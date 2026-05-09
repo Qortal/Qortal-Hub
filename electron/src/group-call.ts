@@ -217,6 +217,7 @@ const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_ACTIVITY_GRACE_MS =
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_RECOVERY_COOLDOWN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
+const GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS = 45_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
@@ -762,6 +763,9 @@ interface ReticulumAudioPeerState {
   linkHeartbeatLastRecoveryAtMs: number;
   linkEstablishLastAttemptAtMs: number;
   linkEstablishRetryDelayMs: number;
+  linkOpenAttempts: number;
+  linkEstablishedCount: number;
+  linkStaleCloseCount: number;
   lastLinkCloseReason: string;
   lastLinkCloseAtMs: number;
   lastLinkCloseLinkId: string;
@@ -786,6 +790,10 @@ interface GcReticulumAudioSendDiagnostics {
   linkId?: string;
   linkEstablished?: boolean;
   linkOpenedByOwner?: boolean | null;
+  linkEstablishPendingAgeMs?: number;
+  linkOpenAttempts?: number;
+  linkEstablishedCount?: number;
+  linkStaleCloseCount?: number;
   lastLinkCloseReason?: string;
   lastLinkCloseAtMs?: number;
   lastLinkCloseLinkId?: string;
@@ -843,6 +851,22 @@ function mergeGcReticulumAudioSendDiagnostics(
     staleDrops: a.staleDrops + b.staleDrops,
     linkUnreadyDrops: a.linkUnreadyDrops + b.linkUnreadyDrops,
     packetSendFailures: a.packetSendFailures + b.packetSendFailures,
+    linkEstablishPendingAgeMs: Math.max(
+      a.linkEstablishPendingAgeMs ?? 0,
+      b.linkEstablishPendingAgeMs ?? 0
+    ),
+    linkOpenAttempts: Math.max(
+      a.linkOpenAttempts ?? 0,
+      b.linkOpenAttempts ?? 0
+    ),
+    linkEstablishedCount: Math.max(
+      a.linkEstablishedCount ?? 0,
+      b.linkEstablishedCount ?? 0
+    ),
+    linkStaleCloseCount: Math.max(
+      a.linkStaleCloseCount ?? 0,
+      b.linkStaleCloseCount ?? 0
+    ),
     linkFallbackActive:
       a.linkFallbackActive || b.linkFallbackActive || undefined,
     pathDiversityActive:
@@ -4942,6 +4966,7 @@ export class GroupCallManager extends EventEmitter {
     state.peerDestinationHash =
       peerDestinationHash || state.peerDestinationHash;
     state.established = true;
+    state.linkEstablishedCount++;
     state.opening = false;
     this.clearReticulumAudioOpenDefer(address);
     this.reticulumAudioAddressByLinkId.set(linkId, address);
@@ -4960,6 +4985,16 @@ export class GroupCallManager extends EventEmitter {
   ): boolean {
     if (state.established && state.linkId) return false;
     if (state.opening) return true;
+    const pendingLinkAgeMs =
+      state.linkId && state.linkEstablishLastAttemptAtMs >= 0
+        ? now - state.linkEstablishLastAttemptAtMs
+        : 0;
+    if (
+      state.linkId &&
+      pendingLinkAgeMs < GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS
+    ) {
+      return true;
+    }
     const retryDelayMs = Math.max(
       GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
       state.linkEstablishRetryDelayMs ||
@@ -4978,9 +5013,10 @@ export class GroupCallManager extends EventEmitter {
       retryDelayMs * 2
     );
     loggerLog(
-      `[GCall] Reticulum audio link establish retry address=${address} room=${roomId} staleLinkId=${staleLinkId || 'n/a'} nextDelayMs=${state.linkEstablishRetryDelayMs}`
+      `[GCall] Reticulum audio link establish retry address=${address} room=${roomId} staleLinkId=${staleLinkId || 'n/a'} pendingAgeMs=${Math.max(0, pendingLinkAgeMs)} nextDelayMs=${state.linkEstablishRetryDelayMs}`
     );
     if (staleLinkId) {
+      state.linkStaleCloseCount++;
       this.markReticulumAudioLinkUnready(
         address,
         staleLinkId,
@@ -5388,6 +5424,7 @@ export class GroupCallManager extends EventEmitter {
     }
     state.opening = true;
     state.linkEstablishLastAttemptAtMs = Date.now();
+    state.linkOpenAttempts++;
     const result: ReticulumOpenAudioLinkResult =
       await bridge.openGroupAudioLink(state.peerPresenceHash);
     const latest = this.reticulumAudioPeersByAddress.get(address);
@@ -5596,6 +5633,9 @@ export class GroupCallManager extends EventEmitter {
         linkEstablishLastAttemptAtMs: -1,
         linkEstablishRetryDelayMs:
           GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
+        linkOpenAttempts: 0,
+        linkEstablishedCount: 0,
+        linkStaleCloseCount: 0,
         lastLinkCloseReason: '',
         lastLinkCloseAtMs: 0,
         lastLinkCloseLinkId: '',
@@ -6040,6 +6080,13 @@ export class GroupCallManager extends EventEmitter {
     const now = Date.now();
     const fallbackActive = state?.packetTransportFallback === true;
     const pathDiversityActive = !!state && state.pathDiversityUntilMs > now;
+    const linkEstablishPendingAgeMs =
+      state &&
+      !state.established &&
+      (state.linkId || state.opening) &&
+      state.linkEstablishLastAttemptAtMs >= 0
+        ? Math.max(0, now - state.linkEstablishLastAttemptAtMs)
+        : undefined;
     return {
       transport: state?.transport ?? this.getReticulumAudioTransportKind(),
       pendingFrames: state?.pending.length ?? 0,
@@ -6059,7 +6106,13 @@ export class GroupCallManager extends EventEmitter {
         ? {
             linkEstablished: state.established,
             linkOpenedByOwner: state.linkOpenedByOwner,
+            linkOpenAttempts: state.linkOpenAttempts,
+            linkEstablishedCount: state.linkEstablishedCount,
+            linkStaleCloseCount: state.linkStaleCloseCount,
           }
+        : {}),
+      ...(linkEstablishPendingAgeMs !== undefined
+        ? { linkEstablishPendingAgeMs }
         : {}),
       ...(state?.linkId ? { linkId: state.linkId } : {}),
       ...(state?.lastLinkCloseReason
@@ -6571,6 +6624,9 @@ export class GroupCallManager extends EventEmitter {
           linkEstablishLastAttemptAtMs: -1,
           linkEstablishRetryDelayMs:
             GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
+          linkOpenAttempts: 0,
+          linkEstablishedCount: 0,
+          linkStaleCloseCount: 0,
           lastLinkCloseReason: '',
           lastLinkCloseAtMs: 0,
           lastLinkCloseLinkId: '',

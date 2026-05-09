@@ -4678,17 +4678,23 @@ describe('Reticulum group audio transport', () => {
 
     await vi.advanceTimersByTimeAsync(5_000);
     await Promise.resolve();
+    expect(bridge.closeGroupAudioLink).not.toHaveBeenCalled();
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await Promise.resolve();
+    expect(bridge.closeGroupAudioLink).not.toHaveBeenCalled();
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await Promise.resolve();
+    expect(bridge.closeGroupAudioLink).not.toHaveBeenCalled();
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_001);
+    await Promise.resolve();
     expect(bridge.closeGroupAudioLink).toHaveBeenCalledWith('link-1');
     expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(2);
-
-    await vi.advanceTimersByTimeAsync(5_000);
-    await Promise.resolve();
-    expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(2);
-
-    await vi.advanceTimersByTimeAsync(5_000);
-    await Promise.resolve();
-    expect(bridge.closeGroupAudioLink).toHaveBeenCalledWith('link-2');
-    expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(3);
     expect(bridge.sendGroupAudioLinkHeartbeatDetailed).not.toHaveBeenCalled();
     manager.stop();
   });
