@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { nodeInfosAtom, selectedNodeInfoAtom } from '../../../atoms/global';
 import { getBaseApiReact } from '../../../App';
 import { useAuth } from '../../../hooks/useAuth';
+import { useBlockedAddresses } from '../../../hooks/useBlockUsers';
 import type { ApiKey } from '../../../types/auth';
 import {
   getDefaultLocalNodeUrl,
@@ -28,10 +29,20 @@ export function useDashboardNodeMenu() {
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
+  const { refreshBlockedUsers } = useBlockedAddresses(true);
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
-    (key: string, defaultValue: string) =>
-      t(`group:dashboard.${key}`, { defaultValue }),
+    (
+      key: string,
+      defaultValue: string,
+      options?: Record<string, string | number>
+    ) =>
+      String(
+        t(`group:dashboard.${key}`, {
+          defaultValue,
+          ...options,
+        })
+      ),
     [t]
   );
 
@@ -88,7 +99,7 @@ export function useDashboardNodeMenu() {
       ? null
       : {
           key: 'local',
-          label: 'Local Node',
+          label: td('node_menu_local', 'Local Node'),
           node: { url: localNodeUrl, apikey: '' },
           secondary: getDashboardNodeHost(localNodeUrl),
           type: 'local',
@@ -124,7 +135,7 @@ export function useDashboardNodeMenu() {
       ...(localNodeOption ? [localNodeOption] : []),
       {
         key: 'public',
-        label: 'Public Node',
+        label: td('node_menu_public', 'Public Node'),
         node: { url: HTTPS_EXT_NODE_QORTAL_LINK, apikey: '' },
         secondary: getDashboardNodeHost(HTTPS_EXT_NODE_QORTAL_LINK),
         type: 'public' as const,
@@ -136,6 +147,7 @@ export function useDashboardNodeMenu() {
     selectedNode?.apikey,
     selectedNode?.name,
     selectedNodeUrl,
+    td,
   ]);
 
   const handleSelectDashboardNode = useCallback(
@@ -173,10 +185,15 @@ export function useDashboardNodeMenu() {
         await handleSaveNodeInfo(nodeToSave);
         setNodeInfos({});
         await getBalanceFunc();
+        refreshBlockedUsers().catch((error) => {
+          console.error('Unable to refresh blocked users after node switch.', error);
+        });
         setNodeMenuAnchorEl(null);
       } catch (error) {
         console.error(error);
-        setNodeSwitchError('Could not switch nodes right now.');
+        setNodeSwitchError(
+          td('node_switch_error', 'Could not switch nodes right now.')
+        );
       } finally {
         setIsSwitchingNodeUrl('');
       }
@@ -185,8 +202,10 @@ export function useDashboardNodeMenu() {
       getBalanceFunc,
       handleSaveNodeInfo,
       isSwitchingNodeUrl,
+      refreshBlockedUsers,
       selectedNodeUrl,
       setNodeInfos,
+      td,
     ]
   );
 

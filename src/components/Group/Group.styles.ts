@@ -43,6 +43,7 @@ export const InnerChatBox = styled(Box)({
   display: 'flex',
   flexGrow: 1,
   height: '100%',
+  minHeight: 0,
   position: 'relative',
 });
 
@@ -61,8 +62,11 @@ export const AdminRowBox = styled(Box)(({ theme }) => ({
 
 export const ChatContentBox = styled(Box)({
   display: 'flex',
-  flexGrow: 1,
-  height: `calc(100vh - ${70 + appChromeOffset}px)`,
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  overflow: 'hidden',
   position: 'relative',
 });
 
@@ -132,6 +136,7 @@ export const SelectedGroupWrapper = styled('div', {
   display: 'flex',
   flexDirection: 'column',
   height: '100%',
+  minHeight: 0,
   opacity: !isVisible ? 0 : 1,
   position: isVisible ? 'absolute' : 'fixed',
   left: !isVisible ? '-100000px' : '0px',

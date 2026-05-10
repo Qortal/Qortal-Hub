@@ -640,49 +640,51 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     if (isNodeSynchronizing) {
       return {
         tone: 'syncing',
-        title: 'Synchronizing',
-        description: 'The node is still syncing, so minting cannot begin yet.',
+        title: t('core:minting.panel.state_syncing_title'),
+        description: t('core:minting.panel.state_syncing_body'),
       };
     }
     if (viewingNodeMintingSelection) {
       return {
         tone: 'active',
-        title: 'Minting active',
-        description:
-          'This minter key is configured on this node. Stats reflect the selected account.',
+        title: t('core:minting.panel.state_active_title'),
+        description: t(
+          'core:minting.panel.state_active_body_node_selection'
+        ),
       };
     }
     if (accountIsMinting) {
       return {
         tone: 'active',
-        title: 'Minting active',
-        description: 'This account is configured to mint on this node.',
+        title: t('core:minting.panel.state_active_title'),
+        description: t('core:minting.panel.state_active_body_account'),
       };
     }
     if (!isPartOfMintingGroup) {
       return {
         tone: 'inactive',
-        title: 'Not minting',
-        description: 'This account is not yet part of the minter group.',
+        title: t('core:minting.panel.state_inactive_title'),
+        description: t('core:minting.panel.state_inactive_body_not_in_group'),
       };
     }
     if (mintingAccounts?.length > 1) {
       return {
         tone: 'inactive',
-        title: 'Not minting',
-        description: 'This node already has multiple minting keys configured.',
+        title: t('core:minting.panel.state_inactive_title'),
+        description: t('core:minting.panel.state_inactive_body_multi_key'),
       };
     }
     return {
       tone: 'inactive',
-      title: 'Not minting',
-      description: 'This account is ready for the next minting step.',
+      title: t('core:minting.panel.state_inactive_title'),
+      description: t('core:minting.panel.state_inactive_body_ready'),
     };
   }, [
     accountIsMinting,
     isNodeSynchronizing,
     isPartOfMintingGroup,
     mintingAccounts?.length,
+    t,
     viewingNodeMintingSelection,
   ]);
 
@@ -708,20 +710,20 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const nextStepDescription = useMemo(() => {
     if (!isPartOfMintingGroup) {
-      return 'Visit the Q-Mintership app to apply to become a minter.';
+      return t('core:minting.panel.next_step_visit_q_mintership');
     }
     if (accountIsMinting) {
-      return 'Minting is already active on this node.';
+      return t('core:minting.panel.next_step_already_active');
     }
     if (isNodeSynchronizing) {
-      return 'Wait for the node to finish syncing before minting can begin.';
+      return t('core:minting.panel.next_step_wait_sync');
     }
     if (mintingAccounts?.length > 1) {
       return t('group:message.generic.minting_keys_per_node', {
         postProcess: 'capitalizeFirstChar',
       });
     }
-    return 'Start minting on this node when you are ready.';
+    return t('core:minting.panel.next_step_start_when_ready');
   }, [
     accountIsMinting,
     isNodeSynchronizing,
@@ -990,7 +992,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 mt: 0.45,
               }}
             >
-              Review your current minting state, progress, and next steps.
+              {t('core:minting.panel.dialog_subtitle')}
             </Typography>
           </Box>
 
@@ -1040,7 +1042,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <FidgetSpinner
-                ariaLabel="fidget-spinner-loading"
+                ariaLabel={t('core:minting.panel.loading_spinner_aria')}
                 height="80"
                 visible={true}
                 width="80"
@@ -1100,7 +1102,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 <Box sx={{ position: 'relative', zIndex: 1 }}>
                 {mintingAccounts?.length > 0 ? (
                   <Box sx={{ mb: 2.25 }}>
-                    <Typography sx={sectionLabelSx}>Your wallet</Typography>
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:minting.panel.section_your_wallet')}
+                    </Typography>
                     <Typography
                       sx={{
                         fontSize: '1.05rem',
@@ -1130,8 +1134,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 <Box>
                   <Typography sx={sectionLabelSx}>
                     {mintingAccounts?.length > 0
-                      ? 'Minter profile (stats)'
-                      : 'Account identity'}
+                      ? t('core:minting.panel.section_minter_profile_stats')
+                      : t('core:minting.panel.section_account_identity')}
                   </Typography>
                   <Typography
                     sx={{
@@ -1163,7 +1167,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     ...sectionDividerSx,
                   }}
                 >
-                  <Typography sx={sectionLabelSx}>Progress to next level</Typography>
+                  <Typography sx={sectionLabelSx}>
+                    {t('core:minting.panel.section_progress_next_level')}
+                  </Typography>
                   <Box
                     sx={{
                       display: 'inline-flex',
@@ -1204,7 +1210,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       mt: 0.55,
                     }}
                   >
-                    blocks to level {progressLevel || '-'}
+                    {t('core:minting.panel.blocks_to_level', {
+                      level: progressLevel ?? '-',
+                    })}
                   </Typography>
                   <Typography
                     sx={{
@@ -1213,7 +1221,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       mt: 1.2,
                     }}
                   >
-                    Minting for: ~{progressDays ?? '-'} days
+                    {t('core:minting.panel.minting_for_approx_days', {
+                      days: progressDays ?? '-',
+                    })}
                   </Typography>
                 </Box>
 
@@ -1222,7 +1232,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     ...sectionDividerSx,
                   }}
                 >
-                  <Typography sx={sectionLabelSx}>Next step</Typography>
+                  <Typography sx={sectionLabelSx}>
+                    {t('core:minting.panel.section_next_step')}
+                  </Typography>
                   <Typography
                     sx={{
                       color: alpha(theme.palette.text.secondary, 0.86),
@@ -1278,14 +1290,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       ...sectionDividerSx,
                     }}
                   >
-                    <Typography sx={sectionLabelSx}>Node minting accounts</Typography>
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:minting.panel.section_node_minting_accounts')}
+                    </Typography>
                     <Typography
                       variant="body2"
                       color="text.secondary"
                       sx={{ mb: 1.1, lineHeight: 1.45 }}
                     >
-                      Select an account to update progress and reward stats on the
-                      right.
+                      {t('core:minting.panel.select_account_for_stats_hint')}
                     </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                       {mintingAccounts?.map((acct) => {
@@ -1357,7 +1370,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                                     textTransform: 'uppercase',
                                   }}
                                 >
-                                  Viewing stats
+                                  {t('core:minting.panel.badge_viewing_stats')}
                                 </Typography>
                               ) : null}
                             </Box>
@@ -1430,7 +1443,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   },
                 }}
               >
-                <Typography sx={sectionLabelSx}>Current status</Typography>
+                <Typography sx={sectionLabelSx}>
+                  {t('core:minting.current_status')}
+                </Typography>
                 <Typography
                   sx={{
                     color: currentStatusTone.accent,
@@ -1526,7 +1541,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 }}
               >
                 <Typography sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}>
-                  Blockchain statistics
+                  {t('core:minting.blockchain_statistics')}
                 </Typography>
                 <Typography
                   sx={{
@@ -1535,7 +1550,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     mb: 1.45,
                   }}
                 >
-                  (for reference only)
+                  {t('core:minting.panel.reference_only')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                   {blockchainRows.map((row) => (
@@ -1561,7 +1576,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 }}
               >
                 <Typography sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}>
-                  Minting rewards info
+                  {t('core:minting.rewards_info')}
                 </Typography>
 
                 <Box>
@@ -1574,8 +1589,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     }}
                   >
                     {statsAddress === myAddress
-                      ? '(your rewards info)'
-                      : '(selected minter — rewards for this key)'}
+                      ? t('core:minting.panel.rewards_info_subtitle_own')
+                      : t('core:minting.panel.rewards_info_subtitle_selected')}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     {directRewardRows.map((row) => (
@@ -1605,7 +1620,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       mb: 1,
                     }}
                   >
-                    NETWORK DETAILS
+                    {t('core:minting.panel.network_details')}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     {networkContextRows.map((row) => (

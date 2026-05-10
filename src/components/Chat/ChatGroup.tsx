@@ -1195,9 +1195,11 @@ export const ChatGroup = ({
     <div
       style={{
         display: 'flex',
+        flex: hide ? undefined : 1,
         flexDirection: 'column',
-        height: '100%',
+        height: hide ? undefined : '100%',
         left: hide && '-100000px',
+        minHeight: hide ? undefined : 0,
         opacity: hide ? 0 : 1,
         padding: '10px',
         position: hide ? 'absolute' : 'relative',

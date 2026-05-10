@@ -87,7 +87,6 @@ import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
 import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 
-
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
     console.error('Error retrieving data:', error);
@@ -119,12 +118,21 @@ export const isRunningGateway = async () => {
 
 const getAppStorage = () =>
   typeof window !== 'undefined' &&
-  (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
+  (
+    window as {
+      appStorage?: {
+        get: (k: string) => Promise<unknown>;
+        set: (k: string, v: unknown) => Promise<void>;
+      };
+    }
+  ).appStorage;
 
 const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
 
 function normalizeNotificationPermissionAppName(appName: unknown): string {
-  return String(appName ?? '').trim().toLowerCase();
+  return String(appName ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 export function getNotificationPermissionKey(appName: unknown): string {
@@ -132,7 +140,9 @@ export function getNotificationPermissionKey(appName: unknown): string {
 }
 
 function isNotificationPermissionKey(key: unknown): key is string {
-  return typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX);
+  return (
+    typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX)
+  );
 }
 
 function normalizePermissionKey(key: unknown): string {
@@ -327,7 +337,7 @@ export const VALID_SESSION_PERMISSIONS = [
   'SIGN_FOREIGN_FEES',
   'REENCRYPT_GROUP_KEYS',
   'START_CROSSCHAIN_SERVER',
-   'NOTIFICATION_PERMISSION',
+  'NOTIFICATION_PERMISSION',
 ];
 
 // Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
@@ -339,7 +349,6 @@ export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
   'GET_USER_WALLET_INFO',
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_LIST_ITEMS',
-  'NOTIFICATION_PERMISSION',
   'SIGN_FOREIGN_FEES',
   'START_CROSSCHAIN_SERVER',
 ];
@@ -506,8 +515,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error:
-                error?.message ?? 'Unable to get notification permission',
+              error: error?.message ?? 'Unable to get notification permission',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -536,8 +544,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error:
-                error?.message ?? 'Unable to read notification permission',
+              error: error?.message ?? 'Unable to read notification permission',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1905,10 +1912,7 @@ function setupMessageListenerQortalRequest() {
 
       case 'NOTIFICATION_MARK_SEEN': {
         try {
-          const res = await markNotificationSeenInApp(
-            request.payload,
-            appInfo
-          );
+          const res = await markNotificationSeenInApp(request.payload, appInfo);
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -2335,7 +2339,9 @@ function setupMessageListenerQortalRequest() {
       case 'UPDATE_SUBSCRIPTIONS': {
         try {
           if (appInfo?.name?.toLowerCase() !== 'subscriptions') {
-            throw new Error('UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app');
+            throw new Error(
+              'UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app'
+            );
           }
           triggerMemberGroupsFetch();
           event.source!.postMessage(

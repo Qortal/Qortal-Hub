@@ -50,6 +50,12 @@ export const HomeDesktopWalletActivity = () => {
     [t]
   );
 
+  const tDashboard = useCallback(
+    (key: string, options?: { count?: number }) =>
+      t(`group:dashboard.${key}`, options),
+    [t]
+  );
+
   const walletActivityNameCacheRef = useRef<Record<string, string>>({});
   const lastWalletActivityBalanceRef = useRef<string | null>(null);
   const [recentWalletActivity, setRecentWalletActivity] =
@@ -98,7 +104,9 @@ export const HomeDesktopWalletActivity = () => {
 
   const resolveWalletActivityAddressLabel = useCallback(
     async (address: string) => {
-      if (!address) return 'Unknown address';
+      if (!address) {
+        return td('wallet_activity_unknown_address', 'Unknown address');
+      }
 
       const cachedSenderName = walletActivityNameCacheRef.current[address];
       if (cachedSenderName !== undefined) {
@@ -123,7 +131,7 @@ export const HomeDesktopWalletActivity = () => {
         return address;
       }
     },
-    []
+    [td]
   );
 
   const fetchWalletActivityTransactionBySignature = useCallback(
@@ -539,7 +547,8 @@ export const HomeDesktopWalletActivity = () => {
               >
                 {formatWalletActivityRelativeTime(
                   activityEntry.timestamp,
-                  walletActivityRelativeTimeNow
+                  walletActivityRelativeTimeNow,
+                  tDashboard
                 )}
               </Typography>
             </Box>

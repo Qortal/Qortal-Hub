@@ -1,38 +1,50 @@
 import {
+  Box,
   List,
   ListItemButton,
-  ListItemIcon,
   ListItemText,
-  Collapse,
   IconButton,
+  Popover,
+  Tooltip,
+  Typography,
   useTheme,
+  type TooltipProps,
 } from '@mui/material';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import PendingIcon from '@mui/icons-material/Pending';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
 import { getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { useAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants';
-import { titleBarIconButtonProps } from '../Desktop/CustomTitleBar';
 
 export const TaskManager = ({
   getUserInfo,
   buttonSx = undefined,
   iconSx = undefined,
+  tooltipSlotProps,
+  tooltipTitle,
 }: {
   getUserInfo: (useTimer?: boolean) => Promise<void>;
   buttonSx?: any;
   iconSx?: any;
+  tooltipSlotProps?: TooltipProps['slotProps'];
+  tooltipTitle?: ReactNode;
 }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
   const [txList, setTxList] = useAtom(txListAtom);
-  const [open, setOpen] = useState(false);
-  const intervals = useRef({});
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const intervals = useRef<Record<string, ReturnType<typeof setInterval>>>({});
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -42,11 +54,22 @@ export const TaskManager = ({
     'tutorial',
   ]);
 
-  const handleClick = () => {
-    setOpen((prev) => !prev);
+  const popoverOpen = Boolean(anchorEl);
+
+  const handleIconClick = (event: MouseEvent<HTMLElement>) => {
+    setAnchorEl((prev) =>
+      prev === event.currentTarget ? null : event.currentTarget
+    );
   };
 
-  const getStatus = ({ signature }, callback) => {
+  const handleClosePopover = () => {
+    setAnchorEl(null);
+  };
+
+  const getStatus = (
+    { signature }: { signature: string },
+    callback?: (ok: boolean) => void
+  ) => {
     let stop = false;
     const getAnswer = async () => {
       const getTx = async () => {
@@ -66,7 +89,7 @@ export const TaskManager = ({
               }, TIME_MINUTES_1_IN_MILLISECONDS)
             );
             setTxList((prev) => {
-              let previousData = [...prev];
+              const previousData = [...prev];
               const findTxWithSignature = previousData.findIndex(
                 (tx) => tx.signature === signature
               );
@@ -96,7 +119,7 @@ export const TaskManager = ({
 
   useEffect(() => {
     setTxList((prev) => {
-      let previousData = [...prev];
+      const previousData = [...prev];
       memberGroups.forEach((group) => {
         const findGroup = txList.findIndex(
           (tx) => tx?.type === 'joined-group' && tx?.groupId === group.groupId
@@ -204,87 +227,160 @@ export const TaskManager = ({
 
   if (txList?.length === 0 || txList.every((item) => item?.done)) return null;
 
+  const triggerButton = (
+    <IconButton
+      disableFocusRipple
+      disableRipple
+      aria-expanded={popoverOpen ? 'true' : 'false'}
+      aria-haspopup="true"
+      tabIndex={-1}
+      onClick={handleIconClick}
+      size="small"
+      sx={{
+        color: txList.some((item) => !item.done)
+          ? theme.palette.primary.light
+          : theme.palette.text.secondary,
+        '&.MuiIconButton-root': {
+          width: 26,
+          height: 26,
+        },
+        ...(buttonSx || {}),
+      }}
+    >
+      {txList.some((item) => !item.done) ? (
+        <PendingIcon sx={iconSx || undefined} />
+      ) : (
+        <TaskAltIcon sx={iconSx || undefined} />
+      )}
+    </IconButton>
+  );
+
   return (
     <>
-      {!open && (
-        <IconButton
-          disableFocusRipple
-          disableRipple
-          tabIndex={-1}
-          onClick={handleClick}
-          size="small"
-          sx={{
-            color: txList.some((item) => !item.done)
-              ? theme.palette.primary.light
-              : theme.palette.text.secondary,
-            '&.MuiIconButton-root': {
-              width: 26,
-              height: 26,
-            },
-            ...(buttonSx || {}),
-          }}
+      {tooltipTitle != null ? (
+        <Tooltip
+          arrow
+          disableInteractive
+          placement="bottom"
+          slotProps={tooltipSlotProps}
+          title={tooltipTitle}
         >
-          {txList.some((item) => !item.done) ? (
-            <PendingIcon sx={iconSx || undefined} />
-          ) : (
-            <TaskAltIcon sx={iconSx || undefined} />
-          )}
-        </IconButton>
+          {triggerButton}
+        </Tooltip>
+      ) : (
+        triggerButton
       )}
-      {open && (
-        <List
-          sx={{
-            bgcolor: theme.palette.background.paper,
-            bottom: 16,
-            boxShadow: 4,
-            maxHeight: '400px',
-            overflow: 'auto',
-            padding: '0px',
-            position: 'fixed',
-            right: 16,
-            width: '300px',
-            zIndex: 10,
-          }}
-          component="nav"
-        >
-          <ListItemButton onClick={handleClick}>
-            <ListItemIcon>
-              {txList.some((item) => !item.done) ? (
-                <PendingIcon
-                  sx={{
-                    color: theme.palette.primary,
-                  }}
-                />
-              ) : (
-                <TaskAltIcon
-                  sx={{
-                    color: theme.palette.primary,
-                  }}
-                />
-              )}
-            </ListItemIcon>
 
-            <ListItemText
-              primary={t('core:message.generic.ongoing_transactions', {
+      <Popover
+        anchorEl={anchorEl}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        disableRestoreFocus
+        open={popoverOpen}
+        slotProps={{
+          paper: {
+            elevation: 8,
+            sx: {
+              border: `1px solid ${theme.palette.divider}`,
+              borderRadius: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: 'min(400px, 70vh)',
+              maxWidth: 'min(300px, calc(100vw - 16px))',
+              mt: 0.75,
+              overflow: 'hidden',
+              width: '300px',
+            },
+          },
+        }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        onClose={handleClosePopover}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 'min(400px, 70vh)',
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'center',
+              borderBottom: `1px solid ${theme.palette.divider}`,
+              display: 'flex',
+              flexShrink: 0,
+              gap: 1,
+              pl: 1.5,
+              pr: 0.5,
+              py: 1,
+            }}
+          >
+            <Box
+              sx={{
+                alignItems: 'center',
+                color: theme.palette.primary.main,
+                display: 'flex',
+                flexShrink: 0,
+              }}
+            >
+              {txList.some((item) => !item.done) ? (
+                <PendingIcon fontSize="small" />
+              ) : (
+                <TaskAltIcon fontSize="small" />
+              )}
+            </Box>
+            <Typography
+              fontWeight={600}
+              sx={{ flex: 1, minWidth: 0, pr: 0.5 }}
+              variant="subtitle2"
+            >
+              {t('core:message.generic.ongoing_transactions', {
                 postProcess: 'capitalizeFirstChar',
               })}
-            />
-            {open ? <ExpandLess /> : <ExpandMore />}
-          </ListItemButton>
+            </Typography>
+            <IconButton
+              aria-label={t('core:action.close', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              edge="end"
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleClosePopover();
+              }}
+            >
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          </Box>
 
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <List component="div" disablePadding>
-              {txList.map((item) => (
-                <ListItemButton key={item?.signature} sx={{ pl: 4 }}>
-                  <ListItemText
-                    primary={item?.done ? item.labelDone : item.label}
-                  />
-                </ListItemButton>
-              ))}
-            </List>
-          </Collapse>
-        </List>
-      )}
+          <List
+            component="nav"
+            dense
+            sx={{
+              bgcolor: theme.palette.background.paper,
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              py: 0,
+            }}
+          >
+            {txList.map((item) => (
+              <ListItemButton
+                key={item?.signature ?? `${item?.type}-${item?.groupId}`}
+                sx={{ alignItems: 'flex-start', py: 1, pl: 2, pr: 2 }}
+              >
+                <ListItemText
+                  primary={item?.done ? item.labelDone : item.label}
+                  primaryTypographyProps={{
+                    variant: 'body2',
+                    sx: { whiteSpace: 'normal', wordBreak: 'break-word' },
+                  }}
+                />
+              </ListItemButton>
+            ))}
+          </List>
+        </Box>
+      </Popover>
     </>
   );
 };

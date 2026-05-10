@@ -52,7 +52,6 @@ import {
   MIN_REQUIRED_QORTS,
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -847,9 +846,13 @@ export const ChatDirect = ({
     <Box
       style={{
         background: theme.palette.background.default,
+        boxSizing: 'border-box',
         display: 'flex',
+        flex: 1,
         flexDirection: 'column',
-        height: `calc(100vh - ${appHeighOffsetPx})`,
+        height: '100%',
+        minHeight: 0,
+        padding: '10px',
         width: '100%',
       }}
     >
@@ -1101,24 +1104,35 @@ export const ChatDirect = ({
         </>
       )}
 
-      <ChatList
-        chatReferences={chatReferences}
-        handleReaction={handleReaction}
-        onEdit={onEdit}
-        onReply={onReply}
-        chatId={selectedDirect?.address}
-        initialMessages={messages}
-        myAddress={myAddress}
-        tempMessages={tempMessages}
-        tempChatReferences={tempChatReferences}
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          minHeight: 0,
+          overflow: 'hidden',
+          width: '100%',
+        }}
+      >
+        <ChatList
+          chatReferences={chatReferences}
+          handleReaction={handleReaction}
+          onEdit={onEdit}
+          onReply={onReply}
+          chatId={selectedDirect?.address}
+          initialMessages={messages}
+          myAddress={myAddress}
+          tempMessages={tempMessages}
+          tempChatReferences={tempChatReferences}
+        />
+      </Box>
 
       <Box
         sx={{
           alignItems: 'flex-end',
           backgroundColor: theme.palette.background.default,
-          borderTop: '1px solid',
-          borderColor: 'divider',
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: '8px',
           bottom: isFocusedParent ? '0px' : 'unset',
           boxSizing: 'border-box',
           display: 'flex',

@@ -310,13 +310,13 @@ export const RegisterName = ({
                 lineHeight: 1.45,
               }}
             >
-              {t(
-                'tutorial:home.register_name_workspace_hint',
-                'A registered name turns this account into a recognizable identity.'
-              )}
+              {t('tutorial:home.register_name_workspace_hint')}
             </Typography>
           </Box>
           <ButtonBase
+            aria-label={t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             onClick={closeRegisterName}
             disabled={isLoadingRegisterName}
             sx={{
@@ -367,7 +367,9 @@ export const RegisterName = ({
                   letterSpacing: '0.01em',
                 }}
               >
-                Name
+                {t('core:name', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
               <TextField
                 autoComplete="off"
@@ -377,7 +379,9 @@ export const RegisterName = ({
                 size="medium"
                 onChange={(e) => setRegisterNameValue(e.target.value)}
                 value={registerNameValue}
-                placeholder="Name"
+                placeholder={t('core:name', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     background: fieldSurface,

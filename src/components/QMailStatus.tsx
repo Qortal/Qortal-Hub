@@ -106,7 +106,7 @@ export const QMailStatus = ({
               textTransform: 'uppercase',
             }}
           >
-            {t('q_apps.q_mail', {
+            {t('core:q_apps.q_mail', {
               postProcess: 'capitalizeFirstChar',
             })}
           </span>

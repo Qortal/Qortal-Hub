@@ -959,9 +959,13 @@ const ChoiceRow = ({ icon, title, description, onClick }) => {
 
 const InlineReturn = ({ onClick }: { onClick: () => void }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['core']);
 
   return (
     <ButtonBase
+      aria-label={t('core:action.back', {
+        postProcess: 'capitalizeFirstChar',
+      })}
       onClick={onClick}
       sx={{
         alignItems: 'center',
@@ -998,7 +1002,7 @@ const WalletRow = ({
   mode,
   setEditingWalletIndex,
 }) => {
-  const { t } = useTranslation(['auth']);
+  const { t } = useTranslation(['auth', 'core']);
   const [accountName, setAccountName] = useState('');
   const [note, setNote] = useState('');
   const isEdit = editingWalletIndex === idx;
@@ -1273,6 +1277,13 @@ const WalletRow = ({
             </Typography>
             <IconButton
               ref={editButtonRef}
+              aria-label={
+                isEdit
+                  ? t('core:action.close', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('auth:entry.wallet_edit_aria_label')
+              }
               sx={{
                 color:
                   mode === 'entry'
@@ -1363,10 +1374,14 @@ const WalletRow = ({
         >
           {canEditAccountName && (
             <>
-              <Typography sx={inlineFieldLabelSx}>Name</Typography>
+              <Typography sx={inlineFieldLabelSx}>
+                {t('auth:entry.wallet_edit_name_label')}
+              </Typography>
               <Input
                 autoFocus
-                placeholder="Account name"
+                placeholder={t(
+                  'auth:entry.wallet_edit_account_name_placeholder'
+                )}
                 value={accountName}
                 onChange={(event) => setAccountName(event.target.value)}
                 onKeyDown={(event) => {
@@ -1380,9 +1395,11 @@ const WalletRow = ({
               />
             </>
           )}
-          <Typography sx={inlineFieldLabelSx}>Note</Typography>
+          <Typography sx={inlineFieldLabelSx}>
+            {t('auth:entry.wallet_edit_note_label')}
+          </Typography>
           <Input
-            placeholder="Optional note"
+            placeholder={t('auth:entry.wallet_edit_note_placeholder')}
             value={note}
             onChange={(event) => setNote(event.target.value)}
             onKeyDown={(event) => {
@@ -1407,13 +1424,13 @@ const WalletRow = ({
               onClick={() => updateWalletItem(idx, null)}
               sx={inlineActionSx(true)}
             >
-              Remove
+              {t('auth:entry.wallet_edit_remove')}
             </ButtonBase>
             <ButtonBase
               onClick={handleSaveEdit}
               sx={inlineActionSx(false)}
             >
-              Save
+              {t('auth:entry.wallet_edit_save')}
             </ButtonBase>
           </Box>
         </Box>

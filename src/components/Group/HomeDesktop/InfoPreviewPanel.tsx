@@ -428,7 +428,9 @@ export const InfoPreviewPanel = ({
                 textTransform: 'none',
               }}
             >
-              <Box component="span">status</Box>
+              <Box component="span">
+                {td('info_panel_status', 'status')}
+              </Box>
               <Box
                 component="span"
                 aria-hidden="true"
@@ -593,9 +595,9 @@ export const InfoPreviewPanel = ({
             }}
           >
             {rows.footerSections.map((section, sectionIndex) => {
-              const isNodeSection = section.title === 'Node';
+              const isNodeSection = section.variant === 'node';
               const sectionHeaderLabel = isNodeSection
-                ? '// node_info'
+                ? td('info_panel_node_comment', '// node_info')
                 : section.title;
 
               return (

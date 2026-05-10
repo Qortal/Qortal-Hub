@@ -1857,7 +1857,7 @@ export const Group = ({
       <Box
         sx={{
           backgroundColor: 'background.default',
-          display: isVisible ? 'flex' : 'none',
+          display: 'flex',
           height: '100%',
           minHeight: 0,
           overflow: 'hidden',
@@ -1969,7 +1969,7 @@ export const Group = ({
               isForum={groupSection === 'forum'}
             />
 
-            <ChatContentBox sx={{ height: '100%' }}>
+            <ChatContentBox>
               {triedToFetchSecretKey && (
                 <ChatGroup
                   myAddress={myAddress}
@@ -2128,11 +2128,10 @@ export const Group = ({
                   {groupSection === 'adminSpace' && (
                     <AdminSpace
                       adminsWithNames={adminsWithNames}
-                      selectedGroup={selectedGroup?.groupId}
-                      isOwner={groupOwner?.owner === myAddress}
-                      myAddress={myAddress}
                       hide={groupSection !== 'adminSpace'}
                       isAdmin={admins.includes(myAddress)}
+                      isOwner={groupOwner?.owner === myAddress}
+                      selectedGroup={selectedGroup?.groupId}
                     />
                   )}
                 </>

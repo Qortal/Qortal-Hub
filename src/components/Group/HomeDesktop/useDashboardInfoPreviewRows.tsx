@@ -62,8 +62,17 @@ export function useDashboardInfoPreviewRows({
   const userAddress = userInfo?.address;
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
-    (key: string, defaultValue: string) =>
-      t(`group:dashboard.${key}`, { defaultValue }),
+    (
+      key: string,
+      defaultValue: string,
+      options?: Record<string, string | number>
+    ) =>
+      String(
+        t(`group:dashboard.${key}`, {
+          defaultValue,
+          ...options,
+        })
+      ),
     [t]
   );
 
@@ -222,8 +231,7 @@ export function useDashboardInfoPreviewRows({
       ? Math.round(nodeInfos?.syncPercent || 0)
       : 100;
   const nodeStatusValue = hasLiveNodeConnection
-    ? t('group:dashboard.sync_percent', {
-        defaultValue: '{{percent}}% Synced',
+    ? td('sync_percent', '{{percent}}% Synced', {
         percent: liveSyncPercent,
       })
     : td('node_unavailable', 'Node unavailable');
@@ -292,8 +300,11 @@ export function useDashboardInfoPreviewRows({
     : resolvedMinterDefaultView;
   const minterPinActionLabel =
     activeMinterInfoView === 'progress'
-      ? 'Save level bar as default view'
-      : 'Save minting dots as default view';
+      ? td(
+          'minter_pin_save_progress_default',
+          'Save level bar as default view'
+        )
+      : td('minter_pin_save_dots_default', 'Save minting dots as default view');
 
   const minterValue = useMemo(
     () => (
@@ -357,10 +368,7 @@ export function useDashboardInfoPreviewRows({
           nodeStatusValue === td('node_unavailable', 'Node unavailable')
             ? 'negative'
             : nodeStatusValue ===
-                t('group:dashboard.sync_percent', {
-                  defaultValue: '{{percent}}% Synced',
-                  percent: 100,
-                })
+                td('sync_percent', '{{percent}}% Synced', { percent: 100 })
               ? 'positive'
               : 'warning',
         value: nodeStatusValue,
@@ -395,6 +403,7 @@ export function useDashboardInfoPreviewRows({
     ],
     footerSections: [
       {
+        variant: 'node',
         title: td('node', 'Node'),
         offsetTopPx: 10,
         items: [
@@ -455,7 +464,11 @@ function MinterInfoValue({
   minterPinActionLabel: string;
   minterProgress: MinterProgressSnapshot | null;
   onHoverMinterChange: (hovered: boolean) => void;
-  td: (key: string, defaultValue: string) => string;
+  td: (
+    key: string,
+    defaultValue: string,
+    options?: Record<string, string | number>
+  ) => string;
   theme: Theme;
 }) {
   return (

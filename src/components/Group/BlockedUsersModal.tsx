@@ -90,7 +90,8 @@ export const BlockedUsersModal = () => {
     Record<string, string>
   >({});
   const { isShow, onCancel, onOk, show, message } = useModal();
-  const { removeBlockFromList, addToBlockList } = useBlockedAddresses(true);
+  const { removeBlockFromList, addToBlockList, refreshBlockedUsers } =
+    useBlockedAddresses(true);
   const blockedAddresses = useAtomValue(blockedAddressesAtom);
   const blockedNames = useAtomValue(blockedNamesAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
@@ -212,6 +213,15 @@ export const BlockedUsersModal = () => {
     };
   }, [setIsOpenBlockedModal]);
 
+  useEffect(() => {
+    if (!isOpenBlockedModal) return;
+
+    setAddressesWithNames({});
+    refreshBlockedUsers().catch((error) => {
+      console.error('Unable to refresh blocked users.', error);
+    });
+  }, [isOpenBlockedModal, refreshBlockedUsers]);
+
   const paperSx = {
     ...getDialogPaperSx(theme, { maxWidth: 544 }),
     maxHeight: 'min(620px, calc(100vh - 48px))',
@@ -328,8 +338,6 @@ export const BlockedUsersModal = () => {
             sx={{ ...dialogContentTextSx, mb: 1.35 }}
           >
             {t('auth:message.generic.block_list_intro', {
-              defaultValue:
-                'Add a Qortal name or address to block them. Addresses affect transaction handling; blocking a name hides their data across the Hub.',
               postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
@@ -397,8 +405,6 @@ export const BlockedUsersModal = () => {
                 </Typography>
                 <Typography sx={sectionSubtitleSx}>
                   {t('auth:message.generic.blocked_addresses_hint', {
-                    defaultValue:
-                      'Blocks processing related to transactions from these addresses.',
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
@@ -491,8 +497,6 @@ export const BlockedUsersModal = () => {
                 </Typography>
                 <Typography sx={sectionSubtitleSx}>
                   {t('auth:message.generic.blocked_names_hint', {
-                    defaultValue:
-                      'These names are blocked for QDN / Hub data and social features.',
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
@@ -556,8 +560,6 @@ export const BlockedUsersModal = () => {
             >
               <Typography sx={{ fontSize: 'inherit', lineHeight: 'inherit' }}>
                 {t('auth:message.generic.no_blocked_users', {
-                  defaultValue:
-                    'Nobody is blocked yet. Add an address or name above when you want to mute them.',
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>

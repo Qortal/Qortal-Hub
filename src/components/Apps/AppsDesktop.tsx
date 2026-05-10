@@ -1681,20 +1681,26 @@ export const AppsDesktop = ({
               tab,
             });
             if (internalTabContent) {
+              const isInternalTabActive =
+                tab?.tabId === selectedTab?.tabId &&
+                !isNewTabWindow &&
+                !hideContentForDevHome;
               return (
                 <Box
                   key={tab?.tabId}
                   sx={{
-                    display:
-                      tab?.tabId === selectedTab?.tabId &&
-                      !isNewTabWindow &&
-                      !hideContentForDevHome
-                        ? 'flex'
-                        : 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
                     height: '100%',
                     minHeight: 0,
                     overflow: 'hidden',
                     width: '100%',
+                    ...(!isInternalTabActive
+                      ? {
+                          left: '-200vw',
+                          position: 'fixed',
+                        }
+                      : {}),
                   }}
                 >
                   {internalTabContent}

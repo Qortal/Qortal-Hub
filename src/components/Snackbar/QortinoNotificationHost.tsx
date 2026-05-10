@@ -73,18 +73,10 @@ const getQortinoInletHeadGeometry = (
   debugSettings: QortinoInletDebugSettings
 ): QortinoInletHeadGeometry => {
   const headScale = 0.92 + (QORTINO_INLET_LOOK.bodyScale - 0.95) * 0.08;
-  const headWidth = Math.round(
-    64 * headScale * debugSettings.headWidthScale
-  );
-  const headHeight = Math.round(
-    61 * headScale * debugSettings.headHeightScale
-  );
-  const faceWidth = Math.round(
-    45 * headScale * debugSettings.faceWidthScale
-  );
-  const faceHeight = Math.round(
-    31 * headScale * debugSettings.faceHeightScale
-  );
+  const headWidth = Math.round(64 * headScale * debugSettings.headWidthScale);
+  const headHeight = Math.round(61 * headScale * debugSettings.headHeightScale);
+  const faceWidth = Math.round(45 * headScale * debugSettings.faceWidthScale);
+  const faceHeight = Math.round(31 * headScale * debugSettings.faceHeightScale);
   const faceLeft = Math.round((headWidth - faceWidth) / 2);
   const faceTop = Math.round((headHeight - faceHeight) / 2 + 2);
 
@@ -125,9 +117,11 @@ const normalizeNotificationMessage = (value?: string) => {
   if (/^successfully requested to join group\./i.test(trimmed)) {
     return 'Join request sent';
   }
-  if (/^failed to join the group$/i.test(trimmed)) return 'Unable to join group';
+  if (/^failed to join the group$/i.test(trimmed))
+    return 'Unable to join group';
   if (/^opened$/i.test(trimmed)) return 'App opened';
-  if (/^loading announcements$/i.test(trimmed)) return 'Loading announcements...';
+  if (/^loading announcements$/i.test(trimmed))
+    return 'Loading announcements...';
   if (/^loading chat\.\.\. please wait\.?$/i.test(trimmed)) {
     return 'Loading chat...';
   }
@@ -142,23 +136,64 @@ const getNotificationPalette = (type: NotificationType) => {
   switch (type) {
     case 'success':
       return {
-        accent: '#A6C8B0',
-        tint: 'rgba(98, 145, 118, 0.12)',
+        accent: '#8EBFA3',
+        tint: 'rgba(98, 145, 118, 0.22)',
       };
     case 'warning':
       return {
-        accent: '#C9B08A',
-        tint: 'rgba(140, 106, 62, 0.12)',
+        accent: '#D4A574',
+        tint: 'rgba(140, 106, 62, 0.22)',
       };
     case 'error':
       return {
-        accent: '#CFA2A6',
-        tint: 'rgba(132, 74, 78, 0.14)',
+        accent: '#E8A8AD',
+        tint: 'rgba(132, 74, 78, 0.26)',
       };
     default:
       return {
-        accent: '#9EB8E6',
-        tint: 'rgba(81, 111, 156, 0.12)',
+        accent: '#8EB0E8',
+        tint: 'rgba(81, 111, 156, 0.22)',
+      };
+  }
+};
+
+/** Visible frame + outer ring — especially for success/error in dark and light UI */
+const getNotificationFrameChrome = (
+  type: NotificationType,
+  isDarkMode: boolean
+) => {
+  switch (type) {
+    case 'success':
+      return {
+        borderAlpha: isDarkMode ? 0.52 : 0.5,
+        glowAlpha: isDarkMode ? 0.2 : 0.22,
+        leftBarPx: 5,
+        outerRingAlpha: isDarkMode ? 0.38 : 0.42,
+        outerRingWidth: 1,
+      };
+    case 'error':
+      return {
+        borderAlpha: isDarkMode ? 0.55 : 0.52,
+        glowAlpha: isDarkMode ? 0.22 : 0.24,
+        leftBarPx: 5,
+        outerRingAlpha: isDarkMode ? 0.42 : 0.46,
+        outerRingWidth: 1,
+      };
+    case 'warning':
+      return {
+        borderAlpha: isDarkMode ? 0.46 : 0.48,
+        glowAlpha: isDarkMode ? 0.16 : 0.18,
+        leftBarPx: 4,
+        outerRingAlpha: isDarkMode ? 0.3 : 0.34,
+        outerRingWidth: 1,
+      };
+    default:
+      return {
+        borderAlpha: isDarkMode ? 0.22 : 0.42,
+        glowAlpha: isDarkMode ? 0.14 : 0.2,
+        leftBarPx: 4,
+        outerRingAlpha: isDarkMode ? 0.18 : 0.22,
+        outerRingWidth: 1,
       };
   }
 };
@@ -174,6 +209,8 @@ const QortinoNotificationHead = ({
 }) => {
   const eyeSize = 5;
   const eyeOffset = 9;
+  const eyeGlow = alpha(accent, isDarkMode ? 0.42 : 0.38);
+  const mouthColor = alpha(accent, isDarkMode ? 0.82 : 0.9);
 
   return (
     <Box
@@ -261,8 +298,8 @@ const QortinoNotificationHead = ({
               ? `linear-gradient(180deg, ${alpha('#101824', 0.76)} 0%, ${alpha('#090D13', 0.9)} 100%)`
               : `linear-gradient(180deg, ${alpha('#2F3F56', 0.9)} 0%, ${alpha('#1E2B3F', 0.94)} 100%)`,
             border: isDarkMode
-              ? `1px solid ${alpha(accent, 0.09)}`
-              : `1px solid ${alpha('#C8DCF8', 0.38)}`,
+              ? `1px solid ${alpha(accent, 0.34)}`
+              : `1px solid ${alpha(accent, 0.48)}`,
             borderRadius: '17px',
             boxShadow: isDarkMode
               ? `inset 0 1px 0 ${alpha('#FFFFFF', 0.04)}, inset 0 -8px 14px ${alpha('#000000', 0.18)}`
@@ -279,7 +316,7 @@ const QortinoNotificationHead = ({
           sx={{
             backgroundColor: '#EAF4FF',
             borderRadius: '999px',
-            boxShadow: `0 0 6px ${alpha(accent, isDarkMode ? 0.08 : 0.14)}`,
+            boxShadow: `0 0 8px ${eyeGlow}`,
             height: `${eyeSize}px`,
             left: `${geometry.faceLeft + 2 + Math.round(geometry.faceWidth / 2) - eyeOffset - Math.round(eyeSize / 2)}px`,
             position: 'absolute',
@@ -292,7 +329,7 @@ const QortinoNotificationHead = ({
           sx={{
             backgroundColor: '#EAF4FF',
             borderRadius: '999px',
-            boxShadow: `0 0 6px ${alpha(accent, isDarkMode ? 0.08 : 0.14)}`,
+            boxShadow: `0 0 8px ${eyeGlow}`,
             height: `${eyeSize}px`,
             left: `${geometry.faceLeft + 2 + Math.round(geometry.faceWidth / 2) + eyeOffset - Math.round(eyeSize / 2)}px`,
             position: 'absolute',
@@ -303,7 +340,7 @@ const QortinoNotificationHead = ({
         />
         <Box
           sx={{
-            borderBottom: `2px solid ${alpha('#EAF4FF', isDarkMode ? 0.72 : 0.88)}`,
+            borderBottom: `2px solid ${mouthColor}`,
             borderRadius: '0 0 999px 999px',
             height: '6px',
             left: `${geometry.faceLeft + 2 + Math.round(geometry.faceWidth / 2) - 11}px`,
@@ -390,10 +427,7 @@ export const QortinoNotificationHost = ({
       setInfo({
         compact: payload.compact === true,
         dismissible: payload.dismissible !== false,
-        duration:
-          payload.duration === undefined
-            ? undefined
-            : payload.duration,
+        duration: payload.duration === undefined ? undefined : payload.duration,
         message,
         sourceId: payload.sourceId,
         type: normalizeNotificationType(payload.type),
@@ -412,7 +446,8 @@ export const QortinoNotificationHost = ({
 
       if (
         sourceId &&
-        (infoRef.current?.sourceId == null || infoRef.current?.sourceId !== sourceId)
+        (infoRef.current?.sourceId == null ||
+          infoRef.current?.sourceId !== sourceId)
       ) {
         return;
       }
@@ -437,6 +472,10 @@ export const QortinoNotificationHost = ({
   const palette = getNotificationPalette(notificationType);
   const isDismissible = info?.dismissible !== false;
   const isDarkMode = theme.palette.mode === 'dark';
+  const frameChrome = useMemo(
+    () => getNotificationFrameChrome(notificationType, isDarkMode),
+    [notificationType, isDarkMode]
+  );
   const inletGeometry = useMemo(
     () => getQortinoInletHeadGeometry(inletDebugSettings),
     [inletDebugSettings]
@@ -470,7 +509,11 @@ export const QortinoNotificationHost = ({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.99 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-          style={{ pointerEvents: 'auto', position: 'relative', width: 'fit-content' }}
+          style={{
+            pointerEvents: 'auto',
+            position: 'relative',
+            width: 'fit-content',
+          }}
         >
           <Box
             role={notificationType === 'error' ? 'alert' : 'status'}
@@ -570,13 +613,16 @@ export const QortinoNotificationHost = ({
                   ? `linear-gradient(180deg, ${alpha('#262E3D', 0.82)} 0%, ${alpha('#171C26', 0.94)} 58%, ${alpha('#121823', 0.96)} 100%)`
                   : `linear-gradient(180deg, ${alpha('#FBFCFE', 0.98)} 0%, ${alpha('#EEF3FA', 0.99)} 48%, ${alpha('#E3EBF5', 1)} 100%)`,
                 backdropFilter: 'blur(16px)',
-                border: isDarkMode
-                  ? `1px solid ${alpha('#D6E5FF', 0.1)}`
-                  : `1px solid ${alpha('#9DB2D4', 0.52)}`,
+                border: `${
+                  notificationType === 'success' || notificationType === 'error'
+                    ? '1.5px'
+                    : '1px'
+                } solid ${alpha(palette.accent, frameChrome.borderAlpha)}`,
+                borderLeft: `${frameChrome.leftBarPx}px solid ${palette.accent}`,
                 borderRadius: '13px',
                 boxShadow: isDarkMode
-                  ? `0 14px 26px ${alpha('#000000', 0.24)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.03)}`
-                  : `0 14px 28px ${alpha('#2A405C', 0.11)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.92)}`,
+                  ? `0 14px 26px ${alpha('#000000', 0.24)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.03)}, 0 0 32px ${alpha(palette.accent, frameChrome.glowAlpha)}, 0 0 0 ${frameChrome.outerRingWidth}px ${alpha(palette.accent, frameChrome.outerRingAlpha)}`
+                  : `0 14px 28px ${alpha('#2A405C', 0.11)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.92)}, 0 0 28px ${alpha(palette.accent, frameChrome.glowAlpha + 0.04)}, 0 0 0 ${frameChrome.outerRingWidth}px ${alpha(palette.accent, frameChrome.outerRingAlpha)}`,
                 display: 'flex',
                 marginLeft: `${QORTINO_INLET_BAR_START_PX}px`,
                 maxWidth: 'min(500px, calc(100vw - 20px))',
@@ -585,7 +631,7 @@ export const QortinoNotificationHost = ({
                 overflow: 'hidden',
                 paddingBottom: '7px',
                 paddingLeft: `${inletGeometry.stageWidth - QORTINO_INLET_BAR_START_PX + 10 + Math.max(0, inletGeometry.headOffsetX)}px`,
-                paddingRight: isDismissible ? '28px' : '11px',
+                paddingRight: isDismissible ? '40px' : '11px',
                 paddingTop: '7px',
                 position: 'relative',
                 width: 'fit-content',
@@ -595,12 +641,13 @@ export const QortinoNotificationHost = ({
                     : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.72)} 0%, transparent 55%)`,
                   content: '""',
                   inset: 0,
+                  pointerEvents: 'none',
                   position: 'absolute',
                 },
                 '&::after': {
                   background: isDarkMode
-                    ? `radial-gradient(circle at 0% 50%, ${alpha(palette.accent, 0.12)} 0%, ${palette.tint} 26%, transparent 66%)`
-                    : `radial-gradient(circle at 0% 50%, ${alpha(palette.accent, 0.16)} 0%, ${alpha(palette.accent, 0.06)} 28%, transparent 62%)`,
+                    ? `radial-gradient(circle at 0% 50%, ${alpha(palette.accent, 0.34)} 0%, ${palette.tint} 38%, transparent 72%)`
+                    : `radial-gradient(circle at 0% 50%, ${alpha(palette.accent, 0.28)} 0%, ${alpha(palette.accent, 0.12)} 36%, transparent 68%)`,
                   content: '""',
                   inset: 0,
                   pointerEvents: 'none',
@@ -611,12 +658,25 @@ export const QortinoNotificationHost = ({
               <Typography
                 sx={{
                   alignItems: 'center',
-                  color: isDarkMode
-                    ? alpha('#FBFDFF', 0.98)
-                    : alpha(theme.palette.text.primary, 0.94),
+                  color:
+                    notificationType === 'error'
+                      ? isDarkMode
+                        ? alpha('#FFE8EA', 0.98)
+                        : alpha('#5C2128', 0.94)
+                      : notificationType === 'success'
+                        ? isDarkMode
+                          ? alpha('#EAF6EE', 0.98)
+                          : alpha('#1E3D2C', 0.92)
+                        : notificationType === 'warning'
+                          ? isDarkMode
+                            ? alpha('#FFF2E0', 0.98)
+                            : alpha('#4D3514', 0.92)
+                          : isDarkMode
+                            ? alpha('#E8F0FF', 0.98)
+                            : alpha(theme.palette.text.primary, 0.94),
                   display: 'flex',
                   fontFamily: 'Inter',
-                  fontSize: '0.82rem',
+                  fontSize: '0.9375rem',
                   fontWeight: 600,
                   letterSpacing: '-0.012em',
                   lineHeight: 1.36,
@@ -624,7 +684,7 @@ export const QortinoNotificationHost = ({
                   minHeight: '21px',
                   position: 'relative',
                   textWrap: 'pretty',
-                  zIndex: 1,
+                  zIndex: 0,
                 }}
               >
                 {message}
@@ -635,25 +695,30 @@ export const QortinoNotificationHost = ({
                   onClick={closeNotification}
                   size="small"
                   sx={{
+                    backgroundColor: isDarkMode
+                      ? alpha('#FFFFFF', 0.06)
+                      : alpha('#000000', 0.04),
                     color: isDarkMode
-                      ? alpha('#F1F5FF', 0.72)
-                      : alpha(theme.palette.text.secondary, 0.88),
+                      ? alpha('#F1F5FF', 0.92)
+                      : alpha(theme.palette.text.secondary, 0.95),
+                    height: 34,
+                    minWidth: 34,
                     position: 'absolute',
-                    right: 2,
+                    right: 4,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    zIndex: 1,
+                    zIndex: 6,
                     '&:hover': {
                       backgroundColor: isDarkMode
-                        ? alpha('#FFFFFF', 0.04)
-                        : alpha(theme.palette.primary.main, 0.08),
+                        ? alpha('#FFFFFF', 0.12)
+                        : alpha(theme.palette.primary.main, 0.1),
                       color: isDarkMode
-                        ? alpha('#F1F5FF', 0.86)
-                        : alpha(theme.palette.text.primary, 0.92),
+                        ? alpha('#FFFFFF', 0.98)
+                        : theme.palette.text.primary,
                     },
                   }}
                 >
-                  <CloseRoundedIcon sx={{ fontSize: 16 }} />
+                  <CloseRoundedIcon sx={{ fontSize: 18 }} />
                 </IconButton>
               ) : null}
             </Box>

@@ -49,23 +49,36 @@ export const isWalletActivityTimestampRecent = (timestamp: number) =>
 
 export function formatWalletActivityRelativeTime(
   timestamp: number,
-  now: number
+  now: number,
+  tDashboard: (
+    key: string,
+    options?: { count?: number }
+  ) => string
 ) {
   const elapsedMs = Math.max(0, now - timestamp);
   const elapsedMinutes = Math.floor(elapsedMs / 60000);
 
-  if (elapsedMinutes < 1) return 'Just now';
+  if (elapsedMinutes < 1) {
+    return tDashboard('wallet_activity_relative_just_now');
+  }
+
   if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
+    return tDashboard('wallet_activity_relative_minutes_ago', {
+      count: elapsedMinutes,
+    });
   }
 
   const elapsedHours = Math.floor(elapsedMinutes / 60);
   if (elapsedHours < 24) {
-    return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
+    return tDashboard('wallet_activity_relative_hours_ago', {
+      count: elapsedHours,
+    });
   }
 
   const elapsedDays = Math.floor(elapsedHours / 24);
-  return `${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`;
+  return tDashboard('wallet_activity_relative_days_ago', {
+    count: elapsedDays,
+  });
 }
 
 export function formatWalletActivityAmount(

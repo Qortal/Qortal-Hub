@@ -800,27 +800,22 @@ export function GlobalQortalNavBar({
               </Box>
             )}
             {hasActiveTasks && (
-              <Tooltip
-                title={tooltipTitle(
-                  t('core:message.generic.ongoing_transactions')
-                )}
-                placement="bottom"
-                arrow
-                slotProps={tooltipSlotProps}
+              <Box
+                component={motion.span}
+                layout
+                transition={utilityLayoutTransition}
+                sx={{ display: 'inline-flex', flexShrink: 0 }}
               >
-                <Box
-                  component={motion.span}
-                  layout
-                  transition={utilityLayoutTransition}
-                  sx={{ display: 'inline-flex', flexShrink: 0 }}
-                >
-                  <TaskManager
-                    getUserInfo={utilityNav.getUserInfo}
-                    buttonSx={utilityModuleButtonSx}
-                    iconSx={utilityModuleIconSx}
-                  />
-                </Box>
-              </Tooltip>
+                <TaskManager
+                  getUserInfo={utilityNav.getUserInfo}
+                  buttonSx={utilityModuleButtonSx}
+                  iconSx={utilityModuleIconSx}
+                  tooltipSlotProps={tooltipSlotProps}
+                  tooltipTitle={tooltipTitle(
+                    t('core:message.generic.ongoing_transactions')
+                  )}
+                />
+              </Box>
             )}
             <Tooltip
               title={tooltipTitle(t('core:action.logout'))}

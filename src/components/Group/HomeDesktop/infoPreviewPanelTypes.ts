@@ -31,6 +31,8 @@ export type InfoPreviewFooterRow = {
 
 export type InfoPreviewFooterSection = {
   title: string;
+  /** Stable section semantics (title is localized and must not be used for branching). */
+  variant?: 'node';
   offsetTopPx?: number;
   items: InfoPreviewFooterRow[];
 };
