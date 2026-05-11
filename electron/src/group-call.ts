@@ -234,6 +234,7 @@ const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS = 8_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS = 45_000;
+const GC_RETICULUM_AUDIO_LINK_STICKY_MS = 15_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
@@ -776,6 +777,7 @@ interface ReticulumAudioPeerState {
   linkOpenedByOwner: boolean | null;
   established: boolean;
   opening: boolean;
+  linkAuthSentByRoom: Map<string, string>;
   rooms: Set<string>;
   pending: ReticulumAudioPendingFrame[];
   pendingControl: ReticulumLinkControlPendingFrame[];
@@ -793,6 +795,7 @@ interface ReticulumAudioPeerState {
   linkHeartbeatLastRxAtMs: number;
   linkHeartbeatMissedPongs: number;
   linkHeartbeatLastRecoveryAtMs: number;
+  linkEstablishedAtMs: number;
   linkEstablishLastAttemptAtMs: number;
   linkEstablishRetryDelayMs: number;
   linkOpenAttempts: number;
@@ -825,6 +828,7 @@ interface GcReticulumAudioSendDiagnostics {
   linkEstablishPendingAgeMs?: number;
   linkOpenAttempts?: number;
   linkEstablishedCount?: number;
+  linkEstablishedAtMs?: number;
   linkStaleCloseCount?: number;
   pendingControlFrames?: number;
   lastLinkCloseReason?: string;
@@ -895,6 +899,10 @@ function mergeGcReticulumAudioSendDiagnostics(
     linkEstablishedCount: Math.max(
       a.linkEstablishedCount ?? 0,
       b.linkEstablishedCount ?? 0
+    ),
+    linkEstablishedAtMs: Math.max(
+      a.linkEstablishedAtMs ?? 0,
+      b.linkEstablishedAtMs ?? 0
     ),
     linkStaleCloseCount: Math.max(
       a.linkStaleCloseCount ?? 0,
@@ -1162,6 +1170,33 @@ function buildGcKeyRotateDigest(encryptedKeys: Record<string, string>): string {
   return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
+function buildGcJoinSignedFields(
+  env: GcJoinEnvelope
+): Record<string, unknown> {
+  return {
+    type: env.type,
+    roomId: env.roomId,
+    chatId: env.chatId,
+    fromAddress: env.fromAddress,
+    fromPublicKey: env.fromPublicKey,
+    timestamp: env.timestamp,
+    reticulumDestinationHash: env.reticulumDestinationHash
+      .trim()
+      .toLowerCase(),
+    ...(env.reticulumIdentityPublicKeyBase64 &&
+    isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
+      ? {
+          reticulumIdentityPublicKeyBase64:
+            env.reticulumIdentityPublicKeyBase64,
+        }
+      : {}),
+    ...(typeof env.joinGeneration === 'number' &&
+    Number.isFinite(env.joinGeneration)
+      ? { joinGeneration: env.joinGeneration }
+      : {}),
+  };
+}
+
 function buildGcKeySignedFields(
   env: GcKeyEnvelope
 ): Record<string, unknown> | null {
@@ -1263,6 +1298,14 @@ type GcVerifyPending =
       env: GcJoinEnvelope;
       fromNodeId?: string;
       peerPresenceHash?: string;
+    }
+  | {
+      kind: 'link_auth_join';
+      env: GcJoinEnvelope;
+      linkId: string;
+      peerDestinationHash: string;
+      peerPresenceHash?: string;
+      incoming: boolean | null;
     }
   | {
       kind: 'join_rk';
@@ -1950,6 +1993,10 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(
         `[GCall] Dropped GC_JOIN: invalid signature from ${job.env.fromAddress}`
       );
+    } else if (job.kind === 'link_auth_join') {
+      loggerLog(
+        `[GCall] Dropped Reticulum link auth GC_JOIN: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'join_rk') {
       loggerLog(
         `[GCall] Dropped GC_JOIN_RK: invalid signature from ${job.env.fromAddress}`
@@ -2011,6 +2058,13 @@ export class GroupCallManager extends EventEmitter {
     const env = job.env;
     const cacheKey = this.gcSignatureCacheKey(env.type, env.signature);
     if (this.verifiedGcSignatures.has(cacheKey)) {
+      if (job.kind === 'link_auth_join') {
+        try {
+          this.applyVerifiedJobSync(job);
+        } catch (err) {
+          loggerError('[GCall] Error applying cached verified message:', err);
+        }
+      }
       return;
     }
     if (this.inFlightGcVerify.has(cacheKey)) {
@@ -2045,7 +2099,7 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private applyVerifiedJobSync(job: GcVerifyPending): void {
-    if (job.kind === 'join') {
+    if (job.kind === 'join' || job.kind === 'link_auth_join') {
       const env = job.env;
       const signed = env.reticulumDestinationHash.trim().toLowerCase();
       const transport = job.peerPresenceHash?.trim().toLowerCase();
@@ -2078,6 +2132,10 @@ export class GroupCallManager extends EventEmitter {
     switch (job.kind) {
       case 'join':
         this.applyVerifiedJoin(job.env, job.fromNodeId);
+        break;
+      case 'link_auth_join':
+        this.applyVerifiedJoin(job.env);
+        this.applyVerifiedReticulumLinkAuthJoin(job);
         break;
       case 'join_rk':
         this.applyVerifiedJoinRk(job.env, job.fromNodeId);
@@ -4337,6 +4395,13 @@ export class GroupCallManager extends EventEmitter {
     if (roomId) {
       const hit = matchParticipantsInRoom(this.rooms.get(roomId));
       if (hit) return hit;
+      const room = this.rooms.get(roomId);
+      if (room) {
+        const remoteParticipants = [...room.participants.keys()].filter(
+          (address) => address && !this.localAddresses.has(address)
+        );
+        if (remoteParticipants.length === 1) return remoteParticipants[0]!;
+      }
     } else {
       for (const r of this.rooms.values()) {
         const hit = matchParticipantsInRoom(r);
@@ -4351,6 +4416,18 @@ export class GroupCallManager extends EventEmitter {
       if (room.participants.has(address)) return rid;
     }
     return null;
+  }
+
+  private isOnlyRemoteParticipantInRoom(
+    roomId: string,
+    address: string
+  ): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room || !address || this.localAddresses.has(address)) return false;
+    const remoteParticipants = [...room.participants.keys()].filter(
+      (participant) => participant && !this.localAddresses.has(participant)
+    );
+    return remoteParticipants.length === 1 && remoteParticipants[0] === address;
   }
 
   private getReticulumAudioTransportKind(): ReticulumMediaTransportKind {
@@ -4800,6 +4877,19 @@ export class GroupCallManager extends EventEmitter {
     );
   }
 
+  private isReticulumAudioEstablishedLinkSticky(
+    state: ReticulumAudioPeerState,
+    now = Date.now()
+  ): boolean {
+    if (!state.established || !state.linkId) return false;
+    return (
+      (state.linkEstablishedAtMs > 0 &&
+        now - state.linkEstablishedAtMs <=
+          GC_RETICULUM_AUDIO_LINK_STICKY_MS) ||
+      this.hasRecentReticulumAudioLinkActivity(state, now)
+    );
+  }
+
   private closeReticulumAudioLinkQuietly(linkId: string, reason: string): void {
     if (!linkId) return;
     const address = this.reticulumAudioAddressByLinkId.get(linkId);
@@ -4936,6 +5026,7 @@ export class GroupCallManager extends EventEmitter {
     const bridge = this.reticulumBridge;
     if (
       !bridge ||
+      typeof bridge.enqueueGroupAudio !== 'function' ||
       bridge.getState() !== 'ready' ||
       !state.established ||
       !state.linkId ||
@@ -4977,6 +5068,61 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(
         `[GCall] Flushed pending Reticulum link control address=${address} link=${state.linkId} sent=${sent} kept=${state.pendingControl.length} dropped=${dropped}`
       );
+    }
+  }
+
+  private getLocalReticulumLinkAuthJoinWire(
+    roomId: string
+  ): Record<string, unknown> | null {
+    for (const localAddress of this.localAddresses) {
+      const env = this.retainedVerifiedJoinByRoomAndAddress.get(
+        this.retainedJoinStateKey(roomId, localAddress)
+      );
+      if (!env) continue;
+      const wire = encodeJoinWire({
+        ...env,
+        reticulumIdentityPublicKeyBase64: undefined,
+      });
+      return wireFitsReticulum(wire) ? wire : null;
+    }
+    return null;
+  }
+
+  private sendReticulumAudioLinkAuth(
+    address: string,
+    state: ReticulumAudioPeerState,
+    reason: string,
+    linkIdOverride?: string,
+    allowPending = false
+  ): void {
+    const bridge = this.reticulumBridge;
+    const linkId = linkIdOverride || state.linkId;
+    if (
+      !bridge ||
+      typeof bridge.enqueueGroupAudio !== 'function' ||
+      !linkId ||
+      (!state.established && !allowPending)
+    ) {
+      return;
+    }
+    let sent = 0;
+    for (const roomId of state.rooms) {
+      if (state.linkAuthSentByRoom.get(roomId) === linkId) continue;
+      const frame = this.getLocalReticulumLinkAuthJoinWire(roomId);
+      if (!frame) continue;
+      const encoded = encodeGcLinkControlWire(frame);
+      if (!encoded) continue;
+      const result = bridge.enqueueGroupAudio(linkId, roomId, encoded);
+      if (result.ok) {
+        state.linkAuthSentByRoom.set(roomId, linkId);
+        sent++;
+      }
+    }
+    if (sent > 0) {
+      loggerLog(
+        `[GCall] Queued Reticulum audio link auth address=${address} link=${linkId} rooms=${sent} reason=${reason}`
+      );
+      this.scheduleReticulumAudioFlush();
     }
   }
 
@@ -5080,7 +5226,11 @@ export class GroupCallManager extends EventEmitter {
         state,
         incoming
       );
-      if (incomingOpenedByOwner === true && state.linkOpenedByOwner !== true) {
+      if (
+        incomingOpenedByOwner === true &&
+        state.linkOpenedByOwner !== true &&
+        !this.isReticulumAudioEstablishedLinkSticky(state)
+      ) {
         const previousLinkId = state.linkId;
         this.reticulumAudioAddressByLinkId.delete(previousLinkId);
         this.closeReticulumAudioLinkQuietly(
@@ -5128,6 +5278,7 @@ export class GroupCallManager extends EventEmitter {
       peerDestinationHash || state.peerDestinationHash;
     state.established = true;
     state.linkEstablishedCount++;
+    state.linkEstablishedAtMs = Date.now();
     state.opening = false;
     this.clearReticulumAudioOpenDefer(address);
     this.reticulumAudioAddressByLinkId.set(linkId, address);
@@ -5136,6 +5287,9 @@ export class GroupCallManager extends EventEmitter {
     }
     this.resetReticulumAudioLinkHeartbeat(state);
     this.flushPendingReticulumLinkControl(address, state);
+    if (reason === 'link-auth') {
+      this.sendReticulumAudioLinkAuth(address, state, reason);
+    }
     return true;
   }
 
@@ -5605,9 +5759,19 @@ export class GroupCallManager extends EventEmitter {
             latest.peerDestinationHash
           )
         ) {
-          this.closeReticulumAudioLinkQuietly(
+          latest.linkId = result.linkId;
+          latest.linkOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+            address,
+            latest,
+            false
+          );
+          this.reticulumAudioAddressByLinkId.set(result.linkId, address);
+          this.sendReticulumAudioLinkAuth(
+            address,
+            latest,
+            'open-result-awaiting-auth',
             result.linkId,
-            'open-result-unverified-address'
+            true
           );
           return;
         }
@@ -5780,6 +5944,7 @@ export class GroupCallManager extends EventEmitter {
         linkOpenedByOwner: null,
         established: false,
         opening: false,
+        linkAuthSentByRoom: new Map(),
         rooms: new Set<string>(),
         pending: [],
         pendingControl: [],
@@ -5797,6 +5962,7 @@ export class GroupCallManager extends EventEmitter {
         linkHeartbeatLastRxAtMs: 0,
         linkHeartbeatMissedPongs: 0,
         linkHeartbeatLastRecoveryAtMs: 0,
+        linkEstablishedAtMs: 0,
         linkEstablishLastAttemptAtMs: -1,
         linkEstablishRetryDelayMs:
           GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
@@ -6275,6 +6441,7 @@ export class GroupCallManager extends EventEmitter {
             linkOpenedByOwner: state.linkOpenedByOwner,
             linkOpenAttempts: state.linkOpenAttempts,
             linkEstablishedCount: state.linkEstablishedCount,
+            linkEstablishedAtMs: state.linkEstablishedAtMs,
             linkStaleCloseCount: state.linkStaleCloseCount,
             pendingControlFrames: state.pendingControl.length,
           }
@@ -6773,6 +6940,7 @@ export class GroupCallManager extends EventEmitter {
           linkOpenedByOwner: null,
           established: false,
           opening: false,
+          linkAuthSentByRoom: new Map(),
           rooms: desired.rooms,
           pending: [],
           pendingControl: [],
@@ -6790,6 +6958,7 @@ export class GroupCallManager extends EventEmitter {
           linkHeartbeatLastRxAtMs: 0,
           linkHeartbeatMissedPongs: 0,
           linkHeartbeatLastRecoveryAtMs: 0,
+          linkEstablishedAtMs: 0,
           linkEstablishLastAttemptAtMs: -1,
           linkEstablishRetryDelayMs:
             GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
@@ -7265,28 +7434,7 @@ export class GroupCallManager extends EventEmitter {
     }
 
     this.enqueueVerify(
-      {
-        type: env.type,
-        roomId: env.roomId,
-        chatId: env.chatId,
-        fromAddress: env.fromAddress,
-        fromPublicKey: env.fromPublicKey,
-        timestamp: env.timestamp,
-        reticulumDestinationHash: env.reticulumDestinationHash
-          .trim()
-          .toLowerCase(),
-        ...(env.reticulumIdentityPublicKeyBase64 &&
-        isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
-          ? {
-              reticulumIdentityPublicKeyBase64:
-                env.reticulumIdentityPublicKeyBase64,
-            }
-          : {}),
-        ...(typeof env.joinGeneration === 'number' &&
-        Number.isFinite(env.joinGeneration)
-          ? { joinGeneration: env.joinGeneration }
-          : {}),
-      },
+      buildGcJoinSignedFields(env),
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
@@ -7932,7 +8080,8 @@ export class GroupCallManager extends EventEmitter {
         address,
         peerPresenceHash || senderDestinationHash,
         senderDestinationHash
-      )
+      ) &&
+      !this.isOnlyRemoteParticipantInRoom(wire.R, address)
     ) {
       this.closeReticulumAudioLinkQuietly(
         linkId,
@@ -7980,6 +8129,124 @@ export class GroupCallManager extends EventEmitter {
     );
   }
 
+  private shouldAcceptStaleReticulumLinkAuthJoin(
+    env: GcJoinEnvelope
+  ): boolean {
+    const room = this.rooms.get(env.roomId);
+    const participant = room?.participants.get(env.fromAddress);
+    if (!participant) return false;
+    if (participant.publicKey !== env.fromPublicKey) return false;
+    const incomingHash = env.reticulumDestinationHash.trim().toLowerCase();
+    const knownHash = participant.reticulumDestinationHash.trim().toLowerCase();
+    return Boolean(incomingHash && incomingHash === knownHash);
+  }
+
+  private handleReticulumLinkAuthJoinWire(
+    wire: Record<string, unknown>,
+    payload: {
+      roomId: string;
+      linkId: string;
+      peerPresenceHash: string;
+      peerDestinationHash: string;
+      incoming: boolean;
+    }
+  ): boolean {
+    if (wire.t !== 'GJ') return false;
+    const env = decodeJoinWire(wire);
+    if (!env) {
+      this.closeReticulumAudioLinkQuietly(payload.linkId, 'link-auth-bad-join');
+      return true;
+    }
+    if (env.roomId !== payload.roomId || !this.hasLocalRoomInterest(env.roomId)) {
+      this.closeReticulumAudioLinkQuietly(payload.linkId, 'link-auth-wrong-room');
+      return true;
+    }
+    if (this.localAddresses.has(env.fromAddress)) {
+      this.closeReticulumAudioLinkQuietly(payload.linkId, 'link-auth-self');
+      return true;
+    }
+    const preRej = gcJoinTimestampRejectReason(env.timestamp, Date.now());
+    if (
+      preRej === 'future' ||
+      (preRej === 'expired' && !this.shouldAcceptStaleReticulumLinkAuthJoin(env))
+    ) {
+      this.closeReticulumAudioLinkQuietly(
+        payload.linkId,
+        `link-auth-${preRej}`
+      );
+      return true;
+    }
+    this.enqueueVerify(
+      buildGcJoinSignedFields(env),
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      {
+        kind: 'link_auth_join',
+        env,
+        linkId: payload.linkId,
+        peerDestinationHash: payload.peerDestinationHash,
+        peerPresenceHash: payload.peerPresenceHash,
+        incoming: payload.incoming,
+      }
+    );
+    return true;
+  }
+
+  private applyVerifiedReticulumLinkAuthJoin(
+    job: Extract<GcVerifyPending, { kind: 'link_auth_join' }>
+  ): void {
+    const env = job.env;
+    const room = this.rooms.get(env.roomId);
+    const participant = room?.participants.get(env.fromAddress);
+    if (!room || !participant) {
+      this.closeReticulumAudioLinkQuietly(job.linkId, 'link-auth-no-participant');
+      return;
+    }
+    if (participant.publicKey !== env.fromPublicKey) {
+      this.closeReticulumAudioLinkQuietly(
+        job.linkId,
+        'link-auth-public-key-mismatch'
+      );
+      return;
+    }
+    const signedHash = env.reticulumDestinationHash.trim().toLowerCase();
+    if (signedHash) {
+      this.rememberReticulumPeerPresenceHash(env.fromAddress, signedHash);
+    }
+    let state = this.reticulumAudioPeersByAddress.get(env.fromAddress);
+    if (!state) {
+      state = this.ensureReticulumAudioPeerState(env.roomId, env.fromAddress);
+    } else {
+      state.rooms.add(env.roomId);
+    }
+    if (!state) {
+      this.closeReticulumAudioLinkQuietly(job.linkId, 'link-auth-no-peer-state');
+      return;
+    }
+    state.peerDestinationHash =
+      job.peerDestinationHash || state.peerDestinationHash;
+    this.reticulumAudioAddressByLinkId.set(job.linkId, env.fromAddress);
+    if (
+      this.adoptEstablishedReticulumAudioLink(
+        env.fromAddress,
+        state,
+        job.linkId,
+        job.peerDestinationHash,
+        job.incoming,
+        'link-auth'
+      )
+    ) {
+      this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
+      this.noteBootstrapParticipantActivity(
+        env.roomId,
+        env.fromAddress,
+        env.timestamp
+      );
+      this.scheduleReticulumAudioFlush();
+    }
+  }
+
   private handleReticulumGroupAudioPacket(payload: {
     linkId: string;
     routeKey?: string;
@@ -8023,6 +8290,18 @@ export class GroupCallManager extends EventEmitter {
       (payload.transport ?? 'link') === 'link' && payload.linkId
         ? decodeGcLinkControlWire(raw)
         : null;
+    if (
+      inboundLinkControlWire &&
+      this.handleReticulumLinkAuthJoinWire(inboundLinkControlWire, {
+        roomId: payload.roomId,
+        linkId: payload.linkId,
+        peerPresenceHash: audioPeerPresenceHash,
+        peerDestinationHash: payload.peerDestinationHash,
+        incoming: payload.incoming,
+      })
+    ) {
+      return;
+    }
     if (inboundLinkControlWire && !fromAddress) {
       this.closeReticulumAudioLinkQuietly(
         payload.linkId,
@@ -8041,7 +8320,8 @@ export class GroupCallManager extends EventEmitter {
           fromAddress,
           audioPeerPresenceHash,
           payload.peerDestinationHash
-        )
+        ) &&
+        !this.isOnlyRemoteParticipantInRoom(payload.roomId, fromAddress)
       ) {
         this.closeReticulumAudioLinkQuietly(
           payload.linkId,
@@ -8193,30 +8473,20 @@ export class GroupCallManager extends EventEmitter {
   }): void {
     const peerPresenceHash =
       payload.peerPresenceHash || payload.peerDestinationHash;
-    const address = this.resolveReticulumAudioAddress(
-      payload.linkId,
-      peerPresenceHash
-    );
+    const address =
+      this.reticulumAudioAddressByLinkId.get(payload.linkId) ??
+      this.resolveReticulumAudioAddress(payload.linkId, peerPresenceHash);
     if (!address) {
-      this.closeReticulumAudioLinkQuietly(
-        payload.linkId,
-        'established-unresolved-address'
+      loggerLog(
+        `[GCall] Reticulum audio link established awaiting auth link=${payload.linkId} peerPresenceHash=${peerPresenceHash || 'n/a'}`
       );
       return;
     }
-    if (
-      !this.isReticulumAudioLinkVerifiedForAddress(
-        address,
-        peerPresenceHash,
-        payload.peerDestinationHash
-      )
-    ) {
-      this.closeReticulumAudioLinkQuietly(
-        payload.linkId,
-        'established-unverified-address'
-      );
-      return;
-    }
+    const verifiedForAddress = this.isReticulumAudioLinkVerifiedForAddress(
+      address,
+      peerPresenceHash,
+      payload.peerDestinationHash
+    );
     if (!this.reticulumAudioPeersByAddress.has(address)) {
       const rid = this.findRoomIdContainingParticipant(address);
       if (rid) {
@@ -8225,6 +8495,28 @@ export class GroupCallManager extends EventEmitter {
     }
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (!state) return;
+    if (!verifiedForAddress) {
+      state.linkId = payload.linkId;
+      state.linkOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+        address,
+        state,
+        payload.incoming
+      );
+      state.peerDestinationHash =
+        payload.peerDestinationHash || state.peerDestinationHash;
+      this.reticulumAudioAddressByLinkId.set(payload.linkId, address);
+      this.sendReticulumAudioLinkAuth(
+        address,
+        state,
+        'established-awaiting-auth',
+        payload.linkId,
+        true
+      );
+      loggerLog(
+        `[GCall] Reticulum audio link established awaiting verified auth address=${address} link=${payload.linkId}`
+      );
+      return;
+    }
     if (
       !this.adoptEstablishedReticulumAudioLink(
         address,
