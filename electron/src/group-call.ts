@@ -830,7 +830,10 @@ interface GcReticulumAudioSendDiagnostics {
   linkId?: string;
   linkEstablished?: boolean;
   linkOpenedByOwner?: boolean | null;
+  linkOpening?: boolean;
   linkEstablishPendingAgeMs?: number;
+  linkEstablishLastAttemptAtMs?: number;
+  linkEstablishRetryDelayMs?: number;
   linkOpenAttempts?: number;
   linkEstablishedCount?: number;
   linkEstablishedAtMs?: number;
@@ -902,6 +905,14 @@ function mergeGcReticulumAudioSendDiagnostics(
       a.linkEstablishPendingAgeMs ?? 0,
       b.linkEstablishPendingAgeMs ?? 0
     ),
+    linkEstablishLastAttemptAtMs: Math.max(
+      a.linkEstablishLastAttemptAtMs ?? 0,
+      b.linkEstablishLastAttemptAtMs ?? 0
+    ),
+    linkEstablishRetryDelayMs: Math.max(
+      a.linkEstablishRetryDelayMs ?? 0,
+      b.linkEstablishRetryDelayMs ?? 0
+    ),
     linkOpenAttempts: Math.max(
       a.linkOpenAttempts ?? 0,
       b.linkOpenAttempts ?? 0
@@ -964,6 +975,11 @@ function mergeGcReticulumAudioSendDiagnostics(
       ? { linkEstablished: b.linkEstablished }
       : a.linkEstablished != null
         ? { linkEstablished: a.linkEstablished }
+        : {}),
+    ...(b.linkOpening != null
+      ? { linkOpening: b.linkOpening }
+      : a.linkOpening != null
+        ? { linkOpening: a.linkOpening }
         : {}),
     ...(b.linkOpenedByOwner !== undefined
       ? { linkOpenedByOwner: b.linkOpenedByOwner }
@@ -5040,6 +5056,38 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(
       `[GCall] Queued ${reason} pending Reticulum group link room=${roomId} address=${address} pending=${state.pendingControl.length}`
     );
+    this.retryReticulumAudioLinkAfterPendingControlIfStale(
+      address,
+      state,
+      roomId,
+      reason,
+      now
+    );
+  }
+
+  private retryReticulumAudioLinkAfterPendingControlIfStale(
+    address: string,
+    state: ReticulumAudioPeerState,
+    roomId: string,
+    reason: string,
+    now: number
+  ): void {
+    if (state.established && state.linkId) return;
+    if (state.opening) return;
+    if (!this.shouldMaintainReticulumAudioLink(state)) return;
+    const pendingLinkAgeMs =
+      state.linkId && state.linkEstablishLastAttemptAtMs >= 0
+        ? now - state.linkEstablishLastAttemptAtMs
+        : 0;
+    const establishStaleMs =
+      state.linkEstablishedCount === 0
+        ? GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS
+        : GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS;
+    if (state.linkId && pendingLinkAgeMs < establishStaleMs) return;
+    loggerLog(
+      `[GCall] Reticulum pending link control forcing establish retry room=${roomId} address=${address} reason=${reason} pendingAgeMs=${Math.max(0, pendingLinkAgeMs)} pendingControl=${state.pendingControl.length}`
+    );
+    this.retryReticulumAudioLinkEstablishIfNeeded(address, state, roomId, now);
   }
 
   private flushPendingReticulumLinkControl(
@@ -6468,6 +6516,9 @@ export class GroupCallManager extends EventEmitter {
         ? {
             linkEstablished: state.established,
             linkOpenedByOwner: state.linkOpenedByOwner,
+            linkOpening: state.opening,
+            linkEstablishLastAttemptAtMs: state.linkEstablishLastAttemptAtMs,
+            linkEstablishRetryDelayMs: state.linkEstablishRetryDelayMs,
             linkOpenAttempts: state.linkOpenAttempts,
             linkEstablishedCount: state.linkEstablishedCount,
             linkEstablishedAtMs: state.linkEstablishedAtMs,
