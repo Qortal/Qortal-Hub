@@ -778,6 +778,11 @@ interface ReticulumAudioPeerState {
   established: boolean;
   opening: boolean;
   linkAuthSentByRoom: Map<string, string>;
+  linkAuthSentCount: number;
+  linkAuthRxCount: number;
+  linkAuthAppliedCount: number;
+  lastLinkAuthAtMs: number;
+  lastLinkAuthReason: string;
   rooms: Set<string>;
   pending: ReticulumAudioPendingFrame[];
   pendingControl: ReticulumLinkControlPendingFrame[];
@@ -831,6 +836,11 @@ interface GcReticulumAudioSendDiagnostics {
   linkEstablishedAtMs?: number;
   linkStaleCloseCount?: number;
   pendingControlFrames?: number;
+  linkAuthSentCount?: number;
+  linkAuthRxCount?: number;
+  linkAuthAppliedCount?: number;
+  lastLinkAuthAtMs?: number;
+  lastLinkAuthReason?: string;
   lastLinkCloseReason?: string;
   lastLinkCloseAtMs?: number;
   lastLinkCloseLinkId?: string;
@@ -904,6 +914,19 @@ function mergeGcReticulumAudioSendDiagnostics(
       a.linkEstablishedAtMs ?? 0,
       b.linkEstablishedAtMs ?? 0
     ),
+    linkAuthSentCount: Math.max(
+      a.linkAuthSentCount ?? 0,
+      b.linkAuthSentCount ?? 0
+    ),
+    linkAuthRxCount: Math.max(a.linkAuthRxCount ?? 0, b.linkAuthRxCount ?? 0),
+    linkAuthAppliedCount: Math.max(
+      a.linkAuthAppliedCount ?? 0,
+      b.linkAuthAppliedCount ?? 0
+    ),
+    lastLinkAuthAtMs: Math.max(a.lastLinkAuthAtMs ?? 0, b.lastLinkAuthAtMs ?? 0),
+    lastLinkAuthReason: b.lastLinkAuthAtMs ?? 0 > (a.lastLinkAuthAtMs ?? 0)
+      ? b.lastLinkAuthReason
+      : a.lastLinkAuthReason,
     linkStaleCloseCount: Math.max(
       a.linkStaleCloseCount ?? 0,
       b.linkStaleCloseCount ?? 0
@@ -5115,6 +5138,9 @@ export class GroupCallManager extends EventEmitter {
       const result = bridge.enqueueGroupAudio(linkId, roomId, encoded);
       if (result.ok) {
         state.linkAuthSentByRoom.set(roomId, linkId);
+        state.linkAuthSentCount++;
+        state.lastLinkAuthAtMs = Date.now();
+        state.lastLinkAuthReason = `sent:${reason}`;
         sent++;
       }
     }
@@ -5287,9 +5313,7 @@ export class GroupCallManager extends EventEmitter {
     }
     this.resetReticulumAudioLinkHeartbeat(state);
     this.flushPendingReticulumLinkControl(address, state);
-    if (reason === 'link-auth') {
-      this.sendReticulumAudioLinkAuth(address, state, reason);
-    }
+    this.sendReticulumAudioLinkAuth(address, state, reason);
     return true;
   }
 
@@ -5945,6 +5969,11 @@ export class GroupCallManager extends EventEmitter {
         established: false,
         opening: false,
         linkAuthSentByRoom: new Map(),
+        linkAuthSentCount: 0,
+        linkAuthRxCount: 0,
+        linkAuthAppliedCount: 0,
+        lastLinkAuthAtMs: 0,
+        lastLinkAuthReason: '',
         rooms: new Set<string>(),
         pending: [],
         pendingControl: [],
@@ -6444,6 +6473,11 @@ export class GroupCallManager extends EventEmitter {
             linkEstablishedAtMs: state.linkEstablishedAtMs,
             linkStaleCloseCount: state.linkStaleCloseCount,
             pendingControlFrames: state.pendingControl.length,
+            linkAuthSentCount: state.linkAuthSentCount,
+            linkAuthRxCount: state.linkAuthRxCount,
+            linkAuthAppliedCount: state.linkAuthAppliedCount,
+            lastLinkAuthAtMs: state.lastLinkAuthAtMs,
+            lastLinkAuthReason: state.lastLinkAuthReason,
           }
         : {}),
       ...(linkEstablishPendingAgeMs !== undefined
@@ -6941,6 +6975,11 @@ export class GroupCallManager extends EventEmitter {
           established: false,
           opening: false,
           linkAuthSentByRoom: new Map(),
+          linkAuthSentCount: 0,
+          linkAuthRxCount: 0,
+          linkAuthAppliedCount: 0,
+          lastLinkAuthAtMs: 0,
+          lastLinkAuthReason: '',
           rooms: desired.rooms,
           pending: [],
           pendingControl: [],
@@ -8190,6 +8229,15 @@ export class GroupCallManager extends EventEmitter {
         incoming: payload.incoming,
       }
     );
+    const currentAddress = this.reticulumAudioAddressByLinkId.get(payload.linkId);
+    const state = currentAddress
+      ? this.reticulumAudioPeersByAddress.get(currentAddress)
+      : undefined;
+    if (state) {
+      state.linkAuthRxCount++;
+      state.lastLinkAuthAtMs = Date.now();
+      state.lastLinkAuthReason = 'rx';
+    }
     return true;
   }
 
@@ -8237,6 +8285,9 @@ export class GroupCallManager extends EventEmitter {
         'link-auth'
       )
     ) {
+      state.linkAuthAppliedCount++;
+      state.lastLinkAuthAtMs = Date.now();
+      state.lastLinkAuthReason = 'applied';
       this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
       this.noteBootstrapParticipantActivity(
         env.roomId,
