@@ -2847,6 +2847,7 @@ export class GroupCallAudioEngineRuntime {
             this.participantJoinIdentityByAddress.delete(
               leavingAddress.trim()
             );
+            this.clearTargetedRoomKeyReplayRetriesForAddress(leavingAddress);
             await this.resetReceiveStateForParticipant(
               leavingAddress,
               'participant-left'
@@ -3709,6 +3710,18 @@ export class GroupCallAudioEngineRuntime {
     this.targetedRoomKeyReplayAttempts.clear();
   }
 
+  private clearTargetedRoomKeyReplayRetriesForAddress(address: string): void {
+    const target = address.trim();
+    if (!target) return;
+    for (const [key, timer] of this.targetedRoomKeyReplayTimers) {
+      const parts = key.split('|');
+      if (parts[3] !== target) continue;
+      clearTimeout(timer);
+      this.targetedRoomKeyReplayTimers.delete(key);
+      this.targetedRoomKeyReplayAttempts.delete(key);
+    }
+  }
+
   private scheduleTargetedRoomKeyReplayRetry(
     toAddressValue: string | null | undefined,
     publicKeyValue: string | null | undefined,
@@ -3777,6 +3790,13 @@ export class GroupCallAudioEngineRuntime {
       toAddress === myAddress ||
       retryKey !== this.buildTargetedRoomKeyReplayKey(toAddress)
     ) {
+      return;
+    }
+    const targetStillInRoom = this.snapshot.participants.some(
+      (participant) => participant.address?.trim() === toAddress
+    );
+    if (!targetStillInRoom) {
+      this.targetedRoomKeyReplayAttempts.delete(retryKey);
       return;
     }
 

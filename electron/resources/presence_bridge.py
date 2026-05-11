@@ -5451,7 +5451,12 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
     link = state.get("link")
     try:
         if link is not None:
+            try:
+                link.set_link_closed_callback(None)
+            except Exception:
+                pass
             link.teardown()
+        emit_audio_link_closed(link_id, "local_close")
         emit_resp(req_id, True)
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
