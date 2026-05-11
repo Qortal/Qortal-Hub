@@ -4639,3 +4639,111 @@ Current patched target:
 - Primary fix: single-source selector damage hold and exit hysteresis. A side with repeated large missing-frame deltas plus high `playoutUnderTargetFraction` / `playoutRateFractionBelow097` should not spend damaging windows in `clean-low-latency` or settle live at `steady-weak-listener`, even if `avgPcmBufferedMs` / reserve EMA looks healthy.
 - Secondary fix: severe-profile strength for `repair-collapse` / `collapse-recovery` on the root side, because correct severe classification still leaves root near empty.
 - Leave baseline unchanged. Do not add a new profile from this call.
+
+## Call: 2026-05-11 12:33Z / group 812 post-sender-hardening check
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-11T12-33-26-638Z.json`
+- Side B: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-11T12-33-30-076Z.json`
+
+User symptom:
+- New two-person group call after the sender backlog/stale-output/reset changes. User asked whether the previous issue was fixed.
+
+High-level verdict:
+- Mixed but materially improved.
+- Both exports agree on room `gcall-qortal-812`, connected state, two active senders, active WASM-FEC receive path, active shared PCM ring, active jitter/playback/scheduler nodes, and matching root/standby roles.
+- The previous catastrophic sender issue is fixed in this call: both sides have `droppedEncoderBackpressureFrames=0`, `droppedStaleEncodedFrames=0`, `encoderResetCount=0`, `encoderQueueSize=0`, and normal sender main-thread-to-encoder timing. Root improved from the previous bad call's `avg=40.068ms / max=426.91ms` to `avg=0.686ms / max=15.24ms`; standby is `avg=0.633ms / max=6.98ms`.
+- Remaining issue is receive-policy churn, not sender backlog. Standby receiving root is now clean enough by the prior symptom bars; root receiving standby still has moderate missing-frame/repair churn.
+
+Not the problem:
+- Sender/WebCodecs backlog: both sides have zero backpressure drops, stale drops, and encoder resets.
+- Decrypt: `packetsDroppedPendingDecrypt=0`, retained-window pending-decrypt delta `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0`, retained-window decode-failure delta `0` on both sides.
+- Queue/backpressure: both outbound paths show send successes equal attempts, no send failures, bridge waiting-for-drain `false`, no queue-pressure drops, no stale drops, no decoded queue drops, and no packet path timeouts.
+- Startup/playout: both sides have active playout, active scheduler/playback nodes, `jitterHasReadyFrame=true`, and no no-target deltas.
+- Renderer stalls: standby has no renderer stalls or long tasks. Root has one early renderer stall and one long task from before/at monitor startup, but sender timing stayed healthy and the stall is not the active failure shape.
+- Baseline: both sides spend most retained samples in recovery and already apply profile floors/boosts; global baseline is not the next lever.
+
+Primary next target:
+- Selector / hysteresis.
+- Specifically, smooth single-source receive profile exit/hold and reduce profile churn after recovery. The catastrophic standby-hearing-root failure is gone, but both sides still show profiles oscillating between lean, weak, repair-heavy, and collapse modes after missing-frame bursts.
+- Do not tune sender next from this call. Do not increase baseline. Profile strength is secondary only if a future report says a correctly classified `repair-collapse` / `collapse-recovery` side still sounds bad.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | mixed: `steady-weak-listener`, `clean-low-latency`, `collapse-recovery`, `repair-collapse`; live `repair-heavy-connected` | no catastrophic symptom reported; residual receive churn | 25.454 | 1471 | 190 | 0.048 | 0.030 | recovery | Sender path healthy. Receive damage is moderate and much improved versus prior root collapse, but `clean-low-latency` still owns `372` missing-frame delta and weak/repair profiles churn. |
+| B | standby-forwarder / macOS / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` / `silent-lean`; live `repair-collapse` | no; prior standby-incomprehensible symptom appears fixed | 11.216 | 685 | 55 | 0.005 | 0.003 | recovery | This is the important before/after improvement. Standby under-target and slow-rate fractions are now near clean-call levels; no sender backlog, decrypt, decode, or queue issues. Profile is conservative/lean-heavy despite low current pressure. |
+
+### Side A
+
+Expected profile from symptom:
+- If no user-bad symptom: mostly `clean-low-latency` with brief `steady-weak-listener` / `repair-heavy-connected` during bursts.
+- If residual spotty audio was noticed: `repair-heavy-connected` or brief `repair-collapse` fits better than full collapse.
+
+Actual exported profile:
+- Current exported profile: `repair-heavy-connected`.
+- Retained profile counts: `steady-weak-listener` (`50`), `clean-low-latency` (`44`), `collapse-recovery` (`33`), `repair-collapse` (`22`), `repair-heavy-connected` (`15`), `buffered-not-ready` (`1`), plus `20` early no-profile samples.
+
+Did classification match?
+- Partly.
+
+Notes:
+- The sender-side classification is clean: captured and encoded frames match (`8376/8376`), with no backpressure/stale/reset counters.
+- Receive classification still exits/enters too often. `repair-collapse` owns the largest retained missing-frame delta (`565`), but `clean-low-latency` still owns `372` missing-frame delta and `steady-weak-listener` owns `343`.
+- Late live state looks like a recovery tail rather than active collapse: `bufferedMsEma=181.741`, `lastAppliedTargetMs=196`, `lastAppliedFloorMs=196`, `underTargetEma=0.074`, `missingFrameEma=0.030`, and `repairHeavy` hold remaining about `9.9s`.
+- This argues for selector/hysteresis refinement, not another global profile-strength increase.
+
+### Side B
+
+Expected profile from symptom:
+- Since the previous standby-incomprehensible symptom appears fixed, expected profile would be mostly `clean-low-latency` or brief lean recovery.
+
+Actual exported profile:
+- Current exported profile: `repair-collapse`.
+- Retained profile counts: `persistent-lean` (`77`), `silent-lean` (`49`), `repair-collapse` (`27`), `collapse-recovery` (`7`), plus `1` early no-profile sample.
+
+Did classification match?
+- Partly / too conservative.
+
+If no:
+- Current user-level outcome looks far better than the exported severe/lean labels imply: `playoutUnderTargetFraction=0.005`, `playoutRateFractionBelow097=0.003`, `concealmentTicks=55`, no renderer stalls, and no sender backlog.
+- The live `repair-collapse` state is mostly driven by shallow/lean geometry (`bufferedMsEma=3.312`, `deltaMsEma=-181.688`, `preProcessBufferedFrames=0`) and missing-frame EMA, not active under-target or concealment pressure.
+- This should not drive profile-strength tuning. It is a selector/exit-hysteresis question: keep protection available for shallow reserve, but avoid making a good-sounding standby look catastrophically classified once current pressure is calm.
+
+## Trend Read
+
+Side A:
+- Improved sender, residual receive oscillation.
+- Reasons seen:
+  - recovery mode for `135/185` retained samples.
+  - profile counts are spread across weak, clean, repair-heavy, repair-collapse, and collapse-recovery rather than one stable severe class.
+  - retained missing-frame deltas: `repair-collapse=565`, `clean-low-latency=372`, `steady-weak-listener=343`, `repair-heavy-connected=111`, `collapse-recovery=80`.
+  - concealment is much lower than the previous root-collapse call (`190` total versus `2335`), but collapse-recovery still owns most concealment (`152`).
+  - no retained-window decrypt/decode/no-target deltas.
+
+Side B:
+- Fixed prior standby catastrophic symptom; conservative lean/recovery classification remains.
+- Reasons seen:
+  - recovery mode for `160/161` retained samples.
+  - retained missing-frame deltas are mostly `persistent-lean=457`, with low concealment (`55`) and very low under-target/slow-rate fractions.
+  - largest missing deltas were `108` and `102` in `persistent-lean`, but late windows settle to small deltas (`2-4`) with `jitterHasReadyFrame=true`.
+  - no renderer stalls, decrypt/decode drops, no-target deltas, or bridge pressure.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-11T12:33Z group-812` | A / Linux root epoch unknown | mixed; live `repair-heavy-connected` | no catastrophic symptom reported; residual churn | partly | selector / recovery hysteresis | Keep sender fix; tune receive selector exit/hold so clean/weak profiles do not own missing-frame bursts and recovery tails do not churn. |
+| `2026-05-11T12:33Z group-812` | B / macOS standby epoch unknown | `persistent-lean` / `silent-lean`; live `repair-collapse` | no; prior incomprehensible standby symptom fixed | partly / too conservative | selector / lean-clear hysteresis | Do not strengthen severe profiles from this side; refine lean/collapse clear conditions so calm low-under-target windows do not look catastrophically classified. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector / hysteresis.
+- Primary fix: single-source receive profile stability after recovery. Keep the new sender backlog protection as successful, then tune receive selector entry/exit so:
+  - `clean-low-latency` and `steady-weak-listener` do not own meaningful missing-frame bursts on Side A.
+  - `persistent-lean` / `silent-lean` / `repair-collapse` clear more coherently on Side B when under-target, slow-rate, concealment, decrypt, decode, sender, and queue signals are calm.
+- Profile strength is not the next target from this call. Baseline is not the next target. No new profile is justified.
