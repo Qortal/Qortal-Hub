@@ -7897,11 +7897,24 @@ export class GroupCallManager extends EventEmitter {
       const reticulumIdentityChanged =
         Boolean(existingReticulumDestinationHash) &&
         incomingReticulumDestinationHash !== existingReticulumDestinationHash;
-      if (refreshedExistingJoin || reticulumIdentityChanged) {
+      const staleAudioStateForAbsentParticipant =
+        !existing &&
+        this.reticulumAudioPeersByAddress
+          .get(env.fromAddress)
+          ?.rooms.has(env.roomId) === true;
+      let audioStateResetReason = '';
+      if (staleAudioStateForAbsentParticipant) {
+        audioStateResetReason = 'fresh-verified-join-absent-participant';
+      } else if (refreshedExistingJoin) {
+        audioStateResetReason = 'fresh-verified-join';
+      } else if (reticulumIdentityChanged) {
+        audioStateResetReason = 'join-identity-changed';
+      }
+      if (audioStateResetReason) {
         this.resetReticulumAudioPeerStateForRoomAddress(
           env.roomId,
           env.fromAddress,
-          refreshedExistingJoin ? 'fresh-verified-join' : 'join-identity-changed'
+          audioStateResetReason
         );
       }
       room.participants.set(env.fromAddress, {

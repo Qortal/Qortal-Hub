@@ -4475,6 +4475,99 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
+  it('resets stale Reticulum audio state when a same-hash rejoin had no roster entry', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      sendGroupCall = vi.fn(async () => true);
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'fresh-link',
+        established: false,
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+      getAudioQueueSnapshot = vi.fn(() => makeAudioQueueSnapshot());
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    manager.setLocalAddresses(['Q-root']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-root',
+      'sig-root',
+      'pk-root',
+      100,
+      TEST_D32
+    );
+    await Promise.resolve();
+    const room = (manager as any).rooms.get('room-1');
+    const now = Date.now();
+    room.participants.set('Q-peer', {
+      publicKey: 'pk-peer-old',
+      joinedAt: now - 1_000,
+      reticulumDestinationHash: `d:Q-peer`,
+    });
+    const staleState = (manager as any).ensureReticulumAudioPeerState(
+      'room-1',
+      'Q-peer'
+    );
+    await Promise.resolve();
+    staleState.linkId = 'old-link';
+    staleState.established = false;
+    staleState.rooms = new Set(['room-1']);
+    staleState.pendingControl.push({
+      roomId: 'room-1',
+      data: Buffer.from([4]),
+      reason: 'GC_KEY',
+      enqueuedAtMs: Date.now(),
+    });
+    staleState.linkAuthSentByRoom.set('room-1', 'old-link');
+    (manager as any).reticulumAudioAddressByLinkId.set('old-link', 'Q-peer');
+    room.participants.delete('Q-peer');
+    bridge.closeGroupAudioLink.mockClear();
+    bridge.openGroupAudioLink.mockClear();
+
+    (manager as any).applyVerifiedJoin({
+      type: 'GC_JOIN',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer-new',
+      signature: 'sig-peer',
+      timestamp: now,
+      reticulumDestinationHash: `d:Q-peer`,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(bridge.closeGroupAudioLink).toHaveBeenCalledWith('old-link');
+    const freshState = (manager as any).reticulumAudioPeersByAddress.get(
+      'Q-peer'
+    );
+    expect(freshState).toBeDefined();
+    expect(freshState).not.toBe(staleState);
+    expect(freshState.pendingControl).toEqual([]);
+    expect(freshState.linkAuthSentByRoom.has('room-1')).toBe(false);
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledWith('d:q-peer');
+    manager.stop();
+  });
+
   it('handles topology received inside a Reticulum group link control frame without emitting audio', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
