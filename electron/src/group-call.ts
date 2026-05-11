@@ -4064,6 +4064,7 @@ export class GroupCallManager extends EventEmitter {
     this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'leave');
     const room = this.rooms.get(roomId);
     let shouldDelayReticulumAudioTeardown = false;
+    let leaveDrainLinks: Array<{ address: string; linkId: string }> = [];
     if (signature) {
       const env: GcLeaveEnvelope = {
         type: 'GC_LEAVE',
@@ -4089,6 +4090,10 @@ export class GroupCallManager extends EventEmitter {
             );
           void skippedLinks;
           shouldDelayReticulumAudioTeardown = sentLinks > 0;
+          if (shouldDelayReticulumAudioTeardown) {
+            leaveDrainLinks =
+              this.collectReticulumAudioLeaveDrainLinksForRoom(roomId);
+          }
           this.fanoutReticulumWire(
             roomId,
             [leaveWire],
@@ -4117,7 +4122,10 @@ export class GroupCallManager extends EventEmitter {
     this.qortalReticulumTargetsByRoomId.delete(roomId);
     this.transportHealthByRoom.delete(roomId);
     if (shouldDelayReticulumAudioTeardown) {
-      this.scheduleReticulumAudioLinkTeardownAfterLeave(roomId);
+      this.scheduleReticulumAudioLinkTeardownAfterLeave(
+        roomId,
+        leaveDrainLinks
+      );
     } else {
       this.syncReticulumAudioLinks();
     }
@@ -4129,19 +4137,55 @@ export class GroupCallManager extends EventEmitter {
     this.scheduleQortalGroupCallActivityEmit(true);
   }
 
-  private scheduleReticulumAudioLinkTeardownAfterLeave(roomId: string): void {
+  private collectReticulumAudioLeaveDrainLinksForRoom(
+    roomId: string
+  ): Array<{ address: string; linkId: string }> {
+    const links: Array<{ address: string; linkId: string }> = [];
+    for (const [address, state] of this.reticulumAudioPeersByAddress) {
+      if (!state.rooms.has(roomId) || !state.linkId) continue;
+      links.push({ address, linkId: state.linkId });
+    }
+    return links;
+  }
+
+  private closeReticulumAudioLeaveDrainLinks(
+    roomId: string,
+    links: Array<{ address: string; linkId: string }>
+  ): void {
+    for (const { address, linkId } of links) {
+      const state = this.reticulumAudioPeersByAddress.get(address);
+      if (state?.linkId === linkId && state.rooms.has(roomId)) {
+        this.resetReticulumAudioPeerStateForRoomAddress(
+          roomId,
+          address,
+          'leave-drain-complete'
+        );
+        continue;
+      }
+      this.reticulumAudioAddressByLinkId.delete(linkId);
+      this.closeReticulumAudioLinkQuietly(linkId, 'leave-drain-complete');
+    }
+  }
+
+  private scheduleReticulumAudioLinkTeardownAfterLeave(
+    roomId: string,
+    links: Array<{ address: string; linkId: string }>
+  ): void {
     const timer = setTimeout(() => {
       this.reticulumLeaveLinkDrainTimers.delete(timer);
-      if (this.rooms.has(roomId)) {
+      if (links.length > 0) {
         loggerLog(
-          `[GCall] GC_LEAVE link drain skipped for room ${roomId}; room was rejoined before teardown`
+          `[GCall] GC_LEAVE link drain complete for room ${roomId}; closing ${links.length} drained Reticulum audio link(s)`
         );
-        return;
+        this.closeReticulumAudioLeaveDrainLinks(roomId, links);
+      } else {
+        loggerLog(
+          `[GCall] GC_LEAVE link drain complete for room ${roomId}; no Reticulum audio links to close`
+        );
       }
-      loggerLog(
-        `[GCall] GC_LEAVE link drain complete for room ${roomId}; syncing Reticulum audio links`
-      );
-      this.syncReticulumAudioLinks();
+      if (!this.rooms.has(roomId)) {
+        this.syncReticulumAudioLinks();
+      }
     }, GC_RETICULUM_LEAVE_LINK_DRAIN_MS);
     timer.unref?.();
     this.reticulumLeaveLinkDrainTimers.add(timer);

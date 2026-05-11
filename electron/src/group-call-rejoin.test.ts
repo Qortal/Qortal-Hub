@@ -1781,7 +1781,7 @@ describe('Reticulum group audio transport', () => {
     expect(bridge.closeGroupAudioLink).not.toHaveBeenCalled();
   });
 
-  it('does not let a stale leave-drain timer tear down a cached-peer link after rejoin', async () => {
+  it('does not let a leave-drain timer tear down a fresh rejoin link', async () => {
     vi.useFakeTimers();
 
     class ReticulumAudioBridgeStub extends EventEmitter {
@@ -1905,7 +1905,8 @@ describe('Reticulum group audio transport', () => {
     expect(state).toBeDefined();
     expect(state.established).toBe(true);
     expect(state.linkId).toBe('link-2');
-    expect(bridge.closeGroupAudioLink).not.toHaveBeenCalled();
+    expect(bridge.closeGroupAudioLink).toHaveBeenCalledWith('link-1');
+    expect(bridge.closeGroupAudioLink).not.toHaveBeenCalledWith('link-2');
   });
 
   it('keeps the established Reticulum audio link when a duplicate link close arrives', () => {
