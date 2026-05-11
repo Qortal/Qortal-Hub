@@ -2160,6 +2160,63 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('uses inbound live media evidence to re-elect topology when control join is missing', async () => {
+    vi.useFakeTimers();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qpeer',
+      'Qlocal',
+    ]);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    await (runtime as any).applyTopology(
+      {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: '',
+        clusters: [
+          {
+            members: ['Qlocal'],
+            forwarder: 'Qlocal',
+            standby: '',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      'local-election'
+    );
+
+    (runtime as any).noteParticipantLiveEvidence('Qpeer', Date.now());
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.runAllTicks();
+
+    expect(
+      ((runtime as any).snapshot.participants as Array<{ address: string }>)
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ address: 'Qpeer' })])
+    );
+    expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
+    expect(
+      ((runtime as any).diagEvents as Array<{ tag: string; payload?: any }>).some(
+        (event) =>
+          event.tag === 'live-evidence-topology-election-requested' &&
+          event.payload?.address === 'Qpeer'
+      )
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('requests a room key on session-updated when another participant is root', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);

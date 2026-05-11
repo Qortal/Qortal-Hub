@@ -345,6 +345,7 @@ const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
 const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS =
   PARTICIPANT_ROSTER_MISSING_EVICT_MS;
 const PARTICIPANT_RECENT_OUTBOUND_EVICT_VETO_MS = 45_000;
+const LIVE_EVIDENCE_TOPOLOGY_ELECTION_MIN_MS = 2_000;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
   TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
@@ -595,6 +596,10 @@ export class GroupCallAudioEngineRuntime {
     number
   >();
   private readonly participantLiveEvidenceLastSeenAt = new Map<
+    string,
+    number
+  >();
+  private readonly liveEvidenceTopologyElectionLastAt = new Map<
     string,
     number
   >();
@@ -2313,6 +2318,7 @@ export class GroupCallAudioEngineRuntime {
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
     this.participantLiveEvidenceLastSeenAt.clear();
+    this.liveEvidenceTopologyElectionLastAt.clear();
     this.bootstrapOnlyParticipantAddresses.clear();
     this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
     this.startupMediaTargetWaitLastDiagAt = 0;
@@ -2593,6 +2599,7 @@ export class GroupCallAudioEngineRuntime {
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
     this.participantLiveEvidenceLastSeenAt.clear();
+    this.liveEvidenceTopologyElectionLastAt.clear();
     this.bootstrapOnlyParticipantAddresses.clear();
     this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
     this.startupMediaTargetWaitLastDiagAt = 0;
@@ -2939,6 +2946,7 @@ export class GroupCallAudioEngineRuntime {
       this.activeSpeakerLastSeenAt.clear();
       this.participantDecodedMediaLastSeenAt.clear();
       this.participantLiveEvidenceLastSeenAt.clear();
+      this.liveEvidenceTopologyElectionLastAt.clear();
       this.clearActiveSpeakerRefreshTimer();
       await this.senderEngine.stop();
       await this.syncDecryptPoolRoomKey(null);
@@ -3899,8 +3907,15 @@ export class GroupCallAudioEngineRuntime {
     ) {
       return;
     }
+    const shouldReconsiderSelfMintedRootFromLiveEvidence =
+      reason === 'live-media-evidence' &&
+      this.selfMintedRoomKey &&
+      (this.topology?.rootForwarder?.trim() ?? '') === myAddress &&
+      addresses.some((address) => address.trim() && address !== myAddress);
     const trustedElectionRoot = getTrustedRootForRejoinElection({
-      currentRoot: this.isProvisionalLocalRootActive(nowMs)
+      currentRoot:
+        this.isProvisionalLocalRootActive(nowMs) ||
+        shouldReconsiderSelfMintedRootFromLiveEvidence
         ? null
         : this.topology?.rootForwarder,
       trustedRemoteRoot: this.trustedRemoteRoot,
@@ -3909,6 +3924,14 @@ export class GroupCallAudioEngineRuntime {
       staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
       rosterAddresses: addresses,
     });
+    if (shouldReconsiderSelfMintedRootFromLiveEvidence) {
+      this.recordDiagEvent('self-minted-root-reconsidered-from-live-evidence', {
+        roomId,
+        reason,
+        participantCount: addresses.length,
+        currentRoot: this.topology?.rootForwarder ?? null,
+      });
+    }
     const topologyEpoch =
       Math.max(
         this.topology?.topologyEpoch ?? 0,
@@ -5301,7 +5324,11 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private async refreshAuthoritativeParticipantRoster(
-    reason: 'periodic' | 'topology-applied'
+    reason:
+      | 'periodic'
+      | 'topology-applied'
+      | 'local-topology-election-suppressed-unchanged'
+      | 'live-media-evidence'
   ): Promise<void> {
     const roomId = this.snapshot.roomId;
     const myAddress = this.userInfo?.address?.trim() ?? '';
@@ -5462,8 +5489,15 @@ export class GroupCallAudioEngineRuntime {
     const address = addressValue?.trim() ?? '';
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!address || address === myAddress) return;
+    if (this.shouldSuppressRecentlyLeftParticipant(address)) return;
     const effectiveSeenAt =
       seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    const wasInRoster = this.snapshot.participants.some(
+      (participant) => participant.address?.trim() === address
+    );
+    const wasInTopology = this.collectTopologyAddresses(this.topology).includes(
+      address
+    );
     this.bootstrapOnlyParticipantAddresses.delete(address);
     this.participantLiveEvidenceLastSeenAt.set(
       address,
@@ -5472,6 +5506,28 @@ export class GroupCallAudioEngineRuntime {
         effectiveSeenAt
       )
     );
+    if (!wasInRoster) {
+      this.upsertParticipantFromRuntimeEvent(address);
+    }
+    if (!wasInRoster || !wasInTopology) {
+      const lastElectionAt =
+        this.liveEvidenceTopologyElectionLastAt.get(address) ?? 0;
+      if (
+        effectiveSeenAt - lastElectionAt >=
+        LIVE_EVIDENCE_TOPOLOGY_ELECTION_MIN_MS
+      ) {
+        this.liveEvidenceTopologyElectionLastAt.set(address, effectiveSeenAt);
+        this.recordDiagEvent('live-evidence-topology-election-requested', {
+          roomId: this.snapshot.roomId,
+          address: truncateGcallDiagAddress(address),
+          wasInRoster,
+          wasInTopology,
+          topologyEpoch: this.topology?.topologyEpoch ?? null,
+        });
+        this.scheduleTopologyElection('live-media-evidence');
+        void this.refreshAuthoritativeParticipantRoster('live-media-evidence');
+      }
+    }
   }
 
   private collectTopologyAddresses(
@@ -5988,17 +6044,17 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       toAddress,
       reason,
-      mediaSessionGeneration: this.mediaSessionGeneration,
-    });
-    this.recordDiagEvent('room-key-requested', {
-      roomId: this.snapshot.roomId,
-      toAddress,
-      reason,
       callSessionId: this.callSessionId,
       mediaSessionGeneration: this.mediaSessionGeneration,
       awaitingAuthoritativeKey: this.awaitingAuthoritativeKey,
       ownsRoomKey: this.ownsRoomKey,
       currentRoot: this.topology?.rootForwarder?.trim() || null,
+    });
+    this.recordDiagEvent('room-key-requested', {
+      roomId: this.snapshot.roomId,
+      toAddress,
+      reason,
+      mediaSessionGeneration: this.mediaSessionGeneration,
     });
     await window.groupCall?.sendKeyRequest(
       this.snapshot.roomId,
@@ -6070,15 +6126,15 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       toAddress,
       reason,
+      callSessionId: this.callSessionId,
+      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+      keyCommitment: this.truncateDiagHex(keyCommitment),
+      encryptedKeyDigest: this.truncateDiagHex(encryptedKeyDigest),
     });
     this.recordDiagEvent('targeted-room-key-sent', {
       roomId: this.snapshot.roomId,
       toAddress,
       reason,
-      callSessionId: this.callSessionId,
-      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
-      keyCommitment: this.truncateDiagHex(keyCommitment),
-      encryptedKeyDigest: this.truncateDiagHex(encryptedKeyDigest),
     });
     await window.groupCall?.sendKey(
       this.snapshot.roomId,

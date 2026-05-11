@@ -131,6 +131,8 @@ const GC_RETICULUM_AUDIO_PENDING_MIN_TOTAL_FRAMES = 12;
 const GC_RETICULUM_AUDIO_PENDING_FRAMES_PER_ACTIVE_PEER = 6;
 const GC_RETICULUM_AUDIO_PENDING_FANOUT_SOFT_LIMIT = 3;
 const GC_RETICULUM_AUDIO_PENDING_HIGH_FANOUT_LIMIT = 12;
+const GC_RETICULUM_LINK_CONTROL_PENDING_MAX_FRAMES = 32;
+const GC_RETICULUM_LINK_CONTROL_PENDING_MAX_AGE_MS = 20_000;
 const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_FRAMES = 6;
 const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS = 300;
 const GC_RETICULUM_AUDIO_PREROUTE_RETRY_DELAY_MS = 30;
@@ -230,6 +232,7 @@ const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_ACTIVITY_GRACE_MS =
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_RECOVERY_COOLDOWN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
+const GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS = 8_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS = 45_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
@@ -735,6 +738,13 @@ interface ReticulumAudioPendingFrame {
   enqueuedAtMs: number;
 }
 
+interface ReticulumLinkControlPendingFrame {
+  roomId: string;
+  data: Buffer;
+  reason: string;
+  enqueuedAtMs: number;
+}
+
 interface ReticulumAudioAwaitingRouteState {
   address: string;
   rooms: Set<string>;
@@ -768,6 +778,7 @@ interface ReticulumAudioPeerState {
   opening: boolean;
   rooms: Set<string>;
   pending: ReticulumAudioPendingFrame[];
+  pendingControl: ReticulumLinkControlPendingFrame[];
   lastInboundAtMs: number;
   lastInboundPacketAtMs: number;
   lastOutboundPacketAtMs: number;
@@ -815,6 +826,7 @@ interface GcReticulumAudioSendDiagnostics {
   linkOpenAttempts?: number;
   linkEstablishedCount?: number;
   linkStaleCloseCount?: number;
+  pendingControlFrames?: number;
   lastLinkCloseReason?: string;
   lastLinkCloseAtMs?: number;
   lastLinkCloseLinkId?: string;
@@ -4837,7 +4849,18 @@ export class GroupCallManager extends EventEmitter {
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
       if (targetAddresses && !targetAddresses.has(address)) continue;
       if (excludeAddresses.has(address)) continue;
-      if (!state.rooms.has(roomId) || !state.established || !state.linkId) {
+      if (!state.rooms.has(roomId)) {
+        skippedLinks++;
+        continue;
+      }
+      if (!state.established || !state.linkId) {
+        this.queuePendingReticulumLinkControl(
+          address,
+          state,
+          roomId,
+          encodedFrames,
+          reason
+        );
         skippedLinks++;
         continue;
       }
@@ -4869,6 +4892,92 @@ export class GroupCallManager extends EventEmitter {
       `[GCall] Queued ${reason} over Reticulum group links room=${roomId} links=${sentLinks} skipped=${skippedLinks}`
     );
     return { sentLinks, skippedLinks };
+  }
+
+  private queuePendingReticulumLinkControl(
+    address: string,
+    state: ReticulumAudioPeerState,
+    roomId: string,
+    encodedFrames: Buffer[],
+    reason: string
+  ): void {
+    if (encodedFrames.length === 0) return;
+    const now = Date.now();
+    while (
+      state.pendingControl.length > 0 &&
+      now - state.pendingControl[0]!.enqueuedAtMs >
+        GC_RETICULUM_LINK_CONTROL_PENDING_MAX_AGE_MS
+    ) {
+      state.pendingControl.shift();
+    }
+    for (const encoded of encodedFrames) {
+      state.pendingControl.push({
+        roomId,
+        data: Buffer.from(encoded),
+        reason,
+        enqueuedAtMs: now,
+      });
+    }
+    while (
+      state.pendingControl.length >
+      GC_RETICULUM_LINK_CONTROL_PENDING_MAX_FRAMES
+    ) {
+      state.pendingControl.shift();
+    }
+    loggerLog(
+      `[GCall] Queued ${reason} pending Reticulum group link room=${roomId} address=${address} pending=${state.pendingControl.length}`
+    );
+  }
+
+  private flushPendingReticulumLinkControl(
+    address: string,
+    state: ReticulumAudioPeerState
+  ): void {
+    const bridge = this.reticulumBridge;
+    if (
+      !bridge ||
+      bridge.getState() !== 'ready' ||
+      !state.established ||
+      !state.linkId ||
+      state.pendingControl.length === 0
+    ) {
+      return;
+    }
+    const now = Date.now();
+    let sent = 0;
+    let dropped = 0;
+    const kept: ReticulumLinkControlPendingFrame[] = [];
+    for (const pending of state.pendingControl) {
+      if (
+        now - pending.enqueuedAtMs >
+          GC_RETICULUM_LINK_CONTROL_PENDING_MAX_AGE_MS ||
+        !state.rooms.has(pending.roomId)
+      ) {
+        dropped++;
+        continue;
+      }
+      const result = bridge.enqueueGroupAudio(
+        state.linkId,
+        pending.roomId,
+        pending.data
+      );
+      if (result.ok) {
+        sent++;
+      } else {
+        kept.push(pending);
+      }
+    }
+    state.pendingControl = kept.slice(
+      -GC_RETICULUM_LINK_CONTROL_PENDING_MAX_FRAMES
+    );
+    if (sent > 0) {
+      this.scheduleReticulumAudioFlush();
+    }
+    if (sent > 0 || dropped > 0) {
+      loggerLog(
+        `[GCall] Flushed pending Reticulum link control address=${address} link=${state.linkId} sent=${sent} kept=${state.pendingControl.length} dropped=${dropped}`
+      );
+    }
   }
 
   private sendReticulumLinkControlToAddresses(
@@ -4991,23 +5100,6 @@ export class GroupCallManager extends EventEmitter {
       }
     }
 
-    if (!state.established && state.linkId && state.linkId !== linkId) {
-      const currentOpenedByOwner = state.linkOpenedByOwner === true;
-      const incomingOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
-        address,
-        state,
-        incoming
-      );
-      if (currentOpenedByOwner && incomingOpenedByOwner !== true) {
-        this.reticulumAudioAddressByLinkId.delete(linkId);
-        this.closeReticulumAudioLinkQuietly(
-          linkId,
-          `duplicate-pending-owner:${reason}`
-        );
-        return false;
-      }
-    }
-
     if (state.established && state.linkId && state.linkId !== linkId) {
       this.reticulumAudioAddressByLinkId.delete(linkId);
       this.closeReticulumAudioLinkQuietly(
@@ -5043,6 +5135,7 @@ export class GroupCallManager extends EventEmitter {
       this.setReticulumAudioRouteKey(address, state, linkId);
     }
     this.resetReticulumAudioLinkHeartbeat(state);
+    this.flushPendingReticulumLinkControl(address, state);
     return true;
   }
 
@@ -5058,9 +5151,13 @@ export class GroupCallManager extends EventEmitter {
       state.linkId && state.linkEstablishLastAttemptAtMs >= 0
         ? now - state.linkEstablishLastAttemptAtMs
         : 0;
+    const establishStaleMs =
+      state.linkEstablishedCount === 0
+        ? GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS
+        : GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS;
     if (
       state.linkId &&
-      pendingLinkAgeMs < GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS
+      pendingLinkAgeMs < establishStaleMs
     ) {
       return true;
     }
@@ -5685,6 +5782,7 @@ export class GroupCallManager extends EventEmitter {
         opening: false,
         rooms: new Set<string>(),
         pending: [],
+        pendingControl: [],
         lastInboundAtMs: 0,
         lastInboundPacketAtMs: 0,
         lastOutboundPacketAtMs: 0,
@@ -6178,6 +6276,7 @@ export class GroupCallManager extends EventEmitter {
             linkOpenAttempts: state.linkOpenAttempts,
             linkEstablishedCount: state.linkEstablishedCount,
             linkStaleCloseCount: state.linkStaleCloseCount,
+            pendingControlFrames: state.pendingControl.length,
           }
         : {}),
       ...(linkEstablishPendingAgeMs !== undefined
@@ -6676,6 +6775,7 @@ export class GroupCallManager extends EventEmitter {
           opening: false,
           rooms: desired.rooms,
           pending: [],
+          pendingControl: [],
           lastInboundAtMs: 0,
           lastInboundPacketAtMs: 0,
           lastOutboundPacketAtMs: 0,
