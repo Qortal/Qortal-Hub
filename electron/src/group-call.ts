@@ -3887,6 +3887,9 @@ export class GroupCallManager extends EventEmitter {
     joinRkSignature?: string
   ): { callSessionId: string; mediaSessionGeneration: number } {
     this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'join');
+    if (!this.rooms.has(roomId)) {
+      this.resetReticulumAudioPeerStatesForRoom(roomId, 'local-join');
+    }
     if (!isRnsDestinationHashHex(reticulumDestinationHash)) {
       throw new Error(
         'Invalid or missing reticulumDestinationHash for GC_JOIN'
@@ -4747,6 +4750,63 @@ export class GroupCallManager extends EventEmitter {
       clearTimeout(timer);
       this.reticulumAudioOpenDeferTimersByAddress.delete(address);
     }
+  }
+
+  private resetReticulumAudioPeerStateForRoomAddress(
+    roomId: string,
+    address: string,
+    reason: string
+  ): boolean {
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (!state || !state.rooms.has(roomId)) return false;
+    state.pending = state.pending.filter((frame) => frame.roomId !== roomId);
+    state.pendingControl = state.pendingControl.filter(
+      (frame) => frame.roomId !== roomId
+    );
+    state.linkAuthSentByRoom.delete(roomId);
+    state.rooms.delete(roomId);
+    if (state.rooms.size > 0) {
+      loggerLog(
+        `[GCall] Cleared Reticulum audio room state room=${roomId} address=${address} reason=${reason}`
+      );
+      return true;
+    }
+    const linkId = state.linkId;
+    this.reticulumAudioAddressByLinkId.delete(state.routeKey);
+    if (linkId) {
+      this.reticulumAudioAddressByLinkId.delete(linkId);
+    }
+    this.reticulumAudioPeersByAddress.delete(address);
+    this.clearReticulumAudioOpenDefer(address);
+    if (linkId) {
+      this.closeReticulumAudioLinkQuietly(
+        linkId,
+        `reset-room-peer-state:${reason}`
+      );
+    }
+    loggerLog(
+      `[GCall] Reset Reticulum audio peer state room=${roomId} address=${address} reason=${reason}`
+    );
+    return true;
+  }
+
+  private resetReticulumAudioPeerStatesForRoom(
+    roomId: string,
+    reason: string
+  ): number {
+    let reset = 0;
+    for (const address of [...this.reticulumAudioPeersByAddress.keys()]) {
+      if (
+        this.resetReticulumAudioPeerStateForRoomAddress(
+          roomId,
+          address,
+          reason
+        )
+      ) {
+        reset++;
+      }
+    }
+    return reset;
   }
 
   private deferReticulumAudioOpenForAddress(
@@ -7815,6 +7875,9 @@ export class GroupCallManager extends EventEmitter {
     }
 
     const existing = room.participants.get(env.fromAddress);
+    const incomingReticulumDestinationHash = env.reticulumDestinationHash
+      .trim()
+      .toLowerCase();
     if (
       shouldRefreshParticipantFromVerifiedJoin({
         currentJoinedAt: existing?.joinedAt,
@@ -7825,12 +7888,26 @@ export class GroupCallManager extends EventEmitter {
         ),
       })
     ) {
+      const existingReticulumDestinationHash =
+        existing?.reticulumDestinationHash?.trim().toLowerCase() ?? '';
+      const refreshedExistingJoin =
+        typeof existing?.joinedAt === 'number' &&
+        Number.isFinite(existing.joinedAt) &&
+        env.timestamp > existing.joinedAt;
+      const reticulumIdentityChanged =
+        Boolean(existingReticulumDestinationHash) &&
+        incomingReticulumDestinationHash !== existingReticulumDestinationHash;
+      if (refreshedExistingJoin || reticulumIdentityChanged) {
+        this.resetReticulumAudioPeerStateForRoomAddress(
+          env.roomId,
+          env.fromAddress,
+          refreshedExistingJoin ? 'fresh-verified-join' : 'join-identity-changed'
+        );
+      }
       room.participants.set(env.fromAddress, {
         publicKey: env.fromPublicKey,
         joinedAt: env.timestamp,
-        reticulumDestinationHash: env.reticulumDestinationHash
-          .trim()
-          .toLowerCase(),
+        reticulumDestinationHash: incomingReticulumDestinationHash,
         ...(env.reticulumIdentityPublicKeyBase64 &&
         isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
           ? {
