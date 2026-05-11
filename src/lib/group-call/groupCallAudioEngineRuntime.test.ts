@@ -718,6 +718,7 @@ describe('GroupCallAudioEngineRuntime', () => {
           role?: string;
           forwardRecipientCount?: number;
         };
+        keyExchange?: { countByTag?: Record<string, number> };
         recentEvents?: Array<{ tag: string }>;
       };
       recentWindowTrends?: Array<{
@@ -753,6 +754,9 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(
       parsed.audioSurfaceRuntimeDiagnostics?.rendererThread?.longTasks?.count
     ).toBeTypeOf('number');
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.keyExchange?.countByTag
+    ).toBeTypeOf('object');
     expect(
       parsed.audioSurfaceRuntimeDiagnostics?.recentEvents?.some(
         (event) => event.tag === 'join-start'
@@ -2076,6 +2080,77 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(sendKeyRequest).toHaveBeenCalledWith(
       'room-1',
       'Qnewroot',
+      'Qlocal',
+      expect.any(String),
+      'pub-local',
+      expect.any(Number),
+      'csid-1',
+      1
+    );
+  });
+
+  it('clears a self-minted room key when remote topology demotes the local root', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const runtimeState = runtime as unknown as {
+      roomKey: Uint8Array | null;
+      awaitingAuthoritativeKey: boolean;
+      ownsRoomKey: boolean;
+      selfMintedRoomKey: boolean;
+    };
+    expect(runtimeState.roomKey).not.toBeNull();
+    expect(runtimeState.ownsRoomKey).toBe(true);
+    expect(runtimeState.selfMintedRoomKey).toBe(true);
+
+    sendKeyRequest.mockClear();
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 2,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(runtimeState.roomKey).toBeNull();
+    expect(runtimeState.ownsRoomKey).toBe(false);
+    expect(runtimeState.selfMintedRoomKey).toBe(false);
+    expect(runtimeState.awaitingAuthoritativeKey).toBe(true);
+    expect(sendKeyRequest).toHaveBeenCalledWith(
+      'room-1',
+      'Qpeer',
       'Qlocal',
       expect.any(String),
       'pub-local',

@@ -924,6 +924,93 @@ export class GroupCallAudioEngineRuntime {
     }
   }
 
+  private truncateDiagHex(value: string | null | undefined): string | null {
+    const normalized = value?.trim() ?? '';
+    if (!normalized) return null;
+    return normalized.length > 16
+      ? `${normalized.slice(0, 12)}...${normalized.slice(-4)}`
+      : normalized;
+  }
+
+  private buildIncomingRoomKeyDiagPayload(
+    payload: Partial<IncomingRoomKeyPayload> | null | undefined,
+    extra?: Record<string, unknown>
+  ): Record<string, unknown> {
+    const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
+    const fromAddress = payload?.fromAddress?.trim() ?? '';
+    const senderInRoster = fromAddress
+      ? this.snapshot.participants.some(
+          (participant) => participant.address?.trim() === fromAddress
+        )
+      : false;
+    return {
+      roomId: payload?.roomId ?? null,
+      expectedRoomId: this.snapshot.roomId || null,
+      fromAddress: fromAddress || null,
+      currentRoot: currentRoot || null,
+      senderInRoster,
+      participantCount: this.snapshot.participants.length,
+      verified: payload?.verified === true,
+      keyMessageVersion: payload?.keyMessageVersion ?? null,
+      expectedKeyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+      payloadCallSessionId: payload?.callSessionId ?? null,
+      localCallSessionId: this.callSessionId || null,
+      payloadMediaSessionGeneration:
+        typeof payload?.mediaSessionGeneration === 'number'
+          ? payload.mediaSessionGeneration >>> 0
+          : null,
+      localMediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+      keyCommitment: this.truncateDiagHex(payload?.keyCommitment),
+      hasEncryptedKey: Boolean(payload?.encryptedKey),
+      hasRoomKey: this.roomKey !== null,
+      ownsRoomKey: this.ownsRoomKey,
+      selfMintedRoomKey: this.selfMintedRoomKey,
+      awaitingAuthoritativeKey: this.awaitingAuthoritativeKey,
+      ...extra,
+    };
+  }
+
+  private buildKeyExchangeDiagnosticsSnapshot(): Record<string, unknown> {
+    const keyEvents = this.diagEvents.filter(
+      (event) =>
+        event.tag.includes('key') ||
+        event.tag.includes('room-key') ||
+        event.tag.includes('session-identity')
+    );
+    const countByTag = keyEvents.reduce<Record<string, number>>(
+      (counts, event) => {
+        counts[event.tag] = (counts[event.tag] ?? 0) + 1;
+        return counts;
+      },
+      {}
+    );
+    const findLast = (
+      predicate: (event: AudioSurfaceDiagEvent) => boolean
+    ): AudioSurfaceDiagEvent | null => {
+      for (let index = this.diagEvents.length - 1; index >= 0; index -= 1) {
+        const event = this.diagEvents[index];
+        if (event && predicate(event)) return event;
+      }
+      return null;
+    };
+    return {
+      countByTag,
+      lastKeyReceived: findLast((event) => event.tag === 'gcall-key-received'),
+      lastKeyApplied: findLast((event) => event.tag === 'room-key-applied'),
+      lastKeyDropped: findLast((event) => event.tag === 'room-key-dropped'),
+      lastKeyRequested: findLast((event) => event.tag === 'room-key-requested'),
+      lastKeyRequestDropped: findLast(
+        (event) => event.tag === 'room-key-request-dropped'
+      ),
+      lastTargetedKeySent: findLast(
+        (event) => event.tag === 'targeted-room-key-sent'
+      ),
+      lastTargetedKeySkipped: findLast(
+        (event) => event.tag === 'targeted-room-key-skipped'
+      ),
+    };
+  }
+
   private buildAuthoritySnapshot(): Record<string, unknown> {
     const nowMs = Date.now();
     const myAddress = this.userInfo?.address?.trim() ?? '';
@@ -1813,6 +1900,7 @@ export class GroupCallAudioEngineRuntime {
       senderEngine: this.senderEngine.getDiagnosticsSnapshot(),
       rendererThread: this.buildRendererThreadDiagnosticsSnapshot(),
       outboundMedia: this.buildOutboundMediaDiagnosticsSnapshot(),
+      keyExchange: this.buildKeyExchangeDiagnosticsSnapshot(),
       decryptPool: this.decryptPool?.stats() ?? {
         enabled: false,
         currentKeyVersion: 0,
@@ -2744,12 +2832,10 @@ export class GroupCallAudioEngineRuntime {
         verified: keyP?.verified === true,
         keyMessageVersion: keyP?.keyMessageVersion,
       });
-      this.recordDiagEvent('gcall-key-received', {
-        roomId: keyP?.roomId,
-        fromAddress: keyP?.fromAddress,
-        verified: keyP?.verified === true,
-        keyMessageVersion: keyP?.keyMessageVersion,
-      });
+      this.recordDiagEvent(
+        'gcall-key-received',
+        this.buildIncomingRoomKeyDiagPayload(keyP)
+      );
       await this.handleIncomingRoomKey(keyP);
       return;
     }
@@ -2938,6 +3024,12 @@ export class GroupCallAudioEngineRuntime {
         expectedRoomId: this.snapshot.roomId,
         payloadRoomId: payload?.roomId,
       });
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'room-mismatch',
+        })
+      );
       return;
     }
     if (payload?.verified !== true) {
@@ -2945,6 +3037,12 @@ export class GroupCallAudioEngineRuntime {
         roomId: payload?.roomId,
         from: payload?.fromAddress,
       });
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'not-verified',
+        })
+      );
       return;
     }
     if (payload?.keyMessageVersion !== GCALL_KEY_MESSAGE_VERSION) {
@@ -2955,6 +3053,12 @@ export class GroupCallAudioEngineRuntime {
           got: payload?.keyMessageVersion,
         }
       );
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'wrong-key-message-version',
+        })
+      );
       return;
     }
     if (!payload?.encryptedKey) {
@@ -2963,6 +3067,12 @@ export class GroupCallAudioEngineRuntime {
         {
           from: payload?.fromAddress,
         }
+      );
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'missing-encrypted-key',
+        })
       );
       return;
     }
@@ -2999,6 +3109,12 @@ export class GroupCallAudioEngineRuntime {
             currentRoot: currentRoot || null,
           }
         );
+        this.recordDiagEvent(
+          'room-key-deferred',
+          this.buildIncomingRoomKeyDiagPayload(payload, {
+            reason: 'provisional-root-reconciliation',
+          })
+        );
         return;
       }
       if (
@@ -3018,12 +3134,31 @@ export class GroupCallAudioEngineRuntime {
           participants: this.snapshot.participants.length,
         }
       );
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'untrusted-sender',
+        })
+      );
       return;
     }
     if (!canDecryptBox) {
       traceGcallAudioSurface(
         'pipeline: gcall:key dropped (no sendMessage / gcallProxyDecryptBoxWithMyKey — cannot decrypt box)',
         {}
+      );
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'decrypt-box-api-unavailable',
+          hasSendMessage: typeof window.sendMessage === 'function',
+          hasElectronProxyDecrypt:
+            typeof (
+              window as Window & {
+                electronAPI?: { gcallProxyDecryptBoxWithMyKey?: unknown };
+              }
+            ).electronAPI?.gcallProxyDecryptBoxWithMyKey === 'function',
+        })
       );
       return;
     }
@@ -3045,6 +3180,12 @@ export class GroupCallAudioEngineRuntime {
           from: payload.fromAddress,
         }
       );
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'decrypt-box-empty',
+        })
+      );
       return;
     }
     const roomKey = base64ToUint8(result.decryptedKey);
@@ -3059,6 +3200,13 @@ export class GroupCallAudioEngineRuntime {
         {
           from: payload.fromAddress,
         }
+      );
+      this.recordDiagEvent(
+        'room-key-dropped',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          reason: 'key-commitment-mismatch',
+          expectedKeyCommitment: this.truncateDiagHex(expectedCommitment),
+        })
       );
       return;
     }
@@ -3083,7 +3231,9 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       fromAddress: payload.fromAddress,
       keyBytes: roomKey.length,
+      callSessionId: payload.callSessionId,
       mediaSessionGeneration: payload.mediaSessionGeneration >>> 0,
+      keyCommitment: this.truncateDiagHex(payload.keyCommitment),
     });
     await this.flushHeldIncomingAudioAfterKeyApplied();
     await this.syncSenderState();
@@ -4738,6 +4888,7 @@ export class GroupCallAudioEngineRuntime {
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
       await this.syncDecryptPoolRoomKey(null);
+      await this.syncSenderState();
       this.requestRetainedKeyReplay('topology-root-changed');
       await this.requestRoomKeyFrom(root, 'topology');
       this.scheduleAuthoritativeKeyRecovery('topology-root-changed');
@@ -4747,8 +4898,11 @@ export class GroupCallAudioEngineRuntime {
       this.ownsRoomKey = false;
     }
     if (previousRoot === myAddress && this.selfMintedRoomKey) {
+      this.roomKey = null;
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
+      await this.syncDecryptPoolRoomKey(null);
+      await this.syncSenderState();
       this.requestRetainedKeyReplay('topology-root-changed');
       await this.requestRoomKeyFrom(root, 'topology');
       this.scheduleAuthoritativeKeyRecovery('topology-root-changed');
@@ -5775,7 +5929,10 @@ export class GroupCallAudioEngineRuntime {
       recipientCount: recipientAddrs.length,
       omittedCount: omittedAddresses.length,
       failedCount: failedAddresses.length,
+      callSessionId: this.callSessionId,
       mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+      keyCommitment: this.truncateDiagHex(keyCommitment),
+      encryptedKeysDigest: this.truncateDiagHex(encryptedKeysDigest),
     });
     for (const recipientAddress of recipientAddrs) {
       this.scheduleTargetedRoomKeyReplayRetry(
@@ -5837,7 +5994,11 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       toAddress,
       reason,
+      callSessionId: this.callSessionId,
       mediaSessionGeneration: this.mediaSessionGeneration,
+      awaitingAuthoritativeKey: this.awaitingAuthoritativeKey,
+      ownsRoomKey: this.ownsRoomKey,
+      currentRoot: this.topology?.rootForwarder?.trim() || null,
     });
     await window.groupCall?.sendKeyRequest(
       this.snapshot.roomId,
@@ -5914,6 +6075,10 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       toAddress,
       reason,
+      callSessionId: this.callSessionId,
+      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+      keyCommitment: this.truncateDiagHex(keyCommitment),
+      encryptedKeyDigest: this.truncateDiagHex(encryptedKeyDigest),
     });
     await window.groupCall?.sendKey(
       this.snapshot.roomId,
@@ -5942,17 +6107,54 @@ export class GroupCallAudioEngineRuntime {
     callSessionId?: string;
     mediaSessionGeneration?: number;
   }): Promise<void> {
-    if (
-      payload.roomId !== this.snapshot.roomId ||
-      payload.toAddress !== this.userInfo?.address ||
-      payload.verified !== true ||
-      !this.roomKey ||
-      !this.ownsRoomKey
-    ) {
+    const dropKeyRequest = (reason: string): void => {
+      this.recordDiagEvent('room-key-request-dropped', {
+        reason,
+        roomId: payload.roomId,
+        expectedRoomId: this.snapshot.roomId || null,
+        toAddress: payload.toAddress,
+        localAddress: this.userInfo?.address ?? null,
+        fromAddress: payload.fromAddress,
+        verified: payload.verified === true,
+        payloadCallSessionId: payload.callSessionId ?? null,
+        localCallSessionId: this.callSessionId || null,
+        payloadMediaSessionGeneration:
+          typeof payload.mediaSessionGeneration === 'number'
+            ? payload.mediaSessionGeneration >>> 0
+            : null,
+        localMediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+        hasRoomKey: this.roomKey !== null,
+        ownsRoomKey: this.ownsRoomKey,
+        selfMintedRoomKey: this.selfMintedRoomKey,
+        awaitingAuthoritativeKey: this.awaitingAuthoritativeKey,
+        currentRoot: this.topology?.rootForwarder?.trim() || null,
+      });
+    };
+    if (payload.roomId !== this.snapshot.roomId) {
+      dropKeyRequest('room-mismatch');
+      return;
+    }
+    if (payload.toAddress !== this.userInfo?.address) {
+      dropKeyRequest('not-local-recipient');
+      return;
+    }
+    if (payload.verified !== true) {
+      dropKeyRequest('not-verified');
+      return;
+    }
+    if (!this.roomKey) {
+      dropKeyRequest('missing-room-key');
+      return;
+    }
+    if (!this.ownsRoomKey) {
+      dropKeyRequest('not-key-owner');
       return;
     }
     const root = this.topology?.rootForwarder?.trim() ?? '';
-    if (!root || root !== this.userInfo?.address) return;
+    if (!root || root !== this.userInfo?.address) {
+      dropKeyRequest('local-not-root');
+      return;
+    }
     // Requesters may still hold their local pre-root-handoff callSessionId.
     // Only generation proves true staleness; a mismatched UUID is exactly what
     // authoritative key recovery is meant to repair.
@@ -5960,6 +6162,7 @@ export class GroupCallAudioEngineRuntime {
       typeof payload.mediaSessionGeneration === 'number' &&
       payload.mediaSessionGeneration >>> 0 !== this.mediaSessionGeneration >>> 0
     ) {
+      dropKeyRequest('media-generation-mismatch');
       return;
     }
     this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
