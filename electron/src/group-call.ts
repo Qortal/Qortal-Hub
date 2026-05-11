@@ -243,7 +243,7 @@ const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = true;
 const GC_RETICULUM_OVERLAY_HOPS = 4;
 const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
 /** Short-lived logical-message dedupe: suppress same authored message while allowing retries to recover soon. */
-const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_TTL_MS = 30_000;
+const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_TTL_MS = 10_000;
 /** Cap RAM if many unique logical keys arrive (sweeps expired first). */
 const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_MAX = 8192;
 /** Full scan for expired logical-key entries at most this often (idle traffic still frees memory). */
@@ -3215,6 +3215,19 @@ export class GroupCallManager extends EventEmitter {
     this.seenReticulumWireLogicalKeys.delete(key);
   }
 
+  private clearReticulumOverlayLogicalDedupeForRoomLifecycle(
+    roomId: string,
+    reason: 'join' | 'leave'
+  ): void {
+    if (this.seenReticulumWireLogicalKeys.size === 0) return;
+    const cleared = this.seenReticulumWireLogicalKeys.size;
+    this.seenReticulumWireLogicalKeys.clear();
+    this.lastReticulumWireLogicalKeySweepAt = 0;
+    loggerLog(
+      `[GCall] Cleared Reticulum logical overlay dedupe on ${reason} room=${roomId} entries=${cleared}`
+    );
+  }
+
   private async broadcastReticulumFramesViaOverlay(
     frames: Record<string, unknown>[],
     excludePeerHashes: string[] = []
@@ -3872,6 +3885,7 @@ export class GroupCallManager extends EventEmitter {
     /** Signature for `GC_JOIN_RK` (second Reticulum frame) when `reticulumIdentityPublicKeyBase64` is set. */
     joinRkSignature?: string
   ): { callSessionId: string; mediaSessionGeneration: number } {
+    this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'join');
     if (!isRnsDestinationHashHex(reticulumDestinationHash)) {
       throw new Error(
         'Invalid or missing reticulumDestinationHash for GC_JOIN'
@@ -4043,6 +4057,7 @@ export class GroupCallManager extends EventEmitter {
     publicKey: string,
     timestamp: number
   ): void {
+    this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'leave');
     const room = this.rooms.get(roomId);
     let shouldDelayReticulumAudioTeardown = false;
     if (signature) {

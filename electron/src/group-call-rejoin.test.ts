@@ -1036,6 +1036,31 @@ describe('recent room bootstrap state', () => {
     expect(sent.some((e) => e.msg.t === 'GJ')).toBe(true);
   });
 
+  it('clears Reticulum logical overlay dedupe across local leave and rejoin', () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    const dedupe = (manager as any)
+      .seenReticulumWireLogicalKeys as Map<string, number>;
+
+    dedupe.set('GJ:g:retained-peer-join', Date.now() + 30_000);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
+    expect(dedupe.size).toBe(0);
+
+    dedupe.set('GT:g:retained-topology', Date.now() + 30_000);
+    manager.leaveRoom('gcall-qortal-812', 'Q-self', 'sig', 'pk', 200);
+    expect(dedupe.size).toBe(0);
+  });
+
   it('retries first-contact Reticulum join fanout after unknown peer discovery lag', async () => {
     vi.useFakeTimers();
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
