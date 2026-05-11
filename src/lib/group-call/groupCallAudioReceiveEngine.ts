@@ -1049,6 +1049,11 @@ export class GroupCallAudioReceiveEngine {
     this.emitMetricsNow();
   }
 
+  hasSource(sourceAddr: string): boolean {
+    const normalized = sourceAddr.trim();
+    return normalized ? this.playouts.has(normalized) : false;
+  }
+
   async dispose(): Promise<void> {
     await this.reset();
     const audioContext = this.audioContext;

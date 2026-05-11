@@ -608,6 +608,7 @@ export class GroupCallAudioEngineRuntime {
   private bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
   private startupMediaTargetWaitLastDiagAt = 0;
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
+  private readonly participantJoinIdentityByAddress = new Map<string, string>();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
@@ -1998,6 +1999,59 @@ export class GroupCallAudioEngineRuntime {
     return true;
   }
 
+  private getParticipantJoinIdentity(
+    joinGeneration?: number,
+    timestamp?: number
+  ): string | null {
+    if (typeof joinGeneration === 'number' && Number.isFinite(joinGeneration)) {
+      return `gen:${joinGeneration >>> 0}`;
+    }
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+      return `ts:${Math.trunc(timestamp)}`;
+    }
+    return null;
+  }
+
+  private async resetReceiveStateForParticipant(
+    addressValue: string | null | undefined,
+    reason: string
+  ): Promise<void> {
+    const address = addressValue?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!address || address === myAddress) return;
+    this.activeSpeakerLastSeenAt.delete(address);
+    this.participantDecodedMediaLastSeenAt.delete(address);
+    this.participantLiveEvidenceLastSeenAt.delete(address);
+    this.decryptPool?.clearLastPlayedSeq(address);
+    await this.receiveEngine.removeSource(address);
+    this.recordDiagEvent('participant-receive-state-reset', {
+      roomId: this.snapshot.roomId,
+      peer: truncateGcallDiagAddress(address),
+      reason,
+    });
+  }
+
+  private async resetReceiveStateForFreshParticipantJoin(
+    addressValue: string | null | undefined,
+    joinGeneration?: number,
+    timestamp?: number
+  ): Promise<void> {
+    const address = addressValue?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!address || address === myAddress) return;
+    const joinIdentity = this.getParticipantJoinIdentity(
+      joinGeneration,
+      timestamp
+    );
+    if (!joinIdentity) return;
+    const previousJoinIdentity =
+      this.participantJoinIdentityByAddress.get(address) ?? null;
+    if (previousJoinIdentity === joinIdentity) return;
+    this.participantJoinIdentityByAddress.set(address, joinIdentity);
+    if (!previousJoinIdentity && !this.receiveEngine.hasSource(address)) return;
+    await this.resetReceiveStateForParticipant(address, 'fresh-participant-join');
+  }
+
   private mergeParticipantsFromTopology(
     participants: AudioEngineParticipant[],
     topology: GroupCallTopology
@@ -2325,6 +2379,7 @@ export class GroupCallAudioEngineRuntime {
     this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
     this.startupMediaTargetWaitLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
+    this.participantJoinIdentityByAddress.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
@@ -2607,6 +2662,7 @@ export class GroupCallAudioEngineRuntime {
     this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
     this.startupMediaTargetWaitLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
+    this.participantJoinIdentityByAddress.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
@@ -2788,9 +2844,14 @@ export class GroupCallAudioEngineRuntime {
             payload as { address?: string } | null | undefined
           )?.address;
           if (leavingAddress) {
-            this.activeSpeakerLastSeenAt.delete(leavingAddress);
+            this.participantJoinIdentityByAddress.delete(
+              leavingAddress.trim()
+            );
+            await this.resetReceiveStateForParticipant(
+              leavingAddress,
+              'participant-left'
+            );
             this.refreshActiveSpeakerState();
-            await this.receiveEngine.removeSource(leavingAddress);
             if (
               (this.topology?.rootForwarder?.trim() ?? '') ===
               leavingAddress.trim()
@@ -2806,11 +2867,21 @@ export class GroupCallAudioEngineRuntime {
           this.removeParticipantFromRuntimeEvent(leavingAddress);
         } else {
           const joining = payload as
-            | { address?: string; publicKey?: string; joinGeneration?: number }
+            | {
+                address?: string;
+                publicKey?: string;
+                joinGeneration?: number;
+                timestamp?: number;
+              }
             | null
             | undefined;
           const joiningAddress = joining?.address?.trim() ?? '';
           const myAddress = this.userInfo?.address?.trim() ?? '';
+          await this.resetReceiveStateForFreshParticipantJoin(
+            joiningAddress,
+            joining?.joinGeneration,
+            joining?.timestamp
+          );
           this.upsertParticipantFromRuntimeEvent(
             joiningAddress,
             joining?.publicKey
@@ -5441,11 +5512,12 @@ export class GroupCallAudioEngineRuntime {
     }
 
     for (const address of removedAddresses) {
-      this.activeSpeakerLastSeenAt.delete(address);
-      this.participantDecodedMediaLastSeenAt.delete(address);
-      this.participantLiveEvidenceLastSeenAt.delete(address);
       this.bootstrapOnlyParticipantAddresses.delete(address);
-      await this.receiveEngine.removeSource(address);
+      this.participantJoinIdentityByAddress.delete(address);
+      await this.resetReceiveStateForParticipant(
+        address,
+        'authoritative-roster-remove'
+      );
       this.markParticipantRecentlyLeft(address);
       if ((this.topology?.rootForwarder?.trim() ?? '') === address) {
         if (this.trustedRemoteRoot === address) {
