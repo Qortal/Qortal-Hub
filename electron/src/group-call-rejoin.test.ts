@@ -2311,6 +2311,94 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
+  it('keeps only newest live audio frames while a Reticulum link is pending', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'pending-link',
+        established: false,
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+      getAudioQueueSnapshot = vi.fn(() => makeAudioQueueSnapshot());
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    manager.setLocalAddresses(['Qa-local']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Qa-local',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Qz-peer', {
+      publicKey: 'pk-peer',
+      joinedAt: 101,
+      reticulumDestinationHash: 'd:Qz-peer',
+    });
+
+    for (const n of [1, 2, 3, 4, 5]) {
+      manager.sendAudio('room-1', 'Qz-peer', Buffer.from([n]));
+    }
+    await Promise.resolve();
+
+    const pendingState = (manager as any).reticulumAudioPeersByAddress.get(
+      'Qz-peer'
+    );
+    expect(pendingState.established).toBe(false);
+    expect(
+      pendingState.pending.map((frame: { data: Buffer }) => [...frame.data])
+    ).toEqual([[4], [5]]);
+    expect(bridge.enqueueGroupAudio).not.toHaveBeenCalled();
+
+    (manager as any).handleReticulumGroupAudioLinkEstablished({
+      linkId: 'pending-link',
+      peerPresenceHash: 'd:Qz-peer',
+      peerDestinationHash: 'd:Qz-peer',
+      incoming: false,
+    });
+    bridge.enqueueGroupAudio.mockClear();
+    (manager as any).flushReticulumAudioQueuesFair('Qz-peer');
+
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledTimes(2);
+    expect(bridge.enqueueGroupAudio.mock.calls.map((call) => [...call[2]]))
+      .toEqual([[4], [5]]);
+  });
+
   it('adopts sole-peer inbound audio links even when bridge hashes are not yet mapped', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {

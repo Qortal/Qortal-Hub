@@ -126,6 +126,7 @@ const GC_RETICULUM_REASM_TTL_MS = 45_000;
 const GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000];
 const GC_RETICULUM_FAILURE_LOG_MIN_MS = 5_000;
 const GC_RETICULUM_AUDIO_PENDING_MAX_FRAMES = 24;
+const GC_RETICULUM_AUDIO_PENDING_UNESTABLISHED_LINK_MAX_FRAMES = 2;
 const GC_RETICULUM_AUDIO_PENDING_MAX_AGE_MS = 750;
 const GC_RETICULUM_AUDIO_PENDING_MIN_TOTAL_FRAMES = 12;
 const GC_RETICULUM_AUDIO_PENDING_FRAMES_PER_ACTIVE_PEER = 6;
@@ -6263,6 +6264,12 @@ export class GroupCallManager extends EventEmitter {
   private computeReticulumAudioPendingLimit(
     state: ReticulumAudioPeerState
   ): number {
+    if (
+      state.transport === 'link' &&
+      !this.hasEstablishedReticulumAudioLink(state)
+    ) {
+      return GC_RETICULUM_AUDIO_PENDING_UNESTABLISHED_LINK_MAX_FRAMES;
+    }
     let maxTargetsForRooms = 1;
     for (const roomId of state.rooms) {
       const room = this.rooms.get(roomId);

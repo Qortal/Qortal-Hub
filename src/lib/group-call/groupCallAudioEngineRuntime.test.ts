@@ -1161,6 +1161,98 @@ describe('GroupCallAudioEngineRuntime', () => {
     ).toBe(true);
   });
 
+  it('does not reset receive playout for duplicate room key replays', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const roomKey = new Uint8Array(32).fill(7);
+    const decryptedKey = btoa(String.fromCharCode(...roomKey));
+    const encryptedKey = btoa(
+      String.fromCharCode(...new Uint8Array(64).fill(1))
+    );
+    const keyCommitment = await buildMediaKeyCommitmentHex(
+      roomKey,
+      'csid-1',
+      1
+    );
+    (
+      window as unknown as { sendMessage: ReturnType<typeof vi.fn> }
+    ).sendMessage = vi.fn().mockImplementation(async (action: string) => {
+      if (action === 'decryptBoxWithMyKey') {
+        return { decryptedKey };
+      }
+      return { signature: 'sig' };
+    });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+    });
+    const keyPayload = {
+      roomId: 'room-1',
+      encryptedKey,
+      fromAddress: 'Qpeer',
+      fromPublicKey: 'pub-peer',
+      keyMessageVersion: 3,
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+      keyCommitment,
+      verified: true,
+    };
+    groupCallEventHandler?.('gcall:key', keyPayload);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:audio', {
+      roomId: 'room-1',
+      data: encodeAudioPacketV2(
+        'Qpeer',
+        false,
+        1,
+        10,
+        new Uint8Array([9, 8, 7]),
+        roomKey
+      ).buffer,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:key', keyPayload);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const result = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const parsed = JSON.parse(String(result.ok ? result.payload : 'null')) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        receiveEngine?: { playoutCount?: number };
+        recentEvents?: Array<{ tag?: string }>;
+      };
+    };
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.receiveEngine?.playoutCount
+    ).toBe(1);
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.recentEvents?.some(
+        (event) => event.tag === 'room-key-duplicate-ignored'
+      )
+    ).toBe(true);
+  });
+
   it('holds early media while awaiting the authoritative key and flushes it after key apply', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);

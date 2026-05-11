@@ -531,6 +531,7 @@ export class GroupCallAudioEngineRuntime {
   private currentChatId = '';
   private topology: GroupCallTopology | null = null;
   private roomKey: Uint8Array | null = null;
+  private appliedRoomKeyCommitment = '';
   private callEpochMs = 0;
   private seq = 0;
   private decryptPool: DecryptWorkerPool | null = null;
@@ -2278,6 +2279,7 @@ export class GroupCallAudioEngineRuntime {
     this.callEpochMs = Date.now();
     this.seq = 0;
     this.roomKey = null;
+    this.appliedRoomKeyCommitment = '';
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
     this.awaitingAuthoritativeKey = false;
@@ -2567,6 +2569,7 @@ export class GroupCallAudioEngineRuntime {
     const cleanupGeneration = ++this.leaveCleanupGeneration;
 
     this.roomKey = null;
+    this.appliedRoomKeyCommitment = '';
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
     this.awaitingAuthoritativeKey = false;
@@ -2935,6 +2938,7 @@ export class GroupCallAudioEngineRuntime {
       this.mediaSessionGeneration =
         (p.mediaSessionGeneration ?? this.mediaSessionGeneration ?? 1) >>> 0;
       this.roomKey = null;
+      this.appliedRoomKeyCommitment = '';
       this.ownsRoomKey = false;
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = false;
@@ -3218,9 +3222,39 @@ export class GroupCallAudioEngineRuntime {
       );
       return;
     }
+    const incomingGeneration = payload.mediaSessionGeneration >>> 0;
+    if (
+      this.roomKey &&
+      this.appliedRoomKeyCommitment === payload.keyCommitment &&
+      this.callSessionId === payload.callSessionId &&
+      this.mediaSessionGeneration === incomingGeneration
+    ) {
+      this.noteRootVerifiedKey(payload.fromAddress, Date.now());
+      this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
+      this.awaitingAuthoritativeKey = false;
+      this.clearKeyRecoveryRetryTimer();
+      traceGcallAudioSurface(
+        'pipeline: duplicate room key ignored without receive reset',
+        {
+          from: payload.fromAddress,
+          mediaSessionGeneration: incomingGeneration,
+        }
+      );
+      this.recordDiagEvent('room-key-duplicate-ignored', {
+        roomId: this.snapshot.roomId,
+        fromAddress: payload.fromAddress,
+        callSessionId: payload.callSessionId,
+        mediaSessionGeneration: incomingGeneration,
+        keyCommitment: this.truncateDiagHex(payload.keyCommitment),
+      });
+      await this.flushHeldIncomingAudioAfterKeyApplied();
+      await this.syncSenderState();
+      return;
+    }
     this.noteRootVerifiedKey(payload.fromAddress, Date.now());
     this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
     this.roomKey = roomKey;
+    this.appliedRoomKeyCommitment = payload.keyCommitment;
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
     this.awaitingAuthoritativeKey = false;
@@ -4907,6 +4941,7 @@ export class GroupCallAudioEngineRuntime {
       previousRoot !== myAddress;
     if (remoteRootChanged) {
       this.roomKey = null;
+      this.appliedRoomKeyCommitment = '';
       this.ownsRoomKey = false;
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
@@ -4922,6 +4957,7 @@ export class GroupCallAudioEngineRuntime {
     }
     if (previousRoot === myAddress && this.selfMintedRoomKey) {
       this.roomKey = null;
+      this.appliedRoomKeyCommitment = '';
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
       await this.syncDecryptPoolRoomKey(null);
