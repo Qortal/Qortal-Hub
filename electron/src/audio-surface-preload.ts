@@ -19,9 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       destinationHash: string | null;
     }>,
   reticulumGetLocalIdentityPublicKeyBase64: () =>
-    ipcRenderer.invoke(
-      'reticulum:getLocalIdentityPublicKeyBase64'
-    ) as Promise<{
+    ipcRenderer.invoke('reticulum:getLocalIdentityPublicKeyBase64') as Promise<{
       publicKeyBase64: string | null;
     }>,
   gcallProxySignPresenceMessage: (payload: Record<string, unknown>) =>
@@ -35,10 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     nonce: string;
     ciphertext: string;
   }) =>
-    ipcRenderer.invoke(
-      'gcall:proxyDecryptBoxWithMyKey',
-      payload
-    ) as Promise<{
+    ipcRenderer.invoke('gcall:proxyDecryptBoxWithMyKey', payload) as Promise<{
       decryptedKey?: string;
       error?: string;
       message?: string;
@@ -88,6 +83,21 @@ contextBridge.exposeInMainWorld('groupCall', {
       publicKey,
       timestamp
     ),
+  leaveSync: (
+    roomId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) =>
+    ipcRenderer.sendSync(
+      'gcall:leaveSync',
+      roomId,
+      localAddress,
+      signature,
+      publicKey,
+      timestamp
+    ) as { success: boolean; error?: string },
   broadcastTopology: async (
     roomId: string,
     topology: unknown,
@@ -217,10 +227,7 @@ contextBridge.exposeInMainWorld('groupCall', {
     ),
   setLocalAddresses: async (addresses: string[], source?: string) =>
     ipcRenderer.invoke('gcall:setLocalAddresses', addresses, source),
-  setQortalGroupReticulumTargets: async (
-    roomId: string,
-    addresses: string[]
-  ) =>
+  setQortalGroupReticulumTargets: async (roomId: string, addresses: string[]) =>
     ipcRenderer.invoke(
       'gcall:setQortalGroupReticulumTargets',
       roomId,
@@ -279,13 +286,15 @@ contextBridge.exposeInMainWorld('audioSurfaceHost', {
     return ipcRenderer
       .invoke('audio-surface:command-result', envelope)
       .catch((error) => {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         return { ok: false as const, error: message };
       });
   },
   onCommand(listener: (envelope: AudioSurfaceCommandEnvelope) => void) {
-    const wrapped = (_event: unknown, envelope: AudioSurfaceCommandEnvelope) => {
+    const wrapped = (
+      _event: unknown,
+      envelope: AudioSurfaceCommandEnvelope
+    ) => {
       listener(envelope);
     };
     ipcRenderer.on(HOST_COMMAND, wrapped);

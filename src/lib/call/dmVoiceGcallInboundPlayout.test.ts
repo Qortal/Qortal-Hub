@@ -194,4 +194,72 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
       nextStallSinceMs: 1000,
     });
   });
+
+  it('arms for a sustained multi-source ready stall with substantial fresh preroll', () => {
+    expect(
+      decideReadyStallForcePrime({
+        hasObservedPlayoutStart: false,
+        activeSourceCount: 3,
+        hasReadyFrame: false,
+        bufferedFrames: 12,
+        stallSinceMs: null,
+        nowMs: 1000,
+        lastPushAgeMs: 40,
+        targetPlayoutMs: 185,
+      })
+    ).toEqual({
+      shouldForcePrime: false,
+      nextStallSinceMs: 1000,
+    });
+
+    expect(
+      decideReadyStallForcePrime({
+        hasObservedPlayoutStart: false,
+        activeSourceCount: 3,
+        hasReadyFrame: false,
+        bufferedFrames: 12,
+        stallSinceMs: 1000,
+        nowMs: 1600,
+        lastPushAgeMs: 40,
+        targetPlayoutMs: 185,
+      })
+    ).toEqual({
+      shouldForcePrime: true,
+      nextStallSinceMs: null,
+    });
+  });
+
+  it('does not arm multi-source force-prime for thin or stale preroll', () => {
+    expect(
+      decideReadyStallForcePrime({
+        hasObservedPlayoutStart: false,
+        activeSourceCount: 2,
+        hasReadyFrame: false,
+        bufferedFrames: 9,
+        stallSinceMs: 1000,
+        nowMs: 1700,
+        lastPushAgeMs: 40,
+        targetPlayoutMs: 185,
+      })
+    ).toEqual({
+      shouldForcePrime: false,
+      nextStallSinceMs: null,
+    });
+
+    expect(
+      decideReadyStallForcePrime({
+        hasObservedPlayoutStart: false,
+        activeSourceCount: 2,
+        hasReadyFrame: false,
+        bufferedFrames: 12,
+        stallSinceMs: 1000,
+        nowMs: 1700,
+        lastPushAgeMs: 400,
+        targetPlayoutMs: 185,
+      })
+    ).toEqual({
+      shouldForcePrime: false,
+      nextStallSinceMs: null,
+    });
+  });
 });

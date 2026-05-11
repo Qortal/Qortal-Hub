@@ -18,6 +18,29 @@ const nodeRequire = createRequire(__filename);
 
 const noop = (..._args: unknown[]) => {};
 
+/** Stdio can be a closed pipe (AppImage, desktop launcher, detached parent). Ignore benign write failures. */
+function isBenignStdioWriteError(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException)?.code;
+  return (
+    code === 'EPIPE' ||
+    code === 'EIO' ||
+    code === 'ENOTCONN' ||
+    code === 'EBADF'
+  );
+}
+
+function emitToConsole(
+  c: Console,
+  method: 'log' | 'error' | 'warn' | 'debug' | 'info',
+  args: readonly unknown[]
+): void {
+  try {
+    (c[method] as (...args: unknown[]) => void).apply(c, args);
+  } catch (err: unknown) {
+    if (!isBenignStdioWriteError(err)) throw err;
+  }
+}
+
 const LOG_FILE = 'qortalHub.log';
 const MAX_LOG_BYTES = 10 * 1024 * 1024;
 
@@ -111,7 +134,7 @@ function makeLogger(
     const c = typeof console !== 'undefined' ? console : null;
     return c && typeof c[method] === 'function'
       ? (...args: unknown[]) => {
-          (c[method] as (...args: unknown[]) => void).apply(c, args);
+          emitToConsole(c, method, args);
           queueFileLine(fileLevel, args);
         }
       : noop;

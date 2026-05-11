@@ -1033,14 +1033,102 @@ function ensureManagedReticulumConfig(): void {
   );
 }
 
+const RETICULUM_LOG_FILENAME = 'reticulum.log';
+const RETICULUM_LOG_MAX_BYTES = 10 * 1024 * 1024;
+
+const reticulumLogPendingLines: string[] = [];
+let reticulumLogFlushScheduled = false;
+let reticulumLogFilePath: string | null = null;
+let reticulumLogUserDataPath: string | null = null;
+/** UTF-8 byte length of current reticulum.log on disk; best-effort. */
+let reticulumLogCurrentFileBytes = 0;
+let reticulumLogIoChain: Promise<void> = Promise.resolve();
+
+function resolveReticulumLogFilePath(): string | null {
+  try {
+    const userDataPath = app.getPath('userData');
+    if (
+      reticulumLogFilePath !== null &&
+      reticulumLogUserDataPath === userDataPath
+    ) {
+      return reticulumLogFilePath;
+    }
+    const dir = path.join(userDataPath, 'logs');
+    fs.mkdirSync(dir, { recursive: true });
+    reticulumLogFilePath = path.join(dir, RETICULUM_LOG_FILENAME);
+    reticulumLogUserDataPath = userDataPath;
+    if (fs.existsSync(reticulumLogFilePath)) {
+      reticulumLogCurrentFileBytes = fs.statSync(reticulumLogFilePath).size;
+    } else {
+      reticulumLogCurrentFileBytes = 0;
+    }
+    return reticulumLogFilePath;
+  } catch {
+    reticulumLogFilePath = null;
+    reticulumLogUserDataPath = null;
+    return null;
+  }
+}
+
+function rotateReticulumLogFileSync(): void {
+  if (!reticulumLogFilePath) return;
+  const rotated = `${reticulumLogFilePath}.1`;
+  try {
+    if (fs.existsSync(rotated)) fs.unlinkSync(rotated);
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (fs.existsSync(reticulumLogFilePath)) {
+      fs.renameSync(reticulumLogFilePath, rotated);
+    }
+  } catch {
+    /* ignore */
+  }
+  reticulumLogCurrentFileBytes = 0;
+}
+
+function scheduleReticulumLogFlush(): void {
+  if (reticulumLogFlushScheduled) return;
+  reticulumLogFlushScheduled = true;
+  setImmediate(() => {
+    reticulumLogFlushScheduled = false;
+    const chunk = reticulumLogPendingLines.splice(
+      0,
+      reticulumLogPendingLines.length
+    ).join('');
+    if (!chunk || !reticulumLogFilePath) return;
+    reticulumLogIoChain = reticulumLogIoChain
+      .then(async () => {
+        const byteLen = Buffer.byteLength(chunk, 'utf8');
+        try {
+          if (
+            reticulumLogCurrentFileBytes + byteLen >
+            RETICULUM_LOG_MAX_BYTES
+          ) {
+            rotateReticulumLogFileSync();
+          }
+          await fs.promises.appendFile(reticulumLogFilePath!, chunk, 'utf8');
+          reticulumLogCurrentFileBytes += byteLen;
+        } catch {
+          /* disk full / permissions — avoid throwing into unhandledRejection */
+        }
+      })
+      .catch(() => {});
+  });
+}
+
+function queueReticulumFileLine(line: string): void {
+  if (!resolveReticulumLogFilePath()) return;
+  reticulumLogPendingLines.push(
+    `[${new Date().toISOString()}] ${line}\n`
+  );
+  scheduleReticulumLogFlush();
+}
+
 function appendReticulumFileLog(line: string): void {
   try {
-    const logDir = path.join(app.getPath('userData'), 'logs');
-    fs.mkdirSync(logDir, { recursive: true });
-    fs.appendFileSync(
-      path.join(logDir, 'reticulum.log'),
-      `[${new Date().toISOString()}] ${line}\n`
-    );
+    queueReticulumFileLine(line);
   } catch {
     // ignore
   }

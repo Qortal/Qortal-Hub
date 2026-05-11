@@ -4747,3 +4747,139 @@ Current patched target:
   - `clean-low-latency` and `steady-weak-listener` do not own meaningful missing-frame bursts on Side A.
   - `persistent-lean` / `silent-lean` / `repair-collapse` clear more coherently on Side B when under-target, slow-rate, concealment, decrypt, decode, sender, and queue signals are calm.
 - Profile strength is not the next target from this call. Baseline is not the next target. No new profile is justified.
+
+## Call: 2026-05-11 13:38Z / group 812 3-person multi-source follow-up
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-11T13-38-40-156Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-11T13-42-52-482Z.json`
+- Side C: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-11T13-38-34-883Z.json`
+
+User symptom:
+- New 3-person group call after the multi-source changes. Root was not able to hear the third participant, but standby was able to hear the third participant.
+
+High-level verdict:
+- Mixed/bad, with one source-specific multi-source playout-readiness failure.
+- All three exports agree on room `gcall-qortal-812`, topology epoch `2`, root `QNardT...ZAWL`, standby `QP9Jj4...i6rP`, participant count `3`, room key presence, and media session generation `1`.
+- The root-side failure matches the diagnostics directly: root has a playout for third participant `QMe6E7...6VFZ`, but `jitterHasReadyFrame=false` for that source in all `102/102` retained multi-source samples. Standby has the same third participant ready in `300/300` retained samples.
+- This is not primarily a profile-strength or baseline miss. The failed root source is already in `multi-protected-recovery` with protected target/floor/boost applied, but it never becomes ready.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, pending-decrypt deltas `0`, and `pendingDecryptDepth=0` on all three exports.
+- Decode: `packetsDroppedDecodeFailure=0`, decoder throws `0`, and decode-failure deltas `0` on all three exports.
+- Queue/backpressure: bridge waiting-for-drain is `false`, no queue-pressure drops, no stale drops, no link-unready drops, no packet send failures; bridge high-water is low (`4`, `2`, `2`).
+- Failover/authority: no promotion/demotion counts, all sides agree on root/standby/topology/session state.
+- Sender: all sides have outbound sends succeeding and `outboundNoTargetSkipsDelta=0`; sender worklet-to-encoder timing is normal.
+- Baseline: the bad source is already above baseline policy in `multi-protected-recovery`, so a global baseline increase is not the next lever.
+
+Primary next target:
+- Another subsystem: multi-source per-source playout readiness / source activation path.
+- Specifically inspect why root receiving `QMe6E7...6VFZ` can have an active playout, active decoder/ring/scheduler, `jitterBufferedFrames=12`, `lastAppliedTargetMs=240`, and `lastAppliedFloorMs=224`, but still export `jitterHasReadyFrame=false` for the whole retained multi-source window.
+- Do not tune selector first: root classified the unheard source as `multi-protected-recovery`, which is the expected strong profile for a source that is not audibly ready.
+- Do not tune profile strength first: stronger targets will not fix a source that never flips ready despite buffered frames.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QNardT...ZAWL` receiving standby `QP9Jj4...i6rP` | `multi-protected-recovery`; earlier single-source churn | no symptom for standby leg | 75.129 | 1664 | 99 | 0.092 | 0.037 | low-latency | Standby leg is ready in `300/300` samples; prior single-source clean/weak churn remains but does not explain the reported third-participant silence. |
+| A | root-forwarder / Linux / `QNardT...ZAWL` receiving participant `QMe6E7...6VFZ` | `multi-protected-recovery` | yes, root could not hear this participant | 75.129 | 1664 | 99 | 0.092 | 0.037 | low-latency | Failed leg. Source exists, output count is `2`, protected profile is active, but `jitterHasReadyFrame=false` for `102/102` retained samples. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving root `QNardT...ZAWL` | `multi-protected-recovery` | not reported bad | 13.044 | 3660 | 85 | 0.003 | 0.001 | low-latency | Conservative protected classification for root, but playout is ready in `294/300` retained samples and no user symptom points here. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving participant `QMe6E7...6VFZ` | `multi-clean-low-latency` | no, standby could hear this participant | 13.044 | 3660 | 85 | 0.003 | 0.001 | low-latency | This is the control leg. Same third participant is ready in `300/300` retained samples and classified clean. |
+| C | participant / Linux / `QMe6E7...6VFZ` receiving root `QNardT...ZAWL` | `multi-protected-recovery` | unknown; metrics bad | 8.997 | 527 | 2066 | 0.077 | 0.075 | recovery | Participant hears root with ready playout after startup, but has heavy concealment and shallow reserve. Classification matches metric severity. |
+| C | participant / Linux / `QMe6E7...6VFZ` receiving standby `QP9Jj4...i6rP` | `multi-protected-recovery` | unknown; metrics bad | 8.997 | 527 | 2066 | 0.077 | 0.075 | recovery | Participant hears standby with ready playout after startup, but the side is generally in protected recovery. |
+
+### Side A
+
+Expected profile from symptom:
+- For root receiving third participant: `multi-protected-recovery` or a startup/playout-not-ready class. Since the source is present but inaudible, protected recovery is reasonable, but readiness must become true.
+
+Actual exported profile:
+- Standby source `QP9Jj4...i6rP`: live `multi-protected-recovery`.
+- Third participant source `QMe6E7...6VFZ`: live `multi-protected-recovery`.
+- Retained profile counts after the third participant joined: standby source `multi-protected-recovery` (`102`); third participant source `multi-protected-recovery` (`101`) plus one `multi-clean-low-latency` sample.
+
+Did classification match?
+- Yes for the bad source, but the subsystem outcome failed.
+
+Notes:
+- The third-participant source was not ignored: root has `sourceAddrs=["QP9Jj4...i6rP","QMe6E7...6VFZ"]`, `outputNodeCount=2`, decoder count `2`, playback node count `2`, jitter buffer count `2`, and active WASM-FEC/shared-ring playouts for both sources.
+- The failing source never became ready in the retained multi-source window: `jitterHasReadyFrame=false` in `102/102` samples, including the export-time playout with `jitterBufferedFrames=12`.
+- That shape fits the template's startup/playout-ready warning more than receive-policy tuning: buffered frames exist, protected profile is selected, but there is no real ready playout.
+
+### Side B
+
+Expected profile from symptom:
+- For standby receiving third participant: `multi-clean-low-latency` or brief multi recovery, because standby could hear the third participant.
+
+Actual exported profile:
+- Third participant source `QMe6E7...6VFZ`: live `multi-clean-low-latency`, retained `multi-clean-low-latency` for `300/300` samples.
+- Root source `QNardT...ZAWL`: live `multi-protected-recovery`, retained `multi-protected-recovery` for `300/300` samples.
+
+Did classification match?
+- Yes for the third-participant symptom.
+- Partly/too conservative for the root source, but that is not the reported failure.
+
+Notes:
+- Standby is the control evidence that the third participant's outbound audio was available and decodable in the room.
+- Standby receiving the third participant has `jitterHasReadyFrame=true` for `300/300` retained samples and low current pressure (`playoutUnderTargetFraction=0.003`, `playoutRateFractionBelow097=0.001`, `concealmentTicks=85` total side-wide).
+
+### Side C
+
+Expected profile from symptom:
+- No user symptom was reported for what the third participant heard. From metrics alone, `multi-protected-recovery` is expected.
+
+Actual exported profile:
+- Root source `QNardT...ZAWL`: live `multi-protected-recovery`, retained `multi-protected-recovery` for `90/92` classified samples after a short `silent-lean` startup.
+- Standby source `QP9Jj4...i6rP`: live `multi-protected-recovery`, retained `multi-protected-recovery` for `90/90` classified samples.
+
+Did classification match?
+- Yes from metrics; user-level correctness is unknown.
+
+Notes:
+- Participant side is shallow and repair-heavy: `avgPcmBufferedMs=8.997`, `concealmentTicks=2066`, `playoutUnderTargetFraction=0.077`, `playoutRateFractionBelow097=0.075`.
+- Both playouts are ready in most retained samples (`86` ready samples per source after startup), so this is not the same failure shape as root receiving participant.
+
+## Trend Read
+
+Side A:
+- Discrete multi-source join event followed by a stuck not-ready source.
+- Reasons seen:
+  - topology changes from epoch `1` to epoch `2` when the third participant joins.
+  - root's third-participant playout is `jitterHasReadyFrame=false` in all `102` retained multi-source samples.
+  - the same source transitions into `multi-protected-recovery` almost immediately, so selector did recognize the bad leg.
+  - no decrypt, decode, no-target, send-failure, or queue-pressure deltas.
+
+Side B:
+- Stable control side for the reported symptom.
+- Reasons seen:
+  - third-participant playout is ready for `300/300` retained samples.
+  - third-participant profile is `multi-clean-low-latency` for `300/300` retained samples.
+  - no decrypt, decode, no-target, send-failure, or queue-pressure deltas.
+
+Side C:
+- Startup into protected recovery with heavy repair/concealment.
+- Reasons seen:
+  - recovery mode for `92/93` retained samples.
+  - both remote sources settle into ready playout after the first few startup samples.
+  - high concealment (`2066`) and shallow reserve justify protected recovery, but this side was not the reported root-hearing-third failure.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-11T13:38Z group-812 3p` | A / Linux root receiving standby | `multi-protected-recovery` | no symptom for this leg | partly conservative | receive / residual selector churn | Do not target from this symptom; keep observing root/standby protected classification separately. |
+| `2026-05-11T13:38Z group-812 3p` | A / Linux root receiving participant | `multi-protected-recovery` | yes, root could not hear third participant | yes | startup/playout-ready subsystem | Fix multi-source per-source readiness/source activation: source is protected and buffered but never ready. |
+| `2026-05-11T13:38Z group-812 3p` | B / Linux standby receiving root | `multi-protected-recovery` | not reported bad | partly conservative | receive selector, secondary | Not next target for this symptom; avoid broad profile-strength changes. |
+| `2026-05-11T13:38Z group-812 3p` | B / Linux standby receiving participant | `multi-clean-low-latency` | no, standby could hear third participant | yes | no issue for reported symptom | No change. This is the control leg. |
+| `2026-05-11T13:38Z group-812 3p` | C / Linux participant receiving root | `multi-protected-recovery` | unknown; metrics bad | yes from metrics | profile strength / recovery quality, secondary | Track separately; not the next fix for root unable to hear participant. |
+| `2026-05-11T13:38Z group-812 3p` | C / Linux participant receiving standby | `multi-protected-recovery` | unknown; metrics bad | yes from metrics | profile strength / recovery quality, secondary | Track separately; not the next fix for root unable to hear participant. |
+
+## Next Fix Target
+
+Current patched target:
+- Another subsystem: multi-source per-source playout readiness / source activation.
+- Primary fix: inspect the receive playout/jitter readiness path for a newly added third source on the root. The failing leg has an active playout and protected profile, but `jitterHasReadyFrame=false` for the entire retained window while the same source is ready on standby.
+- Secondary fix: keep profile-strength work for participant-side protected recovery quality on the list, but do not apply it as the next patch from this symptom.
+- Selector is not the next target for the reported failure because classification for the unheard source was already strong (`multi-protected-recovery`). Baseline is not the next target. Do not add a new profile from this call.

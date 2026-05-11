@@ -104,6 +104,19 @@ const GC_JOIN_MAX_FUTURE_SKEW_MS = 30_000;
 /** Max age of GC_JOIN `timestamp` vs local `now` (for tests and diagnostics). */
 export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
 
+/**
+ * Experimental diagnostic switch.
+ *
+ * Set to true to run group calls without main-process room bootstrap/cache:
+ * - no recent room state is retained after leave/rejoin
+ * - joinRoom does not reuse recent topology/session identity
+ * - getRoomBootstrapState returns null, so renderers rely only on live GC_* traffic
+ *   plus the separate live getRoomParticipants() roster path.
+ *
+ * Keep false for normal builds.
+ */
+export const GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE = true;
+
 const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 5_000;
 /** Must exceed heartbeat interval so peers do not drop `GA` as stale between beats. */
 const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 7_000;
@@ -1632,6 +1645,7 @@ export class GroupCallManager extends EventEmitter {
     roomId: string,
     nowMs = Date.now()
   ): RecentRoomState | null {
+    if (GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE) return null;
     const cached = this.recentRoomStateByRoomId.get(roomId);
     if (!cached) return null;
     if (!isRecentRoomStateFresh(cached.cachedAtMs, nowMs)) {
@@ -1691,6 +1705,7 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private rememberRecentRoomState(room: GroupRoom, nowMs = Date.now()): void {
+    if (GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE) return;
     this.recentRoomStateByRoomId.set(
       room.roomId,
       this.buildRecentRoomState(room, nowMs)
@@ -1702,6 +1717,7 @@ export class GroupCallManager extends EventEmitter {
     address: string,
     atMs = Date.now()
   ): void {
+    if (GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE) return;
     const trimmed = address.trim();
     if (!trimmed) return;
     let byAddress = this.recentBootstrapParticipantActivityByRoom.get(roomId);
@@ -3775,7 +3791,9 @@ export class GroupCallManager extends EventEmitter {
     const destNorm = reticulumDestinationHash.trim().toLowerCase();
     let room = this.rooms.get(roomId);
     if (!room) {
-      const recent = this.getFreshRecentRoomState(roomId);
+      const recent = GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE
+        ? null
+        : this.getFreshRecentRoomState(roomId);
       room = {
         roomId,
         chatId,
@@ -4181,7 +4199,11 @@ export class GroupCallManager extends EventEmitter {
     }
 
     for (const address of [...targets]) {
-      if (!address || this.localAddresses.has(address)) {
+      if (
+        !address ||
+        this.localAddresses.has(address) ||
+        !room.participants.has(address)
+      ) {
         targets.delete(address);
       }
     }
@@ -8492,6 +8514,7 @@ export class GroupCallManager extends EventEmitter {
   }
 
   getRoomBootstrapState(roomId: string): GroupRoomBootstrapState | null {
+    if (GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE) return null;
     const liveRoom = this.rooms.get(roomId);
     const recent = this.getUsableRecentRoomState(roomId);
     if (!liveRoom && !recent) return null;

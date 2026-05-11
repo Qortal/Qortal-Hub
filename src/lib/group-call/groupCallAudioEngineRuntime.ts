@@ -572,6 +572,7 @@ export class GroupCallAudioEngineRuntime {
   private rendererLongTaskMaxMs = 0;
   private readonly rendererLongTaskRecent: RuntimeRendererThreadSample[] = [];
   private topologyAsyncGeneration = 0;
+  private leaveCleanupGeneration = 0;
   private lastObservedTopologyEpoch = 0;
   private trustedRemoteRoot = '';
   private trustedRemoteRootLastSeenAt = 0;
@@ -2462,24 +2463,15 @@ export class GroupCallAudioEngineRuntime {
 
   private async leaveGroupCall(): Promise<AudioSurfaceResponse> {
     const userInfo = this.userInfo;
-    if (!userInfo?.address || !this.snapshot.roomId) {
+    const roomId = this.snapshot.roomId;
+    if (!userInfo?.address || !roomId) {
       return { ok: true };
     }
+    const localAddress = userInfo.address;
+    const publicKey = userInfo.publicKey ?? '';
     const timestamp = Date.now();
-    const signature = await signGroupCallFields({
-      type: 'GC_LEAVE',
-      roomId: this.snapshot.roomId,
-      fromAddress: userInfo.address,
-      fromPublicKey: userInfo.publicKey ?? '',
-      timestamp,
-    }).catch(() => '');
-    await window.groupCall?.leave?.(
-      this.snapshot.roomId,
-      userInfo.address,
-      signature,
-      userInfo.publicKey ?? '',
-      timestamp
-    );
+    const cleanupGeneration = ++this.leaveCleanupGeneration;
+
     this.roomKey = null;
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
@@ -2509,12 +2501,6 @@ export class GroupCallAudioEngineRuntime {
     this.clearRecentWindowTrends();
     this.resetOutboundMediaDiagnostics();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
-    await this.senderEngine.stop();
-    await this.syncDecryptPoolRoomKey(null);
-    await this.receiveEngine.reset();
-    await this.receiveEngine.configure({
-      postFailoverRootHoldUntilMs: 0,
-    });
     this.memberGateGroupId = null;
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
@@ -2530,7 +2516,109 @@ export class GroupCallAudioEngineRuntime {
     this.snapshot = buildPostLeaveSnapshot(this.snapshot);
     this.emitSnapshot();
     resetGcallAudioPipelineSessionStats();
+    this.recordDiagEvent('local-leave-applied', { roomId });
+
+    const signature = await signGroupCallFields({
+      type: 'GC_LEAVE',
+      roomId,
+      fromAddress: localAddress,
+      fromPublicKey: publicKey,
+      timestamp,
+    }).catch(() => '');
+    void this.notifyMainOfLeave(
+      roomId,
+      localAddress,
+      publicKey,
+      timestamp,
+      signature
+    );
+    void this.cleanupMediaAfterLeave(cleanupGeneration, roomId);
+
     return { ok: true };
+  }
+
+  private async notifyMainOfLeave(
+    roomId: string,
+    localAddress: string,
+    publicKey: string,
+    timestamp: number,
+    signature: string
+  ): Promise<void> {
+    try {
+      await Promise.race([
+        window.groupCall?.leave?.(
+          roomId,
+          localAddress,
+          signature,
+          publicKey,
+          timestamp
+        ) ??
+          Promise.resolve({ success: false, error: 'groupcall-api-missing' }),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () => reject(new Error('gcall-leave-ipc-timeout-5s')),
+            5_000
+          );
+        }),
+      ]);
+      this.recordDiagEvent('main-leave-sent', { roomId });
+    } catch (error) {
+      const fallback = window.groupCall?.leaveSync?.(
+        roomId,
+        localAddress,
+        signature,
+        publicKey,
+        timestamp
+      );
+      this.recordDiagEvent('main-leave-failed', {
+        roomId,
+        error: error instanceof Error ? error.message : 'unknown',
+        syncFallbackSuccess: fallback?.success === true,
+        syncFallbackError: fallback?.error,
+      });
+    }
+  }
+
+  private async leaveCleanupStep(
+    label: string,
+    task: Promise<unknown>
+  ): Promise<void> {
+    try {
+      await Promise.race([
+        task,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`${label}-timeout-5s`)), 5_000);
+        }),
+      ]);
+    } catch (error) {
+      this.recordDiagEvent('leave-cleanup-step-failed', {
+        step: label,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+  }
+
+  private async cleanupMediaAfterLeave(
+    cleanupGeneration: number,
+    roomId: string
+  ): Promise<void> {
+    const stillCurrent = (): boolean =>
+      cleanupGeneration === this.leaveCleanupGeneration &&
+      !this.snapshot.roomId;
+    await this.leaveCleanupStep('sender-stop', this.senderEngine.stop());
+    if (!stillCurrent()) return;
+    await this.leaveCleanupStep(
+      'decrypt-key-clear',
+      this.syncDecryptPoolRoomKey(null)
+    );
+    if (!stillCurrent()) return;
+    await this.leaveCleanupStep('receive-reset', this.receiveEngine.reset());
+    if (!stillCurrent()) return;
+    await this.leaveCleanupStep(
+      'receive-configure',
+      this.receiveEngine.configure({ postFailoverRootHoldUntilMs: 0 })
+    );
+    this.recordDiagEvent('leave-cleanup-complete', { roomId });
   }
 
   private async handleGroupCallRuntimeEvent(

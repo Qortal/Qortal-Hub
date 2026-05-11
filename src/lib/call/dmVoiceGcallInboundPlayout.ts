@@ -10,9 +10,7 @@ import {
 } from '../group-call/gcallInboundPlayoutTarget';
 import { JitterBuffer } from '../group-call/gcallJitterBuffer';
 import { createGcallJitterBufferForIngress } from '../group-call/gcallInboundJitterSetup';
-import {
-  GcallOpusFecPlayoutPipeline,
-} from '../group-call/gcallOpusFecPlayoutPipeline';
+import { GcallOpusFecPlayoutPipeline } from '../group-call/gcallOpusFecPlayoutPipeline';
 import {
   GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS,
   computeN1SteadyReserveMs,
@@ -67,7 +65,10 @@ export interface DmVoiceGcallInboundOptions {
   /** After each jitter drain tick (aligned with group `runJitterDrainTick` tail). */
   afterDrain?: (info: { missedFramesThisTick: number }) => void;
   /** Fired after a jitter pop advances the played sequence watermark. */
-  onPlayedSeqAdvanced?: (info: { sourceAddr: string; playedSeq: number }) => void;
+  onPlayedSeqAdvanced?: (info: {
+    sourceAddr: string;
+    playedSeq: number;
+  }) => void;
   /** `gcallPlayoutMetrics` from `group-playout-processor`. */
   onPlayoutWorkletMessage?: (d: DmVoiceGcallPlayoutWorkletMessage) => void;
   /** One sample per jitter scheduler tick for the active hidden playout path. */
@@ -91,6 +92,9 @@ export interface DmVoiceGcallInboundOptions {
 }
 
 const GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS = 5_000;
+const GCALL_MULTI_SOURCE_READY_STALL_MIN_BUFFERED_FRAMES = 10;
+const GCALL_MULTI_SOURCE_READY_STALL_MIN_MS = 500;
+const GCALL_MULTI_SOURCE_READY_STALL_RECENT_PUSH_MAX_MS = 250;
 
 export function decideReadyStallForcePrime(opts: {
   hasObservedPlayoutStart: boolean;
@@ -102,17 +106,35 @@ export function decideReadyStallForcePrime(opts: {
   lastPushAgeMs: number;
   targetPlayoutMs: number;
 }): { shouldForcePrime: boolean; nextStallSinceMs: number | null } {
-  if (
-    opts.activeSourceCount !== 1 ||
-    opts.hasReadyFrame ||
-    opts.bufferedFrames <= 0
-  ) {
+  if (opts.hasReadyFrame || opts.bufferedFrames <= 0) {
     return { shouldForcePrime: false, nextStallSinceMs: null };
   }
   if (opts.stallSinceMs === null) {
     return { shouldForcePrime: false, nextStallSinceMs: opts.nowMs };
   }
   const blockedForMs = Math.max(0, opts.nowMs - opts.stallSinceMs);
+  if (opts.activeSourceCount >= 2) {
+    const hasRecentPush =
+      Number.isFinite(opts.lastPushAgeMs) &&
+      opts.lastPushAgeMs <= GCALL_MULTI_SOURCE_READY_STALL_RECENT_PUSH_MAX_MS;
+    const hasSubstantialFreshPreroll =
+      opts.bufferedFrames >=
+        GCALL_MULTI_SOURCE_READY_STALL_MIN_BUFFERED_FRAMES && hasRecentPush;
+    const shouldForcePrime =
+      hasSubstantialFreshPreroll &&
+      blockedForMs >= GCALL_MULTI_SOURCE_READY_STALL_MIN_MS;
+    return {
+      shouldForcePrime,
+      nextStallSinceMs: shouldForcePrime
+        ? null
+        : hasSubstantialFreshPreroll
+          ? opts.stallSinceMs
+          : null,
+    };
+  }
+  if (opts.activeSourceCount !== 1) {
+    return { shouldForcePrime: false, nextStallSinceMs: null };
+  }
   const opusBufferedMs = opts.bufferedFrames * 20;
   const shouldForcePrime = opts.hasObservedPlayoutStart
     ? shouldForceN1PostStartReprime({
@@ -250,10 +272,13 @@ export class DmVoiceGcallInboundPlayout {
     }
     this.fecPipeline = null;
     void this.ensureWebCodecsDecoder().catch((error) => {
-      console.error('[DM voice] WebCodecs fallback failed after WASM FEC error', {
-        reason,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      console.error(
+        '[DM voice] WebCodecs fallback failed after WASM FEC error',
+        {
+          reason,
+          message: error instanceof Error ? error.message : String(error),
+        }
+      );
     });
   }
 
@@ -319,7 +344,9 @@ export class DmVoiceGcallInboundPlayout {
   resetDynamicTargetPlayoutMs(): void {
     const tuning = this.tuning;
     if (!tuning) return;
-    this.setDynamicTargetPlayoutMs(computeStaticPlayoutTargetMsForTuning(tuning));
+    this.setDynamicTargetPlayoutMs(
+      computeStaticPlayoutTargetMsForTuning(tuning)
+    );
   }
 
   setBurstRecoveryExtraHoldFrames(frames: number): void {
@@ -415,7 +442,8 @@ export class DmVoiceGcallInboundPlayout {
     } as AudioWorkletNodeOptions);
 
     postStaticPlayoutTargetForTuning(playNode, tuning);
-    this.lastPostedTargetPlayoutMs = computeStaticPlayoutTargetMsForTuning(tuning);
+    this.lastPostedTargetPlayoutMs =
+      computeStaticPlayoutTargetMsForTuning(tuning);
 
     playNode.port.onmessage = (e: MessageEvent) => {
       const d = e.data as DmVoiceGcallPlayoutWorkletMessage;
@@ -437,9 +465,15 @@ export class DmVoiceGcallInboundPlayout {
 
     if (fecDesired) {
       this.fecPipeline = new GcallOpusFecPlayoutPipeline(
-        (addr) => (addr === this.peerAddress ? this.playbackNode ?? undefined : undefined),
+        (addr) =>
+          addr === this.peerAddress
+            ? (this.playbackNode ?? undefined)
+            : undefined,
         (addr, stats) => {
-          this.callbacks?.metricsRef?.current?.recordWasmFecDecodeStats(addr, stats);
+          this.callbacks?.metricsRef?.current?.recordWasmFecDecodeStats(
+            addr,
+            stats
+          );
           this.callbacks?.onWasmFecDecodeStats?.({
             sourceAddr: addr,
             ...stats,
@@ -474,9 +508,11 @@ export class DmVoiceGcallInboundPlayout {
             this.fallbackFromWasmFecToWebCodecs('worker-message-error');
             return;
           }
-          if (d.type !== 'decoded' || !this.fecPipeline || !this.opusFecWorker) return;
-          const ingressAtMs =
-            this.fecPipeline.consumeInflightIngressAtMs(d.sourceAddr);
+          if (d.type !== 'decoded' || !this.fecPipeline || !this.opusFecWorker)
+            return;
+          const ingressAtMs = this.fecPipeline.consumeInflightIngressAtMs(
+            d.sourceAddr
+          );
           this.fecPipeline.completeInflight(d.sourceAddr);
           this.fecPipeline.postBatch(
             d.sourceAddr,
@@ -548,7 +584,9 @@ export class DmVoiceGcallInboundPlayout {
         });
         this.startupReadyStallSinceMs = readyStallForcePrime.nextStallSinceMs;
         if (readyStallForcePrime.shouldForcePrime) {
-          jb.forcePrimeForRecoveryEscape(GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS);
+          jb.forcePrimeForRecoveryEscape(
+            GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS
+          );
           hasReadyFrame = jb.hasReadyFrame();
         }
       } else {
@@ -566,7 +604,7 @@ export class DmVoiceGcallInboundPlayout {
       const tickFinishedAt = performance.now();
       if (
         tickFinishedAt - this.lastDrainMetricSampleAtMs >=
-        OPUS_FRAME_SAMPLES / OPUS_SAMPLE_RATE * 1000
+        (OPUS_FRAME_SAMPLES / OPUS_SAMPLE_RATE) * 1000
       ) {
         this.lastDrainMetricSampleAtMs = tickFinishedAt;
         this.callbacks?.metricsRef?.current?.recordJitterTickDuration(
