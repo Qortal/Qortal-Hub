@@ -55,7 +55,7 @@ if (!fs.existsSync(venvPip)) {
 
 console.log('Installing / upgrading rns + lxmf…');
 run(venvPip, ['install', '--upgrade', 'pip']);
-run(venvPip, ['install', 'rns', 'lxmf']);
+run(venvPip, ['install', '--upgrade', 'rns', 'lxmf']);
 
 const marker = path.join(runtimeDir, 'BUNDLE_READY');
 fs.writeFileSync(

@@ -227,6 +227,12 @@ What to tune:
 - collapse-specific hold
 - stricter exit than `repair-heavy-connected`
 
+Current tuning note:
+- This profile now uses the stronger severe single-source tier instead of the
+  old `224ms` floor / `+120ms` boost. It should stay above lean/weak recovery
+  when the listener is shallow-buffered and repair-heavy, with a longer collapse
+  hold so the target has time to rebuild reserve.
+
 Use this instead of a new profile if:
 - the call is clearly repair-heavy and shallow-buffered
 - but still does not fit the simpler repair-heavy-connected path
@@ -332,6 +338,12 @@ What to tune:
 - collapse floor
 - latch duration
 - stricter clear conditions after the collapse
+
+Current tuning note:
+- This is the strongest single-source recovery tier. It now applies a higher
+  floor and target boost than `repair-collapse`, plus a larger accumulation cap,
+  for calls that are already correctly classified as severe but still sit near
+  empty with ongoing concealment.
 
 When this profile is suspicious:
 - if it keeps activating on merely moderate calls

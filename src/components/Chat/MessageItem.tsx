@@ -15,6 +15,7 @@ import {
   Box,
   Button,
   ButtonBase,
+  LinearProgress,
   List,
   ListItem,
   ListItemText,
@@ -36,6 +37,8 @@ import ReplyIcon from '@mui/icons-material/Reply';
 import { ReactionPicker } from '../ReactionPicker';
 import KeyOffIcon from '@mui/icons-material/KeyOff';
 import EditIcon from '@mui/icons-material/Edit';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRounded';
 import TextStyle from '@tiptap/extension-text-style';
 import level0Img from '../../assets/badges/level-0.png';
 import level1Img from '../../assets/badges/level-1.png';
@@ -60,6 +63,8 @@ import { ReactionsMap } from './ChatList';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { useStatus, statusDotColor } from '../../hooks/usePresence';
 import { getClickableAvatarSx } from './clickableAvatarStyles';
+
+const QCHAT_FILE_TRANSFER_TTL_MS = 2 * 60 * 60 * 1000;
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -105,6 +110,28 @@ const UserBadge = memo(({ userInfo }) => {
   );
 });
 
+const getQchatFileTransfer = (message: any) => {
+  if (message?.decryptedData?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData || {}),
+      data: message.decryptedData.data || {},
+    };
+  }
+  if (message?.decryptedData?.data?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData.data || {}),
+      data: message.decryptedData.data.data || {},
+    };
+  }
+  if (message?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...message,
+      data: message.data || {},
+    };
+  }
+  return null;
+};
+
 type MessageItemProps = {
   handleReaction: (reaction: string, messageId: string) => void;
   isLast: boolean;
@@ -118,6 +145,9 @@ type MessageItemProps = {
   myAddress: string;
   onEdit: (messageId: string) => void;
   onReply: (messageId: string) => void;
+  onAcceptQchatFileTransfer?: (message: any) => void;
+  qchatFileTransferStates?: Record<string, any>;
+  qchatCompletedTransfers?: Record<string, any>;
   onSeen: () => void;
   reactions: ReactionsMap | null;
   reply: string | null;
@@ -139,6 +169,9 @@ export const MessageItemComponent = ({
   myAddress,
   onEdit,
   onReply,
+  onAcceptQchatFileTransfer,
+  qchatFileTransferStates,
+  qchatCompletedTransfers,
   onSeen,
   reactions,
   reply,
@@ -153,6 +186,7 @@ export const MessageItemComponent = ({
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [avatarPreviewSrc, setAvatarPreviewSrc] = useState(null);
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
     const getInfo = async () => {
@@ -261,7 +295,121 @@ export const MessageItemComponent = ({
     'tutorial',
   ]);
 
+  const qchatFileTransfer = getQchatFileTransfer(message);
+  const qchatFileData = qchatFileTransfer?.data || {};
+  const qchatTransferState =
+    qchatFileData?.transferId && qchatFileTransferStates
+      ? qchatFileTransferStates[qchatFileData.transferId]
+      : null;
+  const qchatDownloaded =
+    !!qchatFileData?.transferId &&
+    !!qchatCompletedTransfers?.[qchatFileData.transferId];
+  const qchatDestinationHash =
+    qchatFileData?.senderReticulumDestinationHash ||
+    qchatFileData?.recipientReticulumDestinationHash ||
+    qchatTransferState?.peerPresenceHash ||
+    qchatTransferState?.peerDestinationHash ||
+    '';
+  const qchatDisplayStatus = qchatDownloaded
+    ? 'received'
+    : qchatTransferState?.status || qchatFileData?.status || 'offer';
+  const qchatProgress =
+    typeof qchatTransferState?.progress === 'number'
+      ? Math.max(0, Math.min(100, Math.round(qchatTransferState.progress * 100)))
+      : null;
+  const qchatTransferBusy =
+    qchatDisplayStatus === 'accepted' ||
+    qchatDisplayStatus === 'connecting' ||
+    qchatDisplayStatus === 'retrying' ||
+    qchatDisplayStatus === 'link_established' ||
+    qchatDisplayStatus === 'auth_sent' ||
+    qchatDisplayStatus === 'auth' ||
+    qchatDisplayStatus === 'authorized' ||
+    qchatDisplayStatus === 'sending' ||
+    qchatDisplayStatus === 'receiving';
+  const qchatTransferDone =
+    qchatDisplayStatus === 'sent' ||
+    qchatDisplayStatus === 'received' ||
+    qchatDownloaded;
+  const qchatTransferError =
+    qchatDisplayStatus === 'failed' || qchatDisplayStatus === 'rejected';
+  const qchatShowOfferExpiry =
+    qchatDisplayStatus === 'offer' || qchatDisplayStatus === 'registered';
+  const qchatExpiresAt =
+    typeof qchatFileData?.expiresAt === 'number'
+      ? qchatFileData.expiresAt
+      : typeof message?.timestamp === 'number'
+        ? message.timestamp + QCHAT_FILE_TRANSFER_TTL_MS
+        : null;
+  const qchatMsLeft =
+    qchatShowOfferExpiry && qchatExpiresAt && !qchatTransferDone && !qchatTransferError
+      ? Math.max(0, qchatExpiresAt - nowMs)
+      : null;
+  const qchatOfferExpired =
+    qchatShowOfferExpiry &&
+    !qchatTransferDone &&
+    !qchatTransferError &&
+    !!qchatExpiresAt &&
+    qchatExpiresAt <= nowMs;
+  const qchatExpiryText =
+    qchatMsLeft === null
+      ? ''
+      : qchatMsLeft <= 0
+        ? 'expired'
+        : `${Math.floor(qchatMsLeft / 60000)}:${Math.floor(
+            (qchatMsLeft % 60000) / 1000
+          )
+            .toString()
+            .padStart(2, '0')} left`;
+  const qchatStatusText = (() => {
+    switch (qchatDisplayStatus) {
+      case 'offer':
+        if (qchatDownloaded) return 'downloaded';
+        if (qchatOfferExpired) return 'expired';
+        return 'offer';
+      case 'registered':
+        return 'waiting for downloader';
+      case 'accepted':
+      case 'connecting':
+        return 'creating link';
+      case 'retrying':
+        return `retrying link ${qchatTransferState?.attempt || ''}`.trim();
+      case 'link_established':
+        return 'link established';
+      case 'auth_sent':
+        return 'waiting for sender authorization';
+      case 'auth':
+        return 'verifying downloader';
+      case 'authorized':
+        return 'authorized';
+      case 'sending':
+        return qchatProgress !== null ? `uploading ${qchatProgress}%` : 'uploading';
+      case 'receiving':
+        return qchatProgress !== null
+          ? `downloading ${qchatProgress}%`
+          : 'downloading';
+      case 'sent':
+        return 'sent';
+      case 'received':
+        return 'downloaded';
+      case 'failed':
+      case 'rejected':
+        return `error: ${
+          qchatTransferState?.error ||
+          qchatTransferState?.reason ||
+          'transfer failed'
+        }`;
+      default:
+        return qchatDisplayStatus;
+    }
+  })();
+  useEffect(() => {
+    if (!qchatFileTransfer) return;
+    const interval = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [qchatFileTransfer]);
   const hasNoMessage =
+    !qchatFileTransfer &&
     (!message.decryptedData?.data?.message ||
       message.decryptedData?.data?.message === '<p></p>') &&
     (message?.images || [])?.length === 0 &&
@@ -272,6 +420,7 @@ export const MessageItemComponent = ({
   const senderStatus = useStatus(message?.sender);
   const isRepliedToMe =
     reply?.sender === myAddress || replyExpiredMeta?.sender === myAddress;
+  const isQchatFileOffer = qchatFileTransfer?.data?.status === 'offer';
 
   return (
     <>
@@ -748,7 +897,119 @@ export const MessageItemComponent = ({
             )}
 
             {/* Message body - show only one of htmlText or message.text to avoid duplicate for open groups */}
-            {message?.decryptedData?.type === 'notification' ? (
+            {qchatFileTransfer ? (
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  border: '1px solid',
+                  borderColor: theme.palette.divider,
+                  borderRadius: '8px',
+                  display: 'flex',
+                  gap: '10px',
+                  maxWidth: 420,
+                  p: 1.25,
+                }}
+              >
+                <InsertDriveFileRoundedIcon
+                  sx={{ color: theme.palette.text.secondary, flexShrink: 0 }}
+                />
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {qchatFileData?.fileName || 'File transfer'}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: qchatTransferError
+                        ? theme.palette.error.main
+                        : theme.palette.text.secondary,
+                      fontSize: 12,
+                    }}
+                  >
+                    {Math.max(
+                      1,
+                      Math.ceil((qchatFileData?.size || 0) / 1024)
+                    )}{' '}
+                    KB · {qchatStatusText}
+                  </Typography>
+                  {qchatDestinationHash && (
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                        fontSize: 11,
+                        lineHeight: 1.35,
+                        mt: 0.25,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      destinationHash: {qchatDestinationHash}
+                    </Typography>
+                  )}
+                  {qchatExpiryText && (
+                    <Typography
+                      sx={{
+                        color:
+                          qchatMsLeft === 0
+                            ? theme.palette.error.main
+                            : theme.palette.text.secondary,
+                        fontSize: 11,
+                        mt: 0.25,
+                      }}
+                    >
+                      expires: {qchatExpiryText}
+                    </Typography>
+                  )}
+                  {(qchatProgress !== null ||
+                    qchatTransferBusy ||
+                    (qchatTransferDone && !qchatDownloaded)) &&
+                    !qchatTransferError && (
+                    <LinearProgress
+                      variant={qchatProgress !== null ? 'determinate' : 'indeterminate'}
+                      value={
+                        qchatTransferDone
+                          ? 100
+                          : qchatProgress ?? undefined
+                      }
+                      color="primary"
+                      sx={{
+                        mt: 0.75,
+                        height: 4,
+                        borderRadius: 1,
+                      }}
+                    />
+                  )}
+                </Box>
+                {!isOwn && isQchatFileOffer && onAcceptQchatFileTransfer && (
+	                  <Button
+	                    size="small"
+	                    variant="contained"
+	                    startIcon={<DownloadRoundedIcon />}
+	                    disabled={
+	                      qchatTransferBusy ||
+	                      qchatTransferDone ||
+	                      qchatOfferExpired
+	                    }
+	                    onClick={() => onAcceptQchatFileTransfer(message)}
+	                    sx={{ flexShrink: 0, textTransform: 'none' }}
+	                  >
+	                    {qchatDownloaded
+	                      ? 'Downloaded'
+	                      : qchatOfferExpired
+	                        ? 'Expired'
+	                        : 'Accept'}
+	                  </Button>
+                )}
+              </Box>
+            ) : message?.decryptedData?.type === 'notification' ? (
               <MessageDisplay
                 htmlContent={message.decryptedData?.data?.message}
               />

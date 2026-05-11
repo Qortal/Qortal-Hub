@@ -18,7 +18,7 @@ import {
   type ChildProcessWithoutNullStreams,
 } from 'child_process';
 import crypto from 'crypto';
-import { app, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
 import net from 'net';
@@ -33,6 +33,7 @@ import {
   loadReticulumMeshState,
   meshConfigSliceFromState,
 } from './reticulum-mesh-store';
+import { runEd25519VerifySync } from './ed25519-verify-common';
 
 /**
  * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
@@ -64,6 +65,8 @@ const RETICULUM_APP_INSTANCE_REGISTRY_FILENAME = 'reticulum-app-instances.json';
 const RETICULUM_SHARED_DAEMON_STATE_FILENAME = 'reticulum-daemon-state.json';
 const RETICULUM_SHARED_TRANSPORT_STATE_FILENAME = 'reticulum-transport-state.json';
 const RETICULUM_SHARED_RPC_KEY_FILENAME = 'reticulum-rpc-key.hex';
+const QCHAT_FILE_PENDING_SENDS_DIRNAME = 'qchat-file-transfers';
+const QCHAT_FILE_PENDING_SENDS_FILENAME = 'pending-sends.json';
 const RETICULUM_RPC_KEY_BYTES = 32;
 const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
@@ -71,6 +74,11 @@ const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
 const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
+const QCHAT_FILE_OFFER_TTL_MS = 2 * 60 * 60 * 1000;
+const QCHAT_FILE_COMPLETED_CACHE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const QCHAT_FILE_SIGNATURE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const QCHAT_FILE_SIGNATURE_MAX_FUTURE_SKEW_MS = 2 * 60 * 1000;
+const QCHAT_FILE_BRIDGE_ATTACH_RETRY_MS = 3_000;
 
 export type ReticulumDaemonMode = 'frozen' | 'venv' | 'system' | null;
 export type ReticulumAppInstanceRecord = {
@@ -163,6 +171,24 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
 let child: ChildProcessWithoutNullStreams | null = null;
 let lastStartMode: ReticulumDaemonMode = null;
 let reticulumInstanceIndex = 0;
+let qchatFileAttachedBridge: unknown = null;
+let qchatFileAttachRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+type QchatFilePendingSendRecord = {
+  transferId: string;
+  senderAddress: string;
+  allowedRecipientAddress: string;
+  filePath: string;
+  fileName: string;
+  size: number;
+  sha256: string;
+  createdAt: number;
+  expiresAt: number;
+};
+
+const qchatFilePendingSends = new Map<string, QchatFilePendingSendRecord>();
+let qchatFileHydratedBridge: unknown = null;
+const qchatFileCompletedSends = new Map<string, number>();
 
 type ReticulumSharedDaemonState = {
   pid: number;
@@ -175,6 +201,97 @@ type ReticulumSharedDaemonState = {
 
 export function getReticulumConfigDir(): string {
   return path.join(app.getPath('userData'), 'reticulum');
+}
+
+function getQchatFilePendingSendsPath(): string {
+  const dir = path.join(
+    app.getPath('userData'),
+    QCHAT_FILE_PENDING_SENDS_DIRNAME
+  );
+  fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, QCHAT_FILE_PENDING_SENDS_FILENAME);
+}
+
+function normalizeQchatFilePendingSendRecord(
+  value: unknown
+): QchatFilePendingSendRecord | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const transferId = String(record.transferId || '').trim();
+  const senderAddress = String(record.senderAddress || '').trim();
+  const allowedRecipientAddress = String(
+    record.allowedRecipientAddress || ''
+  ).trim();
+  const filePath = String(record.filePath || '').trim();
+  const fileName = String(record.fileName || '').trim();
+  const size = Number(record.size || 0);
+  const sha256 = String(record.sha256 || '').trim().toLowerCase();
+  const createdAt = Number(record.createdAt || 0);
+  const expiresAt = Number(record.expiresAt || 0);
+  if (
+    !transferId ||
+    !senderAddress ||
+    !allowedRecipientAddress ||
+    !filePath ||
+    !fileName ||
+    !Number.isFinite(size) ||
+    size <= 0 ||
+    !Number.isFinite(createdAt) ||
+    createdAt <= 0 ||
+    !Number.isFinite(expiresAt) ||
+    expiresAt <= 0
+  ) {
+    return null;
+  }
+  return {
+    transferId,
+    senderAddress,
+    allowedRecipientAddress,
+    filePath,
+    fileName,
+    size,
+    sha256,
+    createdAt,
+    expiresAt,
+  };
+}
+
+function loadQchatFilePendingSendRecords(): QchatFilePendingSendRecord[] {
+  const filePath = getQchatFilePendingSendsPath();
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as unknown;
+    const records = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { records?: unknown[] })?.records)
+        ? (parsed as { records: unknown[] }).records
+        : [];
+    return records
+      .map(normalizeQchatFilePendingSendRecord)
+      .filter((record): record is QchatFilePendingSendRecord => record !== null);
+  } catch (error) {
+    loggerError('[Reticulum] failed to load qchat pending file sends:', error);
+    return [];
+  }
+}
+
+function saveQchatFilePendingSendRecords(
+  records: QchatFilePendingSendRecord[]
+): void {
+  const filePath = getQchatFilePendingSendsPath();
+  const tempPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(
+    tempPath,
+    JSON.stringify(
+      {
+        version: 1,
+        records,
+      },
+      null,
+      2
+    )
+  );
+  fs.renameSync(tempPath, filePath);
 }
 
 function getReticulumSharedStateDir(): string {
@@ -1600,6 +1717,309 @@ export function startBundledReticulumDaemon(): void {
 }
 
 export function registerReticulumIpcHandlers(): void {
+  const pruneAndPersistQchatFilePendingSends = (): void => {
+    const now = Date.now();
+    for (const [transferId, record] of qchatFilePendingSends.entries()) {
+      if (record.expiresAt <= now || !fs.existsSync(record.filePath)) {
+        qchatFilePendingSends.delete(transferId);
+      }
+    }
+    saveQchatFilePendingSendRecords([...qchatFilePendingSends.values()]);
+  };
+
+  const persistQchatFilePendingSend = (
+    record: QchatFilePendingSendRecord
+  ): void => {
+    qchatFilePendingSends.set(record.transferId, record);
+    pruneAndPersistQchatFilePendingSends();
+  };
+
+  const deleteQchatFilePendingSend = (transferId: string): void => {
+    qchatFilePendingSends.delete(transferId);
+    pruneAndPersistQchatFilePendingSends();
+  };
+
+  const pruneQchatFileCompletedSends = (): void => {
+    const now = Date.now();
+    for (const [transferId, expiresAt] of qchatFileCompletedSends.entries()) {
+      if (expiresAt <= now) {
+        qchatFileCompletedSends.delete(transferId);
+      }
+    }
+  };
+
+  const markQchatFileSendCompleted = (transferId: string): void => {
+    pruneQchatFileCompletedSends();
+    qchatFileCompletedSends.set(
+      transferId,
+      Date.now() + QCHAT_FILE_COMPLETED_CACHE_GRACE_MS
+    );
+    deleteQchatFilePendingSend(transferId);
+  };
+
+  const hydrateQchatFilePendingSends = async (bridge: {
+    sendQchatFileResource: (payload: {
+      allowedRecipientAddress: string;
+      transferId: string;
+      filePath: string;
+      fileName: string;
+      size: number;
+      sha256?: string;
+      expiresAt?: number;
+    }) => Promise<{ ok: boolean; error?: string; reason?: string }>;
+  }): Promise<void> => {
+    if (qchatFileHydratedBridge === bridge) return;
+    const now = Date.now();
+    let changed = false;
+    let hadError = false;
+    for (const record of loadQchatFilePendingSendRecords()) {
+      if (record.expiresAt <= now || !fs.existsSync(record.filePath)) {
+        changed = true;
+        continue;
+      }
+      qchatFilePendingSends.set(record.transferId, record);
+      try {
+        const result = await bridge.sendQchatFileResource({
+          allowedRecipientAddress: record.allowedRecipientAddress,
+          transferId: record.transferId,
+          filePath: record.filePath,
+          fileName: record.fileName,
+          size: record.size,
+          sha256: record.sha256,
+          expiresAt: record.expiresAt,
+        });
+        if (!result.ok) {
+          loggerError(
+            `[Reticulum] failed to hydrate qchat file send ${record.transferId}: ${
+              result.error || result.reason || 'unknown error'
+            }`
+          );
+          hadError = true;
+        }
+      } catch (error) {
+        hadError = true;
+        loggerError(
+          `[Reticulum] failed to hydrate qchat file send ${record.transferId}:`,
+          error
+        );
+      }
+    }
+    if (changed) {
+      pruneAndPersistQchatFilePendingSends();
+    }
+    if (hadError) {
+      throw new Error('qchat file send hydration failed');
+    }
+    qchatFileHydratedBridge = bridge;
+  };
+
+  const verifyQchatFileAuthTimestamp = (timestamp: number): string | null => {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return 'Missing Reticulum link auth timestamp';
+    }
+    const skew = Date.now() - timestamp;
+    if (skew > QCHAT_FILE_SIGNATURE_MAX_AGE_MS) {
+      return 'Reticulum link auth expired';
+    }
+    if (skew < -QCHAT_FILE_SIGNATURE_MAX_FUTURE_SKEW_MS) {
+      return 'Reticulum link auth timestamp is in the future';
+    }
+    return null;
+  };
+
+  const buildQchatFileLinkAuthSignedFields = (payload: {
+    transferId: string;
+    senderAddress: string;
+    downloaderAddress: string;
+    downloaderPublicKey: string;
+    downloaderReticulumDestinationHash: string;
+    downloaderReticulumIdentityPublicKeyBase64: string;
+    timestamp: number;
+  }): Record<string, unknown> => ({
+    type: 'QCHAT_FILE_LINK_AUTH',
+    transferId: payload.transferId,
+    senderAddress: payload.senderAddress,
+    downloaderAddress: payload.downloaderAddress,
+    downloaderPublicKey: payload.downloaderPublicKey,
+    downloaderReticulumDestinationHash:
+      payload.downloaderReticulumDestinationHash,
+    downloaderReticulumIdentityPublicKeyBase64:
+      payload.downloaderReticulumIdentityPublicKeyBase64,
+    timestamp: payload.timestamp,
+  });
+
+  const verifyQchatFileLinkAuth = (
+    auth: Record<string, unknown>,
+    pending: {
+      allowedRecipientAddress: string;
+      senderAddress: string;
+    }
+  ): string | null => {
+    const transferId = String(auth.transferId || '').trim();
+    const senderAddress = String(auth.senderAddress || '').trim();
+    const downloaderAddress = String(auth.downloaderAddress || '').trim();
+    const downloaderPublicKey = String(auth.downloaderPublicKey || '').trim();
+    const downloaderReticulumDestinationHash = String(
+      auth.downloaderReticulumDestinationHash || ''
+    )
+      .trim()
+      .toLowerCase();
+    const downloaderReticulumIdentityPublicKeyBase64 = String(
+      auth.downloaderReticulumIdentityPublicKeyBase64 || ''
+    ).trim();
+    const timestamp = Number(auth.timestamp || 0);
+    const signature = String(auth.signature || '').trim();
+    if (!transferId || !senderAddress || !downloaderAddress || !downloaderPublicKey) {
+      return 'Missing Reticulum link auth identity fields';
+    }
+    if (downloaderAddress !== pending.allowedRecipientAddress) {
+      return 'Reticulum link auth is not from the allowed downloader';
+    }
+    if (senderAddress !== pending.senderAddress) {
+      return 'Reticulum link auth sender mismatch';
+    }
+    if (
+      !downloaderReticulumDestinationHash ||
+      !downloaderReticulumIdentityPublicKeyBase64 ||
+      !signature
+    ) {
+      return 'Missing Reticulum link auth signature fields';
+    }
+    const timestampError = verifyQchatFileAuthTimestamp(timestamp);
+    if (timestampError) return timestampError;
+    const ok = runEd25519VerifySync({
+      kind: 'gc',
+      fields: buildQchatFileLinkAuthSignedFields({
+        transferId,
+        senderAddress,
+        downloaderAddress,
+        downloaderPublicKey,
+        downloaderReticulumDestinationHash,
+        downloaderReticulumIdentityPublicKeyBase64,
+        timestamp,
+      }),
+      signature,
+      fromPublicKey: downloaderPublicKey,
+      fromAddress: downloaderAddress,
+    });
+    return ok ? null : 'Invalid Reticulum link auth signature';
+  };
+
+  const sha256File = async (filePath: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath);
+      stream.on('error', reject);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+    });
+
+  const attachQchatFileBridgeEvents = async (): Promise<void> => {
+    const { getReticulumBridge, startReticulumBridge } =
+      (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
+    const bridge = getReticulumBridge() ?? (await startReticulumBridge());
+    await hydrateQchatFilePendingSends(bridge);
+    if (qchatFileAttachedBridge === bridge) return;
+    bridge.on('qchat-file-transfer', (payload: any) => {
+      const broadcastQchatFileTransfer = (eventPayload: any): void => {
+        for (const wc of BrowserWindow.getAllWindows().map((w) => w.webContents)) {
+          if (!wc.isDestroyed()) {
+            wc.send('reticulum:qchatFileTransferEvent', eventPayload);
+          }
+        }
+      };
+      if (payload?.status === 'auth' && payload?.auth && payload?.linkId) {
+        const transferId = String(payload.transferId || '').trim();
+        const rejectAuth = (reason: string): void => {
+          loggerError(`[Reticulum] qchat file auth rejected: ${reason}`);
+          broadcastQchatFileTransfer({
+            status: 'failed',
+            transferId,
+            reason,
+          });
+          void bridge
+            .rejectQchatFileResource({
+              linkId: String(payload.linkId),
+              transferId,
+              reason,
+            })
+            .then((res) => {
+              if (!res.ok) {
+                const failure = res as { error?: string; reason?: string };
+                loggerError(
+                  `[Reticulum] qchat file reject failed: ${failure.error || failure.reason}`
+                );
+              }
+            })
+            .catch((err) => loggerError('[Reticulum] qchat file reject failed:', err));
+        };
+        const pending = qchatFilePendingSends.get(transferId);
+        if (!pending) {
+          pruneQchatFileCompletedSends();
+          if (qchatFileCompletedSends.has(transferId)) {
+            loggerLog(
+              `[Reticulum] ignoring duplicate qchat file auth for completed transfer ${transferId}`
+            );
+            return;
+          }
+          rejectAuth('no_pending_transfer');
+          return;
+        }
+        if (pending.expiresAt <= Date.now()) {
+          deleteQchatFilePendingSend(transferId);
+          rejectAuth('transfer_expired');
+          return;
+        }
+        if (!fs.existsSync(pending.filePath)) {
+          deleteQchatFilePendingSend(transferId);
+          rejectAuth('file_missing');
+          return;
+        }
+        const failure = verifyQchatFileLinkAuth(payload.auth, pending);
+        if (failure) {
+          rejectAuth(failure);
+          return;
+        }
+        void bridge
+          .authorizeQchatFileResource({
+            linkId: String(payload.linkId),
+            transferId,
+          })
+          .then((res) => {
+            if (!res.ok) {
+              const failure = res as { error?: string; reason?: string };
+              loggerError(
+                `[Reticulum] qchat file authorize failed: ${failure.error || failure.reason}`
+              );
+              return;
+            }
+          })
+          .catch((err) => loggerError('[Reticulum] qchat file authorize failed:', err));
+      } else if (payload?.status === 'sent' && payload?.transferId) {
+        markQchatFileSendCompleted(String(payload.transferId));
+      }
+      broadcastQchatFileTransfer(payload);
+    });
+    qchatFileAttachedBridge = bridge;
+  };
+
+  const scheduleQchatFileBridgeAttachRetry = (): void => {
+    if (qchatFileAttachRetryTimer) return;
+    qchatFileAttachRetryTimer = setTimeout(() => {
+      qchatFileAttachRetryTimer = null;
+      void attachQchatFileBridgeEvents().catch((error) => {
+        loggerError('[Reticulum] qchat file bridge event attach retry failed:', error);
+        scheduleQchatFileBridgeAttachRetry();
+      });
+    }, QCHAT_FILE_BRIDGE_ATTACH_RETRY_MS);
+    qchatFileAttachRetryTimer.unref?.();
+  };
+
+  void attachQchatFileBridgeEvents().catch((error) => {
+    loggerError('[Reticulum] qchat file bridge event attach failed:', error);
+    scheduleQchatFileBridgeAttachRetry();
+  });
+
   ipcMain.handle(
     'reticulum:getStatus',
     async (): Promise<ReticulumDaemonStatus> => {
@@ -1735,6 +2155,238 @@ export function registerReticulumIpcHandlers(): void {
           error
         );
         return [];
+      }
+    }
+  );
+
+  ipcMain.handle('reticulum:qchatFileSelect', async (): Promise<{
+    ok: boolean;
+    canceled?: boolean;
+    error?: string;
+    file?: { path: string; name: string; size: number; sha256: string };
+  }> => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return { ok: false, canceled: true };
+      }
+      const filePath = result.filePaths[0]!;
+      const stat = await fs.promises.stat(filePath);
+      if (!stat.isFile()) return { ok: false, error: 'Selected path is not a file' };
+      const sha256 = await sha256File(filePath);
+      return {
+        ok: true,
+        file: {
+          path: filePath,
+          name: path.basename(filePath),
+          size: stat.size,
+          sha256,
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      loggerError('[Reticulum] qchatFileSelect failed:', error);
+      return { ok: false, error: message };
+    }
+  });
+
+  ipcMain.handle(
+    'reticulum:qchatFileChooseSavePath',
+    async (_event, fileName: string): Promise<{
+      ok: boolean;
+      canceled?: boolean;
+      error?: string;
+      path?: string;
+    }> => {
+      try {
+        const safeName = path.basename(String(fileName || 'received-file'));
+        const result = await dialog.showSaveDialog({
+          defaultPath: safeName,
+        });
+        if (result.canceled || !result.filePath) {
+          return { ok: false, canceled: true };
+        }
+        return { ok: true, path: result.filePath };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        loggerError('[Reticulum] qchatFileChooseSavePath failed:', error);
+        return { ok: false, error: message };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:qchatFileAccept',
+    async (
+      _event,
+      payload: {
+        transferId?: string;
+        senderAddress?: string;
+        recipientAddress?: string;
+        authMessage?: Record<string, unknown>;
+        savePath?: string;
+        fileName?: string;
+        size?: number;
+        sha256?: string;
+        senderReticulumDestinationHash?: string;
+        senderReticulumIdentityPublicKeyBase64?: string;
+      }
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const peerPresenceHash = String(
+          payload?.senderReticulumDestinationHash || ''
+        )
+          .trim()
+          .toLowerCase();
+        const reticulumIdentityPublicKeyBase64 = String(
+          payload?.senderReticulumIdentityPublicKeyBase64 || ''
+        ).trim();
+        if (!peerPresenceHash) {
+          return {
+            ok: false,
+            error: 'Missing sender Reticulum destination hash in offer',
+          };
+        }
+        if (!/^[0-9a-f]{32}$/i.test(peerPresenceHash)) {
+          return {
+            ok: false,
+            error: 'Invalid sender Reticulum destination hash in offer',
+          };
+        }
+        if (!reticulumIdentityPublicKeyBase64) {
+          return {
+            ok: false,
+            error: 'Missing sender Reticulum public key in offer',
+          };
+        }
+        if (!payload?.authMessage || typeof payload.authMessage !== 'object') {
+          return { ok: false, error: 'Missing Reticulum link auth message' };
+        }
+        await attachQchatFileBridgeEvents();
+        const { getReticulumBridge, startReticulumBridge } =
+          (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
+        const bridge = getReticulumBridge() ?? (await startReticulumBridge());
+        const result = await bridge.acceptQchatFileResource({
+          peerPresenceHash,
+          reticulumIdentityPublicKeyBase64,
+          authMessage: payload.authMessage,
+          transferId: String(payload?.transferId || ''),
+          savePath: String(payload?.savePath || ''),
+          fileName: String(payload?.fileName || ''),
+          size: Number(payload?.size || 0),
+          sha256:
+            typeof payload?.sha256 === 'string' ? payload.sha256 : undefined,
+        });
+        if (result.ok) return { ok: true };
+        return {
+          ok: false,
+          error:
+            'reason' in result
+              ? result.error || result.reason
+              : 'Reticulum transfer accept failed',
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        loggerError('[Reticulum] qchatFileAccept failed:', error);
+        return { ok: false, error: message };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:qchatFileSend',
+    async (
+      _event,
+      payload: {
+        transferId?: string;
+        allowedRecipientAddress?: string;
+        senderAddress?: string;
+        recipientAddress?: string;
+        filePath?: string;
+        fileName?: string;
+        size?: number;
+        sha256?: string;
+        expiresAt?: number;
+      }
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const allowedRecipientAddress = String(
+          payload?.allowedRecipientAddress || payload?.recipientAddress || ''
+        ).trim();
+        const senderAddress = String(payload?.senderAddress || '').trim();
+        if (!allowedRecipientAddress) {
+          return {
+            ok: false,
+            error: 'Missing allowed recipient address for file transfer',
+          };
+        }
+        if (!senderAddress) {
+          return {
+            ok: false,
+            error: 'Missing sender address for file transfer',
+          };
+        }
+        await attachQchatFileBridgeEvents();
+        const { getReticulumBridge, startReticulumBridge } =
+          (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
+        const bridge = getReticulumBridge() ?? (await startReticulumBridge());
+        const transferId = String(payload?.transferId || '');
+        const filePath = String(payload?.filePath || '');
+        const fileName = String(payload?.fileName || '');
+        const size = Number(payload?.size || 0);
+        const sha256 =
+          typeof payload?.sha256 === 'string'
+            ? payload.sha256.trim().toLowerCase()
+            : '';
+        const requestedExpiresAt = Number(payload?.expiresAt || 0);
+        const createdAt = Date.now();
+        const expiresAt =
+          Number.isFinite(requestedExpiresAt) && requestedExpiresAt > createdAt
+            ? requestedExpiresAt
+            : createdAt + QCHAT_FILE_OFFER_TTL_MS;
+        if (!transferId) {
+          return { ok: false, error: 'Missing transfer id' };
+        }
+        if (!filePath || !fs.existsSync(filePath)) {
+          return { ok: false, error: 'File does not exist' };
+        }
+        const pendingRecord: QchatFilePendingSendRecord = {
+          transferId,
+          senderAddress,
+          allowedRecipientAddress,
+          filePath,
+          fileName,
+          size,
+          sha256,
+          createdAt,
+          expiresAt,
+        };
+        const result = await bridge.sendQchatFileResource({
+          allowedRecipientAddress,
+          transferId,
+          filePath,
+          fileName,
+          size,
+          sha256,
+          expiresAt,
+        });
+        if (result.ok) {
+          persistQchatFilePendingSend(pendingRecord);
+          return { ok: true };
+        }
+        return {
+          ok: false,
+          error:
+            'reason' in result
+              ? result.error || result.reason
+              : 'Reticulum transfer send failed',
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        loggerError('[Reticulum] qchatFileSend failed:', error);
+        return { ok: false, error: message };
       }
     }
   );

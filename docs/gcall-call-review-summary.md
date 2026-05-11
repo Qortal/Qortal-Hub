@@ -4323,3 +4323,319 @@ Current patched target:
 - Primary fix: multi-source selector stability and attribution. The root side shows rapid clean/protected flipping, while the standby side shows a plausible protected/clean split. Tune entry/exit hysteresis around `preProcessBufferedFrames`, source reserve, and recent missing-frame deltas so good calls do not look like failed protected recovery.
 - Secondary fix: diagnostics/profile interpretation for protected recovery. A fully protected participant can still be a good call; scoreboard logic should treat user symptom plus concealment audibility, not just high retained counters.
 - Leave baseline unchanged. Do not add a new profile from this call.
+
+## Call: 2026-05-10 22:44Z / group 937 2-person follow-up
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-119.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-10T22-44-40-652Z.json`
+
+User symptom:
+- New two-person group call after the latest changes. Subjective quality was not stated, so user-bad is inferred from the retained-window receive metrics and recovery profiles.
+
+High-level verdict:
+- Bad, receive-policy dominated.
+- Both exports agree on room `gcall-qortal-937`, topology epoch `2`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, participant count `2`, room key presence, and media session generation `1`.
+- Side A is a real severe receive failure: near-empty reserve, heavy concealment, and live `repair-collapse`.
+- Side B is still under-classified for the symptom shape: low reserve and repeated missing-frame deltas spend most retained samples in `steady-weak-listener` / `persistent-lean`.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and retained-window pending-decrypt delta `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Queue/backpressure: bridge waiting-for-drain is `false`; bridge queued-frame high-water is `24` on Side A and `2` on Side B, with no queue-pressure drops.
+- Failover/authority: no promotion/demotion counts, settled matching root/standby/topology/session state.
+- Baseline: both sides are already almost entirely in recovery (`112/134` retained samples on Side A, `60/61` on Side B), so a global baseline increase is not the next lever.
+
+Primary next target:
+- Selector.
+- Specifically, single-source damage/readiness hysteresis. Side B still lets weak/lean profiles dominate while missing frames continue, and Side A still oscillates between severe profiles and `silent-lean` even with near-zero reserve and high concealment.
+- Profile strength is secondary: Side A's live `repair-collapse` classification is correct but still sounds bad on paper, so revisit `repair-collapse` target/floor only after the selector stops dropping damaged sources into lean/weak classes.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | mixed, `silent-lean` / `collapse-recovery` | yes/inferred | 1.170 | 635 | 1587 | 0.043 | 0.040 | recovery | Live profile is `repair-collapse`, but retained samples still spend `48/134` in `silent-lean`; reserve is effectively empty and concealment is severe. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `steady-weak-listener` / `persistent-lean` | yes/inferred | 7.061 | 745 | 55 | 0.013 | 0.009 | recovery | Low concealment, but near-empty reserve and `745` missing frames should not be dominated by weak/lean profiles. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`.
+
+Actual exported profile:
+- Current exported profile: `repair-collapse`.
+- Retained samples: `silent-lean` (`48`), `collapse-recovery` (`43`), `repair-collapse` (`18`), `buffered-not-ready` (`4`), `steady-weak-listener` (`3`), plus `18` early samples before receive profile export.
+
+Did classification match?
+- Partly.
+
+Notes:
+- The live profile matches the severe symptom: `avgPcmBufferedMs=1.170`, `jitterBufferDepthFramesMean=0.060`, `avgPlayoutDeltaMs=-183.531`, and `concealmentTicks=1587`.
+- The retained window still spends too much time in `silent-lean` despite `635` missing frames and `1587` concealment ticks.
+- `collapse-recovery` owns most retained concealment delta (`1091`), while `repair-collapse` owns `243` missing-frame delta and `310` concealment delta.
+- There is an early outbound target gap (`totalNoTargetSkipsDelta=60`) before profiles appear, but the late bad state has active playout, active scheduler/playback nodes, and no decrypt/decode failures.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery` during missing-frame bursts; at minimum `silent-lean` should dominate over `steady-weak-listener` when reserve is this shallow.
+
+Actual exported profile:
+- Current exported profile: `silent-lean`.
+- Retained samples: `steady-weak-listener` (`20`), `persistent-lean` (`19`), `collapse-recovery` (`11`), `silent-lean` (`4`), `repair-collapse` (`4`), `repair-heavy-connected` (`1`), `buffered-not-ready` (`1`).
+
+Did classification match?
+- No/partly.
+
+If no:
+- `steady-weak-listener` and `persistent-lean` own `681` of the `745` retained missing-frame delta while reserve stays shallow (`avgPcmBufferedMs=7.061`, jitter depth mean `0.358`).
+- Low concealment (`55`) explains why this is not a classic concealment-heavy collapse, but it does not justify weak/lean dominance through repeated missing-frame bursts.
+- Retune selector entry/hold before changing baseline or adding a new profile.
+
+## Trend Read
+
+Side A:
+- Flat-bad after startup, with severe concealment and selector oscillation.
+- Reasons seen:
+  - `entered-recovery` once near the start of the retained bad window.
+  - `jitterHasReadyFrame=false` in `74/134` retained samples.
+  - top missing-frame deltas include `38`, `37`, `33`, `33`, `29`, and `27`.
+  - top concealment deltas include `49`, `48`, `46`, `45`, `45`, and `43`.
+  - no retained-window decrypt/decode deltas.
+
+Side B:
+- Low-reserve missing-frame failure with weak/lean under-classification.
+- Reasons seen:
+  - `entered-recovery` once at the start of the retained window.
+  - `jitterHasReadyFrame=false` in `18/61` retained samples.
+  - top missing-frame deltas include `64`, `62`, `49`, `39`, `35`, `33`, and `32`.
+  - concealment remains low; top concealment deltas are only `6`.
+  - no retained-window decrypt/decode/no-target deltas.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-10T22:44Z group-937` | A / Linux root epoch 2 | mixed severe/lean, live `repair-collapse` | yes/inferred | partly | selector, then profile strength | Hold severe classification through near-empty/high-concealment windows; after that, verify whether `repair-collapse` target/floor is strong enough. |
+| `2026-05-10T22:44Z group-937` | B / Linux standby epoch 2 | `steady-weak-listener` / `persistent-lean` | yes/inferred | no/partly | selector / damage hold | Escalate repeated missing-frame bursts with shallow reserve even when concealment, under-target, and slow-rate fractions are calm. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: single-source damage/readiness hysteresis. Treat near-empty reserve plus repeated missing-frame deltas or frequent `jitterHasReadyFrame=false` as a reason to hold `repair-collapse` / `collapse-recovery`, not fall back to `steady-weak-listener`, `persistent-lean`, or `silent-lean`.
+- Secondary fix: profile strength for `repair-collapse` if Side A remains near-empty after classification holds steady.
+- Leave baseline unchanged. Do not add a new profile from this call.
+
+## Call: 2026-05-10 23:51Z / group 937 2-person follow-up
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-120.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-10T23-51-02-953Z.json`
+
+User symptom:
+- New two-person group call after the latest changes. Extra report: the root had a harder time hearing the other person.
+
+High-level verdict:
+- Bad on the root side, receive-policy dominated.
+- Both exports agree on room `gcall-qortal-937`, topology epoch `2`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, participant count `2`, room key presence, and media session generation `1`.
+- The reported-bad root side is now correctly classified into severe receive profiles for most retained samples, but the profile protection is still not strong enough to rebuild usable reserve.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and retained-window pending-decrypt delta `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Queue/backpressure: bridge waiting-for-drain is `false`; bridge queued-frame high-water is `22` on Side A and `2` on Side B, with no queue-pressure drops.
+- Failover/authority: no promotion/demotion counts, settled matching root/standby/topology/session state.
+- Startup/send-target: Side A has retained `totalNoTargetSkipsDelta=58`, but the late window has `outboundNoTargetSkipsDelta=0`, active playout, active scheduler/playback nodes, and continuing receive collapse. This is not the primary next fix.
+- Baseline: both sides are already in recovery almost the whole retained window (`94/131` on Side A, `61/62` on Side B), so a global baseline increase is not the next lever.
+
+Primary next target:
+- Profile strength.
+- Specifically strengthen severe single-source protection for `repair-collapse` / `collapse-recovery`: the reported-bad root spends `84/95` classified retained samples in those two severe profiles, live state is `repair-collapse`, and protection already applies `240/224/+120` with extra hold `11`, yet average PCM reserve is only `2.098ms` with `1052` concealment ticks.
+- Selector is now secondary: reduce rapid severe-profile churn, but do not treat this as the main failure because the root is no longer primarily stuck in weak/lean profiles.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `repair-collapse` / `collapse-recovery` | yes | 2.098 | 315 | 1052 | 0.050 | 0.046 | recovery | Reported-bad side. Live profile is `repair-collapse`; retained profile deltas put `112` missing / `243` concealment in `repair-collapse` and `118` missing / `709` concealment in `collapse-recovery`. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `silent-lean` / `persistent-lean` | no/not reported | 8.253 | 479 | 28 | 0.009 | 0.004 | recovery | Symptom was asymmetric toward the root. Side B has low concealment but repeated missing-frame bursts; this looks like a lean/missing-frame path, not the user-reported hard-hearing side. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`.
+
+Actual exported profile:
+- Current exported profile: `repair-collapse`.
+- Retained samples: `repair-collapse` (`43`), `collapse-recovery` (`41`), `silent-lean` (`7`), `buffered-not-ready` (`2`), `persistent-lean` (`2`), plus `36` early samples before receive profile export.
+
+Did classification match?
+- Yes.
+
+Notes:
+- The reported symptom matches the severe receive classification: `avgPcmBufferedMs=2.098`, `jitterBufferDepthFramesMean=0.107`, `avgPlayoutDeltaMs=-182.469`, `missingFrames=315`, and `concealmentTicks=1052`.
+- This is the first follow-up where the root-side problem is not primarily under-classification into weak/lean profiles. Severe profiles dominate the classified retained window.
+- The failure is still active late in the export: the last retained sample has `missingFramesDelta=16`, `concealmentTicksDelta=27`, `avgPcmBufferedMs=2.098`, and `collapse-recovery`.
+- There is rapid `repair-collapse` / `collapse-recovery` switching near export time, but both are severe paths. That churn is secondary to the fact that the severe target/floor is not producing usable reserve.
+
+### Side B
+
+Expected profile from symptom:
+- If the standby had no hearing complaint, mostly clean or brief lean recovery would be expected. If unreported weak audio existed, `silent-lean` / `persistent-lean` fits better than repair-heavy collapse because concealment is low.
+
+Actual exported profile:
+- Current exported profile: `silent-lean`.
+- Retained samples: `silent-lean` (`27`), `persistent-lean` (`17`), `repair-collapse` (`13`), `collapse-recovery` (`3`), `buffered-not-ready` (`1`), plus `1` early sample before receive profile export.
+
+Did classification match?
+- Partly / unknown against user symptom.
+
+If no:
+- The reported asymmetry was root-hearing-other, not standby-hearing-root. Side B's lean classification may be real metrics pressure, but it is not the reported symptom.
+- `silent-lean` and `persistent-lean` own `411` of `479` retained missing-frame delta while concealment stays low (`28` total), so this remains a selector/damage-hold signal for missing-frame bursts if the standby later reports bad audio.
+- Do not use Side B to justify strengthening `repair-collapse`; use Side A for that.
+
+## Trend Read
+
+Side A:
+- Flat-bad severe recovery after startup.
+- Reasons seen:
+  - recovery mode for `94/131` retained samples.
+  - severe profiles for `84/95` classified retained samples.
+  - top missing-frame deltas include `26`, `25`, `20`, `16`, and `12`.
+  - top concealment deltas include `36`, `35`, `35`, `31`, `30`, and `28`.
+  - no retained-window decrypt/decode deltas.
+
+Side B:
+- Lean missing-frame pressure, low concealment, not the reported-bad side.
+- Reasons seen:
+  - recovery mode for `61/62` retained samples.
+  - `silent-lean` / `persistent-lean` for `44/61` classified retained samples.
+  - top missing-frame deltas include `74`, `44`, `43`, `28`, `23`, and `22`.
+  - concealment remains low; top concealment deltas are `4`, `3`, and `2`.
+  - no retained-window decrypt/decode/no-target deltas.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-10T23:51Z group-937` | A / Linux root epoch 2 | `repair-collapse` / `collapse-recovery` | yes | yes | profile strength | Strengthen severe single-source `repair-collapse` / `collapse-recovery` target, floor, accumulation, or hold behavior; classification now matches the root's bad-hearing symptom. |
+| `2026-05-10T23:51Z group-937` | B / Linux standby epoch 2 | `silent-lean` / `persistent-lean` | no/not reported | partly/unknown | selector / lean interpretation | Keep as secondary evidence for missing-frame-plus-lean handling; do not make it the primary fix unless standby-side bad audio is reported. |
+
+## Next Fix Target
+
+Current patched target:
+- Profile strength.
+- Primary fix: severe single-source receive profile strength for `repair-collapse` / `collapse-recovery`. The root-side classification now matches the symptom, but the current `240ms` target, `224ms` floor, `+120ms` boost, and extra hold `11` still leave the listener near empty with heavy concealment.
+- Secondary fix: severe-profile selector stability. Smooth the rapid `repair-collapse` / `collapse-recovery` churn, but keep the side in a severe protection path until reserve actually rebuilds.
+- Leave baseline unchanged. Do not add a new profile from this call.
+
+## Call: 2026-05-11 00:35Z / group 937 2-person follow-up
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-121.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-11T00-35-43-714Z.json`
+
+User symptom:
+- New two-person group call after the latest changes. Audio was horrible and incomprehensible overall; on root it was spotty, and on standby it was incomprehensible.
+
+High-level verdict:
+- Bad/catastrophic, receive-policy dominated.
+- Both exports agree on room `gcall-qortal-937`, topology epoch `1`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, participant count `2`, room key presence, and media session generation `1`.
+- The root side remains a true severe collapse: classification mostly matches, but protection is still not enough to rebuild reserve.
+- The standby side is the stronger failure signal for the next patch: the reported-incomprehensible side is live `steady-weak-listener`, with large missing-frame damage previously carried by `clean-low-latency` and weak profiles.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and retained-window pending-decrypt delta `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Queue/backpressure: bridge waiting-for-drain is `false`; bridge queued-frame high-water is `24` on Side A and `1` on Side B, with no queue-pressure drops.
+- Failover/authority: no promotion/demotion counts, settled matching root/standby/topology/session state.
+- Startup/send-target: retained `totalNoTargetSkipsDelta=0` on both sides, playback/scheduler nodes are active, and both sides have live playouts.
+- Baseline: both sides spend most retained samples in recovery (`141/147` on Side A, `71/91` on Side B), so a global baseline increase is not the next lever.
+
+Primary next target:
+- Selector.
+- Specifically, single-source selector exit/hold around missing-frame bursts, under-target pressure, and slow-rate pressure when reserve looks superficially healthy. The standby side was reported incomprehensible, but live classification is only `steady-weak-listener`, and retained `clean-low-latency` owns `2430` missing-frame delta.
+- Profile strength remains secondary for the root side: Side A is correctly severe and still bad, but the worse standby symptom does not match the live profile, so selector correctness should be fixed before another broad severe-profile strength increase.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `repair-collapse` / `collapse-recovery` | yes, spotty | 0.952 | 1071 | 2335 | 0.050 | 0.049 | recovery | Live profile is `collapse-recovery`; retained severe profiles own `124/146` classified samples and most concealment. Classification matches, but reserve remains effectively empty. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | mixed, live `steady-weak-listener` | yes, incomprehensible | 59.953 | 4991 | 251 | 0.239 | 0.222 | recovery | Retained count is mixed with `collapse-recovery` highest, but `clean-low-latency` and `steady-weak-listener` own `4178` missing-frame delta. Live weak classification does not match the symptom. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`.
+
+Actual exported profile:
+- Current exported profile: `collapse-recovery`.
+- Retained samples: `repair-collapse` (`66`), `collapse-recovery` (`58`), `silent-lean` (`16`), `buffered-not-ready` (`5`), `repair-heavy-connected` (`1`), plus `1` early sample before receive profile export.
+
+Did classification match?
+- Yes for classification; no for outcome.
+
+Notes:
+- The root-side symptom was spotty, and the metrics are severe: `avgPcmBufferedMs=0.952`, `jitterBufferDepthFramesMean=0.048`, `avgPlayoutDeltaMs=-181.082`, `missingFrames=1071`, and `concealmentTicks=2335`.
+- Severe profiles own most retained damage: `collapse-recovery` has `296` missing / `1553` concealment delta, and `repair-collapse` has `286` missing / `627` concealment delta.
+- This repeats the previous finding that severe-profile strength is still insufficient for the root path, but it is not the only or primary signal in this paired call.
+
+### Side B
+
+Expected profile from symptom:
+- `collapse-recovery` or `repair-collapse`; at minimum a sustained repair-heavy/recovery profile should dominate while the side is incomprehensible.
+
+Actual exported profile:
+- Current exported profile: `steady-weak-listener`.
+- Retained samples: `collapse-recovery` (`33`), `clean-low-latency` (`16`), `steady-weak-listener` (`14`), `repair-collapse` (`8`), `buffered-not-ready` (`7`), `repair-heavy-connected` (`1`), plus `12` early samples before receive profile export.
+
+Did classification match?
+- No/partly.
+
+If no:
+- The exported live profile is too weak for the reported symptom and the retained damage pattern.
+- `clean-low-latency` owns `2430` missing-frame delta, and `steady-weak-listener` owns another `1748`, while the side reports incomprehensible audio.
+- Reserve looks higher on paper (`avgPcmBufferedMs=59.953`, live `bufferedMsEma=120.276`), but `playoutUnderTargetFraction=0.239`, `playoutRateFractionBelow097=0.222`, `avgPlayoutDeltaMs=-120.907`, `jitterNotReadyFraction=0.239`, and repeated large missing-frame bursts say this should not clear back to clean/weak handling.
+- Retune selector entry/exit and damage hold before changing baseline or adding a new profile.
+
+## Trend Read
+
+Side A:
+- Flat-bad severe recovery, with rapid severe-profile churn near export time.
+- Reasons seen:
+  - recovery mode for `141/147` retained samples.
+  - severe profiles for `124/146` classified retained samples.
+  - top missing-frame deltas include `154`, `95`, `72`, `69`, `50`, and `44`.
+  - top concealment deltas include `98`, `92`, `75`, `67`, `63`, and `54`.
+  - no retained-window decrypt/decode/no-target deltas.
+
+Side B:
+- Mixed selector failure: healthy-looking reserve, but heavy missing-frame bursts and sustained under-target/slow-rate pressure.
+- Reasons seen:
+  - recovery mode for `71/91` retained samples.
+  - `clean-low-latency` alone carries `2430` missing-frame delta; `steady-weak-listener` carries `1748`.
+  - top missing-frame deltas include `604`, `269`, `252`, `237`, `236`, and `218`.
+  - concealment is comparatively low (`251` total), but under-target and slow-rate fractions are high and the user symptom is incomprehensible.
+  - no retained-window decrypt/decode/no-target deltas.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-11T00:35Z group-937` | A / Linux root epoch 1 | `repair-collapse` / `collapse-recovery` | yes, spotty | yes | profile strength, secondary | Keep severe profile strengthening on the list, but do not make this the only patch because the paired standby side is worse and misclassified. |
+| `2026-05-11T00:35Z group-937` | B / Linux standby epoch 1 | mixed, live `steady-weak-listener` | yes, incomprehensible | no/partly | selector / damage hold | Prevent clean/weak profiles from carrying large missing-frame bursts under high under-target and slow-rate pressure; hold severe or repair-heavy recovery until pressure clears. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: single-source selector damage hold and exit hysteresis. A side with repeated large missing-frame deltas plus high `playoutUnderTargetFraction` / `playoutRateFractionBelow097` should not spend damaging windows in `clean-low-latency` or settle live at `steady-weak-listener`, even if `avgPcmBufferedMs` / reserve EMA looks healthy.
+- Secondary fix: severe-profile strength for `repair-collapse` / `collapse-recovery` on the root side, because correct severe classification still leaves root near empty.
+- Leave baseline unchanged. Do not add a new profile from this call.

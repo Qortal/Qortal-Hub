@@ -707,6 +707,11 @@ describe('GroupCallAudioEngineRuntime', () => {
       };
       audioSurfaceRuntimeDiagnostics?: {
         pipelineMode?: { sharedArrayBufferDefined?: boolean };
+        rendererThread?: {
+          monitorActive?: boolean;
+          eventLoopLag?: { count?: number; maxDelayMs?: number };
+          longTasks?: { supported?: boolean; count?: number; maxMs?: number };
+        };
         sessionState?: {
           roomId?: string | null;
           roomState?: string;
@@ -739,6 +744,15 @@ describe('GroupCallAudioEngineRuntime', () => {
       parsed.audioSurfaceRuntimeDiagnostics?.pipelineMode
         ?.sharedArrayBufferDefined
     ).toBeTypeOf('boolean');
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.rendererThread?.monitorActive
+    ).toBe(true);
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.rendererThread?.eventLoopLag?.count
+    ).toBeTypeOf('number');
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.rendererThread?.longTasks?.count
+    ).toBeTypeOf('number');
     expect(
       parsed.audioSurfaceRuntimeDiagnostics?.recentEvents?.some(
         (event) => event.tag === 'join-start'
@@ -787,6 +801,8 @@ describe('GroupCallAudioEngineRuntime', () => {
         reason?: string[] | null;
         missingFramesDelta?: number;
         concealmentTicksDelta?: number;
+        rendererStallCount?: number;
+        rendererLongTaskCount?: number;
         receiveProfiles?: Array<{ peerAddress: string; profile: string }>;
       }>;
       recentWindowSummary?: {
@@ -809,6 +825,8 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(lastTrend?.missingFramesDelta).toBeGreaterThan(0);
     expect(lastTrend?.concealmentTicksDelta).toBeGreaterThan(0);
     expect(Array.isArray(lastTrend?.receiveProfiles)).toBe(true);
+    expect(lastTrend?.rendererStallCount).toBeTypeOf('number');
+    expect(lastTrend?.rendererLongTaskCount).toBeTypeOf('number');
     expect(lastTrend?.reason).toEqual(
       expect.arrayContaining(['entered-recovery', 'under-target-spike'])
     );

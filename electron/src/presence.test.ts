@@ -25,6 +25,53 @@ function promoteVerifiedPeers(
 }
 
 describe('PresenceManager Reticulum overlay mesh slots', () => {
+  it('does not let an older offline envelope remove a newer live session', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(2_001);
+    const manager = new PresenceManager();
+    const address = 'Q-session-order';
+    const sessionId = 'session-order';
+    const publicKey = 'pk-session-order';
+
+    const newerHeartbeat = {
+      id: 'heartbeat-newer',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: address,
+      timestamp: 2_000,
+      payload: {
+        address,
+        publicKey,
+        sessionId,
+        status: 'online',
+      },
+      signature: 'sig',
+    };
+    const olderOffline = {
+      id: 'offline-older',
+      type: 'PRESENCE_OFFLINE',
+      senderAddress: address,
+      timestamp: 1_999,
+      payload: {
+        address,
+        publicKey,
+        sessionId,
+        status: 'offline',
+      },
+      signature: 'sig',
+    };
+
+    expect(
+      (manager as any).applyVerifiedPresenceEnvelope(newerHeartbeat, { kind: 'local' }, 2_000)
+    ).toBe(true);
+    expect(manager.isAddressOnline(address)).toBe(true);
+
+    expect(
+      (manager as any).applyVerifiedPresenceEnvelope(olderOffline, { kind: 'local' }, 2_001)
+    ).toBe(false);
+    expect(manager.isAddressOnline(address)).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('latches verified overlay identity on first envelope; later messages do not churn mesh', () => {
     const manager = new PresenceManager();
     (manager as any).promoteVerifiedReticulumPeer('peer-hash', 'Q-first', 1000);
@@ -37,6 +84,82 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
       manager.getReticulumVerifiedPeers().find((p) => p.destinationHash === 'peer-hash')?.address
     ).toBe('Q-first');
     expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(neighbors1);
+  });
+
+  it('does not admit a pure fanned-out presence origin into overlay peers', () => {
+    const manager = new PresenceManager();
+    const now = Date.now();
+    const envelope = {
+      id: 'forwarded-heartbeat',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'Q-forwarded',
+      timestamp: now,
+      payload: {
+        address: 'Q-forwarded',
+        publicKey: 'pk-forwarded',
+        sessionId: 'sid-forwarded',
+        status: 'online',
+      },
+      signature: 'sig-forwarded',
+    };
+
+    expect(
+      (manager as any).applyVerifiedPresenceEnvelope(
+        envelope,
+        {
+          kind: 'reticulum',
+          destinationHash: 'origin-hash',
+          viaDestinationHash: 'forwarder-hash',
+          overlayHopsRemaining: 2,
+        },
+        now
+      )
+    ).toBe(true);
+
+    expect(manager.isAddressOnline('Q-forwarded')).toBe(true);
+    expect(manager.getReticulumVerifiedPeers()).toEqual([]);
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual([]);
+  });
+
+  it('allows a fanned-out presence proof to verify an announce-backed candidate', () => {
+    const manager = new PresenceManager();
+    const now = Date.now();
+    manager.noteReticulumCandidateDiscovered('origin-hash', 'announce', now);
+    const envelope = {
+      id: 'announce-backed-heartbeat',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'Q-announced',
+      timestamp: now + 1,
+      payload: {
+        address: 'Q-announced',
+        publicKey: 'pk-announced',
+        sessionId: 'sid-announced',
+        status: 'online',
+      },
+      signature: 'sig-announced',
+    };
+
+    expect(
+      (manager as any).applyVerifiedPresenceEnvelope(
+        envelope,
+        {
+          kind: 'reticulum',
+          destinationHash: 'origin-hash',
+          viaDestinationHash: 'forwarder-hash',
+          overlayHopsRemaining: 2,
+        },
+        now + 1
+      )
+    ).toBe(true);
+
+    expect(manager.getReticulumVerifiedPeers()).toEqual([
+      {
+        destinationHash: 'origin-hash',
+        address: 'Q-announced',
+        lastSeen: now + 1,
+      },
+    ]);
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(['origin-hash']);
   });
 
   it('keeps admitted verified peers stable after presence cleanup', () => {

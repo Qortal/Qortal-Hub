@@ -141,6 +141,13 @@ type HeldIncomingAudioPayload = {
   heldAtMs: number;
 };
 
+type RuntimeRendererThreadSample = {
+  atMs: number;
+  startTime: number;
+  durationMs: number;
+  name: string;
+};
+
 type RuntimeRecentWindowTrend = {
   atMs: number;
   reason: string[] | null;
@@ -171,6 +178,10 @@ type RuntimeRecentWindowTrend = {
   outboundSendFailuresDelta: number;
   outboundNoTargetSkips: number;
   outboundNoTargetSkipsDelta: number;
+  rendererStallCount: number;
+  rendererStallMaxDelayMs: number;
+  rendererLongTaskCount: number;
+  rendererLongTaskMaxMs: number;
   receiveProfiles: Array<{
     peerAddress: string;
     profile: string;
@@ -348,6 +359,9 @@ const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS = 48;
 const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS = 4_000;
 const MAX_AUDIO_SURFACE_DIAG_EVENTS = 120;
 const MAX_RECENT_WINDOW_TRENDS = 300;
+const GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS = 250;
+const GCALL_RENDERER_STALL_DELAY_THRESHOLD_MS = 80;
+const GCALL_RENDERER_THREAD_RECENT_LIMIT = 40;
 const GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN = 0.05;
 const GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN = 300;
 const GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN = 80;
@@ -544,6 +558,19 @@ export class GroupCallAudioEngineRuntime {
   private memberGateRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private participantRosterRefreshTimer: ReturnType<typeof setInterval> | null =
     null;
+  private rendererStallSampleTimer: ReturnType<typeof setInterval> | null =
+    null;
+  private rendererStallExpectedPerfMs = 0;
+  private rendererStallMonitorStartedAtMs = 0;
+  private rendererStallSampleCount = 0;
+  private rendererStallCount = 0;
+  private rendererStallMaxDelayMs = 0;
+  private readonly rendererStallRecent: RuntimeRendererThreadSample[] = [];
+  private rendererLongTaskObserver: PerformanceObserver | null = null;
+  private rendererLongTaskSupported = false;
+  private rendererLongTaskCount = 0;
+  private rendererLongTaskMaxMs = 0;
+  private readonly rendererLongTaskRecent: RuntimeRendererThreadSample[] = [];
   private topologyAsyncGeneration = 0;
   private lastObservedTopologyEpoch = 0;
   private trustedRemoteRoot = '';
@@ -652,6 +679,7 @@ export class GroupCallAudioEngineRuntime {
   }
 
   start(): void {
+    this.startRendererThreadMonitor();
     this.emit({
       type: 'engine-ready',
       bootstrapRevisionApplied: this.bootstrapRevisionApplied,
@@ -672,6 +700,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
     this.clearParticipantRosterRefreshTimer();
+    this.stopRendererThreadMonitor();
     void this.senderEngine.stop();
     void this.receiveEngine.dispose();
     void this.decryptPool?.terminate();
@@ -1190,6 +1219,116 @@ export class GroupCallAudioEngineRuntime {
     });
   }
 
+  private startRendererThreadMonitor(): void {
+    if (this.rendererStallSampleTimer !== null) return;
+    const nowPerf =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+    this.rendererStallMonitorStartedAtMs = Date.now();
+    this.rendererStallExpectedPerfMs =
+      nowPerf + GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS;
+    this.rendererStallSampleTimer = setInterval(() => {
+      const actualPerf =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const delayMs = Math.max(
+        0,
+        actualPerf - this.rendererStallExpectedPerfMs
+      );
+      this.rendererStallExpectedPerfMs =
+        actualPerf + GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS;
+      this.rendererStallSampleCount++;
+      if (delayMs < GCALL_RENDERER_STALL_DELAY_THRESHOLD_MS) return;
+      this.rendererStallCount++;
+      this.rendererStallMaxDelayMs = Math.max(
+        this.rendererStallMaxDelayMs,
+        delayMs
+      );
+      this.pushRendererThreadSample(this.rendererStallRecent, {
+        atMs: Date.now(),
+        startTime: actualPerf - delayMs,
+        durationMs: delayMs,
+        name: 'event-loop-lag',
+      });
+    }, GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS);
+
+    this.startRendererLongTaskObserver();
+  }
+
+  private startRendererLongTaskObserver(): void {
+    if (
+      this.rendererLongTaskObserver !== null ||
+      typeof PerformanceObserver === 'undefined'
+    ) {
+      return;
+    }
+    try {
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          const durationMs = entry.duration;
+          if (!Number.isFinite(durationMs) || durationMs <= 0) continue;
+          this.rendererLongTaskSupported = true;
+          this.rendererLongTaskCount++;
+          this.rendererLongTaskMaxMs = Math.max(
+            this.rendererLongTaskMaxMs,
+            durationMs
+          );
+          this.pushRendererThreadSample(this.rendererLongTaskRecent, {
+            atMs: Date.now(),
+            startTime: entry.startTime,
+            durationMs,
+            name: entry.name || 'longtask',
+          });
+        }
+      });
+      observer.observe({ entryTypes: ['longtask'] });
+      this.rendererLongTaskObserver = observer;
+      this.rendererLongTaskSupported = true;
+    } catch {
+      this.rendererLongTaskObserver = null;
+      this.rendererLongTaskSupported = false;
+    }
+  }
+
+  private stopRendererThreadMonitor(): void {
+    if (this.rendererStallSampleTimer !== null) {
+      clearInterval(this.rendererStallSampleTimer);
+      this.rendererStallSampleTimer = null;
+    }
+    this.rendererLongTaskObserver?.disconnect();
+    this.rendererLongTaskObserver = null;
+  }
+
+  private pushRendererThreadSample(
+    samples: RuntimeRendererThreadSample[],
+    sample: RuntimeRendererThreadSample
+  ): void {
+    samples.push(sample);
+    if (samples.length > GCALL_RENDERER_THREAD_RECENT_LIMIT) {
+      samples.splice(0, samples.length - GCALL_RENDERER_THREAD_RECENT_LIMIT);
+    }
+  }
+
+  private buildRendererThreadDiagnosticsSnapshot(): Record<string, unknown> {
+    return {
+      monitorActive: this.rendererStallSampleTimer !== null,
+      monitorStartedAtMs: this.rendererStallMonitorStartedAtMs || null,
+      sampleIntervalMs: GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS,
+      stallThresholdMs: GCALL_RENDERER_STALL_DELAY_THRESHOLD_MS,
+      eventLoopLag: {
+        sampleCount: this.rendererStallSampleCount,
+        count: this.rendererStallCount,
+        maxDelayMs: this.rendererStallMaxDelayMs,
+        recent: [...this.rendererStallRecent],
+      },
+      longTasks: {
+        supported: this.rendererLongTaskSupported,
+        observerActive: this.rendererLongTaskObserver !== null,
+        count: this.rendererLongTaskCount,
+        maxMs: this.rendererLongTaskMaxMs,
+        recent: [...this.rendererLongTaskRecent],
+      },
+    };
+  }
+
   private recordRecentWindowTrend(metrics: GroupCallMetricsSnapshot): void {
     const previous =
       this.recentWindowTrends[this.recentWindowTrends.length - 1] ?? null;
@@ -1320,6 +1459,10 @@ export class GroupCallAudioEngineRuntime {
       outboundSendFailuresDelta,
       outboundNoTargetSkips: this.outboundSkippedNoTargets,
       outboundNoTargetSkipsDelta,
+      rendererStallCount: this.rendererStallCount,
+      rendererStallMaxDelayMs: this.rendererStallMaxDelayMs,
+      rendererLongTaskCount: this.rendererLongTaskCount,
+      rendererLongTaskMaxMs: this.rendererLongTaskMaxMs,
       receiveProfiles: (
         receiveDiagnostics?.livePolicyProfilesBySource ?? []
       ).map(({ peerAddress, profile }) => ({
@@ -1667,6 +1810,7 @@ export class GroupCallAudioEngineRuntime {
       },
       receiveEngine,
       senderEngine: this.senderEngine.getDiagnosticsSnapshot(),
+      rendererThread: this.buildRendererThreadDiagnosticsSnapshot(),
       outboundMedia: this.buildOutboundMediaDiagnosticsSnapshot(),
       decryptPool: this.decryptPool?.stats() ?? {
         enabled: false,
@@ -2010,6 +2154,7 @@ export class GroupCallAudioEngineRuntime {
     chatId: string,
     options?: AudioEngineJoinOptions
   ): Promise<AudioSurfaceResponse> {
+    this.startRendererThreadMonitor();
     this.recordDiagEvent('join-start', { roomId, chatId });
     traceGcallAudioSurface('engine.joinGroupCall: start', {
       roomId,

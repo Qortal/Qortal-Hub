@@ -2,16 +2,19 @@
 
 import argparse
 import base64
+import hashlib
 import json
+import math
 import os
 from collections import deque
 import queue
+import shutil
 import sys
 import threading
 import time
 import traceback
 import uuid
-from typing import IO, Any, Dict, Optional, Set
+from typing import IO, Any, Dict, Optional, Set, Tuple
 
 import RNS
 
@@ -61,6 +64,9 @@ _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
 _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
 _OVERLAY_LINK_PATH_AWAIT_SECONDS = 0.35
+_QCHAT_FILE_LINK_OPEN_PATH_AWAIT_SECONDS = 8.0
+_QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS = 4
+_QCHAT_FILE_LINK_RETRY_DELAY_SECONDS = 2.0
 # Inbound RNS.Link: classify overlay vs audio by first JSON packet; if none, default to overlay.
 _INBOUND_LINK_CLASSIFY_TIMEOUT_SEC = 5.0
 _pending_inbound_classify_link_ids: Set[int] = set()
@@ -129,6 +135,16 @@ _outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
 _overlay_links_by_id: Dict[str, Dict[str, Any]] = {}
 _overlay_link_ids_by_object: Dict[int, str] = {}
 _active_overlay_link_id_by_peer_hash: Dict[str, str] = {}
+_qchat_file_links_by_id: Dict[str, Dict[str, Any]] = {}
+_qchat_file_link_ids_by_object: Dict[int, str] = {}
+_outgoing_qchat_file_link_id_by_peer_hash: Dict[str, str] = {}
+_incoming_unified_peer_hash_by_object: Dict[int, str] = {}
+_qchat_file_accepts_by_peer: Dict[str, Dict[str, Any]] = {}
+_qchat_file_pending_sends_by_transfer: Dict[str, Dict[str, Any]] = {}
+_QCHAT_FILE_PROGRESS_MIN_INTERVAL_SECONDS = 0.5
+_QCHAT_FILE_PROGRESS_MIN_DELTA = 0.005
+_QCHAT_FILE_CHUNK_SIZE = (1024 * 1024) - 1
+_QCHAT_FILE_PARALLEL_LINKS = 8
 _TRANSPORT_MONITOR_INTERVAL_SECONDS = 5.0
 _OVERLAY_PENDING_PACKET_LIMIT = 24
 
@@ -1254,9 +1270,11 @@ def _set_verified_overlay_peers(
             continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
-        if peer_hash not in _known_peers:
-            continue
-        # Fanout list from TS: verified neighbors plus candidate backfill (bootstrap).
+        # Fanout list from TS: verified neighbors plus candidate backfill
+        # (bootstrap). Keep the lease even if local RNS identity recall is
+        # temporarily empty; _sync_overlay_links will defer opening the link
+        # until recall/path data is available. Dropping it here can collapse
+        # verified=N into publish_fanout=0 and drain the overlay.
         next_neighbors[peer_hash] = now
     retained_neighbors = 0
     for peer_hash, seen_at in prev_neighbors.items():
@@ -1268,10 +1286,10 @@ def _set_verified_overlay_peers(
             continue
         if now - float(seen_at) > _OVERLAY_NEIGHBOR_GRACE_SECONDS:
             continue
-        if peer_hash not in _known_peers:
-            continue
         if peer_hash not in next_verified and peer_hash not in prev_verified:
             continue
+        if peer_hash not in _known_peers:
+            ensure_known_peer_from_recall(peer_hash, "ts_seed")
         next_neighbors[peer_hash] = float(seen_at)
         retained_neighbors += 1
     _active_overlay_neighbors = next_neighbors
@@ -2202,6 +2220,15 @@ def _dedup_pick_keep_link(
     return (link_id_a, link_id_b) if link_id_a < link_id_b else (link_id_b, link_id_a)
 
 
+def _should_initiate_overlay_link(peer_key: str) -> bool:
+    local_hex = _local_presence_hash_hex()
+    return not (
+        local_hex
+        and _valid_presence_destination_hash_hex(peer_key)
+        and local_hex > peer_key
+    )
+
+
 def _teardown_overlay_link_id(link_id: str, reason: str) -> None:
     state = remove_overlay_link(link_id)
     if state is None:
@@ -2274,7 +2301,9 @@ def _flush_overlay_link_pending(link_id: str) -> None:
     emit_overlay_link_state(link_id, state, "flush")
 
 
-def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
+def _ensure_overlay_link(
+    peer_hash: str, respect_dial_owner: bool = True
+) -> Optional[Dict[str, Any]]:
     peer_key = str(peer_hash or "").strip().lower()
     if not peer_key:
         return None
@@ -2292,6 +2321,12 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
             if existing is not None:
                 return existing
             _active_overlay_link_id_by_peer_hash.pop(peer_key, None)
+    if respect_dial_owner and not _should_initiate_overlay_link(peer_key):
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_link_wait_incoming "
+            f"peer={peer_key}"
+        )
+        return None
     link_id = ""
     state: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -2392,6 +2427,8 @@ def _retry_pending_overlay_connect_on_announce(peer_hash: str) -> None:
     local_hex = _local_presence_hash_hex()
     if local_hex and peer_key == local_hex:
         return
+    if not _should_initiate_overlay_link(peer_key):
+        return
     link = None
     existing_link_id = ""
     stale_state: Optional[Dict[str, Any]] = None
@@ -2432,7 +2469,7 @@ def _sync_overlay_links() -> None:
     for peer_hash in desired:
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
-        _ensure_overlay_link(peer_hash)
+        _ensure_overlay_link(peer_hash, respect_dial_owner=True)
     for peer_hash, link_id in list(_active_overlay_link_id_by_peer_hash.items()):
         if peer_hash in desired:
             continue
@@ -2714,11 +2751,1126 @@ def on_overlay_link_packet(message, packet) -> None:
         link_id,
     )
 
+def _sha256_file_hex(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _resource_file_path(resource) -> Optional[str]:
+    storage_path = str(getattr(resource, "storagepath", "") or "")
+    if storage_path and os.path.isfile(storage_path):
+        return storage_path
+    data = getattr(resource, "data", None)
+    data_name = str(getattr(data, "name", "") or "")
+    if data_name and os.path.isfile(data_name):
+        return data_name
+    return None
+
+
+def _move_file_to_save_path(source_path: str, save_path: str) -> None:
+    save_dir = os.path.dirname(save_path)
+    os.makedirs(save_dir, exist_ok=True)
+    try:
+        os.replace(source_path, save_path)
+        return
+    except OSError:
+        pass
+
+    temp_path = os.path.join(
+        save_dir,
+        f".{os.path.basename(save_path)}.part-{uuid.uuid4().hex}",
+    )
+    try:
+        with open(source_path, "rb") as src, open(temp_path, "wb") as out:
+            shutil.copyfileobj(src, out, 1024 * 1024)
+        os.replace(temp_path, save_path)
+    except Exception:
+        try:
+            if os.path.isfile(temp_path):
+                os.unlink(temp_path)
+        except Exception:
+            pass
+        raise
+
+
+def _write_chunk_to_part_file(source_path: str, save_path: str, offset: int) -> None:
+    part_path = save_path + ".part"
+    save_dir = os.path.dirname(save_path)
+    os.makedirs(save_dir, exist_ok=True)
+    with open(source_path, "rb") as src, open(part_path, "r+b" if os.path.exists(part_path) else "w+b") as out:
+        out.seek(offset)
+        shutil.copyfileobj(src, out, 1024 * 1024)
+
+
+def _qchat_file_chunk_count(size: int) -> int:
+    if size <= 0:
+        return 0
+    return int(math.ceil(size / float(_QCHAT_FILE_CHUNK_SIZE)))
+
+
+def _qchat_file_chunk_bounds(size: int, chunk_index: int) -> Tuple[int, int]:
+    offset = chunk_index * _QCHAT_FILE_CHUNK_SIZE
+    remaining = max(0, size - offset)
+    return offset, min(_QCHAT_FILE_CHUNK_SIZE, remaining)
+
+
+def _qchat_file_emit(status: str, payload: Dict[str, Any]) -> None:
+    event_payload = dict(payload)
+    event_payload["status"] = status
+    emit_event("qchat_file_transfer", event_payload)
+
+
+def _qchat_file_progress_payload(
+    state: Dict[str, Any],
+    progress: float,
+    size: int,
+) -> Dict[str, Any]:
+    now = time.monotonic()
+    started_at = float(state.get("progress_started_at") or 0)
+    if started_at <= 0:
+        started_at = now
+        state["progress_started_at"] = started_at
+
+    progress = max(0.0, min(1.0, float(progress)))
+    payload: Dict[str, Any] = {"progress": progress}
+    elapsed = max(0.001, now - started_at)
+    if size > 0:
+        bytes_done = int(size * progress)
+        payload["bytesTransferred"] = bytes_done
+        payload["bytesPerSecond"] = int(bytes_done / elapsed)
+    return payload
+
+
+def _should_emit_qchat_file_progress(
+    state: Dict[str, Any],
+    progress: float,
+    *,
+    force: bool = False,
+) -> bool:
+    progress = max(0.0, min(1.0, float(progress)))
+    if force or progress >= 1.0:
+        state["last_progress_emit_at"] = time.monotonic()
+        state["last_progress_emit_value"] = progress
+        return True
+
+    now = time.monotonic()
+    last_at = float(state.get("last_progress_emit_at") or 0)
+    last_value = float(state.get("last_progress_emit_value") or -1)
+    if (
+        now - last_at >= _QCHAT_FILE_PROGRESS_MIN_INTERVAL_SECONDS
+        or abs(progress - last_value) >= _QCHAT_FILE_PROGRESS_MIN_DELTA
+    ):
+        state["last_progress_emit_at"] = now
+        state["last_progress_emit_value"] = progress
+        return True
+
+    return False
+
+
+def _identity_from_reticulum_public_key_base64(pk_b64: str):
+    s = str(pk_b64 or "").strip()
+    if not s:
+        raise ValueError("Missing Reticulum identity public key")
+    pad = "=" * ((4 - len(s) % 4) % 4)
+    pub_bytes = base64.b64decode(s + pad, validate=True)
+    if len(pub_bytes) != 64:
+        raise ValueError("Bad Reticulum identity public key length")
+    ident = RNS.Identity(create_keys=False)
+    ident.load_public_key(pub_bytes)
+    return ident
+
+
+def _destination_hash_for_identity(identity) -> str:
+    outbound = build_outbound_destination(identity)
+    return destination_hash_hex(outbound.hash)
+
+
+def _identity_matches_destination_hash(identity, expected_hash: str) -> bool:
+    return _destination_hash_for_identity(identity) == str(expected_hash or "").strip().lower()
+
+
+def _is_reticulum_destination_hash(value: str) -> bool:
+    s = str(value or "").strip().lower()
+    return len(s) == 32 and all(c in "0123456789abcdef" for c in s)
+
+
+def _parse_qchat_file_peer_identity(peer_hash: str, pk_b64: Any):
+    if not _is_reticulum_destination_hash(peer_hash):
+        raise ValueError("Missing or invalid Reticulum destination hash")
+    if not isinstance(pk_b64, str) or not pk_b64.strip():
+        raise ValueError("Missing Reticulum identity public key")
+    identity = _identity_from_reticulum_public_key_base64(pk_b64)
+    if not _identity_matches_destination_hash(identity, peer_hash):
+        raise ValueError("Reticulum public key does not match destination hash")
+    return identity
+
+
+def _request_qchat_file_path(destination_hash: bytes, peer_hash: str) -> bool:
+    try:
+        if RNS.Transport.has_path(destination_hash):
+            log(
+                "[presence_bridge] target=qchat-file-reticulum path_ready "
+                f"peer={peer_hash} source=cache"
+            )
+            return True
+    except Exception:
+        pass
+
+    try:
+        RNS.Transport.request_path(destination_hash)
+        log(
+            "[presence_bridge] target=qchat-file-reticulum path_request_sent "
+            f"peer={peer_hash}"
+        )
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=qchat-file-reticulum path_request_failed "
+            f"peer={peer_hash} err={exc}"
+        )
+
+    try:
+        await_path = getattr(RNS.Transport, "await_path", None)
+        if callable(await_path):
+            resolved = bool(
+                await_path(destination_hash, _QCHAT_FILE_LINK_OPEN_PATH_AWAIT_SECONDS)
+            )
+            log(
+                "[presence_bridge] target=qchat-file-reticulum path_await "
+                f"peer={peer_hash} resolved={str(resolved).lower()}"
+            )
+            if resolved:
+                return True
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=qchat-file-reticulum path_await_failed "
+            f"peer={peer_hash} err={exc}"
+        )
+
+    try:
+        RNS.Transport.request_path(destination_hash)
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=qchat-file-reticulum path_request_failed "
+            f"peer={peer_hash} err={exc}"
+        )
+        return False
+
+    resolved = _await_destination_path(
+        destination_hash,
+        _QCHAT_FILE_LINK_OPEN_PATH_AWAIT_SECONDS,
+    )
+    log(
+        "[presence_bridge] target=qchat-file-reticulum path_request "
+        f"peer={peer_hash} resolved={str(resolved).lower()}"
+    )
+    return resolved
+
+
+def get_qchat_file_link_id(link) -> Optional[str]:
+    if link is None:
+        return None
+    return _qchat_file_link_ids_by_object.get(id(link))
+
+
+def get_qchat_file_link_state(link_id: str) -> Optional[Dict[str, Any]]:
+    return _qchat_file_links_by_id.get(link_id)
+
+
+def remove_qchat_file_link(link_id: str) -> Optional[Dict[str, Any]]:
+    state = _qchat_file_links_by_id.pop(link_id, None)
+    if state is None:
+        return None
+    link = state.get("link")
+    if link is not None:
+        _qchat_file_link_ids_by_object.pop(id(link), None)
+        _incoming_unified_peer_hash_by_object.pop(id(link), None)
+    peer_hash = state.get("peerPresenceHash")
+    if isinstance(peer_hash, str):
+        existing = _outgoing_qchat_file_link_id_by_peer_hash.get(peer_hash)
+        if existing == link_id:
+            _outgoing_qchat_file_link_id_by_peer_hash.pop(peer_hash, None)
+    return state
+
+
+def on_qchat_file_link_closed(link) -> None:
+    link_id = get_qchat_file_link_id(link)
+    if link_id is None:
+        return
+    state = remove_qchat_file_link(link_id)
+    if state is not None:
+        timer = state.pop("auth_timeout_timer", None)
+        if timer is not None:
+            try:
+                timer.cancel()
+            except Exception:
+                pass
+        if state.get("completed") is True:
+            return
+        if state.get("incoming") is not True and int(state.get("open_attempts") or 0) < _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS:
+            transfer_id_retry = str(state.get("transferId") or "")
+            peer_hash_retry = str(state.get("peerPresenceHash") or "")
+
+            def retry() -> None:
+                try:
+                    _open_qchat_file_link_for_state(state)
+                except Exception as exc:
+                    _qchat_file_emit(
+                        "failed",
+                        {
+                            "transferId": transfer_id_retry,
+                            "peerPresenceHash": peer_hash_retry,
+                            "fileName": state.get("fileName") or "",
+                            "reason": "file_link_retry_failed",
+                            "error": str(exc),
+                        },
+                    )
+
+            timer = threading.Timer(_QCHAT_FILE_LINK_RETRY_DELAY_SECONDS, retry)
+            timer.daemon = True
+            timer.start()
+            _qchat_file_emit(
+                "retrying",
+                {
+                    "transferId": transfer_id_retry,
+                    "peerPresenceHash": peer_hash_retry,
+                    "fileName": state.get("fileName") or "",
+                    "attempt": int(state.get("open_attempts") or 0) + 1,
+                    "maxAttempts": _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS,
+                },
+            )
+            return
+        transfer_id = str(state.get("transferId") or "")
+        if transfer_id:
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": transfer_id,
+                    "peerPresenceHash": state.get("peerPresenceHash") or "",
+                    "fileName": state.get("fileName") or "",
+                    "reason": "file_link_closed",
+                },
+            )
+
+
+def _open_qchat_file_link_for_state(state: Dict[str, Any]) -> bool:
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    if not peer_hash:
+        return False
+    peer_identity = state.get("peerIdentity")
+    if peer_identity is None:
+        raise RuntimeError("Missing embedded Reticulum peer identity")
+    outbound = build_outbound_destination(peer_identity)
+    if destination_hash_hex(outbound.hash) != peer_hash:
+        raise RuntimeError("Reticulum public key does not match destination hash")
+    state["open_attempts"] = int(state.get("open_attempts") or 0) + 1
+    state["last_open_attempt_at"] = time.time()
+    _qchat_file_emit(
+        "connecting",
+        {
+            "transferId": state.get("transferId") or "",
+            "peerPresenceHash": peer_hash,
+            "fileName": state.get("fileName") or "",
+            "size": int(state.get("size") or 0),
+            "attempt": state["open_attempts"],
+            "maxAttempts": _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS,
+        },
+    )
+    path_ready = _request_qchat_file_path(outbound.hash, peer_hash)
+    if not path_ready:
+        raise RuntimeError("No Reticulum path for file transfer link")
+    previous_link = state.get("link")
+    if previous_link is not None:
+        _qchat_file_link_ids_by_object.pop(id(previous_link), None)
+    link_id = str(uuid.uuid4())
+    link = RNS.Link(
+        outbound,
+        established_callback=on_outgoing_qchat_file_link_established,
+        closed_callback=on_qchat_file_link_closed,
+    )
+    state["link"] = link
+    state["peerDestinationHash"] = destination_hash_hex(outbound.hash)
+    state["incoming"] = False
+    state["established"] = False
+    _qchat_file_links_by_id[link_id] = state
+    _qchat_file_link_ids_by_object[id(link)] = link_id
+    _outgoing_qchat_file_link_id_by_peer_hash[peer_hash] = link_id
+    return True
+
+
+def _schedule_qchat_file_open_retry(state: Dict[str, Any], reason: str) -> bool:
+    attempts = int(state.get("open_attempts") or 0)
+    if attempts >= _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS:
+        return False
+    transfer_id = str(state.get("transferId") or "")
+    peer_hash = str(state.get("peerPresenceHash") or "")
+
+    def retry() -> None:
+        try:
+            _open_qchat_file_link_for_state(state)
+        except Exception as exc:
+            if not _schedule_qchat_file_open_retry(state, str(exc)):
+                _qchat_file_emit(
+                    "failed",
+                    {
+                        "transferId": transfer_id,
+                        "peerPresenceHash": peer_hash,
+                        "fileName": state.get("fileName") or "",
+                        "reason": "link_open_failed",
+                        "error": str(exc),
+                    },
+                )
+
+    timer = threading.Timer(_QCHAT_FILE_LINK_RETRY_DELAY_SECONDS, retry)
+    timer.daemon = True
+    timer.start()
+    _qchat_file_emit(
+        "retrying",
+        {
+            "transferId": transfer_id,
+            "peerPresenceHash": peer_hash,
+            "fileName": state.get("fileName") or "",
+            "attempt": attempts + 1,
+            "maxAttempts": _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS,
+            "reason": reason,
+        },
+    )
+    return True
+
+
+def _open_qchat_file_link_async(state: Dict[str, Any]) -> None:
+    def run() -> None:
+        try:
+            _open_qchat_file_link_for_state(state)
+        except Exception as exc:
+            if _schedule_qchat_file_open_retry(state, str(exc)):
+                return
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": state.get("transferId") or "",
+                    "peerPresenceHash": state.get("peerPresenceHash") or "",
+                    "fileName": state.get("fileName") or "",
+                    "reason": "link_open_failed",
+                    "error": str(exc),
+                },
+            )
+
+    thread = threading.Thread(
+        target=run,
+        name=f"qchat-file-open-{state.get('transferId') or 'unknown'}",
+        daemon=True,
+    )
+    thread.start()
+
+
+def configure_qchat_file_link(link, link_id: str) -> None:
+    link.set_link_closed_callback(on_qchat_file_link_closed)
+    link.set_packet_callback(on_qchat_file_link_packet)
+    link.set_resource_strategy(RNS.Link.ACCEPT_APP)
+    link.set_resource_callback(on_qchat_file_resource_advertised)
+    link.set_resource_started_callback(on_qchat_file_resource_started)
+    link.set_resource_concluded_callback(on_qchat_file_resource_concluded)
+    _qchat_file_link_ids_by_object[id(link)] = link_id
+
+
+def on_qchat_file_link_packet(message, packet) -> None:
+    link = getattr(packet, "link", None)
+    link_id = get_qchat_file_link_id(link) if link is not None else None
+    if not link_id:
+        return
+    state = get_qchat_file_link_state(link_id)
+    if state is None:
+        return
+    try:
+        decoded = json.loads(message.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] invalid qchat file link payload: {exc}")
+        return
+    if not isinstance(decoded, dict):
+        return
+    if decoded.get("type") == "QCHAT_FILE_LINK_AUTH_RESULT":
+        if decoded.get("ok") is True:
+            _qchat_file_emit(
+                "authorized",
+                {
+                    "transferId": str(decoded.get("transferId") or state.get("transferId") or ""),
+                    "peerPresenceHash": state.get("peerPresenceHash") or "",
+                    "fileName": state.get("fileName") or "",
+                },
+            )
+        else:
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": str(decoded.get("transferId") or state.get("transferId") or ""),
+                    "peerPresenceHash": state.get("peerPresenceHash") or "",
+                    "fileName": state.get("fileName") or "",
+                    "reason": str(decoded.get("reason") or "sender_rejected_auth"),
+                },
+            )
+            try:
+                link.teardown()
+            except Exception:
+                pass
+        return
+    if decoded.get("type") != "QCHAT_FILE_LINK_AUTH":
+        return
+    transfer_id = str(decoded.get("transferId") or "").strip()
+    state["transferId"] = transfer_id
+    _qchat_file_emit(
+        "auth",
+        {
+            "linkId": link_id,
+            "transferId": transfer_id,
+            "auth": decoded,
+        },
+    )
+
+
+def on_qchat_file_link_remote_identified(link, identity) -> None:
+    try:
+        peer_hash = _destination_hash_for_identity(identity)
+    except Exception:
+        return
+    _incoming_unified_peer_hash_by_object[id(link)] = peer_hash
+    link_id = get_qchat_file_link_id(link)
+    if link_id:
+        state = get_qchat_file_link_state(link_id)
+        if state is not None:
+            state["peerPresenceHash"] = peer_hash
+            state["peerDestinationHash"] = peer_hash
+
+
+def _register_incoming_qchat_file_link(link, peer_hash: str, transfer_id: str) -> str:
+    link_id = get_qchat_file_link_id(link)
+    if link_id:
+        return link_id
+    now = time.time()
+    link_id = str(uuid.uuid4())
+    state = {
+        "link": link,
+        "peerPresenceHash": peer_hash,
+        "peerDestinationHash": peer_hash,
+        "incoming": True,
+        "established": True,
+        "created_at": now,
+        "established_at": now,
+        "transferId": transfer_id,
+    }
+    with _state_lock:
+        _qchat_file_links_by_id[link_id] = state
+    configure_qchat_file_link(link, link_id)
+    link.set_remote_identified_callback(on_qchat_file_link_remote_identified)
+    return link_id
+
+
+def _qchat_file_update_sent_progress(state: Dict[str, Any]) -> None:
+    size = int(state.get("size") or 0)
+    sent_bytes = int(state.get("sent_bytes") or 0)
+    active = state.get("active_chunks")
+    if isinstance(active, dict):
+        for chunk in active.values():
+            try:
+                sent_bytes += int(chunk.get("size") or 0) * float(chunk.get("progress") or 0)
+            except Exception:
+                pass
+    progress = min(1.0, max(0.0, sent_bytes / float(size))) if size > 0 else 0.0
+    if not _should_emit_qchat_file_progress(state, progress):
+        return
+    _qchat_file_emit(
+        "sending",
+        {
+            "transferId": state.get("transferId") or "",
+            "peerPresenceHash": state.get("peerPresenceHash") or "",
+            "fileName": state.get("fileName") or "",
+            "size": size,
+            **_qchat_file_progress_payload(state, progress, size),
+        },
+    )
+
+
+def _qchat_file_mark_chunk_sent(state: Dict[str, Any], chunk_index: int, chunk_size: int) -> None:
+    active = state.setdefault("active_chunks", {})
+    if isinstance(active, dict):
+        active.pop(chunk_index, None)
+    completed = state.setdefault("completed_chunks", set())
+    if isinstance(completed, set) and chunk_index not in completed:
+        completed.add(chunk_index)
+        state["sent_bytes"] = int(state.get("sent_bytes") or 0) + int(chunk_size)
+    _qchat_file_update_sent_progress(state)
+    if int(state.get("sent_bytes") or 0) >= int(state.get("size") or 0):
+        if state.get("completed") is True:
+            return
+        state["completed"] = True
+        transfer_id = str(state.get("transferId") or "")
+        if transfer_id:
+            with _state_lock:
+                _qchat_file_pending_sends_by_transfer.pop(transfer_id, None)
+        _qchat_file_emit(
+            "sent",
+            {
+                "transferId": transfer_id,
+                "peerPresenceHash": state.get("peerPresenceHash") or "",
+                "fileName": state.get("fileName") or "",
+                "size": int(state.get("size") or 0),
+            },
+        )
+
+
+def _qchat_file_receiver_transfer_done(peer_hash: str, transfer_id: str) -> None:
+    for link_id, link_state in list(_qchat_file_links_by_id.items()):
+        if (
+            str(link_state.get("peerPresenceHash") or "").strip().lower() == peer_hash
+            and str(link_state.get("transferId") or "") == transfer_id
+        ):
+            link = link_state.get("link")
+            link_state["completed"] = True
+            remove_qchat_file_link(link_id)
+            try:
+                if link is not None:
+                    link.teardown()
+            except Exception:
+                pass
+
+
+def _qchat_file_read_chunk(file_path: str, offset: int, chunk_size: int) -> bytes:
+    with open(file_path, "rb") as f:
+        f.seek(offset)
+        return f.read(chunk_size)
+
+
+def _start_qchat_file_resource_for_state(state: Dict[str, Any]) -> bool:
+    link = state.get("link")
+    file_path = str(state.get("filePath") or "")
+    transfer_id = str(state.get("transferId") or "")
+    peer_hash = str(state.get("peerPresenceHash") or "")
+    file_name = str(state.get("fileName") or os.path.basename(file_path))
+    sha256 = str(state.get("sha256") or "").strip().lower()
+    if link is None or not file_path or not transfer_id:
+        return False
+    if state.get("resource_started") is True:
+        return True
+    size = os.path.getsize(file_path)
+    if not state.get("send_root"):
+        state["send_root"] = state
+    root = state.get("send_root") if isinstance(state.get("send_root"), dict) else state
+    chunk_count = _qchat_file_chunk_count(size)
+    with _state_lock:
+        next_chunk = int(root.get("next_chunk_index") or 0)
+        if next_chunk >= chunk_count:
+            try:
+                if link is not None:
+                    link.teardown()
+            except Exception:
+                pass
+            return False
+        chunk_index = next_chunk
+        chunk_offset, chunk_size = _qchat_file_chunk_bounds(size, chunk_index)
+        root["next_chunk_index"] = next_chunk + 1
+        root["transferId"] = transfer_id
+        root["peerPresenceHash"] = peer_hash
+        root["fileName"] = file_name
+        root["size"] = size
+        root.setdefault("active_chunks", {})[chunk_index] = {
+            "size": chunk_size,
+            "progress": 0.0,
+        }
+    metadata = {
+        "kind": "qchat-dm-file",
+        "transferId": transfer_id,
+        "fileName": file_name,
+        "size": size,
+        "sha256": sha256,
+        "chunked": True,
+        "chunkIndex": chunk_index,
+        "chunkCount": chunk_count,
+        "chunkOffset": chunk_offset,
+        "chunkSize": chunk_size,
+    }
+
+    def on_done(resource) -> None:
+        status = "sent" if getattr(resource, "status", None) == RNS.Resource.COMPLETE else "failed"
+        if status == "sent":
+            _qchat_file_mark_chunk_sent(root, chunk_index, chunk_size)
+        else:
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": transfer_id,
+                    "peerPresenceHash": peer_hash,
+                    "fileName": file_name,
+                    "size": size,
+                    "reason": "send_failed",
+                    "chunkIndex": chunk_index,
+                },
+            )
+        link_id_done = get_qchat_file_link_id(link)
+        if link_id_done:
+            remove_qchat_file_link(link_id_done)
+        try:
+            link.teardown()
+        except Exception:
+            pass
+
+    def on_progress(resource) -> None:
+        try:
+            progress = float(resource.get_progress())
+        except Exception:
+            progress = 0.0
+        active = root.setdefault("active_chunks", {})
+        if isinstance(active, dict) and chunk_index in active:
+            active[chunk_index]["progress"] = progress
+        _qchat_file_update_sent_progress(root)
+
+    chunk_data = _qchat_file_read_chunk(file_path, chunk_offset, chunk_size)
+    RNS.Resource(
+        chunk_data,
+        link,
+        metadata=metadata,
+        auto_compress=False,
+        callback=on_done,
+        progress_callback=on_progress,
+    )
+    state["resource_started"] = True
+    _qchat_file_emit(
+        "sending",
+        {
+            "transferId": transfer_id,
+            "peerPresenceHash": peer_hash,
+            "fileName": file_name,
+            "size": size,
+            "progress": 0,
+            "chunkIndex": chunk_index,
+            "chunkCount": chunk_count,
+        },
+    )
+    return True
+
+
+def _send_qchat_file_auth_message(link, state: Dict[str, Any], log_label: str) -> bool:
+    auth_message = state.get("authMessage")
+    if not isinstance(auth_message, dict):
+        return False
+    try:
+        encoded = json.dumps(auth_message, separators=(",", ":")).encode("utf-8")
+        ok = _send_packet_on_link(
+            link,
+            encoded,
+            f"target=qchat-file-reticulum {log_label} transfer={state.get('transferId') or ''}",
+        )
+        if ok:
+            _qchat_file_emit(
+                "auth_sent",
+                {
+                    "transferId": state.get("transferId") or "",
+                    "peerPresenceHash": state.get("peerPresenceHash") or "",
+                    "fileName": state.get("fileName") or "",
+                    "size": int(state.get("size") or 0),
+                },
+            )
+            previous_timer = state.pop("auth_timeout_timer", None)
+            if previous_timer is not None:
+                try:
+                    previous_timer.cancel()
+                except Exception:
+                    pass
+
+            def auth_timeout() -> None:
+                if state.get("resource_started") is True or state.get("completed") is True:
+                    return
+                _qchat_file_emit(
+                    "failed",
+                    {
+                        "transferId": state.get("transferId") or "",
+                        "peerPresenceHash": state.get("peerPresenceHash") or "",
+                        "fileName": state.get("fileName") or "",
+                        "reason": "sender_auth_timeout",
+                        "error": "Sender did not authorize the file transfer",
+                    },
+                )
+                try:
+                    link.teardown()
+                except Exception:
+                    pass
+
+            timer = threading.Timer(45.0, auth_timeout)
+            timer.daemon = True
+            state["auth_timeout_timer"] = timer
+            timer.start()
+            return True
+        _qchat_file_emit(
+            "failed",
+            {
+                "transferId": state.get("transferId") or "",
+                "peerPresenceHash": state.get("peerPresenceHash") or "",
+                "fileName": state.get("fileName") or "",
+                "reason": "auth_send_failed",
+            },
+        )
+    except Exception as exc:
+        _qchat_file_emit(
+            "failed",
+            {
+                "transferId": state.get("transferId") or "",
+                "peerPresenceHash": state.get("peerPresenceHash") or "",
+                "fileName": state.get("fileName") or "",
+                "reason": "auth_send_failed",
+                "error": str(exc),
+            },
+        )
+    return False
+
+
+def on_outgoing_qchat_file_link_established(link) -> None:
+    link_id = get_qchat_file_link_id(link)
+    if link_id is None:
+        return
+    state = get_qchat_file_link_state(link_id)
+    if state is None:
+        return
+    configure_qchat_file_link(link, link_id)
+    link.set_remote_identified_callback(on_qchat_file_link_remote_identified)
+    state["established"] = True
+    state["established_at"] = time.time()
+    _qchat_file_emit(
+        "link_established",
+        {
+            "transferId": state.get("transferId") or "",
+            "peerPresenceHash": state.get("peerPresenceHash") or "",
+            "fileName": state.get("fileName") or "",
+            "size": int(state.get("size") or 0),
+        },
+    )
+    try:
+        if _identity is not None:
+            link.identify(_identity)
+    except Exception as exc:
+        log(f"[presence_bridge] qchat file link identify failed link={link_id}: {exc}")
+    if isinstance(state.get("authMessage"), dict):
+        _send_qchat_file_auth_message(link, state, "auth")
+        return
+    try:
+        _start_qchat_file_resource_for_state(state)
+    except Exception as exc:
+        _qchat_file_emit(
+            "failed",
+            {
+                "transferId": state.get("transferId") or "",
+                "peerPresenceHash": state.get("peerPresenceHash") or "",
+                "fileName": state.get("fileName") or "",
+                "reason": "resource_start_failed",
+                "error": str(exc),
+            },
+        )
+
+
+def on_qchat_file_resource_advertised(resource) -> bool:
+    link = getattr(resource, "link", None)
+    link_id = get_qchat_file_link_id(link) if link is not None else None
+    state = get_qchat_file_link_state(link_id) if link_id else None
+    peer_hash = str((state or {}).get("peerPresenceHash") or "").strip().lower()
+    if not peer_hash and link is not None:
+        peer_hash = str(_incoming_unified_peer_hash_by_object.get(id(link)) or "").strip().lower()
+    if not peer_hash:
+        return False
+    now = time.time()
+    with _state_lock:
+        pending = _qchat_file_accepts_by_peer.get(peer_hash)
+        if pending and float(pending.get("expires_at") or 0) < now:
+            _qchat_file_accepts_by_peer.pop(peer_hash, None)
+            pending = None
+    if not pending:
+        return False
+    expected_size = int(pending.get("size") or 0)
+    pending["started_at"] = time.time()
+    transfer_id = str(pending.get("transferId") or "")
+    try:
+        setattr(resource, "_qchat_peer_hash", peer_hash)
+        setattr(resource, "_qchat_transfer_id", transfer_id)
+    except Exception:
+        pass
+    _register_incoming_qchat_file_link(link, peer_hash, transfer_id)
+    _qchat_file_emit(
+        "receiving",
+        {
+            "transferId": transfer_id,
+            "peerPresenceHash": peer_hash,
+            "fileName": pending.get("fileName"),
+            "size": expected_size,
+        },
+    )
+    return True
+
+
+def on_qchat_file_resource_started(resource) -> None:
+    link = getattr(resource, "link", None)
+    link_id = get_qchat_file_link_id(link) if link is not None else None
+    state = get_qchat_file_link_state(link_id) if link_id else None
+    peer_hash = str((state or {}).get("peerPresenceHash") or "").strip().lower()
+    pending = _qchat_file_accepts_by_peer.get(peer_hash) if peer_hash else None
+    if state is not None:
+        timer = state.pop("auth_timeout_timer", None)
+        if timer is not None:
+            try:
+                timer.cancel()
+            except Exception:
+                pass
+        state["resource_started"] = True
+    if not pending:
+        return
+    transfer_id = str(pending.get("transferId") or "")
+    file_name = str(pending.get("fileName") or "")
+    size = int(pending.get("size") or 0)
+
+    def on_progress(res) -> None:
+        if isinstance(pending.get("completed_chunks"), set):
+            return
+        try:
+            progress = float(res.get_progress())
+        except Exception:
+            progress = 0.0
+        if not _should_emit_qchat_file_progress(pending, progress):
+            return
+        _qchat_file_emit(
+            "receiving",
+            {
+                "transferId": transfer_id,
+                "peerPresenceHash": peer_hash,
+                "fileName": file_name,
+                "size": size,
+                **_qchat_file_progress_payload(pending, progress, size),
+            },
+        )
+
+    try:
+        resource.progress_callback(on_progress)
+    except Exception:
+        pass
+    on_progress(resource)
+
+
+def on_qchat_file_resource_concluded(resource) -> None:
+    link = getattr(resource, "link", None)
+    link_id = get_qchat_file_link_id(link) if link is not None else None
+    state = get_qchat_file_link_state(link_id) if link_id else None
+    peer_hash = str(
+        (state or {}).get("peerPresenceHash")
+        or getattr(resource, "_qchat_peer_hash", "")
+        or (
+            _incoming_unified_peer_hash_by_object.get(id(link))
+            if link is not None
+            else ""
+        )
+        or ""
+    ).strip().lower()
+    if not peer_hash:
+        log("[presence_bridge] qchat file resource concluded without peer hash")
+        return
+    with _state_lock:
+        pending = _qchat_file_accepts_by_peer.get(peer_hash)
+        if pending is None:
+            resource_transfer_id = str(getattr(resource, "_qchat_transfer_id", "") or "")
+            for candidate in _qchat_file_accepts_by_peer.values():
+                if str(candidate.get("transferId") or "") == resource_transfer_id:
+                    pending = candidate
+                    break
+    if not pending:
+        log(
+            "[presence_bridge] qchat file resource concluded without pending receive "
+            f"peer={peer_hash}"
+        )
+        return
+    transfer_id = str(
+        pending.get("transferId") or getattr(resource, "_qchat_transfer_id", "") or ""
+    )
+    save_path = str(pending.get("savePath") or "")
+    expected_hash = str(pending.get("sha256") or "").strip().lower()
+    try:
+        if getattr(resource, "status", None) != RNS.Resource.COMPLETE:
+            if state is not None:
+                state["completed"] = True
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": transfer_id,
+                    "peerPresenceHash": peer_hash,
+                    "reason": "resource_incomplete",
+                },
+            )
+            return
+        metadata = getattr(resource, "metadata", None)
+        is_chunked = isinstance(metadata, dict) and metadata.get("chunked") is True
+        if isinstance(metadata, dict):
+            metadata_transfer_id = str(metadata.get("transferId") or "")
+            metadata_file_name = str(metadata.get("fileName") or "")
+            metadata_size = int(metadata.get("size") or 0)
+            metadata_sha256 = str(metadata.get("sha256") or "").strip().lower()
+            expected_size = int(pending.get("size") or 0)
+            expected_file_name = str(pending.get("fileName") or "")
+            if (
+                (metadata_transfer_id and metadata_transfer_id != transfer_id)
+                or (metadata_file_name and metadata_file_name != expected_file_name)
+                or (metadata_size and expected_size and metadata_size != expected_size)
+                or (not is_chunked and metadata_sha256 and expected_hash and metadata_sha256 != expected_hash)
+            ):
+                if state is not None:
+                    state["completed"] = True
+                _qchat_file_emit(
+                    "failed",
+                    {
+                        "transferId": transfer_id,
+                        "peerPresenceHash": peer_hash,
+                        "reason": "metadata_mismatch",
+                    },
+                )
+                return
+        source_path = _resource_file_path(resource)
+        if not source_path:
+            if state is not None:
+                state["completed"] = True
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": transfer_id,
+                    "peerPresenceHash": peer_hash,
+                    "reason": "missing_resource_file",
+                },
+            )
+            return
+        if is_chunked:
+            chunk_index = int(metadata.get("chunkIndex") or 0)
+            chunk_count = int(metadata.get("chunkCount") or 0)
+            chunk_offset = int(metadata.get("chunkOffset") or 0)
+            chunk_size = int(metadata.get("chunkSize") or 0)
+            lock = pending.get("chunk_lock")
+            if lock is None:
+                lock = threading.RLock()
+                pending["chunk_lock"] = lock
+            with lock:
+                completed_chunks = pending.setdefault("completed_chunks", set())
+                if chunk_index not in completed_chunks:
+                    _write_chunk_to_part_file(source_path, save_path, chunk_offset)
+                    completed_chunks.add(chunk_index)
+                    pending["received_bytes"] = int(pending.get("received_bytes") or 0) + chunk_size
+                size = int(pending.get("size") or 0)
+                progress = min(1.0, max(0.0, int(pending.get("received_bytes") or 0) / float(size))) if size > 0 else 0.0
+                if _should_emit_qchat_file_progress(pending, progress, force=progress >= 1.0):
+                    _qchat_file_emit(
+                        "receiving",
+                        {
+                            "transferId": transfer_id,
+                            "peerPresenceHash": peer_hash,
+                            "fileName": pending.get("fileName"),
+                            "size": size,
+                            **_qchat_file_progress_payload(pending, progress, size),
+                        },
+                    )
+                done = chunk_count > 0 and len(completed_chunks) >= chunk_count
+            if state is not None:
+                state["completed"] = True
+            if not done:
+                peer_identity = pending.get("peerIdentity")
+                if peer_identity is not None:
+                    next_state = {
+                        "peerPresenceHash": peer_hash,
+                        "peerDestinationHash": "",
+                        "incoming": False,
+                        "established": False,
+                        "transferId": transfer_id,
+                        "fileName": pending.get("fileName") or "",
+                        "size": int(pending.get("size") or 0),
+                        "sha256": pending.get("sha256") or "",
+                        "peerIdentity": peer_identity,
+                        "authMessage": pending.get("authMessage"),
+                        "created_at": time.time(),
+                    }
+                    if isinstance(next_state.get("authMessage"), dict):
+                        _open_qchat_file_link_async(next_state)
+                return
+            part_path = save_path + ".part"
+            actual_hash = _sha256_file_hex(part_path)
+            if expected_hash and actual_hash.lower() != expected_hash:
+                _qchat_file_emit(
+                    "failed",
+                    {
+                        "transferId": transfer_id,
+                        "peerPresenceHash": peer_hash,
+                        "reason": "hash_mismatch",
+                        "expectedHash": expected_hash,
+                        "actualHash": actual_hash,
+                    },
+                )
+                return
+            os.replace(part_path, save_path)
+            with _state_lock:
+                _qchat_file_accepts_by_peer.pop(peer_hash, None)
+            _qchat_file_emit(
+                "received",
+                {
+                    "transferId": transfer_id,
+                    "peerPresenceHash": peer_hash,
+                    "fileName": pending.get("fileName"),
+                    "path": save_path,
+                    "sha256": actual_hash,
+                },
+            )
+            _qchat_file_receiver_transfer_done(peer_hash, transfer_id)
+            return
+        actual_hash = _sha256_file_hex(source_path)
+        if expected_hash and actual_hash.lower() != expected_hash:
+            if state is not None:
+                state["completed"] = True
+            _qchat_file_emit(
+                "failed",
+                {
+                    "transferId": transfer_id,
+                    "peerPresenceHash": peer_hash,
+                    "reason": "hash_mismatch",
+                    "expectedHash": expected_hash,
+                    "actualHash": actual_hash,
+                },
+            )
+            return
+        _move_file_to_save_path(source_path, save_path)
+        if state is not None:
+            state["completed"] = True
+        with _state_lock:
+            _qchat_file_accepts_by_peer.pop(peer_hash, None)
+        _qchat_file_emit(
+            "received",
+            {
+                "transferId": transfer_id,
+                "peerPresenceHash": peer_hash,
+                "fileName": pending.get("fileName"),
+                "path": save_path,
+                "sha256": actual_hash,
+            },
+        )
+        _qchat_file_receiver_transfer_done(peer_hash, transfer_id)
+    except Exception as exc:
+        _qchat_file_emit(
+            "failed",
+            {
+                "transferId": transfer_id,
+                "peerPresenceHash": peer_hash,
+                "reason": "save_failed",
+                "error": str(exc),
+            },
+        )
+
+
+def _configure_overlay_link_resources(link) -> None:
+    return None
+
 
 def configure_overlay_link(link, link_id: str) -> None:
     link.set_link_closed_callback(on_overlay_link_closed)
     link.set_packet_callback(on_overlay_link_packet)
     link.set_remote_identified_callback(on_overlay_link_remote_identified)
+    _configure_overlay_link_resources(link)
     _overlay_link_ids_by_object[id(link)] = link_id
 
 
@@ -2749,7 +3901,10 @@ def on_outgoing_overlay_link_established(link) -> None:
 def _send_wire_to_overlay_peer(
     peer_hash: str, wire_bytes: bytes, traffic: str, queue_if_pending: bool = True
 ) -> bool:
-    state = _ensure_overlay_link(peer_hash)
+    state = _ensure_overlay_link(
+        peer_hash,
+        respect_dial_owner=traffic in ("presence_publish", "presence_forward"),
+    )
     if state is None:
         log(
             f"[presence_bridge] target=presence-reticulum overlay_link_missing peer={peer_hash} traffic={traffic}"
@@ -3135,7 +4290,11 @@ def _schedule_inbound_classify_fallback(link) -> None:
                 return
             _pending_inbound_classify_link_ids.discard(link_key)
         _cancel_inbound_classify_timer(link_key)
-        if get_overlay_link_id(link) is not None or get_audio_link_id(link) is not None:
+        if (
+            get_overlay_link_id(link) is not None
+            or get_audio_link_id(link) is not None
+            or get_qchat_file_link_id(link) is not None
+        ):
             return
         log(
             "[presence_bridge] WARNING inbound_link_classify_timeout defaulting_to_overlay "
@@ -3161,6 +4320,10 @@ def on_inbound_unified_link_closed(link) -> None:
         on_overlay_link_closed(link)
     elif get_audio_link_id(link):
         on_audio_link_closed(link)
+    elif get_qchat_file_link_id(link):
+        on_qchat_file_link_closed(link)
+    else:
+        _incoming_unified_peer_hash_by_object.pop(id(link), None)
 
 
 def on_inbound_link_first_packet(message, packet) -> None:
@@ -3194,6 +4357,14 @@ def on_inbound_link_first_packet(message, packet) -> None:
         configure_audio_link(link, link_id)
         on_audio_link_packet(message, packet)
         return
+    if decoded.get("type") == "QCHAT_FILE_LINK_AUTH":
+        link_id = _register_incoming_qchat_file_link(
+            link,
+            "",
+            str(decoded.get("transferId") or ""),
+        )
+        on_qchat_file_link_packet(message, packet)
+        return
     _register_incoming_overlay_link(link)
     on_overlay_link_packet(message, packet)
 
@@ -3204,6 +4375,10 @@ def on_incoming_unified_link_established(link) -> None:
         _pending_inbound_classify_link_ids.add(link_key)
     link.set_link_closed_callback(on_inbound_unified_link_closed)
     link.set_packet_callback(on_inbound_link_first_packet)
+    link.set_remote_identified_callback(on_qchat_file_link_remote_identified)
+    link.set_resource_strategy(RNS.Link.ACCEPT_APP)
+    link.set_resource_callback(on_qchat_file_resource_advertised)
+    link.set_resource_concluded_callback(on_qchat_file_resource_concluded)
     _schedule_inbound_classify_fallback(link)
 
 
@@ -3624,6 +4799,207 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
                 error=str(failure.get("error") or "Packet send returned False"),
             )
             return
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+def handle_accept_qchat_file_resource(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerPresenceHash") or "").strip().lower()
+    pk_b64 = payload.get("reticulumIdentityPublicKeyBase64")
+    auth_message = payload.get("authMessage")
+    transfer_id = str(payload.get("transferId") or "").strip()
+    save_path = str(payload.get("savePath") or "").strip()
+    file_name = str(payload.get("fileName") or "").strip()
+    sha256 = str(payload.get("sha256") or "").strip().lower()
+    try:
+        size = int(payload.get("size") or 0)
+    except Exception:
+        size = 0
+    if not peer_hash or not transfer_id or not save_path:
+        emit_resp(req_id, False, error="Missing peerPresenceHash, transferId or savePath")
+        return
+    if size <= 0:
+        emit_resp(req_id, False, error="Missing or invalid file size")
+        return
+    if not isinstance(auth_message, dict):
+        emit_resp(req_id, False, error="Missing Reticulum link auth message")
+        return
+    try:
+        peer_identity = _parse_qchat_file_peer_identity(peer_hash, pk_b64)
+    except Exception as exc:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bad_reticulum_identity"},
+            error=str(exc),
+        )
+        return
+    with _state_lock:
+        _qchat_file_accepts_by_peer[peer_hash] = {
+            "transferId": transfer_id,
+            "savePath": save_path,
+            "fileName": file_name,
+            "size": size,
+            "sha256": sha256,
+            "peerIdentity": peer_identity,
+            "authMessage": auth_message,
+            "received_bytes": 0,
+            "active_chunks": {},
+            "completed_chunks": set(),
+            "chunk_lock": threading.RLock(),
+            "expires_at": time.time() + 15 * 60,
+        }
+    _qchat_file_emit(
+        "accepted",
+        {
+            "transferId": transfer_id,
+            "peerPresenceHash": peer_hash,
+            "fileName": file_name,
+            "size": size,
+        },
+    )
+    links_to_open = min(_QCHAT_FILE_PARALLEL_LINKS, max(1, _qchat_file_chunk_count(size)))
+    for _ in range(links_to_open):
+        state = {
+            "peerPresenceHash": peer_hash,
+            "peerDestinationHash": "",
+            "incoming": False,
+            "established": False,
+            "transferId": transfer_id,
+            "fileName": file_name,
+            "size": size,
+            "sha256": sha256,
+            "peerIdentity": peer_identity,
+            "authMessage": auth_message,
+            "created_at": time.time(),
+        }
+        _open_qchat_file_link_async(state)
+    emit_resp(req_id, True)
+
+
+def handle_send_qchat_file_resource(req_id: str, payload: Dict[str, Any]) -> None:
+    transfer_id = str(payload.get("transferId") or "").strip()
+    allowed_recipient = str(payload.get("allowedRecipientAddress") or "").strip()
+    file_path = str(payload.get("filePath") or "").strip()
+    file_name = str(payload.get("fileName") or os.path.basename(file_path)).strip()
+    sha256 = str(payload.get("sha256") or "").strip().lower()
+    try:
+        expires_at_ms = float(payload.get("expiresAt") or 0)
+    except Exception:
+        expires_at_ms = 0
+    expires_at = expires_at_ms / 1000 if expires_at_ms > 0 else time.time() + 2 * 60 * 60
+    if not allowed_recipient or not transfer_id or not file_path:
+        emit_resp(req_id, False, error="Missing allowedRecipientAddress, transferId or filePath")
+        return
+    if not os.path.isfile(file_path):
+        emit_resp(req_id, False, error="File does not exist")
+        return
+    try:
+        size = os.path.getsize(file_path)
+        with _state_lock:
+            _qchat_file_pending_sends_by_transfer[transfer_id] = {
+                "allowedRecipientAddress": allowed_recipient,
+                "filePath": file_path,
+                "fileName": file_name,
+                "size": size,
+                "sha256": sha256,
+                "created_at": time.time(),
+                "expires_at": expires_at,
+                "next_chunk_index": 0,
+                "sent_bytes": 0,
+                "active_chunks": {},
+                "completed_chunks": set(),
+            }
+        _qchat_file_emit(
+            "registered",
+            {
+                "transferId": transfer_id,
+                "fileName": file_name,
+                "size": size,
+            },
+        )
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_authorize_qchat_file_resource(req_id: str, payload: Dict[str, Any]) -> None:
+    link_id = str(payload.get("linkId") or "").strip()
+    transfer_id = str(payload.get("transferId") or "").strip()
+    if not link_id or not transfer_id:
+        emit_resp(req_id, False, error="Missing linkId or transferId")
+        return
+    state = get_qchat_file_link_state(link_id)
+    if state is None:
+        emit_resp(req_id, False, payload={"code": "unknown_link_id"}, error="Unknown link id")
+        return
+    with _state_lock:
+        pending = _qchat_file_pending_sends_by_transfer.get(transfer_id)
+    if not pending:
+        emit_resp(req_id, False, payload={"code": "unknown_transfer_id"}, error="Unknown transfer id")
+        return
+    if float(pending.get("expires_at") or 0) < time.time():
+        emit_resp(req_id, False, payload={"code": "transfer_expired"}, error="Transfer expired")
+        return
+    state.update(
+        {
+            "filePath": pending.get("filePath") or "",
+            "fileName": pending.get("fileName") or "",
+            "size": int(pending.get("size") or 0),
+            "sha256": pending.get("sha256") or "",
+            "transferId": transfer_id,
+            "send_root": pending,
+        }
+    )
+    try:
+        link = state.get("link")
+        if link is not None:
+            _send_packet_on_link(
+                link,
+                json.dumps(
+                    {
+                        "type": "QCHAT_FILE_LINK_AUTH_RESULT",
+                        "ok": True,
+                        "transferId": transfer_id,
+                    },
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+                f"target=qchat-file-reticulum auth_result_ok transfer={transfer_id}",
+            )
+        _start_qchat_file_resource_for_state(state)
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_reject_qchat_file_resource(req_id: str, payload: Dict[str, Any]) -> None:
+    link_id = str(payload.get("linkId") or "").strip()
+    transfer_id = str(payload.get("transferId") or "").strip()
+    reason = str(payload.get("reason") or "sender_rejected_auth").strip()
+    state = get_qchat_file_link_state(link_id)
+    if state is None:
+        emit_resp(req_id, False, payload={"code": "unknown_link_id"}, error="Unknown link id")
+        return
+    link = state.get("link")
+    try:
+        if link is not None:
+            _send_packet_on_link(
+                link,
+                json.dumps(
+                    {
+                        "type": "QCHAT_FILE_LINK_AUTH_RESULT",
+                        "ok": False,
+                        "transferId": transfer_id,
+                        "reason": reason,
+                    },
+                    separators=(",", ":"),
+                ).encode("utf-8"),
+                f"target=qchat-file-reticulum auth_result_reject transfer={transfer_id}",
+            )
+            try:
+                link.teardown()
+            except Exception:
+                pass
         emit_resp(req_id, True)
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
@@ -4320,6 +5696,14 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_stop(req_id)
     elif action == "send_call":
         handle_send_call(req_id, payload)
+    elif action == "accept_qchat_file_resource":
+        handle_accept_qchat_file_resource(req_id, payload)
+    elif action == "send_qchat_file_resource":
+        handle_send_qchat_file_resource(req_id, payload)
+    elif action == "authorize_qchat_file_resource":
+        handle_authorize_qchat_file_resource(req_id, payload)
+    elif action == "reject_qchat_file_resource":
+        handle_reject_qchat_file_resource(req_id, payload)
     elif action == "fanout_call":
         handle_fanout_call(req_id, payload)
     elif action == "send_group_call":

@@ -17,6 +17,29 @@ export type ReactionsMap = {
   [reactionType: string]: ReactionItem[];
 };
 
+type ChatListProps = {
+  [key: string]: any;
+  initialMessages: any;
+  myAddress: any;
+  tempMessages: any;
+  onReply: any;
+  onEdit: any;
+  handleReaction: any;
+  chatReferences: any;
+  tempChatReferences: any;
+  members?: any;
+  myName?: any;
+  selectedGroup?: any;
+  enableMentions?: any;
+  openQManager?: any;
+  onAcceptQchatFileTransfer?: (message: any) => void;
+  qchatFileTransferStates?: Record<string, any>;
+  qchatCompletedTransfers?: Record<string, any>;
+  hasSecretKey?: any;
+  isPrivate?: any;
+  compactScrollButton?: boolean;
+};
+
 export const ChatList = ({
   initialMessages,
   myAddress,
@@ -31,10 +54,13 @@ export const ChatList = ({
   selectedGroup,
   enableMentions,
   openQManager,
+  onAcceptQchatFileTransfer,
+  qchatFileTransferStates,
+  qchatCompletedTransfers,
   hasSecretKey,
   isPrivate,
   compactScrollButton = false,
-}) => {
+}: ChatListProps) => {
   const theme = useTheme();
   const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
@@ -158,9 +184,24 @@ export const ChatList = ({
       }
     });
 
-    const uniqueInitialMessages = Array.from(
-      uniqueInitialMessagesMap.values()
-    ).sort((a, b) => a.timestamp - b.timestamp);
+    const uniqueInitialMessages = Array.from(uniqueInitialMessagesMap.values())
+      .filter((message) => {
+        const directType =
+          message?.type ||
+          message?.decryptedData?.type ||
+          message?.decryptedData?.data?.type;
+        const directStatus =
+          message?.status ||
+          message?.data?.status ||
+          message?.decryptedData?.status ||
+          message?.decryptedData?.data?.status ||
+          message?.decryptedData?.data?.data?.status;
+        return !(
+          directType === 'qchat-dm-file-transfer' &&
+          directStatus === 'accepted'
+        );
+      })
+      .sort((a, b) => a.timestamp - b.timestamp);
     const totalMessages = [...uniqueInitialMessages, ...(tempMessages || [])];
 
     if (totalMessages.length === 0) return;
@@ -510,6 +551,9 @@ export const ChatList = ({
                         myAddress={myAddress}
                         onEdit={onEdit}
                         onReply={onReply}
+                        onAcceptQchatFileTransfer={onAcceptQchatFileTransfer}
+                        qchatFileTransferStates={qchatFileTransferStates}
+                        qchatCompletedTransfers={qchatCompletedTransfers}
                         onSeen={handleMessageSeen}
                         reactions={reactions}
                         reply={reply}

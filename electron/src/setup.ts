@@ -2001,8 +2001,12 @@ async function syncReticulumOverlayStateToBridge(
       lastSeen: peer.lastSeen,
     }));
   const activeNeighborHashes = manager.getReticulumActiveNeighborHashes();
+  const overlayNeighborHashes =
+    activeNeighborHashes.length > 0
+      ? activeNeighborHashes
+      : verifiedPeers.map((peer) => peer.destinationHash);
   try {
-    await bridge.syncOverlayState(verifiedPeers, activeNeighborHashes);
+    await bridge.syncOverlayState(verifiedPeers, overlayNeighborHashes);
   } catch (err) {
     loggerWarn(
       '[ReticulumOverlay] Failed to sync overlay state to bridge:',

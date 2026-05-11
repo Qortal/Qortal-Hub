@@ -730,6 +730,48 @@ describe('ReticulumBridge group audio support', () => {
     expect(bridge.getOverlayLinkSnapshots()).toHaveLength(1);
   });
 
+  it('keeps the oldest overlay snapshot when duplicate links exist for a peer', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-old',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: true,
+        established: true,
+        reason: 'established',
+        queuedPackets: 0,
+        closedByReticulum: false,
+      },
+    });
+    const firstConnectedAt = bridge.getOverlayLinkSnapshots()[0]?.connectedAt;
+
+    await new Promise((resolve) => setTimeout(resolve, 1));
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-new',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: false,
+        established: true,
+        reason: 'established',
+        queuedPackets: 0,
+        closedByReticulum: false,
+      },
+    });
+
+    expect(bridge.getOverlayLinkSnapshots()).toEqual([
+      expect.objectContaining({
+        linkId: 'overlay-old',
+        connectedAt: firstConnectedAt,
+      }),
+    ]);
+  });
+
   it('emits presence-envelope with origin and via hashes from forwarded presence', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
@@ -860,6 +902,51 @@ describe('ReticulumBridge publish_presence payload', () => {
         clientVersion: '1',
       },
       signature: 'sig2',
+    };
+
+    await bridge.publish(envelope);
+
+    expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
+      envelope,
+      overlayNeighborHashes: [
+        'aa112233445566778899aabbccddeeff',
+        'bb00112233445566778899aabbccddee',
+      ],
+    });
+  });
+
+  it('falls back to verified overlay neighbors when active publish fanout is empty', async () => {
+    vi.mocked(getPresenceManager).mockReturnValue({
+      getReticulumActiveNeighborHashes: () => [],
+      getReticulumVerifiedNeighborHashes: () => [
+        'aa112233445566778899aabbccddeeff',
+        'bb00112233445566778899aabbccddee',
+      ],
+    } as any);
+
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: '1',
+      ok: true,
+      payload: {},
+    }));
+
+    const envelope: PresenceEnvelope = {
+      id: 'e-fallback',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'addr-fallback',
+      timestamp: Date.now(),
+      payload: {
+        address: 'addr-fallback',
+        publicKey: 'pk-fallback',
+        sessionId: 'sid-fallback',
+        status: 'online',
+      },
+      signature: 'sig-fallback',
     };
 
     await bridge.publish(envelope);

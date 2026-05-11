@@ -1997,7 +1997,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(224);
+    expect(targetMs).toBeGreaterThanOrEqual(280);
     expect(holdSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThan(8);
   });
 
@@ -3130,7 +3130,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const collapseTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(collapseTargetMs).toBeGreaterThanOrEqual(224);
+    expect(collapseTargetMs).toBeGreaterThanOrEqual(280);
     expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
       {
         peerAddress: 'alice',
@@ -3156,7 +3156,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const heldTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(heldTargetMs).toBeGreaterThanOrEqual(224);
+    expect(heldTargetMs).toBeGreaterThanOrEqual(280);
     expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
       {
         peerAddress: 'alice',
@@ -3252,7 +3252,7 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'repair-collapse',
       },
     ]);
-    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(224);
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(280);
 
     for (let i = 0; i < 3; i += 1) {
       capturedOptions?.onPlayoutWorkletMessage?.({
@@ -3998,7 +3998,7 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'repair-collapse',
       },
     ]);
-    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(224);
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(280);
     vi.useRealTimers();
   });
 
@@ -4085,7 +4085,7 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'repair-collapse',
       },
     ]);
-    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(224);
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(280);
 
     for (let i = 0; i < 4; i += 1) {
       capturedOptions?.onPlayoutWorkletMessage?.({
@@ -4233,7 +4233,7 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'repair-collapse',
       },
     ]);
-    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(224);
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(280);
     vi.useRealTimers();
   });
 
@@ -5016,8 +5016,8 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'collapse-recovery',
       },
     ]);
-    expect(targetMs).toBeGreaterThanOrEqual(280);
-    expect(extraHoldFrames).toBeGreaterThan(12);
+    expect(targetMs).toBeGreaterThanOrEqual(320);
+    expect(extraHoldFrames).toBeGreaterThan(14);
     vi.useRealTimers();
   });
 
@@ -5109,8 +5109,8 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'collapse-recovery',
       },
     ]);
-    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(280);
-    expect(holdSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThan(12);
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(320);
+    expect(holdSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThan(14);
     vi.useRealTimers();
   });
 
@@ -5634,7 +5634,7 @@ describe('GroupCallAudioReceiveEngine', () => {
       },
     ]);
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(224);
+    expect(targetMs).toBeGreaterThanOrEqual(280);
     vi.useRealTimers();
   });
 
@@ -7100,6 +7100,94 @@ describe('GroupCallAudioReceiveEngine', () => {
     vi.useRealTimers();
   });
 
+  it('keeps high-reserve stressed missing-frame damage out of clean and weak profiles', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 22,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    for (let i = 0; i < 10; i += 1) {
+      capturedOptions?.afterDrain?.({ missedFramesThisTick: 32 });
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 120,
+        preProcessBufferedMs: 10,
+        targetPlayoutMs: 185,
+        oldestFrameAgeMs: 145,
+        rate: 0.986,
+        outsideBand: true,
+        outsideBandUnder: true,
+        outsideBandOver: false,
+        deltaMs: -121,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    const profile =
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource[0]?.profile;
+    expect(profile).toBe('repair-heavy-connected');
+    vi.useRealTimers();
+  });
+
   it('keeps recent moderate-reserve gap damage out of clean-low-latency while deltas remain bad', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
@@ -7309,6 +7397,94 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'repair-collapse',
       },
     ]);
+    vi.useRealTimers();
+  });
+
+  it('keeps shallow calm-rate missing-frame damage out of weak and lean profiles', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 14,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    for (let i = 0; i < 10; i += 1) {
+      capturedOptions?.afterDrain?.({ missedFramesThisTick: 3 });
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 7,
+        preProcessBufferedMs: 7,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 80,
+        rate: 1,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -178,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    const profile =
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource[0]?.profile;
+    expect(profile).toBe('repair-collapse');
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(280);
     vi.useRealTimers();
   });
 

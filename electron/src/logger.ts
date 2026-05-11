@@ -24,28 +24,33 @@ const MAX_LOG_BYTES = 10 * 1024 * 1024;
 const pendingLines: string[] = [];
 let flushScheduled = false;
 let logFilePath: string | null = null;
-let fileSinkTried = false;
+let logUserDataPath: string | null = null;
 /** Byte length of current log file on disk (UTF-8), best-effort. */
 let currentFileBytes = 0;
 
 let ioChain: Promise<void> = Promise.resolve();
 
 function resolveLogFilePath(): string | null {
-  if (logFilePath !== null) return logFilePath;
-  if (fileSinkTried) return null;
   if (process.type !== 'browser') return null;
-  fileSinkTried = true;
   try {
     const { app } = nodeRequire('electron') as typeof import('electron');
-    const dir = path.join(app.getPath('userData'), 'logs');
+    const userDataPath = app.getPath('userData');
+    if (logFilePath !== null && logUserDataPath === userDataPath) {
+      return logFilePath;
+    }
+    const dir = path.join(userDataPath, 'logs');
     fs.mkdirSync(dir, { recursive: true });
     logFilePath = path.join(dir, LOG_FILE);
+    logUserDataPath = userDataPath;
     if (fs.existsSync(logFilePath)) {
       currentFileBytes = fs.statSync(logFilePath).size;
+    } else {
+      currentFileBytes = 0;
     }
     return logFilePath;
   } catch {
     logFilePath = null;
+    logUserDataPath = null;
     return null;
   }
 }

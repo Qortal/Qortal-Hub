@@ -233,6 +233,7 @@ type ReticulumCandidatePeer = {
   lastSeenAt: number;
   proofDeadlineAt: number;
   failureCount: number;
+  source: string;
   lastFailureReason?: string;
 };
 
@@ -808,6 +809,8 @@ export class PresenceManager extends EventEmitter {
     const { address, publicKey, sessionId } = p;
     const legacyPeerIds = routeToLegacyPeerIds(route);
     const routeExpiresAt = getRouteExpiry(route, now);
+    const key = `${address}:${sessionId}`;
+    const existing = this.sessions.get(key);
 
     const tsKey = `${address}:${sessionId}:${envelope.type}`;
     const prevTs = this.latestTimestamp.get(tsKey) ?? 0;
@@ -822,9 +825,20 @@ export class PresenceManager extends EventEmitter {
       }
       return false;
     }
+    if (existing && envelope.timestamp < existing.lastSeen) {
+      loggerLog(
+        `[Presence] Dropped envelope due to stale session timestamp ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} session_last_seen=${existing.lastSeen}`
+      );
+      if (route.kind === 'reticulum') {
+        loggerLog(
+          `[Presence] target=presence-reticulum rx=drop_stale_session peer_addr=${address} sender_hash=${route.destinationHash} type=${envelope.type} env_ts=${envelope.timestamp} session_last_seen=${existing.lastSeen} envelope_id=${envelope.id ?? 'n/a'}`
+        );
+      }
+      return false;
+    }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
 
-    if (route.kind === 'reticulum') {
+    if (route.kind === 'reticulum' && this.shouldPromoteReticulumOverlayRoute(route)) {
       this.promoteVerifiedReticulumPeer(route.destinationHash, address, now);
     }
 
@@ -840,8 +854,6 @@ export class PresenceManager extends EventEmitter {
       this.removeSession(address, sessionId);
       if (route.kind === 'local') this.lastLocalEnvelope = null;
     } else {
-      const key = `${address}:${sessionId}`;
-      const existing = this.sessions.get(key);
       this.sessions.set(key, {
         address,
         publicKey,
@@ -1062,6 +1074,7 @@ export class PresenceManager extends EventEmitter {
       lastSeenAt: now,
       proofDeadlineAt: now + RETICULUM_CANDIDATE_PROOF_WINDOW_MS,
       failureCount: existing?.failureCount ?? 0,
+      source,
       ...(existing?.lastFailureReason
         ? { lastFailureReason: existing.lastFailureReason }
         : {}),
@@ -1089,6 +1102,7 @@ export class PresenceManager extends EventEmitter {
         lastSeenAt: now,
         proofDeadlineAt: now + RETICULUM_CANDIDATE_PROOF_WINDOW_MS,
         failureCount: 1,
+        source: 'failure',
         lastFailureReason: reason,
       });
       this.emit('reticulum-candidate-failed', {
@@ -1394,6 +1408,15 @@ export class PresenceManager extends EventEmitter {
       lastSeen: now,
     });
     this.emitReticulumOverlayChanged();
+  }
+
+  private shouldPromoteReticulumOverlayRoute(
+    route: Extract<PresenceRoute, { kind: 'reticulum' }>
+  ): boolean {
+    const destinationHash = route.destinationHash.trim().toLowerCase();
+    const viaHash = route.viaDestinationHash?.trim().toLowerCase();
+    if (!viaHash || viaHash === destinationHash) return true;
+    return this.reticulumCandidates.get(destinationHash)?.source === 'announce';
   }
 
   private pruneReticulumOverlayState(now: number = Date.now()): void {

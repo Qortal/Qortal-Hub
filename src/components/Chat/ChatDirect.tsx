@@ -13,8 +13,13 @@ import CircularProgress from '@mui/material/CircularProgress';
 import {
   Avatar,
   Box,
+  Button,
   ButtonBase,
   ClickAwayListener,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputAdornment,
   List,
@@ -37,6 +42,7 @@ import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
 import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SendIcon from '@mui/icons-material/Send';
+import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { getNameInfo } from '../Group/Group';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
@@ -73,6 +79,85 @@ import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import { useIsOnline } from '../../hooks/usePresence';
 
 const uid = new ShortUniqueId({ length: 5 });
+const QCHAT_FILE_DEFAULT_EXPIRY_HOURS = 2;
+const QCHAT_FILE_COMPLETED_CACHE_KEY = 'qchat-dm-file-transfer-completed-v1';
+const QCHAT_FILE_COMPLETED_CACHE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+const loadQchatCompletedTransfers = (address?: string) => {
+  if (!address || typeof window === 'undefined') return {};
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(QCHAT_FILE_COMPLETED_CACHE_KEY) || '{}'
+    );
+    const scoped = parsed?.[address] || {};
+    const now = Date.now();
+    const entries = Object.entries(scoped)
+      .filter(([, value]: any) => {
+        const expiresAt = Number(value?.expiresAt || 0);
+        const completedAt = Number(value?.completedAt || 0);
+        if (expiresAt) return expiresAt + QCHAT_FILE_COMPLETED_CACHE_GRACE_MS > now;
+        return !completedAt || completedAt + QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS > now;
+      })
+      .slice(-5000);
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
+};
+
+const saveQchatCompletedTransfers = (address: string, records: Record<string, any>) => {
+  if (!address || typeof window === 'undefined') return;
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(QCHAT_FILE_COMPLETED_CACHE_KEY) || '{}'
+    );
+    parsed[address] = records;
+    window.localStorage.setItem(
+      QCHAT_FILE_COMPLETED_CACHE_KEY,
+      JSON.stringify(parsed)
+    );
+  } catch {
+    // Ignore storage failures; transfer state still works for the current session.
+  }
+};
+
+const getQchatFileTransferData = (message: any) => {
+  if (message?.decryptedData?.type === 'qchat-dm-file-transfer') {
+    return { ...(message.decryptedData || {}), ...(message.decryptedData.data || {}) };
+  }
+  if (message?.decryptedData?.data?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData.data || {}),
+      ...(message.decryptedData.data.data || {}),
+    };
+  }
+  if (message?.type === 'qchat-dm-file-transfer') {
+    return { ...(message || {}), ...(message.data || {}) };
+  }
+  return null;
+};
+
+const buildQchatFileLinkAuthSignedFields = (payload: {
+  transferId: string;
+  senderAddress: string;
+  downloaderAddress: string;
+  downloaderPublicKey: string;
+  downloaderReticulumDestinationHash: string;
+  downloaderReticulumIdentityPublicKeyBase64: string;
+  timestamp: number;
+}) => ({
+  type: 'QCHAT_FILE_LINK_AUTH',
+  transferId: payload.transferId,
+  senderAddress: payload.senderAddress,
+  downloaderAddress: payload.downloaderAddress,
+  downloaderPublicKey: payload.downloaderPublicKey,
+  downloaderReticulumDestinationHash:
+    payload.downloaderReticulumDestinationHash,
+  downloaderReticulumIdentityPublicKeyBase64:
+    payload.downloaderReticulumIdentityPublicKeyBase64,
+  timestamp: payload.timestamp,
+});
 
 export const ChatDirect = ({
   myAddress,
@@ -133,6 +218,24 @@ export const ChatDirect = ({
     [userInfo?.publicKey]
   );
 
+  const signQchatFileFields = useCallback(
+    async (fields: Record<string, unknown>) => {
+      const res = await (window as any).sendMessage(
+        'signPresenceMessage',
+        fields,
+        10_000
+      );
+      if (!res?.signature || !userInfo?.publicKey) {
+        throw new Error('Unable to sign file transfer message');
+      }
+      return {
+        signature: res.signature,
+        publicKey: userInfo.publicKey,
+      };
+    },
+    [userInfo?.publicKey]
+  );
+
   const handleStartDirectVoiceCall = useCallback(() => {
     if (
       !directVoiceChatId ||
@@ -159,7 +262,7 @@ export const ChatDirect = ({
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
-  }, []);
+  }, [myAddress]);
   const { t } = useTranslation([
     'auth',
     'core',
@@ -192,10 +295,26 @@ export const ChatDirect = ({
   const [messageSize, setMessageSize] = useState(0);
   const groupSocketTimeoutRef = useRef(null);
   const [replyMessage, setReplyMessage] = useState(null);
+  const [qchatFileTransferStates, setQchatFileTransferStates] = useState({});
+  const [qchatCompletedTransfers, setQchatCompletedTransfers] = useState({});
+  const [pendingQchatFileOffer, setPendingQchatFileOffer] = useState(null);
+  const [qchatFileExpiryHours, setQchatFileExpiryHours] = useState(
+    QCHAT_FILE_DEFAULT_EXPIRY_HOURS
+  );
+  const outgoingQchatFileTransfersRef = useRef(new Map());
+  const qchatAcceptedOfferMetaRef = useRef(new Map());
+  const qchatTerminalTransferIdsRef = useRef(new Set<string>());
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
   const publicKeyOfRecipientRef = useRef(null);
+
+  useEffect(() => {
+    const records = loadQchatCompletedTransfers(myAddress);
+    setQchatCompletedTransfers(records);
+    qchatTerminalTransferIdsRef.current = new Set(Object.keys(records));
+    saveQchatCompletedTransfers(myAddress, records);
+  }, [myAddress]);
 
   const handleReaction = useCallback(
     async (reaction, chatMessage, reactionState = true) => {
@@ -887,6 +1006,331 @@ export const ChatDirect = ({
       editorRef.current.chain().focus().clearContent().run();
     }
   };
+
+  const getLocalReticulumIdentityForQchatFile = useCallback(async () => {
+    const api = (window as any).electronAPI;
+    const [hashResult, keyResult] = await Promise.all([
+      api?.reticulumGetLocalDestinationHash?.(),
+      api?.reticulumGetLocalIdentityPublicKeyBase64?.(),
+    ]);
+    const destinationHash = hashResult?.destinationHash;
+    const identityPublicKeyBase64 = keyResult?.publicKeyBase64;
+    if (!destinationHash || !identityPublicKeyBase64) {
+      throw new Error('Reticulum identity is unavailable');
+    }
+    return {
+      destinationHash,
+      identityPublicKeyBase64,
+    };
+  }, []);
+
+  const handleSendQchatFileOffer = useCallback(async () => {
+    try {
+      if (isNewChat || !selectedDirect?.address) return;
+      if (isSending) return;
+      const api = (window as any).electronAPI;
+      if (!api?.qchatFileSelect) {
+        throw new Error('Reticulum file transfer is unavailable');
+      }
+      const selected = await api.qchatFileSelect();
+      if (!selected?.ok || !selected.file) return;
+      setPendingQchatFileOffer(selected.file);
+      setQchatFileExpiryHours(QCHAT_FILE_DEFAULT_EXPIRY_HOURS);
+    } catch (error) {
+      setInfoSnack({
+        type: 'error',
+        message: error?.message || String(error),
+      });
+      setOpenSnack(true);
+    }
+  }, [isNewChat, isSending, selectedDirect?.address]);
+
+  const handleConfirmQchatFileOffer = useCallback(async () => {
+    try {
+      if (isNewChat || !selectedDirect?.address || !pendingQchatFileOffer) return;
+      if (isSending) return;
+      const api = (window as any).electronAPI;
+      if (!api?.qchatFileSend) {
+        throw new Error('Reticulum file transfer is unavailable');
+      }
+      const selectedFile = pendingQchatFileOffer;
+      const reticulumIdentity = await getLocalReticulumIdentityForQchatFile();
+      const transferId = `qft-${Date.now()}-${uid.rnd()}`;
+      const expiryHours = Math.max(
+        0.05,
+        Math.min(168, Number(qchatFileExpiryHours) || QCHAT_FILE_DEFAULT_EXPIRY_HOURS)
+      );
+      const expiresAt = Date.now() + expiryHours * 60 * 60 * 1000;
+      outgoingQchatFileTransfersRef.current.set(transferId, {
+        ...selectedFile,
+        recipientAddress: selectedDirect.address,
+        senderAddress: myAddress,
+        expiresAt,
+      });
+      const otherData = {
+        specialId: transferId,
+        type: 'qchat-dm-file-transfer',
+        status: 'offer',
+        transferId,
+        fileName: selectedFile.name,
+        size: selectedFile.size,
+        sha256: selectedFile.sha256,
+        expiresAt,
+        senderAddress: myAddress,
+        recipientAddress: selectedDirect.address,
+        senderReticulumDestinationHash: reticulumIdentity.destinationHash,
+        senderReticulumIdentityPublicKeyBase64:
+          reticulumIdentity.identityPublicKeyBase64,
+        data: {
+          status: 'offer',
+          transferId,
+          fileName: selectedFile.name,
+          size: selectedFile.size,
+          sha256: selectedFile.sha256,
+          expiresAt,
+          senderAddress: myAddress,
+          recipientAddress: selectedDirect.address,
+          senderReticulumDestinationHash: reticulumIdentity.destinationHash,
+          senderReticulumIdentityPublicKeyBase64:
+            reticulumIdentity.identityPublicKeyBase64,
+        },
+      };
+      const sendMessageFunc = async () => {
+        const registered = await api.qchatFileSend({
+          transferId,
+          senderAddress: myAddress,
+          allowedRecipientAddress: selectedDirect.address,
+          recipientAddress: selectedDirect.address,
+          filePath: selectedFile.path,
+          fileName: selectedFile.name,
+          size: selectedFile.size,
+          sha256: selectedFile.sha256,
+          expiresAt,
+        });
+        if (!registered?.ok) {
+          throw new Error(
+            registered?.error || 'Unable to register file transfer'
+          );
+        }
+        const sent = await sendChatDirect(
+          { messageText: '', otherData },
+          selectedDirect.address,
+          publicKeyOfRecipient,
+          false
+        );
+        return sent;
+      };
+      addToQueue(
+        sendMessageFunc,
+        {
+          message: {
+            timestamp: Date.now(),
+            senderName: myName,
+            sender: myAddress,
+            ...otherData,
+          },
+        },
+        'chat-direct',
+        selectedDirect.address
+      );
+      setPendingQchatFileOffer(null);
+    } catch (error) {
+      setInfoSnack({
+        type: 'error',
+        message: error?.message || String(error),
+      });
+      setOpenSnack(true);
+    }
+  }, [
+    addToQueue,
+    getLocalReticulumIdentityForQchatFile,
+    isNewChat,
+    isSending,
+    myAddress,
+    myName,
+    pendingQchatFileOffer,
+    publicKeyOfRecipient,
+    qchatFileExpiryHours,
+    selectedDirect?.address,
+  ]);
+
+  const handleAcceptQchatFileTransfer = useCallback(
+    async (message) => {
+      try {
+        const data = getQchatFileTransferData(message);
+        if (!data?.transferId || !message?.sender) return;
+        if (qchatCompletedTransfers[data.transferId]) {
+          throw new Error('This file has already been downloaded');
+        }
+        if (Number(data.expiresAt || 0) > 0 && Number(data.expiresAt) <= Date.now()) {
+          throw new Error('This file transfer offer has expired');
+        }
+        const senderAddress = data.senderAddress || message.sender;
+        if (senderAddress !== message.sender) {
+          throw new Error('File offer sender mismatch');
+        }
+        if (data.recipientAddress && data.recipientAddress !== myAddress) {
+          throw new Error('File offer is not addressed to this account');
+        }
+        const api = (window as any).electronAPI;
+        if (!api?.qchatFileChooseSavePath || !api?.qchatFileAccept) {
+          throw new Error('Reticulum file transfer is unavailable');
+        }
+        const save = await api.qchatFileChooseSavePath(
+          data.fileName || 'received-file'
+        );
+        if (!save?.ok || !save.path) return;
+        const reticulumIdentity = await getLocalReticulumIdentityForQchatFile();
+        const authTimestamp = Date.now();
+        const downloaderPublicKey = userInfo?.publicKey || '';
+        if (!downloaderPublicKey) {
+          throw new Error('Missing local Qortal public key');
+        }
+        const authSignedFields = buildQchatFileLinkAuthSignedFields({
+          transferId: data.transferId,
+          senderAddress,
+          downloaderAddress: myAddress,
+          downloaderPublicKey,
+          downloaderReticulumDestinationHash: reticulumIdentity.destinationHash,
+          downloaderReticulumIdentityPublicKeyBase64:
+            reticulumIdentity.identityPublicKeyBase64,
+          timestamp: authTimestamp,
+        });
+        const authSigned = await signQchatFileFields(authSignedFields);
+        const authMessage = {
+          ...authSignedFields,
+          signature: authSigned.signature,
+        };
+        const accepted = await api.qchatFileAccept({
+          transferId: data.transferId,
+          senderAddress,
+          recipientAddress: myAddress,
+          authMessage,
+          senderReticulumDestinationHash: data.senderReticulumDestinationHash,
+          senderReticulumIdentityPublicKeyBase64:
+            data.senderReticulumIdentityPublicKeyBase64,
+          savePath: save.path,
+          fileName: data.fileName || 'received-file',
+          size: Number(data.size || 0),
+          sha256: data.sha256,
+        });
+        if (!accepted?.ok) {
+          throw new Error(accepted?.error || 'Unable to accept file transfer');
+        }
+        qchatAcceptedOfferMetaRef.current.set(data.transferId, {
+          expiresAt: Number(data.expiresAt || 0),
+        });
+      } catch (error) {
+        setInfoSnack({
+          type: 'error',
+          message: error?.message || String(error),
+        });
+        setOpenSnack(true);
+      }
+    },
+    [
+      getLocalReticulumIdentityForQchatFile,
+      myAddress,
+      qchatCompletedTransfers,
+      signQchatFileFields,
+      userInfo?.publicKey,
+    ]
+  );
+
+  useEffect(() => {
+    const unsubscribe = (window as any).electronAPI?.onQchatFileTransferEvent?.(
+      (payload) => {
+        if (!payload?.status || !payload?.transferId) return;
+        const incomingFailure =
+          payload.status === 'failed' || payload.status === 'rejected';
+        if (
+          incomingFailure &&
+          qchatTerminalTransferIdsRef.current.has(payload.transferId)
+        ) {
+          return;
+        }
+        if (payload.status === 'sent' || payload.status === 'received') {
+          qchatTerminalTransferIdsRef.current.add(payload.transferId);
+        }
+        setQchatFileTransferStates((prev) => {
+          const current = prev[payload.transferId] || {};
+          const currentDone =
+            current.status === 'sent' || current.status === 'received';
+          if (currentDone && incomingFailure) {
+            return prev;
+          }
+          const currentHasTransferProgress =
+            (current.status === 'receiving' || current.status === 'sending') &&
+            typeof current.progress === 'number';
+          const incomingLinkSetup =
+            payload.status === 'accepted' ||
+            payload.status === 'connecting' ||
+            payload.status === 'retrying' ||
+            payload.status === 'link_established' ||
+            payload.status === 'auth_sent' ||
+            payload.status === 'auth' ||
+            payload.status === 'authorized';
+          const nextPayload =
+            currentHasTransferProgress && incomingLinkSetup
+              ? {
+                  ...payload,
+                  status: current.status,
+                  progress: current.progress,
+                }
+              : payload;
+          return {
+            ...prev,
+            [payload.transferId]: {
+              ...current,
+              ...nextPayload,
+              updatedAt: Date.now(),
+            },
+          };
+        });
+        if (payload.status === 'sent' || payload.status === 'received') {
+          if (payload.status === 'received') {
+            const offerMeta = qchatAcceptedOfferMetaRef.current.get(
+              payload.transferId
+            );
+            setQchatCompletedTransfers((prev) => {
+              const next = {
+                ...prev,
+                [payload.transferId]: {
+                  transferId: payload.transferId,
+                  fileName: payload.fileName || '',
+                  path: payload.path || '',
+                  sha256: payload.sha256 || '',
+                  expiresAt: Number(offerMeta?.expiresAt || 0),
+                  completedAt: Date.now(),
+                },
+              };
+              saveQchatCompletedTransfers(myAddress, next);
+              return next;
+            });
+            qchatAcceptedOfferMetaRef.current.delete(payload.transferId);
+          }
+          setInfoSnack({
+            type: 'success',
+            message:
+              payload.status === 'sent'
+                ? `Sent ${payload.fileName || 'file'}`
+                : `Received ${payload.fileName || 'file'}`,
+          });
+          setOpenSnack(true);
+        } else if (payload.status === 'failed' || payload.status === 'rejected') {
+          setInfoSnack({
+            type: 'error',
+            message: `File transfer failed: ${payload.reason || 'unknown error'}`,
+          });
+          setOpenSnack(true);
+        }
+      }
+    );
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     if (!editorRef?.current) return;
     const handleUpdate = () => {
@@ -1627,7 +2071,52 @@ export const ChatDirect = ({
         myAddress={myAddress}
         tempMessages={tempMessages}
         tempChatReferences={tempChatReferences}
+        onAcceptQchatFileTransfer={handleAcceptQchatFileTransfer}
+        qchatFileTransferStates={qchatFileTransferStates}
+        qchatCompletedTransfers={qchatCompletedTransfers}
       />
+
+      <Dialog
+        open={!!pendingQchatFileOffer}
+        onClose={() => setPendingQchatFileOffer(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Send file</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'grid', gap: 1.5, pt: 0.5 }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+              {pendingQchatFileOffer?.name || 'Selected file'}
+            </Typography>
+            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+              {Math.max(
+                1,
+                Math.ceil((pendingQchatFileOffer?.size || 0) / 1024)
+              )}{' '}
+              KB
+            </Typography>
+            <TextField
+              label="Expires in hours"
+              type="number"
+              value={qchatFileExpiryHours}
+              onChange={(event) => setQchatFileExpiryHours(event.target.value)}
+              inputProps={{ min: 0.05, max: 168, step: 0.25 }}
+              size="small"
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setPendingQchatFileOffer(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmQchatFileOffer}
+            disabled={isSending}
+          >
+            Send offer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Box
         sx={{
@@ -1744,10 +2233,30 @@ export const ChatDirect = ({
 
         <Box
           sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: '8px',
             flexShrink: 0,
             paddingBottom: '2px',
           }}
         >
+          <Tooltip title="Transfer file with Reticulum">
+            <span>
+              <IconButton
+                onClick={handleSendQchatFileOffer}
+                disabled={isSending || isNewChat || !selectedDirect?.address}
+                sx={{
+                  border: '1px solid',
+                  borderColor: theme.palette.divider,
+                  borderRadius: '8px',
+                  height: 44,
+                  width: 44,
+                }}
+              >
+                <AttachFileRoundedIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
           <CustomButton
             onClick={() => {
               if (isSending) return;

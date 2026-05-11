@@ -40,6 +40,15 @@ function stopStreamSafe(stream: MediaStream | null): void {
   stream.getTracks().forEach((track) => track.stop());
 }
 
+const GCALL_SENDER_MAX_ENCODER_QUEUE_SIZE = 4;
+const GCALL_SENDER_MAX_REALTIME_FRAME_AGE_MS = 180;
+const GCALL_SENDER_ENCODE_TIMING_CACHE_MAX = 256;
+const GCALL_SENDER_ENCODER_RESET_QUEUE_PINNED_MS = 500;
+const GCALL_SENDER_ENCODER_RESET_STALE_DROPS = 8;
+const GCALL_SENDER_ENCODER_RESET_STALE_WINDOW_MS = 2_000;
+const GCALL_SENDER_ENCODER_RESET_MAX_OUTPUT_AGE_MS = 400;
+const GCALL_SENDER_ENCODER_RESET_COOLDOWN_MS = 7_500;
+
 async function ensureAudioContextRunning(ctx: AudioContext): Promise<void> {
   const resumable = ctx as AudioContext & { resume?: () => Promise<void> };
   if (ctx.state === 'running' || typeof resumable.resume !== 'function') return;
@@ -70,8 +79,13 @@ export class GroupCallAudioSenderEngine {
   private keepAliveGain: GainNode | null = null;
   private captureNode: AudioWorkletNode | null = null;
   private encoder: AudioEncoder | null = null;
+  private encoderGeneration = 0;
   private startToken = 0;
-  private activeConfig: Omit<GroupCallAudioSenderEngineConfig, 'onEncodedFrame'> | null =
+  private activeConfig: Omit<
+    GroupCallAudioSenderEngineConfig,
+    'onEncodedFrame'
+  > | null = null;
+  private onEncodedFrame: ((frame: GroupCallAudioSenderFrame) => void) | null =
     null;
   private onVadChanged: ((vad: boolean) => void) | null = null;
   private lastReportedVad = false;
@@ -79,19 +93,42 @@ export class GroupCallAudioSenderEngine {
   private lastEncoderInputPerfMs = 0;
   private capturedFrameCount = 0;
   private encodedFrameCount = 0;
+  private droppedEncoderBackpressureFrames = 0;
+  private droppedStaleEncodedFrames = 0;
+  private encoderResetCount = 0;
+  private lastEncoderResetAtMs = 0;
+  private lastEncoderResetReason: string | null = null;
+  private lastEncoderResetPerfMs = -Infinity;
+  private encoderQueuePressureStartedPerfMs: number | null = null;
+  private encoderPressureActiveMs = 0;
+  private readonly staleEncodedDropPerfMs: number[] = [];
   private encoderErrorCount = 0;
   private lastEncoderError: string | null = null;
   private lastStartAtMs = 0;
   private lastStopAtMs = 0;
   private unsupportedReason: string | null = null;
+  private encodeTimingByTimestampUs = new Map<
+    number,
+    { capturePerfMs: number; encoderInputPerfMs: number; vad: boolean }
+  >();
 
   private resetDiagnosticsCounters(): void {
     this.lastCapturePerfMs = 0;
     this.lastEncoderInputPerfMs = 0;
     this.capturedFrameCount = 0;
     this.encodedFrameCount = 0;
+    this.droppedEncoderBackpressureFrames = 0;
+    this.droppedStaleEncodedFrames = 0;
+    this.encoderResetCount = 0;
+    this.lastEncoderResetAtMs = 0;
+    this.lastEncoderResetReason = null;
+    this.lastEncoderResetPerfMs = -Infinity;
+    this.encoderQueuePressureStartedPerfMs = null;
+    this.encoderPressureActiveMs = 0;
+    this.staleEncodedDropPerfMs.length = 0;
     this.encoderErrorCount = 0;
     this.lastEncoderError = null;
+    this.encodeTimingByTimestampUs.clear();
   }
 
   async startOrUpdate(config: GroupCallAudioSenderEngineConfig): Promise<void> {
@@ -109,9 +146,13 @@ export class GroupCallAudioSenderEngine {
       currentShape.muted === nextShape.muted &&
       currentShape.profile === nextShape.profile;
     if (sameShape && this.audioContext && this.captureNode && this.encoder) {
+      this.onEncodedFrame = config.onEncodedFrame;
       this.onVadChanged = config.onVadChanged ?? null;
       await ensureAudioContextRunning(this.audioContext);
-      this.captureNode.port.postMessage({ type: 'mute', muted: nextShape.muted });
+      this.captureNode.port.postMessage({
+        type: 'mute',
+        muted: nextShape.muted,
+      });
       if (nextShape.muted) this.updateVad(false);
       return;
     }
@@ -129,6 +170,7 @@ export class GroupCallAudioSenderEngine {
     }
     this.activeConfig = nextShape;
     this.unsupportedReason = null;
+    this.onEncodedFrame = config.onEncodedFrame;
     this.onVadChanged = config.onVadChanged ?? null;
     this.resetDiagnosticsCounters();
     this.lastStartAtMs = Date.now();
@@ -152,20 +194,138 @@ export class GroupCallAudioSenderEngine {
     const captureNode = new AudioWorkletNode(ctx, 'capture-processor');
     captureNode.port.postMessage({ type: 'mute', muted: nextShape.muted });
     const tuning = getGroupCallAudioTuning(nextShape.profile);
+    const encoder = this.createEncoder(tuning);
+    captureNode.port.onmessage = (event) => {
+      const capturedAtPerfMs = performance.now();
+      const { frame, vad } = event.data as {
+        frame?: Float32Array;
+        vad?: boolean;
+      };
+      const activeEncoder = this.encoder;
+      if (
+        !(frame instanceof Float32Array) ||
+        !activeEncoder ||
+        activeEncoder.state === 'closed'
+      ) {
+        return;
+      }
+      this.capturedFrameCount++;
+      this.lastCapturePerfMs = capturedAtPerfMs;
+      const queueSize =
+        typeof activeEncoder.encodeQueueSize === 'number'
+          ? activeEncoder.encodeQueueSize
+          : 0;
+      if (queueSize >= GCALL_SENDER_MAX_ENCODER_QUEUE_SIZE) {
+        this.droppedEncoderBackpressureFrames++;
+        if (this.encoderQueuePressureStartedPerfMs === null) {
+          this.encoderQueuePressureStartedPerfMs = capturedAtPerfMs;
+        }
+        this.encoderPressureActiveMs =
+          capturedAtPerfMs - this.encoderQueuePressureStartedPerfMs;
+        if (
+          this.encoderPressureActiveMs >=
+          GCALL_SENDER_ENCODER_RESET_QUEUE_PINNED_MS
+        ) {
+          this.resetEncoderIfAllowed('queue-pinned', capturedAtPerfMs);
+        }
+        return;
+      }
+      this.encoderQueuePressureStartedPerfMs = null;
+      this.encoderPressureActiveMs = 0;
+      const pcm16 = float32ToInt16(frame);
+      const encoderInputPerfMs = performance.now();
+      this.lastEncoderInputPerfMs = encoderInputPerfMs;
+      const timestampUs = Math.trunc(encoderInputPerfMs * 1000);
+      this.encodeTimingByTimestampUs.set(timestampUs, {
+        capturePerfMs: capturedAtPerfMs,
+        encoderInputPerfMs,
+        vad: typeof vad === 'boolean' ? vad : false,
+      });
+      while (
+        this.encodeTimingByTimestampUs.size >
+        GCALL_SENDER_ENCODE_TIMING_CACHE_MAX
+      ) {
+        const oldest = this.encodeTimingByTimestampUs.keys().next().value;
+        if (typeof oldest !== 'number') break;
+        this.encodeTimingByTimestampUs.delete(oldest);
+      }
+      const audioData = new AudioData({
+        format: 's16',
+        sampleRate: OPUS_SAMPLE_RATE,
+        numberOfFrames: OPUS_FRAME_SAMPLES,
+        numberOfChannels: OPUS_CHANNELS,
+        timestamp: timestampUs,
+        data: pcm16,
+      });
+      this.lastVad = typeof vad === 'boolean' ? vad : false;
+      this.updateVad(this.lastVad);
+      activeEncoder.encode(audioData);
+      audioData.close();
+    };
+    source.connect(captureNode);
+    source.connect(keepAliveGain);
+    keepAliveGain.connect(ctx.destination);
+    await applyCallAudioOutput(nextShape.outputDeviceId, { audioContext: ctx });
+    await ensureAudioContextRunning(ctx);
+    this.audioContext = ctx;
+    this.micStream = stream;
+    this.micSource = source;
+    this.keepAliveGain = keepAliveGain;
+    this.captureNode = captureNode;
+    this.encoder = encoder;
+  }
+
+  private lastVad = false;
+
+  private createEncoder(
+    tuning: ReturnType<typeof getGroupCallAudioTuning>
+  ): AudioEncoder {
+    const generation = ++this.encoderGeneration;
     const encoder = new AudioEncoder({
       output: (chunk) => {
+        if (generation !== this.encoderGeneration || this.encoder !== encoder) {
+          return;
+        }
+        const encodeOutPerfMs = performance.now();
+        const chunkTimestampUs =
+          typeof chunk.timestamp === 'number' ? chunk.timestamp : null;
+        const timing =
+          chunkTimestampUs !== null
+            ? this.encodeTimingByTimestampUs.get(chunkTimestampUs)
+            : undefined;
+        if (chunkTimestampUs !== null) {
+          this.encodeTimingByTimestampUs.delete(chunkTimestampUs);
+        }
+        const capturePerfMs = timing?.capturePerfMs ?? this.lastCapturePerfMs;
+        const encoderInputPerfMs =
+          timing?.encoderInputPerfMs ?? this.lastEncoderInputPerfMs;
+        const outputAgeMs = encodeOutPerfMs - capturePerfMs;
+        if (outputAgeMs > GCALL_SENDER_MAX_REALTIME_FRAME_AGE_MS) {
+          this.droppedStaleEncodedFrames++;
+          this.noteStaleEncodedDrop(encodeOutPerfMs);
+          if (outputAgeMs > GCALL_SENDER_ENCODER_RESET_MAX_OUTPUT_AGE_MS) {
+            this.resetEncoderIfAllowed('encoded-output-age', encodeOutPerfMs);
+          } else if (
+            this.staleEncodedDropPerfMs.length >=
+            GCALL_SENDER_ENCODER_RESET_STALE_DROPS
+          ) {
+            this.resetEncoderIfAllowed('stale-output-drops', encodeOutPerfMs);
+          }
+          return;
+        }
         const frame = new Uint8Array(chunk.byteLength);
         chunk.copyTo(frame);
         this.encodedFrameCount++;
-        config.onEncodedFrame({
+        this.onEncodedFrame?.({
           opusFrame: frame,
-          vad: this.lastVad,
-          capturePerfMs: this.lastCapturePerfMs,
-          encoderInputPerfMs: this.lastEncoderInputPerfMs,
-          encodeOutPerfMs: performance.now(),
+          vad: timing?.vad ?? this.lastVad,
+          capturePerfMs,
+          encoderInputPerfMs,
+          encodeOutPerfMs,
         });
       },
       error: (error) => {
+        if (generation !== this.encoderGeneration) return;
         this.encoderErrorCount++;
         this.lastEncoderError =
           error instanceof Error ? error.message : String(error);
@@ -186,45 +346,49 @@ export class GroupCallAudioSenderEngine {
         usedtx: false,
       },
     } as unknown as AudioEncoderConfig);
-    captureNode.port.onmessage = (event) => {
-      const capturedAtPerfMs = performance.now();
-      const { frame, vad } = event.data as {
-        frame?: Float32Array;
-        vad?: boolean;
-      };
-      if (!(frame instanceof Float32Array) || encoder.state === 'closed') return;
-      this.capturedFrameCount++;
-      this.lastCapturePerfMs = capturedAtPerfMs;
-      const pcm16 = float32ToInt16(frame);
-      const encoderInputPerfMs = performance.now();
-      this.lastEncoderInputPerfMs = encoderInputPerfMs;
-      const audioData = new AudioData({
-        format: 's16',
-        sampleRate: OPUS_SAMPLE_RATE,
-        numberOfFrames: OPUS_FRAME_SAMPLES,
-        numberOfChannels: OPUS_CHANNELS,
-        timestamp: encoderInputPerfMs * 1000,
-        data: pcm16,
-      });
-      this.lastVad = typeof vad === 'boolean' ? vad : false;
-      this.updateVad(this.lastVad);
-      encoder.encode(audioData);
-      audioData.close();
-    };
-    source.connect(captureNode);
-    source.connect(keepAliveGain);
-    keepAliveGain.connect(ctx.destination);
-    await applyCallAudioOutput(nextShape.outputDeviceId, { audioContext: ctx });
-    await ensureAudioContextRunning(ctx);
-    this.audioContext = ctx;
-    this.micStream = stream;
-    this.micSource = source;
-    this.keepAliveGain = keepAliveGain;
-    this.captureNode = captureNode;
-    this.encoder = encoder;
+    return encoder;
   }
 
-  private lastVad = false;
+  private noteStaleEncodedDrop(nowPerfMs: number): void {
+    this.staleEncodedDropPerfMs.push(nowPerfMs);
+    const oldestAllowed =
+      nowPerfMs - GCALL_SENDER_ENCODER_RESET_STALE_WINDOW_MS;
+    while (
+      this.staleEncodedDropPerfMs.length > 0 &&
+      this.staleEncodedDropPerfMs[0]! < oldestAllowed
+    ) {
+      this.staleEncodedDropPerfMs.shift();
+    }
+  }
+
+  private resetEncoderIfAllowed(reason: string, nowPerfMs: number): boolean {
+    if (
+      nowPerfMs - this.lastEncoderResetPerfMs <
+      GCALL_SENDER_ENCODER_RESET_COOLDOWN_MS
+    ) {
+      return false;
+    }
+    const current = this.encoder;
+    const config = this.activeConfig;
+    if (!current || current.state === 'closed' || !config) return false;
+    this.lastEncoderResetPerfMs = nowPerfMs;
+    this.encoderResetCount++;
+    this.lastEncoderResetAtMs = Date.now();
+    this.lastEncoderResetReason = reason;
+    this.encoderQueuePressureStartedPerfMs = null;
+    this.encoderPressureActiveMs = 0;
+    this.staleEncodedDropPerfMs.length = 0;
+    this.encodeTimingByTimestampUs.clear();
+    this.encoderGeneration++;
+    this.encoder = null;
+    try {
+      current.close();
+    } catch {
+      /* ignore */
+    }
+    this.encoder = this.createEncoder(getGroupCallAudioTuning(config.profile));
+    return true;
+  }
 
   getVad(): boolean {
     return this.lastVad;
@@ -247,6 +411,17 @@ export class GroupCallAudioSenderEngine {
       lastVad: this.lastVad,
       capturedFrameCount: this.capturedFrameCount,
       encodedFrameCount: this.encodedFrameCount,
+      droppedEncoderBackpressureFrames: this.droppedEncoderBackpressureFrames,
+      droppedStaleEncodedFrames: this.droppedStaleEncodedFrames,
+      encoderResetCount: this.encoderResetCount,
+      lastEncoderResetAtMs: this.lastEncoderResetAtMs,
+      lastEncoderResetReason: this.lastEncoderResetReason,
+      encoderPressureActiveMs: this.encoderPressureActiveMs,
+      staleEncodedDropsInWindow: this.staleEncodedDropPerfMs.length,
+      encoderQueueSize:
+        typeof this.encoder?.encodeQueueSize === 'number'
+          ? this.encoder.encodeQueueSize
+          : null,
       lastCapturePerfMs: this.lastCapturePerfMs,
       lastEncoderInputPerfMs: this.lastEncoderInputPerfMs,
       encoderErrorCount: this.encoderErrorCount,
@@ -273,6 +448,7 @@ export class GroupCallAudioSenderEngine {
 
   async stop(): Promise<void> {
     this.startToken += 1;
+    this.encoderGeneration += 1;
     const captureNode = this.captureNode;
     const keepAliveGain = this.keepAliveGain;
     const micSource = this.micSource;
@@ -288,7 +464,12 @@ export class GroupCallAudioSenderEngine {
     this.lastVad = false;
     this.lastStopAtMs = Date.now();
     this.updateVad(false);
+    this.onEncodedFrame = null;
     this.onVadChanged = null;
+    this.encoderQueuePressureStartedPerfMs = null;
+    this.encoderPressureActiveMs = 0;
+    this.staleEncodedDropPerfMs.length = 0;
+    this.encodeTimingByTimestampUs.clear();
     if (captureNode) {
       captureNode.port.onmessage = null;
     }

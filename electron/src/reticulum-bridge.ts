@@ -58,6 +58,10 @@ type BridgeCmdFrame = {
     | 'overlay_note_candidate_failure'
     | 'stop'
     | 'send_call'
+    | 'accept_qchat_file_resource'
+    | 'send_qchat_file_resource'
+    | 'authorize_qchat_file_resource'
+    | 'reject_qchat_file_resource'
     | 'fanout_call'
     | 'send_group_call'
     | 'fanout_group_call'
@@ -314,6 +318,11 @@ type BridgeEventFrame =
     }
   | {
       type: 'event';
+      event: 'qchat_file_transfer';
+      payload?: Record<string, unknown>;
+    }
+  | {
+      type: 'event';
       event: 'error';
       payload?: { code?: string; message?: string; detail?: string };
     }
@@ -560,6 +569,7 @@ export class ReticulumBridge
   private pending = new Map<string, PendingRequest>();
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private statePromise: Promise<void> | null = null;
+  private launchConfigDir: string | null = null;
   private lastHeartbeatSentAt = 0;
   private lastHeartbeatSemanticKey: string | null = null;
   private lastSemanticPresence = new Map<string, number>();
@@ -611,14 +621,33 @@ export class ReticulumBridge
 
   async start(): Promise<void> {
     this.desiredRunning = true;
+    const configDir = getReticulumConfigDir();
+    if (
+      this.launchConfigDir &&
+      this.launchConfigDir !== configDir &&
+      this.state !== 'stopped'
+    ) {
+      loggerWarn(
+        `[ReticulumBridge] Config changed from ${this.launchConfigDir} to ${configDir}; restarting bridge for current app instance`
+      );
+      const previousStart = this.statePromise;
+      this.stop();
+      if (previousStart) {
+        try {
+          await previousStart;
+        } catch {
+          /* expected when stopping a bridge started with the wrong config */
+        }
+      }
+      this.desiredRunning = true;
+    }
     if (this.state === 'ready') return;
     if (this.statePromise) return this.statePromise;
 
-    loggerLog(
-      `[ReticulumBridge] Starting bridge for config=${getReticulumConfigDir()}`
-    );
+    loggerLog(`[ReticulumBridge] Starting bridge for config=${configDir}`);
     this.state = 'starting';
-    this.statePromise = this.spawnAndHandshake().finally(() => {
+    this.launchConfigDir = configDir;
+    this.statePromise = this.spawnAndHandshake(configDir).finally(() => {
       this.statePromise = null;
     });
     return this.statePromise;
@@ -666,6 +695,7 @@ export class ReticulumBridge
       child.kill();
     }
     this.localPresenceDestinationHash = undefined;
+    this.launchConfigDir = null;
   }
 
   /**
@@ -688,6 +718,46 @@ export class ReticulumBridge
       peerPresenceHash,
       message,
     });
+  }
+
+  async acceptQchatFileResource(payload: {
+    peerPresenceHash: string;
+    reticulumIdentityPublicKeyBase64: string;
+    authMessage: Record<string, unknown>;
+    transferId: string;
+    savePath: string;
+    fileName: string;
+    size: number;
+    sha256?: string;
+  }): Promise<ReticulumSendResult> {
+    return this.sendDetailed('accept_qchat_file_resource', payload);
+  }
+
+  async sendQchatFileResource(payload: {
+    allowedRecipientAddress: string;
+    transferId: string;
+    filePath: string;
+    fileName: string;
+    size: number;
+    sha256?: string;
+    expiresAt?: number;
+  }): Promise<ReticulumSendResult> {
+    return this.sendDetailed('send_qchat_file_resource', payload);
+  }
+
+  async authorizeQchatFileResource(payload: {
+    linkId: string;
+    transferId: string;
+  }): Promise<ReticulumSendResult> {
+    return this.sendDetailed('authorize_qchat_file_resource', payload);
+  }
+
+  async rejectQchatFileResource(payload: {
+    linkId: string;
+    transferId: string;
+    reason: string;
+  }): Promise<ReticulumSendResult> {
+    return this.sendDetailed('reject_qchat_file_resource', payload);
   }
 
   async fanoutCallDetailed(
@@ -1144,10 +1214,14 @@ export class ReticulumBridge
       `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}`
     );
     const pm = getPresenceManager();
+    const activeOverlayNeighborHashes =
+      pm?.getReticulumActiveNeighborHashes() ?? [];
     const overlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes() ??
-      pm?.getReticulumFanoutDestinationHashes() ??
-      [];
+      activeOverlayNeighborHashes.length > 0
+        ? activeOverlayNeighborHashes
+        : (pm?.getReticulumVerifiedNeighborHashes() ??
+          pm?.getReticulumFanoutDestinationHashes() ??
+          []);
     const resp = await this.sendCommand('publish_presence', {
       envelope,
       overlayNeighborHashes,
@@ -1255,7 +1329,7 @@ export class ReticulumBridge
         continue;
       }
       const cur = byPeer.get(k);
-      if (!cur || snap.connectedAt >= cur.connectedAt) {
+      if (!cur || snap.connectedAt < cur.connectedAt) {
         byPeer.set(k, snap);
       }
     }
@@ -1352,8 +1426,7 @@ export class ReticulumBridge
     }
   }
 
-  private async spawnAndHandshake(): Promise<void> {
-    const configDir = getReticulumConfigDir();
+  private async spawnAndHandshake(configDir: string): Promise<void> {
     const launch = resolveBridgeLaunch(configDir);
     if ('error' in launch) {
       this.transitionToDegraded(launch.error);
@@ -1396,10 +1469,14 @@ export class ReticulumBridge
     }
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => this.handleStdout(chunk));
+    child.stdout.on('data', (chunk: string) => {
+      if (this.child !== child) return;
+      this.handleStdout(chunk);
+    });
     const audioIn = child.stdio[4];
     if (audioIn && typeof (audioIn as NodeJS.ReadableStream).on === 'function') {
       (audioIn as NodeJS.ReadableStream).on('data', (chunk: Buffer | string) => {
+        if (this.child !== child) return;
         const buf = Buffer.isBuffer(chunk)
           ? chunk
           : Buffer.from(chunk as string, 'binary');
@@ -1417,18 +1494,22 @@ export class ReticulumBridge
       );
     }
     child.stderr.on('data', (chunk: string) => {
+      if (this.child !== child) return;
       const text = chunk.trim();
       if (text) loggerLog(`[ReticulumBridge/stderr] ${text}`);
     });
     child.stdin.on('drain', () => {
+      if (this.child !== child) return;
       this.waitingForDrain = false;
       this.flushWriteQueue();
     });
     child.on('error', (err) => {
+      if (this.child !== child) return;
       loggerError('[ReticulumBridge] Child process error:', err);
       this.transitionToDegraded(String(err));
     });
     child.on('exit', (code, signal) => {
+      if (this.child !== child) return;
       loggerWarn(
         `[ReticulumBridge] Child exited code=${code} signal=${signal ?? ''}`
       );
@@ -2097,6 +2178,10 @@ export class ReticulumBridge
         });
         return;
       }
+      case 'qchat_file_transfer': {
+        this.emit('qchat-file-transfer', frame.payload ?? {});
+        return;
+      }
       case 'error': {
         const message =
           frame.payload?.message ??
@@ -2226,6 +2311,10 @@ export class ReticulumBridge
   private async sendDetailed(
     action:
       | 'send_call'
+      | 'accept_qchat_file_resource'
+      | 'send_qchat_file_resource'
+      | 'authorize_qchat_file_resource'
+      | 'reject_qchat_file_resource'
       | 'fanout_call'
       | 'send_group_call'
       | 'fanout_group_call'

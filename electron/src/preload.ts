@@ -373,6 +373,64 @@ try {
       ) as Promise<{
         publicKeyBase64: string | null;
       }>,
+    qchatFileSelect: () =>
+      ipcRenderer.invoke('reticulum:qchatFileSelect') as Promise<{
+        ok: boolean;
+        canceled?: boolean;
+        error?: string;
+        file?: { path: string; name: string; size: number; sha256: string };
+      }>,
+    qchatFileChooseSavePath: (fileName: string) =>
+      ipcRenderer.invoke(
+        'reticulum:qchatFileChooseSavePath',
+        fileName
+      ) as Promise<{
+        ok: boolean;
+        canceled?: boolean;
+        error?: string;
+        path?: string;
+      }>,
+    qchatFileAccept: (payload: {
+      transferId: string;
+      senderAddress: string;
+      recipientAddress?: string;
+      authMessage?: Record<string, unknown>;
+      senderReticulumDestinationHash?: string;
+      senderReticulumIdentityPublicKeyBase64?: string;
+      savePath: string;
+      fileName: string;
+      size: number;
+      sha256?: string;
+    }) =>
+      ipcRenderer.invoke('reticulum:qchatFileAccept', payload) as Promise<{
+        ok: boolean;
+        error?: string;
+      }>,
+    qchatFileSend: (payload: {
+      transferId: string;
+      senderAddress?: string;
+      allowedRecipientAddress?: string;
+      recipientAddress: string;
+      filePath: string;
+      fileName: string;
+      size: number;
+      sha256?: string;
+      expiresAt?: number;
+    }) =>
+      ipcRenderer.invoke('reticulum:qchatFileSend', payload) as Promise<{
+        ok: boolean;
+        error?: string;
+      }>,
+    onQchatFileTransferEvent: (cb: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
+        cb(payload);
+      ipcRenderer.on('reticulum:qchatFileTransferEvent', listener);
+      return () =>
+        ipcRenderer.removeListener(
+          'reticulum:qchatFileTransferEvent',
+          listener
+        );
+    },
     ...(isAudioSurfaceWindow
       ? {
           /**
