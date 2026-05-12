@@ -8376,15 +8376,42 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private shouldAcceptStaleReticulumLinkAuthJoin(
-    env: GcJoinEnvelope
+    env: GcJoinEnvelope,
+    payload?: {
+      peerPresenceHash?: string;
+      peerDestinationHash?: string;
+    }
   ): boolean {
     const room = this.rooms.get(env.roomId);
     const participant = room?.participants.get(env.fromAddress);
+    const incomingHash = env.reticulumDestinationHash.trim().toLowerCase();
+    if (
+      payload &&
+      incomingHash &&
+      (payload.peerPresenceHash?.trim().toLowerCase() === incomingHash ||
+        payload.peerDestinationHash?.trim().toLowerCase() === incomingHash)
+    ) {
+      return true;
+    }
     if (!participant) return false;
     if (participant.publicKey !== env.fromPublicKey) return false;
-    const incomingHash = env.reticulumDestinationHash.trim().toLowerCase();
     const knownHash = participant.reticulumDestinationHash.trim().toLowerCase();
     return Boolean(incomingHash && incomingHash === knownHash);
+  }
+
+  private isReticulumLinkAuthJoinBoundToLink(
+    env: GcJoinEnvelope,
+    job: Pick<
+      Extract<GcVerifyPending, { kind: 'link_auth_join' }>,
+      'peerDestinationHash' | 'peerPresenceHash'
+    >
+  ): boolean {
+    const signedHash = env.reticulumDestinationHash.trim().toLowerCase();
+    if (!signedHash) return false;
+    return (
+      job.peerPresenceHash.trim().toLowerCase() === signedHash ||
+      job.peerDestinationHash.trim().toLowerCase() === signedHash
+    );
   }
 
   private handleReticulumLinkAuthJoinWire(
@@ -8414,7 +8441,8 @@ export class GroupCallManager extends EventEmitter {
     const preRej = gcJoinTimestampRejectReason(env.timestamp, Date.now());
     if (
       preRej === 'future' ||
-      (preRej === 'expired' && !this.shouldAcceptStaleReticulumLinkAuthJoin(env))
+      (preRej === 'expired' &&
+        !this.shouldAcceptStaleReticulumLinkAuthJoin(env, payload))
     ) {
       this.closeReticulumAudioLinkQuietly(
         payload.linkId,
@@ -8453,8 +8481,60 @@ export class GroupCallManager extends EventEmitter {
   ): void {
     const env = job.env;
     const room = this.rooms.get(env.roomId);
-    const participant = room?.participants.get(env.fromAddress);
-    if (!room || !participant) {
+    let participant = room?.participants.get(env.fromAddress);
+    if (!room) {
+      this.closeReticulumAudioLinkQuietly(job.linkId, 'link-auth-no-participant');
+      return;
+    }
+    if (!participant) {
+      const leftTimestamp = this.getParticipantLeftTimestamp(
+        env.roomId,
+        env.fromAddress
+      );
+      const hasNewerLeave =
+        typeof leftTimestamp === 'number' &&
+        Number.isFinite(leftTimestamp) &&
+        env.timestamp <= leftTimestamp;
+      if (hasNewerLeave || !this.isReticulumLinkAuthJoinBoundToLink(env, job)) {
+        this.closeReticulumAudioLinkQuietly(
+          job.linkId,
+          'link-auth-no-participant'
+        );
+        return;
+      }
+      const signedHash = env.reticulumDestinationHash.trim().toLowerCase();
+      room.participants.set(env.fromAddress, {
+        publicKey: env.fromPublicKey,
+        joinedAt: env.timestamp,
+        reticulumDestinationHash: signedHash,
+        ...(env.reticulumIdentityPublicKeyBase64 &&
+        isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
+          ? {
+              reticulumIdentityPublicKeyBase64:
+                env.reticulumIdentityPublicKeyBase64,
+            }
+          : {}),
+      });
+      participant = room.participants.get(env.fromAddress);
+      this.clearParticipantLeftTombstone(env.roomId, env.fromAddress);
+      this.rememberRetainedVerifiedJoin(env);
+      this.registerPeerIdentityFromJoinWire(env);
+      if (!env.reticulumIdentityPublicKeyBase64) {
+        this.notePendingJoinRkAfterVerifiedGj(env);
+      }
+      this.emit('gcall:participant-joined', {
+        roomId: env.roomId,
+        chatId: room.chatId?.startsWith('direct:') ? room.chatId : env.chatId,
+        address: env.fromAddress,
+        publicKey: env.fromPublicKey,
+        timestamp: env.timestamp,
+        ...(typeof env.joinGeneration === 'number' &&
+        Number.isFinite(env.joinGeneration)
+          ? { joinGeneration: env.joinGeneration }
+          : {}),
+      });
+    }
+    if (!participant) {
       this.closeReticulumAudioLinkQuietly(job.linkId, 'link-auth-no-participant');
       return;
     }
