@@ -106,10 +106,23 @@ export class JitterBuffer {
    * and steady-state pops (i.e. re-armed mid-call), so late-decrypted frames
    * have a chance to land before `lastPlayedSeq` advances past them.
    */
-  setBurstRecoveryExtraHoldFrames(frames: number): void {
+  setBurstRecoveryExtraHoldFrames(frames: number): number {
     if (Number.isFinite(frames)) {
-      this.burstRecoveryExtraHoldFrames = Math.max(0, Math.trunc(frames));
+      const requested = Math.max(0, Math.trunc(frames));
+      const unprimedBaseThreshold = computeJitterReadyThresholdFrames({
+        primed: false,
+        jitterStartBufferSize: this.jitterStartBufferSize,
+        extraHoldFrames: this.extraHoldFrames,
+        steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
+        burstRecoveryExtraHoldFrames: 0,
+      });
+      const maxFeasible = Math.max(
+        0,
+        this.getMaxEntries() - unprimedBaseThreshold
+      );
+      this.burstRecoveryExtraHoldFrames = Math.min(requested, maxFeasible);
     }
+    return this.burstRecoveryExtraHoldFrames;
   }
 
   getBurstRecoveryExtraHoldFrames(): number {
@@ -133,6 +146,7 @@ export class JitterBuffer {
   forcePrimeForRecoveryEscape(holdPrimedMs = 0): void {
     if (this.entries.length <= 0) return;
     this.primed = true;
+    this.burstRecoveryExtraHoldFrames = 0;
     this.emptySinceMs = null;
     if (holdPrimedMs > 0 && Number.isFinite(holdPrimedMs)) {
       this.forcePrimedUntilMs = Math.max(

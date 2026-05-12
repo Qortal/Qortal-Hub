@@ -74,7 +74,7 @@ describe('gcallJitterBuffer', () => {
     expect(jb.pop()).toBe(null);
   });
 
-  it('burst-recovery extra hold defers pops so late-decrypt frames are not dropped as stale', () => {
+  it('burst-recovery extra hold defers pops until recovery escape intentionally releases it', () => {
     const jb = new JitterBuffer();
     jb.setBurstRecoveryExtraHoldFrames(4);
     jb.setSteadyPrimedHoldFrames(1);
@@ -87,28 +87,40 @@ describe('gcallJitterBuffer', () => {
     expect(jb.hasReadyFrame()).toBe(false);
     expect(jb.pop()).toBe(null);
 
-    // Worker catches up with frames 4 and 5; force-prime to approximate the
-    // early-release escape path but the burst hold should still keep pop
-    // deferred while the buffered depth is under the hold threshold.
+    // Worker catches up with frames 4 and 5. A recovery force-prime is an
+    // explicit "play what we have" escape, so it clears the additive burst
+    // hold rather than letting the call remain silent.
     jb.push(4, new Uint8Array([4]));
     jb.push(5, new Uint8Array([5]));
     jb.forcePrimeForRecoveryEscape();
-    expect(jb.hasReadyFrame()).toBe(false);
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(0);
+    expect(jb.hasReadyFrame()).toBe(true);
 
-    // A late-decrypt completion for seq=2 would have been stale without the
-    // hold; with the hold active, pop has not advanced, so the in-order frame
-    // is still eligible to play (the test re-pushes to prove push-after-prime
-    // for a seq we have not yet popped is still `duplicate`, not `stale`).
     expect(jb.push(2, new Uint8Array([2]))).toEqual({
       status: 'duplicate',
       depth: 5,
       trimmed: 0,
     });
 
-    // Once the buffer reaches the burst-hold threshold, pops proceed in order.
-    jb.push(6, new Uint8Array([6]));
-    expect(jb.hasReadyFrame()).toBe(true);
     expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
+  it('caps burst-recovery extra hold so the unprimed threshold remains reachable', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 12,
+      jitterStartBufferSize: 11,
+    });
+
+    expect(jb.getMaxEntries()).toBe(24);
+    expect(jb.setBurstRecoveryExtraHoldFrames(18)).toBe(13);
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(13);
+
+    for (let seq = 1; seq <= 23; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.hasReadyFrame()).toBe(false);
+    jb.push(24, new Uint8Array([24]));
+    expect(jb.hasReadyFrame()).toBe(true);
   });
 
   it('clearing burst-recovery hold restores the normal primed threshold', () => {
@@ -119,10 +131,8 @@ describe('gcallJitterBuffer', () => {
       jb.push(seq, new Uint8Array([seq]));
     }
     jb.forcePrimeForRecoveryEscape();
-    expect(jb.hasReadyFrame()).toBe(false);
-
-    jb.setBurstRecoveryExtraHoldFrames(0);
-    // Primed + steadyPrimedHoldFrames=1 → 2 frames suffice.
+    // Force-prime clears the burst hold; primed + steadyPrimedHoldFrames=1
+    // means 2 frames suffice.
     expect(jb.hasReadyFrame()).toBe(true);
     expect(jb.pop()).toEqual(new Uint8Array([1]));
   });

@@ -388,8 +388,8 @@ export class DmVoiceGcallInboundPlayout {
     );
   }
 
-  setBurstRecoveryExtraHoldFrames(frames: number): void {
-    this.jitter?.setBurstRecoveryExtraHoldFrames(frames);
+  setBurstRecoveryExtraHoldFrames(frames: number): number {
+    return this.jitter?.setBurstRecoveryExtraHoldFrames(frames) ?? 0;
   }
 
   private canUseSharedPcmRing(): boolean {

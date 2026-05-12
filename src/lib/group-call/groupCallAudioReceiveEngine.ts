@@ -2414,18 +2414,23 @@ export class GroupCallAudioReceiveEngine {
               : profile === 'persistent-lean'
                 ? GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_MAX_EXTRA_HOLD_FRAMES
                 : GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES;
-        const extraHoldFrames = Math.max(
+        const requestedExtraHoldFrames = Math.max(
           0,
           Math.min(
             maxExtraHoldFrames,
             desiredBufferedFrames - Math.max(1, state.preProcessBufferedFrames)
           )
         );
+        const appliedExtraHoldFrames = playout.setBurstRecoveryExtraHoldFrames(
+          requestedExtraHoldFrames
+        );
+        const extraHoldFrames = Number.isFinite(appliedExtraHoldFrames)
+          ? appliedExtraHoldFrames
+          : requestedExtraHoldFrames;
         state.lastAppliedTargetMs = targetMs;
         state.lastAppliedFloorMs = floorMs;
         state.lastAppliedTargetBoostMs = targetBoostMs;
         state.lastAppliedExtraHoldFrames = extraHoldFrames;
-        playout.setBurstRecoveryExtraHoldFrames(extraHoldFrames);
         playout.setDynamicTargetPlayoutMs(targetMs);
         continue;
       }
@@ -2617,7 +2622,7 @@ export class GroupCallAudioReceiveEngine {
           Math.max(2, Math.round(targetMs / OPUS_FRAME_DURATION_MS));
       const maxExtraHoldFrames =
         multiSourceReceiveProfileMaxExtraHoldFrames(profile);
-      const extraHoldFrames =
+      const requestedExtraHoldFrames =
         (shouldHold || shouldForceSourcePressureHold) &&
         accumulationTargetFrames !== null
           ? Math.max(
@@ -2629,12 +2634,17 @@ export class GroupCallAudioReceiveEngine {
               )
             )
           : 0;
+      const appliedExtraHoldFrames = playout.setBurstRecoveryExtraHoldFrames(
+        requestedExtraHoldFrames
+      );
+      const extraHoldFrames = Number.isFinite(appliedExtraHoldFrames)
+        ? appliedExtraHoldFrames
+        : requestedExtraHoldFrames;
 
       state.lastAppliedTargetMs = targetMs;
       state.lastAppliedFloorMs = floorMs;
       state.lastAppliedTargetBoostMs = targetBoostMs;
       state.lastAppliedExtraHoldFrames = extraHoldFrames;
-      playout.setBurstRecoveryExtraHoldFrames(extraHoldFrames);
       playout.setDynamicTargetPlayoutMs(targetMs);
     }
   }
