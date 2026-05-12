@@ -1226,6 +1226,18 @@ export class GroupCallAudioEngineRuntime {
     this.demotedRootKeyTransferUntilMs = 0;
   }
 
+  private async markLocalRoomKeyApplied(roomKey: Uint8Array): Promise<void> {
+    if (!this.callSessionId) {
+      this.appliedRoomKeyCommitment = '';
+      return;
+    }
+    this.appliedRoomKeyCommitment = await buildMediaKeyCommitmentHex(
+      roomKey,
+      this.callSessionId,
+      this.mediaSessionGeneration >>> 0
+    );
+  }
+
   private hasFreshLocalKeyAuthority(nowMs = Date.now()): boolean {
     return (
       this.roomKey !== null &&
@@ -2118,7 +2130,10 @@ export class GroupCallAudioEngineRuntime {
     if (previousJoinIdentity === joinIdentity) return;
     this.participantJoinIdentityByAddress.set(address, joinIdentity);
     if (!previousJoinIdentity && !this.receiveEngine.hasSource(address)) return;
-    await this.resetReceiveStateForParticipant(address, 'fresh-participant-join');
+    await this.resetReceiveStateForParticipant(
+      address,
+      'fresh-participant-join'
+    );
   }
 
   private mergeParticipantsFromTopology(
@@ -2913,9 +2928,7 @@ export class GroupCallAudioEngineRuntime {
             payload as { address?: string } | null | undefined
           )?.address;
           if (leavingAddress) {
-            this.participantJoinIdentityByAddress.delete(
-              leavingAddress.trim()
-            );
+            this.participantJoinIdentityByAddress.delete(leavingAddress.trim());
             this.clearTargetedRoomKeyReplayRetriesForAddress(leavingAddress);
             await this.resetReceiveStateForParticipant(
               leavingAddress,
@@ -3459,6 +3472,7 @@ export class GroupCallAudioEngineRuntime {
       this.selfMintedRoomKey = true;
       this.awaitingAuthoritativeKey = false;
       this.markRoomKeyLocallyEnsured();
+      await this.markLocalRoomKeyApplied(roomKey);
       this.resetWorkerDecodeFailureRecoveryState();
       this.clearKeyRecoveryRetryTimer();
       this.callEpochMs = Date.now();
@@ -4133,8 +4147,8 @@ export class GroupCallAudioEngineRuntime {
       currentRoot:
         this.isProvisionalLocalRootActive(nowMs) ||
         shouldReconsiderSelfMintedRootFromLiveEvidence
-        ? null
-        : this.topology?.rootForwarder,
+          ? null
+          : this.topology?.rootForwarder,
       trustedRemoteRoot: this.trustedRemoteRoot,
       trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
       nowMs,
@@ -4335,11 +4349,7 @@ export class GroupCallAudioEngineRuntime {
         this.lastObservedTopologyEpoch ?? 0
       ) + 1;
     const topology = normalizeGroupCallTopology({
-      ...buildTopologyWithTrustedRoot(
-        sorted,
-        topologyEpoch,
-        deterministicRoot
-      ),
+      ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, deterministicRoot),
       roomId,
       lastSeen: nowMs,
     });
@@ -5235,10 +5245,7 @@ export class GroupCallAudioEngineRuntime {
       const previousRoomKey = this.roomKey;
       const hadOwnRoomKey = this.ownsRoomKey && previousRoomKey !== null;
       const adoptingExistingRoomKey =
-        !hadOwnRoomKey &&
-        previousRoomKey !== null &&
-        previousRoot.length > 0 &&
-        previousRoot !== myAddress;
+        !hadOwnRoomKey && previousRoomKey !== null;
       const nextRoomKey =
         hadOwnRoomKey || adoptingExistingRoomKey
           ? previousRoomKey
@@ -5248,6 +5255,7 @@ export class GroupCallAudioEngineRuntime {
       this.selfMintedRoomKey = !adoptingExistingRoomKey;
       this.awaitingAuthoritativeKey = false;
       this.markRoomKeyLocallyEnsured();
+      await this.markLocalRoomKeyApplied(nextRoomKey);
       this.resetWorkerDecodeFailureRecoveryState();
       this.clearKeyRecoveryRetryTimer();
       if (!hadOwnRoomKey && !adoptingExistingRoomKey) {
@@ -6555,6 +6563,7 @@ export class GroupCallAudioEngineRuntime {
         this.selfMintedRoomKey = true;
         this.awaitingAuthoritativeKey = false;
         this.markRoomKeyLocallyEnsured();
+        await this.markLocalRoomKeyApplied(roomKey);
         this.resetWorkerDecodeFailureRecoveryState();
         this.clearKeyRecoveryRetryTimer();
         this.callEpochMs = Date.now();

@@ -1627,18 +1627,52 @@ describe('GroupCallAudioEngineRuntime', () => {
     const runtimeState = runtime as unknown as {
       roomKey: Uint8Array | null;
       ownsRoomKey: boolean;
+      selfMintedRoomKey: boolean;
       awaitingAuthoritativeKey: boolean;
+      appliedRoomKeyCommitment: string;
       diagEvents: Array<{ tag: string }>;
     };
     expect(Array.from(runtimeState.roomKey ?? [])).toEqual(Array.from(roomKey));
     expect(runtimeState.ownsRoomKey).toBe(false);
     expect(runtimeState.awaitingAuthoritativeKey).toBe(false);
+    expect(runtimeState.appliedRoomKeyCommitment).toBe(keyCommitment);
     expect(runtimeState.diagEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           tag: 'room-key-accepted-during-authority-lag',
         }),
         expect.objectContaining({ tag: 'room-key-applied' }),
+      ])
+    );
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 2,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(Array.from(runtimeState.roomKey ?? [])).toEqual(Array.from(roomKey));
+    expect(runtimeState.ownsRoomKey).toBe(true);
+    expect(runtimeState.selfMintedRoomKey).toBe(false);
+    expect(runtimeState.appliedRoomKeyCommitment).toBe(keyCommitment);
+    expect(runtimeState.diagEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'root-authority-ensured-room-key',
+          payload: expect.objectContaining({
+            rotated: false,
+            adoptedExistingRoomKey: true,
+          }),
+        }),
       ])
     );
   });
