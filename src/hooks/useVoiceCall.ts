@@ -1194,7 +1194,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     const source = ctx.createMediaStreamSource(stream);
     micSourceRef.current = source;
     source.connect(captureNode);
-    source.connect(keepAlive);
+    captureNode.connect(keepAlive);
     keepAlive.connect(ctx.destination);
     captureNode.port.postMessage({ type: 'mute', muted: isMutedRef.current });
 

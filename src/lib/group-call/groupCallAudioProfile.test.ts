@@ -98,19 +98,19 @@ describe('gcall jitter burst headroom', () => {
         { jitterBufferSize: 8, jitterStartBufferSize: 7 },
         1
       )
-    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 7 });
+    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 9 });
     expect(
       applyGcallJitterBurstHeadroom(
         { jitterBufferSize: 8, jitterStartBufferSize: 7 },
         2
       )
-    ).toEqual({ jitterBufferSize: 16, jitterStartBufferSize: 7 });
+    ).toEqual({ jitterBufferSize: 16, jitterStartBufferSize: 11 });
     expect(
       applyGcallJitterBurstHeadroom(
         { jitterBufferSize: 12, jitterStartBufferSize: 11 },
         2
       )
-    ).toEqual({ jitterBufferSize: 20, jitterStartBufferSize: 11 });
+    ).toEqual({ jitterBufferSize: 20, jitterStartBufferSize: 15 });
   });
 
   it('arms burst headroom on direct trim pressure', () => {

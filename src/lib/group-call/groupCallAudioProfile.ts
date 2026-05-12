@@ -122,9 +122,11 @@ export function applyGcallJitterBurstHeadroom(
   level: GcallJitterBurstHeadroomLevel
 ): { jitterBufferSize: number; jitterStartBufferSize: number } {
   if (level <= 0) return tuning;
+  const jitterStartBufferSize =
+    tuning.jitterStartBufferSize + (level >= 2 ? 4 : 2);
   return {
     jitterBufferSize: tuning.jitterBufferSize + (level >= 2 ? 8 : 4),
-    jitterStartBufferSize: tuning.jitterStartBufferSize,
+    jitterStartBufferSize,
   };
 }
 

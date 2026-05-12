@@ -137,6 +137,27 @@ describe('gcallJitterBuffer', () => {
     expect(jb.pop()).toEqual(new Uint8Array([1]));
   });
 
+  it('can preserve burst-recovery hold when force-prime is only escaping the startup threshold', () => {
+    const jb = new JitterBuffer();
+    jb.setBurstRecoveryExtraHoldFrames(4);
+    jb.setSteadyPrimedHoldFrames(1);
+    for (let seq = 1; seq <= 3; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+
+    jb.forcePrimeForRecoveryEscape(5000, {
+      clearBurstRecoveryHold: false,
+    });
+
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(4);
+    expect(jb.hasReadyFrame()).toBe(false);
+    jb.push(4, new Uint8Array([4]));
+    jb.push(5, new Uint8Array([5]));
+    jb.push(6, new Uint8Array([6]));
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
   it('clear() resets the burst-recovery hold', () => {
     const jb = new JitterBuffer();
     jb.setBurstRecoveryExtraHoldFrames(4);

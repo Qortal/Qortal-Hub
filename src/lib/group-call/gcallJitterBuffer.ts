@@ -143,10 +143,15 @@ export class JitterBuffer {
    * unprimed threshold. Mark the buffer primed so a live one-frame trickle can
    * actually drain on the next tick instead of remaining stuck below threshold.
    */
-  forcePrimeForRecoveryEscape(holdPrimedMs = 0): void {
+  forcePrimeForRecoveryEscape(
+    holdPrimedMs = 0,
+    options?: { clearBurstRecoveryHold?: boolean }
+  ): void {
     if (this.entries.length <= 0) return;
     this.primed = true;
-    this.burstRecoveryExtraHoldFrames = 0;
+    if (options?.clearBurstRecoveryHold !== false) {
+      this.burstRecoveryExtraHoldFrames = 0;
+    }
     this.emptySinceMs = null;
     if (holdPrimedMs > 0 && Number.isFinite(holdPrimedMs)) {
       this.forcePrimedUntilMs = Math.max(

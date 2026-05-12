@@ -624,8 +624,11 @@ export class DmVoiceGcallInboundPlayout {
         });
         this.startupReadyStallSinceMs = readyStallForcePrime.nextStallSinceMs;
         if (readyStallForcePrime.shouldForcePrime) {
+          const preserveBurstRecoveryHold =
+            this.jitterBurstHeadroomState.level > 0;
           jb.forcePrimeForRecoveryEscape(
-            GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS
+            GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS,
+            { clearBurstRecoveryHold: !preserveBurstRecoveryHold }
           );
           hasReadyFrame = jb.hasReadyFrame();
         }
