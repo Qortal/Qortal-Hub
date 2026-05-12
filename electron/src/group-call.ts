@@ -181,6 +181,8 @@ const GC_RETICULUM_AUDIO_RECOVERY_BUFFER_MAX_AGE_MS = 200;
 const GC_RETICULUM_AUDIO_RECOVERY_ACTION_COOLDOWN_MS = 1_000;
 /** Give GC_LEAVE link-control frames one short flush window before link teardown. */
 const GC_RETICULUM_LEAVE_LINK_DRAIN_MS = 350;
+/** Local duplicate/reset closes can race later bridge/auth callbacks for the same Reticulum link id. */
+const GC_RETICULUM_AUDIO_CLOSING_LINK_TTL_MS = 60_000;
 /** Kept in sync with `RETICULUM_SEND_PRESSURE_*` in `src/lib/group-call/opusSendPressure.ts` (renderer ladder). */
 const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES = 8;
 const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH = 12;
@@ -1497,6 +1499,10 @@ export class GroupCallManager extends EventEmitter {
     ReticulumAudioPeerState
   >();
   private reticulumAudioAddressByLinkId = new Map<string, string>();
+  private reticulumAudioClosingLinkReasonsById = new Map<
+    string,
+    { reason: string; atMs: number }
+  >();
   private reticulumAudioOpenDeferUntilByAddress = new Map<string, number>();
   private reticulumAudioOpenDeferTimersByAddress = new Map<
     string,
@@ -2274,6 +2280,7 @@ export class GroupCallManager extends EventEmitter {
     this.reticulumAudioAwaitingRouteByAddress.clear();
     this.reticulumAudioPeersByAddress.clear();
     this.reticulumAudioAddressByLinkId.clear();
+    this.reticulumAudioClosingLinkReasonsById.clear();
     this.reticulumAudioFlushScheduled = false;
     if (this.reticulumAudioFlushTimer) {
       clearTimeout(this.reticulumAudioFlushTimer);
@@ -5069,6 +5076,7 @@ export class GroupCallManager extends EventEmitter {
 
   private closeReticulumAudioLinkQuietly(linkId: string, reason: string): void {
     if (!linkId) return;
+    this.noteReticulumAudioLinkClosing(linkId, reason);
     const address = this.reticulumAudioAddressByLinkId.get(linkId);
     const state =
       (address ? this.reticulumAudioPeersByAddress.get(address) : undefined) ??
@@ -5086,6 +5094,38 @@ export class GroupCallManager extends EventEmitter {
       `[GCall] Closing Reticulum audio link linkId=${linkId} reason=${reason}`
     );
     void this.reticulumBridge?.closeGroupAudioLink(linkId).catch(() => {});
+  }
+
+  private pruneReticulumAudioClosingLinks(now = Date.now()): void {
+    for (const [linkId, info] of this.reticulumAudioClosingLinkReasonsById) {
+      if (now - info.atMs > GC_RETICULUM_AUDIO_CLOSING_LINK_TTL_MS) {
+        this.reticulumAudioClosingLinkReasonsById.delete(linkId);
+      }
+    }
+  }
+
+  private noteReticulumAudioLinkClosing(
+    linkId: string,
+    reason: string,
+    now = Date.now()
+  ): void {
+    if (!linkId) return;
+    this.pruneReticulumAudioClosingLinks(now);
+    this.reticulumAudioClosingLinkReasonsById.set(linkId, { reason, atMs: now });
+  }
+
+  private isReticulumAudioLinkLocallyClosing(
+    linkId: string,
+    now = Date.now()
+  ): boolean {
+    if (!linkId) return false;
+    const info = this.reticulumAudioClosingLinkReasonsById.get(linkId);
+    if (!info) return false;
+    if (now - info.atMs > GC_RETICULUM_AUDIO_CLOSING_LINK_TTL_MS) {
+      this.reticulumAudioClosingLinkReasonsById.delete(linkId);
+      return false;
+    }
+    return true;
   }
 
   private sendReticulumLinkControlToEstablishedRoomLinks(
@@ -8448,6 +8488,9 @@ export class GroupCallManager extends EventEmitter {
     }
   ): boolean {
     if (wire.t !== 'GJ') return false;
+    if (this.isReticulumAudioLinkLocallyClosing(payload.linkId)) {
+      return true;
+    }
     const env = decodeJoinWire(wire);
     if (!env) {
       this.closeReticulumAudioLinkQuietly(payload.linkId, 'link-auth-bad-join');
@@ -8502,6 +8545,7 @@ export class GroupCallManager extends EventEmitter {
   private applyVerifiedReticulumLinkAuthJoin(
     job: Extract<GcVerifyPending, { kind: 'link_auth_join' }>
   ): void {
+    if (this.isReticulumAudioLinkLocallyClosing(job.linkId)) return;
     const env = job.env;
     const room = this.rooms.get(env.roomId);
     let participant = room?.participants.get(env.fromAddress);
@@ -8900,13 +8944,24 @@ export class GroupCallManager extends EventEmitter {
     incoming: boolean;
     reason: string;
   }): void {
+    const locallyClosing = this.isReticulumAudioLinkLocallyClosing(payload.linkId);
     const peerPresenceHash =
       payload.peerPresenceHash || payload.peerDestinationHash;
     const address = this.resolveReticulumAudioAddress(
       payload.linkId,
       peerPresenceHash
     );
-    if (!address) return;
+    if (!address) {
+      if (locallyClosing) {
+        this.reticulumAudioClosingLinkReasonsById.delete(payload.linkId);
+      }
+      return;
+    }
+    if (locallyClosing) {
+      this.reticulumAudioAddressByLinkId.delete(payload.linkId);
+      this.reticulumAudioClosingLinkReasonsById.delete(payload.linkId);
+      return;
+    }
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (state?.linkId && state.linkId !== payload.linkId) {
       this.reticulumAudioAddressByLinkId.delete(payload.linkId);

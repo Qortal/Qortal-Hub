@@ -2025,6 +2025,87 @@ describe('Reticulum group audio transport', () => {
     expect(bridge.closeGroupAudioLink).not.toHaveBeenCalledWith('link-keep');
   });
 
+  it('ignores stale verified link auth after that Reticulum audio link was closed', () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      sendGroupCall = vi.fn(async () => true);
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-open',
+        established: false,
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: makeAudioQueueSnapshot(),
+      }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-peer', {
+      publicKey: 'pk-peer',
+      joinedAt: 101,
+      reticulumDestinationHash: 'd:Q-peer',
+    });
+    (manager as any).ensureReticulumAudioPeerState('room-1', 'Q-peer');
+    (manager as any).reticulumAudioPeersByAddress.get('Q-peer').linkId =
+      'link-stale';
+    (manager as any).reticulumAudioAddressByLinkId.set('link-stale', 'Q-peer');
+    room.participants.delete('Q-peer');
+
+    (manager as any).resetReticulumAudioPeerStateForRoomAddress(
+      'room-1',
+      'Q-peer',
+      'fresh-verified-join-absent-participant'
+    );
+    (manager as any).applyVerifiedReticulumLinkAuthJoin({
+      kind: 'link_auth_join',
+      linkId: 'link-stale',
+      peerPresenceHash: 'd:Q-peer',
+      peerDestinationHash: 'd:Q-peer',
+      incoming: true,
+      env: {
+        type: 'GC_JOIN',
+        roomId: 'room-1',
+        chatId: 'chat-1',
+        fromAddress: 'Q-peer',
+        fromPublicKey: 'pk-peer',
+        signature: 'sig-peer',
+        timestamp: 200,
+        reticulumDestinationHash: 'd:Q-peer',
+      },
+    });
+
+    expect((manager as any).reticulumAudioPeersByAddress.has('Q-peer')).toBe(
+      false
+    );
+    expect(bridge.enqueueGroupAudio).not.toHaveBeenCalled();
+    expect(bridge.closeGroupAudioLink).toHaveBeenCalledWith('link-stale');
+  });
+
   it('adopts an established incoming link instead of preserving a pending owner link', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
