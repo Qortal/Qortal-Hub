@@ -306,6 +306,15 @@ try {
         .invoke('window:isMaximized')
         .then((isMaximized: boolean) => ({ isMaximized })),
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
+    getSystemCallReadiness: () =>
+      ipcRenderer.invoke('systemCallReadiness:getSnapshot') as Promise<{
+        status: 'good' | 'warning' | 'blocked' | 'unknown';
+        reasons: string[];
+        cpuLoad: number | null;
+        memoryPressure: number;
+        eventLoopLagMs: number;
+        measuredAt: number;
+      }>,
     showAppMenu: (x?: number, y?: number) =>
       ipcRenderer.invoke('window:showAppMenu', { x, y }),
     getAppSettings: () => ipcRenderer.invoke('appSettings:get'),

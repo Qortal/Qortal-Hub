@@ -190,6 +190,26 @@ async function signPresenceFields(
   }
 }
 
+async function isSystemReadyForCall(
+  showError: (message: string) => void
+): Promise<boolean> {
+  const readiness = await window.electronAPI?.getSystemCallReadiness?.();
+  if (!readiness || readiness.status !== 'good') {
+    showError(
+      'Your system is too busy for calls right now. Close other apps and try again.'
+    );
+    pushDirectVoiceUiLog('warn', 'system call readiness blocked call', {
+      status: readiness?.status ?? 'unavailable',
+      reasons: readiness?.reasons ?? [],
+      cpuLoad: readiness?.cpuLoad ?? null,
+      memoryPressure: readiness?.memoryPressure ?? null,
+      eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
+    });
+    return false;
+  }
+  return true;
+}
+
 export function useVoiceCall(): UseVoiceCallReturn {
   const userInfo = useAtomValue(userInfoAtom);
   const blockedAddresses = useAtomValue(blockedAddressesAtom);
@@ -213,6 +233,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
   callAudioPrefsRef.current = callAudioDevices;
   const setCallAudioDevicesRef = useRef(setCallAudioDevices);
   setCallAudioDevicesRef.current = setCallAudioDevices;
+
+  const showSystemNotReadyForCall = useCallback(
+    (message: string) => {
+      setInfoSnackGlobal({ type: 'error', message });
+      setOpenSnackGlobal(true);
+    },
+    [setInfoSnackGlobal, setOpenSnackGlobal]
+  );
 
   const callIdRef = useRef<string | null>(null);
   const callStateRef = useRef<CallState>('idle');
@@ -1802,6 +1830,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       if (callStateRef.current !== 'idle') return;
       const localAddress = userInfo?.address;
       if (!localAddress) return;
+      if (!(await isSystemReadyForCall(showSystemNotReadyForCall))) return;
 
       const callId = crypto.randomUUID();
       const timestamp = Date.now();
@@ -1852,12 +1881,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
         });
       }
     },
-    [prepareCallAudioContext, updateCallState, userInfo?.address, userInfo?.publicKey]
+    [
+      prepareCallAudioContext,
+      showSystemNotReadyForCall,
+      updateCallState,
+      userInfo?.address,
+      userInfo?.publicKey,
+    ]
   );
 
   const acceptCall = useCallback(async () => {
     const incoming = incomingCallRef.current;
     if (!incoming || callStateRef.current !== 'ringing') return;
+    if (!(await isSystemReadyForCall(showSystemNotReadyForCall))) return;
 
     await reticulumTeardownChainRef.current.catch(() => {});
     await prepareCallAudioContext();
@@ -1896,7 +1932,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
       { type: 'CALL_ACCEPT', callId: incoming.callId, timestamp: acceptTs },
       publicKeyRef.current
     );
-    await (window as any).call?.accept(incoming.callId, signature, publicKey, acceptTs);
+    const acceptResult = await (window as any).call?.accept(
+      incoming.callId,
+      signature,
+      publicKey,
+      acceptTs
+    );
+    if (!acceptResult?.success) {
+      pushDirectVoiceUiLog('warn', 'call.accept failed', {
+        result: acceptResult ?? null,
+      });
+      endCall(false);
+      return;
+    }
 
     pushDirectVoiceUiLog('log', 'incoming call accepted — starting Reticulum media session');
     void startReticulumMediaSession().catch((e) => {
@@ -1910,6 +1958,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     startDurationTimer,
     startReticulumMediaSession,
     prepareCallAudioContext,
+    showSystemNotReadyForCall,
     updateCallState,
     updateIncomingCall,
   ]);

@@ -115,6 +115,10 @@ import {
   type AudioSurfaceResponseLike,
 } from './audio-surface-ipc';
 import { registerStaticAppProtocol } from './app-protocol';
+import {
+  getSystemCallReadinessSnapshot,
+  startSystemCallReadinessMonitor,
+} from './system-call-readiness';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -875,6 +879,12 @@ ipcMain.handle('window:isMaximized', () => {
 });
 
 ipcMain.handle('window:getPlatform', () => process.platform);
+
+startSystemCallReadinessMonitor();
+
+ipcMain.handle('systemCallReadiness:getSnapshot', () =>
+  getSystemCallReadinessSnapshot()
+);
 
 ipcMain.handle(
   'window:showAppMenu',

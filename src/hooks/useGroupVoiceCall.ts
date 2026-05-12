@@ -33,6 +33,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   callAudioDevicesAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
   qortalGroupSelfGcallRoomIdAtom,
   userInfoAtom,
 } from '../atoms/global';
@@ -1353,6 +1355,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const setQortalGroupSelfGcallRoomId = useSetAtom(
     qortalGroupSelfGcallRoomIdAtom as any
   ) as (value: string | null) => void;
+  const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const myStatus = useAtomValue(myStatusAtom);
   const callAudioPrefsRef = useRef(callAudioDevices);
   callAudioPrefsRef.current = callAudioDevices;
@@ -12801,6 +12805,24 @@ export function useGroupVoiceCall(uiActive = false) {
         if (roomStateRef.current !== 'idle') return;
         setGcallJoinError(null);
 
+        const readiness = await window.electronAPI?.getSystemCallReadiness?.();
+        if (!readiness || readiness.status !== 'good') {
+          debugWarn('[GCall] join blocked by system readiness', {
+            status: readiness?.status ?? 'unavailable',
+            reasons: readiness?.reasons ?? [],
+            cpuLoad: readiness?.cpuLoad ?? null,
+            memoryPressure: readiness?.memoryPressure ?? null,
+            eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
+          });
+          setInfoSnackGlobal({
+            type: 'error',
+            message:
+              'Your system is too busy for calls right now. Close other apps and try again.',
+          });
+          setOpenSnackGlobal(true);
+          return;
+        }
+
         if (roomId.startsWith('gcall-qortal-') && myStatus === 'offline') {
           setGcallJoinError('presence_offline');
           return;
@@ -13269,6 +13291,8 @@ export function useGroupVoiceCall(uiActive = false) {
       myStatus,
       installTestingStableRoomKey,
       invalidateV2DrainLoop,
+      setInfoSnackGlobal,
+      setOpenSnackGlobal,
     ]
   );
 

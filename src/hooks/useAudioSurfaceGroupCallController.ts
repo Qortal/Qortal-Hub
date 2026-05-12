@@ -1,6 +1,11 @@
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { callAudioDevicesAtom, userInfoAtom } from '../atoms/global';
+import {
+  callAudioDevicesAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+  userInfoAtom,
+} from '../atoms/global';
 import { myStatusAtom } from '../atoms/presence';
 import {
   buildDefaultAudioSurfaceBridgeState,
@@ -19,6 +24,8 @@ export function useAudioSurfaceGroupCallController(
   const userInfo = useAtomValue(userInfoAtom);
   const myStatus = useAtomValue(myStatusAtom);
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
+  const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const [bridgeState, setBridgeState] = useState(
     buildDefaultAudioSurfaceBridgeState()
   );
@@ -198,6 +205,23 @@ export function useAudioSurfaceGroupCallController(
   const joinGroupCall = useCallback(
     async (roomId: string, chatId: string, options?: AudioEngineJoinOptions) => {
       traceGcallAudioSurface('controller.joinGroupCall: entered', { roomId, chatId });
+      const readiness = await window.electronAPI?.getSystemCallReadiness?.();
+      if (!readiness || readiness.status !== 'good') {
+        traceGcallAudioSurface('controller.joinGroupCall: blocked by system readiness', {
+          status: readiness?.status ?? 'unavailable',
+          reasons: readiness?.reasons ?? [],
+          cpuLoad: readiness?.cpuLoad ?? null,
+          memoryPressure: readiness?.memoryPressure ?? null,
+          eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
+        });
+        setInfoSnackGlobal({
+          type: 'error',
+          message:
+            'Your system is too busy for calls right now. Close other apps and try again.',
+        });
+        setOpenSnackGlobal(true);
+        return;
+      }
       const response = await sendCommand({
         type: 'join-group-call',
         roomId,
@@ -210,7 +234,7 @@ export function useAudioSurfaceGroupCallController(
         });
       }
     },
-    [sendCommand]
+    [sendCommand, setInfoSnackGlobal, setOpenSnackGlobal]
   );
 
   const leaveGroupCall = useCallback(async () => {
