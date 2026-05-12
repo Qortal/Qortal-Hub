@@ -13,7 +13,6 @@ import {
   isRecentRoomStateFresh,
   mergeRoomTopologyEpochWithFloor,
   pendingKeyEnvelopeWinsOver,
-  shouldDelayPresenceEvictionForRecentCallActivity,
   shouldDelayPresenceEvictionForHealthyTransport,
   shouldApplyVerifiedLeaveToParticipant,
   shouldIgnoreLeaveForLocalAddress,
@@ -6710,40 +6709,8 @@ describe('shouldDelayPresenceEvictionForHealthyTransport', () => {
   });
 });
 
-describe('shouldDelayPresenceEvictionForRecentCallActivity', () => {
-  it('delays eviction when the peer had recent call activity', () => {
-    expect(
-      shouldDelayPresenceEvictionForRecentCallActivity({
-        lastActivityAtMs: 10_000,
-        nowMs: 22_000,
-        staleAfterMs: 15_000,
-      })
-    ).toBe(true);
-  });
-
-  it('does not delay eviction when recent call activity is stale', () => {
-    expect(
-      shouldDelayPresenceEvictionForRecentCallActivity({
-        lastActivityAtMs: 10_000,
-        nowMs: 26_000,
-        staleAfterMs: 15_000,
-      })
-    ).toBe(false);
-  });
-
-  it('does not delay eviction without prior call activity', () => {
-    expect(
-      shouldDelayPresenceEvictionForRecentCallActivity({
-        lastActivityAtMs: 0,
-        nowMs: 12_000,
-        staleAfterMs: 15_000,
-      })
-    ).toBe(false);
-  });
-});
-
 describe('presence eviction with recent call activity', () => {
-  it('keeps an in-call participant when offline presence flips but call activity is still fresh', () => {
+  it('evicts an offline in-call participant after grace even when prior call activity is fresh', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-27T16:00:00.000Z'));
 
@@ -6792,10 +6759,11 @@ describe('presence eviction with recent call activity', () => {
 
     vi.advanceTimersByTime(12_000);
 
-    expect(handleLeaveSpy).not.toHaveBeenCalled();
+    expect(handleLeaveSpy).toHaveBeenCalledWith('room-1', 'Q-remote', true);
     expect(
-      (manager as any).rooms.get('room-1')?.participants.has('Q-remote')
-    ).toBe(true);
+      (manager as any).rooms.get('room-1')?.participants.has('Q-remote') ??
+        false
+    ).toBe(false);
 
     manager.stop();
   });
@@ -6857,7 +6825,7 @@ describe('presence eviction with recent call activity', () => {
     manager.stop();
   });
 
-  it('keeps a silent participant when incoming topology still names them as active', () => {
+  it('keeps a silent participant when renderer reports transport healthy', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-27T16:00:00.000Z'));
 
@@ -6933,6 +6901,7 @@ describe('presence eviction with recent call activity', () => {
       ],
       lastSeen: Date.now() - 5_000,
     });
+    manager.reportTransportHealth('room-1', ['Q-participant']);
 
     (manager as any).schedulePresenceEviction('Q-participant');
     vi.advanceTimersByTime(12_000);

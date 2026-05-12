@@ -407,16 +407,6 @@ export function shouldDelayPresenceEvictionForHealthyTransport(opts: {
   return opts.nowMs - lastReportAtMs <= opts.staleAfterMs;
 }
 
-export function shouldDelayPresenceEvictionForRecentCallActivity(opts: {
-  lastActivityAtMs: number | null | undefined;
-  nowMs: number;
-  staleAfterMs: number;
-}): boolean {
-  const lastActivityAtMs = opts.lastActivityAtMs ?? 0;
-  if (lastActivityAtMs <= 0) return false;
-  return opts.nowMs - lastActivityAtMs <= opts.staleAfterMs;
-}
-
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (no topology/key epoch on wire). */
 const GC_KEY_MESSAGE_VERSION = 3;
 
@@ -1502,7 +1492,6 @@ export class GroupCallManager extends EventEmitter {
   >();
   private static readonly PRESENCE_EVICTION_GRACE_MS = 12_000;
   private static readonly TRANSPORT_HEALTH_STALE_MS = 15_000;
-  private static readonly CALL_ACTIVITY_EVICTION_STALE_MS = 45_000;
   private transportHealthByRoom = new Map<
     string,
     { reportedAtMs: number; healthyPeerAddresses: Set<string> }
@@ -9108,10 +9097,6 @@ export class GroupCallManager extends EventEmitter {
       for (const [roomId, room] of this.rooms) {
         if (!room.participants.has(address)) continue;
         const transportHealth = this.transportHealthByRoom.get(roomId);
-        const lastCallActivityAtMs = this.getRecentCallActivityAt(
-          roomId,
-          address
-        );
         if (
           shouldDelayPresenceEvictionForHealthyTransport({
             lastReportAtMs: transportHealth?.reportedAtMs,
@@ -9120,16 +9105,11 @@ export class GroupCallManager extends EventEmitter {
             address,
             nowMs: now,
             staleAfterMs: GroupCallManager.TRANSPORT_HEALTH_STALE_MS,
-          }) ||
-          shouldDelayPresenceEvictionForRecentCallActivity({
-            lastActivityAtMs: lastCallActivityAtMs,
-            nowMs: now,
-            staleAfterMs: GroupCallManager.CALL_ACTIVITY_EVICTION_STALE_MS,
           })
         ) {
           delayedByHealthyTransport = true;
           loggerLog(
-            `[GCall] Grace period expired for ${address} in ${roomId} — delaying eviction because call activity is still recent`
+            `[GCall] Grace period expired for ${address} in ${roomId} — delaying eviction because transport health is still recent`
           );
           continue;
         }
