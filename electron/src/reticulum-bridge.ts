@@ -68,6 +68,7 @@ type BridgeCmdFrame = {
     | 'send_group_audio_link_heartbeat'
     | 'open_group_audio_link'
     | 'close_group_audio_link'
+    | 'reset_group_audio_peer_state'
     | 'warm_group_audio_path'
     | 'get_local_identity_public_key'
     | 'register_peer_identity';
@@ -916,6 +917,25 @@ export class ReticulumBridge
     return this.sendDetailed('close_group_audio_link', { linkId });
   }
 
+  async resetGroupAudioPeerState(
+    peerPresenceHash: string,
+    reason: string
+  ): Promise<ReticulumSendResult> {
+    const peerHash = peerPresenceHash.trim().toLowerCase();
+    if (!peerHash) {
+      return {
+        ok: false,
+        reason: 'send-command-failed',
+        error: 'Missing peerPresenceHash',
+      };
+    }
+    this.dropQueuedAudioFramesForPeerPresenceHash(peerHash);
+    return this.sendDetailed('reset_group_audio_peer_state', {
+      peerPresenceHash: peerHash,
+      reason,
+    });
+  }
+
   async warmGroupAudioPath(
     peerPresenceHash: string
   ): Promise<ReticulumWarmPathResult> {
@@ -1142,6 +1162,48 @@ export class ReticulumBridge
     }
     if (!chosenLinkId) return false;
     return this.dropOldestQueuedFrameForLink(chosenLinkId);
+  }
+
+  private dropQueuedAudioFramesForPeerPresenceHash(
+    peerPresenceHash: string
+  ): number {
+    const peerHash = peerPresenceHash.trim().toLowerCase();
+    if (!peerHash) return 0;
+    let dropped = 0;
+    for (const routeKey of [...this.audioQueuedLinkOrder]) {
+      const queue = this.audioFrameQueues.get(routeKey);
+      if (!queue || queue.length === 0) continue;
+      const kept: QueuedAudioFrame[] = [];
+      for (const frame of queue) {
+        if (
+          frame.peerPresenceHash.trim().toLowerCase() === peerHash ||
+          routeKey === `packet:${peerHash}`
+        ) {
+          this.audioQueuedFrames = Math.max(0, this.audioQueuedFrames - 1);
+          this.audioQueuedBytes = Math.max(
+            0,
+            this.audioQueuedBytes - frame.sizeBytes
+          );
+          dropped++;
+          continue;
+        }
+        kept.push(frame);
+      }
+      if (kept.length === queue.length) continue;
+      if (kept.length > 0) {
+        this.audioFrameQueues.set(routeKey, kept);
+      } else {
+        this.audioFrameQueues.delete(routeKey);
+      }
+      this.compactAudioQueueLink(routeKey);
+    }
+    if (dropped > 0) {
+      this.lastAudioQueueSnapshot = this.getAudioQueueSnapshot();
+      loggerLog(
+        `[ReticulumBridge] Dropped queued group audio frames for peer=${peerHash} count=${dropped}`
+      );
+    }
+    return dropped;
   }
 
   private compactAudioQueueLink(linkId: string): void {
@@ -2320,6 +2382,7 @@ export class ReticulumBridge
       | 'fanout_group_call'
       | 'send_group_audio_link_heartbeat'
       | 'close_group_audio_link'
+      | 'reset_group_audio_peer_state'
       | 'warm_group_audio_path',
     payload: Record<string, unknown>
   ): Promise<ReticulumSendResult> {

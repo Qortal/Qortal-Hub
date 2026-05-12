@@ -5462,6 +5462,35 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error=str(exc))
 
 
+def handle_reset_group_audio_peer_state(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_key = str(payload.get("peerPresenceHash") or "").strip().lower()
+    if not peer_key:
+        emit_resp(req_id, False, error="Missing peerPresenceHash")
+        return
+
+    closed = 0
+    for link_id, state in list(_audio_links_by_id.items()):
+        if str(state.get("peerPresenceHash") or "").strip().lower() != peer_key:
+            continue
+        link = state.get("link")
+        try:
+            if link is not None:
+                try:
+                    link.set_link_closed_callback(None)
+                except Exception:
+                    pass
+                link.teardown()
+        except Exception:
+            pass
+        emit_audio_link_closed(link_id, "peer_state_reset")
+        closed += 1
+
+    _call_media_path_state.pop(peer_key, None)
+    _peer_lifecycle.pop(peer_key, None)
+    _mark_audio_queue_state_dirty()
+    emit_resp(req_id, True, payload={"closedLinks": closed})
+
+
 def handle_get_local_identity_public_key(req_id: str, payload: Dict[str, Any]) -> None:
     if _identity is None:
         emit_resp(
@@ -5719,6 +5748,8 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_open_group_audio_link(req_id, payload)
     elif action == "close_group_audio_link":
         handle_close_group_audio_link(req_id, payload)
+    elif action == "reset_group_audio_peer_state":
+        handle_reset_group_audio_peer_state(req_id, payload)
     elif action == "warm_group_audio_path":
         handle_warm_group_audio_path(req_id, payload)
     elif action == "send_group_audio_link_heartbeat":

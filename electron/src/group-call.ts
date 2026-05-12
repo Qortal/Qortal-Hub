@@ -4816,6 +4816,7 @@ export class GroupCallManager extends EventEmitter {
       return true;
     }
     const linkId = state.linkId;
+    const peerPresenceHash = state.peerPresenceHash;
     this.reticulumAudioAddressByLinkId.delete(state.routeKey);
     if (linkId) {
       this.reticulumAudioAddressByLinkId.delete(linkId);
@@ -4828,6 +4829,10 @@ export class GroupCallManager extends EventEmitter {
         `reset-room-peer-state:${reason}`
       );
     }
+    this.resetReticulumBridgeAudioPeerState(
+      peerPresenceHash,
+      `reset-room-peer-state:${reason}`
+    );
     loggerLog(
       `[GCall] Reset Reticulum audio peer state room=${roomId} address=${address} reason=${reason}`
     );
@@ -5047,6 +5052,19 @@ export class GroupCallManager extends EventEmitter {
           GC_RETICULUM_AUDIO_LINK_STICKY_MS) ||
       this.hasRecentReticulumAudioLinkActivity(state, now)
     );
+  }
+
+  private resetReticulumBridgeAudioPeerState(
+    peerPresenceHash: string,
+    reason: string
+  ): void {
+    const peerHash = peerPresenceHash.trim().toLowerCase();
+    if (!peerHash) return;
+    const bridge = this.reticulumBridge;
+    if (!bridge || typeof bridge.resetGroupAudioPeerState !== 'function') {
+      return;
+    }
+    void bridge.resetGroupAudioPeerState(peerHash, reason).catch(() => {});
   }
 
   private closeReticulumAudioLinkQuietly(linkId: string, reason: string): void {
@@ -7076,6 +7094,7 @@ export class GroupCallManager extends EventEmitter {
       const desired = desiredByAddress.get(address);
       if (!desired) {
         const linkId = state.linkId;
+        const peerPresenceHash = state.peerPresenceHash;
         this.reticulumAudioAddressByLinkId.delete(state.routeKey);
         this.reticulumAudioPeersByAddress.delete(address);
         this.clearReticulumAudioOpenDefer(address);
@@ -7083,6 +7102,10 @@ export class GroupCallManager extends EventEmitter {
           this.reticulumAudioAddressByLinkId.delete(linkId);
           this.closeReticulumAudioLinkQuietly(linkId, 'sync-no-longer-desired');
         }
+        this.resetReticulumBridgeAudioPeerState(
+          peerPresenceHash,
+          'sync-no-longer-desired'
+        );
         continue;
       }
       state.peerPresenceHash = desired.peerPresenceHash;

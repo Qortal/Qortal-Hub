@@ -628,7 +628,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     if (roomId && typeof gc?.reportTransportHealth === 'function') {
       await gc.reportTransportHealth(roomId, []).catch(() => {});
     }
-    if (roomId && addr && reticulumSessionActiveRef.current) {
+    if (roomId && addr && isDmVoiceRoomId(roomId)) {
       reticulumSessionActiveRef.current = false;
       await leaveDirectVoiceReticulumRoom({
         roomId,

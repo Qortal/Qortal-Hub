@@ -288,6 +288,7 @@ describe('useVoiceCall', () => {
       groupCall: {
         onEvent: vi.fn(() => vi.fn()),
         join: vi.fn(async () => ({ success: false, error: 'test-stop' })),
+        leave: vi.fn(async () => ({ success: true })),
         setLocalAddresses: vi.fn(async () => {}),
       },
       sendMessage: vi.fn(async (type: string) => {
@@ -324,7 +325,19 @@ describe('useVoiceCall', () => {
       await result.current.acceptCall();
     });
 
+    const roomId = await buildDmVoiceRoomId(
+      buildDirectVoiceCallChatId(myAddr, peerAddr)
+    );
     expect(resume).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect((window as any).groupCall.leave).toHaveBeenCalledWith(
+        roomId,
+        myAddr,
+        'sig',
+        'pub',
+        expect.any(Number)
+      )
+    );
   });
 
   it('requests shared group-call media recovery warm-up for the DM peer on join and peer-joined', async () => {

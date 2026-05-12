@@ -125,6 +125,56 @@ describe('ReticulumBridge group audio support', () => {
     expect(result).toEqual({ ok: true, pathState: 'fresh', ready: true });
   });
 
+  it('resets per-peer group audio state and drops queued audio for that peer', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.audioFrameQueues.set('packet:peer-hash', [
+      {
+        routeKey: 'packet:peer-hash',
+        transport: 'packet',
+        linkId: '',
+        roomId: 'room-1',
+        peerPresenceHash: 'peer-hash',
+        peerDestinationHash: 'call-hash',
+        data: Buffer.from([1]),
+        queuedAtMs: Date.now(),
+        sizeBytes: 1,
+      },
+    ]);
+    internal.audioFrameQueues.set('packet:other-peer', [
+      {
+        routeKey: 'packet:other-peer',
+        transport: 'packet',
+        linkId: '',
+        roomId: 'room-1',
+        peerPresenceHash: 'other-peer',
+        peerDestinationHash: 'other-call-hash',
+        data: Buffer.from([2]),
+        queuedAtMs: Date.now(),
+        sizeBytes: 1,
+      },
+    ]);
+    internal.audioQueuedLinkOrder = ['packet:peer-hash', 'packet:other-peer'];
+    internal.audioQueuedFrames = 2;
+    internal.audioQueuedBytes = 2;
+    internal.sendDetailed = vi.fn(async () => ({ ok: true }));
+
+    const result = await bridge.resetGroupAudioPeerState(
+      'peer-hash',
+      'test-reset'
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(internal.sendDetailed).toHaveBeenCalledWith(
+      'reset_group_audio_peer_state',
+      { peerPresenceHash: 'peer-hash', reason: 'test-reset' }
+    );
+    expect(internal.audioFrameQueues.has('packet:peer-hash')).toBe(false);
+    expect(internal.audioFrameQueues.has('packet:other-peer')).toBe(true);
+    expect(internal.audioQueuedFrames).toBe(1);
+    expect(internal.audioQueuedBytes).toBe(1);
+  });
+
   it('sends audio-link heartbeat frames through the bridge command channel', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
