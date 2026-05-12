@@ -525,6 +525,7 @@ function setRosterPublicKey(
 const ROOM_KEY_DISTRIBUTION_RETRY_MS = 750;
 const TARGETED_ROOM_KEY_REPLAY_RETRY_MS = 2_000;
 const TARGETED_ROOM_KEY_REPLAY_MAX_ATTEMPTS = 6;
+const TWO_PARTY_LINK_RESYNC_COOLDOWN_MS = 5_000;
 
 export class GroupCallAudioEngineRuntime {
   private bootstrapRevisionApplied = 0;
@@ -611,6 +612,7 @@ export class GroupCallAudioEngineRuntime {
     string,
     number
   >();
+  private readonly twoPartyLinkResyncLastAtByPeer = new Map<string, number>();
   private readonly liveEvidenceTopologyElectionLastAt = new Map<
     string,
     number
@@ -1323,6 +1325,7 @@ export class GroupCallAudioEngineRuntime {
       packetStaleSends: diagnostics.bridge?.packetStaleSends,
       packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
     });
+    this.maybeResyncTwoPartyTopologyFromLinkDiagnostics(diagnostics);
   }
 
   private startRendererThreadMonitor(): void {
@@ -4203,6 +4206,108 @@ export class GroupCallAudioEngineRuntime {
     }
   }
 
+  private isTwoPartyRoomWithPeer(peerAddress: string): boolean {
+    const peer = peerAddress.trim();
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!peer || !myAddress || peer === myAddress) return false;
+    if (!this.isAddressInCurrentRoster(peer)) return false;
+    const addresses = new Set(
+      this.snapshot.participants
+        .map((participant) => participant.address?.trim() ?? '')
+        .filter(Boolean)
+    );
+    addresses.add(myAddress);
+    return addresses.size === 2 && addresses.has(peer);
+  }
+
+  private async forceTwoPartyDeterministicTopologyResync(
+    peerAddress: string,
+    reason: string
+  ): Promise<void> {
+    const roomId = this.snapshot.roomId;
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const peer = peerAddress.trim();
+    if (!roomId || !myAddress || !peer || peer === myAddress) return;
+    if (!this.isTwoPartyRoomWithPeer(peer)) {
+      this.recordDiagEvent('two-party-link-resync-skipped', {
+        roomId,
+        reason,
+        peer: truncateGcallDiagAddress(peer),
+        skippedReason: 'not-current-two-party-roster',
+        participantCount: this.snapshot.participants.length,
+      });
+      return;
+    }
+    const nowMs = Date.now();
+    const lastAt = this.twoPartyLinkResyncLastAtByPeer.get(peer) ?? 0;
+    if (nowMs - lastAt < TWO_PARTY_LINK_RESYNC_COOLDOWN_MS) return;
+    this.twoPartyLinkResyncLastAtByPeer.set(peer, nowMs);
+
+    const sorted = await this.computeElectionOrder([myAddress, peer], roomId);
+    const deterministicRoot = sorted[0] ?? myAddress;
+    const topologyEpoch =
+      Math.max(
+        this.topology?.topologyEpoch ?? 0,
+        this.lastObservedTopologyEpoch ?? 0
+      ) + 1;
+    const topology = normalizeGroupCallTopology({
+      ...buildTopologyWithTrustedRoot(
+        sorted,
+        topologyEpoch,
+        deterministicRoot
+      ),
+      roomId,
+      lastSeen: nowMs,
+    });
+    this.recordDiagEvent('two-party-link-resync-topology', {
+      roomId,
+      reason,
+      peer: truncateGcallDiagAddress(peer),
+      topologyEpoch,
+      deterministicRoot: truncateGcallDiagAddress(deterministicRoot),
+      localPreviousRoot: truncateGcallDiagAddress(
+        this.topology?.rootForwarder ?? ''
+      ),
+      localPreviousEpoch: this.topology?.topologyEpoch ?? null,
+    });
+    const applied = await this.applyTopology(topology, 'local-election');
+    if (applied && topology.rootForwarder === myAddress) {
+      await this.broadcastTopology(topology, reason);
+      if (this.roomKey) {
+        await this.distributeRoomKey(this.roomKey);
+      }
+    } else if (applied && topology.rootForwarder !== myAddress) {
+      this.clearProvisionalLocalRoot();
+      if (!this.ownsRoomKey) {
+        await this.requestRoomKeyFrom(topology.rootForwarder, 'topology');
+      }
+    }
+  }
+
+  private maybeResyncTwoPartyTopologyFromLinkDiagnostics(
+    diagnostics: GcallSendAudioDiagnostics
+  ): void {
+    const peer = diagnostics.targetAddress?.trim() ?? '';
+    if (!peer || !this.isTwoPartyRoomWithPeer(peer)) return;
+    const lastUnreadyAt = diagnostics.lastLinkUnreadyAtMs ?? 0;
+    const reason = diagnostics.lastLinkUnreadyReason ?? '';
+    const linkClosedOrTimedOut =
+      reason.startsWith('bridge-link-closed:') ||
+      reason === 'link-heartbeat-timeout' ||
+      reason.startsWith('audio-recovery:link-heartbeat-timeout') ||
+      reason.startsWith('audio-recovery:link-closed');
+    const linkCurrentlyUnready =
+      diagnostics.transport === 'link' &&
+      diagnostics.linkEstablished === false &&
+      lastUnreadyAt > 0 &&
+      Date.now() - lastUnreadyAt <= 30_000;
+    if (!linkClosedOrTimedOut && !linkCurrentlyUnready) return;
+    void this.forceTwoPartyDeterministicTopologyResync(
+      peer,
+      `link-recovery:${reason || 'unready'}`
+    );
+  }
+
   private async computeElectionOrder(
     addresses: string[],
     roomId: string
@@ -4919,6 +5024,39 @@ export class GroupCallAudioEngineRuntime {
         );
         return;
       }
+      if (this.awaitingAuthoritativeKey) {
+        this.recordDiagEvent(
+          'root-heartbeat-timeout-suppressed-awaiting-authoritative-key',
+          {
+            roomId,
+            currentRoot,
+            heartbeatSilentMs,
+            rootLivenessState: rootLiveness.state,
+          }
+        );
+        this.scheduleRootFailoverWatchForDeadline(
+          nowMs + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS
+        );
+        return;
+      }
+      this.recordDiagEvent(
+        'root-heartbeat-timeout-two-party-deterministic-resync',
+        {
+          roomId,
+          currentRoot,
+          heartbeatSilentMs,
+          oneToOneSilentMs,
+          rootLivenessState: rootLiveness.state,
+        }
+      );
+      await this.forceTwoPartyDeterministicTopologyResync(
+        currentRoot,
+        'root-heartbeat-timeout'
+      );
+      this.scheduleRootFailoverWatchForDeadline(
+        nowMs + ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS
+      );
+      return;
     }
     if (this.awaitingAuthoritativeKey) {
       this.recordDiagEvent(

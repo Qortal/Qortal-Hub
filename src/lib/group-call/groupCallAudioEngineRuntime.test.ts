@@ -3963,6 +3963,107 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('reconverges a two-person room from link-closed diagnostics without excluding the peer', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 4,
+      lastTopology: {
+        topologyEpoch: 4,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: null,
+        clusters: [
+          {
+            members: ['Qlocal'],
+            forwarder: 'Qlocal',
+            standby: null,
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qpeer',
+      'Qlocal',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    broadcastTopology.mockClear();
+    sendKeyRequest.mockClear();
+    (runtime as any).recordOutboundMainDiagnostics({
+      targetAddress: 'Qpeer',
+      transport: 'link',
+      linkEstablished: false,
+      lastLinkUnreadyReason: 'bridge-link-closed:1',
+      lastLinkUnreadyAtMs: Date.now(),
+    });
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
+    expect((runtime as any).topology?.clusters?.[0]?.members).toEqual([
+      'Qpeer',
+      'Qlocal',
+    ]);
+    expect(
+      ((runtime as any).snapshot.participants as Array<{ address: string }>)
+        .map((participant) => participant.address)
+        .sort()
+    ).toEqual(['Qlocal', 'Qpeer']);
+    expect(broadcastTopology).not.toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+        clusters: [expect.objectContaining({ members: ['Qlocal'] })],
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    expect(sendKeyRequest).toHaveBeenLastCalledWith(
+      'room-1',
+      'Qpeer',
+      'Qlocal',
+      expect.any(String),
+      'pub-local',
+      expect.any(Number),
+      'csid-bootstrap',
+      2
+    );
+    expect(
+      ((runtime as any).diagEvents as Array<{ tag: string }>).some(
+        (event) => event.tag === 'two-party-link-resync-topology'
+      )
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('does not promote standby to root on heartbeat timeout while recent root activity still exists', async () => {
     vi.useFakeTimers();
     const nowMs = Date.now();
