@@ -1286,7 +1286,11 @@ def _set_verified_overlay_peers(
             continue
         if now - float(seen_at) > _OVERLAY_NEIGHBOR_GRACE_SECONDS:
             continue
-        if peer_hash not in next_verified and peer_hash not in prev_verified:
+        if (
+            peer_hash not in next_verified
+            and peer_hash not in prev_verified
+            and peer_hash not in _candidate_peers
+        ):
             continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")

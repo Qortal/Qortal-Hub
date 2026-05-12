@@ -873,6 +873,43 @@ describe('ReticulumBridge group audio support', () => {
       },
     ]);
   });
+
+  it('marks decoded call and group call senders as verified overlay peers', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const markReticulumOverlayPeerVerified = vi.fn();
+    vi.mocked(getPresenceManager).mockReturnValue({
+      markReticulumOverlayPeerVerified,
+    } as any);
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'call_message',
+      payload: {
+        wire: { t: 'CA' },
+        senderDestinationHash: 'sender-call-hash',
+        peerPresenceHash: 'peer-call-hash',
+      },
+    });
+    internal.handleFrame({
+      type: 'event',
+      event: 'group_call_message',
+      payload: {
+        wire: { t: 'GA' },
+        senderDestinationHash: 'sender-group-hash',
+        peerPresenceHash: 'peer-group-hash',
+      },
+    });
+
+    expect(markReticulumOverlayPeerVerified).toHaveBeenCalledWith(
+      'peer-call-hash',
+      'call_signal'
+    );
+    expect(markReticulumOverlayPeerVerified).toHaveBeenCalledWith(
+      'peer-group-hash',
+      'group_signal'
+    );
+  });
 });
 
 describe('ReticulumBridge publish_presence payload', () => {

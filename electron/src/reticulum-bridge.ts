@@ -585,6 +585,16 @@ export class ReticulumBridge
   private overlayEstablishedLinkIds = new Set<string>();
   private overlayLinkSnapshots = new Map<string, ReticulumOverlayLinkSnapshot>();
 
+  private markOverlayPeerVerifiedFromQortalTraffic(
+    peerPresenceHash: string,
+    senderDestinationHash: string,
+    source: string
+  ): void {
+    const hash = (peerPresenceHash || senderDestinationHash).trim().toLowerCase();
+    if (!hash) return;
+    getPresenceManager()?.markReticulumOverlayPeerVerified(hash, source);
+  }
+
   subscribe(handlers: PresenceTransportHandlers): () => void {
     const onReady = () => handlers.onReady?.();
     const onDegraded = (reason?: string) => handlers.onDegraded?.(reason);
@@ -2023,6 +2033,11 @@ export class ReticulumBridge
         const senderDestinationHash = frame.payload?.senderDestinationHash;
         const peerPresenceHash = frame.payload?.peerPresenceHash;
         if (!wire || typeof wire !== 'object') return;
+        this.markOverlayPeerVerifiedFromQortalTraffic(
+          typeof peerPresenceHash === 'string' ? peerPresenceHash : '',
+          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
+          'call_signal'
+        );
         this.emit(
           'call-message',
           wire as Record<string, unknown>,
@@ -2036,6 +2051,11 @@ export class ReticulumBridge
         const senderDestinationHash = frame.payload?.senderDestinationHash;
         const peerPresenceHash = frame.payload?.peerPresenceHash;
         if (!wire || typeof wire !== 'object') return;
+        this.markOverlayPeerVerifiedFromQortalTraffic(
+          typeof peerPresenceHash === 'string' ? peerPresenceHash : '',
+          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
+          'group_signal'
+        );
         this.emit(
           'group-call-message',
           wire as Record<string, unknown>,

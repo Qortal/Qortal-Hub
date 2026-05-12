@@ -86,7 +86,7 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(neighbors1);
   });
 
-  it('does not admit a pure fanned-out presence origin into overlay peers', () => {
+  it('admits a fanned-out presence origin as verified Qortal overlay traffic', () => {
     const manager = new PresenceManager();
     const now = Date.now();
     const envelope = {
@@ -117,8 +117,44 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     ).toBe(true);
 
     expect(manager.isAddressOnline('Q-forwarded')).toBe(true);
-    expect(manager.getReticulumVerifiedPeers()).toEqual([]);
-    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual([]);
+    expect(manager.getReticulumVerifiedPeers()).toEqual([
+      {
+        destinationHash: 'origin-hash',
+        address: 'Q-forwarded',
+        lastSeen: now,
+      },
+    ]);
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(['origin-hash']);
+  });
+
+  it('verifies an overlay peer from non-presence Qortal traffic without relatching', () => {
+    const manager = new PresenceManager();
+    const verifiedEvents: unknown[] = [];
+    manager.on('reticulum-peer-verified', (event) => verifiedEvents.push(event));
+
+    manager.noteReticulumCandidateDiscovered('origin-hash', 'announce', 1_000);
+    manager.markReticulumOverlayPeerVerified('origin-hash', 'group_signal', undefined, 2_000);
+
+    expect(manager.getReticulumVerifiedPeers()).toEqual([
+      {
+        destinationHash: 'origin-hash',
+        address: '',
+        lastSeen: 2_000,
+      },
+    ]);
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(['origin-hash']);
+    expect(verifiedEvents).toHaveLength(1);
+
+    manager.markReticulumOverlayPeerVerified('origin-hash', 'call_signal', undefined, 3_000);
+
+    expect(manager.getReticulumVerifiedPeers()).toEqual([
+      {
+        destinationHash: 'origin-hash',
+        address: '',
+        lastSeen: 3_000,
+      },
+    ]);
+    expect(verifiedEvents).toHaveLength(1);
   });
 
   it('allows a fanned-out presence proof to verify an announce-backed candidate', () => {

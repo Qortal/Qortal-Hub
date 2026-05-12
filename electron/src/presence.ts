@@ -838,8 +838,13 @@ export class PresenceManager extends EventEmitter {
     }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
 
-    if (route.kind === 'reticulum' && this.shouldPromoteReticulumOverlayRoute(route)) {
-      this.promoteVerifiedReticulumPeer(route.destinationHash, address, now);
+    if (route.kind === 'reticulum') {
+      this.markReticulumOverlayPeerVerified(
+        route.destinationHash,
+        'presence',
+        address,
+        now
+      );
     }
 
     if (envelope.type === 'PRESENCE_OFFLINE') {
@@ -1134,6 +1139,23 @@ export class PresenceManager extends EventEmitter {
     this.emitReticulumOverlayChanged();
   }
 
+  /**
+   * Marks a Reticulum destination as a verified Qortal overlay participant after
+   * any accepted Qortal overlay protocol traffic. Verification is latched by
+   * destination hash; later accepted traffic only refreshes liveness metadata.
+   */
+  markReticulumOverlayPeerVerified(
+    destinationHash: string,
+    source: string = 'qortal-overlay',
+    address?: string,
+    now: number = Date.now()
+  ): void {
+    const hash = destinationHash.trim().toLowerCase();
+    if (!hash) return;
+    if (this.isSelfReticulumHash(hash)) return;
+    this.promoteVerifiedReticulumPeer(hash, address ?? '', now, source);
+  }
+
   /** Returns the most-recently-seen active status for an address, or null. */
   getAddressStatus(address: string): UserStatus | null {
     return this.getAddressAggregate(address).status;
@@ -1377,17 +1399,18 @@ export class PresenceManager extends EventEmitter {
   private promoteVerifiedReticulumPeer(
     destinationHash: string,
     address: string,
-    now: number
+    now: number,
+    source: string = 'presence'
   ): void {
     const hash = destinationHash.trim().toLowerCase();
-    if (!hash || !address) return;
+    if (!hash) return;
     if (this.isSelfReticulumHash(hash)) return;
     this.reticulumCandidates.delete(hash);
     const existing = this.verifiedReticulumPeers.get(hash);
     if (existing) {
       this.verifiedReticulumPeers.set(hash, {
         destinationHash: hash,
-        address: existing.address,
+        address: existing.address || address,
         lastSeen: now,
         verifiedAt: existing.verifiedAt,
         linkClosedAt: null,
@@ -1406,17 +1429,9 @@ export class PresenceManager extends EventEmitter {
       destinationHash: hash,
       address,
       lastSeen: now,
+      source,
     });
     this.emitReticulumOverlayChanged();
-  }
-
-  private shouldPromoteReticulumOverlayRoute(
-    route: Extract<PresenceRoute, { kind: 'reticulum' }>
-  ): boolean {
-    const destinationHash = route.destinationHash.trim().toLowerCase();
-    const viaHash = route.viaDestinationHash?.trim().toLowerCase();
-    if (!viaHash || viaHash === destinationHash) return true;
-    return this.reticulumCandidates.get(destinationHash)?.source === 'announce';
   }
 
   private pruneReticulumOverlayState(now: number = Date.now()): void {
