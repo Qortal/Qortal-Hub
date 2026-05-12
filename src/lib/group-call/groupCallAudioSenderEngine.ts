@@ -300,7 +300,7 @@ export class GroupCallAudioSenderEngine {
       audioData.close();
     };
     source.connect(captureNode);
-    source.connect(keepAliveGain);
+    captureNode.connect(keepAliveGain);
     keepAliveGain.connect(ctx.destination);
     await applyCallAudioOutput(nextShape.outputDeviceId, { audioContext: ctx });
     await ensureAudioContextRunning(ctx);

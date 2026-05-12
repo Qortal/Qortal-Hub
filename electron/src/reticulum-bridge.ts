@@ -198,6 +198,7 @@ export type ReticulumOverlayLinkSnapshot = {
   peerPresenceHash: string;
   incoming: boolean;
   connectedAt: number;
+  lastRxAt: number;
 };
 
 type BridgeEventFrame =
@@ -315,6 +316,7 @@ type BridgeEventFrame =
         reason?: string;
         queuedPackets?: number;
         closedByReticulum?: boolean;
+        lastRxAt?: number | null;
       };
     }
   | {
@@ -366,6 +368,7 @@ const CONTROL_LOW_PRIORITY_PENDING_MAX = 128;
 const HEARTBEAT_MIN_INTERVAL_MS = 10_000;
 const ANNOUNCE_DEDUP_WINDOW_MS = 1_000;
 const RESTART_DELAY_MS = 2_000;
+const OVERLAY_LINK_RX_IDLE_TIMEOUT_MS = 95_000;
 
 /** Grep main-process logs for this string when debugging binary audio IPC (fd3/fd4). */
 const RETICULUM_AUDIO_IPC_LOG = 'target=reticulum-audio-ipc';
@@ -1381,6 +1384,7 @@ export class ReticulumBridge
 
   /** Unique overlay peers (by presence hash); links without hash yet count separately. */
   private getEstablishedOverlayPeerCount(): number {
+    this.pruneStaleOverlayLinkSnapshots();
     const byPeer = new Set<string>();
     let noHash = 0;
     for (const snap of this.overlayLinkSnapshots.values()) {
@@ -1392,6 +1396,7 @@ export class ReticulumBridge
   }
 
   getOverlayLinkSnapshots(): ReticulumOverlayLinkSnapshot[] {
+    this.pruneStaleOverlayLinkSnapshots();
     const byPeer = new Map<string, ReticulumOverlayLinkSnapshot>();
     const noHash: ReticulumOverlayLinkSnapshot[] = [];
     for (const snap of this.overlayLinkSnapshots.values()) {
@@ -1408,6 +1413,23 @@ export class ReticulumBridge
     return [...byPeer.values(), ...noHash].sort(
       (a, b) => a.connectedAt - b.connectedAt
     );
+  }
+
+  private pruneStaleOverlayLinkSnapshots(now = Date.now()): void {
+    for (const [linkId, snap] of this.overlayLinkSnapshots.entries()) {
+      if (now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
+      this.overlayEstablishedLinkIds.delete(linkId);
+      this.overlayLinkSnapshots.delete(linkId);
+      loggerLog(
+        `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} rxIdleMs=${now - snap.lastRxAt}`
+      );
+      if (snap.peerPresenceHash) {
+        this.emit('overlay-link-closed', {
+          peerHash: snap.peerPresenceHash,
+          reason: 'rx_idle_timeout',
+        });
+      }
+    }
   }
 
   /**
@@ -2233,11 +2255,17 @@ export class ReticulumBridge
         if (established) {
           this.overlayEstablishedLinkIds.add(linkId);
           const existing = this.overlayLinkSnapshots.get(linkId);
+          const lastRxAt =
+            typeof frame.payload?.lastRxAt === 'number' &&
+            Number.isFinite(frame.payload.lastRxAt)
+              ? frame.payload.lastRxAt
+              : existing?.lastRxAt ?? Date.now();
           this.overlayLinkSnapshots.set(linkId, {
             linkId,
             peerPresenceHash: peerPresenceHash || existing?.peerPresenceHash || '',
             incoming: frame.payload?.incoming === true,
             connectedAt: existing?.connectedAt ?? Date.now(),
+            lastRxAt,
           });
         } else {
           this.overlayEstablishedLinkIds.delete(linkId);

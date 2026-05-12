@@ -62,11 +62,28 @@ class FakeAudioEncoder {
 
 describe('GroupCallAudioSenderEngine', () => {
   let latestCapturePort: CapturePort | null = null;
+  let latestMicSource: {
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+  } | null = null;
+  let latestKeepAliveGain: {
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    gain: { value: number };
+  } | null = null;
+  let latestCaptureNode: {
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    port: CapturePort;
+  } | null = null;
   let nowMs = 0;
   let performanceNowSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     latestCapturePort = null;
+    latestMicSource = null;
+    latestKeepAliveGain = null;
+    latestCaptureNode = null;
     nowMs = 0;
     FakeAudioEncoder.instances = [];
     getUserAudioStreamForCall.mockResolvedValue({
@@ -93,14 +110,16 @@ describe('GroupCallAudioSenderEngine', () => {
         destination = {};
         audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) };
         createMediaStreamSource() {
-          return { connect: vi.fn(), disconnect: vi.fn() };
+          latestMicSource = { connect: vi.fn(), disconnect: vi.fn() };
+          return latestMicSource;
         }
         createGain() {
-          return {
+          latestKeepAliveGain = {
             gain: { value: 0 },
             connect: vi.fn(),
             disconnect: vi.fn(),
           };
+          return latestKeepAliveGain;
         }
         resume = vi.fn().mockResolvedValue(undefined);
         close = vi.fn().mockResolvedValue(undefined);
@@ -116,6 +135,7 @@ describe('GroupCallAudioSenderEngine', () => {
         constructor(_ctx: unknown, name: string) {
           if (name === 'capture-processor') {
             latestCapturePort = this.port;
+            latestCaptureNode = this;
           }
         }
         connect = vi.fn();
@@ -163,6 +183,21 @@ describe('GroupCallAudioSenderEngine', () => {
       },
     } as MessageEvent);
   }
+
+  it('routes the capture worklet through the keep-alive output graph', async () => {
+    const { engine } = await startSender();
+
+    expect(latestMicSource?.connect).toHaveBeenCalledTimes(1);
+    expect(latestMicSource?.connect).toHaveBeenCalledWith(latestCaptureNode);
+    expect(latestCaptureNode?.connect).toHaveBeenCalledTimes(1);
+    expect(latestCaptureNode?.connect).toHaveBeenCalledWith(
+      latestKeepAliveGain
+    );
+    expect(latestKeepAliveGain?.connect).toHaveBeenCalledTimes(1);
+    expect(latestKeepAliveGain?.gain.value).toBe(0.0001);
+
+    await engine.stop();
+  });
 
   it('drops stale encoder outputs instead of sending a delayed burst', async () => {
     const { engine, encoder, onEncodedFrame } = await startSender();

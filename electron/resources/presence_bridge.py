@@ -64,6 +64,10 @@ _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
 _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
 _OVERLAY_LINK_PATH_AWAIT_SECONDS = 0.35
+# Presence heartbeats are expected every 25s and TS expires sessions after 70s.
+# Keep overlay links a little longer than that, but do not trust a link forever
+# when no inbound Qortal overlay traffic arrives after the remote app exits.
+_OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS = 95.0
 _QCHAT_FILE_LINK_OPEN_PATH_AWAIT_SECONDS = 8.0
 _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS = 4
 _QCHAT_FILE_LINK_RETRY_DELAY_SECONDS = 2.0
@@ -2139,6 +2143,11 @@ def emit_overlay_link_state(
             "reason": reason,
             "queuedPackets": len(state.get("pending_packets") or []),
             "closedByReticulum": closed_by_reticulum,
+            "lastRxAt": (
+                float(state.get("last_rx_at")) * 1000.0
+                if isinstance(state.get("last_rx_at"), (int, float))
+                else None
+            ),
         },
     )
 
@@ -2245,6 +2254,24 @@ def _teardown_overlay_link_id(link_id: str, reason: str) -> None:
             pass
     state["established"] = False
     emit_overlay_link_state(link_id, state, reason)
+
+
+def _maybe_prune_stale_overlay_links() -> None:
+    now = time.time()
+    stale_ids = []
+    with _state_lock:
+        for link_id, state in list(_overlay_links_by_id.items()):
+            if state.get("established") is not True:
+                continue
+            last_rx = state.get("last_rx_at")
+            if not isinstance(last_rx, (int, float)):
+                last_rx = state.get("established_at") or state.get("created_at")
+            if not isinstance(last_rx, (int, float)):
+                continue
+            if now - float(last_rx) > _OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS:
+                stale_ids.append(link_id)
+    for link_id in stale_ids:
+        _teardown_overlay_link_id(link_id, "rx_idle_timeout")
 
 
 def _register_active_overlay_for_peer(peer_key: str, link_id: str) -> Optional[Dict[str, Any]]:
@@ -2469,6 +2496,7 @@ def _retry_pending_overlay_connect_on_announce(peer_hash: str) -> None:
 
 
 def _sync_overlay_links() -> None:
+    _maybe_prune_stale_overlay_links()
     desired = set(_active_overlay_neighbors.keys())
     for peer_hash in desired:
         if peer_hash not in _known_peers:
@@ -2740,6 +2768,7 @@ def on_overlay_link_packet(message, packet) -> None:
     if not isinstance(decoded, dict):
         return
     state["last_activity_at"] = time.time()
+    state["last_rx_at"] = time.time()
     t = decoded.get("t")
     if isinstance(t, str) and t.startswith("PRESENCE_"):
         if _emit_presence_message(decoded, link_id):
@@ -3890,6 +3919,7 @@ def on_outgoing_overlay_link_established(link) -> None:
     state["established"] = True
     state["established_at"] = now
     state["last_activity_at"] = now
+    state.setdefault("last_rx_at", now)
     try:
         if _identity is not None:
             link.identify(_identity)
@@ -4277,6 +4307,7 @@ def _register_incoming_overlay_link(link) -> str:
         "created_at": now,
         "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
         "last_activity_at": now,
+        "last_rx_at": now,
     }
     with _state_lock:
         _overlay_links_by_id[link_id] = state

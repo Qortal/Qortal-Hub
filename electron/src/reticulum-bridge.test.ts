@@ -650,6 +650,7 @@ describe('ReticulumBridge group audio support', () => {
         peerPresenceHash: 'peer-hash',
         incoming: false,
         connectedAt: expect.any(Number),
+        lastRxAt: expect.any(Number),
       },
     ]);
 
@@ -690,6 +691,40 @@ describe('ReticulumBridge group audio support', () => {
         closedByReticulum: false,
       },
     ]);
+  });
+
+  it('prunes overlay snapshots when inbound traffic goes idle', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(200_000);
+    const seen: unknown[] = [];
+
+    bridge.on('overlay-link-closed', (payload) => {
+      seen.push(payload);
+    });
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: true,
+        established: true,
+        reason: 'rx_presence',
+        queuedPackets: 0,
+        closedByReticulum: false,
+        lastRxAt: 100_000,
+      },
+    });
+
+    expect(bridge.getOverlayLinkSnapshots()).toEqual([]);
+    expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(0);
+    expect(seen).toEqual([
+      { peerHash: 'peer-hash', reason: 'rx_idle_timeout' },
+    ]);
+
+    nowSpy.mockRestore();
   });
 
   it('emits overlay-link-closed for Reticulum-driven closes when peer hash is known', () => {
