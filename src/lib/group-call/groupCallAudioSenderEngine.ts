@@ -48,7 +48,6 @@ const GCALL_SENDER_ENCODER_RESET_STALE_DROPS = 8;
 const GCALL_SENDER_ENCODER_RESET_STALE_WINDOW_MS = 2_000;
 const GCALL_SENDER_ENCODER_RESET_MAX_OUTPUT_AGE_MS = 400;
 const GCALL_SENDER_ENCODER_RESET_COOLDOWN_MS = 7_500;
-const GCALL_SENDER_IMPOSSIBLE_FRAME_SPACING_MS = 1;
 
 async function ensureAudioContextRunning(ctx: AudioContext): Promise<void> {
   const resumable = ctx as AudioContext & { resume?: () => Promise<void> };
@@ -105,7 +104,6 @@ export class GroupCallAudioSenderEngine {
   private encodedFrameCount = 0;
   private droppedEncoderBackpressureFrames = 0;
   private droppedStaleEncodedFrames = 0;
-  private droppedCadenceFrames = 0;
   private encoderResetCount = 0;
   private lastEncoderResetAtMs = 0;
   private lastEncoderResetReason: string | null = null;
@@ -122,7 +120,6 @@ export class GroupCallAudioSenderEngine {
   private captureInputSampleRate: number | null = null;
   private captureOutputSampleRate: number | null = null;
   private captureInputFrameSamples: number | null = null;
-  private lastEncodedFrameInputPerfMs: number | null = null;
   private encodeTimingByTimestampUs = new Map<
     number,
     { capturePerfMs: number; encoderInputPerfMs: number; vad: boolean }
@@ -143,7 +140,6 @@ export class GroupCallAudioSenderEngine {
     this.encodedFrameCount = 0;
     this.droppedEncoderBackpressureFrames = 0;
     this.droppedStaleEncodedFrames = 0;
-    this.droppedCadenceFrames = 0;
     this.encoderResetCount = 0;
     this.lastEncoderResetAtMs = 0;
     this.lastEncoderResetReason = null;
@@ -157,7 +153,6 @@ export class GroupCallAudioSenderEngine {
     this.captureInputSampleRate = null;
     this.captureOutputSampleRate = null;
     this.captureInputFrameSamples = null;
-    this.lastEncodedFrameInputPerfMs = null;
     this.encodeTimingByTimestampUs.clear();
   }
 
@@ -404,18 +399,9 @@ export class GroupCallAudioSenderEngine {
           }
           return;
         }
-        if (
-          this.lastEncodedFrameInputPerfMs !== null &&
-          encoderInputPerfMs - this.lastEncodedFrameInputPerfMs <
-            GCALL_SENDER_IMPOSSIBLE_FRAME_SPACING_MS
-        ) {
-          this.droppedCadenceFrames++;
-          return;
-        }
         const frame = new Uint8Array(chunk.byteLength);
         chunk.copyTo(frame);
         this.encodedFrameCount++;
-        this.lastEncodedFrameInputPerfMs = encoderInputPerfMs;
         this.onEncodedFrame?.({
           opusFrame: frame,
           vad: timing?.vad ?? this.lastVad,
@@ -479,7 +465,6 @@ export class GroupCallAudioSenderEngine {
     this.encoderPressureActiveMs = 0;
     this.staleEncodedDropPerfMs.length = 0;
     this.encodeTimingByTimestampUs.clear();
-    this.lastEncodedFrameInputPerfMs = null;
     this.encoderGeneration++;
     this.encoder = null;
     try {
@@ -518,7 +503,6 @@ export class GroupCallAudioSenderEngine {
       encodedFrameCount: this.encodedFrameCount,
       droppedEncoderBackpressureFrames: this.droppedEncoderBackpressureFrames,
       droppedStaleEncodedFrames: this.droppedStaleEncodedFrames,
-      droppedCadenceFrames: this.droppedCadenceFrames,
       encoderResetCount: this.encoderResetCount,
       lastEncoderResetAtMs: this.lastEncoderResetAtMs,
       lastEncoderResetReason: this.lastEncoderResetReason,
@@ -579,7 +563,6 @@ export class GroupCallAudioSenderEngine {
     this.encoderQueuePressureStartedPerfMs = null;
     this.encoderPressureActiveMs = 0;
     this.staleEncodedDropPerfMs.length = 0;
-    this.lastEncodedFrameInputPerfMs = null;
     this.encodeTimingByTimestampUs.clear();
     if (captureNode) {
       captureNode.port.onmessage = null;

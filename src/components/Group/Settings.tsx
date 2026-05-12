@@ -133,6 +133,7 @@ function formatReticulumReachability(status: ReticulumStatus | null): string {
     case 'disconnected':
       return 'Hub disconnected';
     default:
+      if (status?.bridgeState === 'ready') return 'Bridge ready';
       return 'Detecting reachability';
   }
 }

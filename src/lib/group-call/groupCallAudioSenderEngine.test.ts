@@ -291,7 +291,7 @@ describe('GroupCallAudioSenderEngine', () => {
     await engine.stop();
   });
 
-  it('drops impossible same-timestamp encoded cadence', async () => {
+  it('allows close-together encoder outputs from batched capture delivery', async () => {
     const { engine, encoder, onEncodedFrame } = await startSender();
 
     nowMs = 20;
@@ -303,10 +303,9 @@ describe('GroupCallAudioSenderEngine', () => {
     encoder.emitNext();
     encoder.emitNext();
 
-    expect(onEncodedFrame).toHaveBeenCalledTimes(1);
+    expect(onEncodedFrame).toHaveBeenCalledTimes(2);
     expect(engine.getDiagnosticsSnapshot()).toMatchObject({
-      encodedFrameCount: 1,
-      droppedCadenceFrames: 1,
+      encodedFrameCount: 2,
     });
 
     await engine.stop();
