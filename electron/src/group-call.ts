@@ -13,9 +13,9 @@
  *   GC_JOIN / GC_LEAVE       — room membership (Reticulum compact wire; see group-call-wire-reticulum.ts)
  *   GC_TOPOLOGY              — forwarder tree (Reticulum; fragmentation when large)
  *   GC_CLUSTER_HEARTBEAT     — per cluster-forwarder liveness (signed, Reticulum)
- *   GC_KEY / GC_KEY_ROTATE   — room media key distribution (Reticulum)
+ *   GC_KEY                   — room media key distribution (Reticulum)
  *
- * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_CLUSTER_HEARTBEAT, GC_KEY, GC_KEY_ROTATE, and
+ * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_CLUSTER_HEARTBEAT, GC_KEY, and
  * GC_KEY_REQUEST carry Ed25519 signatures. In-room peers verify before use.
  */
 
@@ -49,8 +49,6 @@ import {
   decodeJoinWireFailureReason,
   decodeKeyRequestFromGq1,
   decodeKeyRequestWireSingle,
-  decodeKeyRotateFromGr1,
-  decodeKeyRotateWireSingle,
   decodeKeyWireFromGk1,
   decodeKeyWireSingle,
   decodeLeaveWire,
@@ -60,7 +58,6 @@ import {
   encodeJoinIdentityWire,
   encodeJoinWire,
   encodeKeyRequestWire,
-  encodeKeyRotateWire,
   encodeKeyWire,
   encodeLeaveWire,
   encodeTopologyWire,
@@ -72,16 +69,10 @@ import {
   parseGk1,
   parseGq0,
   parseGq1,
-  parseGr0,
-  parseGr1,
   parseGt0,
   parseGt1,
 } from './group-call-wire-reticulum';
-import type {
-  GrFragmentMeta,
-  GkFragmentMeta,
-  GtFragmentMeta,
-} from './group-call-wire-reticulum';
+import type { GkFragmentMeta, GtFragmentMeta } from './group-call-wire-reticulum';
 import { compactDmVoiceJoinWireChatId } from './dm-voice-wire';
 import {
   byteLengthUtf8JsonWithBridgeSender,
@@ -376,7 +367,7 @@ export function shouldApplyVerifiedLeaveToParticipant(opts: {
 }
 
 /**
- * Strict merge for a single pending KEY/KEY_ROTATE slot: higher `mediaSessionGeneration` wins;
+ * Strict merge for a single pending KEY slot: higher `mediaSessionGeneration` wins;
  * if equal, newer `timestamp` wins. Never prefer lower generation even if timestamp is newer.
  * Exported for unit tests.
  */
@@ -393,7 +384,7 @@ export function pendingKeyEnvelopeWinsOver(
 
 /**
  * Local recovery must not bump generation ahead of the mesh; otherwise authoritative
- * GC_KEY/GC_KEY_ROTATE from the real root look stale to this process.
+ * GC_KEY from the real root look stale to this process.
  */
 export function getLocalSessionBreakMediaSessionGeneration(
   currentGeneration: number
@@ -477,7 +468,6 @@ export type GroupCallMsgType =
   | 'GC_TOPOLOGY'
   | 'GC_CLUSTER_HEARTBEAT'
   | 'GC_KEY'
-  | 'GC_KEY_ROTATE'
   | 'GC_KEY_REQUEST';
 
 export const GC_MESSAGE_TYPES = new Set<string>([
@@ -486,7 +476,6 @@ export const GC_MESSAGE_TYPES = new Set<string>([
   'GC_TOPOLOGY',
   'GC_CLUSTER_HEARTBEAT',
   'GC_KEY',
-  'GC_KEY_ROTATE',
   'GC_KEY_REQUEST',
 ]);
 
@@ -665,23 +654,6 @@ export interface GcKeyEnvelope {
   hopsRemaining?: number;
 }
 
-export interface GcKeyRotateEnvelope {
-  type: 'GC_KEY_ROTATE';
-  roomId: string;
-  fromAddress: string;
-  fromPublicKey: string;
-  /** Base64-encoded encrypted room media keys — map of address → encryptedKey */
-  encryptedKeys: Record<string, string>;
-  keyMessageVersion: number;
-  callSessionId: string;
-  mediaSessionGeneration: number;
-  keyCommitment: string;
-  encryptedKeysDigest: string;
-  signature: string;
-  timestamp: number;
-  hopsRemaining?: number;
-}
-
 export interface GcKeyRequestEnvelope {
   type: 'GC_KEY_REQUEST';
   roomId: string;
@@ -702,7 +674,6 @@ export type GcEnvelope =
   | GcTopologyEnvelope
   | GcClusterHeartbeatEnvelope
   | GcKeyEnvelope
-  | GcKeyRotateEnvelope
   | GcKeyRequestEnvelope;
 
 // ── Room state ────────────────────────────────────────────────────────────────
@@ -1196,20 +1167,8 @@ function sha256Hex(input: string): string {
   return nodeCrypto.createHash('sha256').update(input).digest('hex');
 }
 
-function canonicalizeStringMap(map: Record<string, string>): string {
-  const sorted: Record<string, string> = {};
-  for (const key of Object.keys(map).sort()) {
-    sorted[key] = map[key]!;
-  }
-  return JSON.stringify(sorted);
-}
-
 function buildGcKeyDigest(toAddress: string, encryptedKey: string): string {
   return sha256Hex(JSON.stringify({ encryptedKey, toAddress }));
-}
-
-function buildGcKeyRotateDigest(encryptedKeys: Record<string, string>): string {
-  return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
 function buildGcJoinSignedFields(
@@ -1264,33 +1223,6 @@ function buildGcKeySignedFields(
     mediaSessionGeneration: env.mediaSessionGeneration,
     keyCommitment: env.keyCommitment,
     encryptedKeyDigest: env.encryptedKeyDigest,
-  };
-}
-
-function buildGcKeyRotateSignedFields(
-  env: GcKeyRotateEnvelope
-): Record<string, unknown> | null {
-  if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) return null;
-  if (
-    !isNonEmptyString(env.callSessionId) ||
-    typeof env.mediaSessionGeneration !== 'number' ||
-    !Number.isFinite(env.mediaSessionGeneration) ||
-    !isNonEmptyString(env.keyCommitment) ||
-    !isNonEmptyString(env.encryptedKeysDigest)
-  ) {
-    return null;
-  }
-  return {
-    type: env.type,
-    roomId: env.roomId,
-    fromAddress: env.fromAddress,
-    fromPublicKey: env.fromPublicKey,
-    timestamp: env.timestamp,
-    keyMessageVersion: env.keyMessageVersion,
-    callSessionId: env.callSessionId,
-    mediaSessionGeneration: env.mediaSessionGeneration,
-    keyCommitment: env.keyCommitment,
-    encryptedKeysDigest: env.encryptedKeysDigest,
   };
 }
 
@@ -1363,7 +1295,6 @@ type GcVerifyPending =
       peerPresenceHash?: string;
     }
   | { kind: 'key'; env: GcKeyEnvelope; peerPresenceHash?: string }
-  | { kind: 'key_rotate'; env: GcKeyRotateEnvelope; peerPresenceHash?: string }
   | {
       kind: 'key_request';
       env: GcKeyRequestEnvelope;
@@ -1381,7 +1312,7 @@ const GC_JOIN_DROP_LOG_MIN_MS = 5_000;
 /** Throttle broadcastTopology with no local room (ordering / race diagnostic). */
 const BROADCAST_TOPOLOGY_NO_ROOM_LOG_MIN_MS = 10_000;
 
-/** Buffer GC_KEY / GC_KEY_ROTATE until joinRoom creates GroupRoom (ordering fix). */
+/** Buffer GC_KEY until joinRoom creates GroupRoom (ordering fix). */
 const PENDING_KEY_TTL_MS = 10_000;
 /** Buffer inbound GC_JOIN until joinRoom registers the room (align with GC_JOIN_RK pending TTL). */
 const PENDING_GC_JOIN_BEFORE_JOIN_ROOM_MS = 120_000;
@@ -1390,21 +1321,13 @@ const GC_UNKNOWN_ROOM_KEY_LOG_MIN_MS = 60_000;
 /** Throttle diagnostic when pending key expires before join. */
 const PENDING_KEY_EXPIRED_LOG_MIN_MS = 30_000;
 
-type PendingKeyEntry =
-  | {
-      type: 'KEY';
-      mediaSessionGeneration: number;
-      timestamp: number;
-      deadlineMs: number;
-      env: GcKeyEnvelope;
-    }
-  | {
-      type: 'ROTATE';
-      mediaSessionGeneration: number;
-      timestamp: number;
-      deadlineMs: number;
-      env: GcKeyRotateEnvelope;
-    };
+type PendingKeyEntry = {
+  type: 'KEY';
+  mediaSessionGeneration: number;
+  timestamp: number;
+  deadlineMs: number;
+  env: GcKeyEnvelope;
+};
 
 type RetainedVerifiedKeyState = {
   roomId: string;
@@ -1633,7 +1556,7 @@ export class GroupCallManager extends EventEmitter {
   /** roomId → last warn time when broadcastTopology ran before joinRoom created the room */
   private broadcastTopologyNoRoomLogAt = new Map<string, number>();
 
-  /** GC_KEY / GC_KEY_ROTATE before joinRoom — one slot per roomId (strict generation merge). */
+  /** GC_KEY before joinRoom — one slot per roomId (strict generation merge). */
   private pendingKeyByRoom = new Map<string, PendingKeyEntry>();
   /** GC_JOIN / GJ before joinRoom registered `roomId` (race: peer sends join first). */
   private pendingGcJoinBeforeJoinRoom = new Map<
@@ -1702,10 +1625,6 @@ export class GroupCallManager extends EventEmitter {
   private reticulumTopoReasm = new Map<
     string,
     { meta: GtFragmentMeta; parts: Map<number, string>; deadline: number }
-  >();
-  private reticulumGrReasm = new Map<
-    string,
-    { meta: GrFragmentMeta; parts: Map<number, string>; deadline: number }
   >();
   private reticulumGkReasm = new Map<
     string,
@@ -2063,10 +1982,6 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(
         `[GCall] Dropped GC_KEY: invalid signature from ${job.env.fromAddress}`
       );
-    } else if (job.kind === 'key_rotate') {
-      loggerLog(
-        `[GCall] Dropped GC_KEY_ROTATE: invalid signature from ${job.env.fromAddress}`
-      );
     } else {
       loggerLog(
         `[GCall] Dropped GC_KEY_REQUEST: invalid signature from ${job.env.fromAddress}`
@@ -2197,9 +2112,6 @@ export class GroupCallManager extends EventEmitter {
         break;
       case 'key':
         this.applyVerifiedKey(job.env);
-        break;
-      case 'key_rotate':
-        this.applyVerifiedKeyRotate(job.env);
         break;
       case 'key_request':
         this.applyVerifiedKeyRequest(job.env);
@@ -2336,7 +2248,6 @@ export class GroupCallManager extends EventEmitter {
     this.qortalReticulumTargetsByRoomId.clear();
     this.watchedQortalGroupNumericIds.clear();
     this.reticulumTopoReasm.clear();
-    this.reticulumGrReasm.clear();
     this.reticulumGkReasm.clear();
     this.reticulumGqReasm.clear();
     for (const timer of this.reticulumRetryTimers) {
@@ -2592,42 +2503,6 @@ export class GroupCallManager extends EventEmitter {
     return true;
   }
 
-  private tryEnqueuePendingKeyFromRotate(env: GcKeyRotateEnvelope): boolean {
-    const gen = env.mediaSessionGeneration;
-    const ts = env.timestamp;
-    if (
-      typeof gen !== 'number' ||
-      !Number.isFinite(gen) ||
-      typeof ts !== 'number' ||
-      !Number.isFinite(ts)
-    ) {
-      return false;
-    }
-    const roomId = env.roomId;
-    const existing = this.pendingKeyByRoom.get(roomId);
-    if (existing) {
-      if (
-        !pendingKeyEnvelopeWinsOver(
-          { mediaSessionGeneration: gen, timestamp: ts },
-          {
-            mediaSessionGeneration: existing.mediaSessionGeneration,
-            timestamp: existing.timestamp,
-          }
-        )
-      ) {
-        return false;
-      }
-    }
-    this.pendingKeyByRoom.set(roomId, {
-      type: 'ROTATE',
-      mediaSessionGeneration: gen,
-      timestamp: ts,
-      deadlineMs: Date.now() + PENDING_KEY_TTL_MS,
-      env: { ...env, encryptedKeys: { ...env.encryptedKeys } },
-    });
-    return true;
-  }
-
   private flushPendingKeyForRoom(roomId: string): void {
     const pending = this.pendingKeyByRoom.get(roomId);
     if (!pending) return;
@@ -2639,11 +2514,7 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     this.pendingKeyByRoom.delete(roomId);
-    if (pending.type === 'KEY') {
-      this.handleKey(pending.env);
-    } else {
-      this.handleKeyRotate(pending.env);
-    }
+    this.handleKey(pending.env);
     this.pendingKeyFlushSuccess++;
   }
 
@@ -3047,7 +2918,6 @@ export class GroupCallManager extends EventEmitter {
   private sweepExpiredReticulumReassembly(now: number): void {
     for (const m of [
       this.reticulumTopoReasm,
-      this.reticulumGrReasm,
       this.reticulumGkReasm,
       this.reticulumGqReasm,
     ]) {
@@ -3750,40 +3620,6 @@ export class GroupCallManager extends EventEmitter {
       this.reticulumTopoReasm.delete(key);
       if (!env) return;
       this.handleTopology(env as GcTopologyEnvelope, peerPresenceHash);
-      return;
-    }
-
-    if (t === 'GR') {
-      const env = decodeKeyRotateWireSingle(wire);
-      if (!env) return;
-      this.handleKeyRotate(env as GcKeyRotateEnvelope, peerPresenceHash);
-      return;
-    }
-    if (t === 'GR0') {
-      const meta = parseGr0(wire);
-      if (!meta) return;
-      this.reticulumGrReasm.set(`${meta.roomId}:${meta.z}`, {
-        meta,
-        parts: new Map(),
-        deadline: now + GC_RETICULUM_REASM_TTL_MS,
-      });
-      return;
-    }
-    if (t === 'GR1') {
-      const pr = parseGr1(wire);
-      if (!pr) return;
-      const key = `${pr.R}:${pr.z}`;
-      const buf = this.reticulumGrReasm.get(key);
-      if (!buf || pr.n !== buf.meta.n) {
-        this.releaseReticulumWireLogicalKey(overlayLogicalKey);
-        return;
-      }
-      buf.parts.set(pr.x, pr.p);
-      if (buf.parts.size < buf.meta.n) return;
-      const env = decodeKeyRotateFromGr1(buf.meta, buf.parts);
-      this.reticulumGrReasm.delete(key);
-      if (!env) return;
-      this.handleKeyRotate(env as GcKeyRotateEnvelope, peerPresenceHash);
       return;
     }
 
@@ -7527,7 +7363,12 @@ export class GroupCallManager extends EventEmitter {
       keyCommitment: string;
       encryptedKeyDigest: string;
     }
-  ): void {
+  ): {
+    success: boolean;
+    error?: string;
+    sentLinks?: number;
+    skippedLinks?: number;
+  } {
     const env: GcKeyEnvelope = {
       type: 'GC_KEY',
       roomId,
@@ -7544,7 +7385,7 @@ export class GroupCallManager extends EventEmitter {
       loggerWarn(
         `[GCall] Skipping GC_KEY (Reticulum) for room ${roomId}: unable to encode within Reticulum wire limit`
       );
-      return;
+      return { success: false, error: 'reticulum-wire-encode-failed' };
     }
     const { sentLinks, skippedLinks } =
       this.sendReticulumLinkControlToAddresses(
@@ -7557,51 +7398,7 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(
       `[GCall] Queued GC_KEY (Reticulum links) for room ${roomId} to=${toAddress} links=${sentLinks} skipped=${skippedLinks}`
     );
-  }
-
-  sendKeyRotate(
-    roomId: string,
-    encryptedKeys: Record<string, string>,
-    fromAddress: string,
-    signature: string,
-    publicKey: string,
-    timestamp: number,
-    meta: {
-      keyMessageVersion: number;
-      callSessionId: string;
-      mediaSessionGeneration: number;
-      keyCommitment: string;
-      encryptedKeysDigest: string;
-    }
-  ): void {
-    const env: GcKeyRotateEnvelope = {
-      type: 'GC_KEY_ROTATE',
-      roomId,
-      fromAddress,
-      fromPublicKey: publicKey,
-      encryptedKeys,
-      signature,
-      timestamp,
-      ...meta,
-    };
-    const keyRotateFrames = encodeKeyRotateWire(env);
-    if (keyRotateFrames.length === 0) {
-      loggerWarn(
-        `[GCall] Skipping GC_KEY_ROTATE (Reticulum) for room ${roomId}: unable to encode within Reticulum wire limit`
-      );
-      return;
-    }
-    const { sentLinks, skippedLinks } =
-      this.sendReticulumLinkControlToAddresses(
-        roomId,
-        keyRotateFrames,
-        Object.keys(encryptedKeys),
-        new Set([fromAddress]),
-        'GC_KEY_ROTATE'
-      );
-    loggerLog(
-      `[GCall] Queued GC_KEY_ROTATE (Reticulum links) for room ${roomId} recipients=${Object.keys(encryptedKeys).length} links=${sentLinks} skipped=${skippedLinks}`
-    );
+    return { success: sentLinks > 0, sentLinks, skippedLinks };
   }
 
   sendKeyRequest(
@@ -7669,8 +7466,6 @@ export class GroupCallManager extends EventEmitter {
         return this.handleClusterHeartbeat(env, peerPresenceHash);
       case 'GC_KEY':
         return this.handleKey(env, peerPresenceHash);
-      case 'GC_KEY_ROTATE':
-        return this.handleKeyRotate(env, peerPresenceHash);
       case 'GC_KEY_REQUEST':
         return this.handleKeyRequest(env, peerPresenceHash);
     }
@@ -9059,77 +8854,6 @@ export class GroupCallManager extends EventEmitter {
     );
   }
 
-  private handleKeyRotate(
-    env: GcKeyRotateEnvelope,
-    peerPresenceHash?: string
-  ): void {
-    let hasLocalRecipient = false;
-    for (const localAddr of this.localAddresses) {
-      if (env.encryptedKeys[localAddr]) {
-        hasLocalRecipient = true;
-        break;
-      }
-    }
-    if (!hasLocalRecipient) {
-      return;
-    }
-    if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
-      loggerLog(
-        `[GCall] Dropped GC_KEY_ROTATE: unsupported version ${env.keyMessageVersion}`
-      );
-      return;
-    }
-    if (env.encryptedKeysDigest !== buildGcKeyRotateDigest(env.encryptedKeys)) {
-      loggerLog(
-        `[GCall] Dropped GC_KEY_ROTATE: payload digest mismatch from ${env.fromAddress}`
-      );
-      return;
-    }
-    const room = this.rooms.get(env.roomId);
-    if (!room) {
-      const accepted = this.tryEnqueuePendingKeyFromRotate(env);
-      if (!accepted && !this.pendingKeyByRoom.has(env.roomId)) {
-        this.logUnknownRoomKeyThrottled(env.roomId, 'GC_KEY_ROTATE');
-      }
-      return;
-    }
-    // Same cross-process session adoption as handleKey: root's callSessionId wins.
-    let sessionAdopted = false;
-    if (env.mediaSessionGeneration !== room.mediaSessionGeneration) {
-      if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
-        room.callSessionId = env.callSessionId;
-        room.mediaSessionGeneration = env.mediaSessionGeneration;
-        sessionAdopted = true;
-        loggerLog(
-          `[GCall] GC_KEY_ROTATE: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`
-        );
-      } else {
-        loggerLog(
-          `[GCall] Dropped GC_KEY_ROTATE: stale session generation from ${env.fromAddress}`
-        );
-        return;
-      }
-    } else if (env.callSessionId !== room.callSessionId) {
-      room.callSessionId = env.callSessionId;
-      sessionAdopted = true;
-    }
-    if (sessionAdopted) {
-      this.pendingVerifiedSessionUpdateByRoom.set(env.roomId, {
-        callSessionId: env.callSessionId,
-        mediaSessionGeneration: env.mediaSessionGeneration,
-      });
-    }
-    const fields = buildGcKeyRotateSignedFields(env);
-    if (!fields) return;
-    this.enqueueVerify(
-      fields,
-      env.signature,
-      env.fromPublicKey,
-      env.fromAddress,
-      { kind: 'key_rotate', env, peerPresenceHash }
-    );
-  }
-
   private handleKeyRequest(
     env: GcKeyRequestEnvelope,
     peerPresenceHash?: string
@@ -9216,36 +8940,6 @@ export class GroupCallManager extends EventEmitter {
     this.emit('gcall:key', payload);
   }
 
-  private applyVerifiedKeyRotate(env: GcKeyRotateEnvelope): void {
-    this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
-    this.noteBootstrapParticipantActivity(
-      env.roomId,
-      env.fromAddress,
-      env.timestamp
-    );
-    this.emitPendingVerifiedSessionUpdate(env.roomId, env);
-    for (const localAddr of this.localAddresses) {
-      const encryptedKey = env.encryptedKeys[localAddr];
-      if (!encryptedKey) continue;
-      const payload: RetainedVerifiedKeyState = {
-        roomId: env.roomId,
-        recipientAddress: localAddr,
-        fromAddress: env.fromAddress,
-        fromPublicKey: env.fromPublicKey,
-        encryptedKey,
-        timestamp: env.timestamp,
-        keyMessageVersion: env.keyMessageVersion,
-        callSessionId: env.callSessionId,
-        mediaSessionGeneration: env.mediaSessionGeneration,
-        keyCommitment: env.keyCommitment,
-        verified: true,
-        deliveryKind: 'live',
-      };
-      this.rememberRetainedVerifiedKeyState(localAddr, payload);
-      this.emit('gcall:key', payload);
-    }
-  }
-
   private applyVerifiedKeyRequest(env: GcKeyRequestEnvelope): void {
     this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
     this.noteBootstrapParticipantActivity(
@@ -9292,10 +8986,6 @@ export class GroupCallManager extends EventEmitter {
 
   getKeyDigestForTarget(toAddress: string, encryptedKey: string): string {
     return buildGcKeyDigest(toAddress, encryptedKey);
-  }
-
-  getKeyRotateDigest(encryptedKeys: Record<string, string>): string {
-    return buildGcKeyRotateDigest(encryptedKeys);
   }
 
   // ── Queries ───────────────────────────────────────────────────────────────

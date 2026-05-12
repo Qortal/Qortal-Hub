@@ -458,7 +458,7 @@ const naclApi = nacl as any;
 
 /**
  * Flip to `true` locally to test group calls with a fixed 32-byte media key shared by all
- * peers — no GC_KEY / GC_KEY_ROTATE / targeted key sends.
+ * peers — no GC_KEY / targeted key sends.
  * Also skips root-change self-mint invalidation, authoritative decrypt grace, and send-path
  * gates so topology elections do not block audio.
  */
@@ -786,7 +786,7 @@ const ROOT_INBOUND_WARM_MIN_RELAY_SENT = 24;
 const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
 const GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS = 1_000;
 const GCALL_N1_ACCUMULATION_HOLD_LOG_MIN_MS = 1_000;
-/** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
+/** Safety-net timeout: if room-key distribution IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
 const WINDOW_METRICS_INTERVAL_MS = 60_000;
@@ -1098,25 +1098,11 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function canonicalizeStringMap(map: Record<string, string>): string {
-  const sorted: Record<string, string> = {};
-  for (const key of Object.keys(map).sort()) {
-    sorted[key] = map[key]!;
-  }
-  return JSON.stringify(sorted);
-}
-
 async function buildGcKeyDigest(
   toAddress: string,
   encryptedKey: string
 ): Promise<string> {
   return sha256Hex(JSON.stringify({ encryptedKey, toAddress }));
-}
-
-async function buildGcKeyRotateDigest(
-  encryptedKeys: Record<string, string>
-): Promise<string> {
-  return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
 /** Compute election scores for all participants. Returns sorted list (lowest score first). */
@@ -11465,39 +11451,45 @@ export function useGroupVoiceCall(uiActive = false) {
         callSessionId,
         mediaSessionGeneration
       );
-      const encryptedKeysDigest = await buildGcKeyRotateDigest(encryptedKeys);
-      const ts = Date.now();
-      const sig = await signGroupCallFields({
-        type: 'GC_KEY_ROTATE',
-        roomId: roomIdRef.current,
-        fromAddress: myAddr,
-        fromPublicKey: userInfo.publicKey ?? '',
-        keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-        callSessionId,
-        mediaSessionGeneration,
-        keyCommitment,
-        encryptedKeysDigest,
-        timestamp: ts,
-      }).catch(() => '');
-      if (!sig) {
-        debugWarn('[GCall] Signing failed for GC_KEY_ROTATE');
-        return;
-      }
-      await window.groupCall.sendKeyRotate(
-        roomIdRef.current,
-        encryptedKeys,
-        myAddr,
-        sig,
-        userInfo.publicKey ?? '',
-        ts,
-        {
+      for (const [addr, encryptedKey] of Object.entries(encryptedKeys)) {
+        const encryptedKeyDigest = await buildGcKeyDigest(addr, encryptedKey);
+        const ts = Date.now();
+        const sig = await signGroupCallFields({
+          type: 'GC_KEY',
+          roomId: roomIdRef.current,
+          toAddress: addr,
+          fromAddress: myAddr,
+          fromPublicKey: userInfo.publicKey ?? '',
           keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
           callSessionId,
           mediaSessionGeneration,
           keyCommitment,
-          encryptedKeysDigest,
+          encryptedKeyDigest,
+          timestamp: ts,
+        }).catch(() => '');
+        if (!sig) {
+          debugWarn('[GCall] Signing failed for GC_KEY distribution', {
+            toAddress: addr,
+          });
+          continue;
         }
-      );
+        await window.groupCall.sendKey(
+          roomIdRef.current,
+          addr,
+          encryptedKey,
+          myAddr,
+          sig,
+          userInfo.publicKey ?? '',
+          ts,
+          {
+            keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+            callSessionId,
+            mediaSessionGeneration,
+            keyCommitment,
+            encryptedKeyDigest,
+          }
+        );
+      }
     },
     [encryptRoomKeyForRecipients, getAuthoritativeRotationRecipients, userInfo]
   );

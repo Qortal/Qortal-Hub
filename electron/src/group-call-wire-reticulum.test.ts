@@ -7,8 +7,6 @@ import {
   decodeJoinWireFailureReason,
   decodeKeyRequestFromGq1,
   decodeKeyWireFromGk1,
-  decodeKeyRotateFromGr1,
-  decodeKeyRotateWireSingle,
   decodeTopologyFromGt1,
   decodeTopologyWireSingle,
   encodeClusterHeartbeatWire,
@@ -16,10 +14,7 @@ import {
   encodeJoinWire,
   encodeKeyRequestWire,
   encodeKeyWire,
-  encodeKeyRotateWire,
   encodeTopologyWire,
-  parseGr0,
-  parseGr1,
   parseGk0,
   parseGk1,
   parseGq0,
@@ -384,42 +379,6 @@ describe('group-call-wire-reticulum', () => {
     expect(back?.clusters).toEqual(env.clusters);
   });
 
-  it('round-trips or fragments key rotate', () => {
-    const keys: Record<string, string> = { Qa: 'ek-a', Qb: 'ek-b' };
-    const env = {
-      type: 'GC_KEY_ROTATE' as const,
-      roomId: 'kr',
-      fromAddress: 'Qroot',
-      fromPublicKey: 'pk',
-      encryptedKeys: keys,
-      keyMessageVersion: 3,
-      callSessionId: 'sid',
-      mediaSessionGeneration: 2,
-      keyCommitment: 'kc',
-      encryptedKeysDigest: 'deadbeef',
-      signature: 'sig',
-      timestamp: 5,
-    };
-    const frames = encodeKeyRotateWire(env);
-    if (frames.length === 1) {
-      const back = decodeKeyRotateWireSingle(
-        frames[0] as Record<string, unknown>
-      );
-      expect(back?.encryptedKeys).toEqual(keys);
-      return;
-    }
-    const meta = parseGr0(frames[0] as Record<string, unknown>);
-    expect(meta).not.toBeNull();
-    const parts = new Map<number, string>();
-    for (let i = 1; i < frames.length; i++) {
-      const p = parseGr1(frames[i] as Record<string, unknown>);
-      expect(p).not.toBeNull();
-      parts.set(p!.x, p!.p);
-    }
-    const back = decodeKeyRotateFromGr1(meta!, parts);
-    expect(back?.encryptedKeys).toEqual(keys);
-  });
-
   it('fragments realistic encrypted keys under wire limit', () => {
     const frames = encodeKeyWire({
       roomId: 'gcall-qortal-812',
@@ -507,24 +466,4 @@ describe('group-call-wire-reticulum', () => {
     });
   });
 
-  it('encodeKeyRotateWire returns empty array when GR0 meta cannot fit wire limit', () => {
-    const longRoom = `gcall-${'x'.repeat(500)}`;
-    const keys: Record<string, string> = { Qa: 'ek' };
-    const env = {
-      type: 'GC_KEY_ROTATE' as const,
-      roomId: longRoom,
-      fromAddress: 'Qroot',
-      fromPublicKey: 'pk',
-      encryptedKeys: keys,
-      keyMessageVersion: 3,
-      callSessionId: 'sid',
-      mediaSessionGeneration: 2,
-      keyCommitment: 'kc',
-      encryptedKeysDigest: 'deadbeef',
-      signature: 'sig',
-      timestamp: 5,
-    };
-    const frames = encodeKeyRotateWire(env);
-    expect(frames).toEqual([]);
-  });
 });

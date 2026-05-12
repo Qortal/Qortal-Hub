@@ -395,6 +395,12 @@ const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_BRIDGE_TO_RENDERER_MS = 750;
 const BURSTY_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 80;
 const BURSTY_INBOUND_MEDIA_RECOVERY_MISSING_FRAMES_MIN = 300;
 const naclApi = nacl as typeof nacl;
+const randomNaclBytes = (nacl as { randomBytes(size: number): Uint8Array })
+  .randomBytes;
+
+function randomRoomKey(): Uint8Array {
+  return randomNaclBytes(32);
+}
 
 function base64ToUint8(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
@@ -405,17 +411,6 @@ function uint8ToBase64(value: Uint8Array): string {
   for (let i = 0; i < value.length; i++)
     binary += String.fromCharCode(value[i]!);
   return btoa(binary);
-}
-
-function canonicalizeStringMap(value: Record<string, string>): string {
-  return JSON.stringify(
-    Object.keys(value)
-      .sort((a, b) => a.localeCompare(b))
-      .reduce<Record<string, string>>((out, key) => {
-        out[key] = value[key]!;
-        return out;
-      }, {})
-  );
 }
 
 async function sha256Hex(input: string): Promise<string> {
@@ -431,12 +426,6 @@ async function buildGcKeyDigest(
   encryptedKey: string
 ): Promise<string> {
   return sha256Hex(JSON.stringify({ encryptedKey, toAddress }));
-}
-
-async function buildGcKeyRotateDigest(
-  encryptedKeys: Record<string, string>
-): Promise<string> {
-  return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
 function buildTopologyWithTrustedRoot(
@@ -526,6 +515,9 @@ const ROOM_KEY_DISTRIBUTION_RETRY_MS = 750;
 const TARGETED_ROOM_KEY_REPLAY_RETRY_MS = 2_000;
 const TARGETED_ROOM_KEY_REPLAY_MAX_ATTEMPTS = 6;
 const TWO_PARTY_LINK_RESYNC_COOLDOWN_MS = 5_000;
+const DEMOTED_ROOT_KEY_TRANSFER_GRACE_MS =
+  ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS;
+const FRESH_LOCAL_KEY_AUTHORITY_GRACE_MS = 10_000;
 
 export class GroupCallAudioEngineRuntime {
   private bootstrapRevisionApplied = 0;
@@ -555,6 +547,8 @@ export class GroupCallAudioEngineRuntime {
   private ownsRoomKey = false;
   private selfMintedRoomKey = false;
   private awaitingAuthoritativeKey = false;
+  private localRoomKeyLastEnsuredAtMs = 0;
+  private demotedRootKeyTransferUntilMs = 0;
   private keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private roomKeyDistributionRetryTimer: ReturnType<typeof setTimeout> | null =
     null;
@@ -1202,6 +1196,56 @@ export class GroupCallAudioEngineRuntime {
     });
     this.scheduleTopologyElection(`provisional-local-root-${reason}`);
     return true;
+  }
+
+  private shouldAcceptVerifiedRoomKeyDuringAuthorityLag(
+    fromAddress: string,
+    senderInRoster: boolean,
+    currentRoot: string
+  ): boolean {
+    const sender = fromAddress.trim();
+    const root = currentRoot.trim();
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!sender || !myAddress || sender === myAddress) return false;
+    if (root && root !== myAddress) return false;
+    const smallRoom =
+      this.snapshot.participants.length <= 2 &&
+      this.countRemoteParticipants() <= 1;
+    const hasOccupiedRejoinEvidence =
+      this.startupOccupiedRoomEvidence || this.startupHydratedRemoteCount > 0;
+    return (
+      smallRoom ||
+      senderInRoster ||
+      hasOccupiedRejoinEvidence ||
+      this.isProvisionalLocalRootActive()
+    );
+  }
+
+  private markRoomKeyLocallyEnsured(): void {
+    this.localRoomKeyLastEnsuredAtMs = Date.now();
+    this.demotedRootKeyTransferUntilMs = 0;
+  }
+
+  private hasFreshLocalKeyAuthority(nowMs = Date.now()): boolean {
+    return (
+      this.roomKey !== null &&
+      this.ownsRoomKey &&
+      this.localRoomKeyLastEnsuredAtMs > 0 &&
+      nowMs - this.localRoomKeyLastEnsuredAtMs <=
+        FRESH_LOCAL_KEY_AUTHORITY_GRACE_MS
+    );
+  }
+
+  private retainDemotedRootKeyForTransfer(reason: string): void {
+    if (!this.roomKey) return;
+    this.demotedRootKeyTransferUntilMs =
+      Date.now() + DEMOTED_ROOT_KEY_TRANSFER_GRACE_MS;
+    this.recordDiagEvent('demoted-root-key-retained', {
+      roomId: this.snapshot.roomId,
+      reason,
+      transferGraceMs: DEMOTED_ROOT_KEY_TRANSFER_GRACE_MS,
+      currentRoot: this.topology?.rootForwarder?.trim() || null,
+    });
   }
 
   private clearRecentWindowTrends(): void {
@@ -3039,6 +3083,8 @@ export class GroupCallAudioEngineRuntime {
       this.ownsRoomKey = false;
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = false;
+      this.localRoomKeyLastEnsuredAtMs = 0;
+      this.demotedRootKeyTransferUntilMs = 0;
       this.resetWorkerDecodeFailureRecoveryState();
       this.seq = 0;
       this.callEpochMs = Date.now();
@@ -3189,9 +3235,17 @@ export class GroupCallAudioEngineRuntime {
       (participant) => participant.address === payload.fromAddress
     );
     const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
-    const trustedSender = currentRoot
+    const trustedByTopology = currentRoot
       ? payload.fromAddress === currentRoot
       : senderInRoster || this.snapshot.participants.length <= 2;
+    const trustedDuringAuthorityLag =
+      !trustedByTopology &&
+      this.shouldAcceptVerifiedRoomKeyDuringAuthorityLag(
+        payload.fromAddress,
+        senderInRoster,
+        currentRoot
+      );
+    const trustedSender = trustedByTopology || trustedDuringAuthorityLag;
     const canDecryptBox =
       typeof window.sendMessage === 'function' ||
       typeof (
@@ -3199,6 +3253,18 @@ export class GroupCallAudioEngineRuntime {
           electronAPI?: { gcallProxyDecryptBoxWithMyKey?: unknown };
         }
       ).electronAPI?.gcallProxyDecryptBoxWithMyKey === 'function';
+    if (trustedDuringAuthorityLag) {
+      this.updateTrustedRemoteRoot(payload.fromAddress, Date.now());
+      this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
+      this.recordDiagEvent(
+        'room-key-accepted-during-authority-lag',
+        this.buildIncomingRoomKeyDiagPayload(payload, {
+          currentRoot: currentRoot || null,
+          senderInRoster,
+          participantCount: this.snapshot.participants.length,
+        })
+      );
+    }
     if (!trustedSender) {
       const myAddress = this.userInfo?.address?.trim() ?? '';
       const fromAddress = payload.fromAddress?.trim() ?? '';
@@ -3387,11 +3453,12 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     if (root && root === myAddress) {
-      const roomKey = naclApi.randomBytes(32);
+      const roomKey = randomRoomKey();
       this.roomKey = roomKey;
       this.ownsRoomKey = true;
       this.selfMintedRoomKey = true;
       this.awaitingAuthoritativeKey = false;
+      this.markRoomKeyLocallyEnsured();
       this.resetWorkerDecodeFailureRecoveryState();
       this.clearKeyRecoveryRetryTimer();
       this.callEpochMs = Date.now();
@@ -4245,6 +4312,23 @@ export class GroupCallAudioEngineRuntime {
 
     const sorted = await this.computeElectionOrder([myAddress, peer], roomId);
     const deterministicRoot = sorted[0] ?? myAddress;
+    if (
+      deterministicRoot !== myAddress &&
+      this.hasFreshLocalKeyAuthority(nowMs)
+    ) {
+      this.recordDiagEvent('two-party-link-resync-skipped', {
+        roomId,
+        reason,
+        peer: truncateGcallDiagAddress(peer),
+        skippedReason: 'fresh-local-key-authority',
+        deterministicRoot: truncateGcallDiagAddress(deterministicRoot),
+        currentRoot: truncateGcallDiagAddress(
+          this.topology?.rootForwarder ?? ''
+        ),
+        keyAuthorityAgeMs: nowMs - this.localRoomKeyLastEnsuredAtMs,
+      });
+      return;
+    }
     const topologyEpoch =
       Math.max(
         this.topology?.topologyEpoch ?? 0,
@@ -5158,11 +5242,12 @@ export class GroupCallAudioEngineRuntime {
       const nextRoomKey =
         hadOwnRoomKey || adoptingExistingRoomKey
           ? previousRoomKey
-          : naclApi.randomBytes(32);
+          : randomRoomKey();
       this.roomKey = nextRoomKey;
       this.ownsRoomKey = true;
       this.selfMintedRoomKey = !adoptingExistingRoomKey;
       this.awaitingAuthoritativeKey = false;
+      this.markRoomKeyLocallyEnsured();
       this.resetWorkerDecodeFailureRecoveryState();
       this.clearKeyRecoveryRetryTimer();
       if (!hadOwnRoomKey && !adoptingExistingRoomKey) {
@@ -5191,12 +5276,14 @@ export class GroupCallAudioEngineRuntime {
       previousRoot !== root &&
       previousRoot !== myAddress;
     if (remoteRootChanged) {
-      this.roomKey = null;
-      this.appliedRoomKeyCommitment = '';
+      if (this.roomKey) {
+        this.retainDemotedRootKeyForTransfer('remote-root-changed');
+      } else {
+        this.appliedRoomKeyCommitment = '';
+      }
       this.ownsRoomKey = false;
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
-      await this.syncDecryptPoolRoomKey(null);
       await this.syncSenderState();
       this.requestRetainedKeyReplay('topology-root-changed');
       await this.requestRoomKeyFrom(root, 'topology');
@@ -5207,11 +5294,9 @@ export class GroupCallAudioEngineRuntime {
       this.ownsRoomKey = false;
     }
     if (previousRoot === myAddress && this.selfMintedRoomKey) {
-      this.roomKey = null;
-      this.appliedRoomKeyCommitment = '';
+      this.retainDemotedRootKeyForTransfer('self-minted-root-changed');
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
-      await this.syncDecryptPoolRoomKey(null);
       await this.syncSenderState();
       this.requestRetainedKeyReplay('topology-root-changed');
       await this.requestRoomKeyFrom(root, 'topology');
@@ -6233,56 +6318,30 @@ export class GroupCallAudioEngineRuntime {
       }
       return;
     }
-    const keyCommitment = await buildMediaKeyCommitmentHex(
-      roomKey,
-      this.callSessionId,
-      this.mediaSessionGeneration >>> 0
-    );
-    const encryptedKeysDigest = await buildGcKeyRotateDigest(encryptedKeys);
-    const timestamp = Date.now();
-    const signature = await signGroupCallFields({
-      type: 'GC_KEY_ROTATE',
-      roomId: this.snapshot.roomId,
-      fromAddress: this.userInfo.address,
-      fromPublicKey: this.userInfo.publicKey ?? '',
-      keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-      callSessionId: this.callSessionId,
-      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
-      keyCommitment,
-      encryptedKeysDigest,
-      timestamp,
-    }).catch(() => '');
-    if (!signature) return;
-    await window.groupCall?.sendKeyRotate(
-      this.snapshot.roomId,
-      encryptedKeys,
-      this.userInfo.address,
-      signature,
-      this.userInfo.publicKey ?? '',
-      timestamp,
-      {
-        keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-        callSessionId: this.callSessionId,
-        mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
-        keyCommitment,
-        encryptedKeysDigest,
+    for (const recipientAddress of recipientAddrs) {
+      const publicKey = recipients.get(recipientAddress)?.publicKey;
+      if (publicKey) {
+        await this.sendTargetedRoomKey(
+          roomKey,
+          recipientAddress,
+          publicKey,
+          'room-key-distribution'
+        );
       }
-    );
-    this.recordDiagEvent('room-key-rotate-sent', {
+    }
+    this.recordDiagEvent('room-key-targeted-distribution-sent', {
       roomId: this.snapshot.roomId,
       recipientCount: recipientAddrs.length,
       omittedCount: omittedAddresses.length,
       failedCount: failedAddresses.length,
       callSessionId: this.callSessionId,
       mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
-      keyCommitment: this.truncateDiagHex(keyCommitment),
-      encryptedKeysDigest: this.truncateDiagHex(encryptedKeysDigest),
     });
     for (const recipientAddress of recipientAddrs) {
       this.scheduleTargetedRoomKeyReplayRetry(
         recipientAddress,
         recipients.get(recipientAddress)?.publicKey,
-        'room-key-rotate'
+        'room-key-distribution'
       );
     }
     if (omittedAddresses.length > 0 || failedAddresses.length > 0) {
@@ -6486,6 +6545,54 @@ export class GroupCallAudioEngineRuntime {
       dropKeyRequest('not-verified');
       return;
     }
+    const root = this.topology?.rootForwarder?.trim() ?? '';
+    const localAddress = this.userInfo?.address?.trim() ?? '';
+    if (!this.roomKey) {
+      if (root && root === localAddress && this.callSessionId) {
+        const roomKey = randomRoomKey();
+        this.roomKey = roomKey;
+        this.ownsRoomKey = true;
+        this.selfMintedRoomKey = true;
+        this.awaitingAuthoritativeKey = false;
+        this.markRoomKeyLocallyEnsured();
+        this.resetWorkerDecodeFailureRecoveryState();
+        this.clearKeyRecoveryRetryTimer();
+        this.callEpochMs = Date.now();
+        this.seq = 0;
+        await this.syncDecryptPoolRoomKey(roomKey);
+        await this.syncSenderState();
+        this.recordDiagEvent('missing-room-key-self-recovered', {
+          roomId: this.snapshot.roomId,
+          fromAddress: payload.fromAddress,
+          mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+        });
+      } else {
+        dropKeyRequest('missing-room-key');
+        return;
+      }
+    }
+    const retainedRoomKey = this.roomKey;
+    if (
+      retainedRoomKey &&
+      !this.ownsRoomKey &&
+      root &&
+      root === payload.fromAddress?.trim() &&
+      this.demotedRootKeyTransferUntilMs > Date.now()
+    ) {
+      this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
+      await this.sendTargetedRoomKey(
+        retainedRoomKey,
+        payload.fromAddress,
+        payload.fromPublicKey,
+        'key-request-demoted-root-transfer'
+      );
+      this.scheduleTargetedRoomKeyReplayRetry(
+        payload.fromAddress,
+        payload.fromPublicKey,
+        'key-request-demoted-root-transfer'
+      );
+      return;
+    }
     if (!this.roomKey) {
       dropKeyRequest('missing-room-key');
       return;
@@ -6494,7 +6601,6 @@ export class GroupCallAudioEngineRuntime {
       dropKeyRequest('not-key-owner');
       return;
     }
-    const root = this.topology?.rootForwarder?.trim() ?? '';
     if (!root || root !== this.userInfo?.address) {
       dropKeyRequest('local-not-root');
       return;

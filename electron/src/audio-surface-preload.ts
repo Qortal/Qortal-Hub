@@ -179,31 +179,6 @@ contextBridge.exposeInMainWorld('groupCall', {
       timestamp,
       meta
     ),
-  sendKeyRotate: async (
-    roomId: string,
-    encryptedKeys: Record<string, string>,
-    fromAddress: string,
-    signature: string,
-    publicKey: string,
-    timestamp: number,
-    meta: {
-      keyMessageVersion: number;
-      callSessionId: string;
-      mediaSessionGeneration: number;
-      keyCommitment: string;
-      encryptedKeysDigest: string;
-    }
-  ) =>
-    ipcRenderer.invoke(
-      'gcall:sendKeyRotate',
-      roomId,
-      encryptedKeys,
-      fromAddress,
-      signature,
-      publicKey,
-      timestamp,
-      meta
-    ),
   sendKeyRequest: async (
     roomId: string,
     toAddress: string,

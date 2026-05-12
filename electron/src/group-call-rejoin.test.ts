@@ -4255,7 +4255,7 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
-  it('sends key rotate and key request over established Reticulum group links', async () => {
+  it('sends targeted keys and key request over established Reticulum group links', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
         return 'ready' as const;
@@ -4320,15 +4320,12 @@ describe('Reticulum group audio transport', () => {
     }
     bridge.enqueueGroupAudio.mockClear();
 
-    manager.sendKeyRotate(
+    manager.sendKey(
       'room-1',
-      {
-        'Q-a': 'cipher-a',
-        'Q-b': 'cipher-b',
-        'Q-root': 'cipher-root',
-      },
+      'Q-a',
+      'cipher-a',
       'Q-root',
-      'sig-rotate',
+      'sig-key-a',
       'pk-root',
       200,
       {
@@ -4336,7 +4333,23 @@ describe('Reticulum group audio transport', () => {
         callSessionId: 'session-root',
         mediaSessionGeneration: 2,
         keyCommitment: 'commitment',
-        encryptedKeysDigest: 'digest',
+        encryptedKeyDigest: 'digest-a',
+      }
+    );
+    manager.sendKey(
+      'room-1',
+      'Q-b',
+      'cipher-b',
+      'Q-root',
+      'sig-key-b',
+      'pk-root',
+      200,
+      {
+        keyMessageVersion: 3,
+        callSessionId: 'session-root',
+        mediaSessionGeneration: 2,
+        keyCommitment: 'commitment',
+        encryptedKeyDigest: 'digest-b',
       }
     );
     manager.sendKeyRequest(
@@ -4367,7 +4380,7 @@ describe('Reticulum group audio transport', () => {
     }));
     expect(decoded.every((entry) => entry.roomId === 'room-1')).toBe(true);
     expect(decoded.every((entry) => entry.magic === 'QGCCTL1\0')).toBe(true);
-    expect(decoded.map((entry) => entry.wire.t)).toEqual(['GR', 'GR', 'GQ']);
+    expect(decoded.map((entry) => entry.wire.t)).toEqual(['GK', 'GK', 'GQ']);
     expect(
       decoded
         .slice(0, 2)

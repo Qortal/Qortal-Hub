@@ -22,7 +22,6 @@ describe('GroupCallAudioEngineRuntime', () => {
   const sendAudioBatch = vi.fn();
   const broadcastTopology = vi.fn();
   const sendKey = vi.fn();
-  const sendKeyRotate = vi.fn();
   const sendKeyRequest = vi.fn();
   const getRoomParticipants = vi.fn();
   const getRoomBootstrapState = vi.fn();
@@ -45,7 +44,6 @@ describe('GroupCallAudioEngineRuntime', () => {
     sendAudioBatch.mockReset();
     broadcastTopology.mockReset();
     sendKey.mockReset();
-    sendKeyRotate.mockReset();
     sendKeyRequest.mockReset();
     getRoomParticipants.mockReset();
     getRoomBootstrapState.mockReset();
@@ -63,7 +61,6 @@ describe('GroupCallAudioEngineRuntime', () => {
     sendAudioBatch.mockResolvedValue({ success: true });
     broadcastTopology.mockResolvedValue({ success: true });
     sendKey.mockResolvedValue({ success: true });
-    sendKeyRotate.mockResolvedValue({ success: true });
     sendKeyRequest.mockResolvedValue({ success: true });
     setQortalGroupReticulumTargets.mockResolvedValue({ success: true });
     requestPeerMediaRecovery.mockResolvedValue({ success: true });
@@ -278,7 +275,6 @@ describe('GroupCallAudioEngineRuntime', () => {
       sendAudio,
       sendAudioBatch,
       sendKey,
-      sendKeyRotate,
       sendKeyRequest,
       getRoomParticipants,
       getRoomBootstrapState,
@@ -1568,6 +1564,85 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(runtimeState.heldIncomingAudio).toHaveLength(3);
   });
 
+  it('accepts a verified two-party room key while topology authority is still catching up', async () => {
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+    ]);
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const roomKey = new Uint8Array(32).fill(12);
+    const decryptedKey = btoa(String.fromCharCode(...roomKey));
+    const keyCommitment = await buildMediaKeyCommitmentHex(
+      roomKey,
+      'csid-1',
+      1
+    );
+    (
+      window as unknown as { sendMessage: ReturnType<typeof vi.fn> }
+    ).sendMessage = vi.fn().mockImplementation(async (action: string) => {
+      if (action === 'decryptBoxWithMyKey') {
+        return { decryptedKey };
+      }
+      return { signature: 'sig' };
+    });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: '',
+      clusters: [
+        {
+          members: ['Qlocal'],
+          forwarder: 'Qlocal',
+          standby: 'Qlocal',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-1',
+      encryptedKey: btoa(String.fromCharCode(...new Uint8Array(64).fill(1))),
+      fromAddress: 'Qpeer',
+      fromPublicKey: 'pub-peer',
+      keyMessageVersion: 3,
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+      keyCommitment,
+      verified: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const runtimeState = runtime as unknown as {
+      roomKey: Uint8Array | null;
+      ownsRoomKey: boolean;
+      awaitingAuthoritativeKey: boolean;
+      diagEvents: Array<{ tag: string }>;
+    };
+    expect(Array.from(runtimeState.roomKey ?? [])).toEqual(Array.from(roomKey));
+    expect(runtimeState.ownsRoomKey).toBe(false);
+    expect(runtimeState.awaitingAuthoritativeKey).toBe(false);
+    expect(runtimeState.diagEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'room-key-accepted-during-authority-lag',
+        }),
+        expect.objectContaining({ tag: 'room-key-applied' }),
+      ])
+    );
+  });
+
   it('triggers authoritative-key recovery on repeated worker decode failures', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -1857,6 +1932,68 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('distributes room keys with targeted messages', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const peerPublicKey = Base58.encode(nacl.sign.keyPair().publicKey);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    (runtime as any).snapshot = {
+      ...(runtime as any).snapshot,
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', role: 'root-forwarder' },
+        {
+          address: 'Qpeer',
+          publicKey: peerPublicKey,
+          role: 'standby-forwarder',
+        },
+      ],
+    };
+    (runtime as any).topology = {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' },
+      ],
+      lastSeen: Date.now(),
+    };
+
+    await (runtime as any).distributeRoomKey(new Uint8Array(32).fill(8));
+    expect(sendKey).toHaveBeenCalledWith(
+      'room-1',
+      'Qpeer',
+      expect.any(String),
+      'Qlocal',
+      expect.any(String),
+      'pub-local',
+      expect.any(Number),
+      expect.objectContaining({
+        keyMessageVersion: 3,
+        callSessionId: 'csid-1',
+        mediaSessionGeneration: 1,
+      })
+    );
+    expect((runtime as any).diagEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'room-key-targeted-distribution-sent',
+        }),
+      ])
+    );
+  });
+
   it('retries a targeted room key after a participant joins an active rooted room', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -1996,7 +2133,7 @@ describe('GroupCallAudioEngineRuntime', () => {
       address: 'Qpeer',
       publicKey: peerPublicKey,
     });
-    sendKeyRotate.mockClear();
+    sendKey.mockClear();
 
     groupCallEventHandler?.('gcall:topology', {
       roomId: 'room-1',
@@ -2009,11 +2146,10 @@ describe('GroupCallAudioEngineRuntime', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(sendKeyRotate).toHaveBeenCalledTimes(1);
-    expect(sendKeyRotate).toHaveBeenCalledWith(
+    expect(sendKey).toHaveBeenCalledWith(
       'room-1',
-      expect.objectContaining({ Qpeer: expect.any(String) }),
+      'Qpeer',
+      expect.any(String),
       'Qlocal',
       expect.any(String),
       'pub-local',
@@ -2304,7 +2440,7 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
-  it('drops the old room key and requests a new one when the remote root changes', async () => {
+  it('retains the old room key and requests a new one when the remote root changes', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
     const roomKey = new Uint8Array(32).fill(4);
@@ -2361,7 +2497,7 @@ describe('GroupCallAudioEngineRuntime', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(runtimeState.roomKey).toBeNull();
+    expect(runtimeState.roomKey).toBe(roomKey);
     expect(runtimeState.awaitingAuthoritativeKey).toBe(true);
     expect(sendKeyRequest).toHaveBeenCalledTimes(1);
     expect(sendKeyRequest).toHaveBeenCalledWith(
@@ -2376,9 +2512,12 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
-  it('clears a self-minted room key when remote topology demotes the local root', async () => {
+  it('retains a self-minted room key for transfer when remote topology demotes the local root', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
+    const sendTargetedRoomKey = vi
+      .spyOn(runtime as any, 'sendTargetedRoomKey')
+      .mockResolvedValue(undefined);
     await runtime.handleCommand({
       type: 'set-user',
       userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
@@ -2431,7 +2570,7 @@ describe('GroupCallAudioEngineRuntime', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(runtimeState.roomKey).toBeNull();
+    expect(runtimeState.roomKey).not.toBeNull();
     expect(runtimeState.ownsRoomKey).toBe(false);
     expect(runtimeState.selfMintedRoomKey).toBe(false);
     expect(runtimeState.awaitingAuthoritativeKey).toBe(true);
@@ -2444,6 +2583,24 @@ describe('GroupCallAudioEngineRuntime', () => {
       expect.any(Number),
       'csid-1',
       1
+    );
+
+    groupCallEventHandler?.('gcall:key-request', {
+      roomId: 'room-1',
+      toAddress: 'Qlocal',
+      fromAddress: 'Qpeer',
+      fromPublicKey: 'pub-peer',
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+      verified: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sendTargetedRoomKey).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      'Qpeer',
+      'pub-peer',
+      'key-request-demoted-root-transfer'
     );
   });
 
@@ -2489,13 +2646,15 @@ describe('GroupCallAudioEngineRuntime', () => {
     await vi.runAllTicks();
 
     expect(
-      ((runtime as any).snapshot.participants as Array<{ address: string }>)
+      (runtime as any).snapshot.participants as Array<{ address: string }>
     ).toEqual(
       expect.arrayContaining([expect.objectContaining({ address: 'Qpeer' })])
     );
     expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
     expect(
-      ((runtime as any).diagEvents as Array<{ tag: string; payload?: any }>).some(
+      (
+        (runtime as any).diagEvents as Array<{ tag: string; payload?: any }>
+      ).some(
         (event) =>
           event.tag === 'live-evidence-topology-election-requested' &&
           event.payload?.address === 'Qpeer'
@@ -4064,6 +4223,71 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('does not let link recovery flip a fresh local room-key authority', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const applyTopology = vi.spyOn(runtime as any, 'applyTopology');
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qpeer',
+      'Qlocal',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' },
+      ],
+      lastSeen: nowMs,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    applyTopology.mockClear();
+
+    (runtime as any).recordOutboundMainDiagnostics({
+      targetAddress: 'Qpeer',
+      transport: 'link',
+      linkEstablished: false,
+      lastLinkUnreadyReason: 'link-heartbeat-send-failed:unknown-link-id',
+      lastLinkUnreadyAtMs: Date.now(),
+    });
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(applyTopology).not.toHaveBeenCalled();
+    expect((runtime as any).topology?.rootForwarder).toBe('Qlocal');
+    expect(
+      (
+        (runtime as any).diagEvents as Array<{
+          tag: string;
+          payload?: { skippedReason?: string };
+        }>
+      ).some(
+        (event) =>
+          event.tag === 'two-party-link-resync-skipped' &&
+          event.payload?.skippedReason === 'fresh-local-key-authority'
+      )
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('does not promote standby to root on heartbeat timeout while recent root activity still exists', async () => {
     vi.useFakeTimers();
     const nowMs = Date.now();
@@ -5345,13 +5569,9 @@ describe('GroupCallAudioEngineRuntime', () => {
         verified: true,
       });
       await vi.advanceTimersByTimeAsync(0);
-
-      sendKeyRotate.mockClear();
       broadcastTopology.mockClear();
 
       await vi.advanceTimersByTimeAsync(34_000);
-
-      expect(sendKeyRotate).not.toHaveBeenCalled();
 
       const exportResult = await runtime.handleCommand({
         type: 'export-diagnostics',
@@ -5614,7 +5834,6 @@ describe('GroupCallAudioEngineRuntime', () => {
     await vi.advanceTimersByTimeAsync(5_000);
     expect(broadcastTopology).not.toHaveBeenCalled();
     expect(sendKey).not.toHaveBeenCalled();
-    expect(sendKeyRotate).not.toHaveBeenCalled();
 
     groupCallEventHandler?.('gcall:topology', {
       roomId: 'gcall-qortal-812',
@@ -5708,13 +5927,11 @@ describe('GroupCallAudioEngineRuntime', () => {
 
     broadcastTopology.mockClear();
     sendKey.mockClear();
-    sendKeyRotate.mockClear();
 
     await vi.advanceTimersByTimeAsync(500);
 
     expect(broadcastTopology).not.toHaveBeenCalled();
     expect(sendKey).not.toHaveBeenCalled();
-    expect(sendKeyRotate).not.toHaveBeenCalled();
 
     groupCallEventHandler?.('gcall:topology', {
       roomId: 'gcall-qortal-812',
@@ -5987,7 +6204,6 @@ describe('GroupCallAudioEngineRuntime', () => {
 
     expect(broadcastTopology).not.toHaveBeenCalled();
     expect(sendKey).not.toHaveBeenCalled();
-    expect(sendKeyRotate).not.toHaveBeenCalled();
 
     groupCallEventHandler?.('gcall:topology', {
       roomId: 'gcall-qortal-812',
