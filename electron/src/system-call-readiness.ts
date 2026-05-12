@@ -18,8 +18,6 @@ export type SystemCallReadinessSnapshot = {
 const SAMPLE_INTERVAL_MS = 15_000;
 const CPU_WARNING_LOAD = 0.5;
 const CPU_BLOCKED_LOAD = 0.85;
-const MEMORY_WARNING_PRESSURE = 0.8;
-const MEMORY_BLOCKED_PRESSURE = 0.9;
 const EVENT_LOOP_WARNING_LAG_MS = 100;
 const EVENT_LOOP_BLOCKED_LAG_MS = 250;
 
@@ -78,9 +76,6 @@ function classifySystemPressure(input: {
   if (input.cpuLoad !== null && input.cpuLoad > CPU_BLOCKED_LOAD) {
     blockedReasons.push('cpu-busy');
   }
-  if (input.memoryPressure > MEMORY_BLOCKED_PRESSURE) {
-    blockedReasons.push('memory-pressure');
-  }
   if (input.eventLoopLagMs > EVENT_LOOP_BLOCKED_LAG_MS) {
     blockedReasons.push('main-loop-lag');
   }
@@ -93,9 +88,6 @@ function classifySystemPressure(input: {
 
   if (input.cpuLoad !== null && input.cpuLoad > CPU_WARNING_LOAD) {
     warningReasons.push('cpu-elevated');
-  }
-  if (input.memoryPressure > MEMORY_WARNING_PRESSURE) {
-    warningReasons.push('memory-elevated');
   }
   if (input.eventLoopLagMs > EVENT_LOOP_WARNING_LAG_MS) {
     warningReasons.push('main-loop-lag-elevated');
@@ -119,6 +111,9 @@ function sampleSystemCallReadiness(): void {
 
   const totalMemory = os.totalmem();
   const freeMemory = os.freemem();
+  // Keep this as a diagnostic metric only. Raw free-memory ratios are misleading
+  // on macOS and can also be noisy on Windows because reclaimable/cache memory is
+  // not the same thing as call-breaking memory pressure.
   const memoryPressure =
     totalMemory > 0 ? Math.max(0, Math.min(1, 1 - freeMemory / totalMemory)) : 0;
   const cpuLoad = readCpuLoad();
