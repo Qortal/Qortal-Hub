@@ -119,10 +119,7 @@ export function shouldAcceptIncomingRoomKeySender(opts: {
   senderAddress: string;
   senderInRoster: boolean;
 }): boolean {
-  if (opts.currentRoot) {
-    return opts.senderAddress === opts.currentRoot;
-  }
-  return opts.senderInRoster;
+  return Boolean(opts.currentRoot) && opts.senderAddress === opts.currentRoot;
 }
 
 export function shouldAcceptIncomingRoomKeySenderRelaxed(opts: {
@@ -135,26 +132,7 @@ export function shouldAcceptIncomingRoomKeySenderRelaxed(opts: {
   designatedRoot: string | null;
   participantCount: number;
 }): boolean {
-  if (shouldAcceptIncomingRoomKeySender(opts)) {
-    return true;
-  }
-  if (!opts.awaitingAuthoritativeKey || !opts.senderInRoster) return false;
-  const senderAddress = opts.senderAddress.trim();
-  const myAddress = opts.myAddress.trim();
-  if (!senderAddress || !myAddress || senderAddress === myAddress) return false;
-  const trustedRemoteRoot = opts.trustedRemoteRoot.trim();
-  if (trustedRemoteRoot && senderAddress === trustedRemoteRoot) return true;
-  const designatedRoot = opts.designatedRoot?.trim() ?? '';
-  if (designatedRoot && senderAddress === designatedRoot) return true;
-  const currentRoot = opts.currentRoot.trim();
-  if (
-    opts.participantCount === 2 &&
-    currentRoot === myAddress &&
-    senderAddress !== myAddress
-  ) {
-    return true;
-  }
-  return false;
+  return shouldAcceptIncomingRoomKeySender(opts);
 }
 
 export function shouldIgnoreRedundantRoomKeyDelivery(opts: {

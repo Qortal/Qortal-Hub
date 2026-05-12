@@ -22,6 +22,16 @@ type EncodedFrame = {
   copyTo: (target: Uint8Array) => void;
 };
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 class FakeAudioEncoder {
   static instances: FakeAudioEncoder[] = [];
 
@@ -61,6 +71,7 @@ class FakeAudioEncoder {
 }
 
 describe('GroupCallAudioSenderEngine', () => {
+  let capturePorts: CapturePort[] = [];
   let latestCapturePort: CapturePort | null = null;
   let latestMicSource: {
     connect: ReturnType<typeof vi.fn>;
@@ -80,6 +91,7 @@ describe('GroupCallAudioSenderEngine', () => {
   let performanceNowSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    capturePorts = [];
     latestCapturePort = null;
     latestMicSource = null;
     latestKeepAliveGain = null;
@@ -135,6 +147,7 @@ describe('GroupCallAudioSenderEngine', () => {
         constructor(_ctx: unknown, name: string) {
           if (name === 'capture-processor') {
             latestCapturePort = this.port;
+            capturePorts.push(this.port);
             latestCaptureNode = this;
           }
         }
@@ -195,6 +208,106 @@ describe('GroupCallAudioSenderEngine', () => {
     );
     expect(latestKeepAliveGain?.connect).toHaveBeenCalledTimes(1);
     expect(latestKeepAliveGain?.gain.value).toBe(0.0001);
+
+    await engine.stop();
+  });
+
+  it('serializes overlapping start requests onto one active capture graph', async () => {
+    const firstStream = {
+      getTracks: () => [{ stop: vi.fn() }],
+      getAudioTracks: () => [
+        { enabled: true, muted: false, readyState: 'live' },
+      ],
+    };
+    const firstGum = createDeferred<{ stream: typeof firstStream }>();
+    getUserAudioStreamForCall.mockReset();
+    getUserAudioStreamForCall.mockReturnValueOnce(firstGum.promise);
+    const engine = new GroupCallAudioSenderEngine();
+    const onEncodedFrame = vi.fn();
+
+    const firstStart = engine.startOrUpdate({
+      inputDeviceId: null,
+      outputDeviceId: null,
+      muted: false,
+      profile: 'low-latency',
+      onEncodedFrame,
+    });
+    const secondStart = engine.startOrUpdate({
+      inputDeviceId: null,
+      outputDeviceId: null,
+      muted: false,
+      profile: 'low-latency',
+      onEncodedFrame,
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(getUserAudioStreamForCall).toHaveBeenCalledTimes(1);
+
+    firstGum.resolve({ stream: firstStream });
+    await firstStart;
+    await secondStart;
+
+    expect(getUserAudioStreamForCall).toHaveBeenCalledTimes(1);
+    expect(capturePorts).toHaveLength(1);
+    expect(FakeAudioEncoder.instances).toHaveLength(1);
+
+    await engine.stop();
+  });
+
+  it('ignores queued frames from a stale capture callback after restart', async () => {
+    const { engine, onEncodedFrame } = await startSender();
+    const staleCaptureHandler = latestCapturePort?.onmessage;
+
+    await engine.startOrUpdate({
+      inputDeviceId: null,
+      outputDeviceId: 'other-output-device',
+      muted: false,
+      profile: 'low-latency',
+      onEncodedFrame,
+    });
+
+    expect(capturePorts).toHaveLength(2);
+    expect(FakeAudioEncoder.instances).toHaveLength(2);
+    expect(FakeAudioEncoder.instances[0]?.close).toHaveBeenCalledTimes(1);
+
+    nowMs = 20;
+    staleCaptureHandler?.({
+      data: {
+        frame: new Float32Array(960),
+        vad: true,
+      },
+    } as MessageEvent);
+    expect(FakeAudioEncoder.instances[1]?.pendingCount()).toBe(0);
+
+    nowMs = 40;
+    captureFrame(true);
+    expect(FakeAudioEncoder.instances[1]?.pendingCount()).toBe(1);
+
+    nowMs = 45;
+    FakeAudioEncoder.instances[1]?.emitNext();
+    expect(onEncodedFrame).toHaveBeenCalledTimes(1);
+
+    await engine.stop();
+  });
+
+  it('drops impossible same-timestamp encoded cadence', async () => {
+    const { engine, encoder, onEncodedFrame } = await startSender();
+
+    nowMs = 20;
+    captureFrame(true);
+    captureFrame(true);
+    expect(encoder.pendingCount()).toBe(2);
+
+    nowMs = 30;
+    encoder.emitNext();
+    encoder.emitNext();
+
+    expect(onEncodedFrame).toHaveBeenCalledTimes(1);
+    expect(engine.getDiagnosticsSnapshot()).toMatchObject({
+      encodedFrameCount: 1,
+      droppedCadenceFrames: 1,
+    });
 
     await engine.stop();
   });

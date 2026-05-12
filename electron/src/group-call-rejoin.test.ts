@@ -1440,6 +1440,20 @@ describe('recent room bootstrap state', () => {
       TEST_D32
     );
     expect(join.callSessionId).not.toBe('root-session');
+    manager.broadcastTopology(
+      'room-1',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 1,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-self',
+        clusters: [],
+        lastSeen: 100,
+      },
+      'sig-root',
+      'pk-root',
+      100
+    );
 
     const encryptedKey = 'ciphertext-root';
     (manager as any).handleKey({
@@ -1467,10 +1481,71 @@ describe('recent room bootstrap state', () => {
         mediaSessionGeneration: 1,
       },
     ]);
-    expect(manager.getRoomBootstrapState('room-1')?.callSessionId).toBe(
+    expect((manager as any).rooms.get('room-1')?.callSessionId).toBe(
       'root-session'
     );
     manager.stop();
+  });
+
+  it('does not adopt a same-generation key session from a non-root participant', () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    const sessionUpdates: Array<Record<string, unknown>> = [];
+    manager.on('gcall:session-updated', (payload) => {
+      sessionUpdates.push(payload as Record<string, unknown>);
+    });
+
+    manager.setLocalAddresses(['Q-self']);
+    const join = manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
+    manager.broadcastTopology(
+      'room-1',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 1,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-self',
+        clusters: [
+          {
+            members: ['Q-self', 'Q-root', 'Q-peer'],
+            forwarder: 'Q-root',
+            standby: 'Q-self',
+          },
+        ],
+        lastSeen: 100,
+      },
+      'sig-root',
+      'pk-root',
+      100
+    );
+
+    (manager as any).applyVerifiedKey({
+      roomId: 'room-1',
+      toAddress: 'Q-self',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer',
+      encryptedKey: 'ciphertext-peer',
+      signature: 'sig-peer',
+      timestamp: 101,
+      keyMessageVersion: 3,
+      callSessionId: 'peer-session',
+      mediaSessionGeneration: 1,
+      keyCommitment: 'commitment-peer',
+    });
+
+    expect(sessionUpdates).toEqual([]);
+    expect((manager as any).rooms.get('room-1')?.callSessionId).toBe(
+      join.callSessionId
+    );
   });
 });
 

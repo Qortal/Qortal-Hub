@@ -3247,17 +3247,8 @@ export class GroupCallAudioEngineRuntime {
       (participant) => participant.address === payload.fromAddress
     );
     const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
-    const trustedByTopology = currentRoot
-      ? payload.fromAddress === currentRoot
-      : senderInRoster || this.snapshot.participants.length <= 2;
-    const trustedDuringAuthorityLag =
-      !trustedByTopology &&
-      this.shouldAcceptVerifiedRoomKeyDuringAuthorityLag(
-        payload.fromAddress,
-        senderInRoster,
-        currentRoot
-      );
-    const trustedSender = trustedByTopology || trustedDuringAuthorityLag;
+    const trustedSender =
+      Boolean(currentRoot) && payload.fromAddress === currentRoot;
     const canDecryptBox =
       typeof window.sendMessage === 'function' ||
       typeof (
@@ -3265,18 +3256,6 @@ export class GroupCallAudioEngineRuntime {
           electronAPI?: { gcallProxyDecryptBoxWithMyKey?: unknown };
         }
       ).electronAPI?.gcallProxyDecryptBoxWithMyKey === 'function';
-    if (trustedDuringAuthorityLag) {
-      this.updateTrustedRemoteRoot(payload.fromAddress, Date.now());
-      this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
-      this.recordDiagEvent(
-        'room-key-accepted-during-authority-lag',
-        this.buildIncomingRoomKeyDiagPayload(payload, {
-          currentRoot: currentRoot || null,
-          senderInRoster,
-          participantCount: this.snapshot.participants.length,
-        })
-      );
-    }
     if (!trustedSender) {
       const myAddress = this.userInfo?.address?.trim() ?? '';
       const fromAddress = payload.fromAddress?.trim() ?? '';
@@ -4171,7 +4150,7 @@ export class GroupCallAudioEngineRuntime {
       ...buildTopologyWithTrustedRoot(
         sorted,
         topologyEpoch,
-        trustedElectionRoot
+        sorted.length === 2 ? sorted[0] : trustedElectionRoot
       ),
       roomId,
       lastSeen: nowMs,

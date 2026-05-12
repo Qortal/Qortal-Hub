@@ -2700,7 +2700,7 @@ export class GroupCallManager extends EventEmitter {
   ): boolean {
     const room = this.rooms.get(roomId);
     const authoritativeRoot = room?.lastTopology?.rootForwarder?.trim() ?? '';
-    if (!authoritativeRoot) return true;
+    if (!authoritativeRoot) return roomId.startsWith('dmv:');
     return authoritativeRoot === fromAddress.trim();
   }
 
@@ -8802,35 +8802,17 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
-    // Each Electron process allocates its own callSessionId UUID on first joinRoom.
-    // The root's UUID is the authoritative session identity; non-root peers adopt it
-    // from the first verified key message rather than from their own local UUID.
-    let sessionAdopted = false;
+    // Session identity is adopted only after GC_KEY signature verification in
+    // applyVerifiedKey(), and only from the current topology root. Doing it here
+    // lets stale or non-authoritative retained keys flip callSessionId before the
+    // key is verified, which can split the media key across peers.
     if (env.mediaSessionGeneration !== room.mediaSessionGeneration) {
-      if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
-        // Root has advanced the generation (session-break). Adopt the new session.
-        room.callSessionId = env.callSessionId;
-        room.mediaSessionGeneration = env.mediaSessionGeneration;
-        sessionAdopted = true;
-        loggerLog(
-          `[GCall] GC_KEY: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`
-        );
-      } else {
+      if (env.mediaSessionGeneration < room.mediaSessionGeneration) {
         loggerLog(
           `[GCall] Dropped GC_KEY: stale session generation from ${env.fromAddress}`
         );
         return;
       }
-    } else if (env.callSessionId !== room.callSessionId) {
-      // Same generation, different callSessionId — root's UUID wins; adopt it.
-      room.callSessionId = env.callSessionId;
-      sessionAdopted = true;
-    }
-    if (sessionAdopted) {
-      this.pendingVerifiedSessionUpdateByRoom.set(env.roomId, {
-        callSessionId: env.callSessionId,
-        mediaSessionGeneration: env.mediaSessionGeneration,
-      });
     }
     const fields = buildGcKeySignedFields(env);
     if (!fields) return;
@@ -8910,6 +8892,62 @@ export class GroupCallManager extends EventEmitter {
       env.fromAddress,
       env.timestamp
     );
+    const room = this.rooms.get(env.roomId);
+    if (!room) return;
+
+    const authoritativeRoot = room.lastTopology?.rootForwarder?.trim() ?? '';
+    if (!authoritativeRoot) {
+      if (env.roomId.startsWith('dmv:')) {
+        const participantKnown =
+          room.participants.has(env.fromAddress) ||
+          this.getRecentCallActivityAt(env.roomId, env.fromAddress) > 0;
+        if (!participantKnown) {
+          loggerLog(
+            `[GCall] Dropped DM GC_KEY: unknown sender room=${env.roomId} from=${env.fromAddress}`
+          );
+          return;
+        }
+      } else {
+        loggerLog(
+          `[GCall] Dropped GC_KEY: no topology root yet room=${env.roomId} from=${env.fromAddress}`
+        );
+        return;
+      }
+    }
+    if (authoritativeRoot && env.fromAddress.trim() !== authoritativeRoot) {
+      loggerLog(
+        `[GCall] Dropped GC_KEY: non-authoritative key room=${env.roomId} from=${env.fromAddress} root=${authoritativeRoot}`
+      );
+      return;
+    }
+
+    let sessionAdopted = false;
+    if (env.mediaSessionGeneration < room.mediaSessionGeneration) {
+      loggerLog(
+        `[GCall] Dropped GC_KEY: stale verified session generation from ${env.fromAddress}`
+      );
+      return;
+    }
+    if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
+      room.callSessionId = env.callSessionId;
+      room.mediaSessionGeneration = env.mediaSessionGeneration;
+      sessionAdopted = true;
+      loggerLog(
+        `[GCall] GC_KEY: adopted verified session gen ${env.mediaSessionGeneration} from root ${env.fromAddress}`
+      );
+    } else if (env.callSessionId !== room.callSessionId) {
+      room.callSessionId = env.callSessionId;
+      sessionAdopted = true;
+      loggerLog(
+        `[GCall] GC_KEY: adopted verified same-generation session from root ${env.fromAddress}`
+      );
+    }
+    if (sessionAdopted) {
+      this.pendingVerifiedSessionUpdateByRoom.set(env.roomId, {
+        callSessionId: env.callSessionId,
+        mediaSessionGeneration: env.mediaSessionGeneration,
+      });
+    }
     this.emitPendingVerifiedSessionUpdate(env.roomId, env);
     const payload: RetainedVerifiedKeyState = {
       roomId: env.roomId,

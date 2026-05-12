@@ -13866,7 +13866,7 @@ export function useGroupVoiceCall(uiActive = false) {
           const newTopoBase = buildTopologyWithTrustedRoot(
             sorted,
             epoch,
-            trustedElectionRoot
+            sorted.length === 2 ? sorted[0] : trustedElectionRoot
           );
           const newTopo = { ...newTopoBase, lastSeen: Date.now() };
           applyTopology(newTopo);

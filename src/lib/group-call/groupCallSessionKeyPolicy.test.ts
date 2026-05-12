@@ -24,7 +24,7 @@ describe('groupCallSessionKeyPolicy', () => {
     ).toBe('request-recovery');
   });
 
-  it('accepts the remote root key while awaiting authoritative delivery', () => {
+  it('rejects non-topology-root keys while awaiting authoritative delivery', () => {
     expect(
       shouldAcceptIncomingRoomKeySenderRelaxed({
         currentRoot: 'Qme',
@@ -36,7 +36,7 @@ describe('groupCallSessionKeyPolicy', () => {
         designatedRoot: null,
         participantCount: 2,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('blocks simultaneous-join minting while remote media is still recent', () => {
