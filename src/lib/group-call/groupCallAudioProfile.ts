@@ -122,19 +122,9 @@ export function applyGcallJitterBurstHeadroom(
   level: GcallJitterBurstHeadroomLevel
 ): { jitterBufferSize: number; jitterStartBufferSize: number } {
   if (level <= 0) return tuning;
-  const target =
-    level >= 2
-      ? { jitterBufferSize: 12, jitterStartBufferSize: 9 }
-      : { jitterBufferSize: 10, jitterStartBufferSize: 8 };
   return {
-    jitterBufferSize: Math.max(
-      tuning.jitterBufferSize,
-      target.jitterBufferSize
-    ),
-    jitterStartBufferSize: Math.max(
-      tuning.jitterStartBufferSize,
-      target.jitterStartBufferSize
-    ),
+    jitterBufferSize: tuning.jitterBufferSize + (level >= 2 ? 8 : 4),
+    jitterStartBufferSize: tuning.jitterStartBufferSize,
   };
 }
 
@@ -193,13 +183,13 @@ export function stepGcallJitterBurstHeadroom(input: {
     nearCap && playoutStressed
       ? safeState.nearCapPressureCount + 1
       : 0;
-  const trimPressure =
+  const directTrimPressure =
     trimCount >= GCALL_JITTER_BURST_HEADROOM_TRIM_TRIGGER ||
     (trimCount > 0 && nearCap);
   const nearCapPressure =
     nearCapPressureCount >= GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
 
-  if (playoutStressed && (trimPressure || nearCapPressure)) {
+  if (directTrimPressure || (playoutStressed && nearCapPressure)) {
     const strongPressure =
       trimCount >= GCALL_JITTER_BURST_HEADROOM_STRONG_TRIM_TRIGGER ||
       nearCapPressureCount >
@@ -218,7 +208,7 @@ export function stepGcallJitterBurstHeadroom(input: {
         calmSinceMs: null,
         nearCapPressureCount,
       },
-      reason: trimPressure ? 'trim-pressure' : 'near-cap-pressure',
+      reason: directTrimPressure ? 'trim-pressure' : 'near-cap-pressure',
     };
   }
 

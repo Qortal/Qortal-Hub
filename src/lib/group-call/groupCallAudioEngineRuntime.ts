@@ -190,6 +190,17 @@ type RuntimeRecentWindowTrend = {
     peerAddress: string;
     jitterBufferedFrames: number;
     jitterHasReadyFrame: boolean;
+    jitterMaxEntries?: number;
+    jitterPushAccepted?: number;
+    jitterPushStale?: number;
+    jitterPushDuplicate?: number;
+    jitterPushTrimmedFrames?: number;
+    jitterPushTrimEvents?: number;
+    jitterPushDepthHighWater?: number;
+    jitterLastTrimmedFrames?: number;
+    jitterLastTrimAtMs?: number;
+    jitterBurstHeadroomLevel?: number;
+    jitterBurstHeadroomReason?: string | null;
     lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
   }>;
 };
@@ -1568,6 +1579,17 @@ export class GroupCallAudioEngineRuntime {
         peerAddress: playout.peerAddress,
         jitterBufferedFrames: playout.jitterBufferedFrames,
         jitterHasReadyFrame: playout.jitterHasReadyFrame,
+        jitterMaxEntries: playout.jitterMaxEntries,
+        jitterPushAccepted: playout.jitterPushAccepted,
+        jitterPushStale: playout.jitterPushStale,
+        jitterPushDuplicate: playout.jitterPushDuplicate,
+        jitterPushTrimmedFrames: playout.jitterPushTrimmedFrames,
+        jitterPushTrimEvents: playout.jitterPushTrimEvents,
+        jitterPushDepthHighWater: playout.jitterPushDepthHighWater,
+        jitterLastTrimmedFrames: playout.jitterLastTrimmedFrames,
+        jitterLastTrimAtMs: playout.jitterLastTrimAtMs,
+        jitterBurstHeadroomLevel: playout.jitterBurstHeadroomLevel,
+        jitterBurstHeadroomReason: playout.jitterBurstHeadroomReason,
         lastJitterAdaptiveMode: playout.lastJitterAdaptiveMode,
       })),
     });

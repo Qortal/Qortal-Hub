@@ -21,6 +21,9 @@ import {
 import { GCALL_GLOBAL_PLAYOUT_CAP_MS } from '../group-call/gcallPlayoutPolicy';
 import { configureWebCodecsOpusDecoderForGcall } from '../group-call/configureWebCodecsOpusDecoderForGcall';
 import {
+  applyGcallJitterBurstHeadroom,
+  createGcallJitterBurstHeadroomState,
+  stepGcallJitterBurstHeadroom,
   computeSoftUnprimeMsForTier2,
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
@@ -222,6 +225,18 @@ export class DmVoiceGcallInboundPlayout {
   private startupReadyStallSinceMs: number | null = null;
   private hasObservedPlayoutStart = false;
   private lastPushAtPerfMs: number | null = null;
+  private jitterPushAccepted = 0;
+  private jitterPushStale = 0;
+  private jitterPushDuplicate = 0;
+  private jitterPushTrimmedFrames = 0;
+  private jitterPushTrimEvents = 0;
+  private jitterPushDepthHighWater = 0;
+  private jitterPushDepthHighWaterSinceLastHeadroomStep = 0;
+  private jitterLastTrimmedFrames = 0;
+  private jitterLastTrimAtMs = 0;
+  private jitterTrimmedFramesAtLastHeadroomStep = 0;
+  private jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
+  private lastJitterBurstHeadroomReason: string | null = null;
 
   private resolveActiveSourceCount(): number {
     const n = this.callbacks?.getActiveSourceCount?.() ?? 1;
@@ -298,11 +313,23 @@ export class DmVoiceGcallInboundPlayout {
     jitterActive: boolean;
     jitterBufferedFrames: number;
     jitterHasReadyFrame: boolean;
+    jitterMaxEntries: number;
+    jitterPushAccepted: number;
+    jitterPushStale: number;
+    jitterPushDuplicate: number;
+    jitterPushTrimmedFrames: number;
+    jitterPushTrimEvents: number;
+    jitterPushDepthHighWater: number;
+    jitterLastTrimmedFrames: number;
+    jitterLastTrimAtMs: number;
+    jitterBurstHeadroomLevel: number;
+    jitterBurstHeadroomHoldUntilMs: number;
+    jitterBurstHeadroomReason: string | null;
     playbackNodeActive: boolean;
     schedulerNodeActive: boolean;
     lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
   } {
-    this.syncJitterGeometryFromMetrics();
+    this.syncJitterGeometryFromMetrics(false);
     return {
       peerAddress: this.peerAddress,
       decodePath: this.wasmFecActive
@@ -319,6 +346,18 @@ export class DmVoiceGcallInboundPlayout {
       jitterActive: this.jitter !== null,
       jitterBufferedFrames: this.jitter?.getBufferedFrames() ?? 0,
       jitterHasReadyFrame: this.jitter?.hasReadyFrame() ?? false,
+      jitterMaxEntries: this.jitter?.getMaxEntries() ?? 0,
+      jitterPushAccepted: this.jitterPushAccepted,
+      jitterPushStale: this.jitterPushStale,
+      jitterPushDuplicate: this.jitterPushDuplicate,
+      jitterPushTrimmedFrames: this.jitterPushTrimmedFrames,
+      jitterPushTrimEvents: this.jitterPushTrimEvents,
+      jitterPushDepthHighWater: this.jitterPushDepthHighWater,
+      jitterLastTrimmedFrames: this.jitterLastTrimmedFrames,
+      jitterLastTrimAtMs: this.jitterLastTrimAtMs,
+      jitterBurstHeadroomLevel: this.jitterBurstHeadroomState.level,
+      jitterBurstHeadroomHoldUntilMs: this.jitterBurstHeadroomState.holdUntilMs,
+      jitterBurstHeadroomReason: this.lastJitterBurstHeadroomReason,
       playbackNodeActive: this.playbackNode !== null,
       schedulerNodeActive: this.schedulerNode !== null,
       lastJitterAdaptiveMode: this.lastJitterAdaptiveMode,
@@ -400,6 +439,7 @@ export class DmVoiceGcallInboundPlayout {
     this.startupReadyStallSinceMs = null;
     this.hasObservedPlayoutStart = false;
     this.lastPushAtPerfMs = null;
+    this.resetJitterPushDiagnostics();
     this.peerAddress = peerAddress;
     const tuning = getGroupCallAudioTuning(
       options?.profile ?? readGroupCallAudioProfile()
@@ -543,7 +583,7 @@ export class DmVoiceGcallInboundPlayout {
     jitterSched.port.onmessage = (ev: MessageEvent) => {
       if (ev.data?.type !== 'tick') return;
       const tickStartedAt = performance.now();
-      this.syncJitterGeometryFromMetrics();
+      this.syncJitterGeometryFromMetrics(true);
       const jb = this.jitter;
       let missedFramesThisTick = 0;
       if (!jb) {
@@ -645,28 +685,72 @@ export class DmVoiceGcallInboundPlayout {
     this.speakerGain = speakerGain;
   }
 
-  private syncJitterGeometryFromMetrics(): void {
+  private resetJitterPushDiagnostics(): void {
+    this.jitterPushAccepted = 0;
+    this.jitterPushStale = 0;
+    this.jitterPushDuplicate = 0;
+    this.jitterPushTrimmedFrames = 0;
+    this.jitterPushTrimEvents = 0;
+    this.jitterPushDepthHighWater = 0;
+    this.jitterPushDepthHighWaterSinceLastHeadroomStep = 0;
+    this.jitterLastTrimmedFrames = 0;
+    this.jitterLastTrimAtMs = 0;
+    this.jitterTrimmedFramesAtLastHeadroomStep = 0;
+    this.jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
+    this.lastJitterBurstHeadroomReason = null;
+  }
+
+  private syncJitterGeometryFromMetrics(stepHeadroom = true): void {
     const jb = this.jitter;
     const tuning = this.tuning;
     const m = this.callbacks?.metricsRef?.current;
     if (!jb || !tuning || !m) return;
     const mode = m.getSnapshot().adaptiveNetworkMode;
     const activeSourceCount = this.resolveActiveSourceCount();
+    const snapshot = m.getSnapshot();
+    if (stepHeadroom) {
+      const trimCount =
+        this.jitterPushTrimmedFrames -
+        this.jitterTrimmedFramesAtLastHeadroomStep;
+      this.jitterTrimmedFramesAtLastHeadroomStep =
+        this.jitterPushTrimmedFrames;
+      const depthHighWater =
+        this.jitterPushDepthHighWaterSinceLastHeadroomStep;
+      this.jitterPushDepthHighWaterSinceLastHeadroomStep =
+        jb.getBufferedFrames();
+      const stepped = stepGcallJitterBurstHeadroom({
+        state: this.jitterBurstHeadroomState,
+        enabled: mode === 'recovery',
+        nowMs: Date.now(),
+        trimCount,
+        depthHighWater,
+        maxDepthFrames: jb.getMaxEntries(),
+        playoutUnderTargetFraction: snapshot.playoutUnderTargetFraction,
+        avgPlayoutRate: snapshot.avgPlayoutRate,
+      });
+      this.jitterBurstHeadroomState = stepped.state;
+      if (stepped.reason) this.lastJitterBurstHeadroomReason = stepped.reason;
+    }
     if (
       this.lastJitterAdaptiveMode === mode &&
-      this.lastJitterActiveSourceCount === activeSourceCount
+      this.lastJitterActiveSourceCount === activeSourceCount &&
+      !stepHeadroom
     ) {
       return;
     }
     this.lastJitterAdaptiveMode = mode;
     this.lastJitterActiveSourceCount = activeSourceCount;
-    const eff =
+    const base =
       mode === 'recovery'
         ? getEffectiveJitterTuning(tuning, 'recovery', {
             tier2MultiSource: true,
             activeSourceCount,
           })
         : getEffectiveJitterTuning(tuning, 'low-latency');
+    const eff = applyGcallJitterBurstHeadroom(
+      base,
+      this.jitterBurstHeadroomState.level
+    );
     jb.applyJitterTuning(eff);
     jb.setSoftUnprimeMs(
       computeSoftUnprimeMsForTier2(
@@ -757,7 +841,28 @@ export class DmVoiceGcallInboundPlayout {
     for (const p of packets) {
       if (p.opusFrame?.length) {
         const result = jb.push(p.seq, p.opusFrame);
-        if (result.status === 'accepted') pushedAny = true;
+        if (result.status === 'accepted') {
+          this.jitterPushAccepted++;
+          pushedAny = true;
+        } else if (result.status === 'stale') {
+          this.jitterPushStale++;
+        } else {
+          this.jitterPushDuplicate++;
+        }
+        this.jitterPushDepthHighWater = Math.max(
+          this.jitterPushDepthHighWater,
+          result.depth
+        );
+        this.jitterPushDepthHighWaterSinceLastHeadroomStep = Math.max(
+          this.jitterPushDepthHighWaterSinceLastHeadroomStep,
+          result.depth
+        );
+        if (result.trimmed > 0) {
+          this.jitterPushTrimmedFrames += result.trimmed;
+          this.jitterPushTrimEvents++;
+          this.jitterLastTrimmedFrames = result.trimmed;
+          this.jitterLastTrimAtMs = Date.now();
+        }
       }
     }
     if (pushedAny) this.lastPushAtPerfMs = performance.now();
@@ -792,6 +897,7 @@ export class DmVoiceGcallInboundPlayout {
     this.startupReadyStallSinceMs = null;
     this.hasObservedPlayoutStart = false;
     this.lastPushAtPerfMs = null;
+    this.resetJitterPushDiagnostics();
 
     pcmRing?.reset();
     disconnectSafe(playNode);

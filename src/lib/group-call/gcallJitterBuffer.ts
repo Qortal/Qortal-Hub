@@ -257,6 +257,10 @@ export class JitterBuffer {
     return this.entries.length;
   }
 
+  getMaxEntries(): number {
+    return this.jitterBufferSize * 2;
+  }
+
   clear(): void {
     this.entries = [];
     this.lastPlayedSeq = -1;

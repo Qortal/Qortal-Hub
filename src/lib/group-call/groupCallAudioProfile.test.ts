@@ -98,36 +98,23 @@ describe('gcall jitter burst headroom', () => {
         { jitterBufferSize: 8, jitterStartBufferSize: 7 },
         1
       )
-    ).toEqual({ jitterBufferSize: 10, jitterStartBufferSize: 8 });
+    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 7 });
     expect(
       applyGcallJitterBurstHeadroom(
         { jitterBufferSize: 8, jitterStartBufferSize: 7 },
         2
       )
-    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 9 });
+    ).toEqual({ jitterBufferSize: 16, jitterStartBufferSize: 7 });
     expect(
       applyGcallJitterBurstHeadroom(
         { jitterBufferSize: 12, jitterStartBufferSize: 11 },
         2
       )
-    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 11 });
+    ).toEqual({ jitterBufferSize: 20, jitterStartBufferSize: 11 });
   });
 
-  it('arms burst headroom only when trim pressure coincides with playout stress', () => {
+  it('arms burst headroom on direct trim pressure', () => {
     const state = createGcallJitterBurstHeadroomState();
-    expect(
-      stepGcallJitterBurstHeadroom({
-        state,
-        enabled: true,
-        nowMs: 1_000,
-        trimCount: 8,
-        depthHighWater: 16,
-        maxDepthFrames: 16,
-        playoutUnderTargetFraction: 0.05,
-        avgPlayoutRate: 1,
-      }).state.level
-    ).toBe(0);
-
     const armed = stepGcallJitterBurstHeadroom({
       state,
       enabled: true,
@@ -135,12 +122,53 @@ describe('gcall jitter burst headroom', () => {
       trimCount: 8,
       depthHighWater: 16,
       maxDepthFrames: 16,
-      playoutUnderTargetFraction: 0.35,
-      avgPlayoutRate: 0.99,
+      playoutUnderTargetFraction: 0.05,
+      avgPlayoutRate: 1,
     });
     expect(armed.reason).toBe('trim-pressure');
     expect(armed.state.level).toBe(1);
     expect(armed.state.holdUntilMs).toBeGreaterThan(2_000);
+  });
+
+  it('keeps near-cap-only pressure gated by playout stress', () => {
+    const state = createGcallJitterBurstHeadroomState();
+    expect(
+      stepGcallJitterBurstHeadroom({
+        state,
+        enabled: true,
+        nowMs: 1_000,
+        trimCount: 0,
+        depthHighWater: 16,
+        maxDepthFrames: 16,
+        playoutUnderTargetFraction: 0.05,
+        avgPlayoutRate: 1,
+      }).state.level
+    ).toBe(0);
+
+    const firstStressedNearCap = stepGcallJitterBurstHeadroom({
+      state,
+      enabled: true,
+      nowMs: 2_000,
+      trimCount: 0,
+      depthHighWater: 16,
+      maxDepthFrames: 16,
+      playoutUnderTargetFraction: 0.35,
+      avgPlayoutRate: 0.99,
+    });
+    expect(firstStressedNearCap.state.level).toBe(0);
+
+    const secondStressedNearCap = stepGcallJitterBurstHeadroom({
+      state: firstStressedNearCap.state,
+      enabled: true,
+      nowMs: 2_020,
+      trimCount: 0,
+      depthHighWater: 16,
+      maxDepthFrames: 16,
+      playoutUnderTargetFraction: 0.35,
+      avgPlayoutRate: 0.99,
+    });
+    expect(secondStressedNearCap.reason).toBe('near-cap-pressure');
+    expect(secondStressedNearCap.state.level).toBe(1);
   });
 
   it('escalates strong trim pressure to level 2', () => {

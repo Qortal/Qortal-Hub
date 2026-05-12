@@ -4883,3 +4883,107 @@ Current patched target:
 - Primary fix: inspect the receive playout/jitter readiness path for a newly added third source on the root. The failing leg has an active playout and protected profile, but `jitterHasReadyFrame=false` for the entire retained window while the same source is ready on standby.
 - Secondary fix: keep profile-strength work for participant-side protected recovery quality on the list, but do not apply it as the next patch from this symptom.
 - Selector is not the next target for the reported failure because classification for the unheard source was already strong (`multi-protected-recovery`). Baseline is not the next target. Do not add a new profile from this call.
+
+## Call: 2026-05-12 11:50Z / group 812 2-person latest-code quality check
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-12T11-50-43-149Z.json`
+- Side B: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-12T11-50-45-893Z.json`
+
+User symptom:
+- Linux has the latest code. Mac heard Linux very well, but Linux heard Mac choppy.
+
+High-level verdict:
+- Mixed/bad, asymmetric receive quality.
+- Both senders look healthy on the current capture path: `48000` Hz input, `960` sample frames, no encoder drops, no send failures, and link transport active in both directions.
+- Mac receiving Linux is near-clean for the sampled window. Linux receiving Mac is still bad: `628` missing frames, `43` concealment ticks, repeated receive-profile churn, and burst-like inbound timing.
+
+Not the problem:
+- Bootstrap/seeding: not involved in this symptom.
+- Link establishment: both sides are connected over link transport, with successful outbound sends and inbound link samples.
+- Sender/capture: both sides export canonical `48k/960` capture and encode successfully.
+- Decrypt/decode: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and `packetsDroppedDecodeFailure=0` on both sides.
+- Queue/backpressure: no queue-pressure drops, stale drops, link-unready drops, packet send failures, or bridge waiting-for-drain pressure in the live window.
+- Startup readiness: both sides have active playout, active scheduler/playback nodes, and `jitterHasReadyFrame=true` at export time.
+- Global baseline: Mac is good under the same baseline, so baseline is not the first lever.
+
+Primary next target:
+- Another subsystem: receive burst absorption / jitter-buffer overflow diagnostics on the Linux receive path.
+- The profile selector detects damage, but the profile labels are not the source of the damage. Linux gets missing-frame bursts while its jitter buffer is often already near `20-24` frames and ready, which points to sequence gaps created inside receive buffering rather than starvation, sender failure, or decode failure.
+- Add direct jitter push/trim diagnostics and then tune the jitter-buffer capacity/trim behavior if trims confirm the inferred overflow path. Do not tune sender, bootstrap, or baseline from this call.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` dominant; live `silent-lean`; repair/collapse churn | yes, Linux heard Mac choppy | 13.447 | 628 | 43 | 0.013 | 0.008 | recovery | Bad side. Decode and link are clean. Missing-frame deltas recur while `jitterBufferedFrames` is often `20-24`, including `+70`, `+26`, `+21`, `+19`, and `+15` bursts. |
+| B | standby-forwarder / macOS / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `clean-low-latency` dominant; live `repair-heavy-connected` | no, Mac heard Linux well | 85.612 | 10 | 0 | 0.055 | 0.000 | recovery | Good side. Mostly clean-low-latency, no concealment, only `10` missing frames total, and no renderer stalls. Late repair-heavy state is conservative relative to the user symptom. |
+
+### Side A
+
+Expected profile from symptom:
+- A receive-damage profile is expected because Linux heard Mac choppy.
+- The exported bad shape should ideally land in a profile that explains bursty receive damage, not a lean/silent profile that implies mostly reserve geometry.
+
+Actual exported profile:
+- Current exported profile: `silent-lean`.
+- Retained profile counts: `steady-weak-listener` (`47`), `buffered-not-ready` (`11`), `silent-lean` (`10`), `repair-heavy-connected` (`7`), `collapse-recovery` (`7`), `persistent-lean` (`1`).
+
+Did classification match?
+- Partly.
+
+If no:
+- The selector correctly sees that the side is damaged and keeps the side in recovery, but the labels churn between lean, buffered-not-ready, repair-heavy, and collapse.
+- The actual failure signature is stronger than the live `silent-lean` label: high missing frames with clean transport/decode and ready jitter buffers.
+- This is not a simple selector-only bug. The selector is reacting to damage that appears to be produced by the receive buffering path.
+
+### Side B
+
+Expected profile from symptom:
+- Mostly `clean-low-latency`, because Mac heard Linux well.
+
+Actual exported profile:
+- Current exported profile: `repair-heavy-connected`.
+- Retained profile counts: `clean-low-latency` (`56`), `repair-heavy-connected` (`8`), `steady-weak-listener` (`7`), `buffered-not-ready` (`2`), `silent-lean` (`1`).
+
+Did classification match?
+- Mostly yes for the retained window; live state is conservative.
+
+If no:
+- The late `repair-heavy-connected` label is too strong for the user symptom and the cumulative metrics, but it is not the reported bad direction.
+- This should not drive a profile-strength increase.
+
+## Trend Read
+
+Side A:
+- Oscillating receive damage with burst-like missing-frame jumps.
+- Reasons seen:
+  - recovery mode for `77/96` retained samples.
+  - total missing-frame delta `628` and concealment delta `43`.
+  - repeated missing bursts while jitter has frames and is often ready: examples include `+70` with `jitterBufferedFrames=22`, `+26` with `9`, `+19` with `24`, `+15` with `22`, and `+21` with `22`.
+  - no decrypt, decode, send-failure, no-target, link-unready, stale-drop, or queue-pressure deltas.
+  - one renderer stall was recorded on Linux, but the active pattern is repeated receive missing bursts, not a single startup stall.
+
+Side B:
+- Stable/good receive direction with conservative late recovery.
+- Reasons seen:
+  - total missing-frame delta `10`, concealment delta `0`.
+  - mostly `clean-low-latency` retained samples.
+  - no renderer stalls or long tasks.
+  - no decrypt, decode, send-failure, no-target, link-unready, stale-drop, or queue-pressure deltas.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-12T11:50Z group-812 2p` | A / Linux root receiving Mac | `steady-weak-listener`; live `silent-lean`; repair/collapse churn | yes | partly | receive jitter-buffer / burst absorption | Add direct jitter push/trim diagnostics, then fix buffer trim/capacity behavior if confirmed. Do not target sender, bootstrap, or baseline. |
+| `2026-05-12T11:50Z group-812 2p` | B / macOS standby receiving Linux | `clean-low-latency`; live `repair-heavy-connected` | no | mostly yes; live label conservative | no issue for reported symptom / selector secondary | No profile-strength change from this side. Track late conservative repair-heavy separately. |
+
+## Next Fix Target
+
+Current patched target:
+- Another subsystem: receive burst absorption / jitter-buffer overflow visibility.
+- Primary fix: expose jitter-buffer push outcomes in diagnostics, especially accepted, stale, duplicate, trimmed count, high-water depth, and last trim event per source.
+- If trims line up with Linux missing-frame bursts, tune the jitter-buffer cap/trim policy for single-source recovery so bursty inbound delivery does not discard valid frames and then report the discard as missing audio.
+- Selector is secondary because it reacts after the damage. Profile strength is not the next target. Baseline is not the next target. No new profile is justified from this call.

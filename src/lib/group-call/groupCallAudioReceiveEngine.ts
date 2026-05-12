@@ -805,6 +805,18 @@ export class GroupCallAudioReceiveEngine {
       jitterActive: boolean;
       jitterBufferedFrames: number;
       jitterHasReadyFrame: boolean;
+      jitterMaxEntries: number;
+      jitterPushAccepted: number;
+      jitterPushStale: number;
+      jitterPushDuplicate: number;
+      jitterPushTrimmedFrames: number;
+      jitterPushTrimEvents: number;
+      jitterPushDepthHighWater: number;
+      jitterLastTrimmedFrames: number;
+      jitterLastTrimAtMs: number;
+      jitterBurstHeadroomLevel: number;
+      jitterBurstHeadroomHoldUntilMs: number;
+      jitterBurstHeadroomReason: string | null;
       playbackNodeActive: boolean;
       schedulerNodeActive: boolean;
       lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
