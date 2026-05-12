@@ -12,7 +12,51 @@
  *   - Accept { type: 'mute', muted: boolean } messages to silence output.
  */
 
+const OPUS_OUTPUT_SAMPLE_RATE = 48000;
+const OPUS_FRAME_DURATION_MS = 20;
 const OPUS_FRAME_SAMPLES = 960; // 20ms @ 48 kHz
+
+function resampleLinear(input, outputLength) {
+  if (input.length === outputLength) {
+    const out = new Float32Array(outputLength);
+    out.set(input);
+    return out;
+  }
+  const out = new Float32Array(outputLength);
+  if (outputLength <= 1 || input.length <= 1) {
+    out[0] = input[0] || 0;
+    return out;
+  }
+  if (input.length > outputLength) {
+    const scale = input.length / outputLength;
+    for (let i = 0; i < outputLength; i++) {
+      const start = i * scale;
+      const end = (i + 1) * scale;
+      const first = Math.floor(start);
+      const last = Math.min(input.length - 1, Math.ceil(end) - 1);
+      let sum = 0;
+      let weight = 0;
+      for (let j = first; j <= last; j++) {
+        const segmentStart = Math.max(start, j);
+        const segmentEnd = Math.min(end, j + 1);
+        const w = Math.max(0, segmentEnd - segmentStart);
+        sum += input[j] * w;
+        weight += w;
+      }
+      out[i] = weight > 0 ? sum / weight : input[first] || 0;
+    }
+    return out;
+  }
+  const scale = (input.length - 1) / (outputLength - 1);
+  for (let i = 0; i < outputLength; i++) {
+    const pos = i * scale;
+    const left = Math.floor(pos);
+    const right = Math.min(input.length - 1, left + 1);
+    const frac = pos - left;
+    out[i] = input[left] * (1 - frac) + input[right] * frac;
+  }
+  return out;
+}
 
 // Adaptive RMS VAD constants (noise-tracking worklet only).
 const VAD_ALPHA = 0.99;
@@ -25,8 +69,13 @@ class CaptureProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
 
-    // Staging buffer: grows on demand, pre-sized for two Opus frames
-    this._buf = new Float32Array(OPUS_FRAME_SAMPLES * 2);
+    this._inputFrameSamples = Math.max(
+      1,
+      Math.round((sampleRate * OPUS_FRAME_DURATION_MS) / 1000)
+    );
+
+    // Staging buffer: grows on demand, pre-sized for two input-rate frames.
+    this._buf = new Float32Array(this._inputFrameSamples * 2);
     this._offset = 0;
 
     // Adaptive VAD state
@@ -75,15 +124,16 @@ class CaptureProcessor extends AudioWorkletProcessor {
     this._buf.set(input, this._offset);
     this._offset += input.length;
 
-    // Drain complete Opus frames
-    while (this._offset >= OPUS_FRAME_SAMPLES) {
-      // Copy frame into a fresh ArrayBuffer so it can be transferred
-      const frame = new Float32Array(OPUS_FRAME_SAMPLES);
-      frame.set(this._buf.subarray(0, OPUS_FRAME_SAMPLES));
+    // Drain complete 20 ms frames at the actual AudioContext sample rate, then
+    // resample to the canonical 48 kHz/960-sample Opus input expected by sender.
+    while (this._offset >= this._inputFrameSamples) {
+      const inputFrame = new Float32Array(this._inputFrameSamples);
+      inputFrame.set(this._buf.subarray(0, this._inputFrameSamples));
+      const frame = resampleLinear(inputFrame, OPUS_FRAME_SAMPLES);
 
       // Slide remaining samples to front
-      this._buf.copyWithin(0, OPUS_FRAME_SAMPLES, this._offset);
-      this._offset -= OPUS_FRAME_SAMPLES;
+      this._buf.copyWithin(0, this._inputFrameSamples, this._offset);
+      this._offset -= this._inputFrameSamples;
 
       // Adaptive RMS VAD
       let sum = 0;
@@ -100,8 +150,7 @@ class CaptureProcessor extends AudioWorkletProcessor {
         this._noiseFloor * VAD_MULTIPLIER
       );
       if (rms < threshold) {
-        this._noiseFloor =
-          VAD_ALPHA * this._noiseFloor + (1 - VAD_ALPHA) * rms;
+        this._noiseFloor = VAD_ALPHA * this._noiseFloor + (1 - VAD_ALPHA) * rms;
       }
       const vad = rms > threshold;
 
@@ -110,7 +159,17 @@ class CaptureProcessor extends AudioWorkletProcessor {
       const workletPostAudioClockMs = currentTime * 1000;
 
       // Transfer the frame buffer to avoid copying
-      this.port.postMessage({ frame, vad, workletPostAudioClockMs }, [frame.buffer]);
+      this.port.postMessage(
+        {
+          frame,
+          vad,
+          workletPostAudioClockMs,
+          inputSampleRate: sampleRate,
+          outputSampleRate: OPUS_OUTPUT_SAMPLE_RATE,
+          inputFrameSamples: this._inputFrameSamples,
+        },
+        [frame.buffer]
+      );
     }
 
     return true; // keep processor alive

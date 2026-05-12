@@ -63,6 +63,14 @@ export interface GroupCallAudioSenderFrame {
   encodeOutPerfMs: number;
 }
 
+type CaptureWorkletMessage = {
+  frame?: Float32Array;
+  vad?: boolean;
+  inputSampleRate?: number;
+  outputSampleRate?: number;
+  inputFrameSamples?: number;
+};
+
 export interface GroupCallAudioSenderEngineConfig {
   inputDeviceId: string | null;
   outputDeviceId: string | null;
@@ -107,6 +115,10 @@ export class GroupCallAudioSenderEngine {
   private lastStartAtMs = 0;
   private lastStopAtMs = 0;
   private unsupportedReason: string | null = null;
+  private audioContextSampleRate: number | null = null;
+  private captureInputSampleRate: number | null = null;
+  private captureOutputSampleRate: number | null = null;
+  private captureInputFrameSamples: number | null = null;
   private encodeTimingByTimestampUs = new Map<
     number,
     { capturePerfMs: number; encoderInputPerfMs: number; vad: boolean }
@@ -128,6 +140,10 @@ export class GroupCallAudioSenderEngine {
     this.staleEncodedDropPerfMs.length = 0;
     this.encoderErrorCount = 0;
     this.lastEncoderError = null;
+    this.audioContextSampleRate = null;
+    this.captureInputSampleRate = null;
+    this.captureOutputSampleRate = null;
+    this.captureInputFrameSamples = null;
     this.encodeTimingByTimestampUs.clear();
   }
 
@@ -197,10 +213,31 @@ export class GroupCallAudioSenderEngine {
     const encoder = this.createEncoder(tuning);
     captureNode.port.onmessage = (event) => {
       const capturedAtPerfMs = performance.now();
-      const { frame, vad } = event.data as {
-        frame?: Float32Array;
-        vad?: boolean;
-      };
+      const {
+        frame,
+        vad,
+        inputSampleRate,
+        outputSampleRate,
+        inputFrameSamples,
+      } = event.data as CaptureWorkletMessage;
+      if (
+        typeof inputSampleRate === 'number' &&
+        Number.isFinite(inputSampleRate)
+      ) {
+        this.captureInputSampleRate = inputSampleRate;
+      }
+      if (
+        typeof outputSampleRate === 'number' &&
+        Number.isFinite(outputSampleRate)
+      ) {
+        this.captureOutputSampleRate = outputSampleRate;
+      }
+      if (
+        typeof inputFrameSamples === 'number' &&
+        Number.isFinite(inputFrameSamples)
+      ) {
+        this.captureInputFrameSamples = inputFrameSamples;
+      }
       const activeEncoder = this.encoder;
       if (
         !(frame instanceof Float32Array) ||
@@ -268,6 +305,7 @@ export class GroupCallAudioSenderEngine {
     await applyCallAudioOutput(nextShape.outputDeviceId, { audioContext: ctx });
     await ensureAudioContextRunning(ctx);
     this.audioContext = ctx;
+    this.audioContextSampleRate = ctx.sampleRate;
     this.micStream = stream;
     this.micSource = source;
     this.keepAliveGain = keepAliveGain;
@@ -406,6 +444,10 @@ export class GroupCallAudioSenderEngine {
         readyState: track.readyState,
       })),
       hasCaptureNode: this.captureNode !== null,
+      audioContextSampleRate: this.audioContextSampleRate,
+      captureInputSampleRate: this.captureInputSampleRate,
+      captureOutputSampleRate: this.captureOutputSampleRate,
+      captureInputFrameSamples: this.captureInputFrameSamples,
       encoderState: this.encoder?.state ?? null,
       activeConfig: this.activeConfig,
       lastVad: this.lastVad,
