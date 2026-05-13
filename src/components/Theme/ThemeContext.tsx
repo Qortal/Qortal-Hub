@@ -16,6 +16,7 @@ import i18n from '../../i18n/i18n';
 
 export const ENABLE_CUSTOM_THEMES = false;
 const SAVED_UI_THEME_KEY = 'saved_ui_theme';
+const DEFAULT_THEME_ID = 'default';
 
 const defaultTheme = {
   id: 'default',
@@ -32,13 +33,13 @@ const ThemeContext = createContext({
   userThemes: [defaultTheme],
   addUserTheme: (themes) => {},
   setUserTheme: (theme, themes) => {},
-  currentThemeId: 'default',
+  currentThemeId: DEFAULT_THEME_ID,
 });
 
 export const ThemeProvider = ({ children }) => {
   const [themeMode, setThemeMode] = useState('dark');
   const [userThemes, setUserThemes] = useState([defaultTheme]);
-  const [currentThemeId, setCurrentThemeId] = useState('default');
+  const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_THEME_ID);
 
   const currentTheme =
     userThemes.find((theme) => theme.id === currentThemeId) || defaultTheme;
@@ -63,25 +64,13 @@ export const ThemeProvider = ({ children }) => {
     themeId = currentThemeId
   ) => {
     if (!ENABLE_CUSTOM_THEMES) {
-      const saved = localStorage.getItem(SAVED_UI_THEME_KEY);
-
-      try {
-        const parsed = saved ? JSON.parse(saved) : {};
-        localStorage.setItem(
-          SAVED_UI_THEME_KEY,
-          JSON.stringify({
-            ...parsed,
-            mode,
-          })
-        );
-      } catch {
-        localStorage.setItem(
-          SAVED_UI_THEME_KEY,
-          JSON.stringify({
-            mode,
-          })
-        );
-      }
+      localStorage.setItem(
+        SAVED_UI_THEME_KEY,
+        JSON.stringify({
+          mode,
+          currentThemeId: DEFAULT_THEME_ID,
+        })
+      );
 
       return;
     }
@@ -128,7 +117,21 @@ export const ThemeProvider = ({ children }) => {
         const parsed = JSON.parse(saved);
         if (parsed.mode === 'light' || parsed.mode === 'dark')
           setThemeMode(parsed.mode);
-        if (!ENABLE_CUSTOM_THEMES) return;
+        if (!ENABLE_CUSTOM_THEMES) {
+          setUserThemes([defaultTheme]);
+          setCurrentThemeId(DEFAULT_THEME_ID);
+          localStorage.setItem(
+            SAVED_UI_THEME_KEY,
+            JSON.stringify({
+              mode:
+                parsed.mode === 'light' || parsed.mode === 'dark'
+                  ? parsed.mode
+                  : themeMode,
+              currentThemeId: DEFAULT_THEME_ID,
+            })
+          );
+          return;
+        }
         if (Array.isArray(parsed.userThemes)) {
           const filteredThemes = parsed.userThemes.filter(
             (theme) => theme.id !== 'default'
@@ -138,9 +141,23 @@ export const ThemeProvider = ({ children }) => {
         if (parsed.currentThemeId) setCurrentThemeId(parsed.currentThemeId);
       } catch (error) {
         console.error('Failed to parse saved_ui_theme:', error);
+        if (!ENABLE_CUSTOM_THEMES) {
+          setUserThemes([defaultTheme]);
+          setCurrentThemeId(DEFAULT_THEME_ID);
+          localStorage.setItem(
+            SAVED_UI_THEME_KEY,
+            JSON.stringify({
+              mode: themeMode,
+              currentThemeId: DEFAULT_THEME_ID,
+            })
+          );
+        }
       }
+    } else if (!ENABLE_CUSTOM_THEMES) {
+      setUserThemes([defaultTheme]);
+      setCurrentThemeId(DEFAULT_THEME_ID);
     }
-  }, []);
+  }, [themeMode]);
 
   useEffect(() => {
     loadSettings();
