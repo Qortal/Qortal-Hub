@@ -14,6 +14,9 @@ import { lightThemeOptions } from '../../styles/theme-light';
 import { darkThemeOptions } from '../../styles/theme-dark';
 import i18n from '../../i18n/i18n';
 
+export const ENABLE_CUSTOM_THEMES = false;
+const SAVED_UI_THEME_KEY = 'saved_ui_theme';
+
 const defaultTheme = {
   id: 'default',
   name: i18n.t('core:theme.default', {
@@ -44,8 +47,9 @@ export const ThemeProvider = ({ children }) => {
     const baseThemeOptions =
       themeMode === 'light' ? lightThemeOptions : darkThemeOptions;
 
+    const activeTheme = ENABLE_CUSTOM_THEMES ? currentTheme : defaultTheme;
     const palette =
-      themeMode === 'light' ? currentTheme.light : currentTheme.dark;
+      themeMode === 'light' ? activeTheme.light : activeTheme.dark;
 
     return createTheme({
       ...baseThemeOptions,
@@ -58,8 +62,32 @@ export const ThemeProvider = ({ children }) => {
     mode = themeMode,
     themeId = currentThemeId
   ) => {
+    if (!ENABLE_CUSTOM_THEMES) {
+      const saved = localStorage.getItem(SAVED_UI_THEME_KEY);
+
+      try {
+        const parsed = saved ? JSON.parse(saved) : {};
+        localStorage.setItem(
+          SAVED_UI_THEME_KEY,
+          JSON.stringify({
+            ...parsed,
+            mode,
+          })
+        );
+      } catch {
+        localStorage.setItem(
+          SAVED_UI_THEME_KEY,
+          JSON.stringify({
+            mode,
+          })
+        );
+      }
+
+      return;
+    }
+
     localStorage.setItem(
-      'saved_ui_theme',
+      SAVED_UI_THEME_KEY,
       JSON.stringify({
         mode,
         userThemes: themes,
@@ -77,11 +105,13 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const addUserTheme = (themes) => {
+    if (!ENABLE_CUSTOM_THEMES) return;
     setUserThemes(themes);
     saveSettings(themes);
   };
 
   const setUserTheme = (theme, themes) => {
+    if (!ENABLE_CUSTOM_THEMES) return;
     if (theme.id === 'default') {
       setCurrentThemeId('default');
       saveSettings(themes || userThemes, themeMode, 'default');
@@ -92,12 +122,13 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const loadSettings = useCallback(() => {
-    const saved = localStorage.getItem('saved_ui_theme');
+    const saved = localStorage.getItem(SAVED_UI_THEME_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.mode === 'light' || parsed.mode === 'dark')
           setThemeMode(parsed.mode);
+        if (!ENABLE_CUSTOM_THEMES) return;
         if (Array.isArray(parsed.userThemes)) {
           const filteredThemes = parsed.userThemes.filter(
             (theme) => theme.id !== 'default'
