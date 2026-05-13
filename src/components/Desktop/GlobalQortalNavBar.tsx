@@ -570,6 +570,8 @@ export function GlobalQortalNavBar({
               address={userInfo?.address}
               chromeBackground={chromeBackground}
               selectedTab={bookmarkSelectedTab}
+              tooltipSlotProps={tooltipSlotProps}
+              tooltipTitle={tooltipTitle}
               buttonSx={{
                 alignItems: 'center',
                 borderRadius: '9px',

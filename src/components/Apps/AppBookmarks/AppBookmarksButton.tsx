@@ -68,6 +68,8 @@ type AppBookmarksButtonProps = {
   buttonSx?: object;
   chromeBackground?: string;
   selectedTab: BookmarkableAppTab | null;
+  tooltipSlotProps?: any;
+  tooltipTitle?: (text: string) => React.ReactNode;
 };
 
 type BookmarkFormState = {
@@ -96,6 +98,8 @@ export function AppBookmarksButton({
   buttonSx,
   chromeBackground,
   selectedTab,
+  tooltipSlotProps,
+  tooltipTitle,
 }: AppBookmarksButtonProps) {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -536,7 +540,12 @@ export function AppBookmarksButton({
 
   return (
     <>
-      <Tooltip title={buttonTitle}>
+      <Tooltip
+        arrow
+        placement="bottom"
+        slotProps={tooltipSlotProps}
+        title={tooltipTitle ? tooltipTitle(buttonTitle) : buttonTitle}
+      >
         <span>
           <ButtonBase
             disableRipple

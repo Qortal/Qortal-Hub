@@ -151,6 +151,7 @@ export const InfoPreviewPanel = ({
     enableOverlay,
     footerItemCount,
     footerSectionCount,
+    resetKey,
     rows.metricItems.length,
     rows.primaryItems.length,
   ]);
