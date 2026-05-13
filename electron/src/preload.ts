@@ -8,7 +8,23 @@ import { contextBridge, shell, ipcRenderer } from 'electron';
 try {
   // Expose Electron API
   contextBridge.exposeInMainWorld('electronAPI', {
-    openExternal: (url) => shell.openExternal(url),
+    openExternal: (url: string) => {
+      if (typeof url !== 'string') {
+        return;
+      }
+      try {
+        const parsed = new URL(url.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return;
+        }
+        if (!parsed.hostname) {
+          return;
+        }
+        void shell.openExternal(parsed.toString());
+      } catch {
+        // Invalid URL
+      }
+    },
     setAllowedDomains: (domains) => {
       ipcRenderer.send('set-allowed-domains', domains);
     },

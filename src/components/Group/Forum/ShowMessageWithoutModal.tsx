@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Avatar, Box, IconButton } from '@mui/material';
+import { Avatar, Box, IconButton, useTheme } from '@mui/material';
 import DOMPurify from 'dompurify';
+import '../../Chat/chat.css';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 import MoreSVG from '../../../assets/svgs/More.svg';
 import {
@@ -19,6 +20,7 @@ import { getBaseApiReact } from '../../../App';
 import { WrapperUserAction } from '../../WrapperUserAction';
 
 export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
+  const theme = useTheme();
   const [expandAttachments, setExpandAttachments] = useState<boolean>(false);
 
   let cleanHTML = '';
@@ -212,7 +214,23 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
           <MessageDisplay htmlContent={message?.textContentV2} />
         )}
         {message?.htmlContent && (
-          <div dangerouslySetInnerHTML={{ __html: cleanHTML }} />
+          <Box
+            sx={{
+              '--text-primary': theme.palette.text.primary,
+              '--text-secondary': theme.palette.text.secondary,
+              '--background-default': theme.palette.background.default,
+              '--background-secondary': theme.palette.background.paper,
+              '--code-block-bg': theme.palette.background.paper,
+              '--code-block-accent': theme.palette.primary.main,
+              '--code-block-border': theme.palette.divider,
+              '--primary-main': theme.palette.primary.main,
+            }}
+          >
+            <div
+              className="tiptap"
+              dangerouslySetInnerHTML={{ __html: cleanHTML }}
+            />
+          </Box>
         )}
         <Box
           sx={{

@@ -13,8 +13,7 @@ import { LOCALHOST } from '../constants/constants';
 import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
-
-
+import type { QuitterDashboardFeedCache } from '../components/Widgets/quitter/quitterFeedTypes';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 
@@ -75,6 +74,11 @@ export type JoinRequestsCache = {
   adminGroupIds: number[];
 } | null;
 export const joinRequestsCacheAtom = atom<JoinRequestsCache>(null) as PrimitiveAtom<JoinRequestsCache>;
+
+/** Quitter home-dashboard widget feed. Reset on logout. Prefer useAtom only in QuitterFeedWidget. */
+export const quitterDashboardFeedCacheAtom =
+  atomWithReset<QuitterDashboardFeedCache | null>(null);
+
 export const qMailLastEnteredTimestampAtom = atomWithReset(null);
 export const resourceDownloadControllerAtom = atomWithReset({});
 export const globalDownloadsAtom = atomWithReset<

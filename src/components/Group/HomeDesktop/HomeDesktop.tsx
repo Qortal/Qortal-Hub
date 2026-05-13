@@ -3,6 +3,7 @@ import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import { alpha, darken } from '@mui/material/styles';
 import {
+  Activity,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -18,7 +19,6 @@ import { HomeQuickToolsPad } from '../HomeQuickToolsPad';
 import { HomeFeaturedApps } from '../HomeFeaturedApps';
 import { useTranslation } from 'react-i18next';
 import {
-  AnimatePresence,
   LazyMotion,
   domAnimation,
   motion,
@@ -514,27 +514,25 @@ export const HomeDesktop = ({
 
   return (
     <LazyMotion features={domAnimation}>
-      <AnimatePresence mode="wait">
-        {desktopViewMode === 'home' && (
-          <motion.div
-            key="home"
-            initial={{ opacity: 0, scale: 1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            custom={reduce}
-            style={{
-              alignItems: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              overflow: 'auto',
-              scrollbarGutter: 'stable',
-              width: '100%',
-              willChange: 'opacity',
-              backfaceVisibility: 'hidden',
-            }}
-          >
+      <Activity mode={desktopViewMode === 'home' ? 'visible' : 'hidden'}>
+        <motion.div
+          key="home"
+          initial={{ opacity: 0, scale: 1 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          custom={reduce}
+          style={{
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'auto',
+            scrollbarGutter: 'stable',
+            width: '100%',
+            willChange: 'opacity',
+            backfaceVisibility: 'hidden',
+          }}
+        >
             <Spacer height="20px" />
             <Box
               ref={homeLayoutDebugRootRef}
@@ -921,8 +919,7 @@ export const HomeDesktop = ({
             </Box>
             <Spacer height="120px" />
           </motion.div>
-        )}
-      </AnimatePresence>
+      </Activity>
     </LazyMotion>
   );
 };

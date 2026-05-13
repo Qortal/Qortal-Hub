@@ -1630,7 +1630,6 @@ export async function publishOnQDNCase(request, event) {
       tag5,
       uploadType,
     });
-
     event.source.postMessage(
       {
         requestId: request.requestId,

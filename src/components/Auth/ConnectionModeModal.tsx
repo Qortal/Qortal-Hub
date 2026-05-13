@@ -247,15 +247,6 @@ export function ConnectionModeModal({
           return;
         }
 
-        const certOk = await ensureElectronCertIfLocalPrivateHttps(
-          selectedCustomNode.url,
-          selectedCustomNode.apikey || ''
-        );
-        if (!certOk.success) {
-          console.error(certOk.error || 'HTTPS certificate preparation failed');
-          return;
-        }
-
         await handleSaveNodeInfo(selectedCustomNode);
       }
       onClose();

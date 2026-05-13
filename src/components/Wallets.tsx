@@ -30,6 +30,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import VpnKeyRoundedIcon from '@mui/icons-material/VpnKeyRounded';
+import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
@@ -62,10 +63,12 @@ type WalletsProps = {
   setRawWallet: (wallet: any) => void;
   rawWallet?: any;
   mode?: 'entry' | 'import';
-  onImportViewChange?: (view: 'choice' | 'backup' | 'seedphrase') => void;
+  onImportViewChange?: (view: ImportView) => void;
   onReady?: () => void;
   onWalletUnlockStart?: (snapshot: AuthUnlockTransitionSnapshot) => void;
 };
+
+type ImportView = 'choice' | 'backup' | 'seedphrase' | 'authenticate';
 
 export const Wallets = ({
   setExtState,
@@ -83,9 +86,7 @@ export const Wallets = ({
   const [password, setPassword] = useState('');
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
   const [isSeedVisible, setIsSeedVisible] = useState(false);
-  const [importView, setImportView] = useState<'choice' | 'backup' | 'seedphrase'>(
-    'choice'
-  );
+  const [importView, setImportView] = useState<ImportView>('choice');
   const [backupImportHint, setBackupImportHint] = useState('');
   /** Insertion slot index in the wallet list — line appears before wallets[idx] when idx < length */
   const [walletDropGapBeforeIndex, setWalletDropGapBeforeIndex] = useState<
@@ -194,7 +195,7 @@ export const Wallets = ({
   );
 
   const changeImportView = useCallback(
-    (view: 'choice' | 'backup' | 'seedphrase') => {
+    (view: ImportView) => {
       setImportView(view);
       onImportViewChange?.(view);
     },
@@ -400,14 +401,11 @@ export const Wallets = ({
     }
   };
 
-  const { getRootProps, getInputProps } = useDropzone({
-    accept: {
-      'application/json': ['.json'],
-    },
-    onDrop: async (acceptedFiles) => {
+  const readWalletFiles = useCallback(
+    async (acceptedFiles: File[]) => {
       const importedWallets: any[] = [];
 
-      for (const file of acceptedFiles as File[]) {
+      for (const file of acceptedFiles) {
         try {
           const fileContents = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -434,7 +432,17 @@ export const Wallets = ({
         }
       });
 
-      const uniqueWallets = Array.from(uniqueInitialMap.values());
+      return Array.from(uniqueInitialMap.values());
+    },
+    [t]
+  );
+
+  const { getRootProps, getInputProps } = useDropzone({
+    accept: {
+      'application/json': ['.json'],
+    },
+    onDrop: async (acceptedFiles) => {
+      const uniqueWallets = await readWalletFiles(acceptedFiles as File[]);
       if (!uniqueWallets.length) return;
 
       const latestWallets = await getLatestWallets();
@@ -461,6 +469,29 @@ export const Wallets = ({
       if (uniqueNewWallets.length > 0) {
         setExtState('not-authenticated');
       }
+    },
+  });
+
+  const {
+    getRootProps: getAuthenticateRootProps,
+    getInputProps: getAuthenticateInputProps,
+  } = useDropzone({
+    accept: {
+      'application/json': ['.json'],
+    },
+    multiple: false,
+    onDrop: async (acceptedFiles) => {
+      const uniqueWallets = await readWalletFiles(acceptedFiles as File[]);
+      const wallet = uniqueWallets[0];
+
+      if (!wallet?.address0) {
+        setBackupImportHint(t('auth:entry.import_backup_invalid'));
+        return;
+      }
+
+      setBackupImportHint('');
+      setRawWallet(wallet);
+      setExtState('wallet-dropped');
     },
   });
 
@@ -753,6 +784,12 @@ export const Wallets = ({
             title={t('auth:entry.import_choice_backup_title')}
           />
           <ChoiceRow
+            description={t('auth:entry.import_choice_authenticate_description')}
+            icon={<LoginRoundedIcon sx={{ fontSize: 22 }} />}
+            onClick={() => changeImportView('authenticate')}
+            title={t('auth:entry.import_choice_authenticate_title')}
+          />
+          <ChoiceRow
             description={t('auth:entry.import_choice_seed_description')}
             icon={<VpnKeyRoundedIcon sx={{ fontSize: 22 }} />}
             onClick={() => changeImportView('seedphrase')}
@@ -810,6 +847,60 @@ export const Wallets = ({
               }}
             >
               {t('auth:entry.import_backup_drop_hint')}
+            </Typography>
+          </Box>
+          {backupImportHint && (
+            <Typography
+              sx={{
+                color: 'rgba(214,221,233,0.56)',
+                fontSize: '0.84rem',
+              }}
+            >
+              {backupImportHint}
+            </Typography>
+          )}
+        </Box>
+      )}
+
+      {importView === 'authenticate' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
+          <InlineReturn onClick={() => changeImportView('choice')} />
+          <Box
+            {...getAuthenticateRootProps()}
+            sx={{
+              alignItems: 'center',
+              backgroundColor: 'rgba(255,255,255,0.02)',
+              border: '1px dashed rgba(255,255,255,0.12)',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.8,
+              justifyContent: 'center',
+              minHeight: 170,
+              px: 3,
+              py: 3,
+              textAlign: 'center',
+              transition: 'background-color 160ms ease, border-color 160ms ease',
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.03)',
+                borderColor: 'rgba(255,255,255,0.18)',
+              },
+            }}
+          >
+            <input {...getAuthenticateInputProps()} />
+            <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
+              {t('auth:entry.import_authenticate_heading')}
+            </Typography>
+            <Typography
+              sx={{
+                color: 'rgba(214,221,233,0.56)',
+                fontSize: '0.88rem',
+                lineHeight: 1.6,
+                maxWidth: 300,
+              }}
+            >
+              {t('auth:entry.import_authenticate_drop_hint')}
             </Typography>
           </Box>
           {backupImportHint && (

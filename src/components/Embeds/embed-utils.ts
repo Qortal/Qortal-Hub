@@ -1,9 +1,9 @@
+import { decodeHTML } from 'entities';
+
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 
-function decodeHTMLEntities(str: string) {
-  const txt = document.createElement('textarea');
-  txt.innerHTML = str;
-  return txt.value;
+function decodeHTMLEntities(str: string): string {
+  return decodeHTML(str);
 }
 
 export const parseQortalLink = (link: string) => {

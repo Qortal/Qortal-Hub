@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client';
+import './utils/configureDomPurify';
 import App from './App.tsx';
 import '../src/styles/index.css';
 import './messaging/MessagesToBackground.tsx';

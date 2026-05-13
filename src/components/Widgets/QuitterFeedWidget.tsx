@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import {
   useCallback,
   useEffect,
@@ -18,7 +18,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { userInfoAtom } from '../../atoms/global';
+import { quitterDashboardFeedCacheAtom, userInfoAtom } from '../../atoms/global';
 import { executeEvent } from '../../utils/events';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
 import {
@@ -31,8 +31,11 @@ import {
   fetchQuitterFollowedNames,
 } from './quitter/quitterFeedApi';
 import type {
+  QuitterDashboardFeedCache,
+  QuitterDashboardInitialFeedState,
   QuitterFeedItem,
   QuitterFeedPage,
+  QuitterFollowingEmptyReason,
 } from './quitter/quitterFeedTypes';
 
 type QuitterFeedWidgetProps = {
@@ -44,11 +47,20 @@ type QuitterFeedWidgetProps = {
   searchLimit?: number;
 };
 
-type InitialFeedState = 'error' | 'loading' | 'success';
 type QuitterFeedMode = 'following' | 'general';
-type FollowingEmptyReason = 'no-following' | 'no-name' | 'no-posts' | null;
 
 const QUITTER_FEED_MODE_STORAGE_PREFIX = 'quitter_dashboard_feed_mode:';
+
+const emptyCacheForKey = (feedKey: string): QuitterDashboardFeedCache => ({
+  error: null,
+  feedKey,
+  followingEmptyReason: null,
+  initialFeedState: 'loading',
+  items: [],
+  lastFullFetchAt: 0,
+  lastPollAt: null,
+  pendingItems: [],
+});
 
 const parseStoredQuitterFeedMode = (
   raw: string | null
@@ -164,6 +176,7 @@ export const QuitterFeedWidget = ({
   const theme = useTheme();
   const { t } = useTranslation('core');
   const userInfo = useAtomValue(userInfoAtom);
+  const [feedCache, setFeedCache] = useAtom(quitterDashboardFeedCacheAtom);
   const isCompact = displayMode === 'compact';
   const currentUserName =
     typeof userInfo?.name === 'string' && userInfo.name.trim().length > 0
@@ -177,25 +190,31 @@ export const QuitterFeedWidget = ({
         : 'anonymous';
     return `${QUITTER_FEED_MODE_STORAGE_PREFIX}${addr}`;
   }, [userInfo?.address]);
-  const [error, setError] = useState<string | null>(null);
   const [feedMode, setFeedMode] = useState<QuitterFeedMode>('following');
-  const [followingEmptyReason, setFollowingEmptyReason] =
-    useState<FollowingEmptyReason>(null);
-  const [initialFeedState, setInitialFeedState] =
-    useState<InitialFeedState>('loading');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [items, setItems] = useState<QuitterFeedItem[]>([]);
-  const [pendingItems, setPendingItems] = useState<QuitterFeedItem[]>([]);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
   const itemsRef = useRef<QuitterFeedItem[]>([]);
   const pendingItemsRef = useRef<QuitterFeedItem[]>([]);
+  const feedKeyRef = useRef('');
+  const feedCacheRef = useRef<QuitterDashboardFeedCache | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const previousRefreshTokenRef = useRef(refreshToken);
   const activeFeedRequestIdRef = useRef(0);
   const activeUpdateRequestIdRef = useRef(0);
   const isUpdateCheckInFlightRef = useRef(false);
+  const feedKey = `${feedMode}:${currentUserName ?? ''}`;
+
+  const cacheMatches = feedCache?.feedKey === feedKey;
+  const items = cacheMatches ? feedCache.items : [];
+  const pendingItems = cacheMatches ? feedCache.pendingItems : [];
+  const followingEmptyReason = cacheMatches ? feedCache.followingEmptyReason : null;
+  const initialFeedState: QuitterDashboardInitialFeedState = cacheMatches
+    ? feedCache.initialFeedState
+    : 'loading';
+  const error = cacheMatches ? feedCache.error : null;
+
   const isFollowingFeed = feedMode === 'following';
   const loadedPostLabel = useMemo(
     () => t('quitter_feed.posts_showing', { count: items.length }),
@@ -224,7 +243,20 @@ export const QuitterFeedWidget = ({
     overscan: 6,
   });
 
-  const feedKey = `${feedMode}:${currentUserName ?? ''}`;
+  useEffect(() => {
+    feedKeyRef.current = feedKey;
+  }, [feedKey]);
+
+  useEffect(() => {
+    feedCacheRef.current = feedCache;
+  }, [feedCache]);
+
+  useEffect(() => {
+    if (feedCache?.feedKey === feedKey) {
+      itemsRef.current = feedCache.items;
+      pendingItemsRef.current = feedCache.pendingItems;
+    }
+  }, [feedCache, feedKey]);
 
   useEffect(() => {
     setFeedMode(readQuitterFeedMode(feedModeStorageKey));
@@ -232,21 +264,29 @@ export const QuitterFeedWidget = ({
 
   const commitVisibleItems = useCallback((nextItems: QuitterFeedItem[]) => {
     itemsRef.current = nextItems;
-    setItems(nextItems);
-  }, []);
+    setFeedCache((prev) => {
+      const key = feedKeyRef.current;
+      const next: QuitterDashboardFeedCache =
+        prev?.feedKey === key
+          ? { ...prev, items: nextItems }
+          : { ...emptyCacheForKey(key), items: nextItems };
+      feedCacheRef.current = next;
+      return next;
+    });
+  }, [setFeedCache]);
 
   const commitPendingItems = useCallback((nextItems: QuitterFeedItem[]) => {
     pendingItemsRef.current = nextItems;
-    setPendingItems(nextItems);
-  }, []);
-
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
-
-  useEffect(() => {
-    pendingItemsRef.current = pendingItems;
-  }, [pendingItems]);
+    setFeedCache((prev) => {
+      const key = feedKeyRef.current;
+      const next: QuitterDashboardFeedCache =
+        prev?.feedKey === key
+          ? { ...prev, pendingItems: nextItems }
+          : { ...emptyCacheForKey(key), pendingItems: nextItems };
+      feedCacheRef.current = next;
+      return next;
+    });
+  }, [setFeedCache]);
 
   useEffect(() => {
     onRefreshStateChange?.(isRefreshing);
@@ -340,19 +380,23 @@ export const QuitterFeedWidget = ({
     ) => {
       const requestId = activeFeedRequestIdRef.current + 1;
       const resolvedFeedMode = options.feedMode ?? feedMode;
+      const requestFeedKey = feedKeyRef.current;
 
       activeFeedRequestIdRef.current = requestId;
       activeUpdateRequestIdRef.current = 0;
       isUpdateCheckInFlightRef.current = false;
-      setError(null);
-      setFollowingEmptyReason(null);
-      setInitialFeedState('loading');
+
+      setFeedCache(() => {
+        const next = emptyCacheForKey(requestFeedKey);
+        feedCacheRef.current = next;
+        return next;
+      });
       setIsInitialLoading(true);
       setIsRefreshing(false);
 
       try {
         let nextPage: QuitterFeedPage;
-        let nextFollowingEmptyReason: FollowingEmptyReason = null;
+        let nextFollowingEmptyReason: QuitterFollowingEmptyReason = null;
 
         if (resolvedFeedMode === 'following') {
           if (!currentUserName) {
@@ -414,31 +458,53 @@ export const QuitterFeedWidget = ({
           });
         }
 
-        if (signal.aborted || activeFeedRequestIdRef.current !== requestId) {
+        if (
+          signal.aborted ||
+          activeFeedRequestIdRef.current !== requestId ||
+          feedKeyRef.current !== requestFeedKey
+        ) {
           return;
         }
 
-        commitVisibleItems(nextPage.items);
-        commitPendingItems([]);
-        setFollowingEmptyReason(nextFollowingEmptyReason);
-        setInitialFeedState('success');
+        const nextCache: QuitterDashboardFeedCache = {
+          error: null,
+          feedKey: requestFeedKey,
+          followingEmptyReason: nextFollowingEmptyReason,
+          initialFeedState: 'success',
+          items: nextPage.items,
+          lastFullFetchAt: Date.now(),
+          lastPollAt: null,
+          pendingItems: [],
+        };
+        setFeedCache(nextCache);
+        feedCacheRef.current = nextCache;
+        itemsRef.current = nextPage.items;
+        pendingItemsRef.current = [];
       } catch (error) {
-        if (signal.aborted || activeFeedRequestIdRef.current !== requestId) {
+        if (
+          signal.aborted ||
+          activeFeedRequestIdRef.current !== requestId ||
+          feedKeyRef.current !== requestFeedKey
+        ) {
           return;
         }
 
         console.error('Failed to load Quitter feed widget', error);
-        commitVisibleItems([]);
-        commitPendingItems([]);
-        setFollowingEmptyReason(null);
-        setInitialFeedState('error');
-        setError(
+        const message =
           error instanceof FeedLoadTimeoutError
             ? error.message
             : resolvedFeedMode === 'following'
               ? t('quitter_feed.error_following')
-              : t('quitter_feed.error_generic')
-        );
+              : t('quitter_feed.error_generic');
+        const nextCache: QuitterDashboardFeedCache = {
+          ...emptyCacheForKey(requestFeedKey),
+          error: message,
+          initialFeedState: 'error',
+        };
+        setFeedCache(nextCache);
+        feedCacheRef.current = nextCache;
+        itemsRef.current = [];
+        pendingItemsRef.current = [];
       } finally {
         if (activeFeedRequestIdRef.current === requestId) {
           setIsInitialLoading(false);
@@ -465,6 +531,7 @@ export const QuitterFeedWidget = ({
 
       const requestId = activeUpdateRequestIdRef.current + 1;
       const resolvedFeedMode = options.feedMode ?? feedMode;
+      const pollFeedKey = feedKeyRef.current;
       const showRefreshIndicator = !!options.showRefreshIndicator;
       const pollItemLimit = Math.min(
         Math.max(initialBatchSize, batchSize) +
@@ -531,6 +598,15 @@ export const QuitterFeedWidget = ({
           if (showRefreshIndicator) {
             setIsRefreshing(false);
           }
+
+          setFeedCache((prev) => {
+            if (!prev || prev.feedKey !== pollFeedKey) {
+              return prev;
+            }
+            const next = { ...prev, lastPollAt: Date.now() };
+            feedCacheRef.current = next;
+            return next;
+          });
         }
       }
     }
@@ -540,11 +616,26 @@ export const QuitterFeedWidget = ({
     const controller = new AbortController();
 
     previousRefreshTokenRef.current = refreshToken;
-    commitVisibleItems([]);
-    commitPendingItems([]);
-    setRevealedItemIds([]);
-    setError(null);
+    const key = feedKey;
+    feedKeyRef.current = key;
 
+    const snapshot = feedCacheRef.current;
+    const canReuse =
+      snapshot != null &&
+      snapshot.feedKey === key &&
+      snapshot.initialFeedState === 'success';
+
+    if (canReuse) {
+      itemsRef.current = snapshot.items;
+      pendingItemsRef.current = snapshot.pendingItems;
+      setIsInitialLoading(false);
+      setRevealedItemIds([]);
+      return () => {
+        controller.abort();
+      };
+    }
+
+    setRevealedItemIds([]);
     void loadFeed(controller.signal, {
       feedMode,
     });
@@ -552,7 +643,7 @@ export const QuitterFeedWidget = ({
     return () => {
       controller.abort();
     };
-  }, [commitPendingItems, commitVisibleItems, feedKey, feedMode, reloadToken]);
+  }, [feedKey, feedMode, reloadToken]);
 
   useEffect(() => {
     if (refreshToken <= previousRefreshTokenRef.current) {
@@ -590,11 +681,22 @@ export const QuitterFeedWidget = ({
     let isCancelled = false;
     let timeoutId: number | null = null;
     let activeController: AbortController | null = null;
+    const pollKey = feedKey;
 
     const scheduleNextPoll = () => {
       if (isCancelled) {
         return;
       }
+
+      const lastPollAt =
+        feedCacheRef.current?.feedKey === pollKey
+          ? feedCacheRef.current.lastPollAt
+          : null;
+      const now = Date.now();
+      const delay =
+        lastPollAt == null
+          ? FEED_POLL_INTERVAL_MS
+          : Math.max(0, FEED_POLL_INTERVAL_MS - (now - lastPollAt));
 
       timeoutId = window.setTimeout(() => {
         if (isCancelled) {
@@ -609,7 +711,7 @@ export const QuitterFeedWidget = ({
           activeController = null;
           scheduleNextPoll();
         });
-      }, FEED_POLL_INTERVAL_MS);
+      }, delay);
     };
 
     scheduleNextPoll();
@@ -623,7 +725,7 @@ export const QuitterFeedWidget = ({
 
       activeController?.abort();
     };
-  }, [feedMode, initialFeedState, items.length]);
+  }, [feedMode, feedKey, initialFeedState, items.length]);
 
   const handleOpenPost = useCallback((item: QuitterFeedItem) => {
     executeEvent('addTab', {
@@ -683,13 +785,15 @@ export const QuitterFeedWidget = ({
     !isInitialLoading && initialFeedState === 'success' && items.length === 0;
 
   const handleRetryInitialFeed = useCallback(() => {
-    setError(null);
-    commitPendingItems([]);
-    commitVisibleItems([]);
-    setInitialFeedState('loading');
+    setFeedCache(() => {
+      const key = feedKeyRef.current;
+      const next = emptyCacheForKey(key);
+      feedCacheRef.current = next;
+      return next;
+    });
     setIsInitialLoading(true);
     setReloadToken((value) => value + 1);
-  }, [commitPendingItems, commitVisibleItems]);
+  }, [setFeedCache]);
 
   const handleSelectFollowingFeed = useCallback(() => {
     if (feedMode === 'following') {

@@ -5,6 +5,8 @@ import { Wallets } from '../Wallets';
 import { AuthScreen } from '../Auth/AuthShell';
 import { useEffect, useState } from 'react';
 
+type ImportView = 'choice' | 'backup' | 'seedphrase' | 'authenticate';
+
 type WalletsViewProps = {
   onBack: () => void;
   setRawWallet: (wallet: any) => void;
@@ -19,9 +21,7 @@ export function WalletsView({
   rawWallet,
 }: WalletsViewProps) {
   const { t } = useTranslation(['auth']);
-  const [importView, setImportView] = useState<'choice' | 'backup' | 'seedphrase'>(
-    'choice'
-  );
+  const [importView, setImportView] = useState<ImportView>('choice');
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -40,8 +40,12 @@ export function WalletsView({
 
   return (
     <AuthScreen
-      title={t('auth:import_account.title')}
-      subtitle={t('auth:import_account.subtitle')}
+      title={t('auth:import_account.title', {
+        postProcess: 'capitalizeFirstChar',
+      })}
+      subtitle={t('auth:import_account.subtitle', {
+        postProcess: 'capitalizeFirstChar',
+      })}
       maxWidth={420}
     >
       {importView === 'choice' && (

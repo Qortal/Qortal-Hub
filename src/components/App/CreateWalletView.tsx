@@ -172,8 +172,12 @@ export function CreateWalletView({
               }}
             >
               {backupDownloaded
-                ? t('auth:create_wallet.success_wallet_saved')
-                : t('auth:create_wallet.success_account_created')}
+                ? t('auth:create_wallet.success_wallet_saved', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('auth:create_wallet.success_account_created', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
             </Typography>
             <Typography
               sx={{
@@ -186,8 +190,12 @@ export function CreateWalletView({
               }}
             >
               {backupDownloaded
-                ? t('auth:create_wallet.success_ready_hub')
-                : t('auth:create_wallet.success_backup_before_hub')}
+                ? t('auth:create_wallet.success_ready_hub', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('auth:create_wallet.success_backup_before_hub', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
             </Typography>
           </Box>
 
@@ -202,19 +210,27 @@ export function CreateWalletView({
             {backupDownloaded ? (
               <>
                 <AuthButton onClick={onEnterHub}>
-                  {t('auth:create_wallet.enter_hub')}
+                  {t('auth:create_wallet.enter_hub', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </AuthButton>
                 <AuthButton onClick={handleDownloadBackup} primary={false}>
-                  {t('auth:create_wallet.download_another_copy')}
+                  {t('auth:create_wallet.download_another_copy', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </AuthButton>
               </>
             ) : (
               <>
                 <AuthButton onClick={handleDownloadBackup}>
-                  {t('auth:create_wallet.backup_wallet')}
+                  {t('auth:create_wallet.backup_wallet', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </AuthButton>
                 <AuthButton disabled primary={false}>
-                  {t('auth:create_wallet.enter_hub')}
+                  {t('auth:create_wallet.enter_hub', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </AuthButton>
               </>
             )}
@@ -229,7 +245,9 @@ export function CreateWalletView({
               lineHeight: 1.5,
             }}
           >
-            {t('auth:create_wallet.backup_encrypted_notice')}
+            {t('auth:create_wallet.backup_encrypted_notice', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
         </Box>
       </AuthScreen>
@@ -240,8 +258,12 @@ export function CreateWalletView({
     return (
       <AuthScreen
         maxWidth={460}
-        title={t('auth:create_wallet.seed_title')}
-        subtitle={t('auth:create_wallet.seed_subtitle')}
+        title={t('auth:create_wallet.seed_title', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+        subtitle={t('auth:create_wallet.seed_subtitle', {
+          postProcess: 'capitalizeSentenceStarts',
+        })}
       >
         <Box
           sx={{
@@ -342,8 +364,12 @@ export function CreateWalletView({
   return (
     <AuthScreen
       maxWidth={400}
-      title={t('auth:create_wallet.password_title')}
-      subtitle={t('auth:create_wallet.password_subtitle')}
+      title={t('auth:create_wallet.password_title', {
+        postProcess: 'capitalizeFirstChar',
+      })}
+      subtitle={t('auth:create_wallet.password_subtitle', {
+        postProcess: 'capitalizeFirstChar',
+      })}
     >
       <Box
         sx={{

@@ -127,15 +127,25 @@ export const Thread = ({
   const theme = useTheme();
   // Update: Use a new ref for the scrollable container
   const threadContainerRef = useRef(null);
-  const threadBeginningRef = useRef(null);
   // New state variables
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
   const secretKeyRef = useRef(null);
   const currentThreadRef = useRef(null);
-  const containerRef = useRef(null);
   const dataPublishes = useRef({});
+
+  const scrollThreadContainer = useCallback((position: 'top' | 'bottom') => {
+    setTimeout(() => {
+      const container = threadContainerRef.current;
+      if (!container) return;
+
+      container.scrollTo({
+        top: position === 'bottom' ? container.scrollHeight : 0,
+        behavior: position === 'bottom' ? 'smooth' : 'auto',
+      });
+    }, position === 'bottom' ? 300 : 100);
+  }, []);
 
   const getSavedData = useCallback(async (groupId) => {
     const res = await getDataPublishesFunc(groupId, 'thmsg');
@@ -268,14 +278,10 @@ export const Thread = ({
         }
         setMessages(fullArrayMsg);
         if (before === null && after === null && isReverse) {
-          setTimeout(() => {
-            containerRef.current.scrollIntoView({ behavior: 'smooth' });
-          }, 300);
+          scrollThreadContainer('bottom');
         }
         if (after || (before === null && after === null && !isReverse)) {
-          setTimeout(() => {
-            threadBeginningRef.current.scrollIntoView();
-          }, 100);
+          scrollThreadContainer('top');
         }
 
         if (fullArrayMsg.length === 0) {
@@ -578,6 +584,8 @@ export const Thread = ({
       sx={{
         display: 'flex',
         flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
         overflow: 'hidden',
         position: 'relative',
         width: '100%',
@@ -655,11 +663,13 @@ export const Thread = ({
       <ThreadContainerFullWidth
         sx={{
           flexGrow: 1,
+          minHeight: 0,
           overflow: 'auto',
+          paddingBottom: '32px',
+          scrollPaddingBottom: '32px',
         }}
         ref={threadContainerRef} // Updated ref attached here
       >
-        <div ref={threadBeginningRef} />
         <ThreadContainer>
           <Spacer height={'30px'} />
 
@@ -1095,8 +1105,6 @@ export const Thread = ({
 
             <Spacer height="30px" />
           </Box>
-
-          <div ref={containerRef} />
         </ThreadContainer>
       </ThreadContainerFullWidth>
 

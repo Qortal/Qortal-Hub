@@ -1104,40 +1104,40 @@ export const HomeProfileCard = ({
       setIsAvatarLoading(true);
       const avatarBase64 = await fileToBase64(avatarFile);
 
-      await new Promise((res, rej) => {
-        window
-          .sendMessage('publishOnQDN', {
-            data: avatarBase64,
-            identifier: 'qortal_avatar',
-            service: 'THUMBNAIL',
-            uploadType: 'base64',
-          })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              return;
-            }
-            rej(response.error);
-          })
-          .catch((error) => {
-            rej(
-              error.message ||
+      const publishResponse = await window.sendMessage('publishOnQDN', {
+        data: avatarBase64,
+        identifier: 'qortal_avatar',
+        service: 'THUMBNAIL',
+        uploadType: 'base64',
+      });
+      if (publishResponse?.error) {
+        throw new Error(
+          typeof publishResponse.error === 'string'
+            ? publishResponse.error
+            : publishResponse.message ||
                 t('core:message.error.generic', {
                   postProcess: 'capitalizeFirstChar',
                 })
-            );
-          });
-      });
+        );
+      }
 
       setAvatarFile(null);
       setTempAvatar(`data:image/webp;base64,${avatarBase64}`);
       setAvatarAnchorEl(null);
       executeEvent('avatarUploaded', {});
     } catch (error) {
-      if (error?.message) {
-        setInfoSnack({ type: 'error', message: error.message });
-        setOpenSnack(true);
-      }
+      setInfoSnack({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
+      });
+      setOpenSnack(true);
     } finally {
       setIsAvatarLoading(false);
     }
@@ -1513,6 +1513,8 @@ export const HomeProfileCard = ({
           </BorderGlow>
         </TiltedCard>
 
+        {/*
+        Account status pill + menu — restore when status UX is ready again.
         <ButtonBase
           onClick={handleOpenAccountStatusMenu}
           aria-haspopup="menu"
@@ -1589,6 +1591,7 @@ export const HomeProfileCard = ({
             }}
           />
         </ButtonBase>
+        */}
       </Box>
 
       <Box
@@ -1917,6 +1920,8 @@ export const HomeProfileCard = ({
         </Box>
       </Box>
 
+      {/*
+      Account status dropdown — restore with the ButtonBase pill above.
       <Menu
         id="account-status-menu"
         anchorEl={accountStatusAnchorEl}
@@ -1998,6 +2003,7 @@ export const HomeProfileCard = ({
           );
         })}
       </Menu>
+      */}
 
       <Dialog
         open={isAccountSettingsOpen}
@@ -3509,4 +3515,3 @@ export const HomeProfileCard = ({
     </Box>
   );
 };
-

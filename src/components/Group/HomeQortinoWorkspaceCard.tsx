@@ -64,6 +64,7 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
+import { openHttpUrlExternally } from '../../utils/openExternalHttp';
 import {
   dashboardPanelSx,
   handleDashboardPanelPointerLeave,
@@ -123,7 +124,8 @@ import {
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
 const AVATAR_IDENTIFIER = 'qortal_avatar';
-const MIN_BALANCE_FOR_QORTS = 6;
+/** Advance past step 1 at this balance; labels still say "6 QORT" for onboarding copy. */
+const MIN_BALANCE_FOR_QORTS = 1.25;
 export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
 const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
@@ -497,12 +499,7 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
 };
 
 const openExternalUrl = (url: string) => {
-  if (window?.electronAPI?.openExternal) {
-    window.electronAPI.openExternal(url);
-    return;
-  }
-
-  window.open(url, '_blank');
+  openHttpUrlExternally(url);
 };
 
 const dispatchAppTab = (name: string, path = '') => {
@@ -2293,7 +2290,7 @@ export const HomeQortinoWorkspaceCard = ({
           'tutorial:home.qorts_acquired_hint',
           'The hardest part is over. Press Next when you are ready to register your name.'
         ),
-        label: t('tutorial:home.qorts_acquired', '6 QORT acquired'),
+        label: t('tutorial:home.qorts_acquired', 'QORT acquired'),
         loading: false,
       }
     : baseCurrentStep;

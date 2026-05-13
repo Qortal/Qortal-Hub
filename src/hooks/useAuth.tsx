@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   getDefaultLocalNodeUrl,
+  EXT_NODE_QORTAL_LINK,
   HTTP_LOCALHOST_12391,
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
@@ -34,18 +35,22 @@ import {
   setLocalApiKeyNotElectronCase,
 } from '../background/background-cases';
 import { ApiKey } from '../types/auth';
-import { isRunningGateway } from '../qortal/qortal-requests';
 import { useModalGlobal } from './useModalGlobal';
 import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
+const ADMIN_STATUS_FETCH_TIMEOUT_MS = 5000;
 
 function isLocalCoreStatusSynced(status: any) {
   const syncPercent = Number(status?.syncPercent);
   return (
     Number.isFinite(syncPercent) && syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
   );
+}
+
+function isGatewayNode(nodeInfo?: ApiKey | null) {
+  return !nodeInfo?.url || nodeInfo.url.includes(EXT_NODE_QORTAL_LINK);
 }
 
 export const useAuth = () => {
@@ -154,7 +159,18 @@ export const useAuth = () => {
         if (!isLocal) {
           let isUrlGood = true;
           try {
-            const resUrlCheck = await fetch(`${baseUrl}/admin/status`);
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => {
+              controller.abort();
+            }, ADMIN_STATUS_FETCH_TIMEOUT_MS);
+            let resUrlCheck: Response;
+            try {
+              resUrlCheck = await fetch(`${baseUrl}/admin/status`, {
+                signal: controller.signal,
+              });
+            } finally {
+              window.clearTimeout(timeoutId);
+            }
             if (!resUrlCheck.ok) {
               isUrlGood = false;
             }
@@ -262,19 +278,17 @@ export const useAuth = () => {
 
   const handleSaveNodeInfo = useCallback(
     async (nodeInfo) => {
-      await window.sendMessage('setApiKey', nodeInfo);
-      if (nodeInfo) {
-        setSelectedNode(nodeInfo);
-      } else {
-        setSelectedNode({
+      const nextNodeInfo =
+        nodeInfo || {
           url: HTTPS_EXT_NODE_QORTAL_LINK,
           apikey: '',
-        });
-      }
-      handleSetGlobalApikey(nodeInfo);
+        };
+
+      await window.sendMessage('setApiKey', nextNodeInfo);
+      setSelectedNode(nextNodeInfo);
+      handleSetGlobalApikey(nextNodeInfo);
       try {
-        const onGateway = await isRunningGateway();
-        setIsRunningPublicNode(onGateway);
+        setIsRunningPublicNode(isGatewayNode(nextNodeInfo));
       } catch (error) {
         console.error(error);
       }

@@ -33,6 +33,7 @@ import {
   promotionTimeIntervalAtom,
   promotionsAtom,
   qMailLastEnteredTimestampAtom,
+  quitterDashboardFeedCacheAtom,
   resourceDownloadControllerAtom,
   selectedGroupIdAtom,
   settingsLocalLastUpdatedAtom,
@@ -124,6 +125,9 @@ export function useAppReset() {
   const resetPromotionTimeIntervalAtom = useResetAtom(
     promotionTimeIntervalAtom
   );
+  const resetQuitterDashboardFeedCacheAtom = useResetAtom(
+    quitterDashboardFeedCacheAtom
+  );
 
   const resetAppSortAtom = useResetAtom(appSortAtom);
   const resetAppCategoryFilterAtom = useResetAtom(appCategoryFilterAtom);
@@ -181,6 +185,7 @@ export function useAppReset() {
     resetSelectedGroupIdAtom();
     resetPromotionsAtom();
     resetPromotionTimeIntervalAtom();
+    resetQuitterDashboardFeedCacheAtom();
     resetAppSortAtom();
     resetAppCategoryFilterAtom();
     resetAppStatusFilterAtom();
@@ -229,6 +234,7 @@ export function useAppReset() {
     resetSelectedGroupIdAtom,
     resetPromotionsAtom,
     resetPromotionTimeIntervalAtom,
+    resetQuitterDashboardFeedCacheAtom,
     resetAppSortAtom,
     resetAppCategoryFilterAtom,
     resetAppStatusFilterAtom,

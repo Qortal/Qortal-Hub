@@ -1384,11 +1384,25 @@ export const AppsDesktop = ({
     scheduleTabPointerUnlock();
   }, [scheduleTabPointerUnlock]);
 
+  const hasOpenTabs = tabs.length > 0;
+  const hideAppsShellOffScreen = !show && hasOpenTabs;
+
   return (
     <AppsParent
       sx={{
-        display: show ? 'flex' : 'none',
+        display: hideAppsShellOffScreen || show ? 'flex' : 'none',
         flexDirection: 'row',
+        ...(hideAppsShellOffScreen
+          ? {
+              height: `calc(100vh - ${appChromeOffsetPx})`,
+              left: '-200vw',
+              maxWidth: '100vw',
+              pointerEvents: 'none',
+              position: 'fixed',
+              top: 0,
+              width: '100%',
+            }
+          : {}),
       }}
     >
       <RatingsCacheInitializer />

@@ -5,6 +5,7 @@ import {
   capitalizeEachFirstChar,
   capitalizeFirstChar,
   capitalizeFirstWord,
+  capitalizeSentenceStarts,
 } from './processors';
 
 export const supportedLanguages = {
@@ -67,6 +68,7 @@ i18n
   .use(capitalizeEachFirstChar as any)
   .use(capitalizeFirstChar as any)
   .use(capitalizeFirstWord as any)
+  .use(capitalizeSentenceStarts as any)
   .init({
     resources,
     fallbackLng: 'en',

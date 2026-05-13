@@ -55,6 +55,8 @@
     "open_app": "Open",
     "address_copied": "Address copied to clipboard",
     "group_activity": "Group Activity",
+    "qorts_acquired": "QORT acquired",
+    "qorts_acquired_hint": "The hardest part is over. Press Next when you are ready to register your name.",
     "get_qorts_workspace_hint": "Unlock your first 6 QORT to activate the rest of the setup.",
     "register_name_workspace_hint": "A registered name turns this account into a recognizable identity.",
     "load_avatar_workspace_hint": "Give the dashboard a face so the whole space starts to feel like yours.",
