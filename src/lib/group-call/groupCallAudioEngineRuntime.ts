@@ -3100,6 +3100,7 @@ export class GroupCallAudioEngineRuntime {
       this.resetWorkerDecodeFailureRecoveryState();
       this.seq = 0;
       this.callEpochMs = Date.now();
+      this.resetOutboundMediaDiagnostics();
       this.clearHeldIncomingAudio();
       this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
       this.activeSpeakerLastSeenAt.clear();
@@ -3417,6 +3418,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRecentWindowTrends();
     this.callEpochMs = Date.now();
     this.seq = 0;
+    this.resetOutboundMediaDiagnostics();
     await this.receiveEngine.reset();
     await this.syncDecryptPoolRoomKey(roomKey);
     traceGcallAudioSurface('pipeline: room key applied, decrypt path enabled', {
@@ -3455,6 +3457,7 @@ export class GroupCallAudioEngineRuntime {
       this.clearKeyRecoveryRetryTimer();
       this.callEpochMs = Date.now();
       this.seq = 0;
+      this.resetOutboundMediaDiagnostics();
       await this.syncDecryptPoolRoomKey(roomKey);
       await this.distributeRoomKey(roomKey);
       await this.syncSenderState();
@@ -5239,6 +5242,7 @@ export class GroupCallAudioEngineRuntime {
       if (!hadOwnRoomKey && !adoptingExistingRoomKey) {
         this.callEpochMs = Date.now();
         this.seq = 0;
+        this.resetOutboundMediaDiagnostics();
         await this.syncDecryptPoolRoomKey(nextRoomKey);
       }
       await this.distributeRoomKey(nextRoomKey);
@@ -6538,6 +6542,7 @@ export class GroupCallAudioEngineRuntime {
         this.clearKeyRecoveryRetryTimer();
         this.callEpochMs = Date.now();
         this.seq = 0;
+        this.resetOutboundMediaDiagnostics();
         await this.syncDecryptPoolRoomKey(roomKey);
         await this.syncSenderState();
         this.recordDiagEvent('missing-room-key-self-recovered', {

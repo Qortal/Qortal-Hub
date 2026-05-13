@@ -16,6 +16,7 @@ export type SystemCallReadinessSnapshot = {
 };
 
 const SAMPLE_INTERVAL_MS = 15_000;
+const LIVE_SAMPLE_INTERVAL_MS = 250;
 const CPU_WARNING_LOAD = 0.5;
 const CPU_BLOCKED_LOAD = 0.85;
 const EVENT_LOOP_WARNING_LAG_MS = 100;
@@ -34,13 +35,15 @@ let timer: ReturnType<typeof setInterval> | null = null;
 let lastCpuSample = os.cpus();
 let nextExpectedTickMs = Date.now() + SAMPLE_INTERVAL_MS;
 
-function readCpuLoad(): number | null {
-  const currentCpuSample = os.cpus();
+function computeCpuLoad(
+  previousCpuSample: os.CpuInfo[],
+  currentCpuSample: os.CpuInfo[]
+): number | null {
   let idleDelta = 0;
   let totalDelta = 0;
 
   for (let i = 0; i < currentCpuSample.length; i++) {
-    const previous = lastCpuSample[i]?.times;
+    const previous = previousCpuSample[i]?.times;
     const current = currentCpuSample[i].times;
     if (!previous) continue;
 
@@ -57,13 +60,50 @@ function readCpuLoad(): number | null {
     totalDelta += currentTotal - previousTotal;
   }
 
-  lastCpuSample = currentCpuSample;
-
   if (totalDelta <= 0) {
     return null;
   }
 
   return Math.max(0, Math.min(1, 1 - idleDelta / totalDelta));
+}
+
+function readCpuLoad(): number | null {
+  const currentCpuSample = os.cpus();
+  const cpuLoad = computeCpuLoad(lastCpuSample, currentCpuSample);
+  lastCpuSample = currentCpuSample;
+  return cpuLoad;
+}
+
+function readMemoryPressure(): number {
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  // Keep this as a diagnostic metric only. Raw free-memory ratios are misleading
+  // on macOS and can also be noisy on Windows because reclaimable/cache memory is
+  // not the same thing as call-breaking memory pressure.
+  return totalMemory > 0
+    ? Math.max(0, Math.min(1, 1 - freeMemory / totalMemory))
+    : 0;
+}
+
+function buildReadinessSnapshot(input: {
+  cpuLoad: number | null;
+  memoryPressure: number;
+  eventLoopLagMs: number;
+  measuredAt: number;
+}): SystemCallReadinessSnapshot {
+  const classification = classifySystemPressure({
+    cpuLoad: input.cpuLoad,
+    memoryPressure: input.memoryPressure,
+    eventLoopLagMs: input.eventLoopLagMs,
+  });
+
+  return {
+    ...classification,
+    cpuLoad: input.cpuLoad,
+    memoryPressure: input.memoryPressure,
+    eventLoopLagMs: input.eventLoopLagMs,
+    measuredAt: input.measuredAt,
+  };
 }
 
 function classifySystemPressure(input: {
@@ -108,28 +148,14 @@ function sampleSystemCallReadiness(): void {
   const now = Date.now();
   const eventLoopLagMs = Math.max(0, now - nextExpectedTickMs);
   nextExpectedTickMs = now + SAMPLE_INTERVAL_MS;
-
-  const totalMemory = os.totalmem();
-  const freeMemory = os.freemem();
-  // Keep this as a diagnostic metric only. Raw free-memory ratios are misleading
-  // on macOS and can also be noisy on Windows because reclaimable/cache memory is
-  // not the same thing as call-breaking memory pressure.
-  const memoryPressure =
-    totalMemory > 0 ? Math.max(0, Math.min(1, 1 - freeMemory / totalMemory)) : 0;
   const cpuLoad = readCpuLoad();
-  const classification = classifySystemPressure({
-    cpuLoad,
-    memoryPressure,
-    eventLoopLagMs,
-  });
 
-  snapshot = {
-    ...classification,
+  snapshot = buildReadinessSnapshot({
     cpuLoad,
-    memoryPressure,
+    memoryPressure: readMemoryPressure(),
     eventLoopLagMs,
     measuredAt: now,
-  };
+  });
 }
 
 export function startSystemCallReadinessMonitor(): void {
@@ -148,5 +174,28 @@ export function stopSystemCallReadinessMonitor(): void {
 }
 
 export function getSystemCallReadinessSnapshot(): SystemCallReadinessSnapshot {
+  return snapshot;
+}
+
+export async function refreshSystemCallReadinessSnapshot(): Promise<SystemCallReadinessSnapshot> {
+  const startCpuSample = os.cpus();
+  const expectedWakeMs = Date.now() + LIVE_SAMPLE_INTERVAL_MS;
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, LIVE_SAMPLE_INTERVAL_MS);
+    timeout.unref?.();
+  });
+
+  const measuredAt = Date.now();
+  const eventLoopLagMs = Math.max(0, measuredAt - expectedWakeMs);
+  const cpuLoad = computeCpuLoad(startCpuSample, os.cpus());
+
+  snapshot = buildReadinessSnapshot({
+    cpuLoad,
+    memoryPressure: readMemoryPressure(),
+    eventLoopLagMs,
+    measuredAt,
+  });
+
   return snapshot;
 }

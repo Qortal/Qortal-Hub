@@ -218,6 +218,7 @@ export class DmVoiceGcallInboundPlayout {
   private callbacks: DmVoiceGcallInboundOptions | null = null;
   /** Last applied `metrics.adaptiveNetworkMode` for jitter geometry. */
   private lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null = null;
+  private forcedJitterAdaptiveMode: 'low-latency' | 'recovery' | null = null;
   private lastJitterActiveSourceCount = 1;
   private lastPostedTargetPlayoutMs: number | null = null;
   private pendingDecodedIngressAtMs: Array<number | null> = [];
@@ -366,6 +367,14 @@ export class DmVoiceGcallInboundPlayout {
 
   syncAdaptiveJitterGeometry(): void {
     this.syncJitterGeometryFromMetrics();
+  }
+
+  setForcedAdaptiveJitterMode(
+    mode: 'low-latency' | 'recovery' | null
+  ): void {
+    if (this.forcedJitterAdaptiveMode === mode) return;
+    this.forcedJitterAdaptiveMode = mode;
+    this.syncJitterGeometryFromMetrics(false);
   }
 
   setDynamicTargetPlayoutMs(targetPlayoutMs: number): void {
@@ -708,7 +717,8 @@ export class DmVoiceGcallInboundPlayout {
     const tuning = this.tuning;
     const m = this.callbacks?.metricsRef?.current;
     if (!jb || !tuning || !m) return;
-    const mode = m.getSnapshot().adaptiveNetworkMode;
+    const metricsMode = m.getSnapshot().adaptiveNetworkMode;
+    const mode = this.forcedJitterAdaptiveMode ?? metricsMode;
     const activeSourceCount = this.resolveActiveSourceCount();
     const snapshot = m.getSnapshot();
     if (stepHeadroom) {

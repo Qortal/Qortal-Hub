@@ -49,6 +49,7 @@ export class JitterBuffer {
   private entries: JitterEntry[] = [];
   private lastPlayedSeq = -1;
   private pendingMissedSeq = 0;
+  private trimSuppressedGapDebt = 0;
   private lastPoppedReceivedAtMs: number | null = null;
   private primed = false;
   /** When buffer became empty after `pop`; delays resetting `primed` (Phase C/D soft un-prime). */
@@ -215,6 +216,9 @@ export class JitterBuffer {
     if (this.entries.length > maxEntries) {
       trimmed = this.entries.length - maxEntries;
       this.entries.splice(0, trimmed);
+      if (this.lastPlayedSeq >= 0) {
+        this.trimSuppressedGapDebt += trimmed;
+      }
     }
     return { status: 'accepted', depth: this.entries.length, trimmed };
   }
@@ -245,9 +249,17 @@ export class JitterBuffer {
       const expected = (this.lastPlayedSeq + 1) & 0xffff;
       const gap = (entry.seq - expected + 65536) % 65536;
       this.lastRawGapAfterPop = gap;
-      if (gap > 0 && gap <= 48) this.pendingMissedSeq += gap;
+      const trimSuppressedGap = Math.min(gap, this.trimSuppressedGapDebt);
+      if (trimSuppressedGap > 0) {
+        this.trimSuppressedGapDebt -= trimSuppressedGap;
+      }
+      const unexpectedGap = gap - trimSuppressedGap;
+      if (unexpectedGap > 0 && unexpectedGap <= 48) {
+        this.pendingMissedSeq += unexpectedGap;
+      }
     } else {
       this.lastRawGapAfterPop = 0;
+      this.trimSuppressedGapDebt = 0;
     }
     this.lastPlayedSeq = entry.seq;
     if (this.entries.length === 0) {
@@ -284,6 +296,7 @@ export class JitterBuffer {
     this.entries = [];
     this.lastPlayedSeq = -1;
     this.pendingMissedSeq = 0;
+    this.trimSuppressedGapDebt = 0;
     this.lastPoppedReceivedAtMs = null;
     this.primed = false;
     this.emptySinceMs = null;

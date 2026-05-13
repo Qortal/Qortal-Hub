@@ -35,6 +35,31 @@ describe('gcallJitterBuffer', () => {
     });
   });
 
+  it('does not report intentional trim skips as unexpected missing frames', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 2,
+      jitterStartBufferSize: 1,
+    });
+
+    jb.push(1, new Uint8Array([1]));
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+
+    for (let seq = 2; seq <= 5; seq++) {
+      expect(jb.push(seq, new Uint8Array([seq])).trimmed).toBe(0);
+    }
+    expect(jb.push(6, new Uint8Array([6]))).toEqual({
+      status: 'accepted',
+      depth: 4,
+      trimmed: 1,
+    });
+
+    expect(jb.pop()).toEqual(new Uint8Array([3]));
+    expect(jb.consumeLastRawGapAfterPop()).toBe(1);
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+  });
+
   it('can force-prime a live one-frame buffer for exact-1-remote recovery escape', () => {
     const jb = new JitterBuffer();
     jb.push(1, new Uint8Array([1, 2, 3]));

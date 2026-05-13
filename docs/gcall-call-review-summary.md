@@ -4987,3 +4987,135 @@ Current patched target:
 - Primary fix: expose jitter-buffer push outcomes in diagnostics, especially accepted, stale, duplicate, trimmed count, high-water depth, and last trim event per source.
 - If trims line up with Linux missing-frame bursts, tune the jitter-buffer cap/trim policy for single-source recovery so bursty inbound delivery does not discard valid frames and then report the discard as missing audio.
 - Selector is secondary because it reacts after the damage. Profile strength is not the next target. Baseline is not the next target. No new profile is justified from this call.
+
+## Call: 2026-05-13 21:40Z / group 937 3-person latest-code multi-source check
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-13T21-40-11-400Z.json`
+- Side B: `/home/qortal/Downloads/seth-kenny-phil-14.json`
+- Side C: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-13T21-39-44-545Z.json`
+
+User symptom:
+- New 3+ multi-party group-call check after the recent changes. No side-specific spoken symptom was provided with the exports.
+- Metric symptom: all three sides remain in multi-source protected recovery for both remote sources, with repeated missing-frame/concealment bursts while playouts are usually ready and jitter buffers are at or near trim pressure.
+
+High-level verdict:
+- Bad/mixed, but improved diagnostic clarity.
+- This is not the prior hidden-startup case where a source was buffered but never became ready. In this batch every side has active playouts, active schedulers/playback nodes, and mostly ready samples for both remote sources.
+- The common failure shape is jitter trim pressure in multi-source recovery: large missing-frame bursts line up with per-source jitter buffers at high water and `jitterPushTrimmedFrames` increasing.
+
+Not the problem:
+- Pending decrypt/key: `packetsDroppedPendingDecrypt=0`, pending-decrypt deltas `0`, and `pendingDecryptDepth=0` on all three exports.
+- Current decode path: root has `5` historical decode failures and participant has `40`, but `totalDecodeFailureDelta=0` in all retained windows, so decode/key mismatch is not the active sampled failure.
+- Sender/no-target: all retained windows have `totalNoTargetSkipsDelta=0`, outbound sends succeed, and link transport is active.
+- Queue/backpressure: no queue-pressure drops, stale drops, link-unready drops, packet send failures, or bridge drain waits. Decoded queue high-water exists, but no transport-queue drops explain the bursts.
+- Startup readiness: all six remote playouts are ready in most retained samples and ready at export time; this is not a source-activation/not-ready regression.
+- Baseline: every leg is already above baseline in `multi-protected-recovery`, so a global baseline bump is not the first lever.
+
+Primary next target:
+- Another subsystem: multi-source jitter-buffer push/trim behavior under recovery.
+- The next patch should tune or fix per-source jitter cap/headroom/trim policy and sequence-gap accounting in multi-source recovery. The new trim diagnostics confirm the earlier suspected overflow/trim path: large missing-frame deltas appear when jitter buffers are at `40/40` or have just trimmed.
+- Selector is not the next target because all six legs are classified as `multi-protected-recovery`. Profile strength is secondary because stronger targets do not help if valid frames are being trimmed at the jitter cap. Baseline is not the next target.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QeJW96...j5W9` receiving participant `QP9Jj4...i6rP` | `multi-protected-recovery` | unknown; metrics bad | 55.843 | 801 | 205 | 0.014 | 0.006 | low-latency | Ready in `291/300` samples. `+147`, `+97`, and `+226` missing bursts occur with ready jitter buffers and trim pressure; current playout has `925` trimmed frames. |
+| A | root-forwarder / Linux / `QeJW96...j5W9` receiving standby `QTSzRS...9jMn` | `multi-protected-recovery` | unknown; metrics bad | 55.843 | 801 | 205 | 0.014 | 0.006 | low-latency | Ready in `292/300` samples. Large bursts at `21:32:09` and `21:38:39` line up with this leg trimming from high-water. |
+| B | standby-forwarder / Linux / `QTSzRS...9jMn` receiving root `QeJW96...j5W9` | `multi-protected-recovery` | unknown; metrics bad | 94.173 | 1333 | 209 | 0.018 | 0.012 | low-latency | Ready in `294/300` samples. One burst briefly shows `jitterHasReadyFrame=false`, but most retained samples are ready; current trim total is `287`. |
+| B | standby-forwarder / Linux / `QTSzRS...9jMn` receiving participant `QP9Jj4...i6rP` | `multi-protected-recovery` | unknown; metrics bad | 94.173 | 1333 | 209 | 0.018 | 0.012 | low-latency | Ready in `287/300` samples. Heavy trim pressure: current trim total is `1030`, with `+165`, `+218`, `+107`, and `+393` missing bursts. |
+| C | participant / Linux / `QP9Jj4...i6rP` receiving root `QeJW96...j5W9` | `multi-protected-recovery` | unknown; metrics bad | 12.200 | 2013 | 318 | 0.003 | 0.002 | low-latency | Ready in `291/300` samples. Very shallow side-wide reserve, but bursts happen while this source is ready and near cap; current trim total is `812`. |
+| C | participant / Linux / `QP9Jj4...i6rP` receiving standby `QTSzRS...9jMn` | `multi-protected-recovery` | unknown; metrics bad | 12.200 | 2013 | 318 | 0.003 | 0.002 | low-latency | Ready in `283/300` samples. Strongest trim pressure in this export: current trim total is `1226`, including `+366`, `+488`, `+22`, and `+289` missing bursts. |
+
+### Side A
+
+Expected profile from symptom:
+- With no side-specific user symptom, the metric symptom expects a multi-source recovery profile rather than clean-low-latency.
+
+Actual exported profile:
+- Participant `QP9Jj4...i6rP`: `multi-protected-recovery` for `300/300` retained samples.
+- Standby `QTSzRS...9jMn`: `multi-protected-recovery` for `300/300` retained samples.
+
+Did classification match?
+- Yes for the metric symptom.
+
+Notes:
+- The selector is not missing the bad state. The root side is already protected for both sources.
+- The failure is downstream of classification: missing bursts occur while playouts are ready and the jitter buffers are at/near trim pressure.
+
+### Side B
+
+Expected profile from symptom:
+- Multi-source protected recovery is expected from the retained-window metric damage.
+
+Actual exported profile:
+- Root `QeJW96...j5W9`: `multi-protected-recovery` for `300/300` retained samples.
+- Participant `QP9Jj4...i6rP`: `multi-protected-recovery` for `300/300` retained samples.
+
+Did classification match?
+- Yes for the metric symptom.
+
+Notes:
+- This side has high reserve on paper (`avgPcmBufferedMs=94.173`) but still has `905` missing-frame delta and `148` concealment delta in the retained window.
+- That combination argues against simply raising profile strength; the buffer is not globally empty, yet per-source trims and sequence gaps still create missing audio.
+
+### Side C
+
+Expected profile from symptom:
+- Multi-source protected recovery is expected: this is the most damaged side by totals and has shallow side-wide reserve.
+
+Actual exported profile:
+- Root `QeJW96...j5W9`: `multi-protected-recovery` for `300/300` retained samples.
+- Standby `QTSzRS...9jMn`: `multi-protected-recovery` for `300/300` retained samples.
+
+Did classification match?
+- Yes for the metric symptom.
+
+Notes:
+- Participant-side metrics are worst overall: `1184` missing-frame delta, `193` concealment delta, `avgPcmBufferedMs=12.2`.
+- Even here, the burst evidence points at jitter trimming: both remote playouts are ready in most samples, and large bursts occur with `jitterBufferedFrames` around `39-40` plus trim pressure.
+
+## Trend Read
+
+Side A:
+- Oscillating/discrete trim-pressure bursts.
+- Reasons seen:
+  - retained-window damage: `500` missing-frame delta and `130` concealment delta.
+  - large bursts: `+147`, `+97`, `+226`, and `+20`.
+  - all retained profile samples are `multi-protected-recovery`.
+  - both playouts are mostly ready and current jitter cap/high-water is `40`.
+
+Side B:
+- Oscillating/discrete trim-pressure bursts.
+- Reasons seen:
+  - retained-window damage: `905` missing-frame delta and `148` concealment delta.
+  - large bursts: `+165`, `+218`, `+107`, and `+393`.
+  - participant leg is heavily trimmed (`1030` current trimmed frames), and root leg also reaches trim-pressure headroom by export time.
+
+Side C:
+- Worst burst damage, shallow reserve, but still not a startup-not-ready shape.
+- Reasons seen:
+  - retained-window damage: `1184` missing-frame delta and `193` concealment delta.
+  - large bursts: `+366`, `+488`, `+22`, and `+289`.
+  - both source buffers hit high-water `40`; trim totals are `812` and `1226`.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-13T21:40Z group-937 3p` | A / Linux root receiving participant | `multi-protected-recovery` | unknown; metrics bad | yes | jitter push/trim subsystem | Tune multi-source jitter cap/headroom/trim behavior; selector/profile strength are not first. |
+| `2026-05-13T21:40Z group-937 3p` | A / Linux root receiving standby | `multi-protected-recovery` | unknown; metrics bad | yes | jitter push/trim subsystem | Same multi-source trim target; watch source-specific trim events around missing bursts. |
+| `2026-05-13T21:40Z group-937 3p` | B / Linux standby receiving root | `multi-protected-recovery` | unknown; metrics bad | yes | jitter push/trim subsystem | Fix burst handling; one not-ready sample is secondary, not the dominant failure. |
+| `2026-05-13T21:40Z group-937 3p` | B / Linux standby receiving participant | `multi-protected-recovery` | unknown; metrics bad | yes | jitter push/trim subsystem | Highest trim pressure on this side; prioritize per-source trim/cap behavior. |
+| `2026-05-13T21:40Z group-937 3p` | C / Linux participant receiving root | `multi-protected-recovery` | unknown; metrics bad | yes | jitter push/trim subsystem | Fix trim-induced sequence gaps before changing profile targets. |
+| `2026-05-13T21:40Z group-937 3p` | C / Linux participant receiving standby | `multi-protected-recovery` | unknown; metrics bad | yes | jitter push/trim subsystem | Strongest evidence: large bursts with `40/40` buffers and `1226` current trimmed frames. |
+
+## Next Fix Target
+
+Current patched target:
+- Another subsystem: multi-source jitter-buffer push/trim behavior under recovery.
+- Primary fix: tune per-source jitter cap/headroom/trim policy so recovery-mode burst absorption does not trim valid near-future frames and then surface the gap as missing audio.
+- Secondary fix: check missing-frame accounting against trim events so intentionally trimmed-old frames are not misclassified as unexpected sequence gaps.
+- Selector is not the next target. Profile strength is not the next target until trim behavior is corrected. Baseline is not the next target. No new profile is justified from this batch.

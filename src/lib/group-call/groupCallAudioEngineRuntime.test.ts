@@ -6189,6 +6189,106 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('resets outbound media diagnostics when the media session resets', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-944',
+      chatId: 'group:944',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-944',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: Date.now(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    (runtime as any).roomKey = new Uint8Array(32).fill(3);
+    await (runtime as any).syncSenderState();
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array([0]), vad: true },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const beforeReset = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const beforeParsed = JSON.parse(
+      beforeReset.ok ? (beforeReset.payload as string) : '{}'
+    ) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        outboundMedia?: {
+          encodedFrameCallbacks?: number;
+          packetBuildAttempts?: number;
+          sendAttempts?: number;
+        };
+      };
+    };
+    expect(
+      beforeParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.encodedFrameCallbacks
+    ).toBe(1);
+    expect(
+      beforeParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.packetBuildAttempts
+    ).toBe(1);
+    expect(
+      beforeParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia?.sendAttempts
+    ).toBe(1);
+
+    groupCallEventHandler?.('gcall:session-updated', {
+      roomId: 'gcall-qortal-944',
+      callSessionId: 'csid-2',
+      mediaSessionGeneration: 2,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const afterReset = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const afterParsed = JSON.parse(
+      afterReset.ok ? (afterReset.payload as string) : '{}'
+    ) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        outboundMedia?: {
+          encodedFrameCallbacks?: number;
+          packetBuildAttempts?: number;
+          sendAttempts?: number;
+        };
+      };
+    };
+    expect(
+      afterParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.encodedFrameCallbacks
+    ).toBe(0);
+    expect(
+      afterParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.packetBuildAttempts
+    ).toBe(0);
+    expect(
+      afterParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia?.sendAttempts
+    ).toBe(0);
+  });
+
   it('does not restore cached local root authority on self-only rejoin from recent cache', async () => {
     vi.useFakeTimers();
     getRoomParticipants.mockResolvedValue([

@@ -111,6 +111,8 @@ const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_BUFFERED_MS_MAX = 108;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_DELTA_MAX_MS = -10;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_RATE_EMA_MAX = 0.999;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_BUFFERED_MS_MIN = 64;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_BUFFERED_MS_MIN = 88;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_DELTA_MIN_MS = -32;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN = 3;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX = 0.04;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX = 0.02;
@@ -1434,6 +1436,7 @@ export class GroupCallAudioReceiveEngine {
     for (const [sourceAddr, playout] of this.playouts) {
       const state = this.liveMultiSourceStateBySource.get(sourceAddr);
       if (!state) {
+        playout.setForcedAdaptiveJitterMode(null);
         playout.setBurstRecoveryExtraHoldFrames(0);
         playout.resetDynamicTargetPlayoutMs();
         continue;
@@ -1446,6 +1449,7 @@ export class GroupCallAudioReceiveEngine {
       );
 
       if (activeSourceCount < 2) {
+        playout.setForcedAdaptiveJitterMode(null);
         const latestBufferedMs =
           state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
         const postFailoverRootProfileActive =
@@ -1602,8 +1606,23 @@ export class GroupCallAudioReceiveEngine {
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_BUFFERED_MS_MAX;
+        const recentDamageHealthyEscape =
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_BUFFERED_MS_MIN &&
+          state.deltaMsEma >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_DELTA_MIN_MS &&
+          state.preProcessBufferedFrames >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_RATE_EMA_MIN;
         const steadyHealthyEscape =
           state.lastJitterHasReadyFrame &&
+          (state.damageBurstHoldUntilMs <= nowMs ||
+            recentDamageHealthyEscape) &&
+          (state.recentDamageHoldUntilMs <= nowMs ||
+            recentDamageHealthyEscape) &&
           !currentUnderTargetPressure &&
           !currentSlowRatePressure &&
           state.bufferedMsEma >=
@@ -2521,6 +2540,7 @@ export class GroupCallAudioReceiveEngine {
             state.deltaMsEma <= GCALL_MULTI_SOURCE_COLLAPSE_DELTA_MAX_MS));
 
       if (mode !== 'recovery' && !multiSourceSourceRecoveryPressure) {
+        playout.setForcedAdaptiveJitterMode(null);
         this.setReceiveProfile(
           sourceAddr,
           state,
@@ -2552,6 +2572,11 @@ export class GroupCallAudioReceiveEngine {
         sourceRecoveryPressure: multiSourceSourceRecoveryPressure,
         sourceCollapsePressure: multiSourceSourceCollapsePressure,
       });
+      playout.setForcedAdaptiveJitterMode(
+        mode !== 'recovery' && multiSourceSourceRecoveryPressure
+          ? 'recovery'
+          : null
+      );
       this.setReceiveProfile(sourceAddr, state, profile, nowMs);
 
       const targetBoostMs = multiSourceReceiveProfileTargetBoostMs(

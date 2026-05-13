@@ -42,6 +42,14 @@ declare global {
         eventLoopLagMs: number;
         measuredAt: number;
       }>;
+      refreshSystemCallReadiness?: () => Promise<{
+        status: 'good' | 'warning' | 'blocked' | 'unknown';
+        reasons: string[];
+        cpuLoad: number | null;
+        memoryPressure: number;
+        eventLoopLagMs: number;
+        measuredAt: number;
+      }>;
       showAppMenu?: (x?: number, y?: number) => void;
       getAppSettings?: () => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';

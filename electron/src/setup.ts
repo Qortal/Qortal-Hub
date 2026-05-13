@@ -117,6 +117,7 @@ import {
 import { registerStaticAppProtocol } from './app-protocol';
 import {
   getSystemCallReadinessSnapshot,
+  refreshSystemCallReadinessSnapshot,
   startSystemCallReadinessMonitor,
 } from './system-call-readiness';
 
@@ -884,6 +885,10 @@ startSystemCallReadinessMonitor();
 
 ipcMain.handle('systemCallReadiness:getSnapshot', () =>
   getSystemCallReadinessSnapshot()
+);
+
+ipcMain.handle('systemCallReadiness:refreshSnapshot', () =>
+  refreshSystemCallReadinessSnapshot()
 );
 
 ipcMain.handle(

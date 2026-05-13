@@ -89,7 +89,7 @@ export const GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES = 4;
 /** Phase D: boost decode when physical depth is at or below this (frames). */
 export const GCALL_THIN_JITTER_BUFFER_FRAMES = 2;
 
-export type GcallJitterBurstHeadroomLevel = 0 | 1 | 2;
+export type GcallJitterBurstHeadroomLevel = 0 | 1 | 2 | 3;
 
 export interface GcallJitterBurstHeadroomState {
   readonly level: GcallJitterBurstHeadroomLevel;
@@ -100,6 +100,7 @@ export interface GcallJitterBurstHeadroomState {
 
 export const GCALL_JITTER_BURST_HEADROOM_TRIM_TRIGGER = 6;
 export const GCALL_JITTER_BURST_HEADROOM_STRONG_TRIM_TRIGGER = 12;
+export const GCALL_JITTER_BURST_HEADROOM_EMERGENCY_TRIM_TRIGGER = 96;
 export const GCALL_JITTER_BURST_HEADROOM_HOLD_MS = 12_000;
 export const GCALL_JITTER_BURST_HEADROOM_CALM_MS = 10_000;
 export const GCALL_JITTER_BURST_HEADROOM_UNDERTARGET_MIN = 0.2;
@@ -122,11 +123,13 @@ export function applyGcallJitterBurstHeadroom(
   level: GcallJitterBurstHeadroomLevel
 ): { jitterBufferSize: number; jitterStartBufferSize: number } {
   if (level <= 0) return tuning;
-  const jitterStartBufferSize =
-    tuning.jitterStartBufferSize + (level >= 2 ? 4 : 2);
+  const bufferBoost =
+    level >= 3 ? 28 : level >= 2 ? 8 : 4;
+  const startBoost =
+    level >= 3 ? 8 : level >= 2 ? 4 : 2;
   return {
-    jitterBufferSize: tuning.jitterBufferSize + (level >= 2 ? 8 : 4),
-    jitterStartBufferSize,
+    jitterBufferSize: tuning.jitterBufferSize + bufferBoost,
+    jitterStartBufferSize: tuning.jitterStartBufferSize + startBoost,
   };
 }
 
@@ -192,12 +195,17 @@ export function stepGcallJitterBurstHeadroom(input: {
     nearCapPressureCount >= GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
 
   if (directTrimPressure || (playoutStressed && nearCapPressure)) {
+    const emergencyPressure =
+      trimCount >= GCALL_JITTER_BURST_HEADROOM_EMERGENCY_TRIM_TRIGGER;
     const strongPressure =
+      emergencyPressure ||
       trimCount >= GCALL_JITTER_BURST_HEADROOM_STRONG_TRIM_TRIGGER ||
       nearCapPressureCount >
         GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
     const requestedLevel: GcallJitterBurstHeadroomLevel = strongPressure
-      ? 2
+      ? emergencyPressure
+        ? 3
+        : 2
       : safeState.level >= 1
         ? 2
         : 1;

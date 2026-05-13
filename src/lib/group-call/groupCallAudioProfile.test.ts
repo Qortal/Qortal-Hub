@@ -111,6 +111,12 @@ describe('gcall jitter burst headroom', () => {
         2
       )
     ).toEqual({ jitterBufferSize: 20, jitterStartBufferSize: 15 });
+    expect(
+      applyGcallJitterBurstHeadroom(
+        { jitterBufferSize: 12, jitterStartBufferSize: 10 },
+        3
+      )
+    ).toEqual({ jitterBufferSize: 40, jitterStartBufferSize: 18 });
   });
 
   it('arms burst headroom on direct trim pressure', () => {
@@ -184,6 +190,21 @@ describe('gcall jitter burst headroom', () => {
     });
     expect(armed.reason).toBe('trim-pressure');
     expect(armed.state.level).toBe(2);
+  });
+
+  it('escalates very large trim bursts to emergency level 3', () => {
+    const armed = stepGcallJitterBurstHeadroom({
+      state: createGcallJitterBurstHeadroomState(),
+      enabled: true,
+      nowMs: 1_000,
+      trimCount: 120,
+      depthHighWater: 40,
+      maxDepthFrames: 40,
+      playoutUnderTargetFraction: 0.05,
+      avgPlayoutRate: 1,
+    });
+    expect(armed.reason).toBe('trim-pressure');
+    expect(armed.state.level).toBe(3);
   });
 
   it('decays one level after the hold window and a calm period', () => {

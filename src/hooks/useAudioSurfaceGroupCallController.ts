@@ -205,7 +205,13 @@ export function useAudioSurfaceGroupCallController(
   const joinGroupCall = useCallback(
     async (roomId: string, chatId: string, options?: AudioEngineJoinOptions) => {
       traceGcallAudioSurface('controller.joinGroupCall: entered', { roomId, chatId });
-      const readiness = await window.electronAPI?.getSystemCallReadiness?.();
+      const cachedReadiness =
+        await window.electronAPI?.getSystemCallReadiness?.();
+      const readiness =
+        cachedReadiness?.status === 'good'
+          ? cachedReadiness
+          : ((await window.electronAPI?.refreshSystemCallReadiness?.()) ??
+            cachedReadiness);
       if (!readiness || readiness.status !== 'good') {
         traceGcallAudioSurface('controller.joinGroupCall: blocked by system readiness', {
           status: readiness?.status ?? 'unavailable',
@@ -213,6 +219,8 @@ export function useAudioSurfaceGroupCallController(
           cpuLoad: readiness?.cpuLoad ?? null,
           memoryPressure: readiness?.memoryPressure ?? null,
           eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
+          cachedStatus: cachedReadiness?.status ?? 'unavailable',
+          cachedReasons: cachedReadiness?.reasons ?? [],
         });
         setInfoSnackGlobal({
           type: 'error',

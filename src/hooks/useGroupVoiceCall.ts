@@ -5653,7 +5653,9 @@ export function useGroupVoiceCall(uiActive = false) {
       const jitterPushRejectedTotal =
         jitterPushStaleBySource.total + jitterPushDuplicateBySource.total;
       const headroomMode =
-        snap.adaptiveNetworkMode === 'recovery' ? 'recovery' : 'low-latency';
+        jitterGeomAppliedRef.current === 'recovery'
+          ? 'recovery'
+          : 'low-latency';
       const baseHeadroomTuning =
         headroomMode === 'recovery'
           ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
@@ -5675,7 +5677,9 @@ export function useGroupVoiceCall(uiActive = false) {
           : 1;
       const burstHeadroomDecision = stepGcallJitterBurstHeadroom({
         state: previousBurstHeadroomState,
-        enabled: audioTuningRef.current.profile === 'high-stability',
+        enabled:
+          audioTuningRef.current.profile === 'high-stability' ||
+          (activeSourceCount >= 2 && headroomMode === 'recovery'),
         nowMs: wallNow,
         trimCount: jitterPushTrimmedBySource.total,
         depthHighWater: jitterPushDepthHighWaterBySource.max,
@@ -12805,7 +12809,13 @@ export function useGroupVoiceCall(uiActive = false) {
         if (roomStateRef.current !== 'idle') return;
         setGcallJoinError(null);
 
-        const readiness = await window.electronAPI?.getSystemCallReadiness?.();
+        const cachedReadiness =
+          await window.electronAPI?.getSystemCallReadiness?.();
+        const readiness =
+          cachedReadiness?.status === 'good'
+            ? cachedReadiness
+            : ((await window.electronAPI?.refreshSystemCallReadiness?.()) ??
+              cachedReadiness);
         if (!readiness || readiness.status !== 'good') {
           debugWarn('[GCall] join blocked by system readiness', {
             status: readiness?.status ?? 'unavailable',
@@ -12813,6 +12823,8 @@ export function useGroupVoiceCall(uiActive = false) {
             cpuLoad: readiness?.cpuLoad ?? null,
             memoryPressure: readiness?.memoryPressure ?? null,
             eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
+            cachedStatus: cachedReadiness?.status ?? 'unavailable',
+            cachedReasons: cachedReadiness?.reasons ?? [],
           });
           setInfoSnackGlobal({
             type: 'error',
