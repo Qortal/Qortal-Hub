@@ -10,7 +10,11 @@ import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { extractComponents } from '../Chat/MessageDisplay';
-import { navigationControllerAtom, txListAtom } from '../../atoms/global';
+import {
+  navigationControllerAtom,
+  txListAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import {
   executeEvent,
   subscribeToEvent,
@@ -24,6 +28,7 @@ import { TaskManager } from '../TaskManager/TaskManager';
 import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 import { SubscriptionsStatus } from './SubscriptionsStatus';
+import { AppBookmarksButton } from '../Apps/AppBookmarks';
 
 type GlobalQortalNavBarProps = {
   desktopViewMode: string;
@@ -82,6 +87,7 @@ export function GlobalQortalNavBar({
   const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
   const txList = useAtomValue(txListAtom);
+  const userInfo = useAtomValue(userInfoAtom);
   const { t } = useTranslation(['core']);
   const [selectedTab, setSelectedTab] = useState<SelectedTab>(null);
   const [inputValue, setInputValue] = useState('');
@@ -165,6 +171,19 @@ export function GlobalQortalNavBar({
   const currentLink = useMemo(() => {
     return currentNavigation?.currentLink || '';
   }, [currentNavigation]);
+  const bookmarkSelectedTab = useMemo(() => {
+    const parsedLink = currentLink
+      ? extractComponents(normalizeQortalInput(currentLink))
+      : null;
+    if (!parsedLink) return selectedTab;
+    return {
+      ...(selectedTab || {}),
+      service: parsedLink.service,
+      name: parsedLink.name,
+      identifier: parsedLink.identifier,
+      path: parsedLink.path,
+    };
+  }, [currentLink, selectedTab]);
 
   useEffect(() => {
     if (isInputFocusedRef.current) return;
@@ -538,6 +557,44 @@ export function GlobalQortalNavBar({
           >
             <RefreshIcon sx={{ fontSize: 18 }} />
           </ButtonBase>
+
+          <Box
+            sx={{
+              borderLeft: `1px solid ${theme.palette.border.subtle}`,
+              display: 'flex',
+              ml: 0.75,
+              pl: 1,
+            }}
+          >
+            <AppBookmarksButton
+              address={userInfo?.address}
+              chromeBackground={chromeBackground}
+              selectedTab={bookmarkSelectedTab}
+              buttonSx={{
+                alignItems: 'center',
+                borderRadius: '9px',
+                display: 'flex',
+                height: 32,
+                justifyContent: 'center',
+                transition:
+                  'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                width: 32,
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: buttonHoverBackground,
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                },
+                '&:active:not(.Mui-disabled)': {
+                  transform: 'translateY(0)',
+                  boxShadow: 'none',
+                },
+                '&:focus-visible': {
+                  outline: `1px solid ${theme.palette.primary.main}`,
+                  outlineOffset: '2px',
+                },
+              }}
+            />
+          </Box>
         </Box>
 
         <Box
