@@ -387,6 +387,7 @@ type BridgeEventFrame =
         executorCommandMsMax?: number;
         executorCommandWhileQueuedMsMax?: number;
         executorCommandSlowCount?: number;
+        mediaRouteDiagnostics?: Array<Record<string, unknown>>;
       };
     }
   | {
