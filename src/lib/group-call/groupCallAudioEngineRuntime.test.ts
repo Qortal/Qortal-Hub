@@ -7,7 +7,7 @@ vi.mock('../../components/Group/groupApi', () => ({
   getGroupMembers,
 }));
 import { GroupCallAudioEngineRuntime } from './groupCallAudioEngineRuntime';
-import { encodeAudioPacketV2 } from './audioPacketCodec';
+import { decodeAudioPacket, encodeAudioPacketV2 } from './audioPacketCodec';
 import { buildMediaKeyCommitmentHex } from './mediaKeyCommitment';
 import Base58 from '../../encryption/Base58.js';
 import nacl from '../../encryption/nacl-fast';
@@ -953,6 +953,44 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(
       lastSnapshot?.snapshot?.metrics?.reticulumAudioInboundTransportLast
     ).toBe('link');
+  });
+
+  it('packetizes the VAD bit from the encoded frame, not the later sender state', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const roomKey = new Uint8Array(32).fill(7);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' },
+      ],
+    });
+    (runtime as any).roomKey = roomKey;
+    vi.spyOn((runtime as any).senderEngine, 'getVad').mockReturnValue(false);
+
+    await (runtime as any).dispatchEncodedFrame(
+      new Uint8Array([1, 2, 3]),
+      true
+    );
+
+    const sentPacket = sendAudio.mock.calls[0]?.[2] as Uint8Array;
+    const decoded = decodeAudioPacket(sentPacket, roomKey);
+    expect(decoded?.sourceAddr).toBe('Qlocal');
+    expect(decoded?.vad).toBe(true);
   });
 
   it('backfills a visible participant from successfully decoded remote audio', async () => {

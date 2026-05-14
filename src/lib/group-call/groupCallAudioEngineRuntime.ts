@@ -6906,6 +6906,7 @@ export class GroupCallAudioEngineRuntime {
         },
         onEncodedFrame: ({
           opusFrame,
+          vad,
           capturePerfMs,
           encoderInputPerfMs,
           encodeOutPerfMs,
@@ -6933,7 +6934,7 @@ export class GroupCallAudioEngineRuntime {
             workletToEncoderOutputMs,
             mainThreadToEncoderOutputMs,
           });
-          void this.dispatchEncodedFrame(opusFrame, encodeOutPerfMs);
+          void this.dispatchEncodedFrame(opusFrame, vad, encodeOutPerfMs);
         },
       });
     } catch (error) {
@@ -7034,6 +7035,7 @@ export class GroupCallAudioEngineRuntime {
 
   private async dispatchEncodedFrame(
     opusFrame: Uint8Array,
+    vad = this.senderEngine.getVad(),
     encodeOutPerfMs?: number
   ): Promise<void> {
     if (!this.roomKey) {
@@ -7098,7 +7100,7 @@ export class GroupCallAudioEngineRuntime {
     const seq = this.seq++ & 0xffff;
     const packet = encodeAudioPacketV2(
       this.userInfo.address,
-      this.senderEngine.getVad(),
+      vad,
       seq,
       Math.max(0, Date.now() - this.callEpochMs),
       opusFrame,

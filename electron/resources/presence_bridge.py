@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+import selectors
 from collections import deque
 import queue
 import shutil
@@ -207,8 +208,16 @@ _cmd_queue_bounded: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
 _audio_decoded_queue: "queue.Queue[Optional[list]]" = queue.Queue(
     maxsize=_AUDIO_DECODED_QUEUE_MAX
 )
-_rns_work_condition = threading.Condition()
-_audio_in_f: Optional[IO[bytes]] = None
+_rns_wake_read_fd: Optional[int] = None
+_rns_wake_write_fd: Optional[int] = None
+try:
+    _rns_wake_read_fd, _rns_wake_write_fd = os.pipe()
+    os.set_blocking(_rns_wake_read_fd, False)
+    os.set_blocking(_rns_wake_write_fd, False)
+except OSError:
+    _rns_wake_read_fd = None
+    _rns_wake_write_fd = None
+_audio_in_fd: Optional[int] = None
 _audio_drops_ingress = 0
 _audio_drops_json_out = 0
 _audio_drops_binary_out = 0
@@ -333,8 +342,28 @@ def _mark_audio_queue_state_dirty() -> None:
 
 
 def _notify_rns_work_available() -> None:
-    with _rns_work_condition:
-        _rns_work_condition.notify()
+    if _rns_wake_write_fd is None:
+        return
+    try:
+        os.write(_rns_wake_write_fd, b"\x01")
+    except BlockingIOError:
+        pass
+    except OSError:
+        pass
+
+
+def _drain_rns_wake_pipe() -> None:
+    if _rns_wake_read_fd is None:
+        return
+    while True:
+        try:
+            chunk = os.read(_rns_wake_read_fd, 1024)
+        except BlockingIOError:
+            return
+        except OSError:
+            return
+        if not chunk:
+            return
 
 
 def _decoded_queue_oldest_age_ms(now: float) -> float:
@@ -1045,66 +1074,109 @@ def _audio_binary_out_writer_loop() -> None:
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=write-error err={exc}")
 
 
-def _audio_in_reader_loop() -> None:
-    global _audio_in_f, _audio_drops_ingress, _audio_ipc_fd3_first_batch_ok_logged
-    global _audio_stale_drops, _audio_deadline_drops
+def _open_audio_input_fd_for_rns_owner() -> Optional[int]:
+    global _audio_in_fd
     try:
-        _audio_in_f = open(3, "rb", buffering=0)
+        os.set_blocking(3, False)
     except OSError as exc:
         log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=open-failed parent→child-binary-disabled err={exc}")
-        return
+        return None
+    _audio_in_fd = 3
     log(
-        f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=ingress-ready parent→child-binary (outbound audio from Electron)"
+        f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=ingress-ready parent→child-binary "
+        f"(outbound audio from Electron, rns-owner-direct)"
     )
-    f = _audio_in_f
-    while not _shutdown.is_set():
+    return _audio_in_fd
+
+
+def _audio_input_buffer_has_complete_batch(buffer: bytearray) -> bool:
+    if len(buffer) < AUDIO_HEADER_BYTES:
+        return False
+    if bytes(buffer[0:4]) != AUDIO_MAGIC:
+        return True
+    body_len = int.from_bytes(buffer[5:9], "big")
+    return len(buffer) >= AUDIO_HEADER_BYTES + body_len
+
+
+def _read_audio_input_available(fd: int, buffer: bytearray) -> bool:
+    while True:
         try:
-            header = _read_exact(f, AUDIO_HEADER_BYTES)
-        except EOFError:
-            break
-        except Exception as exc:
-            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=read-header-error err={exc}")
-            break
-        if header[0:4] != AUDIO_MAGIC:
+            chunk = os.read(fd, 65536)
+        except BlockingIOError:
+            return True
+        except OSError as exc:
+            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=read-error err={exc}")
+            return False
+        if not chunk:
+            return False
+        buffer.extend(chunk)
+
+
+def _process_audio_input_frames(frames: list, queued_at: float) -> bool:
+    global _audio_stale_drops, _audio_deadline_drops, _audio_ipc_fd3_first_batch_ok_logged
+    batch_age = max(0.0, time.monotonic() - queued_at)
+    _note_decoded_queue_dwell_ms(batch_age * 1000.0)
+    _note_fd3_decoded_age(frames)
+    frames, deadline_drops = _filter_outbound_audio_deadline(frames)
+    if deadline_drops > 0:
+        _audio_deadline_drops += deadline_drops
+        _audio_stale_drops += deadline_drops
+        _mark_audio_queue_state_dirty()
+        _emit_audio_queue_state()
+    if not frames:
+        return False
+    if not _audio_ipc_fd3_first_batch_ok_logged:
+        _audio_ipc_fd3_first_batch_ok_logged = True
+        nframes = len(frames) if isinstance(frames, list) else 0
+        log(
+            f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-first-batch-from-parent-parsed "
+            f"frames={nframes} mode=rns-owner-direct"
+        )
+    if batch_age > _AUDIO_BATCH_STALE_SECONDS:
+        _audio_stale_drops += len(frames)
+        _mark_audio_queue_state_dirty()
+        return False
+    _process_audio_batch(frames)
+    return True
+
+
+def _drain_audio_input_buffer(buffer: bytearray, batch_budget: int) -> tuple[bool, int]:
+    drained_audio = False
+    drained_batches = 0
+    audio_pass_start = time.monotonic()
+    while drained_batches < batch_budget and len(buffer) >= AUDIO_HEADER_BYTES:
+        if bytes(buffer[0:4]) != AUDIO_MAGIC:
+            del buffer[0:1]
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=bad-magic")
             continue
-        if header[4] != AUDIO_VERSION:
-            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=bad-version got={header[4]}")
+        if buffer[4] != AUDIO_VERSION:
+            got_version = buffer[4]
+            del buffer[:AUDIO_HEADER_BYTES]
+            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=bad-version got={got_version}")
             continue
-        body_len = int.from_bytes(header[5:9], "big")
+        body_len = int.from_bytes(buffer[5:9], "big")
         if body_len > AUDIO_MAX_BODY or body_len < 2:
+            del buffer[:AUDIO_HEADER_BYTES]
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=bad-body_len len={body_len}")
             continue
-        try:
-            body = _read_exact(f, body_len)
-        except EOFError:
+        frame_len = AUDIO_HEADER_BYTES + body_len
+        if len(buffer) < frame_len:
             break
-        except Exception as exc:
-            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=read-body-error err={exc}")
-            break
+        body = bytes(buffer[AUDIO_HEADER_BYTES:frame_len])
+        del buffer[:frame_len]
         try:
             frames = _parse_audio_batch_body(body)
         except ValueError as exc:
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=parse-batch-failed err={exc}")
             continue
-        _note_fd3_decoded_age(frames)
-        frames, deadline_drops = _filter_outbound_audio_deadline(frames)
-        if deadline_drops > 0:
-            _audio_deadline_drops += deadline_drops
-            _audio_stale_drops += deadline_drops
-            _mark_audio_queue_state_dirty()
-            _emit_audio_queue_state()
-        if not frames:
-            continue
-        if not _audio_ipc_fd3_first_batch_ok_logged:
-            _audio_ipc_fd3_first_batch_ok_logged = True
-            nframes = len(frames) if isinstance(frames, list) else 0
-            log(
-                f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-first-batch-from-parent-parsed "
-                f"frames={nframes}"
-            )
-        _put_audio_decoded_batch_keep_newest(frames)
+        _process_audio_input_frames(frames, audio_pass_start)
+        drained_audio = True
+        drained_batches += 1
+    _note_executor_audio_pass_duration(audio_pass_start, drained_batches)
+    if drained_audio:
+        _mark_audio_queue_state_dirty()
         _emit_audio_queue_state()
+    return drained_audio, drained_batches
 
 
 def _drain_audio_executor_pass(batch_budget: int) -> tuple[bool, int]:
@@ -1142,7 +1214,10 @@ def _drain_audio_executor_pass(batch_budget: int) -> tuple[bool, int]:
     return drained_audio, drained_batches
 
 
-def _handle_rns_command_message(message: Optional[Dict[str, Any]]) -> bool:
+def _handle_rns_command_message(
+    message: Optional[Dict[str, Any]],
+    audio_queued_at_start_override: Optional[int] = None,
+) -> bool:
     if message is None:
         try:
             while True:
@@ -1156,7 +1231,11 @@ def _handle_rns_command_message(message: Optional[Dict[str, Any]]) -> bool:
         _emit_audio_queue_state(force=True)
         return False
     command_start = time.monotonic()
-    audio_queued_at_start = _audio_decoded_queue.qsize()
+    audio_queued_at_start = (
+        int(max(0, audio_queued_at_start_override))
+        if isinstance(audio_queued_at_start_override, int)
+        else _audio_decoded_queue.qsize()
+    )
     action = message.get("action") if isinstance(message, dict) else None
     try:
         handle_command(message)
@@ -1179,25 +1258,55 @@ def _rns_executor_loop() -> None:
     last_loop_at: Optional[float] = None
     queued_before_gap = 0
     next_lane = "audio"
+    audio_input_buffer = bytearray()
+    audio_fd = _open_audio_input_fd_for_rns_owner()
+    selector = selectors.DefaultSelector()
+    try:
+        if _rns_wake_read_fd is not None:
+            selector.register(_rns_wake_read_fd, selectors.EVENT_READ, "wake")
+        if audio_fd is not None:
+            selector.register(audio_fd, selectors.EVENT_READ, "audio")
+    except Exception as exc:
+        log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-owner-selector-setup-failed err={exc}")
+
     while True:
         loop_start = time.monotonic()
         _note_executor_loop_gap(last_loop_at, loop_start, queued_before_gap)
         last_loop_at = loop_start
 
-        audio_ready = not _audio_decoded_queue.empty()
+        buffered_audio_ready = _audio_input_buffer_has_complete_batch(audio_input_buffer)
+        audio_ready = buffered_audio_ready or not _audio_decoded_queue.empty()
         cmd_ready = not _cmd_queue_bounded.empty()
         if not audio_ready and not cmd_ready:
             if _shutdown.is_set():
                 return
             queued_before_gap = 0
             _emit_audio_queue_state()
-            with _rns_work_condition:
-                if _audio_decoded_queue.empty() and _cmd_queue_bounded.empty():
-                    _rns_work_condition.wait(timeout=0.05)
+            if selector.get_map():
+                try:
+                    events = selector.select(timeout=0.05)
+                except Exception as exc:
+                    log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-owner-selector-error err={exc}")
+                    events = []
+                for key, _mask in events:
+                    if key.data == "wake":
+                        _drain_rns_wake_pipe()
+                    elif key.data == "audio" and audio_fd is not None:
+                        if not _read_audio_input_available(audio_fd, audio_input_buffer):
+                            try:
+                                selector.unregister(audio_fd)
+                            except Exception:
+                                pass
+                            audio_fd = None
+                            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=closed")
+            else:
+                time.sleep(0.05)
             continue
 
         if audio_ready and (not cmd_ready or next_lane == "audio"):
             decoded_backlog = _audio_decoded_queue.qsize()
+            if buffered_audio_ready:
+                decoded_backlog += 1
             if cmd_ready:
                 batch_budget = _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS
             else:
@@ -1206,9 +1315,14 @@ def _rns_executor_loop() -> None:
                     _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS
                     + max(0, decoded_backlog // _AUDIO_BACKLOG_BATCH_STEP),
                 )
-            _drain_audio_executor_pass(batch_budget)
+            if buffered_audio_ready:
+                _drain_audio_input_buffer(audio_input_buffer, batch_budget)
+            else:
+                _drain_audio_executor_pass(batch_budget)
             next_lane = "cmd"
             queued_before_gap = _audio_decoded_queue.qsize()
+            if _audio_input_buffer_has_complete_batch(audio_input_buffer):
+                queued_before_gap += 1
             continue
 
         if cmd_ready:
@@ -1216,11 +1330,18 @@ def _rns_executor_loop() -> None:
                 message = _cmd_queue_bounded.get_nowait()
             except queue.Empty:
                 queued_before_gap = _audio_decoded_queue.qsize()
+                if _audio_input_buffer_has_complete_batch(audio_input_buffer):
+                    queued_before_gap += 1
                 continue
-            if not _handle_rns_command_message(message):
+            audio_queued_at_start = _audio_decoded_queue.qsize()
+            if _audio_input_buffer_has_complete_batch(audio_input_buffer):
+                audio_queued_at_start += 1
+            if not _handle_rns_command_message(message, audio_queued_at_start):
                 return
             next_lane = "audio"
             queued_before_gap = _audio_decoded_queue.qsize()
+            if _audio_input_buffer_has_complete_batch(audio_input_buffer):
+                queued_before_gap += 1
             continue
 
 
@@ -6196,10 +6317,6 @@ def main() -> None:
         target=_rns_executor_loop, name="reticulum-rns", daemon=False
     )
     rns_thread.start()
-    audio_in_thread = threading.Thread(
-        target=_audio_in_reader_loop, name="reticulum-audio-in", daemon=True
-    )
-    audio_in_thread.start()
 
     stdin_thread = threading.Thread(target=stdin_loop, daemon=True)
     stdin_thread.start()
