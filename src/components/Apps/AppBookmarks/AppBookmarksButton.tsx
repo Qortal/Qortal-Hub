@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   ButtonBase,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -159,6 +160,9 @@ export function AppBookmarksButton({
     isDark
       ? 'rgba(28, 31, 37, 0.82)'
       : 'rgba(232, 236, 241, 0.88)';
+  const panelBorderColor = isDark
+    ? alpha('#A9BCD8', 0.18)
+    : theme.palette.divider;
   const bookmarkMenuPaperSx = {
     backgroundColor: bookmarkChromeBackground,
     backgroundImage: 'none',
@@ -481,7 +485,11 @@ export function AppBookmarksButton({
       }}
     >
       <BookmarkBorderIcon
-        sx={{ color: theme.palette.text.secondary, fontSize: 18 }}
+        sx={{
+          color: theme.palette.text.secondary,
+          flexShrink: 0,
+          fontSize: 18,
+        }}
       />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
@@ -499,6 +507,7 @@ export function AppBookmarksButton({
           sx={{
             color: theme.palette.text.secondary,
             fontSize: 11.5,
+            lineHeight: 1.45,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -513,6 +522,7 @@ export function AppBookmarksButton({
           onClick={(event) =>
             openItemMenu(event, { type: 'bookmark', bookmark })
           }
+          sx={{ flexShrink: 0 }}
         >
           <MoreVertRoundedIcon sx={{ fontSize: 18 }} />
         </IconButton>
@@ -576,23 +586,31 @@ export function AppBookmarksButton({
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         slotProps={{
           paper: {
-            sx: {
-              backgroundColor: bookmarkChromeBackground,
-              backgroundImage: 'none',
-              border: `1px solid ${theme.palette.border.subtle}`,
-              borderRadius: '8px',
-              boxShadow:
-                theme.palette.mode === 'dark'
-                  ? '0 18px 42px rgba(0,0,0,0.42)'
-                  : '0 18px 42px rgba(28,38,52,0.16)',
-              mt: 1,
-              overflow: 'hidden',
-              width: 460,
-            },
+            sx: isDark
+              ? {
+                  background: '#111820',
+                  backgroundImage: 'none',
+                  border: `1px solid ${panelBorderColor}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                  width: 460,
+                }
+              : {
+                  background: theme.palette.background.paper,
+                  backgroundImage: 'none',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 16px 40px ${alpha('#1E3248', 0.1)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                  width: 460,
+                },
           },
         }}
       >
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ overflowX: 'hidden', p: 2 }}>
           <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
             {currentFolder && (
               <IconButton size="small" onClick={() => setCurrentFolderId(null)}>
@@ -651,9 +669,26 @@ export function AppBookmarksButton({
           </Box>
 
           {isLoading && (
-            <Typography sx={{ color: theme.palette.text.secondary, mt: 2 }}>
-              {t('core:bookmarks.loading')}
-            </Typography>
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1,
+                justifyContent: 'center',
+                minHeight: 150,
+              }}
+            >
+              <CircularProgress size={22} />
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.82),
+                  fontSize: '0.78rem',
+                }}
+              >
+                {t('core:bookmarks.loading')}
+              </Typography>
+            </Box>
           )}
 
           {!isLoading && showCreateFolder && !currentFolder && (
@@ -943,6 +978,7 @@ export function AppBookmarksButton({
                         <FolderOutlinedIcon
                           sx={{
                             color: theme.palette.text.secondary,
+                            flexShrink: 0,
                             fontSize: 19,
                           }}
                         />
@@ -1006,6 +1042,7 @@ export function AppBookmarksButton({
                             onClick={(event) =>
                               openItemMenu(event, { type: 'folder', folder })
                             }
+                            sx={{ flexShrink: 0 }}
                           >
                             <MoreVertRoundedIcon sx={{ fontSize: 18 }} />
                           </IconButton>

@@ -691,15 +691,7 @@ export async function getSharedSettingsFilePath(
 // never overwrite each other's keys (only a simultaneous write of the *same* key
 // by two instances at the exact same moment could still race, which is acceptable).
 const PERSISTENT_STORE_FILENAME = 'qortal-persistent-store.json';
-
-let persistentStoreCache: Record<string, unknown> | null = null;
-let persistentStoreLoadedFromDisk = false;
-
-function getPersistentStoreFilePath(): string {
-  const dir = path.join(app.getPath('appData'), 'qortal-hub');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, PERSISTENT_STORE_FILENAME);
-}
+const MISC_PERSISTENT_STORE_FILENAME = 'misc-persist.json';
 
 function parsePersistentStoreRaw(raw: string): Record<string, unknown> {
   const trimmed = raw?.trim() ?? '';
@@ -711,100 +703,149 @@ function parsePersistentStoreRaw(raw: string): Record<string, unknown> {
   }
 }
 
-async function readPersistentStoreFromDisk(): Promise<Record<string, unknown>> {
-  try {
-    const filePath = getPersistentStoreFilePath();
-    const stats = await fs.promises.stat(filePath).catch(() => null);
-    if (!stats?.isFile()) return {};
-    const raw = await fs.promises.readFile(filePath, 'utf-8');
-    return parsePersistentStoreRaw(raw);
-  } catch (err) {
-    loggerError('Error reading persistent store from disk', err);
-    return {};
-  }
-}
+function createPersistentJsonStore(fileName: string, label: string) {
+  let cache: Record<string, unknown> | null = null;
+  let loadedFromDisk = false;
 
-async function loadPersistentStore(): Promise<Record<string, unknown>> {
-  if (persistentStoreCache !== null) return persistentStoreCache;
-  const data = await readPersistentStoreFromDisk();
-  const hadData = Object.keys(data).length > 0;
-  persistentStoreCache = data;
-  if (hadData) persistentStoreLoadedFromDisk = true;
-  return persistentStoreCache;
-}
+  const getFilePath = (): string => {
+    const dir = path.join(app.getPath('appData'), 'qortal-hub');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, fileName);
+  };
 
-
-export function flushPersistentStore(): void {
-  if (persistentStoreCache === null) return;
-  if (
-    !persistentStoreLoadedFromDisk &&
-    Object.keys(persistentStoreCache).length === 0
-  ) {
-    return;
-  }
-  try {
-    const filePath = getPersistentStoreFilePath();
-    // Read current on-disk state, merge our cache on top, write atomically (sync).
-    let onDisk: Record<string, unknown> = {};
-    if (fs.existsSync(filePath)) {
-      try {
-        onDisk = parsePersistentStoreRaw(fs.readFileSync(filePath, 'utf-8'));
-      } catch (_) {
-        onDisk = {};
-      }
+  const readFromDisk = async (): Promise<Record<string, unknown>> => {
+    try {
+      const filePath = getFilePath();
+      const stats = await fs.promises.stat(filePath).catch(() => null);
+      if (!stats?.isFile()) return {};
+      const raw = await fs.promises.readFile(filePath, 'utf-8');
+      return parsePersistentStoreRaw(raw);
+    } catch (err) {
+      loggerError(`Error reading ${label} from disk`, err);
+      return {};
     }
-    const merged = { ...onDisk, ...persistentStoreCache };
-    writeFileAtomic.sync(filePath, JSON.stringify(merged, null, 2), {
-      encoding: 'utf8',
-    });
-  } catch (err) {
-    loggerError('Error flushing persistent store', err);
-  }
-}
+  };
 
-ipcMain.handle('persistentStore:get', async (_event, key: string) => {
-  const store = await loadPersistentStore();
-  return store[key];
-});
+  const load = async (): Promise<Record<string, unknown>> => {
+    if (cache !== null) return cache;
+    const data = await readFromDisk();
+    const hadData = Object.keys(data).length > 0;
+    cache = data;
+    if (hadData) loadedFromDisk = true;
+    return cache;
+  };
 
-ipcMain.handle(
-  'persistentStore:set',
-  async (_event, key: string, value: unknown) => {
+  const flush = (): void => {
+    if (cache === null) return;
+    if (!loadedFromDisk && Object.keys(cache).length === 0) {
+      return;
+    }
+    try {
+      const filePath = getFilePath();
+      let onDisk: Record<string, unknown> = {};
+      if (fs.existsSync(filePath)) {
+        try {
+          onDisk = parsePersistentStoreRaw(fs.readFileSync(filePath, 'utf-8'));
+        } catch (_) {
+          onDisk = {};
+        }
+      }
+      const merged = { ...onDisk, ...cache };
+      writeFileAtomic.sync(filePath, JSON.stringify(merged, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error flushing ${label}`, err);
+    }
+  };
+
+  const get = async (key: string): Promise<unknown> => {
+    const store = await load();
+    return store[key];
+  };
+
+  const set = async (key: string, value: unknown): Promise<void> => {
     // Read-merge-write: fetch fresh disk state, merge the new key, write atomically.
     // This ensures concurrent instances don't clobber each other's unrelated keys.
-    const onDisk = await readPersistentStoreFromDisk();
+    const onDisk = await readFromDisk();
     onDisk[key] = value;
     try {
-      const filePath = getPersistentStoreFilePath();
+      const filePath = getFilePath();
       await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
         encoding: 'utf8',
       });
     } catch (err) {
-      loggerError('Error writing persistent store (set)', err);
+      loggerError(`Error writing ${label} (set)`, err);
     }
-    // Keep local cache in sync.
-    if (persistentStoreCache === null) persistentStoreCache = {};
-    persistentStoreCache[key] = value;
-    persistentStoreLoadedFromDisk = true;
+    if (cache === null) cache = {};
+    cache[key] = value;
+    loadedFromDisk = true;
+  };
+
+  const deleteKey = async (key: string): Promise<void> => {
+    // Read-merge-write: fetch fresh disk state, remove the key, write atomically.
+    const onDisk = await readFromDisk();
+    delete onDisk[key];
+    try {
+      const filePath = getFilePath();
+      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error writing ${label} (delete)`, err);
+    }
+    if (cache !== null) delete cache[key];
+  };
+
+  return { deleteKey, flush, get, set };
+}
+
+const persistentStore = createPersistentJsonStore(
+  PERSISTENT_STORE_FILENAME,
+  'persistent store'
+);
+const miscPersistentStore = createPersistentJsonStore(
+  MISC_PERSISTENT_STORE_FILENAME,
+  'misc persistent store'
+);
+
+export function flushPersistentStore(): void {
+  persistentStore.flush();
+}
+
+export function flushMiscPersistentStore(): void {
+  miscPersistentStore.flush();
+}
+
+ipcMain.handle('persistentStore:get', async (_event, key: string) =>
+  persistentStore.get(key)
+);
+
+ipcMain.handle(
+  'persistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    await persistentStore.set(key, value);
   }
 );
 
 ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
-  // Read-merge-write: fetch fresh disk state, remove the key, write atomically.
-  const onDisk = await readPersistentStoreFromDisk();
-  delete onDisk[key];
-  try {
-    const filePath = getPersistentStoreFilePath();
-    await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
-      encoding: 'utf8',
-    });
-  } catch (err) {
-    loggerError('Error writing persistent store (delete)', err);
-  }
-  // Keep local cache in sync.
-  if (persistentStoreCache !== null) delete persistentStoreCache[key];
+  await persistentStore.deleteKey(key);
 });
 
+ipcMain.handle('miscPersistentStore:get', async (_event, key: string) =>
+  miscPersistentStore.get(key)
+);
+
+ipcMain.handle(
+  'miscPersistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    await miscPersistentStore.set(key, value);
+  }
+);
+
+ipcMain.handle('miscPersistentStore:delete', async (_event, key: string) => {
+  await miscPersistentStore.deleteKey(key);
+});
 
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray preference
 const APP_SETTINGS_FILENAME = 'app-settings.json';

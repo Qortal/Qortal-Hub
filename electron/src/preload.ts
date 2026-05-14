@@ -87,6 +87,18 @@ try {
     },
   });
 
+  contextBridge.exposeInMainWorld('miscStorage', {
+    get: async (key) => {
+      return ipcRenderer.invoke('miscPersistentStore:get', key);
+    },
+    set: async (key, value) => {
+      return ipcRenderer.invoke('miscPersistentStore:set', key, value);
+    },
+    delete: async (key) => {
+      return ipcRenderer.invoke('miscPersistentStore:delete', key);
+    },
+  });
+
   // Expose it
   contextBridge.exposeInMainWorld('walletStorage', {
     get: async (key) => {

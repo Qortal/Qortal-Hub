@@ -146,9 +146,50 @@ type PromotionActionState = 'connecting' | 'processing' | 'request_sent';
 const GROUP_PROMOTION_IDENTIFIER_PREFIX = 'group-promotions-ui24-';
 const GROUP_PROMOTION_MAX_ITEMS = 8;
 const GROUP_NOTIFICATION_PREVIEW_LIMIT = 20;
+const GROUP_ACTIVITY_MISC_STORAGE_PREFIX = 'group_activity_dismissed';
 /** Latest chat payload to omit from Group Activity list + unread count (system/meta). */
 const GROUP_ACTIVITY_EXCLUDED_MESSAGE_DATA = 'NDAwMQ==';
 const GROUP_WIDGET_CARD_RADIUS = '10px';
+
+const getDismissedStorageKey = (
+  address: string,
+  type: 'invites' | 'requests'
+) => `${GROUP_ACTIVITY_MISC_STORAGE_PREFIX}:${address}:${type}`;
+
+const normalizeStoredIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(value.filter((id): id is string => typeof id === 'string' && !!id))
+  );
+};
+
+const loadMiscStoredIds = async (key: string): Promise<string[]> => {
+  if (typeof window === 'undefined') return [];
+  try {
+    if (window.miscStorage) {
+      return normalizeStoredIds(await window.miscStorage.get(key));
+    }
+    const raw = window.localStorage?.getItem(key);
+    return normalizeStoredIds(raw ? JSON.parse(raw) : []);
+  } catch (error) {
+    console.error('[GroupsWidget] Failed to load dismissed ids:', error);
+    return [];
+  }
+};
+
+const saveMiscStoredIds = async (key: string, ids: string[]): Promise<void> => {
+  if (typeof window === 'undefined') return;
+  const nextIds = normalizeStoredIds(ids);
+  try {
+    if (window.miscStorage) {
+      await window.miscStorage.set(key, nextIds);
+      return;
+    }
+    window.localStorage?.setItem(key, JSON.stringify(nextIds));
+  } catch (error) {
+    console.error('[GroupsWidget] Failed to save dismissed ids:', error);
+  }
+};
 
 const stripHtml = (value: string) =>
   value
@@ -576,6 +617,8 @@ export const GroupsWidget = ({
   } | null>(null);
   const [dismissedInviteIds, setDismissedInviteIds] = useState<string[]>([]);
   const [dismissedRequestIds, setDismissedRequestIds] = useState<string[]>([]);
+  const [showIgnoredInvites, setShowIgnoredInvites] = useState(false);
+  const [showIgnoredRequests, setShowIgnoredRequests] = useState(false);
   const [invites, setInvites] = useState<GroupInviteItem[]>([]);
   const [invitesError, setInvitesError] = useState<string | null>(null);
   const [hasLoadedInvitesOnce, setHasLoadedInvitesOnce] = useState(false);
@@ -602,6 +645,14 @@ export const GroupsWidget = ({
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(
     null
+  );
+  const dismissedInviteStorageKey = useMemo(
+    () => getDismissedStorageKey(myAddress, 'invites'),
+    [myAddress]
+  );
+  const dismissedRequestStorageKey = useMemo(
+    () => getDismissedStorageKey(myAddress, 'requests'),
+    [myAddress]
   );
   const isCompact = displayMode === 'compact';
   const rowPadding = isCompact ? '11px 12px' : '13px 13px';
@@ -1044,20 +1095,63 @@ export const GroupsWidget = ({
   }, [t]);
 
   useEffect(() => {
-    setDismissedInviteIds([]);
-    setDismissedRequestIds([]);
+    let cancelled = false;
     setActionFeedback(null);
+    setShowIgnoredInvites(false);
+    setShowIgnoredRequests(false);
+    void (async () => {
+      const [storedInvites, storedRequests] = await Promise.all([
+        loadMiscStoredIds(dismissedInviteStorageKey),
+        loadMiscStoredIds(dismissedRequestStorageKey),
+      ]);
+      if (cancelled) return;
+      setDismissedInviteIds(storedInvites);
+      setDismissedRequestIds(storedRequests);
+    })();
     void fetchInvites(false);
     void fetchJoinRequests(false);
-  }, [fetchInvites, fetchJoinRequests, myAddress]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dismissedInviteStorageKey,
+    dismissedRequestStorageKey,
+    fetchInvites,
+    fetchJoinRequests,
+  ]);
+
+  useEffect(() => {
+    if (!hasLoadedInvitesOnce || invitesError || invites.length === 0) return;
+    const liveIds = new Set(invites.map((invite) => invite.id));
+    setDismissedInviteIds((current) => {
+      const next = current.filter((id) => liveIds.has(id));
+      if (next.length === current.length) return current;
+      void saveMiscStoredIds(dismissedInviteStorageKey, next);
+      return next;
+    });
+  }, [dismissedInviteStorageKey, hasLoadedInvitesOnce, invites, invitesError]);
+
+  useEffect(() => {
+    if (!hasLoadedRequestsOnce || requestsError || requests.length === 0) return;
+    const liveIds = new Set(requests.map((request) => request.id));
+    setDismissedRequestIds((current) => {
+      const next = current.filter((id) => liveIds.has(id));
+      if (next.length === current.length) return current;
+      void saveMiscStoredIds(dismissedRequestStorageKey, next);
+      return next;
+    });
+  }, [
+    dismissedRequestStorageKey,
+    hasLoadedRequestsOnce,
+    requests,
+    requestsError,
+  ]);
 
   useEffect(() => {
     if (refreshToken === 0) {
       return;
     }
 
-    setDismissedInviteIds([]);
-    setDismissedRequestIds([]);
     setActionFeedback(null);
     void fetchInvites(true);
     void fetchJoinRequests(true);
@@ -1074,10 +1168,19 @@ export const GroupsWidget = ({
     () => invites.filter((invite) => !dismissedInviteIds.includes(invite.id)),
     [dismissedInviteIds, invites]
   );
+  const ignoredInvites = useMemo(
+    () => invites.filter((invite) => dismissedInviteIds.includes(invite.id)),
+    [dismissedInviteIds, invites]
+  );
 
   const visibleRequests = useMemo(
     () =>
       requests.filter((request) => !dismissedRequestIds.includes(request.id)),
+    [dismissedRequestIds, requests]
+  );
+  const ignoredRequests = useMemo(
+    () =>
+      requests.filter((request) => dismissedRequestIds.includes(request.id)),
     [dismissedRequestIds, requests]
   );
 
@@ -1117,7 +1220,14 @@ export const GroupsWidget = ({
           throw new Error(response.error);
         }
 
-        setDismissedInviteIds((current) => [...current, invite.id]);
+        setInvites((current) =>
+          current.filter((currentInvite) => currentInvite.id !== invite.id)
+        );
+        setDismissedInviteIds((current) => {
+          const next = current.filter((id) => id !== invite.id);
+          void saveMiscStoredIds(dismissedInviteStorageKey, next);
+          return next;
+        });
         setGroupInvitesCache(null);
         setActionFeedback({
           message: t('groups_widget.joined_group', { name: invite.groupName }),
@@ -1133,20 +1243,31 @@ export const GroupsWidget = ({
         setJoiningGroupId(null);
       }
     },
-    [setGroupInvitesCache, show, t]
+    [dismissedInviteStorageKey, setGroupInvitesCache, show, t]
   );
 
   const handleIgnoreInvite = useCallback(
-    (inviteId: string) => {
-      setDismissedInviteIds((current) =>
-        current.includes(inviteId) ? current : [...current, inviteId]
-      );
+    async (inviteId: string) => {
+      const next = dismissedInviteIds.includes(inviteId)
+        ? dismissedInviteIds
+        : [...dismissedInviteIds, inviteId];
+      await saveMiscStoredIds(dismissedInviteStorageKey, next);
+      setDismissedInviteIds(next);
       setActionFeedback({
         message: t('groups_widget.invite_hidden'),
         tone: 'success',
       });
     },
-    [t]
+    [dismissedInviteIds, dismissedInviteStorageKey, t]
+  );
+
+  const handleRestoreInvite = useCallback(
+    async (inviteId: string) => {
+      const next = dismissedInviteIds.filter((id) => id !== inviteId);
+      await saveMiscStoredIds(dismissedInviteStorageKey, next);
+      setDismissedInviteIds(next);
+    },
+    [dismissedInviteIds, dismissedInviteStorageKey]
   );
 
   const handleApproveRequest = useCallback(
@@ -1170,7 +1291,16 @@ export const GroupsWidget = ({
           throw new Error(response.error);
         }
 
-        setDismissedRequestIds((current) => [...current, request.id]);
+        setRequests((current) =>
+          current.filter(
+            (currentRequest) => currentRequest.id !== request.id
+          )
+        );
+        setDismissedRequestIds((current) => {
+          const next = current.filter((id) => id !== request.id);
+          void saveMiscStoredIds(dismissedRequestStorageKey, next);
+          return next;
+        });
         setJoinRequestsCache(null);
         setActionFeedback({
           message: t('groups_widget.request_approved', {
@@ -1189,20 +1319,31 @@ export const GroupsWidget = ({
         setResolvingRequestId(null);
       }
     },
-    [setJoinRequestsCache, show, t]
+    [dismissedRequestStorageKey, setJoinRequestsCache, show, t]
   );
 
   const handleRejectRequest = useCallback(
-    (requestId: string) => {
-      setDismissedRequestIds((current) =>
-        current.includes(requestId) ? current : [...current, requestId]
-      );
+    async (requestId: string) => {
+      const next = dismissedRequestIds.includes(requestId)
+        ? dismissedRequestIds
+        : [...dismissedRequestIds, requestId];
+      await saveMiscStoredIds(dismissedRequestStorageKey, next);
+      setDismissedRequestIds(next);
       setActionFeedback({
         message: t('groups_widget.request_removed'),
         tone: 'success',
       });
     },
-    [t]
+    [dismissedRequestIds, dismissedRequestStorageKey, t]
+  );
+
+  const handleRestoreRequest = useCallback(
+    async (requestId: string) => {
+      const next = dismissedRequestIds.filter((id) => id !== requestId);
+      await saveMiscStoredIds(dismissedRequestStorageKey, next);
+      setDismissedRequestIds(next);
+    },
+    [dismissedRequestIds, dismissedRequestStorageKey]
   );
 
   const handleJoinPromotedGroup = useCallback(
@@ -1384,6 +1525,27 @@ export const GroupsWidget = ({
     },
   } as const;
 
+  const ignoredItemsActionSx = {
+    alignItems: 'center',
+    border: `1px solid ${alpha(
+      theme.palette.border.main,
+      theme.palette.mode === 'dark' ? 0.22 : 0.14
+    )}`,
+    borderRadius: '999px',
+    color: theme.palette.text.secondary,
+    display: 'inline-flex',
+    flexShrink: 0,
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    minHeight: '30px',
+    px: 1.25,
+    textTransform: 'none',
+    '&:hover': {
+      backgroundColor: theme.palette.action.hover,
+      color: theme.palette.text.primary,
+    },
+  } as const;
+
   const headerUtilityActionSx = {
     alignItems: 'center',
     backgroundColor:
@@ -1506,8 +1668,10 @@ export const GroupsWidget = ({
     () => [...notificationItems].sort(sortGroupNotificationItems),
     [notificationItems]
   );
-  const effectiveInvites = visibleInvites;
-  const effectiveRequests = visibleRequests;
+  const effectiveInvites = showIgnoredInvites ? ignoredInvites : visibleInvites;
+  const effectiveRequests = showIgnoredRequests
+    ? ignoredRequests
+    : visibleRequests;
   const effectivePromotions = promotions;
   const effectiveUnreadNotificationCount = unreadNotificationCount;
 
@@ -1945,15 +2109,68 @@ export const GroupsWidget = ({
             tone={actionFeedback.tone}
           />
         ) : null}
+        {(ignoredInvites.length > 0 || showIgnoredInvites) && (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '0.72rem',
+                fontWeight: 700,
+              }}
+            >
+              {showIgnoredInvites
+                ? t('groups_widget.ignored_invites', {
+                    count: ignoredInvites.length,
+                    defaultValue: 'Ignored invites ({{count}})',
+                  })
+                : t('groups_widget.hidden_invites_count', {
+                    count: ignoredInvites.length,
+                    defaultValue: '{{count}} ignored',
+                  })}
+            </Typography>
+            <ButtonBase
+              onClick={() => setShowIgnoredInvites((prev) => !prev)}
+              sx={ignoredItemsActionSx}
+            >
+              {showIgnoredInvites
+                ? t('groups_widget.back_to_invites', {
+                    defaultValue: 'Back to invites',
+                  })
+                : t('groups_widget.show_ignored', {
+                    defaultValue: 'Show ignored',
+                  })}
+            </ButtonBase>
+          </Box>
+        )}
         {effectiveInvites.length === 0 &&
         !showInitialInvitesLoading &&
         !invitesError ? (
           <IllustratedEmptyState
             actionLabel={t('groups_widget.refresh')}
             compact={isCompact}
-            description={t('groups_widget.invites_empty_description')}
+            description={
+              showIgnoredInvites
+                ? t('groups_widget.ignored_invites_empty_description', {
+                    defaultValue:
+                      'Ignored invites are checked against your current pending invites.',
+                  })
+                : t('groups_widget.invites_empty_description')
+            }
             onAction={() => void fetchInvites(true)}
-            title={t('groups_widget.invites_empty_title')}
+            title={
+              showIgnoredInvites
+                ? t('groups_widget.ignored_invites_empty_title', {
+                    defaultValue: 'No ignored invites',
+                  })
+                : t('groups_widget.invites_empty_title')
+            }
             variant="invites"
           />
         ) : (
@@ -2048,28 +2265,18 @@ export const GroupsWidget = ({
                   }}
                 >
                   <ButtonBase
-                    onClick={() => handleIgnoreInvite(invite.id)}
-                    sx={{
-                      alignItems: 'center',
-                      border: `1px solid ${alpha(
-                        theme.palette.border.main,
-                        theme.palette.mode === 'dark' ? 0.22 : 0.14
-                      )}`,
-                      borderRadius: '999px',
-                      color: theme.palette.text.secondary,
-                      display: 'inline-flex',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      minHeight: '30px',
-                      px: 1.25,
-                      textTransform: 'none',
-                      '&:hover': {
-                        backgroundColor: theme.palette.action.hover,
-                        color: theme.palette.text.primary,
-                      },
-                    }}
+                    onClick={() =>
+                      void (showIgnoredInvites
+                        ? handleRestoreInvite(invite.id)
+                        : handleIgnoreInvite(invite.id))
+                    }
+                    sx={ignoredItemsActionSx}
                   >
-                    {t('groups_widget.ignore')}
+                    {showIgnoredInvites
+                      ? t('groups_widget.restore', {
+                          defaultValue: 'Restore',
+                        })
+                      : t('groups_widget.ignore')}
                   </ButtonBase>
                   <LoadingButton
                     loading={joiningGroupId === invite.groupId}
@@ -2120,15 +2327,68 @@ export const GroupsWidget = ({
             tone={actionFeedback.tone}
           />
         ) : null}
+        {(ignoredRequests.length > 0 || showIgnoredRequests) && (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '0.72rem',
+                fontWeight: 700,
+              }}
+            >
+              {showIgnoredRequests
+                ? t('groups_widget.ignored_requests', {
+                    count: ignoredRequests.length,
+                    defaultValue: 'Ignored requests ({{count}})',
+                  })
+                : t('groups_widget.hidden_requests_count', {
+                    count: ignoredRequests.length,
+                    defaultValue: '{{count}} ignored',
+                  })}
+            </Typography>
+            <ButtonBase
+              onClick={() => setShowIgnoredRequests((prev) => !prev)}
+              sx={ignoredItemsActionSx}
+            >
+              {showIgnoredRequests
+                ? t('groups_widget.back_to_requests', {
+                    defaultValue: 'Back to requests',
+                  })
+                : t('groups_widget.show_ignored', {
+                    defaultValue: 'Show ignored',
+                  })}
+            </ButtonBase>
+          </Box>
+        )}
         {effectiveRequests.length === 0 &&
         !showInitialRequestsLoading &&
         !requestsError ? (
           <IllustratedEmptyState
             actionLabel={t('groups_widget.refresh')}
             compact={isCompact}
-            description={t('groups_widget.requests_empty_description')}
+            description={
+              showIgnoredRequests
+                ? t('groups_widget.ignored_requests_empty_description', {
+                    defaultValue:
+                      'Ignored requests are checked against your current pending requests.',
+                  })
+                : t('groups_widget.requests_empty_description')
+            }
             onAction={() => void fetchJoinRequests(true)}
-            title={t('groups_widget.requests_empty_title')}
+            title={
+              showIgnoredRequests
+                ? t('groups_widget.ignored_requests_empty_title', {
+                    defaultValue: 'No ignored requests',
+                  })
+                : t('groups_widget.requests_empty_title')
+            }
             variant="requests"
           />
         ) : (
@@ -2217,27 +2477,18 @@ export const GroupsWidget = ({
                   }}
                 >
                   <ButtonBase
-                    onClick={() => handleRejectRequest(request.id)}
-                    sx={{
-                      alignItems: 'center',
-                      border: `1px solid ${alpha(
-                        theme.palette.border.main,
-                        theme.palette.mode === 'dark' ? 0.22 : 0.14
-                      )}`,
-                      borderRadius: '999px',
-                      color: theme.palette.text.secondary,
-                      display: 'inline-flex',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      minHeight: '30px',
-                      px: 1.25,
-                      '&:hover': {
-                        backgroundColor: theme.palette.action.hover,
-                        color: theme.palette.text.primary,
-                      },
-                    }}
+                    onClick={() =>
+                      void (showIgnoredRequests
+                        ? handleRestoreRequest(request.id)
+                        : handleRejectRequest(request.id))
+                    }
+                    sx={ignoredItemsActionSx}
                   >
-                    {t('groups_widget.reject')}
+                    {showIgnoredRequests
+                      ? t('groups_widget.restore', {
+                          defaultValue: 'Restore',
+                        })
+                      : t('groups_widget.ignore')}
                   </ButtonBase>
                   <LoadingButton
                     loading={resolvingRequestId === request.id}
@@ -2495,8 +2746,8 @@ export const GroupsWidget = ({
     </QAppWidgetContainer>
   );
 
-  const invitesCount = effectiveInvites.length;
-  const requestsCount = effectiveRequests.length;
+  const invitesCount = visibleInvites.length;
+  const requestsCount = visibleRequests.length;
 
   return (
     <Box

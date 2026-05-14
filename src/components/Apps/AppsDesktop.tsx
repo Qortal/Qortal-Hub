@@ -358,6 +358,33 @@ export const AppsDesktop = ({
   }, [show, tabs, selectedTab, isNewTabWindow]);
 
   useEffect(() => {
+    if (
+      desktopViewMode !== 'dev' ||
+      devMode !== 'home' ||
+      isNewTabWindow
+    ) {
+      return;
+    }
+
+    if (selectedTab) {
+      setSelectedTab(null);
+    }
+
+    tabsTokenRef.current += 1;
+    const tabsToken = tabsTokenRef.current;
+    executeEvent('setTabsToNav', {
+      data: {
+        tabs,
+        selectedTab: null,
+        isNewTabWindow: false,
+        tabsToken,
+      },
+    });
+    executeEvent('forceNavClear', { data: { tabsToken } });
+    executeEvent('clearNavInput', {});
+  }, [desktopViewMode, devMode, isNewTabWindow, selectedTab, tabs]);
+
+  useEffect(() => {
     const id = selectedTab?.tabId;
     if (!id) return;
     const prev = recentTabIdsRef.current;

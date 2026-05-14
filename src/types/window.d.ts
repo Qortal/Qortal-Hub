@@ -5,6 +5,11 @@ declare global {
       set: (key: string, value: unknown) => Promise<void>;
       delete: (key: string) => Promise<void>;
     };
+    miscStorage?: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<void>;
+    };
     coreSetup?: {
       isCoreRunning?: () => Promise<boolean>;
       isCoreRunningOnSystem?: () => Promise<boolean>;
@@ -54,4 +59,3 @@ declare global {
 }
 
 export {};
-

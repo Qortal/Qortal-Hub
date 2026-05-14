@@ -30,6 +30,7 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
   const { themeMode, toggleTheme } = useThemeContext();
   const selectorRef = useRef(null);
   const theme = useTheme();
+  const switchThemeLabel = themeMode === 'dark' ? 'Light' : 'Dark';
   const sidebarButtonSx = {
     alignItems: 'center',
     borderRadius: '14px',
@@ -81,7 +82,7 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
       <Box ref={selectorRef}>
         <Tooltip title={ariaLabel}>
           <IconButton onClick={toggleTheme} aria-label={ariaLabel}>
-            {themeMode === 'light' ? (
+            {themeMode === 'dark' ? (
               <LightModeIcon sx={{ fontSize: 18 }} />
             ) : (
               <DarkModeIcon sx={{ fontSize: 18 }} />
@@ -110,7 +111,7 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
               width: '40px',
             }}
           >
-            {themeMode === 'light' ? (
+            {themeMode === 'dark' ? (
               <LightModeIcon sx={{ fontSize: '1.45rem' }} />
             ) : (
               <DarkModeIcon sx={{ fontSize: '1.45rem' }} />
@@ -125,7 +126,7 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
               lineHeight: 1,
             }}
           >
-            {themeMode === 'light' ? 'Light' : 'Dark'}
+            {switchThemeLabel}
           </Typography>
         </ButtonBase>
       </Box>
@@ -141,7 +142,7 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
           color: theme.palette.text.primary,
         }}
       >
-        {themeMode === 'light' ? <LightModeIcon /> : <DarkModeIcon />}
+        {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
       </IconButton>
     </Box>
   );
