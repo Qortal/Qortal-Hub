@@ -34,24 +34,38 @@ export type ReticulumMeshState = {
   meshReachableOnHost?: string;
 };
 
+function getCanonicalQortalHubDataDir(): string {
+  return path.join(app.getPath('appData'), 'qortal-hub');
+}
+
 export function getReticulumMeshStatePath(): string {
-  return path.join(app.getPath('userData'), 'reticulum-mesh-state.json');
+  return path.join(getCanonicalQortalHubDataDir(), 'reticulum-mesh-state.json');
 }
 
 /**
- * Writable copy under userData; `network_identity` points here. Installed from the bundled
- * community file (same identity for all Qortal Hub users — see `getBundledMeshNetworkIdentityPath`).
+ * Writable copy under the canonical qortal-hub profile; `network_identity`
+ * points here. Installed from the bundled community file (same identity for
+ * all Qortal Hub users — see `getBundledMeshNetworkIdentityPath`).
  */
 export function getMeshNetworkIdentityPath(): string {
-  return path.join(app.getPath('userData'), 'reticulum', 'mesh-network.identity');
+  return path.join(
+    getCanonicalQortalHubDataDir(),
+    'reticulum',
+    'mesh-network.identity'
+  );
 }
 
 /**
- * Writable copy under userData; the mesh listener `passphrase` points here so
- * all installs can join the same authenticated Qortal Hub mesh segment.
+ * Writable copy under the canonical qortal-hub profile; the mesh listener
+ * `passphrase` points here so all installs can join the same authenticated
+ * Qortal Hub mesh segment.
  */
 export function getMeshNetworkPassphrasePath(): string {
-  return path.join(app.getPath('userData'), 'reticulum', 'mesh-network.passphrase');
+  return path.join(
+    getCanonicalQortalHubDataDir(),
+    'reticulum',
+    'mesh-network.passphrase'
+  );
 }
 
 /**

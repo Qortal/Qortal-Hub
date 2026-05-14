@@ -9,6 +9,9 @@ vi.mock('electron', () => ({
 }));
 
 import {
+  getMeshNetworkIdentityPath,
+  getMeshNetworkPassphrasePath,
+  getReticulumMeshStatePath,
   isPlausibleReachableOnHost,
   meshConfigSliceFromState,
   resolveMeshReachableOnHost,
@@ -45,6 +48,18 @@ describe('sortMeshOutboundHostsForEmission', () => {
 });
 
 describe('meshConfigSliceFromState', () => {
+  it('uses canonical qortal-hub storage paths shared by local app instances', () => {
+    expect(getReticulumMeshStatePath()).toBe(
+      '/tmp/qortal-appdata/qortal-hub/reticulum-mesh-state.json'
+    );
+    expect(getMeshNetworkIdentityPath()).toBe(
+      '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity'
+    );
+    expect(getMeshNetworkPassphrasePath()).toBe(
+      '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.passphrase'
+    );
+  });
+
   it('produces identical slice when selected hosts are in different order', () => {
     const state = baseState();
     const selectedA = [

@@ -763,7 +763,12 @@ export function useVoiceCall(): UseVoiceCallReturn {
       enqueueTeardownReticulumMedia();
       applyLocalCallEnd();
     },
-    [clearDurationTimer, enqueueTeardownReticulumMedia, updateCallState, updateIncomingCall]
+    [
+      clearDurationTimer,
+      enqueueTeardownReticulumMedia,
+      updateCallState,
+      updateIncomingCall,
+    ]
   );
 
   const pushDecodedDmAudioPackets = useCallback(

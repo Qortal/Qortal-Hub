@@ -57,6 +57,7 @@ type InboundMessage =
   | { type: 'stop'; generation?: number };
 
 type EncodeTiming = {
+  timestampUs: number;
   capturePerfMs: number;
   encoderInputPerfMs: number;
   vad: boolean;
@@ -153,8 +154,10 @@ let sharedState: Int32Array | null = null;
 let sharedSlotCount = 0;
 let sharedFrameSamples = 960;
 let sharedRingFallbackTransfers = 0;
+let latestVad = false;
 const staleEncodedDropPerfMs: number[] = [];
 const encodeTimingByTimestampUs = new Map<number, EncodeTiming>();
+const encodeTimingQueue: EncodeTiming[] = [];
 
 function getStats(): WorkerStats {
   return {
@@ -204,6 +207,7 @@ function closeEncoder(): void {
   encoder = null;
   encoderGeneration++;
   encodeTimingByTimestampUs.clear();
+  encodeTimingQueue.length = 0;
   if (!current) return;
   try {
     current.close();
@@ -238,12 +242,23 @@ function createEncoder(): AudioEncoder {
       const encodeOutPerfMs = performance.now();
       const chunkTimestampUs =
         typeof chunk.timestamp === 'number' ? chunk.timestamp : null;
-      const timing =
+      let timing =
         chunkTimestampUs !== null
           ? encodeTimingByTimestampUs.get(chunkTimestampUs)
           : undefined;
-      if (chunkTimestampUs !== null) {
+      if (timing && chunkTimestampUs !== null) {
         encodeTimingByTimestampUs.delete(chunkTimestampUs);
+        const queuedIndex = encodeTimingQueue.findIndex(
+          (entry) => entry.timestampUs === chunkTimestampUs
+        );
+        if (queuedIndex >= 0) {
+          encodeTimingQueue.splice(queuedIndex, 1);
+        }
+      } else {
+        timing = encodeTimingQueue.shift();
+        if (timing) {
+          encodeTimingByTimestampUs.delete(timing.timestampUs);
+        }
       }
       const capturePerfMs = timing?.capturePerfMs ?? encodeOutPerfMs;
       const encoderInputPerfMs =
@@ -271,7 +286,7 @@ function createEncoder(): AudioEncoder {
           type: 'encoded',
           generation,
           opusFrame: frame.buffer,
-          vad: timing?.vad ?? false,
+          vad: timing?.vad ?? latestVad,
           capturePerfMs,
           encoderInputPerfMs,
           encodeOutPerfMs,
@@ -466,6 +481,7 @@ function handleEncodeFrame(message: EncodeFrameMessage): void {
     message.capturePerfMs > 0
       ? message.capturePerfMs
       : performance.now();
+  latestVad = message.vad === true;
   capturedFrameCount++;
   lastCapturePerfMs = capturedAtPerfMs;
   if (
@@ -489,7 +505,7 @@ function handleEncodeFrame(message: EncodeFrameMessage): void {
   workerPost({
     type: 'vad',
     generation,
-    vad: message.vad === true,
+    vad: latestVad,
     stats: getStats(),
   });
   const queueSize =
@@ -546,11 +562,18 @@ function handleEncodeFrame(message: EncodeFrameMessage): void {
   const encoderInputPerfMs = performance.now();
   lastEncoderInputPerfMs = encoderInputPerfMs;
   const timestampUs = Math.trunc(encoderInputPerfMs * 1000);
-  encodeTimingByTimestampUs.set(timestampUs, {
+  const timing: EncodeTiming = {
+    timestampUs,
     capturePerfMs: capturedAtPerfMs,
     encoderInputPerfMs,
-    vad: message.vad === true,
-  });
+    vad: latestVad,
+  };
+  encodeTimingByTimestampUs.set(timestampUs, timing);
+  encodeTimingQueue.push(timing);
+  while (encodeTimingQueue.length > 32) {
+    const dropped = encodeTimingQueue.shift();
+    if (dropped) encodeTimingByTimestampUs.delete(dropped.timestampUs);
+  }
   const audioData = new AudioDataCtor({
     format: 's16',
     sampleRate: 48_000,

@@ -8,7 +8,8 @@
  * 4. Any build: system Python if QORTAL_RETICULUM_SYSTEM=1 (e.g. forced testing)
  * Opt out of (3) and (4) in dev: QORTAL_RETICULUM_NO_SYSTEM=1
  *
- * Config and state: app.getPath('userData')/reticulum (writable; isolated per profile).
+ * Config and daemon state: appData/qortal-hub/reticulum (writable; shared by
+ * local app instances so they use one RNS config and bridge identity).
  * @see https://reticulum.network/manual/using.html
  */
 
@@ -65,6 +66,7 @@ const RETICULUM_APP_INSTANCE_REGISTRY_FILENAME = 'reticulum-app-instances.json';
 const RETICULUM_SHARED_DAEMON_STATE_FILENAME = 'reticulum-daemon-state.json';
 const RETICULUM_SHARED_TRANSPORT_STATE_FILENAME = 'reticulum-transport-state.json';
 const RETICULUM_SHARED_RPC_KEY_FILENAME = 'reticulum-rpc-key.hex';
+const RETICULUM_PRESENCE_BRIDGE_IDENTITY_FILENAME = 'presence-bridge.identity';
 const QCHAT_FILE_PENDING_SENDS_DIRNAME = 'qchat-file-transfers';
 const QCHAT_FILE_PENDING_SENDS_FILENAME = 'pending-sends.json';
 const RETICULUM_RPC_KEY_BYTES = 32;
@@ -199,8 +201,20 @@ type ReticulumSharedDaemonState = {
   mode: ReticulumDaemonMode;
 };
 
+function getCanonicalQortalHubDataDir(): string {
+  return path.join(app.getPath('appData'), 'qortal-hub');
+}
+
 export function getReticulumConfigDir(): string {
-  return path.join(app.getPath('userData'), 'reticulum');
+  return path.join(getCanonicalQortalHubDataDir(), 'reticulum');
+}
+
+export function getReticulumBridgeIdentityPath(): string {
+  return path.join(
+    app.getPath('userData'),
+    'reticulum',
+    RETICULUM_PRESENCE_BRIDGE_IDENTITY_FILENAME
+  );
 }
 
 function getQchatFilePendingSendsPath(): string {
@@ -2003,9 +2017,13 @@ export function registerReticulumIpcHandlers(): void {
     });
 
   const attachQchatFileBridgeEvents = async (): Promise<void> => {
-    const { getReticulumBridge, startReticulumBridge } =
+    const { getReticulumBridge } =
       (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
-    const bridge = getReticulumBridge() ?? (await startReticulumBridge());
+    const bridge = getReticulumBridge();
+    if (!bridge) {
+      scheduleQchatFileBridgeAttachRetry();
+      return;
+    }
     await hydrateQchatFilePendingSends(bridge);
     if (qchatFileAttachedBridge === bridge) return;
     bridge.on('qchat-file-transfer', (payload: any) => {
@@ -2134,12 +2152,16 @@ export function registerReticulumIpcHandlers(): void {
           getPresenceManager()?.getReticulumVerifiedPeers().length ?? 0;
         let p2pActiveOverlayPeers = 0;
         if (bridge) {
-          const snap = bridge.getConnectivitySnapshot();
-          if (typeof snap.overlayLinksConnected === 'number') {
-            p2pActiveOverlayPeers = snap.overlayLinksConnected;
-          } else {
-            p2pActiveOverlayPeers = bridge.getOverlayLinkSnapshots().length;
+          const localHash =
+            bridge.getLocalDestinationHash()?.trim().toLowerCase() ?? '';
+          const activePeerHashes = new Set<string>();
+          for (const peer of bridge.getOverlayLinkSnapshots()) {
+            const peerKey = peer.peerPresenceHash.trim().toLowerCase();
+            if (!peerKey) continue;
+            if (localHash && peerKey === localHash) continue;
+            activePeerHashes.add(peerKey);
           }
+          p2pActiveOverlayPeers = activePeerHashes.size;
         }
         const transportFallback =
           getReticulumInstanceIndex() > 0 &&

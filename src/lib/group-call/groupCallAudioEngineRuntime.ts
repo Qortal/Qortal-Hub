@@ -907,7 +907,11 @@ export class GroupCallAudioEngineRuntime {
     if (!roomId || !peerAddress || !key) {
       return { ok: false, error: 'invalid-direct-voice-receive-config' };
     }
-    if (this.directVoiceRoomId && this.directVoiceRoomId !== roomId) {
+    if (
+      this.directVoiceRoomId &&
+      (this.directVoiceRoomId !== roomId ||
+        this.directVoicePeerAddress !== peerAddress)
+    ) {
       await this.directVoiceReceiveEngine?.reset();
     }
     this.directVoiceRoomId = roomId;

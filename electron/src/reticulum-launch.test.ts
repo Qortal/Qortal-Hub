@@ -32,12 +32,12 @@ describe('startReticulumForAppLaunch', () => {
     vi.mocked(startReticulumBridge).mockResolvedValue({} as never);
   });
 
-  it('starts the daemon and accepts either shared-port or bridge readiness', async () => {
+  it('starts the daemon and waits for shared-port readiness before bridge startup', async () => {
     vi.mocked(getReticulumDaemonStatus).mockReturnValue({
       running: true,
       pid: 123,
       mode: 'system',
-      configDir: '/tmp/qortal-userdata/reticulum',
+      configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
 
@@ -45,7 +45,7 @@ describe('startReticulumForAppLaunch', () => {
 
     expect(startBundledReticulumDaemon).toHaveBeenCalledTimes(1);
     expect(waitForReticulumSharedInstanceReady).toHaveBeenCalledWith(1_234);
-    expect(startReticulumBridge).toHaveBeenCalledTimes(1);
+    expect(startReticulumBridge).not.toHaveBeenCalled();
     expect(restartBundledReticulumDaemonAndWaitReady).not.toHaveBeenCalled();
   });
 
@@ -55,7 +55,7 @@ describe('startReticulumForAppLaunch', () => {
       running: true,
       pid: 456,
       mode: 'system',
-      configDir: '/tmp/qortal-userdata/reticulum',
+      configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
     vi.mocked(waitForReticulumSharedInstanceReady).mockRejectedValueOnce(timeoutError);
@@ -76,7 +76,7 @@ describe('startReticulumForAppLaunch', () => {
       running: true,
       pid: 456,
       mode: 'system',
-      configDir: '/tmp/qortal-userdata/reticulum',
+      configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
     vi.mocked(waitForReticulumSharedInstanceReady).mockRejectedValueOnce(timeoutError);
@@ -86,8 +86,9 @@ describe('startReticulumForAppLaunch', () => {
 
     expect(loggerError).toHaveBeenCalledWith(
       '[Reticulum] Launch readiness wait failed; continuing with bridge startup:',
-      bridgeError
+      timeoutError
     );
+    expect(startReticulumBridge).toHaveBeenCalledTimes(1);
     expect(restartBundledReticulumDaemonAndWaitReady).not.toHaveBeenCalled();
   });
 
@@ -96,7 +97,7 @@ describe('startReticulumForAppLaunch', () => {
       running: false,
       pid: undefined,
       mode: null,
-      configDir: '/tmp/qortal-userdata/reticulum',
+      configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'disconnected',
     });
 

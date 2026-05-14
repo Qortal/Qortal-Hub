@@ -7,6 +7,8 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('./reticulum-daemon', () => ({
+  getReticulumBridgeIdentityPath: () =>
+    '/tmp/qortal-userdata/reticulum/presence-bridge.identity',
   getReticulumConfigDir: () => '/tmp/qortal-reticulum-test',
   persistReticulumSharedTransportState: vi.fn(),
   resolveReticulumPythonLaunch: () => ({
@@ -32,6 +34,21 @@ import type { PresenceEnvelope } from './presence';
 import { ReticulumBridge } from './reticulum-bridge';
 
 describe('ReticulumBridge presence subscriptions', () => {
+  it('does not spawn a second child while startup is waiting for ready', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'starting';
+    internal.child = {
+      exitCode: null,
+      killed: false,
+    };
+    internal.spawnAndHandshake = vi.fn(async () => {});
+
+    await bridge.start();
+
+    expect(internal.spawnAndHandshake).not.toHaveBeenCalled();
+  });
+
   it('notifies late subscribers when the bridge is already ready', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
@@ -835,6 +852,61 @@ describe('ReticulumBridge group audio support', () => {
     expect(seen).toEqual([
       { peerHash: 'peer-hash', reason: 'closed' },
       { peerHash: 'peer-hash-2', reason: 'closed' },
+    ]);
+  });
+
+  it('does not emit overlay-link-closed when a duplicate closes but another link remains', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const seen: unknown[] = [];
+
+    bridge.on('overlay-link-closed', (payload) => {
+      seen.push(payload);
+    });
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-keep',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: false,
+        established: true,
+        reason: 'established',
+        queuedPackets: 0,
+        closedByReticulum: false,
+      },
+    });
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-duplicate',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: true,
+        established: true,
+        reason: 'established',
+        queuedPackets: 0,
+        closedByReticulum: false,
+      },
+    });
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-duplicate',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: true,
+        established: false,
+        reason: '3',
+        queuedPackets: 0,
+        closedByReticulum: true,
+      },
+    });
+
+    expect(seen).toEqual([]);
+    expect(bridge.getOverlayLinkSnapshots()).toEqual([
+      expect.objectContaining({ linkId: 'overlay-keep' }),
     ]);
   });
 

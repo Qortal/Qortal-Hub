@@ -2524,6 +2524,20 @@ def get_overlay_link_state(link_id: str) -> Optional[Dict[str, Any]]:
         return _overlay_links_by_id.get(link_id)
 
 
+def _overlay_link_is_current(link_id: str, link: Any = None) -> bool:
+    if not link_id:
+        return False
+    with _state_lock:
+        state = _overlay_links_by_id.get(link_id)
+        if state is None:
+            return False
+        if link is not None and state.get("link") is not link:
+            return False
+    if link is not None and getattr(link, "status", None) == getattr(RNS.Link, "CLOSED", object()):
+        return False
+    return True
+
+
 def remove_overlay_link(link_id: str) -> Optional[Dict[str, Any]]:
     with _state_lock:
         state = _overlay_links_by_id.pop(link_id, None)
@@ -2535,6 +2549,7 @@ def remove_overlay_link(link_id: str) -> Optional[Dict[str, Any]]:
         peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
         if peer_hash:
             existing = _active_overlay_link_id_by_peer_hash.get(peer_hash)
+            state["_was_active_overlay"] = existing == link_id
             if existing == link_id:
                 _active_overlay_link_id_by_peer_hash.pop(peer_hash, None)
         return state
@@ -2547,6 +2562,18 @@ def emit_overlay_link_state(
     *,
     closed_by_reticulum: bool = False,
 ) -> None:
+    now = time.time()
+    created_at = state.get("created_at")
+    established_at = state.get("established_at")
+    last_rx_at = state.get("last_rx_at")
+    last_send_ok_at = state.get("last_send_ok_at")
+    last_activity_at = state.get("last_activity_at")
+
+    def age_ms(value: Any) -> Optional[int]:
+        if not isinstance(value, (int, float)):
+            return None
+        return max(0, int((now - float(value)) * 1000.0))
+
     emit_event(
         "overlay_link_state",
         {
@@ -2558,11 +2585,55 @@ def emit_overlay_link_state(
             "queuedPackets": len(state.get("pending_packets") or []),
             "closedByReticulum": closed_by_reticulum,
             "lastRxAt": (
-                float(state.get("last_rx_at")) * 1000.0
-                if isinstance(state.get("last_rx_at"), (int, float))
+                float(last_rx_at) * 1000.0
+                if isinstance(last_rx_at, (int, float))
                 else None
             ),
+            "createdAgeMs": age_ms(created_at),
+            "establishedAgeMs": age_ms(established_at),
+            "lastRxAgeMs": age_ms(last_rx_at),
+            "lastSendOkAgeMs": age_ms(last_send_ok_at),
+            "lastActivityAgeMs": age_ms(last_activity_at),
         },
+    )
+
+
+def _overlay_teardown_reason_name(reason: Any) -> str:
+    if reason == getattr(RNS.Link, "TIMEOUT", object()):
+        return "timeout"
+    if reason == getattr(RNS.Link, "INITIATOR_CLOSED", object()):
+        return "initiator_closed"
+    if reason == getattr(RNS.Link, "DESTINATION_CLOSED", object()):
+        return "destination_closed"
+    if reason is None:
+        return "closed"
+    return str(reason)
+
+
+def _overlay_close_debug_line(link_id: str, state: Dict[str, Any], reason: str) -> str:
+    now = time.time()
+
+    def age_label(key: str) -> str:
+        value = state.get(key)
+        if not isinstance(value, (int, float)):
+            return "na"
+        return str(max(0, int((now - float(value)) * 1000.0)))
+
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower() or "unknown"
+    link = state.get("link")
+    reticulum_status = getattr(link, "status", None) if link is not None else None
+    was_active = state.get("_was_active_overlay") is True
+    return (
+        "[presence_bridge] target=presence-reticulum overlay_link_close_detail "
+        f"link={link_id} peer={peer_hash} incoming={str(state.get('incoming') is True).lower()} "
+        f"was_established={str(state.get('established') is True).lower()} "
+        f"was_active={str(was_active).lower()} reason={reason} "
+        f"created_age_ms={age_label('created_at')} "
+        f"established_age_ms={age_label('established_at')} "
+        f"last_rx_age_ms={age_label('last_rx_at')} "
+        f"last_send_ok_age_ms={age_label('last_send_ok_at')} "
+        f"last_activity_age_ms={age_label('last_activity_at')} "
+        f"queued={len(state.get('pending_packets') or [])} rns_status={reticulum_status}"
     )
 
 
@@ -2614,6 +2685,20 @@ def _dedup_age_ts(state: Dict[str, Any], both_established: bool) -> float:
     return 0.0
 
 
+def _dedup_activity_ts(state: Dict[str, Any]) -> float:
+    """Sort key for recently useful links; higher = more useful."""
+    best = 0.0
+    for key in ("last_rx_at", "last_send_ok_at", "last_activity_at", "established_at"):
+        t = state.get(key)
+        if isinstance(t, (int, float)):
+            best = max(best, float(t))
+    return best
+
+
+def _dedup_has_peer_hash(state: Dict[str, Any], peer_key: str) -> bool:
+    return str(state.get("peerPresenceHash") or "").strip().lower() == peer_key
+
+
 def _dedup_pick_keep_link(
     peer_key: str,
     link_id_a: str,
@@ -2622,23 +2707,33 @@ def _dedup_pick_keep_link(
     state_b: Dict[str, Any],
 ) -> tuple[str, str]:
     """Return (keep_link_id, teardown_link_id) for two links to the same peer."""
-    incoming_a = state_a.get("incoming") is True
-    incoming_b = state_b.get("incoming") is True
-    if incoming_a != incoming_b:
-        local_hex = _local_presence_hash_hex()
-        if local_hex and _valid_presence_destination_hash_hex(peer_key):
-            # Deterministic duplicate resolution for simultaneous dials:
-            # lower hash keeps the outbound link, higher hash keeps the incoming link.
-            prefer_incoming = local_hex > peer_key
-            if incoming_a == prefer_incoming:
-                return link_id_a, link_id_b
-            return link_id_b, link_id_a
     est_a = state_a.get("established") is True
     est_b = state_b.get("established") is True
     if est_a and not est_b:
         return link_id_a, link_id_b
     if est_b and not est_a:
         return link_id_b, link_id_a
+    known_a = _dedup_has_peer_hash(state_a, peer_key)
+    known_b = _dedup_has_peer_hash(state_b, peer_key)
+    if known_a and not known_b:
+        return link_id_a, link_id_b
+    if known_b and not known_a:
+        return link_id_b, link_id_a
+    activity_a = _dedup_activity_ts(state_a)
+    activity_b = _dedup_activity_ts(state_b)
+    if abs(activity_a - activity_b) > 0.001:
+        return (link_id_a, link_id_b) if activity_a > activity_b else (link_id_b, link_id_a)
+    incoming_a = state_a.get("incoming") is True
+    incoming_b = state_b.get("incoming") is True
+    if incoming_a != incoming_b:
+        local_hex = _local_presence_hash_hex()
+        if local_hex and _valid_presence_destination_hash_hex(peer_key):
+            # Deterministic duplicate resolution for otherwise equivalent links:
+            # lower hash keeps outbound, higher hash keeps incoming.
+            prefer_incoming = local_hex > peer_key
+            if incoming_a == prefer_incoming:
+                return link_id_a, link_id_b
+            return link_id_b, link_id_a
     both_est = est_a and est_b
     ta = _dedup_age_ts(state_a, both_est)
     tb = _dedup_age_ts(state_b, both_est)
@@ -2660,6 +2755,7 @@ def _teardown_overlay_link_id(link_id: str, reason: str) -> None:
     state = remove_overlay_link(link_id)
     if state is None:
         return
+    log(_overlay_close_debug_line(link_id, state, reason))
     link = state.get("link")
     if link is not None:
         try:
@@ -2719,9 +2815,15 @@ def _register_active_overlay_for_peer(peer_key: str, link_id: str) -> Optional[D
         keep_state = _overlay_links_by_id.get(keep_id)
     if lose_id:
         log(
-            "[presence_bridge] target=presence-reticulum overlay_dedup_peer "
+            "[presence_bridge] target=presence-reticulum overlay_link_duplicate_teardown "
             f"peer={peer_key} keep={keep_id} teardown={lose_id}"
         )
+        if keep_state is not None:
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_link_canonical_keep "
+                f"peer={peer_key} link={keep_id} incoming={str(keep_state.get('incoming') is True).lower()} "
+                f"established={str(keep_state.get('established') is True).lower()}"
+            )
         _teardown_overlay_link_id(lose_id, "dedup_same_peer")
     return keep_state
 
@@ -2734,7 +2836,11 @@ def _flush_overlay_link_pending(link_id: str) -> None:
     pending = state.get("pending_packets")
     if link is None or pending is None:
         return
+    if not _overlay_link_is_current(link_id, link):
+        return
     while pending:
+        if not _overlay_link_is_current(link_id, link):
+            return
         traffic, wire_bytes = pending[0]
         if not _send_packet_on_link(
             link,
@@ -2742,8 +2848,11 @@ def _flush_overlay_link_pending(link_id: str) -> None:
             f"target=presence-reticulum overlay_link_flush peer={state.get('peerPresenceHash') or 'unknown'} traffic={traffic}",
         ):
             break
+        if not _overlay_link_is_current(link_id, link):
+            return
         pending.popleft()
-    emit_overlay_link_state(link_id, state, "flush")
+    if _overlay_link_is_current(link_id, link):
+        emit_overlay_link_state(link_id, state, "flush")
 
 
 def _ensure_overlay_link(
@@ -2816,6 +2925,11 @@ def _ensure_overlay_link(
             if existing_link_id:
                 existing = _overlay_links_by_id.get(existing_link_id)
                 if existing is not None:
+                    log(
+                        "[presence_bridge] target=presence-reticulum "
+                        f"overlay_link_reuse_{'incoming' if existing.get('incoming') is True else 'outgoing'} "
+                        f"peer={peer_key} link={existing_link_id}"
+                    )
                     return existing
                 _active_overlay_link_id_by_peer_hash.pop(peer_key, None)
             if outbound is None:
@@ -2859,7 +2973,7 @@ def _ensure_overlay_link(
     if st_new is not None and st_new.get("incoming") is not True:
         emit_overlay_link_state(link_id, st_new, "connecting")
     log(
-        f"[presence_bridge] target=presence-reticulum overlay_link_connect peer={peer_key}"
+        f"[presence_bridge] target=presence-reticulum overlay_link_open_on_demand peer={peer_key}"
     )
     return state
 
@@ -3102,10 +3216,11 @@ def on_overlay_link_closed(link) -> None:
     if link_id is None:
         return
     teardown_reason = getattr(link, "teardown_reason", None)
-    reason = str(teardown_reason) if teardown_reason is not None else "closed"
+    reason = _overlay_teardown_reason_name(teardown_reason)
     state = remove_overlay_link(link_id)
     if state is None:
         return
+    log(_overlay_close_debug_line(link_id, state, reason))
     state["established"] = False
     emit_overlay_link_state(
         link_id,
@@ -4328,6 +4443,8 @@ def on_outgoing_overlay_link_established(link) -> None:
     state = get_overlay_link_state(link_id)
     if state is None:
         return
+    if not _overlay_link_is_current(link_id, link):
+        return
     configure_overlay_link(link, link_id)
     now = time.time()
     state["established"] = True
@@ -4339,19 +4456,25 @@ def on_outgoing_overlay_link_established(link) -> None:
             link.identify(_identity)
     except Exception as exc:
         log(f"[presence_bridge] overlay link identify failed link={link_id}: {exc}")
+    if not _overlay_link_is_current(link_id, link):
+        return
     emit_overlay_link_state(link_id, state, "established")
     ph_out = str(state.get("peerPresenceHash") or "").strip().lower()
     if ph_out and _valid_presence_destination_hash_hex(ph_out):
         _register_active_overlay_for_peer(ph_out, link_id)
+    if not _overlay_link_is_current(link_id, link):
+        return
     _flush_overlay_link_pending(link_id)
 
 
 def _send_wire_to_overlay_peer(
     peer_hash: str, wire_bytes: bytes, traffic: str, queue_if_pending: bool = True
 ) -> bool:
+    # Background sync avoids duplicate dials, but send-on-demand must be able to
+    # recover when the expected incoming link is absent or stale.
     state = _ensure_overlay_link(
         peer_hash,
-        respect_dial_owner=traffic in ("presence_publish", "presence_forward"),
+        respect_dial_owner=False,
     )
     if state is None:
         log(
@@ -4366,7 +4489,9 @@ def _send_wire_to_overlay_peer(
             f"target=presence-reticulum overlay_link_send peer={peer_hash} traffic={traffic}",
         )
         if ok:
-            state["last_activity_at"] = time.time()
+            now = time.time()
+            state["last_activity_at"] = now
+            state["last_send_ok_at"] = now
         else:
             _queue_overlay_packet(state, traffic, wire_bytes)
         emit_overlay_link_state(get_overlay_link_id(link) or "", state, traffic)

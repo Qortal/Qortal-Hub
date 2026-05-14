@@ -11,6 +11,7 @@ import type {
 } from './presence';
 import { buildPresenceSignedFields, getPresenceManager } from './presence';
 import {
+  getReticulumBridgeIdentityPath,
   getReticulumConfigDir,
   persistReticulumSharedTransportState,
   resolveReticulumPythonLaunch,
@@ -54,6 +55,24 @@ function shouldLogOverlayLinkStateEvent(reason: string): boolean {
   if (reason === 'rx_presence') return false;
   if (reason.startsWith('queued:')) return false;
   return true;
+}
+
+function overlayAgeDetail(payload: Record<string, unknown> | undefined): string {
+  if (!payload) return '';
+  const parts: string[] = [];
+  for (const key of [
+    'createdAgeMs',
+    'establishedAgeMs',
+    'lastRxAgeMs',
+    'lastSendOkAgeMs',
+    'lastActivityAgeMs',
+  ]) {
+    const value = payload[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      parts.push(`${key}=${Math.round(value)}`);
+    }
+  }
+  return parts.length ? ` ${parts.join(' ')}` : '';
 }
 
 type BridgeCmdFrame = {
@@ -359,6 +378,11 @@ type BridgeEventFrame =
         queuedPackets?: number;
         closedByReticulum?: boolean;
         lastRxAt?: number | null;
+        createdAgeMs?: number | null;
+        establishedAgeMs?: number | null;
+        lastRxAgeMs?: number | null;
+        lastSendOkAgeMs?: number | null;
+        lastActivityAgeMs?: number | null;
       };
     }
   | {
@@ -740,6 +764,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     }
     if (this.state === 'ready') return;
     if (this.statePromise) return this.statePromise;
+    if (
+      this.state === 'starting' &&
+      this.child &&
+      this.child.exitCode === null &&
+      !this.child.killed
+    ) {
+      return;
+    }
 
     loggerLog(`[ReticulumBridge] Starting bridge for config=${configDir}`);
     this.state = 'starting';
@@ -1524,6 +1556,17 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     );
   }
 
+  private hasEstablishedOverlaySnapshotForPeer(peerPresenceHash: string): boolean {
+    const peerKey = peerPresenceHash.trim().toLowerCase();
+    if (!peerKey) return false;
+    for (const snap of this.overlayLinkSnapshots.values()) {
+      if (snap.peerPresenceHash.trim().toLowerCase() === peerKey) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private pruneStaleOverlayLinkSnapshots(now = Date.now()): void {
     for (const [linkId, snap] of this.overlayLinkSnapshots.entries()) {
       if (now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
@@ -1532,7 +1575,10 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       loggerLog(
         `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} rxIdleMs=${now - snap.lastRxAt}`
       );
-      if (snap.peerPresenceHash) {
+      if (
+        snap.peerPresenceHash &&
+        !this.hasEstablishedOverlaySnapshotForPeer(snap.peerPresenceHash)
+      ) {
         this.emit('overlay-link-closed', {
           peerHash: snap.peerPresenceHash,
           reason: 'rx_idle_timeout',
@@ -1639,11 +1685,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     loggerLog(
       `[ReticulumBridge] Launching bridge mode=${launch.mode} cmd=${launch.cmd}`
     );
+    const identityPath = getReticulumBridgeIdentityPath();
+    fs.mkdirSync(path.dirname(identityPath), { recursive: true });
     const env = {
       ...process.env,
       ...(launch.envExtra ?? {}),
       PYTHONUNBUFFERED: '1',
       QORTAL_RETICULUM_CONFIG_DIR: configDir,
+      QORTAL_RETICULUM_IDENTITY_PATH: identityPath,
     };
 
     const child = spawn(launch.cmd, launch.args, {
@@ -2446,7 +2495,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             : 0;
         if (shouldLogOverlayLinkStateEvent(reason)) {
           loggerLog(
-            `[ReticulumBridge] overlay-link link_id=${linkId} peer=${peerPresenceHash || 'unknown'} incoming=${frame.payload?.incoming === true ? 'yes' : 'no'} established=${frame.payload?.established === true ? 'yes' : 'no'} queued=${queuedPackets}${reason ? ` reason=${reason}` : ''}`
+            `[ReticulumBridge] overlay-link link_id=${linkId} peer=${peerPresenceHash || 'unknown'} incoming=${frame.payload?.incoming === true ? 'yes' : 'no'} established=${frame.payload?.established === true ? 'yes' : 'no'} queued=${queuedPackets}${reason ? ` reason=${reason}` : ''}${overlayAgeDetail(frame.payload as Record<string, unknown> | undefined)}`
           );
         }
         const established = frame.payload?.established === true;
@@ -2470,7 +2519,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           this.overlayEstablishedLinkIds.delete(linkId);
           this.overlayLinkSnapshots.delete(linkId);
         }
-        if (frame.payload?.closedByReticulum === true && peerPresenceHash) {
+        if (
+          frame.payload?.closedByReticulum === true &&
+          peerPresenceHash &&
+          !this.hasEstablishedOverlaySnapshotForPeer(peerPresenceHash)
+        ) {
           this.emit('overlay-link-closed', {
             peerHash: peerPresenceHash,
             reason,

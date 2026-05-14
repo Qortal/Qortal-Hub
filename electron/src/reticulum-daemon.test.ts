@@ -23,6 +23,8 @@ import {
   buildManagedReticulumConfig,
   computeManagedReticulumConfigFingerprint,
   getReticulumDaemonStatus,
+  getReticulumBridgeIdentityPath,
+  getReticulumConfigDir,
   getReticulumAppInstanceRegistryPath,
   getReticulumSharedDaemonStatePath,
   getReticulumSharedRpcKeyPath,
@@ -85,6 +87,18 @@ describe('reticulum-daemon managed config', () => {
     } catch {
       /* ignore */
     }
+  });
+
+  it('uses the canonical qortal-hub Reticulum config directory', () => {
+    expect(getReticulumConfigDir()).toBe(
+      '/tmp/qortal-appdata/qortal-hub/reticulum'
+    );
+  });
+
+  it('keeps the presence bridge identity under per-instance userData', () => {
+    expect(getReticulumBridgeIdentityPath()).toBe(
+      '/tmp/qortal-userdata/reticulum/presence-bridge.identity'
+    );
   });
 
   it('keeps LAN discovery and includes the default public hubs', () => {
@@ -172,7 +186,8 @@ describe('reticulum-daemon managed config', () => {
       meshDiscoveryClient: true,
       autoconnectDiscoveredMax: 8,
       meshPrivateGateway: false,
-      networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      networkIdentityPath:
+        '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
       networkPassphrase: null,
       enableTransport: true,
       reachableOn: null,
@@ -218,7 +233,8 @@ describe('reticulum-daemon managed config', () => {
       meshDiscoveryClient: true,
       autoconnectDiscoveredMax: 8,
       meshPrivateGateway: true,
-      networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      networkIdentityPath:
+        '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
       networkPassphrase: 'qortal-hub-community-mesh-v1',
       enableTransport: true,
       reachableOn: null,
@@ -227,7 +243,7 @@ describe('reticulum-daemon managed config', () => {
       const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
       expect(config).toContain('enable_transport = True');
       expect(config).toContain(
-        'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
+        'network_identity = /tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity'
       );
       expect(config).not.toContain('reachable_on =');
       expect(config).not.toContain('[[Qortal Hub Mesh Listen]]');
@@ -250,7 +266,8 @@ describe('reticulum-daemon managed config', () => {
       meshDiscoveryClient: true,
       autoconnectDiscoveredMax: 8,
       meshPrivateGateway: true,
-      networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      networkIdentityPath:
+        '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
       networkPassphrase: 'qortal-hub-community-mesh-v1',
       enableTransport: true,
       reachableOn: '203.0.113.7',
@@ -259,7 +276,7 @@ describe('reticulum-daemon managed config', () => {
       const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
       expect(config).toContain('enable_transport = True');
       expect(config).toContain(
-        'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
+        'network_identity = /tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity'
       );
       expect(config).toContain('discovery_name = Qortal Hub Mesh Listen');
       expect(config).toContain('network_name = qortal-hub');
@@ -345,7 +362,7 @@ describe('reticulum-daemon managed config', () => {
         ownerAppPid: 101,
         ownerInstanceIndex: 0,
         startedAt: Date.now(),
-        configDir: '/tmp/qortal-userdata/reticulum',
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
         mode: 'system',
       }),
       'utf8'
@@ -383,7 +400,7 @@ describe('reticulum-daemon managed config', () => {
         ownerAppPid: 101,
         ownerInstanceIndex: 0,
         startedAt: Date.now(),
-        configDir: '/tmp/qortal-userdata/reticulum',
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
         mode: 'system',
       }),
       'utf8'
@@ -421,7 +438,7 @@ describe('reticulum-daemon managed config', () => {
         ownerAppPid: 101,
         ownerInstanceIndex: 0,
         startedAt: Date.now(),
-        configDir: '/tmp/qortal-userdata/reticulum',
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
         mode: 'system',
       }),
       'utf8'
@@ -462,7 +479,7 @@ describe('reticulum-daemon managed config', () => {
         ownerAppPid: 101,
         ownerInstanceIndex: 0,
         startedAt: Date.now(),
-        configDir: '/tmp/qortal-appdata/qortal-instance-2/reticulum',
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
         mode: 'system',
       }),
       'utf8'
@@ -472,7 +489,7 @@ describe('reticulum-daemon managed config', () => {
       running: true,
       pid: 999,
       mode: 'system',
-      configDir: '/tmp/qortal-appdata/qortal-instance-2/reticulum',
+      configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
     expect(killSpy).toHaveBeenCalledWith(999, 0);
