@@ -172,6 +172,29 @@ export type ReticulumAudioQueueSnapshot = {
   executorCommandMsMax: number;
   executorCommandWhileQueuedMsMax: number;
   executorCommandSlowCount: number;
+  mediaRouteDiagnostics?: ReticulumAudioMediaRouteDiagnostic[];
+};
+
+export type ReticulumAudioMediaRouteDiagnostic = {
+  transport: 'link' | 'packet' | string;
+  routeKey: string;
+  linkId: string;
+  peerPresenceHash: string;
+  peerDestinationHash: string;
+  incoming: boolean;
+  sentFrames: number;
+  sentBytes: number;
+  sendFailures: number;
+  receivedFrames: number;
+  receivedBytes: number;
+  fd4EnqueuedFrames: number;
+  fd4EnqueueFailures: number;
+  lastSendAtMs: number;
+  lastSendFailureAtMs: number;
+  lastReceiveAtMs: number;
+  lastFd4EnqueueAtMs: number;
+  lastActivityAtMs: number;
+  lastRoomId: string;
 };
 
 export type ReticulumEnqueueGroupAudioResult =
@@ -666,6 +689,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     executorCommandMsMax: 0,
     executorCommandWhileQueuedMsMax: 0,
     executorCommandSlowCount: 0,
+    mediaRouteDiagnostics: [],
   };
   /** One-shot diagnostics: confirm binary egress/ingress actually ran. */
   private audioIpcFd3FirstBatchLogged = false;
@@ -1244,6 +1268,42 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       ),
     };
     return { ...this.lastAudioQueueSnapshot };
+  }
+
+  private normalizeAudioMediaRouteDiagnostic(
+    input: Record<string, unknown>
+  ): ReticulumAudioMediaRouteDiagnostic {
+    const num = (key: string): number => {
+      const value = input[key];
+      return typeof value === 'number' && Number.isFinite(value)
+        ? value
+        : 0;
+    };
+    const str = (key: string): string => {
+      const value = input[key];
+      return typeof value === 'string' ? value : '';
+    };
+    return {
+      transport: str('transport'),
+      routeKey: str('routeKey'),
+      linkId: str('linkId'),
+      peerPresenceHash: str('peerPresenceHash'),
+      peerDestinationHash: str('peerDestinationHash'),
+      incoming: input.incoming === true,
+      sentFrames: num('sentFrames'),
+      sentBytes: num('sentBytes'),
+      sendFailures: num('sendFailures'),
+      receivedFrames: num('receivedFrames'),
+      receivedBytes: num('receivedBytes'),
+      fd4EnqueuedFrames: num('fd4EnqueuedFrames'),
+      fd4EnqueueFailures: num('fd4EnqueueFailures'),
+      lastSendAtMs: num('lastSendAtMs'),
+      lastSendFailureAtMs: num('lastSendFailureAtMs'),
+      lastReceiveAtMs: num('lastReceiveAtMs'),
+      lastFd4EnqueueAtMs: num('lastFd4EnqueueAtMs'),
+      lastActivityAtMs: num('lastActivityAtMs'),
+      lastRoomId: str('lastRoomId'),
+    };
   }
 
   private getQueuedAudioFrameOldestAgeMs(nowMs = Date.now()): number {
@@ -2477,6 +2537,17 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             typeof frame.payload?.executorCommandSlowCount === 'number'
               ? frame.payload.executorCommandSlowCount
               : this.lastAudioQueueSnapshot.executorCommandSlowCount,
+          mediaRouteDiagnostics: Array.isArray(
+            frame.payload?.mediaRouteDiagnostics
+          )
+            ? frame.payload.mediaRouteDiagnostics
+                .filter((item): item is Record<string, unknown> => {
+                  return !!item && typeof item === 'object';
+                })
+                .map((item) =>
+                  this.normalizeAudioMediaRouteDiagnostic(item)
+                )
+            : this.lastAudioQueueSnapshot.mediaRouteDiagnostics,
         };
         return;
       }

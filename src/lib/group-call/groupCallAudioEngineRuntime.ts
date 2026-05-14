@@ -289,6 +289,27 @@ type GcallSendAudioDiagnostics = {
     executorCommandMsMax?: number;
     executorCommandWhileQueuedMsMax?: number;
     executorCommandSlowCount?: number;
+    mediaRouteDiagnostics?: Array<{
+      transport?: string;
+      routeKey?: string;
+      linkId?: string;
+      peerPresenceHash?: string;
+      peerDestinationHash?: string;
+      incoming?: boolean;
+      sentFrames?: number;
+      sentBytes?: number;
+      sendFailures?: number;
+      receivedFrames?: number;
+      receivedBytes?: number;
+      fd4EnqueuedFrames?: number;
+      fd4EnqueueFailures?: number;
+      lastSendAtMs?: number;
+      lastSendFailureAtMs?: number;
+      lastReceiveAtMs?: number;
+      lastFd4EnqueueAtMs?: number;
+      lastActivityAtMs?: number;
+      lastRoomId?: string;
+    }>;
   };
 };
 
@@ -4762,6 +4783,9 @@ export class GroupCallAudioEngineRuntime {
     if (!peer || !this.isTwoPartyRoomWithPeer(peer)) return;
     const lastUnreadyAt = diagnostics.lastLinkUnreadyAtMs ?? 0;
     const reason = diagnostics.lastLinkUnreadyReason ?? '';
+    const linkHealthy =
+      diagnostics.transport === 'link' && diagnostics.linkEstablished === true;
+    if (linkHealthy) return;
     const linkClosedOrTimedOut =
       reason.startsWith('bridge-link-closed:') ||
       reason === 'link-heartbeat-timeout' ||

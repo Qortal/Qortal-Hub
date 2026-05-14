@@ -76,7 +76,8 @@ export class JitterBuffer {
     private readonly extraHoldFrames = 0,
     tuning?: { jitterBufferSize: number; jitterStartBufferSize: number }
   ) {
-    this.jitterBufferSize = tuning?.jitterBufferSize ?? DEFAULT_JITTER_BUFFER_SIZE;
+    this.jitterBufferSize =
+      tuning?.jitterBufferSize ?? DEFAULT_JITTER_BUFFER_SIZE;
     this.jitterStartBufferSize =
       tuning?.jitterStartBufferSize ?? DEFAULT_JITTER_START_BUFFER_SIZE;
   }
@@ -221,6 +222,31 @@ export class JitterBuffer {
       }
     }
     return { status: 'accepted', depth: this.entries.length, trimmed };
+  }
+
+  /**
+   * Drop oldest queued frames intentionally to shed latency after recovery has
+   * overfilled the jitter queue. The skipped seqs are treated like capacity
+   * trims, so the next pop does not report them as unexpected missing frames.
+   */
+  discardOldest(count: number): number {
+    this.checkSoftUnprime();
+    const n = Math.max(
+      0,
+      Math.min(
+        this.entries.length,
+        Number.isFinite(count) ? Math.trunc(count) : 0
+      )
+    );
+    if (n <= 0) return 0;
+    this.entries.splice(0, n);
+    if (this.lastPlayedSeq >= 0) {
+      this.trimSuppressedGapDebt += n;
+    }
+    if (this.entries.length === 0) {
+      this.emptySinceMs = performance.now();
+    }
+    return n;
   }
 
   /** Raw (mod 65536) seq gap before the frame just popped; 0 if first packet or no prior seq. */

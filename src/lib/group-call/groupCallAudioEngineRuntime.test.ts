@@ -4340,6 +4340,80 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('ignores stale link-closed diagnostics once the Reticulum link is healthy again', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 4,
+      lastTopology: {
+        topologyEpoch: 4,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qlocal',
+            standby: 'Qpeer',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const applyTopology = vi.spyOn(runtime as any, 'applyTopology');
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qpeer',
+      'Qlocal',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    applyTopology.mockClear();
+
+    (runtime as any).recordOutboundMainDiagnostics({
+      targetAddress: 'Qpeer',
+      transport: 'link',
+      linkEstablished: true,
+      linkId: 'link-new',
+      lastLinkUnreadyReason: 'bridge-link-closed:3',
+      lastLinkUnreadyAtMs: Date.now(),
+      lastLinkUnreadyLinkId: 'link-old',
+    });
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(applyTopology).not.toHaveBeenCalled();
+    expect(
+      ((runtime as any).diagEvents as Array<{ tag: string }>).some(
+        (event) => event.tag === 'two-party-link-resync-topology'
+      )
+    ).toBe(false);
+    vi.useRealTimers();
+  });
+
   it('does not let link recovery flip a fresh local room-key authority', async () => {
     vi.useFakeTimers();
     const nowMs = Date.now();

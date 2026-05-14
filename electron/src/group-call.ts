@@ -5372,6 +5372,9 @@ export class GroupCallManager extends EventEmitter {
     state.established = true;
     state.linkEstablishedCount++;
     state.linkEstablishedAtMs = Date.now();
+    state.lastLinkUnreadyReason = '';
+    state.lastLinkUnreadyAtMs = 0;
+    state.lastLinkUnreadyLinkId = '';
     state.opening = false;
     this.clearReticulumAudioOpenDefer(address);
     this.reticulumAudioAddressByLinkId.set(linkId, address);

@@ -2827,6 +2827,91 @@ describe('Reticulum group audio transport', () => {
     expect(diagnostics.lastLinkCloseLinkId).toBe('link-keep');
   });
 
+  it('clears stale Reticulum audio link unready reasons when a replacement link is established', () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(
+        () =>
+          new Promise<{
+            ok: true;
+            linkId: string;
+            established: boolean;
+          }>(() => {})
+      );
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+      getAudioQueueSnapshot = vi.fn(() => makeAudioQueueSnapshot());
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-peer', {
+      publicKey: 'pk-peer',
+      joinedAt: 101,
+      reticulumDestinationHash: 'd:Q-peer',
+    });
+    (manager as any).ensureReticulumAudioPeerState('room-1', 'Q-peer');
+    (manager as any).handleReticulumGroupAudioLinkEstablished({
+      linkId: 'link-old',
+      peerPresenceHash: 'd:Q-peer',
+      peerDestinationHash: 'd:Q-peer',
+      incoming: false,
+    });
+    (manager as any).handleReticulumGroupAudioLinkClosed({
+      linkId: 'link-old',
+      peerPresenceHash: 'd:Q-peer',
+      peerDestinationHash: 'd:Q-peer',
+      incoming: false,
+      reason: 'remote-closed',
+    });
+
+    (manager as any).handleReticulumGroupAudioLinkEstablished({
+      linkId: 'link-new',
+      peerPresenceHash: 'd:Q-peer',
+      peerDestinationHash: 'd:Q-peer',
+      incoming: false,
+    });
+
+    const state = (manager as any).reticulumAudioPeersByAddress.get('Q-peer');
+    const diagnostics = (manager as any).buildReticulumAudioSendDiagnostics(
+      state,
+      'Q-peer'
+    );
+    expect(diagnostics.linkEstablished).toBe(true);
+    expect(diagnostics.linkId).toBe('link-new');
+    expect(diagnostics.lastLinkUnreadyReason).toBeUndefined();
+    expect(diagnostics.lastLinkUnreadyAtMs).toBeUndefined();
+    expect(diagnostics.lastLinkUnreadyLinkId).toBeUndefined();
+    expect(state.lastLinkUnreadyReason).toBe('');
+    expect(state.lastLinkUnreadyAtMs).toBe(0);
+    expect(state.lastLinkUnreadyLinkId).toBe('');
+  });
+
   it('buffers audio until the verified Reticulum identity hash is known', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {

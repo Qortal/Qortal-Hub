@@ -60,6 +60,27 @@ describe('gcallJitterBuffer', () => {
     expect(jb.consumePendingMissedFrames()).toBe(0);
   });
 
+  it('does not report intentional latency shedding as unexpected missing frames', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 4,
+      jitterStartBufferSize: 1,
+    });
+
+    jb.push(1, new Uint8Array([1]));
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+
+    for (let seq = 2; seq <= 8; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.discardOldest(2)).toBe(2);
+
+    expect(jb.pop()).toEqual(new Uint8Array([4]));
+    expect(jb.consumeLastRawGapAfterPop()).toBe(2);
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+  });
+
   it('can force-prime a live one-frame buffer for exact-1-remote recovery escape', () => {
     const jb = new JitterBuffer();
     jb.push(1, new Uint8Array([1, 2, 3]));

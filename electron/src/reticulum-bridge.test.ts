@@ -487,6 +487,29 @@ describe('ReticulumBridge group audio support', () => {
         executorCommandMsMax: 91,
         executorCommandWhileQueuedMsMax: 92,
         executorCommandSlowCount: 4,
+        mediaRouteDiagnostics: [
+          {
+            transport: 'link',
+            routeKey: 'link-a',
+            linkId: 'link-a',
+            peerPresenceHash: 'peer-hash',
+            peerDestinationHash: 'dest-hash',
+            incoming: false,
+            sentFrames: 10,
+            sentBytes: 1200,
+            sendFailures: 1,
+            receivedFrames: 0,
+            receivedBytes: 0,
+            fd4EnqueuedFrames: 0,
+            fd4EnqueueFailures: 0,
+            lastSendAtMs: 1000,
+            lastSendFailureAtMs: 900,
+            lastReceiveAtMs: 0,
+            lastFd4EnqueueAtMs: 0,
+            lastActivityAtMs: 1000,
+            lastRoomId: 'room-1',
+          },
+        ],
       },
     });
 
@@ -509,6 +532,17 @@ describe('ReticulumBridge group audio support', () => {
       executorCommandMsMax: 91,
       executorCommandWhileQueuedMsMax: 92,
       executorCommandSlowCount: 4,
+      mediaRouteDiagnostics: [
+        {
+          transport: 'link',
+          routeKey: 'link-a',
+          linkId: 'link-a',
+          peerPresenceHash: 'peer-hash',
+          sentFrames: 10,
+          sendFailures: 1,
+          lastRoomId: 'room-1',
+        },
+      ],
     });
   });
 

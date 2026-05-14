@@ -98,6 +98,12 @@ const GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS = 5_000;
 const GCALL_MULTI_SOURCE_READY_STALL_MIN_BUFFERED_FRAMES = 10;
 const GCALL_MULTI_SOURCE_READY_STALL_MIN_MS = 500;
 const GCALL_MULTI_SOURCE_READY_STALL_RECENT_PUSH_MAX_MS = 250;
+const GCALL_RECOVERY_LATENCY_SHED_MAX_FRAMES_PER_TICK = 2;
+const GCALL_RECOVERY_LATENCY_SHED_TARGET_HEADROOM_FRAMES = 4;
+const GCALL_RECOVERY_LATENCY_SHED_MIN_OVER_TARGET_FRAMES = 3;
+const GCALL_RECOVERY_LATENCY_SHED_MIN_CAP_RATIO = 0.85;
+const GCALL_RECOVERY_LATENCY_SHED_UNDERTARGET_MAX = 0.12;
+const GCALL_RECOVERY_LATENCY_SHED_PLAYOUT_RATE_MIN = 0.985;
 
 export function decideReadyStallForcePrime(opts: {
   hasObservedPlayoutStart: boolean;
@@ -369,9 +375,7 @@ export class DmVoiceGcallInboundPlayout {
     this.syncJitterGeometryFromMetrics();
   }
 
-  setForcedAdaptiveJitterMode(
-    mode: 'low-latency' | 'recovery' | null
-  ): void {
+  setForcedAdaptiveJitterMode(mode: 'low-latency' | 'recovery' | null): void {
     if (this.forcedJitterAdaptiveMode === mode) return;
     this.forcedJitterAdaptiveMode = mode;
     this.syncJitterGeometryFromMetrics(false);
@@ -619,13 +623,19 @@ export class DmVoiceGcallInboundPlayout {
           targetPlayoutMs,
         })
       );
+      const shedFrames = this.shedRecoveredJitterLatency({
+        bufferedFrames,
+        targetPlayoutMs,
+      });
+      const effectiveBufferedFrames =
+        shedFrames > 0 ? jb.getBufferedFrames() : bufferedFrames;
       let hasReadyFrame = jb.hasReadyFrame();
       if (!hasReadyFrame) {
         const readyStallForcePrime = decideReadyStallForcePrime({
           hasObservedPlayoutStart: this.hasObservedPlayoutStart,
           activeSourceCount,
           hasReadyFrame,
-          bufferedFrames,
+          bufferedFrames: effectiveBufferedFrames,
           stallSinceMs: this.startupReadyStallSinceMs,
           nowMs: tickStartedAt,
           lastPushAgeMs,
@@ -665,10 +675,10 @@ export class DmVoiceGcallInboundPlayout {
         if (!this.pcmRing) {
           this.callbacks?.metricsRef?.current?.recordJitterDrainTelemetry({
             sourceCount: 1,
-            depthSum: bufferedFrames,
-            worstDepth: bufferedFrames,
+            depthSum: effectiveBufferedFrames,
+            worstDepth: effectiveBufferedFrames,
             notReadyCount: hasReadyFrame ? 0 : 1,
-            rawEmptyCount: bufferedFrames === 0 ? 1 : 0,
+            rawEmptyCount: effectiveBufferedFrames === 0 ? 1 : 0,
           });
         }
         if (!hasReadyFrame && !this.pcmRing) {
@@ -681,9 +691,9 @@ export class DmVoiceGcallInboundPlayout {
       this.callbacks?.onJitterTickTelemetry?.({
         sourceAddr: this.peerAddress,
         durationMs: tickFinishedAt - tickStartedAt,
-        bufferedFrames,
+        bufferedFrames: effectiveBufferedFrames,
         hasReadyFrame,
-        rawEmpty: bufferedFrames === 0,
+        rawEmpty: effectiveBufferedFrames === 0,
       });
       this.callbacks?.afterDrain?.({ missedFramesThisTick });
     };
@@ -725,10 +735,8 @@ export class DmVoiceGcallInboundPlayout {
       const trimCount =
         this.jitterPushTrimmedFrames -
         this.jitterTrimmedFramesAtLastHeadroomStep;
-      this.jitterTrimmedFramesAtLastHeadroomStep =
-        this.jitterPushTrimmedFrames;
-      const depthHighWater =
-        this.jitterPushDepthHighWaterSinceLastHeadroomStep;
+      this.jitterTrimmedFramesAtLastHeadroomStep = this.jitterPushTrimmedFrames;
+      const depthHighWater = this.jitterPushDepthHighWaterSinceLastHeadroomStep;
       this.jitterPushDepthHighWaterSinceLastHeadroomStep =
         jb.getBufferedFrames();
       const stepped = stepGcallJitterBurstHeadroom({
@@ -772,6 +780,50 @@ export class DmVoiceGcallInboundPlayout {
       )
     );
     jb.setSteadyPrimedHoldFrames(mode !== 'recovery' ? 1 : 0);
+  }
+
+  private shedRecoveredJitterLatency(opts: {
+    bufferedFrames: number;
+    targetPlayoutMs: number;
+  }): number {
+    const jb = this.jitter;
+    const metrics = this.callbacks?.metricsRef?.current?.getSnapshot();
+    if (!jb || !metrics) return 0;
+    if ((this.lastJitterAdaptiveMode ?? 'low-latency') !== 'recovery') {
+      return 0;
+    }
+    if (!Number.isFinite(opts.targetPlayoutMs) || opts.targetPlayoutMs <= 0) {
+      return 0;
+    }
+    const maxEntries = jb.getMaxEntries();
+    if (maxEntries <= 0) return 0;
+    const nearCap =
+      opts.bufferedFrames >=
+      Math.max(
+        1,
+        Math.floor(maxEntries * GCALL_RECOVERY_LATENCY_SHED_MIN_CAP_RATIO)
+      );
+    if (!nearCap) return 0;
+    const stableEnough =
+      metrics.playoutUnderTargetFraction <=
+        GCALL_RECOVERY_LATENCY_SHED_UNDERTARGET_MAX &&
+      metrics.avgPlayoutRate >= GCALL_RECOVERY_LATENCY_SHED_PLAYOUT_RATE_MIN;
+    if (!stableEnough) return 0;
+    const targetFrames = Math.max(
+      4,
+      Math.ceil(opts.targetPlayoutMs / OPUS_FRAME_DURATION_MS) +
+        GCALL_RECOVERY_LATENCY_SHED_TARGET_HEADROOM_FRAMES
+    );
+    const overTargetFrames = opts.bufferedFrames - targetFrames;
+    if (overTargetFrames < GCALL_RECOVERY_LATENCY_SHED_MIN_OVER_TARGET_FRAMES) {
+      return 0;
+    }
+    return jb.discardOldest(
+      Math.min(
+        GCALL_RECOVERY_LATENCY_SHED_MAX_FRAMES_PER_TICK,
+        overTargetFrames
+      )
+    );
   }
 
   private drainOneFrame(): number {
