@@ -145,6 +145,23 @@ function makeAudioQueueSnapshot(
     packetFreshSends: 0,
     packetStaleSends: 0,
     packetUnknownSends: 0,
+    deadlineDropCount: 0,
+    decodedQueueEvictOldestCount: 0,
+    decodedQueueDropNewestCount: 0,
+    fd3DecodedAgeMsMax: 0,
+    decodedQueueDwellMsMax: 0,
+    rnsSendDurationMsMax: 0,
+    packetPathCheckMsMax: 0,
+    executorLoopGapMsMax: 0,
+    executorGapWhileQueuedMsMax: 0,
+    executorAudioPassMsMax: 0,
+    processBatchMsMax: 0,
+    processBatchFramesMax: 0,
+    rnsSendSlowCount: 0,
+    executorStallCount: 0,
+    executorCommandMsMax: 0,
+    executorCommandWhileQueuedMsMax: 0,
+    executorCommandSlowCount: 0,
     ...overrides,
   };
 }
@@ -1040,8 +1057,10 @@ describe('recent room bootstrap state', () => {
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );
-    const dedupe = (manager as any)
-      .seenReticulumWireLogicalKeys as Map<string, number>;
+    const dedupe = (manager as any).seenReticulumWireLogicalKeys as Map<
+      string,
+      number
+    >;
 
     dedupe.set('GJ:g:retained-peer-join', Date.now() + 30_000);
     manager.joinRoom(
@@ -2551,8 +2570,9 @@ describe('Reticulum group audio transport', () => {
     (manager as any).flushReticulumAudioQueuesFair('Qz-peer');
 
     expect(bridge.enqueueGroupAudio).toHaveBeenCalledTimes(2);
-    expect(bridge.enqueueGroupAudio.mock.calls.map((call) => [...call[2]]))
-      .toEqual([[4], [5]]);
+    expect(
+      bridge.enqueueGroupAudio.mock.calls.map((call) => [...call[2]])
+    ).toEqual([[4], [5]]);
   });
 
   it('adopts sole-peer inbound audio links even when bridge hashes are not yet mapped', async () => {
@@ -5897,7 +5917,15 @@ describe('Reticulum group audio transport', () => {
     (manager as any).verifyPool.verify = vi.fn(async () => true);
     manager.start();
     manager.setLocalAddresses(['Q-self']);
-    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig-self', 'pk-self', 100, TEST_D32);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig-self',
+      'pk-self',
+      100,
+      TEST_D32
+    );
 
     const joinWire = encodeJoinWire({
       type: 'GC_JOIN',
@@ -5930,9 +5958,9 @@ describe('Reticulum group audio transport', () => {
     const state = (manager as any).reticulumAudioPeersByAddress.get('Q-peer');
     expect(state?.linkId).toBe('auth-link');
     expect(state?.established).toBe(true);
-    expect((manager as any).reticulumAudioAddressByLinkId.get('auth-link')).toBe(
-      'Q-peer'
-    );
+    expect(
+      (manager as any).reticulumAudioAddressByLinkId.get('auth-link')
+    ).toBe('Q-peer');
     expect(bridge.closeGroupAudioLink).not.toHaveBeenCalledWith('auth-link');
     manager.stop();
   });

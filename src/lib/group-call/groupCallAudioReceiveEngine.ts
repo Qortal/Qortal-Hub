@@ -746,6 +746,23 @@ export class GroupCallAudioReceiveEngine {
     packetFreshSends?: number;
     packetStaleSends?: number;
     packetUnknownSends?: number;
+    deadlineDropCount?: number;
+    decodedQueueEvictOldestCount?: number;
+    decodedQueueDropNewestCount?: number;
+    fd3DecodedAgeMsMax?: number;
+    decodedQueueDwellMsMax?: number;
+    rnsSendDurationMsMax?: number;
+    packetPathCheckMsMax?: number;
+    executorLoopGapMsMax?: number;
+    executorGapWhileQueuedMsMax?: number;
+    executorAudioPassMsMax?: number;
+    processBatchMsMax?: number;
+    processBatchFramesMax?: number;
+    rnsSendSlowCount?: number;
+    executorStallCount?: number;
+    executorCommandMsMax?: number;
+    executorCommandWhileQueuedMsMax?: number;
+    executorCommandSlowCount?: number;
   }): void {
     this.metrics.setReticulumAudioQueueDepths(depths);
     this.scheduleMetricsEmit();

@@ -1,6 +1,6 @@
 /**
  * Configure WebCodecs `AudioEncoder` for Opus the same way as group voice (`useGroupVoiceCall`).
- * Caps bitrate and sets voip-style Opus options so encrypted+JSON wire fits Reticulum MDU
+ * Caps bitrate and sets voip-style Opus options so encrypted binary wire fits Reticulum MDU
  * (avoids `audio_payload_too_large` from `presence_bridge.make_group_audio_wire`).
  */
 

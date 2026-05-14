@@ -121,7 +121,7 @@ function shouldTraceAudioSurfaceIsolationAsset(requestPathname: string): boolean
     requestPathname === AUDIO_SURFACE_ENTRY_PATH ||
     /\/assets\/.*\.(?:js|mjs|cjs|css|wasm)$/i.test(requestPathname) ||
     /\/(?:registerSW\.js|manifest\.webmanifest)$/i.test(requestPathname) ||
-    /\/assets\/(?:audio-decrypt\.worker|gcall-opus-fec\.worker|group-playout-processor|gcall-jitter-scheduler).*?\.(?:js|mjs|cjs|wasm)$/i.test(
+    /\/assets\/(?:audio-decrypt\.worker|gcall-audio-encode\.worker|gcall-opus-fec\.worker|group-playout-processor|gcall-jitter-scheduler).*?\.(?:js|mjs|cjs|wasm)$/i.test(
       requestPathname
     )
   );

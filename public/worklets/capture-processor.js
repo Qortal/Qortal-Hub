@@ -7,8 +7,8 @@
  *   - Accumulate incoming 128-sample Web Audio blocks into a staging buffer.
  *   - Drain the staging buffer in 960-sample chunks (20ms Opus frames @ 48kHz).
  *   - Compute adaptive RMS VAD per frame.
- *   - Post each complete frame + VAD flag to the main thread via a transferable
- *     ArrayBuffer so the main thread can call AudioEncoder.encode().
+ *   - Post each complete frame + VAD flag to either the main thread or, when
+ *     installed, a dedicated encode worker MessagePort.
  *   - Accept { type: 'mute', muted: boolean } messages to silence output.
  */
 
@@ -83,12 +83,82 @@ class CaptureProcessor extends AudioWorkletProcessor {
 
     // Mute gate
     this._muted = false;
+    this._framePort = null;
+    this._framePortGeneration = 0;
+    this._sharedSamples = null;
+    this._sharedState = null;
+    this._sharedSlotCount = 0;
+    this._sharedFrameSamples = OPUS_FRAME_SAMPLES;
 
     this.port.onmessage = (e) => {
       if (e.data?.type === 'mute') {
         this._muted = !!e.data.muted;
+      } else if (e.data?.type === 'set-frame-port') {
+        this._framePort = e.ports?.[0] || null;
+        this._framePortGeneration = (e.data.generation >>> 0) || 0;
+        this._sharedSamples =
+          e.data.sharedSamples instanceof SharedArrayBuffer
+            ? new Float32Array(e.data.sharedSamples)
+            : null;
+        this._sharedState =
+          e.data.sharedState instanceof SharedArrayBuffer
+            ? new Int32Array(e.data.sharedState)
+            : null;
+        this._sharedSlotCount = Math.max(0, e.data.sharedSlotCount >>> 0);
+        this._sharedFrameSamples =
+          Math.max(1, e.data.sharedFrameSamples >>> 0) || OPUS_FRAME_SAMPLES;
+      } else if (e.data?.type === 'clear-frame-port') {
+        this._framePort = null;
+        this._framePortGeneration = 0;
+        this._sharedSamples = null;
+        this._sharedState = null;
+        this._sharedSlotCount = 0;
       }
     };
+  }
+
+  _postFrameToWorker(frame, vad, workletPostAudioClockMs) {
+    if (
+      this._sharedSamples &&
+      this._sharedState &&
+      this._sharedSlotCount > 0 &&
+      this._sharedFrameSamples === frame.length
+    ) {
+      for (let slot = 0; slot < this._sharedSlotCount; slot++) {
+        if (Atomics.compareExchange(this._sharedState, slot, 0, 1) !== 0) {
+          continue;
+        }
+        this._sharedSamples.set(frame, slot * this._sharedFrameSamples);
+        Atomics.store(this._sharedState, slot, 2);
+        this._framePort.postMessage({
+          type: 'encodeFrame',
+          generation: this._framePortGeneration,
+          sharedSlot: slot,
+          vad,
+          workletPostAudioClockMs,
+          inputSampleRate: sampleRate,
+          outputSampleRate: OPUS_OUTPUT_SAMPLE_RATE,
+          inputFrameSamples: this._inputFrameSamples,
+        });
+        return;
+      }
+    }
+
+    this._framePort.postMessage(
+      {
+        type: 'encodeFrame',
+        generation: this._framePortGeneration,
+        frame: frame.buffer,
+        byteOffset: frame.byteOffset,
+        byteLength: frame.byteLength,
+        vad,
+        workletPostAudioClockMs,
+        inputSampleRate: sampleRate,
+        outputSampleRate: OPUS_OUTPUT_SAMPLE_RATE,
+        inputFrameSamples: this._inputFrameSamples,
+      },
+      [frame.buffer]
+    );
   }
 
   process(inputs, outputs) {
@@ -158,18 +228,22 @@ class CaptureProcessor extends AudioWorkletProcessor {
       // `performance.now()` produced bogus multi-minute deltas in exports.
       const workletPostAudioClockMs = currentTime * 1000;
 
-      // Transfer the frame buffer to avoid copying
-      this.port.postMessage(
-        {
-          frame,
-          vad,
-          workletPostAudioClockMs,
-          inputSampleRate: sampleRate,
-          outputSampleRate: OPUS_OUTPUT_SAMPLE_RATE,
-          inputFrameSamples: this._inputFrameSamples,
-        },
-        [frame.buffer]
-      );
+      if (this._framePort) {
+        this._postFrameToWorker(frame, vad, workletPostAudioClockMs);
+      } else {
+        // Transfer the frame buffer to avoid copying
+        this.port.postMessage(
+          {
+            frame,
+            vad,
+            workletPostAudioClockMs,
+            inputSampleRate: sampleRate,
+            outputSampleRate: OPUS_OUTPUT_SAMPLE_RATE,
+            inputFrameSamples: this._inputFrameSamples,
+          },
+          [frame.buffer]
+        );
+      }
     }
 
     return true; // keep processor alive

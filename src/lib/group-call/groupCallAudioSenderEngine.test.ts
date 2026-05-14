@@ -70,6 +70,23 @@ class FakeAudioEncoder {
   }
 }
 
+class FakeWorker {
+  static instances: FakeWorker[] = [];
+
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  readonly postMessage = vi.fn();
+  readonly terminate = vi.fn();
+
+  constructor() {
+    FakeWorker.instances.push(this);
+  }
+
+  emit(message: unknown): void {
+    this.onmessage?.({ data: message } as MessageEvent);
+  }
+}
+
 describe('GroupCallAudioSenderEngine', () => {
   let capturePorts: CapturePort[] = [];
   let latestCapturePort: CapturePort | null = null;
@@ -98,6 +115,7 @@ describe('GroupCallAudioSenderEngine', () => {
     latestCaptureNode = null;
     nowMs = 0;
     FakeAudioEncoder.instances = [];
+    FakeWorker.instances = [];
     getUserAudioStreamForCall.mockResolvedValue({
       stream: {
         getTracks: () => [{ stop: vi.fn() }],
@@ -173,7 +191,7 @@ describe('GroupCallAudioSenderEngine', () => {
     vi.unstubAllGlobals();
   });
 
-  async function startSender(onEncodedFrame = vi.fn()) {
+  async function startSender(onEncodedFrame = vi.fn(), onVadChanged = vi.fn()) {
     const engine = new GroupCallAudioSenderEngine();
     await engine.startOrUpdate({
       inputDeviceId: null,
@@ -181,11 +199,12 @@ describe('GroupCallAudioSenderEngine', () => {
       muted: false,
       profile: 'low-latency',
       onEncodedFrame,
+      onVadChanged,
     });
     const encoder = FakeAudioEncoder.instances[0];
     expect(latestCapturePort).not.toBeNull();
     expect(encoder).toBeDefined();
-    return { engine, encoder: encoder!, onEncodedFrame };
+    return { engine, encoder: encoder!, onEncodedFrame, onVadChanged };
   }
 
   function captureFrame(vad = true): void {
@@ -311,6 +330,194 @@ describe('GroupCallAudioSenderEngine', () => {
     await engine.stop();
   });
 
+  it('keeps main-thread encode fallback when encode worker probing is unavailable', async () => {
+    vi.stubGlobal('Worker', undefined);
+    const { engine } = await startSender();
+
+    expect(engine.getDiagnosticsSnapshot()).toMatchObject({
+      senderEncodeSummary: {
+        mode: 'main-thread',
+        mainThreadFallback: true,
+        fallbackReason: null,
+        workerProbeState: 'unsupported',
+      },
+      senderEncodeMode: 'main-thread',
+      encodeWorkerProbe: {
+        state: 'unsupported',
+        detail: { message: 'worker-api-unavailable' },
+      },
+    });
+
+    await engine.stop();
+  });
+
+  it('switches to worker-direct after the encode worker configures', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    const { engine } = await startSender();
+    const worker = FakeWorker.instances[0];
+    expect(worker).toBeDefined();
+
+    worker?.emit({
+      type: 'configured',
+      generation: 1,
+      supported: true,
+      audioEncoderDefined: true,
+      audioDataDefined: true,
+      configSupported: true,
+      stats: {
+        encodedFrameCount: 0,
+        droppedEncoderBackpressureFrames: 0,
+        droppedStaleEncodedFrames: 0,
+        encoderResetCount: 0,
+        lastEncoderResetAtMs: 0,
+        lastEncoderResetReason: null,
+        encoderPressureActiveMs: 0,
+        staleEncodedDropsInWindow: 0,
+        encoderQueueSize: 0,
+        lastEncoderInputPerfMs: 0,
+        capturedFrameCount: 0,
+        lastCapturePerfMs: 0,
+        captureInputSampleRate: null,
+        captureOutputSampleRate: null,
+        captureInputFrameSamples: null,
+        sharedRingEnabled: true,
+        sharedRingSlotCount: 8,
+        sharedRingFallbackTransfers: 0,
+        encoderErrorCount: 0,
+        lastEncoderError: null,
+      },
+    });
+
+    expect(engine.getDiagnosticsSnapshot()).toMatchObject({
+      senderEncodeSummary: {
+        mode: 'worker-direct',
+        label: 'worker-direct active',
+        workerDirect: true,
+        transport: 'shared-ring',
+        fallbackReason: null,
+        workerProbeState: 'supported',
+      },
+      senderEncodeMode: 'worker-direct',
+      encodeWorkerProbe: { state: 'supported' },
+      encodeWorkerActive: true,
+      encodeWorkerSharedRing: {
+        enabled: true,
+        slotCount: 8,
+        fallbackTransfers: 0,
+        localBuffersPresent: true,
+      },
+    });
+    expect(latestCapturePort?.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'set-frame-port',
+        generation: 1,
+      }),
+      expect.any(Array)
+    );
+    expect(FakeAudioEncoder.instances[0]?.close).toHaveBeenCalled();
+
+    await engine.stop();
+  });
+
+  it('updates local VAD from worker-direct messages', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    const { engine, onVadChanged } = await startSender();
+    const worker = FakeWorker.instances[0];
+
+    worker?.emit({
+      type: 'configured',
+      generation: 1,
+      supported: true,
+      audioEncoderDefined: true,
+      audioDataDefined: true,
+      configSupported: true,
+      stats: {
+        encodedFrameCount: 0,
+        droppedEncoderBackpressureFrames: 0,
+        droppedStaleEncodedFrames: 0,
+        encoderResetCount: 0,
+        lastEncoderResetAtMs: 0,
+        lastEncoderResetReason: null,
+        encoderPressureActiveMs: 0,
+        staleEncodedDropsInWindow: 0,
+        encoderQueueSize: 0,
+        lastEncoderInputPerfMs: 0,
+        capturedFrameCount: 0,
+        lastCapturePerfMs: 0,
+        captureInputSampleRate: null,
+        captureOutputSampleRate: null,
+        captureInputFrameSamples: null,
+        sharedRingEnabled: true,
+        sharedRingSlotCount: 8,
+        sharedRingFallbackTransfers: 0,
+        encoderErrorCount: 0,
+        lastEncoderError: null,
+      },
+    });
+
+    worker?.emit({ type: 'vad', generation: 1, vad: true });
+    expect(engine.getVad()).toBe(true);
+    expect(onVadChanged).toHaveBeenLastCalledWith(true);
+
+    worker?.emit({ type: 'vad', generation: 1, vad: false });
+    expect(engine.getVad()).toBe(false);
+    expect(onVadChanged).toHaveBeenLastCalledWith(false);
+
+    await engine.stop();
+  });
+
+  it('uses worker-relay when direct MessageChannel setup is unavailable', async () => {
+    vi.stubGlobal('Worker', FakeWorker);
+    vi.stubGlobal('MessageChannel', undefined);
+    const { engine } = await startSender();
+    const worker = FakeWorker.instances[0];
+
+    worker?.emit({
+      type: 'configured',
+      generation: 1,
+      supported: true,
+      audioEncoderDefined: true,
+      audioDataDefined: true,
+      configSupported: true,
+      stats: {
+        encodedFrameCount: 0,
+        droppedEncoderBackpressureFrames: 0,
+        droppedStaleEncodedFrames: 0,
+        encoderResetCount: 0,
+        lastEncoderResetAtMs: 0,
+        lastEncoderResetReason: null,
+        encoderPressureActiveMs: 0,
+        staleEncodedDropsInWindow: 0,
+        encoderQueueSize: 0,
+        lastEncoderInputPerfMs: 0,
+        capturedFrameCount: 0,
+        lastCapturePerfMs: 0,
+        captureInputSampleRate: null,
+        captureOutputSampleRate: null,
+        captureInputFrameSamples: null,
+        sharedRingEnabled: false,
+        sharedRingSlotCount: 0,
+        sharedRingFallbackTransfers: 0,
+        encoderErrorCount: 0,
+        lastEncoderError: null,
+      },
+    });
+
+    expect(engine.getDiagnosticsSnapshot()).toMatchObject({
+      senderEncodeSummary: {
+        mode: 'worker-relay',
+        label: 'worker-relay fallback',
+        workerRelay: true,
+        fallbackReason: 'direct-message-channel-unavailable',
+        workerProbeState: 'supported',
+      },
+      senderEncodeMode: 'worker-relay',
+      encodeWorkerProbe: { state: 'supported' },
+    });
+
+    await engine.stop();
+  });
+
   it('drops stale encoder outputs instead of sending a delayed burst', async () => {
     const { engine, encoder, onEncodedFrame } = await startSender();
 
@@ -355,6 +562,46 @@ describe('GroupCallAudioSenderEngine', () => {
       encodedFrameCount: 4,
       droppedStaleEncodedFrames: 0,
     });
+
+    await engine.stop();
+  });
+
+  it('switches CPU degraded mode by replacing only the encoder', async () => {
+    const { engine, encoder, onEncodedFrame } = await startSender();
+
+    expect(encoder.configure).toHaveBeenCalledWith(
+      expect.objectContaining({ bitrate: 24_000 })
+    );
+
+    await engine.startOrUpdate({
+      inputDeviceId: null,
+      outputDeviceId: null,
+      muted: false,
+      profile: 'low-latency',
+      cpuDegraded: true,
+      onEncodedFrame,
+    });
+
+    expect(capturePorts).toHaveLength(1);
+    expect(FakeAudioEncoder.instances).toHaveLength(2);
+    expect(encoder.close).toHaveBeenCalledTimes(1);
+    expect(FakeAudioEncoder.instances[1]?.configure).toHaveBeenCalledWith(
+      expect.objectContaining({ bitrate: 16_000 })
+    );
+    expect(engine.getDiagnosticsSnapshot()).toMatchObject({
+      cpuDegraded: true,
+      effectiveTuning: expect.objectContaining({
+        profile: 'low-latency',
+        opusBitrate: 16_000,
+      }),
+      lastEncoderResetReason: 'cpu-mode-change',
+    });
+
+    nowMs = 40;
+    captureFrame(true);
+    nowMs = 45;
+    FakeAudioEncoder.instances[1]?.emitNext();
+    expect(onEncodedFrame).toHaveBeenCalledTimes(1);
 
     await engine.stop();
   });

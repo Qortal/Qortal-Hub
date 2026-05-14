@@ -122,7 +122,9 @@ declare global {
         publicKeyBase64: string | null;
       }>;
       /** Hidden audio-surface: proxy signing to the main shell (wallet key in-memory). */
-      gcallProxySignPresenceMessage?: (payload: Record<string, unknown>) => Promise<{
+      gcallProxySignPresenceMessage?: (
+        payload: Record<string, unknown>
+      ) => Promise<{
         signature?: string;
         error?: string;
         message?: string;
@@ -532,6 +534,23 @@ declare global {
             packetFreshSends: number;
             packetStaleSends: number;
             packetUnknownSends: number;
+            deadlineDropCount: number;
+            decodedQueueEvictOldestCount: number;
+            decodedQueueDropNewestCount: number;
+            fd3DecodedAgeMsMax: number;
+            decodedQueueDwellMsMax: number;
+            rnsSendDurationMsMax: number;
+            packetPathCheckMsMax: number;
+            executorLoopGapMsMax: number;
+            executorGapWhileQueuedMsMax: number;
+            executorAudioPassMsMax: number;
+            processBatchMsMax: number;
+            processBatchFramesMax: number;
+            rnsSendSlowCount: number;
+            executorStallCount: number;
+            executorCommandMsMax: number;
+            executorCommandWhileQueuedMsMax: number;
+            executorCommandSlowCount: number;
           };
         };
       }>;
@@ -590,6 +609,23 @@ declare global {
             packetFreshSends: number;
             packetStaleSends: number;
             packetUnknownSends: number;
+            deadlineDropCount: number;
+            decodedQueueEvictOldestCount: number;
+            decodedQueueDropNewestCount: number;
+            fd3DecodedAgeMsMax: number;
+            decodedQueueDwellMsMax: number;
+            rnsSendDurationMsMax: number;
+            packetPathCheckMsMax: number;
+            executorLoopGapMsMax: number;
+            executorGapWhileQueuedMsMax: number;
+            executorAudioPassMsMax: number;
+            processBatchMsMax: number;
+            processBatchFramesMax: number;
+            rnsSendSlowCount: number;
+            executorStallCount: number;
+            executorCommandMsMax: number;
+            executorCommandWhileQueuedMsMax: number;
+            executorCommandSlowCount: number;
           };
         };
       }>;
@@ -698,7 +734,7 @@ declare global {
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };
     audioSurface?: {
-            ensureReady: () => Promise<{ success: boolean; error?: string }>;
+      ensureReady: () => Promise<{ success: boolean; error?: string }>;
       sendCommand: (command: AudioSurfaceCommand) => Promise<{
         ok: boolean;
         payload?: unknown;
@@ -710,9 +746,7 @@ declare global {
     audioSurfaceHost?: {
       notifyReady: () => void;
       emitEvent: (event: AudioSurfaceEvent) => void;
-      resolveCommand: (
-        envelope: AudioSurfaceCommandResultEnvelope
-      ) => void;
+      resolveCommand: (envelope: AudioSurfaceCommandResultEnvelope) => void;
       onCommand: (
         cb: (envelope: AudioSurfaceCommandEnvelope) => void
       ) => () => void;

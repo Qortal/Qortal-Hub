@@ -3352,6 +3352,51 @@ describe('GroupCallAudioEngineRuntime', () => {
     }
   });
 
+  it('does not reconfigure receive playout when sender CPU mode changes', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const receiveConfigure = vi.spyOn(
+      (runtime as any).receiveEngine,
+      'configure'
+    );
+    const senderStart = vi
+      .spyOn((runtime as any).senderEngine, 'startOrUpdate')
+      .mockResolvedValue(undefined);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    (runtime as any).roomKey = new Uint8Array(32).fill(3);
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+    });
+    receiveConfigure.mockClear();
+
+    (runtime as any).setCpuDegradedActive(true, 'test', {});
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(senderStart).toHaveBeenCalled();
+    expect(receiveConfigure).not.toHaveBeenCalled();
+  });
+
   it('resumes a suspended sender audio context before capture runs', async () => {
     nextAudioContextInitialState = 'suspended';
     const runtime = new GroupCallAudioEngineRuntime();

@@ -33,6 +33,23 @@ export type GcReticulumAudioSendResult = {
       packetFreshSends?: number;
       packetStaleSends?: number;
       packetUnknownSends?: number;
+      deadlineDropCount?: number;
+      decodedQueueEvictOldestCount?: number;
+      decodedQueueDropNewestCount?: number;
+      fd3DecodedAgeMsMax?: number;
+      decodedQueueDwellMsMax?: number;
+      rnsSendDurationMsMax?: number;
+      packetPathCheckMsMax?: number;
+      executorLoopGapMsMax?: number;
+      executorGapWhileQueuedMsMax?: number;
+      executorAudioPassMsMax?: number;
+      processBatchMsMax?: number;
+      processBatchFramesMax?: number;
+      rnsSendSlowCount?: number;
+      executorStallCount?: number;
+      executorCommandMsMax?: number;
+      executorCommandWhileQueuedMsMax?: number;
+      executorCommandSlowCount?: number;
     };
   };
 };
@@ -85,6 +102,27 @@ export function ingestDmReticulumSendResultIntoMetrics(
       packetFreshSends: diagnostics.bridge?.packetFreshSends,
       packetStaleSends: diagnostics.bridge?.packetStaleSends,
       packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
+      deadlineDropCount: diagnostics.bridge?.deadlineDropCount,
+      decodedQueueEvictOldestCount:
+        diagnostics.bridge?.decodedQueueEvictOldestCount,
+      decodedQueueDropNewestCount:
+        diagnostics.bridge?.decodedQueueDropNewestCount,
+      fd3DecodedAgeMsMax: diagnostics.bridge?.fd3DecodedAgeMsMax,
+      decodedQueueDwellMsMax: diagnostics.bridge?.decodedQueueDwellMsMax,
+      rnsSendDurationMsMax: diagnostics.bridge?.rnsSendDurationMsMax,
+      packetPathCheckMsMax: diagnostics.bridge?.packetPathCheckMsMax,
+      executorLoopGapMsMax: diagnostics.bridge?.executorLoopGapMsMax,
+      executorGapWhileQueuedMsMax:
+        diagnostics.bridge?.executorGapWhileQueuedMsMax,
+      executorAudioPassMsMax: diagnostics.bridge?.executorAudioPassMsMax,
+      processBatchMsMax: diagnostics.bridge?.processBatchMsMax,
+      processBatchFramesMax: diagnostics.bridge?.processBatchFramesMax,
+      rnsSendSlowCount: diagnostics.bridge?.rnsSendSlowCount,
+      executorStallCount: diagnostics.bridge?.executorStallCount,
+      executorCommandMsMax: diagnostics.bridge?.executorCommandMsMax,
+      executorCommandWhileQueuedMsMax:
+        diagnostics.bridge?.executorCommandWhileQueuedMsMax,
+      executorCommandSlowCount: diagnostics.bridge?.executorCommandSlowCount,
     });
     if (diagnostics.bridge) {
       const last = lastTotalsRef.current;

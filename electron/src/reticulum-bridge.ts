@@ -17,7 +17,11 @@ import {
   type ReticulumBridgeState,
   type ReticulumReachability,
 } from './reticulum-daemon';
-import { error as loggerError, log as loggerLog, warn as loggerWarn } from './logger';
+import {
+  error as loggerError,
+  log as loggerLog,
+  warn as loggerWarn,
+} from './logger';
 import {
   decodeReticulumAudioMessage,
   encodeReticulumAudioBatch,
@@ -29,6 +33,10 @@ import {
   type ReticulumAudioFrame,
 } from './reticulum-audio-ipc';
 import { GC_RETICULUM_WIRE_BUILD_MARKER } from './group-call-wire-reticulum';
+
+const RETICULUM_AUDIO_QUEUED_AT_MS = Symbol.for(
+  'qortal.reticulumAudioQueuedAtMs'
+);
 
 /**
  * Python emits overlay_link_state after every overlay send with these traffic labels
@@ -128,6 +136,23 @@ export type ReticulumAudioQueueSnapshot = {
   packetFreshSends: number;
   packetStaleSends: number;
   packetUnknownSends: number;
+  deadlineDropCount: number;
+  decodedQueueEvictOldestCount: number;
+  decodedQueueDropNewestCount: number;
+  fd3DecodedAgeMsMax: number;
+  decodedQueueDwellMsMax: number;
+  rnsSendDurationMsMax: number;
+  packetPathCheckMsMax: number;
+  executorLoopGapMsMax: number;
+  executorGapWhileQueuedMsMax: number;
+  executorAudioPassMsMax: number;
+  processBatchMsMax: number;
+  processBatchFramesMax: number;
+  rnsSendSlowCount: number;
+  executorStallCount: number;
+  executorCommandMsMax: number;
+  executorCommandWhileQueuedMsMax: number;
+  executorCommandSlowCount: number;
 };
 
 export type ReticulumEnqueueGroupAudioResult =
@@ -303,6 +328,23 @@ type BridgeEventFrame =
         packetFreshSends?: number;
         packetStaleSends?: number;
         packetUnknownSends?: number;
+        deadlineDropCount?: number;
+        decodedQueueEvictOldestCount?: number;
+        decodedQueueDropNewestCount?: number;
+        fd3DecodedAgeMsMax?: number;
+        decodedQueueDwellMsMax?: number;
+        rnsSendDurationMsMax?: number;
+        packetPathCheckMsMax?: number;
+        executorLoopGapMsMax?: number;
+        executorGapWhileQueuedMsMax?: number;
+        executorAudioPassMsMax?: number;
+        processBatchMsMax?: number;
+        processBatchFramesMax?: number;
+        rnsSendSlowCount?: number;
+        executorStallCount?: number;
+        executorCommandMsMax?: number;
+        executorCommandWhileQueuedMsMax?: number;
+        executorCommandSlowCount?: number;
       };
     }
   | {
@@ -343,7 +385,7 @@ type BridgeEventFrame =
         reason?: string;
         meshListenOnline?: boolean;
       };
-    }
+    };
 type PendingRequest = {
   action: BridgeCmdFrame['action'];
   priority: BridgeCmdPriority;
@@ -374,14 +416,23 @@ const OVERLAY_LINK_RX_IDLE_TIMEOUT_MS = 95_000;
 const RETICULUM_AUDIO_IPC_LOG = 'target=reticulum-audio-ipc';
 
 function bridgeExeName(): string {
-  return process.platform === 'win32' ? 'presence_bridge.exe' : 'presence_bridge';
+  return process.platform === 'win32'
+    ? 'presence_bridge.exe'
+    : 'presence_bridge';
 }
 
 function getFrozenBridgePath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'reticulum', bridgeExeName());
   }
-  return path.join(__dirname, '..', '..', 'resources', 'reticulum', bridgeExeName());
+  return path.join(
+    __dirname,
+    '..',
+    '..',
+    'resources',
+    'reticulum',
+    bridgeExeName()
+  );
 }
 
 function getBridgeScriptPath(): string {
@@ -392,11 +443,20 @@ function getBridgeScriptPath(): string {
 }
 
 function resolveBridgeLaunch(configDir: string):
-  | { cmd: string; args: string[]; cwd: string; mode: 'frozen'; envExtra?: Record<string, string> }
+  | {
+      cmd: string;
+      args: string[];
+      cwd: string;
+      mode: 'frozen';
+      envExtra?: Record<string, string>;
+    }
   | ReturnType<typeof resolveReticulumPythonLaunch> {
   // Dev (`npm run electron:start`): always use `presence_bridge.py` so edits apply; ignore PyInstaller binary in resources/reticulum/.
   if (!app.isPackaged) {
-    return resolveReticulumPythonLaunch(getBridgeScriptPath(), ['--config', configDir]);
+    return resolveReticulumPythonLaunch(getBridgeScriptPath(), [
+      '--config',
+      configDir,
+    ]);
   }
 
   const frozenBridge = getFrozenBridgePath();
@@ -409,7 +469,10 @@ function resolveBridgeLaunch(configDir: string):
     };
   }
 
-  return resolveReticulumPythonLaunch(getBridgeScriptPath(), ['--config', configDir]);
+  return resolveReticulumPythonLaunch(getBridgeScriptPath(), [
+    '--config',
+    configDir,
+  ]);
 }
 
 function toPresenceRoute(raw: unknown): PresenceRoute | null {
@@ -446,7 +509,9 @@ function semanticPresenceKey(envelope: PresenceEnvelope): string {
   });
 }
 
-function commandPriorityForAction(action: BridgeCmdFrame['action']): BridgeCmdPriority {
+function commandPriorityForAction(
+  action: BridgeCmdFrame['action']
+): BridgeCmdPriority {
   switch (action) {
     case 'publish_presence':
     case 'forward_presence':
@@ -482,10 +547,7 @@ type QueuedAudioFrame = {
   sizeBytes: number;
 };
 
-export class ReticulumBridge
-  extends EventEmitter
-  implements PresenceTransport
-{
+export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   readonly kind = 'reticulum' as const;
 
   private child: ChildProcess | null = null;
@@ -533,7 +595,8 @@ export class ReticulumBridge
   private audioInBuffer = Buffer.alloc(0);
   private audioQueuePressureDrops = 0;
   private audioStaleDrops = 0;
-  private audioQueuePressureDropEvents: Array<{ atMs: number; count: number }> = [];
+  private audioQueuePressureDropEvents: Array<{ atMs: number; count: number }> =
+    [];
   private audioStaleDropEvents: Array<{ atMs: number; count: number }> = [];
   private lastAudioQueueSnapshot: ReticulumAudioQueueSnapshot = {
     bridgeQueuedFrames: 0,
@@ -562,6 +625,23 @@ export class ReticulumBridge
     packetFreshSends: 0,
     packetStaleSends: 0,
     packetUnknownSends: 0,
+    deadlineDropCount: 0,
+    decodedQueueEvictOldestCount: 0,
+    decodedQueueDropNewestCount: 0,
+    fd3DecodedAgeMsMax: 0,
+    decodedQueueDwellMsMax: 0,
+    rnsSendDurationMsMax: 0,
+    packetPathCheckMsMax: 0,
+    executorLoopGapMsMax: 0,
+    executorGapWhileQueuedMsMax: 0,
+    executorAudioPassMsMax: 0,
+    processBatchMsMax: 0,
+    processBatchFramesMax: 0,
+    rnsSendSlowCount: 0,
+    executorStallCount: 0,
+    executorCommandMsMax: 0,
+    executorCommandWhileQueuedMsMax: 0,
+    executorCommandSlowCount: 0,
   };
   /** One-shot diagnostics: confirm binary egress/ingress actually ran. */
   private audioIpcFd3FirstBatchLogged = false;
@@ -586,14 +666,19 @@ export class ReticulumBridge
   private localPresenceDestinationHash: string | undefined;
   /** Overlay control-plane links reporting `established` from Python `overlay_link_state`. */
   private overlayEstablishedLinkIds = new Set<string>();
-  private overlayLinkSnapshots = new Map<string, ReticulumOverlayLinkSnapshot>();
+  private overlayLinkSnapshots = new Map<
+    string,
+    ReticulumOverlayLinkSnapshot
+  >();
 
   private markOverlayPeerVerifiedFromQortalTraffic(
     peerPresenceHash: string,
     senderDestinationHash: string,
     source: string
   ): void {
-    const hash = (peerPresenceHash || senderDestinationHash).trim().toLowerCase();
+    const hash = (peerPresenceHash || senderDestinationHash)
+      .trim()
+      .toLowerCase();
     if (!hash) return;
     getPresenceManager()?.markReticulumOverlayPeerVerified(hash, source);
   }
@@ -601,10 +686,8 @@ export class ReticulumBridge
   subscribe(handlers: PresenceTransportHandlers): () => void {
     const onReady = () => handlers.onReady?.();
     const onDegraded = (reason?: string) => handlers.onDegraded?.(reason);
-    const onEnvelope = (
-      envelope: PresenceEnvelope,
-      route: PresenceRoute
-    ) => handlers.onEnvelope(envelope, route);
+    const onEnvelope = (envelope: PresenceEnvelope, route: PresenceRoute) =>
+      handlers.onEnvelope(envelope, route);
     const onCandidatePeerDiscovered = (payload: {
       peerHash: string;
       source?: string;
@@ -1067,10 +1150,20 @@ export class ReticulumBridge
       queuePressureDrops++;
       dropped = true;
     }
+    const queuedAtMs = (
+      frameInput.data as Buffer & {
+        [RETICULUM_AUDIO_QUEUED_AT_MS]?: unknown;
+      }
+    )[RETICULUM_AUDIO_QUEUED_AT_MS];
     const frame: QueuedAudioFrame = {
       ...frameInput,
       data: Buffer.from(frameInput.data),
-      queuedAtMs: Date.now(),
+      queuedAtMs:
+        typeof queuedAtMs === 'number' &&
+        Number.isFinite(queuedAtMs) &&
+        queuedAtMs > 0
+          ? queuedAtMs
+          : Date.now(),
       sizeBytes: frameInput.data.length,
     };
     queue.push(frame);
@@ -1078,7 +1171,10 @@ export class ReticulumBridge
     this.audioQueuedBytes += frame.sizeBytes;
     this.audioQueuePressureDrops += queuePressureDrops;
     this.audioStaleDrops += staleDrops;
-    this.recordAudioDropEvents(this.audioQueuePressureDropEvents, queuePressureDrops);
+    this.recordAudioDropEvents(
+      this.audioQueuePressureDropEvents,
+      queuePressureDrops
+    );
     this.recordAudioDropEvents(this.audioStaleDropEvents, staleDrops);
     this.scheduleAudioOutFlush();
     return {
@@ -1093,7 +1189,7 @@ export class ReticulumBridge
   getAudioQueueSnapshot(routeKey?: string): ReticulumAudioQueueSnapshot {
     const nowMs = Date.now();
     const perLinkQueuedFrames = routeKey
-      ? this.audioFrameQueues.get(routeKey)?.length ?? 0
+      ? (this.audioFrameQueues.get(routeKey)?.length ?? 0)
       : 0;
     this.lastAudioQueueSnapshot = {
       ...this.lastAudioQueueSnapshot,
@@ -1107,8 +1203,13 @@ export class ReticulumBridge
       queuePressureDropsLast5s: this.sumRecentAudioDropEvents(
         this.audioQueuePressureDropEvents
       ),
-      staleDrops: Math.max(this.lastAudioQueueSnapshot.staleDrops, this.audioStaleDrops),
-      staleDropsLast5s: this.sumRecentAudioDropEvents(this.audioStaleDropEvents),
+      staleDrops: Math.max(
+        this.lastAudioQueueSnapshot.staleDrops,
+        this.audioStaleDrops
+      ),
+      staleDropsLast5s: this.sumRecentAudioDropEvents(
+        this.audioStaleDropEvents
+      ),
     };
     return { ...this.lastAudioQueueSnapshot };
   }
@@ -1158,7 +1259,10 @@ export class ReticulumBridge
     const dropped = queue.shift();
     if (!dropped) return false;
     this.audioQueuedFrames = Math.max(0, this.audioQueuedFrames - 1);
-    this.audioQueuedBytes = Math.max(0, this.audioQueuedBytes - dropped.sizeBytes);
+    this.audioQueuedBytes = Math.max(
+      0,
+      this.audioQueuedBytes - dropped.sizeBytes
+    );
     this.compactAudioQueueLink(linkId);
     return true;
   }
@@ -1248,7 +1352,10 @@ export class ReticulumBridge
         if (!next || nowMs - next.queuedAtMs <= this.audioFrameStaleMs) break;
         queue.shift();
         this.audioQueuedFrames = Math.max(0, this.audioQueuedFrames - 1);
-        this.audioQueuedBytes = Math.max(0, this.audioQueuedBytes - next.sizeBytes);
+        this.audioQueuedBytes = Math.max(
+          0,
+          this.audioQueuedBytes - next.sizeBytes
+        );
         dropped++;
       }
       this.compactAudioQueueLink(linkId);
@@ -1267,7 +1374,9 @@ export class ReticulumBridge
         now - this.lastHeartbeatSentAt < HEARTBEAT_MIN_INTERVAL_MS &&
         semanticKey === this.lastHeartbeatSemanticKey
       ) {
-        loggerLog('[ReticulumBridge] Suppressed heartbeat due to minimum interval');
+        loggerLog(
+          '[ReticulumBridge] Suppressed heartbeat due to minimum interval'
+        );
         return true;
       }
       this.lastHeartbeatSentAt = now;
@@ -1307,7 +1416,9 @@ export class ReticulumBridge
         : 'unknown';
     const pl = resp.payload;
     const fanoutPeers =
-      pl && typeof pl['fanoutPeers'] === 'number' ? pl['fanoutPeers'] : undefined;
+      pl && typeof pl['fanoutPeers'] === 'number'
+        ? pl['fanoutPeers']
+        : undefined;
     const fanoutHashes =
       pl &&
       Array.isArray(pl['fanoutHashes']) &&
@@ -1336,9 +1447,7 @@ export class ReticulumBridge
       envelope,
       overlayHopsRemaining,
       excludeDestinationHashes,
-      ...(typeof originalSenderHash === 'string'
-        ? { originalSenderHash }
-        : {}),
+      ...(typeof originalSenderHash === 'string' ? { originalSenderHash } : {}),
     });
     return resp.ok;
   }
@@ -1568,20 +1677,26 @@ export class ReticulumBridge
       this.handleStdout(chunk);
     });
     const audioIn = child.stdio[4];
-    if (audioIn && typeof (audioIn as NodeJS.ReadableStream).on === 'function') {
-      (audioIn as NodeJS.ReadableStream).on('data', (chunk: Buffer | string) => {
-        if (this.child !== child) return;
-        const buf = Buffer.isBuffer(chunk)
-          ? chunk
-          : Buffer.from(chunk as string, 'binary');
-        if (!this.audioIpcFd4FirstRawChunkLogged && buf.length > 0) {
-          this.audioIpcFd4FirstRawChunkLogged = true;
-          loggerLog(
-            `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} stage=fd4-first-raw-chunk-from-child len=${buf.length}`
-          );
+    if (
+      audioIn &&
+      typeof (audioIn as NodeJS.ReadableStream).on === 'function'
+    ) {
+      (audioIn as NodeJS.ReadableStream).on(
+        'data',
+        (chunk: Buffer | string) => {
+          if (this.child !== child) return;
+          const buf = Buffer.isBuffer(chunk)
+            ? chunk
+            : Buffer.from(chunk as string, 'binary');
+          if (!this.audioIpcFd4FirstRawChunkLogged && buf.length > 0) {
+            this.audioIpcFd4FirstRawChunkLogged = true;
+            loggerLog(
+              `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} stage=fd4-first-raw-chunk-from-child len=${buf.length}`
+            );
+          }
+          this.appendAudioInData(buf);
         }
-        this.appendAudioInData(buf);
-      });
+      );
     } else {
       loggerWarn(
         `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=parent-read-missing inbound-binary-audio-disabled`
@@ -1609,7 +1724,9 @@ export class ReticulumBridge
       );
       this.child = null;
       if (this.desiredRunning) {
-        this.transitionToDegraded(`bridge-exit:${code ?? 'null'}:${signal ?? ''}`);
+        this.transitionToDegraded(
+          `bridge-exit:${code ?? 'null'}:${signal ?? ''}`
+        );
         this.scheduleRestart();
       } else {
         this.state = 'stopped';
@@ -1784,7 +1901,8 @@ export class ReticulumBridge
         let scanned = 0;
         while (scanned < this.audioQueuedLinkOrder.length) {
           if (this.audioQueuedLinkOrder.length === 0) break;
-          const index = this.audioRoundRobinCursor % this.audioQueuedLinkOrder.length;
+          const index =
+            this.audioRoundRobinCursor % this.audioQueuedLinkOrder.length;
           routeKey = this.audioQueuedLinkOrder[index]!;
           const queue = this.audioFrameQueues.get(routeKey);
           if (!queue || queue.length === 0) {
@@ -1817,12 +1935,16 @@ export class ReticulumBridge
         if (!queue || queue.length === 0) break;
         queue.shift();
         this.audioQueuedFrames = Math.max(0, this.audioQueuedFrames - 1);
-        this.audioQueuedBytes = Math.max(0, this.audioQueuedBytes - next.sizeBytes);
+        this.audioQueuedBytes = Math.max(
+          0,
+          this.audioQueuedBytes - next.sizeBytes
+        );
         batch.push({
           linkId: next.linkId,
           roomId: next.roomId,
           peerPresenceHash: next.peerPresenceHash,
           peerDestinationHash: next.peerDestinationHash,
+          receivedAtWallMs: next.queuedAtMs,
           payload: next.data,
         });
         bodyBudget = nextBody;
@@ -1850,10 +1972,7 @@ export class ReticulumBridge
     const raw = c?.stdio?.[3];
     if (!c || !raw || this.waitingForAudioBinaryDrain) return;
     const stream = raw as NodeJS.WritableStream & {
-      write(
-        chunk: Buffer,
-        cb?: (err?: Error | null) => void
-      ): boolean;
+      write(chunk: Buffer, cb?: (err?: Error | null) => void): boolean;
       once(event: 'drain', listener: () => void): typeof stream;
     };
     while (this.audioBinaryWriteQueue.length > 0) {
@@ -2027,7 +2146,8 @@ export class ReticulumBridge
         const route = toPresenceRoute(frame.payload?.route);
         if (!envelope || !route || route.kind !== 'reticulum') return;
         const peerAddr =
-          typeof (envelope.payload as { address?: string })?.address === 'string'
+          typeof (envelope.payload as { address?: string })?.address ===
+          'string'
             ? (envelope.payload as { address: string }).address
             : 'unknown';
         loggerLog(
@@ -2057,13 +2177,17 @@ export class ReticulumBridge
         if (!wire || typeof wire !== 'object') return;
         this.markOverlayPeerVerifiedFromQortalTraffic(
           typeof peerPresenceHash === 'string' ? peerPresenceHash : '',
-          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
+          typeof senderDestinationHash === 'string'
+            ? senderDestinationHash
+            : '',
           'call_signal'
         );
         this.emit(
           'call-message',
           wire as Record<string, unknown>,
-          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
+          typeof senderDestinationHash === 'string'
+            ? senderDestinationHash
+            : '',
           typeof peerPresenceHash === 'string' ? peerPresenceHash : ''
         );
         return;
@@ -2075,13 +2199,17 @@ export class ReticulumBridge
         if (!wire || typeof wire !== 'object') return;
         this.markOverlayPeerVerifiedFromQortalTraffic(
           typeof peerPresenceHash === 'string' ? peerPresenceHash : '',
-          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
+          typeof senderDestinationHash === 'string'
+            ? senderDestinationHash
+            : '',
           'group_signal'
         );
         this.emit(
           'group-call-message',
           wire as Record<string, unknown>,
-          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
+          typeof senderDestinationHash === 'string'
+            ? senderDestinationHash
+            : '',
           typeof peerPresenceHash === 'string' ? peerPresenceHash : '',
           typeof frame.payload?.linkId === 'string' ? frame.payload.linkId : ''
         );
@@ -2148,7 +2276,9 @@ export class ReticulumBridge
           peerPresenceHash,
           transport,
           reason:
-            typeof frame.payload?.reason === 'string' ? frame.payload.reason : '',
+            typeof frame.payload?.reason === 'string'
+              ? frame.payload.reason
+              : '',
           code,
           error:
             typeof frame.payload?.error === 'string' ? frame.payload.error : '',
@@ -2230,6 +2360,74 @@ export class ReticulumBridge
             typeof frame.payload?.packetUnknownSends === 'number'
               ? frame.payload.packetUnknownSends
               : this.lastAudioQueueSnapshot.packetUnknownSends,
+          deadlineDropCount:
+            typeof frame.payload?.deadlineDropCount === 'number'
+              ? frame.payload.deadlineDropCount
+              : this.lastAudioQueueSnapshot.deadlineDropCount,
+          decodedQueueEvictOldestCount:
+            typeof frame.payload?.decodedQueueEvictOldestCount === 'number'
+              ? frame.payload.decodedQueueEvictOldestCount
+              : this.lastAudioQueueSnapshot.decodedQueueEvictOldestCount,
+          decodedQueueDropNewestCount:
+            typeof frame.payload?.decodedQueueDropNewestCount === 'number'
+              ? frame.payload.decodedQueueDropNewestCount
+              : this.lastAudioQueueSnapshot.decodedQueueDropNewestCount,
+          fd3DecodedAgeMsMax:
+            typeof frame.payload?.fd3DecodedAgeMsMax === 'number'
+              ? frame.payload.fd3DecodedAgeMsMax
+              : this.lastAudioQueueSnapshot.fd3DecodedAgeMsMax,
+          decodedQueueDwellMsMax:
+            typeof frame.payload?.decodedQueueDwellMsMax === 'number'
+              ? frame.payload.decodedQueueDwellMsMax
+              : this.lastAudioQueueSnapshot.decodedQueueDwellMsMax,
+          rnsSendDurationMsMax:
+            typeof frame.payload?.rnsSendDurationMsMax === 'number'
+              ? frame.payload.rnsSendDurationMsMax
+              : this.lastAudioQueueSnapshot.rnsSendDurationMsMax,
+          packetPathCheckMsMax:
+            typeof frame.payload?.packetPathCheckMsMax === 'number'
+              ? frame.payload.packetPathCheckMsMax
+              : this.lastAudioQueueSnapshot.packetPathCheckMsMax,
+          executorLoopGapMsMax:
+            typeof frame.payload?.executorLoopGapMsMax === 'number'
+              ? frame.payload.executorLoopGapMsMax
+              : this.lastAudioQueueSnapshot.executorLoopGapMsMax,
+          executorGapWhileQueuedMsMax:
+            typeof frame.payload?.executorGapWhileQueuedMsMax === 'number'
+              ? frame.payload.executorGapWhileQueuedMsMax
+              : this.lastAudioQueueSnapshot.executorGapWhileQueuedMsMax,
+          executorAudioPassMsMax:
+            typeof frame.payload?.executorAudioPassMsMax === 'number'
+              ? frame.payload.executorAudioPassMsMax
+              : this.lastAudioQueueSnapshot.executorAudioPassMsMax,
+          processBatchMsMax:
+            typeof frame.payload?.processBatchMsMax === 'number'
+              ? frame.payload.processBatchMsMax
+              : this.lastAudioQueueSnapshot.processBatchMsMax,
+          processBatchFramesMax:
+            typeof frame.payload?.processBatchFramesMax === 'number'
+              ? frame.payload.processBatchFramesMax
+              : this.lastAudioQueueSnapshot.processBatchFramesMax,
+          rnsSendSlowCount:
+            typeof frame.payload?.rnsSendSlowCount === 'number'
+              ? frame.payload.rnsSendSlowCount
+              : this.lastAudioQueueSnapshot.rnsSendSlowCount,
+          executorStallCount:
+            typeof frame.payload?.executorStallCount === 'number'
+              ? frame.payload.executorStallCount
+              : this.lastAudioQueueSnapshot.executorStallCount,
+          executorCommandMsMax:
+            typeof frame.payload?.executorCommandMsMax === 'number'
+              ? frame.payload.executorCommandMsMax
+              : this.lastAudioQueueSnapshot.executorCommandMsMax,
+          executorCommandWhileQueuedMsMax:
+            typeof frame.payload?.executorCommandWhileQueuedMsMax === 'number'
+              ? frame.payload.executorCommandWhileQueuedMsMax
+              : this.lastAudioQueueSnapshot.executorCommandWhileQueuedMsMax,
+          executorCommandSlowCount:
+            typeof frame.payload?.executorCommandSlowCount === 'number'
+              ? frame.payload.executorCommandSlowCount
+              : this.lastAudioQueueSnapshot.executorCommandSlowCount,
         };
         return;
       }
@@ -2259,10 +2457,11 @@ export class ReticulumBridge
             typeof frame.payload?.lastRxAt === 'number' &&
             Number.isFinite(frame.payload.lastRxAt)
               ? frame.payload.lastRxAt
-              : existing?.lastRxAt ?? Date.now();
+              : (existing?.lastRxAt ?? Date.now());
           this.overlayLinkSnapshots.set(linkId, {
             linkId,
-            peerPresenceHash: peerPresenceHash || existing?.peerPresenceHash || '',
+            peerPresenceHash:
+              peerPresenceHash || existing?.peerPresenceHash || '',
             incoming: frame.payload?.incoming === true,
             connectedAt: existing?.connectedAt ?? Date.now(),
             lastRxAt,
@@ -2343,7 +2542,8 @@ export class ReticulumBridge
           persistReticulumSharedTransportState({
             reachability: this.connectivitySnapshot.reachability,
             transportEnabled: this.connectivitySnapshot.transportEnabled,
-            configuredHubInterfaces: this.connectivitySnapshot.configuredHubInterfaces,
+            configuredHubInterfaces:
+              this.connectivitySnapshot.configuredHubInterfaces,
             onlineHubInterfaces: this.connectivitySnapshot.onlineHubInterfaces,
             configuredRemoteHubInterfaces:
               this.connectivitySnapshot.configuredRemoteHubInterfaces,
@@ -2470,7 +2670,9 @@ export class ReticulumBridge
     }
   }
 
-  private mapSendFailureReason(frame: BridgeRespFrame): ReticulumSendFailureReason {
+  private mapSendFailureReason(
+    frame: BridgeRespFrame
+  ): ReticulumSendFailureReason {
     const code = frame.payload?.code;
     if (code === 'bridge_overloaded') return 'bridge-overloaded';
     if (code === 'bridge_not_started') return 'bridge-not-started';

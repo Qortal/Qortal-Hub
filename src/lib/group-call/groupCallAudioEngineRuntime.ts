@@ -151,6 +151,8 @@ type RuntimeRendererThreadSample = {
 type RuntimeRecentWindowTrend = {
   atMs: number;
   reason: string[] | null;
+  cpuDegradedActive?: boolean;
+  cpuDegradedReason?: string | null;
   role: AudioEngineRole;
   topologyEpoch: number;
   adaptiveNetworkMode: GroupCallMetricsSnapshot['adaptiveNetworkMode'];
@@ -270,6 +272,23 @@ type GcallSendAudioDiagnostics = {
     packetFreshSends?: number;
     packetStaleSends?: number;
     packetUnknownSends?: number;
+    deadlineDropCount?: number;
+    decodedQueueEvictOldestCount?: number;
+    decodedQueueDropNewestCount?: number;
+    fd3DecodedAgeMsMax?: number;
+    decodedQueueDwellMsMax?: number;
+    rnsSendDurationMsMax?: number;
+    packetPathCheckMsMax?: number;
+    executorLoopGapMsMax?: number;
+    executorGapWhileQueuedMsMax?: number;
+    executorAudioPassMsMax?: number;
+    processBatchMsMax?: number;
+    processBatchFramesMax?: number;
+    rnsSendSlowCount?: number;
+    executorStallCount?: number;
+    executorCommandMsMax?: number;
+    executorCommandWhileQueuedMsMax?: number;
+    executorCommandSlowCount?: number;
   };
 };
 
@@ -373,6 +392,21 @@ const MAX_RECENT_WINDOW_TRENDS = 300;
 const GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS = 250;
 const GCALL_RENDERER_STALL_DELAY_THRESHOLD_MS = 80;
 const GCALL_RENDERER_THREAD_RECENT_LIMIT = 40;
+const GCALL_CPU_DEGRADED_SENDER_TOTAL_MODERATE_MS = 80;
+const GCALL_CPU_DEGRADED_SENDER_TOTAL_SEVERE_MS = 250;
+const GCALL_CPU_DEGRADED_SENDER_ENCODER_MODERATE_MS = 50;
+const GCALL_CPU_DEGRADED_SENDER_ENCODER_SEVERE_MS = 200;
+const GCALL_CPU_DEGRADED_LONG_TASK_MODERATE_MS = 75;
+const GCALL_CPU_DEGRADED_LONG_TASK_SEVERE_MS = 150;
+const GCALL_CPU_DEGRADED_BRIDGE_OLDEST_MODERATE_MS = 80;
+const GCALL_CPU_DEGRADED_BRIDGE_OLDEST_SEVERE_MS = 150;
+const GCALL_CPU_DEGRADED_BRIDGE_DROPS_MODERATE = 1;
+const GCALL_CPU_DEGRADED_BRIDGE_DROPS_SEVERE = 3;
+const GCALL_CPU_DEGRADED_MODERATE_ENTER_MS = 3_000;
+const GCALL_CPU_DEGRADED_PRESSURE_RESET_MS = 5_000;
+const GCALL_CPU_DEGRADED_MODERATE_HOLD_MS = 15_000;
+const GCALL_CPU_DEGRADED_SEVERE_HOLD_MS = 30_000;
+const GCALL_CPU_DEGRADED_CALM_EXIT_MS = 20_000;
 const GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN = 0.05;
 const GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN = 300;
 const GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN = 80;
@@ -578,6 +612,15 @@ export class GroupCallAudioEngineRuntime {
   private rendererLongTaskCount = 0;
   private rendererLongTaskMaxMs = 0;
   private readonly rendererLongTaskRecent: RuntimeRendererThreadSample[] = [];
+  private cpuDegradedActive = false;
+  private cpuDegradedEnteredAtMs = 0;
+  private cpuDegradedHoldUntilMs = 0;
+  private cpuDegradedLastPressureAtMs = 0;
+  private cpuDegradedPressureStartedAtMs = 0;
+  private cpuDegradedEntryCount = 0;
+  private cpuDegradedLastReasons: string[] = [];
+  private cpuDegradedLastDetail: Record<string, unknown> | null = null;
+  private cpuDegradedSenderSyncQueued = false;
   private topologyAsyncGeneration = 0;
   private leaveCleanupGeneration = 0;
   private lastObservedTopologyEpoch = 0;
@@ -1379,8 +1422,209 @@ export class GroupCallAudioEngineRuntime {
       packetFreshSends: diagnostics.bridge?.packetFreshSends,
       packetStaleSends: diagnostics.bridge?.packetStaleSends,
       packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
+      deadlineDropCount: diagnostics.bridge?.deadlineDropCount,
+      decodedQueueEvictOldestCount:
+        diagnostics.bridge?.decodedQueueEvictOldestCount,
+      decodedQueueDropNewestCount:
+        diagnostics.bridge?.decodedQueueDropNewestCount,
+      fd3DecodedAgeMsMax: diagnostics.bridge?.fd3DecodedAgeMsMax,
+      decodedQueueDwellMsMax: diagnostics.bridge?.decodedQueueDwellMsMax,
+      rnsSendDurationMsMax: diagnostics.bridge?.rnsSendDurationMsMax,
+      packetPathCheckMsMax: diagnostics.bridge?.packetPathCheckMsMax,
+      executorLoopGapMsMax: diagnostics.bridge?.executorLoopGapMsMax,
+      executorGapWhileQueuedMsMax:
+        diagnostics.bridge?.executorGapWhileQueuedMsMax,
+      executorAudioPassMsMax: diagnostics.bridge?.executorAudioPassMsMax,
+      processBatchMsMax: diagnostics.bridge?.processBatchMsMax,
+      processBatchFramesMax: diagnostics.bridge?.processBatchFramesMax,
+      rnsSendSlowCount: diagnostics.bridge?.rnsSendSlowCount,
+      executorStallCount: diagnostics.bridge?.executorStallCount,
+      executorCommandMsMax: diagnostics.bridge?.executorCommandMsMax,
+      executorCommandWhileQueuedMsMax:
+        diagnostics.bridge?.executorCommandWhileQueuedMsMax,
+      executorCommandSlowCount: diagnostics.bridge?.executorCommandSlowCount,
     });
+    this.noteCpuDegradedBridgePressure(diagnostics);
     this.maybeResyncTwoPartyTopologyFromLinkDiagnostics(diagnostics);
+  }
+
+  private noteCpuDegradedBridgePressure(
+    diagnostics: GcallSendAudioDiagnostics
+  ): void {
+    const bridge = diagnostics.bridge;
+    if (!bridge) return;
+    const bridgeOldest = Math.max(
+      diagnostics.pendingOldestAgeMs ?? 0,
+      bridge.bridgeQueuedOldestAgeMs ?? 0,
+      bridge.decodedQueueOldestAgeMs ?? 0,
+      bridge.binaryOutQueueOldestAgeMs ?? 0
+    );
+    const dropsLast5s = Math.max(
+      bridge.queuePressureDropsLast5s ?? 0,
+      bridge.staleDropsLast5s ?? 0
+    );
+    if (
+      bridgeOldest >= GCALL_CPU_DEGRADED_BRIDGE_OLDEST_SEVERE_MS ||
+      dropsLast5s >= GCALL_CPU_DEGRADED_BRIDGE_DROPS_SEVERE
+    ) {
+      this.noteCpuDegradedPressure('outbound-bridge-pressure', 'severe', {
+        bridgeQueuedOldestAgeMs: bridge.bridgeQueuedOldestAgeMs ?? null,
+        decodedQueueOldestAgeMs: bridge.decodedQueueOldestAgeMs ?? null,
+        binaryOutQueueOldestAgeMs: bridge.binaryOutQueueOldestAgeMs ?? null,
+        pendingOldestAgeMs: diagnostics.pendingOldestAgeMs ?? null,
+        queuePressureDropsLast5s: bridge.queuePressureDropsLast5s ?? null,
+        staleDropsLast5s: bridge.staleDropsLast5s ?? null,
+      });
+      return;
+    }
+    if (
+      bridgeOldest >= GCALL_CPU_DEGRADED_BRIDGE_OLDEST_MODERATE_MS ||
+      dropsLast5s >= GCALL_CPU_DEGRADED_BRIDGE_DROPS_MODERATE ||
+      bridge.bridgeWaitingForDrain === true
+    ) {
+      this.noteCpuDegradedPressure('outbound-bridge-pressure', 'moderate', {
+        bridgeQueuedOldestAgeMs: bridge.bridgeQueuedOldestAgeMs ?? null,
+        decodedQueueOldestAgeMs: bridge.decodedQueueOldestAgeMs ?? null,
+        binaryOutQueueOldestAgeMs: bridge.binaryOutQueueOldestAgeMs ?? null,
+        pendingOldestAgeMs: diagnostics.pendingOldestAgeMs ?? null,
+        bridgeWaitingForDrain: bridge.bridgeWaitingForDrain === true,
+        queuePressureDropsLast5s: bridge.queuePressureDropsLast5s ?? null,
+        staleDropsLast5s: bridge.staleDropsLast5s ?? null,
+      });
+    }
+  }
+
+  private noteSenderEncodePressure(input: {
+    workletToEncoderOutputMs: number;
+    mainThreadToEncoderOutputMs: number;
+  }): void {
+    const totalMs = Math.max(0, input.workletToEncoderOutputMs);
+    const encoderMs = Math.max(0, input.mainThreadToEncoderOutputMs);
+    if (
+      totalMs >= GCALL_CPU_DEGRADED_SENDER_TOTAL_SEVERE_MS ||
+      encoderMs >= GCALL_CPU_DEGRADED_SENDER_ENCODER_SEVERE_MS
+    ) {
+      this.noteCpuDegradedPressure('sender-encode-delay', 'severe', {
+        workletToEncoderOutputMs: totalMs,
+        mainThreadToEncoderOutputMs: encoderMs,
+      });
+      return;
+    }
+    if (
+      totalMs >= GCALL_CPU_DEGRADED_SENDER_TOTAL_MODERATE_MS ||
+      encoderMs >= GCALL_CPU_DEGRADED_SENDER_ENCODER_MODERATE_MS
+    ) {
+      this.noteCpuDegradedPressure('sender-encode-delay', 'moderate', {
+        workletToEncoderOutputMs: totalMs,
+        mainThreadToEncoderOutputMs: encoderMs,
+      });
+    }
+  }
+
+  private noteCpuDegradedPressure(
+    reason: string,
+    severity: 'moderate' | 'severe',
+    detail?: Record<string, unknown>
+  ): void {
+    const nowMs = Date.now();
+    if (
+      this.cpuDegradedLastPressureAtMs > 0 &&
+      nowMs - this.cpuDegradedLastPressureAtMs >
+        GCALL_CPU_DEGRADED_PRESSURE_RESET_MS
+    ) {
+      this.cpuDegradedPressureStartedAtMs = 0;
+    }
+    this.cpuDegradedLastPressureAtMs = nowMs;
+    this.cpuDegradedHoldUntilMs = Math.max(
+      this.cpuDegradedHoldUntilMs,
+      nowMs +
+        (severity === 'severe'
+          ? GCALL_CPU_DEGRADED_SEVERE_HOLD_MS
+          : GCALL_CPU_DEGRADED_MODERATE_HOLD_MS)
+    );
+    this.cpuDegradedLastReasons = [
+      reason,
+      ...this.cpuDegradedLastReasons.filter((entry) => entry !== reason),
+    ].slice(0, 5);
+    this.cpuDegradedLastDetail = {
+      reason,
+      severity,
+      ...(detail ?? {}),
+    };
+
+    if (this.cpuDegradedActive) return;
+    if (severity === 'severe') {
+      this.setCpuDegradedActive(true, reason, this.cpuDegradedLastDetail);
+      return;
+    }
+    if (this.cpuDegradedPressureStartedAtMs <= 0) {
+      this.cpuDegradedPressureStartedAtMs = nowMs;
+    }
+    if (
+      nowMs - this.cpuDegradedPressureStartedAtMs >=
+      GCALL_CPU_DEGRADED_MODERATE_ENTER_MS
+    ) {
+      this.setCpuDegradedActive(true, reason, this.cpuDegradedLastDetail);
+    }
+  }
+
+  private tickCpuDegradedMode(nowMs = Date.now()): void {
+    if (
+      this.cpuDegradedLastPressureAtMs > 0 &&
+      nowMs - this.cpuDegradedLastPressureAtMs >
+        GCALL_CPU_DEGRADED_PRESSURE_RESET_MS
+    ) {
+      this.cpuDegradedPressureStartedAtMs = 0;
+    }
+    if (!this.cpuDegradedActive) return;
+    if (nowMs < this.cpuDegradedHoldUntilMs) return;
+    if (
+      nowMs - this.cpuDegradedLastPressureAtMs <
+      GCALL_CPU_DEGRADED_CALM_EXIT_MS
+    ) {
+      return;
+    }
+    this.setCpuDegradedActive(false, 'calm-window', {
+      lastPressureAtMs: this.cpuDegradedLastPressureAtMs || null,
+    });
+  }
+
+  private setCpuDegradedActive(
+    active: boolean,
+    reason: string,
+    detail?: Record<string, unknown> | null
+  ): void {
+    if (this.cpuDegradedActive === active) return;
+    const nowMs = Date.now();
+    this.cpuDegradedActive = active;
+    if (active) {
+      this.cpuDegradedEnteredAtMs = nowMs;
+      this.cpuDegradedEntryCount++;
+      this.recordDiagEvent('cpu-degraded-audio-entered', {
+        reason,
+        holdUntilMs: this.cpuDegradedHoldUntilMs,
+        detail: detail ?? null,
+      });
+    } else {
+      this.cpuDegradedEnteredAtMs = 0;
+      this.cpuDegradedPressureStartedAtMs = 0;
+      this.recordDiagEvent('cpu-degraded-audio-exited', {
+        reason,
+        detail: detail ?? null,
+      });
+    }
+    this.queueSenderCpuModeSync();
+  }
+
+  private queueSenderCpuModeSync(): void {
+    if (this.cpuDegradedSenderSyncQueued) return;
+    this.cpuDegradedSenderSyncQueued = true;
+    const run = () => {
+      this.cpuDegradedSenderSyncQueued = false;
+      void this.syncSenderState();
+    };
+    if (typeof queueMicrotask === 'function') queueMicrotask(run);
+    else void Promise.resolve().then(run);
   }
 
   private startRendererThreadMonitor(): void {
@@ -1400,6 +1644,7 @@ export class GroupCallAudioEngineRuntime {
       this.rendererStallExpectedPerfMs =
         actualPerf + GCALL_RENDERER_STALL_SAMPLE_INTERVAL_MS;
       this.rendererStallSampleCount++;
+      this.tickCpuDegradedMode();
       if (delayMs < GCALL_RENDERER_STALL_DELAY_THRESHOLD_MS) return;
       this.rendererStallCount++;
       this.rendererStallMaxDelayMs = Math.max(
@@ -1441,6 +1686,15 @@ export class GroupCallAudioEngineRuntime {
             durationMs,
             name: entry.name || 'longtask',
           });
+          if (durationMs >= GCALL_CPU_DEGRADED_LONG_TASK_SEVERE_MS) {
+            this.noteCpuDegradedPressure('renderer-long-task', 'severe', {
+              durationMs,
+            });
+          } else if (durationMs >= GCALL_CPU_DEGRADED_LONG_TASK_MODERATE_MS) {
+            this.noteCpuDegradedPressure('renderer-long-task', 'moderate', {
+              durationMs,
+            });
+          }
         }
       });
       observer.observe({ entryTypes: ['longtask'] });
@@ -1591,6 +1845,8 @@ export class GroupCallAudioEngineRuntime {
     this.recentWindowTrends.push({
       atMs: Date.now(),
       reason: reasons.length > 0 ? reasons : null,
+      cpuDegradedActive: this.cpuDegradedActive,
+      cpuDegradedReason: this.cpuDegradedLastReasons[0] ?? null,
       role: this.deriveTopologyRoleForAddress(this.userInfo?.address ?? ''),
       topologyEpoch: this.topology?.topologyEpoch ?? 0,
       adaptiveNetworkMode: metrics.adaptiveNetworkMode,
@@ -1676,6 +1932,7 @@ export class GroupCallAudioEngineRuntime {
         receiveProfiles: receiveDiagnostics?.livePolicyProfilesBySource ?? [],
       });
     }
+    this.tickCpuDegradedMode();
     this.maybeRequestZeroInboundMediaRecovery(metrics);
     this.maybeRequestLowInboundMediaRecovery(metrics);
   }
@@ -1922,6 +2179,7 @@ export class GroupCallAudioEngineRuntime {
       ? computeGroupCallRole(myAddress, topology)
       : 'listener';
     const receiveEngine = this.receiveEngine.getDiagnosticsSnapshot();
+    const senderEngine = this.senderEngine.getDiagnosticsSnapshot();
     const rootPeerLiveness = this.getRootPeerLivenessSnapshot();
     const decodePaths = [
       ...new Set(receiveEngine.playouts.map((playout) => playout.decodePath)),
@@ -1984,7 +2242,23 @@ export class GroupCallAudioEngineRuntime {
             : 0,
       },
       receiveEngine,
-      senderEngine: this.senderEngine.getDiagnosticsSnapshot(),
+      senderEngine,
+      senderEncodePipeline: (senderEngine.senderEncodeSummary as Record<
+        string,
+        unknown
+      >) ?? {
+        mode: senderEngine.senderEncodeMode ?? 'unknown',
+      },
+      cpuDegradedAudio: {
+        active: this.cpuDegradedActive,
+        senderOnly: true,
+        enteredAtMs: this.cpuDegradedEnteredAtMs || null,
+        holdUntilMs: this.cpuDegradedHoldUntilMs || null,
+        lastPressureAtMs: this.cpuDegradedLastPressureAtMs || null,
+        entryCount: this.cpuDegradedEntryCount,
+        reasons: [...this.cpuDegradedLastReasons],
+        lastDetail: this.cpuDegradedLastDetail,
+      },
       rendererThread: this.buildRendererThreadDiagnosticsSnapshot(),
       outboundMedia: this.buildOutboundMediaDiagnosticsSnapshot(),
       keyExchange: this.buildKeyExchangeDiagnosticsSnapshot(),
@@ -6626,6 +6900,7 @@ export class GroupCallAudioEngineRuntime {
         outputDeviceId: this.outputDeviceId,
         muted: this.snapshot.muted,
         profile: this.snapshot.audioQualityProfile,
+        cpuDegraded: this.cpuDegradedActive,
         onVadChanged: (vad) => {
           this.noteLocalVadActivity(vad);
         },
@@ -6637,19 +6912,26 @@ export class GroupCallAudioEngineRuntime {
         }) => {
           this.outboundEncodedFrameCallbacks++;
           this.outboundLastEncodedFrameAtMs = Date.now();
+          const workletToMainThreadMs = Math.max(
+            0,
+            encoderInputPerfMs - capturePerfMs
+          );
+          const mainThreadToEncoderOutputMs = Math.max(
+            0,
+            encodeOutPerfMs - encoderInputPerfMs
+          );
+          const workletToEncoderOutputMs = Math.max(
+            0,
+            encodeOutPerfMs - capturePerfMs
+          );
           this.receiveEngine.recordSenderPreEncodePipeline({
-            workletToMainThreadMs: Math.max(
-              0,
-              encoderInputPerfMs - capturePerfMs
-            ),
-            mainThreadToEncoderOutputMs: Math.max(
-              0,
-              encodeOutPerfMs - encoderInputPerfMs
-            ),
-            workletToEncoderOutputMs: Math.max(
-              0,
-              encodeOutPerfMs - capturePerfMs
-            ),
+            workletToMainThreadMs,
+            mainThreadToEncoderOutputMs,
+            workletToEncoderOutputMs,
+          });
+          this.noteSenderEncodePressure({
+            workletToEncoderOutputMs,
+            mainThreadToEncoderOutputMs,
           });
           void this.dispatchEncodedFrame(opusFrame, encodeOutPerfMs);
         },

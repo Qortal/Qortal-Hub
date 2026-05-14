@@ -31,7 +31,9 @@ export function getClusterOfficers(cluster: {
  * After cluster forwarder failure: standby becomes forwarder; fill standby/standby2 from backup
  * then remaining members in election order (`members` array).
  */
-export function promoteClusterOfficersRow(cluster: RouterClusterDef): RouterClusterDef {
+export function promoteClusterOfficersRow(
+  cluster: RouterClusterDef
+): RouterClusterDef {
   const { forwarder, standby, backup } = getClusterOfficers(cluster);
   if (!standby || standby === forwarder) return cluster;
 
@@ -249,8 +251,7 @@ export function buildSingleClusterTopologyWithStickyRoot(
       ? previousRoot
       : (sorted[0] ?? '');
   const standby = sorted.find((a) => a !== root) ?? '';
-  const standby2 =
-    sorted.find((a) => a !== root && a !== standby) ?? '';
+  const standby2 = sorted.find((a) => a !== root && a !== standby) ?? '';
 
   return {
     topologyEpoch,
@@ -504,6 +505,40 @@ export interface GroupCallMetricsSnapshot {
   reticulumAudioPacketStaleSends: number;
   /** Sends issued while path state was unknown/failing. */
   reticulumAudioPacketUnknownSends: number;
+  /** Audio frames dropped by Python bridge because they missed the outbound deadline. */
+  reticulumAudioDeadlineDropCount: number;
+  /** Decoded Python fd3 batches evicted oldest-first to admit fresh audio. */
+  reticulumAudioDecodedQueueEvictOldestCount: number;
+  /** Fresh decoded Python fd3 batches dropped because admission still failed. */
+  reticulumAudioDecodedQueueDropNewestCount: number;
+  /** Max age of an outbound audio frame when Python decoded it from fd3. */
+  reticulumAudioFd3DecodedAgeMsMax: number;
+  /** Max dwell time inside the Python decoded audio queue before RNS processing. */
+  reticulumAudioDecodedQueueDwellMsMax: number;
+  /** Max observed duration of an RNS audio packet send. */
+  reticulumAudioRnsSendDurationMsMax: number;
+  /** Max observed duration of packet path check before RNS send. */
+  reticulumAudioPacketPathCheckMsMax: number;
+  /** Max time between Python RNS executor loop passes. */
+  reticulumAudioExecutorLoopGapMsMax: number;
+  /** Max executor loop gap while decoded audio was already waiting. */
+  reticulumAudioExecutorGapWhileQueuedMsMax: number;
+  /** Max duration of one Python executor audio-drain pass. */
+  reticulumAudioExecutorAudioPassMsMax: number;
+  /** Max duration of processing one decoded audio batch. */
+  reticulumAudioProcessBatchMsMax: number;
+  /** Largest decoded audio batch processed by Python. */
+  reticulumAudioProcessBatchFramesMax: number;
+  /** Count of slow RNS audio packet sends observed by Python. */
+  reticulumAudioRnsSendSlowCount: number;
+  /** Count of executor loop stalls while decoded audio was queued. */
+  reticulumAudioExecutorStallCount: number;
+  /** Max duration of one non-audio command handled by the Python RNS executor. */
+  reticulumAudioExecutorCommandMsMax: number;
+  /** Max command duration when decoded audio was already queued. */
+  reticulumAudioExecutorCommandWhileQueuedMsMax: number;
+  /** Count of slow non-audio commands handled by the Python RNS executor. */
+  reticulumAudioExecutorCommandSlowCount: number;
   /**
    * Outbound group-audio send path observed from main-process diagnostics (`transport` field).
    * Incremented once per send IPC completion that reported a `link` transport.
@@ -871,12 +906,15 @@ export function compareGroupCallSourceIsolationPriority(
 export function pickWorstSourceForIsolation(
   sources: readonly GroupCallSourceWindowMetrics[]
 ): GroupCallSourceWindowMetrics | null {
-  return sources.reduce<GroupCallSourceWindowMetrics | null>((worst, current) => {
-    if (!worst) return current;
-    return compareGroupCallSourceIsolationPriority(current, worst) > 0
-      ? current
-      : worst;
-  }, null);
+  return sources.reduce<GroupCallSourceWindowMetrics | null>(
+    (worst, current) => {
+      if (!worst) return current;
+      return compareGroupCallSourceIsolationPriority(current, worst) > 0
+        ? current
+        : worst;
+    },
+    null
+  );
 }
 
 export function assessReticulumAudioPressureWindow(
@@ -897,7 +935,8 @@ export function assessReticulumAudioPressureWindow(
   const durationSeconds = Math.max(1, windowMetrics.durationMs / 1000);
   const queuePressureRate =
     windowMetrics.reticulumAudioQueuePressureDrops / durationSeconds;
-  const staleDropRate = windowMetrics.reticulumAudioStaleDrops / durationSeconds;
+  const staleDropRate =
+    windowMetrics.reticulumAudioStaleDrops / durationSeconds;
   const pendingDecryptDropRate =
     windowMetrics.packetsDroppedPendingDecrypt / durationSeconds;
   let score = 0;
@@ -1072,10 +1111,7 @@ export function isGroupCallTopologyDuplicateHeartbeat(
   );
 }
 
-export type GroupCallTransportMode =
-  | 'reticulum'
-  | 'relay'
-  | 'connecting';
+export type GroupCallTransportMode = 'reticulum' | 'relay' | 'connecting';
 
 /**
  * Live transport indicator: Reticulum when the role-required transport is ready;
@@ -1107,8 +1143,7 @@ export function getGroupCallTransportSummary(
     return {
       mode: 'relay',
       label: 'P2P relay',
-      tooltip:
-        'Audio is using the legacy P2P relay path.',
+      tooltip: 'Audio is using the legacy P2P relay path.',
     };
   }
   return {
@@ -1182,6 +1217,16 @@ function roundMetric(value: number): number {
   return Number(value.toFixed(3));
 }
 
+function maxFiniteMetric(current: number | undefined, next: number): number {
+  const currentSafe = Number.isFinite(current) ? Number(current) : 0;
+  return Math.max(currentSafe, Math.max(0, roundMetric(next)));
+}
+
+function maxFiniteCount(current: number | undefined, next: number): number {
+  const currentSafe = Number.isFinite(current) ? Number(current) : 0;
+  return Math.max(currentSafe, Math.max(0, Math.trunc(next)));
+}
+
 function percentile(
   samples: readonly number[],
   percentileRank: number
@@ -1218,6 +1263,23 @@ function emptyWindowCounters(): WindowCounterSet {
     reticulumAudioPacketFreshSends: 0,
     reticulumAudioPacketStaleSends: 0,
     reticulumAudioPacketUnknownSends: 0,
+    reticulumAudioDeadlineDropCount: 0,
+    reticulumAudioDecodedQueueEvictOldestCount: 0,
+    reticulumAudioDecodedQueueDropNewestCount: 0,
+    reticulumAudioFd3DecodedAgeMsMax: 0,
+    reticulumAudioDecodedQueueDwellMsMax: 0,
+    reticulumAudioRnsSendDurationMsMax: 0,
+    reticulumAudioPacketPathCheckMsMax: 0,
+    reticulumAudioExecutorLoopGapMsMax: 0,
+    reticulumAudioExecutorGapWhileQueuedMsMax: 0,
+    reticulumAudioExecutorAudioPassMsMax: 0,
+    reticulumAudioProcessBatchMsMax: 0,
+    reticulumAudioProcessBatchFramesMax: 0,
+    reticulumAudioRnsSendSlowCount: 0,
+    reticulumAudioExecutorStallCount: 0,
+    reticulumAudioExecutorCommandMsMax: 0,
+    reticulumAudioExecutorCommandWhileQueuedMsMax: 0,
+    reticulumAudioExecutorCommandSlowCount: 0,
     reticulumAudioOutboundLinkSamples: 0,
     reticulumAudioOutboundPacketSamples: 0,
     reticulumAudioInboundLinkSamples: 0,
@@ -1313,6 +1375,23 @@ export class GroupCallPerformanceTracker {
     reticulumAudioPacketFreshSends: 0,
     reticulumAudioPacketStaleSends: 0,
     reticulumAudioPacketUnknownSends: 0,
+    reticulumAudioDeadlineDropCount: 0,
+    reticulumAudioDecodedQueueEvictOldestCount: 0,
+    reticulumAudioDecodedQueueDropNewestCount: 0,
+    reticulumAudioFd3DecodedAgeMsMax: 0,
+    reticulumAudioDecodedQueueDwellMsMax: 0,
+    reticulumAudioRnsSendDurationMsMax: 0,
+    reticulumAudioPacketPathCheckMsMax: 0,
+    reticulumAudioExecutorLoopGapMsMax: 0,
+    reticulumAudioExecutorGapWhileQueuedMsMax: 0,
+    reticulumAudioExecutorAudioPassMsMax: 0,
+    reticulumAudioProcessBatchMsMax: 0,
+    reticulumAudioProcessBatchFramesMax: 0,
+    reticulumAudioRnsSendSlowCount: 0,
+    reticulumAudioExecutorStallCount: 0,
+    reticulumAudioExecutorCommandMsMax: 0,
+    reticulumAudioExecutorCommandWhileQueuedMsMax: 0,
+    reticulumAudioExecutorCommandSlowCount: 0,
     reticulumAudioOutboundLinkSamples: 0,
     reticulumAudioOutboundPacketSamples: 0,
     reticulumAudioOutboundTransportLast: null,
@@ -1883,6 +1962,23 @@ export class GroupCallPerformanceTracker {
     packetFreshSends?: number;
     packetStaleSends?: number;
     packetUnknownSends?: number;
+    deadlineDropCount?: number;
+    decodedQueueEvictOldestCount?: number;
+    decodedQueueDropNewestCount?: number;
+    fd3DecodedAgeMsMax?: number;
+    decodedQueueDwellMsMax?: number;
+    rnsSendDurationMsMax?: number;
+    packetPathCheckMsMax?: number;
+    executorLoopGapMsMax?: number;
+    executorGapWhileQueuedMsMax?: number;
+    executorAudioPassMsMax?: number;
+    processBatchMsMax?: number;
+    processBatchFramesMax?: number;
+    rnsSendSlowCount?: number;
+    executorStallCount?: number;
+    executorCommandMsMax?: number;
+    executorCommandWhileQueuedMsMax?: number;
+    executorCommandSlowCount?: number;
   }): void {
     if (typeof depths.pendingFrames === 'number') {
       const pendingFrames = Math.max(0, Math.trunc(depths.pendingFrames));
@@ -1897,7 +1993,10 @@ export class GroupCallPerformanceTracker {
       );
     }
     if (typeof depths.pendingOldestAgeMs === 'number') {
-      const pendingOldestAgeMs = Math.max(0, roundMetric(depths.pendingOldestAgeMs));
+      const pendingOldestAgeMs = Math.max(
+        0,
+        roundMetric(depths.pendingOldestAgeMs)
+      );
       this.snapshot.reticulumAudioPendingOldestAgeMs = pendingOldestAgeMs;
       this.snapshot.reticulumAudioPendingOldestAgeMaxMs = Math.max(
         this.snapshot.reticulumAudioPendingOldestAgeMaxMs,
@@ -1909,7 +2008,10 @@ export class GroupCallPerformanceTracker {
       );
     }
     if (typeof depths.bridgeQueuedFrames === 'number') {
-      const bridgeQueuedFrames = Math.max(0, Math.trunc(depths.bridgeQueuedFrames));
+      const bridgeQueuedFrames = Math.max(
+        0,
+        Math.trunc(depths.bridgeQueuedFrames)
+      );
       this.snapshot.reticulumAudioBridgeQueuedFrames = bridgeQueuedFrames;
       this.snapshot.reticulumAudioBridgeQueuedFramesHighWater = Math.max(
         this.snapshot.reticulumAudioBridgeQueuedFramesHighWater,
@@ -1925,7 +2027,8 @@ export class GroupCallPerformanceTracker {
         0,
         roundMetric(depths.bridgeQueuedOldestAgeMs)
       );
-      this.snapshot.reticulumAudioBridgeQueuedOldestAgeMs = bridgeQueuedOldestAgeMs;
+      this.snapshot.reticulumAudioBridgeQueuedOldestAgeMs =
+        bridgeQueuedOldestAgeMs;
       this.snapshot.reticulumAudioBridgeQueuedOldestAgeMaxMs = Math.max(
         this.snapshot.reticulumAudioBridgeQueuedOldestAgeMaxMs,
         bridgeQueuedOldestAgeMs
@@ -1936,10 +2039,14 @@ export class GroupCallPerformanceTracker {
       );
     }
     if (typeof depths.bridgeWaitingForDrain === 'boolean') {
-      this.snapshot.reticulumAudioBridgeWaitingForDrain = depths.bridgeWaitingForDrain;
+      this.snapshot.reticulumAudioBridgeWaitingForDrain =
+        depths.bridgeWaitingForDrain;
     }
     if (typeof depths.decodedQueueDepth === 'number') {
-      const decodedQueueDepth = Math.max(0, Math.trunc(depths.decodedQueueDepth));
+      const decodedQueueDepth = Math.max(
+        0,
+        Math.trunc(depths.decodedQueueDepth)
+      );
       this.snapshot.reticulumAudioDecodedQueueDepth = decodedQueueDepth;
       this.snapshot.reticulumAudioDecodedQueueDepthHighWater = Math.max(
         this.snapshot.reticulumAudioDecodedQueueDepthHighWater,
@@ -1955,7 +2062,8 @@ export class GroupCallPerformanceTracker {
         0,
         roundMetric(depths.decodedQueueOldestAgeMs)
       );
-      this.snapshot.reticulumAudioDecodedQueueOldestAgeMs = decodedQueueOldestAgeMs;
+      this.snapshot.reticulumAudioDecodedQueueOldestAgeMs =
+        decodedQueueOldestAgeMs;
       this.snapshot.reticulumAudioDecodedQueueOldestAgeMaxMs = Math.max(
         this.snapshot.reticulumAudioDecodedQueueOldestAgeMaxMs,
         decodedQueueOldestAgeMs
@@ -1966,7 +2074,10 @@ export class GroupCallPerformanceTracker {
       );
     }
     if (typeof depths.binaryOutQueueDepth === 'number') {
-      const binaryOutQueueDepth = Math.max(0, Math.trunc(depths.binaryOutQueueDepth));
+      const binaryOutQueueDepth = Math.max(
+        0,
+        Math.trunc(depths.binaryOutQueueDepth)
+      );
       this.snapshot.reticulumAudioBinaryOutQueueDepth = binaryOutQueueDepth;
       this.snapshot.reticulumAudioBinaryOutQueueDepthHighWater = Math.max(
         this.snapshot.reticulumAudioBinaryOutQueueDepthHighWater,
@@ -2039,6 +2150,108 @@ export class GroupCallPerformanceTracker {
       this.snapshot.reticulumAudioPacketUnknownSends = Math.max(
         0,
         Math.trunc(depths.packetUnknownSends)
+      );
+    }
+    if (typeof depths.deadlineDropCount === 'number') {
+      this.snapshot.reticulumAudioDeadlineDropCount = Math.max(
+        0,
+        Math.trunc(depths.deadlineDropCount)
+      );
+    }
+    if (typeof depths.decodedQueueEvictOldestCount === 'number') {
+      this.snapshot.reticulumAudioDecodedQueueEvictOldestCount = Math.max(
+        0,
+        Math.trunc(depths.decodedQueueEvictOldestCount)
+      );
+    }
+    if (typeof depths.decodedQueueDropNewestCount === 'number') {
+      this.snapshot.reticulumAudioDecodedQueueDropNewestCount = Math.max(
+        0,
+        Math.trunc(depths.decodedQueueDropNewestCount)
+      );
+    }
+    if (typeof depths.fd3DecodedAgeMsMax === 'number') {
+      this.snapshot.reticulumAudioFd3DecodedAgeMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioFd3DecodedAgeMsMax,
+        depths.fd3DecodedAgeMsMax
+      );
+    }
+    if (typeof depths.decodedQueueDwellMsMax === 'number') {
+      this.snapshot.reticulumAudioDecodedQueueDwellMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioDecodedQueueDwellMsMax,
+        depths.decodedQueueDwellMsMax
+      );
+    }
+    if (typeof depths.rnsSendDurationMsMax === 'number') {
+      this.snapshot.reticulumAudioRnsSendDurationMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioRnsSendDurationMsMax,
+        depths.rnsSendDurationMsMax
+      );
+    }
+    if (typeof depths.packetPathCheckMsMax === 'number') {
+      this.snapshot.reticulumAudioPacketPathCheckMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioPacketPathCheckMsMax,
+        depths.packetPathCheckMsMax
+      );
+    }
+    if (typeof depths.executorLoopGapMsMax === 'number') {
+      this.snapshot.reticulumAudioExecutorLoopGapMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioExecutorLoopGapMsMax,
+        depths.executorLoopGapMsMax
+      );
+    }
+    if (typeof depths.executorGapWhileQueuedMsMax === 'number') {
+      this.snapshot.reticulumAudioExecutorGapWhileQueuedMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioExecutorGapWhileQueuedMsMax,
+        depths.executorGapWhileQueuedMsMax
+      );
+    }
+    if (typeof depths.executorAudioPassMsMax === 'number') {
+      this.snapshot.reticulumAudioExecutorAudioPassMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioExecutorAudioPassMsMax,
+        depths.executorAudioPassMsMax
+      );
+    }
+    if (typeof depths.processBatchMsMax === 'number') {
+      this.snapshot.reticulumAudioProcessBatchMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioProcessBatchMsMax,
+        depths.processBatchMsMax
+      );
+    }
+    if (typeof depths.processBatchFramesMax === 'number') {
+      this.snapshot.reticulumAudioProcessBatchFramesMax = maxFiniteCount(
+        this.snapshot.reticulumAudioProcessBatchFramesMax,
+        depths.processBatchFramesMax
+      );
+    }
+    if (typeof depths.rnsSendSlowCount === 'number') {
+      this.snapshot.reticulumAudioRnsSendSlowCount = Math.max(
+        0,
+        Math.trunc(depths.rnsSendSlowCount)
+      );
+    }
+    if (typeof depths.executorStallCount === 'number') {
+      this.snapshot.reticulumAudioExecutorStallCount = Math.max(
+        0,
+        Math.trunc(depths.executorStallCount)
+      );
+    }
+    if (typeof depths.executorCommandMsMax === 'number') {
+      this.snapshot.reticulumAudioExecutorCommandMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioExecutorCommandMsMax,
+        depths.executorCommandMsMax
+      );
+    }
+    if (typeof depths.executorCommandWhileQueuedMsMax === 'number') {
+      this.snapshot.reticulumAudioExecutorCommandWhileQueuedMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioExecutorCommandWhileQueuedMsMax,
+        depths.executorCommandWhileQueuedMsMax
+      );
+    }
+    if (typeof depths.executorCommandSlowCount === 'number') {
+      this.snapshot.reticulumAudioExecutorCommandSlowCount = Math.max(
+        0,
+        Math.trunc(depths.executorCommandSlowCount)
       );
     }
     this.snapshot.lastUpdatedAt = Date.now();
@@ -2219,9 +2432,13 @@ export class GroupCallPerformanceTracker {
     if (!Number.isFinite(latencyMs) || latencyMs < 0) return;
     this.playoutPostLatencyMsSum += latencyMs;
     this.playoutPostLatencyMsSamples++;
-    this.playoutPostLatencyMsMax = Math.max(this.playoutPostLatencyMsMax, latencyMs);
+    this.playoutPostLatencyMsMax = Math.max(
+      this.playoutPostLatencyMsMax,
+      latencyMs
+    );
     this.snapshot.avgReceiverIngressToPlayoutPostMs = roundMetric(
-      this.playoutPostLatencyMsSum / Math.max(1, this.playoutPostLatencyMsSamples)
+      this.playoutPostLatencyMsSum /
+        Math.max(1, this.playoutPostLatencyMsSamples)
     );
     this.snapshot.maxReceiverIngressToPlayoutPostMs = roundMetric(
       this.playoutPostLatencyMsMax
@@ -2602,6 +2819,23 @@ export class GroupCallPerformanceTracker {
       reticulumAudioPacketFreshSends: 0,
       reticulumAudioPacketStaleSends: 0,
       reticulumAudioPacketUnknownSends: 0,
+      reticulumAudioDeadlineDropCount: 0,
+      reticulumAudioDecodedQueueEvictOldestCount: 0,
+      reticulumAudioDecodedQueueDropNewestCount: 0,
+      reticulumAudioFd3DecodedAgeMsMax: 0,
+      reticulumAudioDecodedQueueDwellMsMax: 0,
+      reticulumAudioRnsSendDurationMsMax: 0,
+      reticulumAudioPacketPathCheckMsMax: 0,
+      reticulumAudioExecutorLoopGapMsMax: 0,
+      reticulumAudioExecutorGapWhileQueuedMsMax: 0,
+      reticulumAudioExecutorAudioPassMsMax: 0,
+      reticulumAudioProcessBatchMsMax: 0,
+      reticulumAudioProcessBatchFramesMax: 0,
+      reticulumAudioRnsSendSlowCount: 0,
+      reticulumAudioExecutorStallCount: 0,
+      reticulumAudioExecutorCommandMsMax: 0,
+      reticulumAudioExecutorCommandWhileQueuedMsMax: 0,
+      reticulumAudioExecutorCommandSlowCount: 0,
       reticulumAudioOutboundLinkSamples: 0,
       reticulumAudioOutboundPacketSamples: 0,
       reticulumAudioOutboundTransportLast: null,
@@ -2743,8 +2977,7 @@ export class GroupCallPerformanceTracker {
             stats.playoutOverTicks / Math.max(1, stats.playoutTicks)
           ),
           avgPlayoutDeltaMs: roundMetric(
-            stats.playoutDeltaMsSum /
-              Math.max(1, stats.playoutDeltaMsSamples)
+            stats.playoutDeltaMsSum / Math.max(1, stats.playoutDeltaMsSamples)
           ),
           avgReceiverIngressToPlayoutPostMs: roundMetric(
             stats.playoutPostLatencyMsSum /
@@ -2832,13 +3065,15 @@ export class GroupCallPerformanceTracker {
       reticulumAudioInboundPacketSamples:
         this.windowCounters.reticulumAudioInboundPacketSamples,
       reticulumAudioQueuePressureDropRatePerSec: roundMetric(
-        this.windowCounters.reticulumAudioQueuePressureDrops / (durationMs / 1000)
+        this.windowCounters.reticulumAudioQueuePressureDrops /
+          (durationMs / 1000)
       ),
       reticulumAudioStaleDropRatePerSec: roundMetric(
         this.windowCounters.reticulumAudioStaleDrops / (durationMs / 1000)
       ),
       reticulumAudioPacketSendFailureRatePerSec: roundMetric(
-        this.windowCounters.reticulumAudioPacketSendFailures / (durationMs / 1000)
+        this.windowCounters.reticulumAudioPacketSendFailures /
+          (durationMs / 1000)
       ),
       reticulumAudioPendingFramesHighWater:
         this.windowReticulumAudioPendingFramesHighWater,
@@ -2871,8 +3106,7 @@ export class GroupCallPerformanceTracker {
           Math.max(1, this.windowPlayoutMetricTicks)
       ),
       playoutOverTargetFraction: roundMetric(
-        this.windowPlayoutOverTicks /
-          Math.max(1, this.windowPlayoutMetricTicks)
+        this.windowPlayoutOverTicks / Math.max(1, this.windowPlayoutMetricTicks)
       ),
       avgPlayoutDeltaMs: roundMetric(
         this.windowPlayoutDeltaMsSum /

@@ -2907,8 +2907,7 @@ export function useGroupVoiceCall(uiActive = false) {
               ? 1
               : windowMetrics.sources.length,
             avgPcmBufferedMs: source.avgPcmBufferedMs,
-            playoutUnderTargetFraction:
-              source.playoutUnderTargetFraction ?? 0,
+            playoutUnderTargetFraction: source.playoutUnderTargetFraction ?? 0,
             avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
             concealmentTicks: source.concealmentTicks,
             missingFrames: source.missingFrames,
@@ -3527,8 +3526,9 @@ export function useGroupVoiceCall(uiActive = false) {
           windowMetrics.reticulumAudioInboundPacketSamples,
       };
       const prevWindowTrend =
-        recentWindowTrendsRef.current[recentWindowTrendsRef.current.length - 1] ??
-        null;
+        recentWindowTrendsRef.current[
+          recentWindowTrendsRef.current.length - 1
+        ] ?? null;
       const worsenedReasons: string[] = [];
       if (prevWindowTrend) {
         if (
@@ -3538,7 +3538,8 @@ export function useGroupVoiceCall(uiActive = false) {
           worsenedReasons.push('entered-recovery');
         }
         if (
-          prevWindowTrend.pathQualityScoreV1 - nextWindowTrend.pathQualityScoreV1 >=
+          prevWindowTrend.pathQualityScoreV1 -
+            nextWindowTrend.pathQualityScoreV1 >=
           GCALL_CALL_QUALITY_WORSENED_SCORE_DROP_MIN
         ) {
           worsenedReasons.push('path-quality-drop');
@@ -3582,7 +3583,9 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
       recentWindowTrendsRef.current.push(nextWindowTrend);
-      if (recentWindowTrendsRef.current.length > GCALL_RECENT_WINDOW_TRENDS_MAX) {
+      if (
+        recentWindowTrendsRef.current.length > GCALL_RECENT_WINDOW_TRENDS_MAX
+      ) {
         recentWindowTrendsRef.current.splice(
           0,
           recentWindowTrendsRef.current.length - GCALL_RECENT_WINDOW_TRENDS_MAX
@@ -3597,15 +3600,13 @@ export function useGroupVoiceCall(uiActive = false) {
           nextPathQualityScoreV1: nextWindowTrend.pathQualityScoreV1,
           prevUnderTargetFraction:
             prevWindowTrend?.playoutUnderTargetFraction ?? null,
-          nextUnderTargetFraction:
-            nextWindowTrend.playoutUnderTargetFraction,
+          nextUnderTargetFraction: nextWindowTrend.playoutUnderTargetFraction,
           prevMissingFrames: prevWindowTrend?.missingFrames ?? null,
           nextMissingFrames: nextWindowTrend.missingFrames,
           prevConcealmentTicks: prevWindowTrend?.concealmentTicks ?? null,
           nextConcealmentTicks: nextWindowTrend.concealmentTicks,
           nextDecodeFailures: nextWindowTrend.packetsDroppedDecodeFailure,
-          nextPendingDecryptDrops:
-            nextWindowTrend.packetsDroppedPendingDecrypt,
+          nextPendingDecryptDrops: nextWindowTrend.packetsDroppedPendingDecrypt,
           nextPacketPathTimeouts:
             nextWindowTrend.reticulumAudioPacketPathTimeouts,
         };
@@ -3614,7 +3615,11 @@ export function useGroupVoiceCall(uiActive = false) {
           type: 'call-quality-worsened',
           detail: worsenedDetail,
         });
-        gcallDiagnosticsPush('warn', '[GCall] callQualityWorsened', worsenedDetail);
+        gcallDiagnosticsPush(
+          'warn',
+          '[GCall] callQualityWorsened',
+          worsenedDetail
+        );
       }
       const tagBuf = gcallWindowDiagnosticTagsRef.current;
       const tags = tagBuf.splice(0, tagBuf.length);
@@ -4751,6 +4756,23 @@ export function useGroupVoiceCall(uiActive = false) {
             packetFreshSends?: number;
             packetStaleSends?: number;
             packetUnknownSends?: number;
+            deadlineDropCount?: number;
+            decodedQueueEvictOldestCount?: number;
+            decodedQueueDropNewestCount?: number;
+            fd3DecodedAgeMsMax?: number;
+            decodedQueueDwellMsMax?: number;
+            rnsSendDurationMsMax?: number;
+            packetPathCheckMsMax?: number;
+            executorLoopGapMsMax?: number;
+            executorGapWhileQueuedMsMax?: number;
+            executorAudioPassMsMax?: number;
+            processBatchMsMax?: number;
+            processBatchFramesMax?: number;
+            rnsSendSlowCount?: number;
+            executorStallCount?: number;
+            executorCommandMsMax?: number;
+            executorCommandWhileQueuedMsMax?: number;
+            executorCommandSlowCount?: number;
           };
         };
       }
@@ -4779,11 +4801,15 @@ export function useGroupVoiceCall(uiActive = false) {
                 nextTransport: outboundTransport,
               },
             });
-            gcallDiagnosticsPush('info', '[GCall] reticulumAudioSendTransportChanged', {
-              peerAddress: truncateGcallDiagAddress(outboundPeerKey),
-              prevTransport: prevOutboundTransport,
-              nextTransport: outboundTransport,
-            });
+            gcallDiagnosticsPush(
+              'info',
+              '[GCall] reticulumAudioSendTransportChanged',
+              {
+                peerAddress: truncateGcallDiagAddress(outboundPeerKey),
+                prevTransport: prevOutboundTransport,
+                nextTransport: outboundTransport,
+              }
+            );
           }
           lastOutboundTransportByPeerRef.current.set(
             outboundPeerKey,
@@ -4810,6 +4836,27 @@ export function useGroupVoiceCall(uiActive = false) {
           packetFreshSends: diagnostics.bridge?.packetFreshSends,
           packetStaleSends: diagnostics.bridge?.packetStaleSends,
           packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
+          deadlineDropCount: diagnostics.bridge?.deadlineDropCount,
+          decodedQueueEvictOldestCount:
+            diagnostics.bridge?.decodedQueueEvictOldestCount,
+          decodedQueueDropNewestCount:
+            diagnostics.bridge?.decodedQueueDropNewestCount,
+          fd3DecodedAgeMsMax: diagnostics.bridge?.fd3DecodedAgeMsMax,
+          decodedQueueDwellMsMax: diagnostics.bridge?.decodedQueueDwellMsMax,
+          rnsSendDurationMsMax: diagnostics.bridge?.rnsSendDurationMsMax,
+          packetPathCheckMsMax: diagnostics.bridge?.packetPathCheckMsMax,
+          executorLoopGapMsMax: diagnostics.bridge?.executorLoopGapMsMax,
+          executorGapWhileQueuedMsMax:
+            diagnostics.bridge?.executorGapWhileQueuedMsMax,
+          executorAudioPassMsMax: diagnostics.bridge?.executorAudioPassMsMax,
+          processBatchMsMax: diagnostics.bridge?.processBatchMsMax,
+          processBatchFramesMax: diagnostics.bridge?.processBatchFramesMax,
+          rnsSendSlowCount: diagnostics.bridge?.rnsSendSlowCount,
+          executorStallCount: diagnostics.bridge?.executorStallCount,
+          executorCommandMsMax: diagnostics.bridge?.executorCommandMsMax,
+          executorCommandWhileQueuedMsMax:
+            diagnostics.bridge?.executorCommandWhileQueuedMsMax,
+          executorCommandSlowCount: diagnostics.bridge?.executorCommandSlowCount,
         });
         if (diagnostics.bridge) {
           const last = lastReticulumAudioTotalsRef.current;
@@ -7529,7 +7576,10 @@ export function useGroupVoiceCall(uiActive = false) {
       processPendingVerifiedKeysRef.current();
 
       const role = computeMyRole(myAddress, topo);
-      const clusterForwarderIndex = findClusterIndexForForwarder(myAddress, topo);
+      const clusterForwarderIndex = findClusterIndexForForwarder(
+        myAddress,
+        topo
+      );
       const restartTopologyHeartbeat = shouldRestartTopologyHeartbeat({
         role,
         previousRole: myRoleRef.current,
@@ -12881,9 +12931,11 @@ export function useGroupVoiceCall(uiActive = false) {
           setMemberGateGroupName('');
         }
 
-        const electronApi = (window as Window & {
-          electronAPI?: Window['electronAPI'];
-        }).electronAPI;
+        const electronApi = (
+          window as Window & {
+            electronAPI?: Window['electronAPI'];
+          }
+        ).electronAPI;
         if (typeof electronApi?.reticulumGetStatus !== 'function') {
           setGcallJoinError('p2p_health_not_good');
           return;
@@ -14952,11 +15004,15 @@ export function useGroupVoiceCall(uiActive = false) {
               nextTransport: normalizedIngressTransport,
             },
           });
-          gcallDiagnosticsPush('info', '[GCall] reticulumAudioRecvTransportChanged', {
-            peerAddress: truncateGcallDiagAddress(inboundPeerKey),
-            prevTransport: prevInboundTransport,
-            nextTransport: normalizedIngressTransport,
-          });
+          gcallDiagnosticsPush(
+            'info',
+            '[GCall] reticulumAudioRecvTransportChanged',
+            {
+              peerAddress: truncateGcallDiagAddress(inboundPeerKey),
+              prevTransport: prevInboundTransport,
+              nextTransport: normalizedIngressTransport,
+            }
+          );
         }
         lastInboundTransportByPeerRef.current.set(
           inboundPeerKey,

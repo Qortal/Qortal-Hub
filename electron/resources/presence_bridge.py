@@ -41,7 +41,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire393-reticulum-await-path-links-v1"
+PRESENCE_BRIDGE_BUILD = "wire394-reticulum-binary-audio-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -133,6 +133,9 @@ def _call_wire_json_bytes(out: Dict[str, Any]) -> bytes:
 
 _GROUP_AUDIO_WIRE_TYPE = "GCA"
 _GROUP_AUDIO_HEARTBEAT_WIRE_TYPE = "GAC"
+_GROUP_AUDIO_BINARY_MAGIC = b"QGAU"
+_GROUP_AUDIO_BINARY_VERSION = 1
+_GROUP_AUDIO_BINARY_HEADER_BYTES = 9
 _audio_links_by_id: Dict[str, Dict[str, Any]] = {}
 _audio_link_ids_by_object: Dict[int, str] = {}
 _outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
@@ -171,6 +174,7 @@ _JSON_RESP_OUT_QUEUE_MAX = 512
 _JSON_EVENT_OUT_QUEUE_MAX = 2048
 _AUDIO_BINARY_OUT_QUEUE_MAX = 128
 _AUDIO_BATCH_STALE_SECONDS = 0.75
+_AUDIO_OUTBOUND_DEADLINE_SECONDS = 0.32
 _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS = 2
 _AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS = 16
 _AUDIO_BACKLOG_BATCH_STEP = 2
@@ -203,6 +207,7 @@ _cmd_queue_bounded: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
 _audio_decoded_queue: "queue.Queue[Optional[list]]" = queue.Queue(
     maxsize=_AUDIO_DECODED_QUEUE_MAX
 )
+_rns_work_condition = threading.Condition()
 _audio_in_f: Optional[IO[bytes]] = None
 _audio_drops_ingress = 0
 _audio_drops_json_out = 0
@@ -215,6 +220,27 @@ _audio_packet_path_timeouts = 0
 _audio_packet_fresh_sends = 0
 _audio_packet_stale_sends = 0
 _audio_packet_unknown_sends = 0
+_audio_deadline_drops = 0
+_audio_decoded_queue_evict_oldest = 0
+_audio_decoded_queue_drop_newest = 0
+_audio_fd3_decoded_age_ms_max = 0.0
+_audio_decoded_queue_dwell_ms_max = 0.0
+_audio_rns_send_duration_ms_max = 0.0
+_audio_packet_path_check_ms_max = 0.0
+_audio_executor_loop_gap_ms_max = 0.0
+_audio_executor_gap_while_queued_ms_max = 0.0
+_audio_executor_audio_pass_ms_max = 0.0
+_audio_process_batch_ms_max = 0.0
+_audio_process_batch_frames_max = 0
+_audio_rns_send_slow_count = 0
+_audio_executor_stall_count = 0
+_audio_executor_command_ms_max = 0.0
+_audio_executor_command_while_queued_ms_max = 0.0
+_audio_executor_command_slow_count = 0
+_AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
+_AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS = 120.0
+_AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS = 80.0
+_AUDIO_EXECUTOR_COMMAND_LOG_THRESHOLD_MS = 80.0
 _audio_queue_state_last_emit = 0.0
 _audio_queue_state_dirty = False
 # One-shot narrowing logs (grep target=reticulum-audio-ipc stage=…)
@@ -255,7 +281,7 @@ _GROUP_CALL_WIRE_TYPES = frozenset(
     }
 )
 _AUDIO_LINK_WIRE_TYPES = frozenset(
-    {_GROUP_AUDIO_WIRE_TYPE, _GROUP_AUDIO_HEARTBEAT_WIRE_TYPE}
+    {_GROUP_AUDIO_HEARTBEAT_WIRE_TYPE}
 )
 
 
@@ -304,6 +330,11 @@ def emit_event(event: str, payload: Optional[Dict[str, Any]] = None) -> None:
 def _mark_audio_queue_state_dirty() -> None:
     global _audio_queue_state_dirty
     _audio_queue_state_dirty = True
+
+
+def _notify_rns_work_available() -> None:
+    with _rns_work_condition:
+        _rns_work_condition.notify()
 
 
 def _decoded_queue_oldest_age_ms(now: float) -> float:
@@ -359,6 +390,23 @@ def _emit_audio_queue_state(force: bool = False) -> None:
             "packetFreshSends": _audio_packet_fresh_sends,
             "packetStaleSends": _audio_packet_stale_sends,
             "packetUnknownSends": _audio_packet_unknown_sends,
+            "deadlineDropCount": _audio_deadline_drops,
+            "decodedQueueEvictOldestCount": _audio_decoded_queue_evict_oldest,
+            "decodedQueueDropNewestCount": _audio_decoded_queue_drop_newest,
+            "fd3DecodedAgeMsMax": _audio_fd3_decoded_age_ms_max,
+            "decodedQueueDwellMsMax": _audio_decoded_queue_dwell_ms_max,
+            "rnsSendDurationMsMax": _audio_rns_send_duration_ms_max,
+            "packetPathCheckMsMax": _audio_packet_path_check_ms_max,
+            "executorLoopGapMsMax": _audio_executor_loop_gap_ms_max,
+            "executorGapWhileQueuedMsMax": _audio_executor_gap_while_queued_ms_max,
+            "executorAudioPassMsMax": _audio_executor_audio_pass_ms_max,
+            "processBatchMsMax": _audio_process_batch_ms_max,
+            "processBatchFramesMax": _audio_process_batch_frames_max,
+            "rnsSendSlowCount": _audio_rns_send_slow_count,
+            "executorStallCount": _audio_executor_stall_count,
+            "executorCommandMsMax": _audio_executor_command_ms_max,
+            "executorCommandWhileQueuedMsMax": _audio_executor_command_while_queued_ms_max,
+            "executorCommandSlowCount": _audio_executor_command_slow_count,
         },
     )
 
@@ -519,10 +567,206 @@ def _encode_audio_batch_binary(
     return bytes(header) + body_bytes
 
 
+def _filter_outbound_audio_deadline(
+    frames: list, now_wall_ms: Optional[int] = None
+) -> tuple[list, int]:
+    """Drop parent→child audio frames that already missed the live send deadline."""
+    if not frames:
+        return frames, 0
+    now_ms = (
+        now_wall_ms if isinstance(now_wall_ms, int) else int(time.time() * 1000)
+    )
+    deadline_ms = int(_AUDIO_OUTBOUND_DEADLINE_SECONDS * 1000)
+    fresh: list = []
+    dropped = 0
+    for frame in frames:
+        try:
+            received_at_wall_ms = int(frame[4])
+        except Exception:
+            received_at_wall_ms = 0
+        if received_at_wall_ms > 0 and now_ms - received_at_wall_ms > deadline_ms:
+            dropped += 1
+            continue
+        fresh.append(frame)
+    return fresh, dropped
+
+
+def _note_fd3_decoded_age(frames: list) -> None:
+    global _audio_fd3_decoded_age_ms_max
+    if not frames:
+        return
+    now_ms = int(time.time() * 1000)
+    max_age = 0.0
+    for frame in frames:
+        try:
+            received_at_wall_ms = int(frame[4])
+        except Exception:
+            received_at_wall_ms = 0
+        if received_at_wall_ms > 0:
+            max_age = max(max_age, float(max(0, now_ms - received_at_wall_ms)))
+    if max_age > _audio_fd3_decoded_age_ms_max:
+        _audio_fd3_decoded_age_ms_max = max_age
+        _mark_audio_queue_state_dirty()
+
+
+def _note_decoded_queue_dwell_ms(dwell_ms: float) -> None:
+    global _audio_decoded_queue_dwell_ms_max
+    if dwell_ms > _audio_decoded_queue_dwell_ms_max:
+        _audio_decoded_queue_dwell_ms_max = dwell_ms
+        _mark_audio_queue_state_dirty()
+
+
+def _note_rns_send_duration(start_monotonic: float) -> None:
+    global _audio_rns_send_duration_ms_max, _audio_rns_send_slow_count
+    duration_ms = max(0.0, (time.monotonic() - start_monotonic) * 1000.0)
+    if duration_ms > _audio_rns_send_duration_ms_max:
+        _audio_rns_send_duration_ms_max = duration_ms
+        _mark_audio_queue_state_dirty()
+    if duration_ms >= _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS:
+        _audio_rns_send_slow_count += 1
+        _mark_audio_queue_state_dirty()
+        log(
+            f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-send-slow "
+            f"duration_ms={duration_ms:.3f} threshold_ms={_AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS:.1f}"
+        )
+
+
+def _note_packet_path_check_duration(start_monotonic: float) -> None:
+    global _audio_packet_path_check_ms_max
+    duration_ms = max(0.0, (time.monotonic() - start_monotonic) * 1000.0)
+    if duration_ms > _audio_packet_path_check_ms_max:
+        _audio_packet_path_check_ms_max = duration_ms
+        _mark_audio_queue_state_dirty()
+
+
+def _note_executor_loop_gap(
+    previous_loop_at: Optional[float],
+    now: float,
+    queued_before_gap: int,
+) -> None:
+    global _audio_executor_loop_gap_ms_max, _audio_executor_gap_while_queued_ms_max
+    global _audio_executor_stall_count
+    if previous_loop_at is None:
+        return
+    gap_ms = max(0.0, (now - previous_loop_at) * 1000.0)
+    if gap_ms > _audio_executor_loop_gap_ms_max:
+        _audio_executor_loop_gap_ms_max = gap_ms
+        _mark_audio_queue_state_dirty()
+    if queued_before_gap > 0 and gap_ms > _audio_executor_gap_while_queued_ms_max:
+        _audio_executor_gap_while_queued_ms_max = gap_ms
+        _mark_audio_queue_state_dirty()
+    if queued_before_gap > 0 and gap_ms >= _AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS:
+        _audio_executor_stall_count += 1
+        _mark_audio_queue_state_dirty()
+        log(
+            f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-executor-stall "
+            f"gap_ms={gap_ms:.3f} queued_before_gap={queued_before_gap} "
+            f"threshold_ms={_AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS:.1f}"
+        )
+
+
+def _note_executor_audio_pass_duration(start_monotonic: float, batches: int) -> None:
+    global _audio_executor_audio_pass_ms_max
+    if batches <= 0:
+        return
+    duration_ms = max(0.0, (time.monotonic() - start_monotonic) * 1000.0)
+    if duration_ms > _audio_executor_audio_pass_ms_max:
+        _audio_executor_audio_pass_ms_max = duration_ms
+        _mark_audio_queue_state_dirty()
+
+
+def _note_process_audio_batch_duration(start_monotonic: float, frame_count: int) -> None:
+    global _audio_process_batch_ms_max, _audio_process_batch_frames_max
+    duration_ms = max(0.0, (time.monotonic() - start_monotonic) * 1000.0)
+    if duration_ms > _audio_process_batch_ms_max:
+        _audio_process_batch_ms_max = duration_ms
+        _mark_audio_queue_state_dirty()
+    if frame_count > _audio_process_batch_frames_max:
+        _audio_process_batch_frames_max = frame_count
+        _mark_audio_queue_state_dirty()
+    if duration_ms >= _AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS:
+        log(
+            f"[presence_bridge] {_AUDIO_IPC_LOG} stage=process-audio-batch-slow "
+            f"duration_ms={duration_ms:.3f} frames={frame_count} "
+            f"threshold_ms={_AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS:.1f}"
+        )
+
+
+def _note_executor_command_duration(
+    start_monotonic: float,
+    action: Any,
+    audio_queued_at_start: int,
+) -> None:
+    global _audio_executor_command_ms_max, _audio_executor_command_while_queued_ms_max
+    global _audio_executor_command_slow_count
+    duration_ms = max(0.0, (time.monotonic() - start_monotonic) * 1000.0)
+    if duration_ms > _audio_executor_command_ms_max:
+        _audio_executor_command_ms_max = duration_ms
+        _mark_audio_queue_state_dirty()
+    if audio_queued_at_start > 0 and duration_ms > _audio_executor_command_while_queued_ms_max:
+        _audio_executor_command_while_queued_ms_max = duration_ms
+        _mark_audio_queue_state_dirty()
+    if duration_ms >= _AUDIO_EXECUTOR_COMMAND_LOG_THRESHOLD_MS:
+        _audio_executor_command_slow_count += 1
+        _mark_audio_queue_state_dirty()
+        log(
+            f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-executor-command-slow "
+            f"duration_ms={duration_ms:.3f} action={str(action)[:80]!r} "
+            f"audio_queued_at_start={audio_queued_at_start} "
+            f"threshold_ms={_AUDIO_EXECUTOR_COMMAND_LOG_THRESHOLD_MS:.1f}"
+        )
+
+
+def _put_audio_decoded_batch_keep_newest(frames: list) -> bool:
+    """Admit fresh outbound audio by evicting the oldest decoded batch under pressure."""
+    global _audio_drops_ingress, _audio_decoded_queue_evict_oldest
+    global _audio_decoded_queue_drop_newest
+    queued = (time.monotonic(), frames)
+    try:
+        _audio_decoded_queue.put_nowait(queued)
+        _mark_audio_queue_state_dirty()
+        _notify_rns_work_available()
+        return True
+    except queue.Full:
+        pass
+
+    evicted_oldest = False
+    try:
+        dropped = _audio_decoded_queue.get_nowait()
+        if dropped is not None:
+            evicted_oldest = True
+            _audio_drops_ingress += 1
+            _audio_decoded_queue_evict_oldest += 1
+    except queue.Empty:
+        pass
+
+    try:
+        _audio_decoded_queue.put_nowait(queued)
+        _mark_audio_queue_state_dirty()
+        _notify_rns_work_available()
+        if evicted_oldest and _audio_drops_ingress % 100 == 1:
+            log(
+                f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=decoded-queue-full "
+                f"evicted_oldest drops={_audio_drops_ingress}"
+            )
+        return True
+    except queue.Full:
+        _audio_drops_ingress += 1
+        _audio_decoded_queue_drop_newest += 1
+        _mark_audio_queue_state_dirty()
+        if _audio_drops_ingress % 100 == 1:
+            log(
+                f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=decoded-queue-full "
+                f"drop_newest drops={_audio_drops_ingress}"
+            )
+        return False
+
+
 def _process_audio_batch(frames: list) -> None:
     """frames: list of (link_id, room_id, peer_presence_hash, peer_call_hash, received_at_wall_ms, raw_opus_bytes)"""
     global _audio_ipc_rns_first_send_ok_logged, _audio_packet_send_failures
     global _audio_packet_fresh_sends, _audio_packet_stale_sends, _audio_packet_unknown_sends
+    process_start = time.monotonic()
     for link_id, room_id, peer_presence_hash, peer_call_hash, _received_at_wall_ms, raw in frames:
         if link_id:
             state = get_audio_link_state(link_id)
@@ -563,8 +807,7 @@ def _process_audio_batch(frames: list) -> None:
                 )
                 continue
             try:
-                data_b64 = base64.b64encode(raw).decode("ascii")
-                wire_bytes = make_group_audio_wire(room_id, data_b64)
+                wire_bytes = make_group_audio_wire(room_id, raw)
                 max_wire_bytes = _MAX_ENCRYPTED_WIRE_BYTES
                 try:
                     link_mdu = link.get_mdu()
@@ -585,7 +828,9 @@ def _process_audio_batch(frames: list) -> None:
                     )
                     continue
                 packet = RNS.Packet(link, wire_bytes, create_receipt=False)
+                send_start = time.monotonic()
                 result = packet.send()
+                _note_rns_send_duration(send_start)
                 if result is False:
                     _audio_packet_send_failures += 1
                     _mark_audio_queue_state_dirty()
@@ -649,6 +894,7 @@ def _process_audio_batch(frames: list) -> None:
         try:
             outbound = build_outbound_destination(peer_identity)
             destination_hash = outbound.hash
+            path_check_start = time.monotonic()
             path_state, path_ready = _ensure_call_media_path(
                 peer_hash,
                 destination_hash,
@@ -656,6 +902,7 @@ def _process_audio_batch(frames: list) -> None:
                 allow_wait=False,
                 reason="audio_send",
             )
+            _note_packet_path_check_duration(path_check_start)
             if path_state == "fresh":
                 _audio_packet_fresh_sends += 1
             elif path_state in ("stale", "warming"):
@@ -675,8 +922,7 @@ def _process_audio_batch(frames: list) -> None:
                     },
                 )
                 continue
-            data_b64 = base64.b64encode(raw).decode("ascii")
-            wire_bytes = make_group_audio_wire(room_id, data_b64)
+            wire_bytes = make_group_audio_wire(room_id, raw)
             if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
                 emit_event(
                     "group_audio_send_failed",
@@ -689,7 +935,9 @@ def _process_audio_batch(frames: list) -> None:
                 )
                 continue
             packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
+            send_start = time.monotonic()
             result = packet.send()
+            _note_rns_send_duration(send_start)
             if result is False:
                 _audio_packet_send_failures += 1
                 _note_call_media_send_result(peer_hash, False)
@@ -726,6 +974,7 @@ def _process_audio_batch(frames: list) -> None:
                     "transport": "packet",
                 },
             )
+    _note_process_audio_batch_duration(process_start, len(frames))
 
 
 def _stdout_writer_loop() -> None:
@@ -798,6 +1047,7 @@ def _audio_binary_out_writer_loop() -> None:
 
 def _audio_in_reader_loop() -> None:
     global _audio_in_f, _audio_drops_ingress, _audio_ipc_fd3_first_batch_ok_logged
+    global _audio_stale_drops, _audio_deadline_drops
     try:
         _audio_in_f = open(3, "rb", buffering=0)
     except OSError as exc:
@@ -837,6 +1087,15 @@ def _audio_in_reader_loop() -> None:
         except ValueError as exc:
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=parse-batch-failed err={exc}")
             continue
+        _note_fd3_decoded_age(frames)
+        frames, deadline_drops = _filter_outbound_audio_deadline(frames)
+        if deadline_drops > 0:
+            _audio_deadline_drops += deadline_drops
+            _audio_stale_drops += deadline_drops
+            _mark_audio_queue_state_dirty()
+            _emit_audio_queue_state()
+        if not frames:
+            continue
         if not _audio_ipc_fd3_first_batch_ok_logged:
             _audio_ipc_fd3_first_batch_ok_logged = True
             nframes = len(frames) if isinstance(frames, list) else 0
@@ -844,91 +1103,125 @@ def _audio_in_reader_loop() -> None:
                 f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-first-batch-from-parent-parsed "
                 f"frames={nframes}"
             )
+        _put_audio_decoded_batch_keep_newest(frames)
+        _emit_audio_queue_state()
+
+
+def _drain_audio_executor_pass(batch_budget: int) -> tuple[bool, int]:
+    global _audio_stale_drops, _audio_deadline_drops
+    drained_audio = False
+    drained_batches = 0
+    audio_pass_start = time.monotonic()
+    try:
+        while drained_batches < batch_budget:
+            queued = _audio_decoded_queue.get_nowait()
+            if queued is None:
+                break
+            queued_at, batch = queued
+            batch_age = time.monotonic() - queued_at
+            _note_decoded_queue_dwell_ms(batch_age * 1000.0)
+            if batch_age > _AUDIO_BATCH_STALE_SECONDS:
+                _audio_stale_drops += len(batch)
+                _mark_audio_queue_state_dirty()
+            else:
+                batch, deadline_drops = _filter_outbound_audio_deadline(batch)
+                if deadline_drops > 0:
+                    _audio_deadline_drops += deadline_drops
+                    _audio_stale_drops += deadline_drops
+                    _mark_audio_queue_state_dirty()
+                if batch:
+                    _process_audio_batch(batch)
+            drained_audio = True
+            drained_batches += 1
+    except queue.Empty:
+        pass
+    _note_executor_audio_pass_duration(audio_pass_start, drained_batches)
+    if drained_audio:
+        _mark_audio_queue_state_dirty()
+        _emit_audio_queue_state()
+    return drained_audio, drained_batches
+
+
+def _handle_rns_command_message(message: Optional[Dict[str, Any]]) -> bool:
+    if message is None:
         try:
-            _audio_decoded_queue.put_nowait((time.monotonic(), frames))
-            _mark_audio_queue_state_dirty()
-            _emit_audio_queue_state()
-        except queue.Full:
-            _audio_drops_ingress += 1
-            _mark_audio_queue_state_dirty()
-            _emit_audio_queue_state()
-            if _audio_drops_ingress % 100 == 1:
-                log(
-                    f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=decoded-queue-full drops={_audio_drops_ingress}"
-                )
+            while True:
+                queued = _audio_decoded_queue.get_nowait()
+                if queued is None:
+                    continue
+                _, batch = queued
+                _process_audio_batch(batch)
+        except queue.Empty:
+            pass
+        _emit_audio_queue_state(force=True)
+        return False
+    command_start = time.monotonic()
+    audio_queued_at_start = _audio_decoded_queue.qsize()
+    action = message.get("action") if isinstance(message, dict) else None
+    try:
+        handle_command(message)
+    except Exception as exc:
+        emit_event(
+            "error",
+            {
+                "code": "command_failed",
+                "message": str(exc),
+                "detail": traceback.format_exc(limit=3),
+            },
+        )
+    finally:
+        _note_executor_command_duration(command_start, action, audio_queued_at_start)
+    _emit_audio_queue_state()
+    return True
 
 
 def _rns_executor_loop() -> None:
-    global _audio_stale_drops
+    last_loop_at: Optional[float] = None
+    queued_before_gap = 0
+    next_lane = "audio"
     while True:
-        drained_audio = False
-        drained_batches = 0
-        decoded_backlog = 0
-        try:
-            decoded_backlog = _audio_decoded_queue.qsize()
-            batch_budget = min(
-                _AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS,
-                _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS
-                + max(0, decoded_backlog // _AUDIO_BACKLOG_BATCH_STEP),
-            )
-            while drained_batches < batch_budget:
-                queued = _audio_decoded_queue.get_nowait()
-                if queued is None:
-                    break
-                queued_at, batch = queued
-                batch_age = time.monotonic() - queued_at
-                if batch_age > _AUDIO_BATCH_STALE_SECONDS:
-                    _audio_stale_drops += len(batch)
-                    _mark_audio_queue_state_dirty()
-                else:
-                    _process_audio_batch(batch)
-                drained_audio = True
-                drained_batches += 1
-        except queue.Empty:
-            pass
-        if drained_audio:
-            _mark_audio_queue_state_dirty()
-            _emit_audio_queue_state()
-        try:
-            if not _cmd_queue_bounded.empty():
-                message = _cmd_queue_bounded.get_nowait()
-            elif not _audio_decoded_queue.empty():
-                if _shutdown.is_set() and _cmd_queue_bounded.empty():
-                    continue
-                _emit_audio_queue_state()
-                time.sleep(_AUDIO_BACKLOG_CMD_TIMEOUT_SECONDS)
-                continue
-            else:
-                message = _cmd_queue_bounded.get(timeout=0.05)
-        except queue.Empty:
-            if _shutdown.is_set() and _cmd_queue_bounded.empty() and _audio_decoded_queue.empty():
+        loop_start = time.monotonic()
+        _note_executor_loop_gap(last_loop_at, loop_start, queued_before_gap)
+        last_loop_at = loop_start
+
+        audio_ready = not _audio_decoded_queue.empty()
+        cmd_ready = not _cmd_queue_bounded.empty()
+        if not audio_ready and not cmd_ready:
+            if _shutdown.is_set():
                 return
+            queued_before_gap = 0
             _emit_audio_queue_state()
+            with _rns_work_condition:
+                if _audio_decoded_queue.empty() and _cmd_queue_bounded.empty():
+                    _rns_work_condition.wait(timeout=0.05)
             continue
-        if message is None:
+
+        if audio_ready and (not cmd_ready or next_lane == "audio"):
+            decoded_backlog = _audio_decoded_queue.qsize()
+            if cmd_ready:
+                batch_budget = _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS
+            else:
+                batch_budget = min(
+                    _AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS,
+                    _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS
+                    + max(0, decoded_backlog // _AUDIO_BACKLOG_BATCH_STEP),
+                )
+            _drain_audio_executor_pass(batch_budget)
+            next_lane = "cmd"
+            queued_before_gap = _audio_decoded_queue.qsize()
+            continue
+
+        if cmd_ready:
             try:
-                while True:
-                    queued = _audio_decoded_queue.get_nowait()
-                    if queued is None:
-                        continue
-                    _, batch = queued
-                    _process_audio_batch(batch)
+                message = _cmd_queue_bounded.get_nowait()
             except queue.Empty:
-                pass
-            _emit_audio_queue_state(force=True)
-            return
-        try:
-            handle_command(message)
-        except Exception as exc:
-            emit_event(
-                "error",
-                {
-                    "code": "command_failed",
-                    "message": str(exc),
-                    "detail": traceback.format_exc(limit=3),
-                },
-            )
-        _emit_audio_queue_state()
+                queued_before_gap = _audio_decoded_queue.qsize()
+                continue
+            if not _handle_rns_command_message(message):
+                return
+            next_lane = "audio"
+            queued_before_gap = _audio_decoded_queue.qsize()
+            continue
 
 
 def log(message: str) -> None:
@@ -4114,16 +4407,68 @@ def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes)
         )
 
 
-def make_group_audio_wire(room_id: str, data_b64: str) -> bytes:
+def make_group_audio_wire(room_id: str, raw_audio: bytes) -> bytes:
     if _destination is None:
         raise RuntimeError("Local destination not initialised")
-    wire = {
-        "t": _GROUP_AUDIO_WIRE_TYPE,
-        "R": room_id,
-        "d": data_b64,
-        "r": destination_hash_hex(_destination.hash),
-    }
-    return json.dumps(wire, separators=(",", ":")).encode("utf-8")
+    room_bytes = str(room_id or "").encode("utf-8")
+    sender_hash = bytes(_destination.hash)
+    payload = bytes(raw_audio or b"")
+    if (
+        not room_bytes
+        or len(room_bytes) > AUDIO_MAX_ROOM_ID_LEN
+        or len(sender_hash) > AUDIO_MAX_HASH_LEN
+        or len(payload) > AUDIO_MAX_PAYLOAD
+    ):
+        raise ValueError("field too large")
+    return (
+        _GROUP_AUDIO_BINARY_MAGIC
+        + bytes(
+            (
+                _GROUP_AUDIO_BINARY_VERSION,
+                len(room_bytes),
+                len(sender_hash),
+            )
+        )
+        + len(payload).to_bytes(2, "big")
+        + room_bytes
+        + sender_hash
+        + payload
+    )
+
+
+def _decode_group_audio_wire(data: bytes) -> Optional[Tuple[str, str, bytes]]:
+    if not isinstance(data, (bytes, bytearray)):
+        return None
+    wire = bytes(data)
+    if len(wire) < _GROUP_AUDIO_BINARY_HEADER_BYTES:
+        return None
+    if wire[:4] != _GROUP_AUDIO_BINARY_MAGIC:
+        return None
+    if wire[4] != _GROUP_AUDIO_BINARY_VERSION:
+        return None
+    room_len = wire[5]
+    sender_len = wire[6]
+    payload_len = int.from_bytes(wire[7:9], "big")
+    if (
+        room_len == 0
+        or room_len > AUDIO_MAX_ROOM_ID_LEN
+        or sender_len == 0
+        or sender_len > AUDIO_MAX_HASH_LEN
+        or payload_len > AUDIO_MAX_PAYLOAD
+    ):
+        return None
+    expected_len = _GROUP_AUDIO_BINARY_HEADER_BYTES + room_len + sender_len + payload_len
+    if len(wire) != expected_len:
+        return None
+    offset = _GROUP_AUDIO_BINARY_HEADER_BYTES
+    try:
+        room_id = wire[offset : offset + room_len].decode("utf-8")
+    except Exception:
+        return None
+    offset += room_len
+    sender_hex = wire[offset : offset + sender_len].hex()
+    offset += sender_len
+    return room_id, sender_hex, bytes(wire[offset : offset + payload_len])
 
 
 def get_audio_link_state(link_id: str) -> Optional[Dict[str, Any]]:
@@ -4211,6 +4556,31 @@ def on_audio_link_packet(message, packet) -> None:
     state = get_audio_link_state(link_id)
     if state is None:
         return
+    decoded_audio = _decode_group_audio_wire(message)
+    if decoded_audio is not None:
+        room_id, sender_call_hash, raw_audio = decoded_audio
+        if sender_call_hash:
+            state["peerDestinationHash"] = sender_call_hash
+            peer_presence_hash = _resolve_sender_peer_destination_hash(sender_call_hash)
+            if peer_presence_hash:
+                state["peerPresenceHash"] = peer_presence_hash
+        try:
+            chunk = _encode_audio_batch_binary(
+                [
+                    (
+                        link_id,
+                        room_id,
+                        str(state.get("peerPresenceHash") or ""),
+                        str(state.get("peerDestinationHash") or ""),
+                        int(time.time() * 1000),
+                        raw_audio,
+                    )
+                ]
+            )
+            _emit_binary_audio(chunk)
+        except Exception as exc:
+            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
+        return
     try:
         decoded = json.loads(message.decode("utf-8"))
     except Exception as exc:
@@ -4230,36 +4600,7 @@ def on_audio_link_packet(message, packet) -> None:
         return
     if decoded.get("t") != _GROUP_AUDIO_WIRE_TYPE:
         return
-    room_id = decoded.get("R")
-    data_b64 = decoded.get("d")
-    sender_call_hash = decoded.get("r")
-    if not isinstance(room_id, str) or not room_id:
-        return
-    if not isinstance(data_b64, str) or not data_b64:
-        return
-    if isinstance(sender_call_hash, str) and sender_call_hash:
-        state["peerDestinationHash"] = sender_call_hash
-    try:
-        raw_audio = base64.b64decode(data_b64, validate=True)
-    except Exception:
-        log("[presence_bridge] invalid base64 in link audio payload")
-        return
-    try:
-        chunk = _encode_audio_batch_binary(
-            [
-                (
-                    link_id,
-                    room_id,
-                    str(state.get("peerPresenceHash") or ""),
-                    str(state.get("peerDestinationHash") or ""),
-                    int(time.time() * 1000),
-                    raw_audio,
-                )
-            ]
-        )
-        _emit_binary_audio(chunk)
-    except Exception as exc:
-        log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
+    log("[presence_bridge] ignored legacy json/base64 link audio payload")
 
 
 def configure_audio_link(link, link_id: str) -> None:
@@ -4371,6 +4712,18 @@ def on_inbound_link_first_packet(message, packet) -> None:
             return
         _pending_inbound_classify_link_ids.discard(link_key)
     _cancel_inbound_classify_timer(link_key)
+    if _decode_group_audio_wire(message) is not None:
+        link_id = str(uuid.uuid4())
+        _audio_links_by_id[link_id] = {
+            "link": link,
+            "peerPresenceHash": "",
+            "peerDestinationHash": "",
+            "incoming": True,
+            "established": True,
+        }
+        configure_audio_link(link, link_id)
+        on_audio_link_packet(message, packet)
+        return
     try:
         decoded = json.loads(message.decode("utf-8"))
     except Exception as exc:
@@ -4418,30 +4771,9 @@ def on_incoming_unified_link_established(link) -> None:
 
 
 def on_hub_packet_received(data, packet) -> None:
-    try:
-        message = json.loads(data.decode("utf-8"))
-    except Exception as exc:
-        log(f"[presence_bridge] invalid hub packet payload: {exc}")
-        return
-
-    if not isinstance(message, dict):
-        log("[presence_bridge] ignored non-object hub packet payload")
-        return
-    t = message.get("t")
-    if t == _GROUP_AUDIO_WIRE_TYPE:
-        room_id = message.get("R")
-        data_b64 = message.get("d")
-        sender_dest = message.get("r")
-        if not isinstance(room_id, str) or not room_id:
-            return
-        if not isinstance(data_b64, str) or not data_b64:
-            return
-        sender_dest = sender_dest if isinstance(sender_dest, str) else ""
-        try:
-            raw_audio = base64.b64decode(data_b64, validate=True)
-        except Exception:
-            log("[presence_bridge] invalid base64 in hub packet audio payload")
-            return
+    decoded_audio = _decode_group_audio_wire(data)
+    if decoded_audio is not None:
+        room_id, sender_dest, raw_audio = decoded_audio
         peer_presence_hash = _resolve_sender_peer_destination_hash(sender_dest)
         try:
             chunk = _encode_audio_batch_binary(
@@ -4460,6 +4792,19 @@ def on_hub_packet_received(data, packet) -> None:
             _emit_binary_audio(chunk)
         except Exception as exc:
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
+        return
+    try:
+        message = json.loads(data.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] invalid hub packet payload: {exc}")
+        return
+
+    if not isinstance(message, dict):
+        log("[presence_bridge] ignored non-object hub packet payload")
+        return
+    t = message.get("t")
+    if t == _GROUP_AUDIO_WIRE_TYPE:
+        log("[presence_bridge] ignored legacy json/base64 hub audio payload")
         return
     if isinstance(t, str) and t.startswith("PRESENCE_"):
         _emit_presence_message(message)
@@ -5823,8 +6168,10 @@ def stdin_loop() -> None:
             continue
 
         _cmd_queue_bounded.put(message)
+        _notify_rns_work_available()
 
     _cmd_queue_bounded.put(None)
+    _notify_rns_work_available()
 
 
 def main() -> None:
@@ -5859,6 +6206,7 @@ def main() -> None:
     stdin_thread.join()
     _shutdown.set()
     _cmd_queue_bounded.put(None)
+    _notify_rns_work_available()
     rns_thread.join(timeout=60.0)
     try:
         _json_resp_queue.put(None, timeout=0.1)
