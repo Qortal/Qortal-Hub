@@ -37,7 +37,6 @@ import {
 import i18n from '../i18n/i18n';
 import {
   applyCallAudioOutput,
-  getUserAudioStreamForCall,
 } from '../lib/call/audioDevices';
 import {
   type DecodedAudioPacket,
@@ -72,11 +71,9 @@ import { GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE } from '../lib/group-call/pendingD
 import { GroupCallPerformanceTracker } from '../lib/group-call/router';
 import { GroupCallAudioReceiveEngine } from '../lib/group-call/groupCallAudioReceiveEngine';
 import {
-  OPUS_CHANNELS,
-  OPUS_FRAME_DURATION_MS,
-  OPUS_FRAME_SAMPLES,
-  OPUS_SAMPLE_RATE,
-} from '../lib/group-call/gcallVoiceAudioConstants';
+  GroupCallAudioSenderEngine,
+  type GroupCallAudioSenderFrame,
+} from '../lib/group-call/groupCallAudioSenderEngine';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 
 const DM_MEDIA_RECOVERY_REQUEST_COOLDOWN_MS = 4_000;
@@ -117,15 +114,6 @@ type GcallKeyRequestEventPayload = {
   keyMessageVersion?: number;
   verified?: boolean;
 };
-
-/** Float32 PCM → Int16 for WebCodecs AudioData (matches group call). */
-function float32ToInt16(f32: Float32Array): Int16Array {
-  const i16 = new Int16Array(f32.length);
-  for (let i = 0; i < f32.length; i++) {
-    i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i]! * 32767)));
-  }
-  return i16;
-}
 
 function uint8ToBase64Local(bytes: Uint8Array): string {
   let s = '';
@@ -268,12 +256,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startupStageSinceRef = useRef(Date.now());
 
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const encoderRef = useRef<AudioEncoder | null>(null);
-  const captureWorkletRef = useRef<AudioWorkletNode | null>(null);
-  const keepAliveGainRef = useRef<GainNode | null>(null);
-  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const dmSenderEngineRef = useRef<GroupCallAudioSenderEngine | null>(null);
+  if (!dmSenderEngineRef.current) {
+    dmSenderEngineRef.current = new GroupCallAudioSenderEngine();
+  }
   const dmReceiveEngineRef = useRef<GroupCallAudioReceiveEngine | null>(null);
   if (!dmReceiveEngineRef.current) {
     dmReceiveEngineRef.current = new GroupCallAudioReceiveEngine(() => {});
@@ -339,6 +325,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     ) => Promise<void>
   >(async () => {});
   const startReticulumCaptureRef = useRef<() => Promise<void>>(async () => {});
+  const dmReceiveOnAudioSurfaceRef = useRef(false);
   const decryptWorkerRef = useRef<Worker | null>(null);
   const decryptWorkerKeyVersionRef = useRef(0);
   const decryptWorkerAppliedKeyVersionRef = useRef(0);
@@ -432,6 +419,56 @@ export function useVoiceCall(): UseVoiceCallReturn {
     },
     [clearPendingWorkerJobs]
   );
+
+  const startDirectVoiceReceiveOnAudioSurface = useCallback(async () => {
+    const roomId = dmRoomIdRef.current;
+    const peer = peerAddressRef.current;
+    const roomKey = roomKeyRef.current;
+    if (!window.audioSurface || !roomId || !peer || !roomKey) {
+      dmReceiveOnAudioSurfaceRef.current = false;
+      return false;
+    }
+    const keyBuffer = roomKey.slice().buffer as ArrayBuffer;
+    const response = await window.audioSurface.sendCommand({
+      type: 'start-direct-voice-receive',
+      roomId,
+      peerAddress: peer,
+      roomKey: keyBuffer,
+      outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
+      hearCall: hearCallRef.current,
+      profile: readGroupCallAudioProfile(),
+    });
+    dmReceiveOnAudioSurfaceRef.current = response.ok === true;
+    if (!response.ok) {
+      pushDirectVoiceUiLog('warn', 'audio-surface DM receive unavailable', {
+        err: response.error ?? 'unknown',
+      });
+    }
+    return response.ok === true;
+  }, []);
+
+  const updateDirectVoiceReceiveOnAudioSurface = useCallback(async () => {
+    if (!dmReceiveOnAudioSurfaceRef.current || !window.audioSurface) return;
+    await window.audioSurface
+      .sendCommand({
+        type: 'update-direct-voice-receive',
+        outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
+        hearCall: hearCallRef.current,
+        profile: readGroupCallAudioProfile(),
+      })
+      .catch(() => {});
+  }, []);
+
+  const stopDirectVoiceReceiveOnAudioSurface = useCallback(async () => {
+    if (!dmReceiveOnAudioSurfaceRef.current || !window.audioSurface) {
+      dmReceiveOnAudioSurfaceRef.current = false;
+      return;
+    }
+    dmReceiveOnAudioSurfaceRef.current = false;
+    await window.audioSurface
+      .sendCommand({ type: 'stop-direct-voice-receive' })
+      .catch(() => {});
+  }, []);
 
   const resetDmVoiceMediaSession = useCallback(() => {
     metricsRef.current = new GroupCallPerformanceTracker();
@@ -606,48 +643,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
   }, []);
 
-  const stopCapturePipeline = useCallback(() => {
-    try {
-      micSourceRef.current?.disconnect();
-    } catch {
-      /* ignore */
-    }
-    micSourceRef.current = null;
-    try {
-      captureWorkletRef.current?.disconnect();
-    } catch {
-      /* ignore */
-    }
-    captureWorkletRef.current = null;
-    try {
-      keepAliveGainRef.current?.disconnect();
-    } catch {
-      /* ignore */
-    }
-    keepAliveGainRef.current = null;
-    micStreamRef.current?.getTracks().forEach((t) => t.stop());
-    micStreamRef.current = null;
-    const enc = encoderRef.current;
-    if (enc && enc.state !== 'closed') {
-      try {
-        enc.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    encoderRef.current = null;
+  const stopCapturePipeline = useCallback(async () => {
+    await dmSenderEngineRef.current?.stop().catch(() => {});
     opusEncoderApplyBitrateRef.current = () => {};
     opusEncoderLastConfiguredBitrateRef.current = null;
-    void audioCtxRef.current?.close().catch(() => {});
-    audioCtxRef.current = null;
   }, []);
 
   const teardownReticulumMediaInner = useCallback(async () => {
     clearDmRoomKeyReplayTimers();
     clearDmRoomKeyRequestTimers();
+    await stopDirectVoiceReceiveOnAudioSurface();
     await dmReceiveEngineRef.current?.dispose();
     dmReceiveEngineRef.current = new GroupCallAudioReceiveEngine(() => {});
-    stopCapturePipeline();
+    await stopCapturePipeline();
 
     const roomId = dmRoomIdRef.current;
     const addr = userInfo?.address;
@@ -695,6 +703,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     clearDmRoomKeyRequestTimers,
     resetDmVoiceMediaSession,
     stopCapturePipeline,
+    stopDirectVoiceReceiveOnAudioSurface,
     syncDecryptWorkerRoomKey,
     userInfo?.address,
     userInfo?.publicKey,
@@ -757,40 +766,6 @@ export function useVoiceCall(): UseVoiceCallReturn {
     [clearDurationTimer, enqueueTeardownReticulumMedia, updateCallState, updateIncomingCall]
   );
 
-  const prepareCallAudioContext = useCallback(async (): Promise<AudioContext | null> => {
-    let ctx = audioCtxRef.current;
-    if (!ctx || ctx.state === 'closed') {
-      ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
-      audioCtxRef.current = ctx;
-    }
-
-    const outApply = await applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
-      audioContext: ctx,
-    });
-    if (outApply.clearPersistedOutput) {
-      setCallAudioDevices((prev) => ({ ...prev, outputDeviceId: null }));
-    }
-
-    if (ctx.state !== 'running') {
-      try {
-        await ctx.resume();
-      } catch (e) {
-        pushDirectVoiceUiLog('warn', 'AudioContext resume failed', {
-          err: String(e),
-          state: ctx.state,
-        });
-      }
-      const stateAfterResume = ctx.state as AudioContextState;
-      if (stateAfterResume !== 'running') {
-        pushDirectVoiceUiLog('warn', 'AudioContext not running after resume', {
-          state: stateAfterResume,
-        });
-      }
-    }
-
-    return ctx;
-  }, [setCallAudioDevices]);
-
   const pushDecodedDmAudioPackets = useCallback(
     async (packets: DecodedAudioPacket[], fromAddress: string) => {
       const peer = peerAddressRef.current;
@@ -828,6 +803,9 @@ export function useVoiceCall(): UseVoiceCallReturn {
             peerTrunc: peer.slice(0, 8),
           });
         }
+        return;
+      }
+      if (dmReceiveOnAudioSurfaceRef.current) {
         return;
       }
 
@@ -1015,6 +993,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       callSessionIdRef.current = payload.callSessionId;
       mediaGenRef.current = payload.mediaSessionGeneration >>> 0;
       syncDecryptWorkerRoomKey(keyBytes);
+      await startDirectVoiceReceiveOnAudioSurface();
       setAudioMode('reticulum');
       clearDmRoomKeyRequestTimers();
       setCallAudioWireNonce((n) => n + 1);
@@ -1023,12 +1002,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
         mediaGen: payload.mediaSessionGeneration ?? 1,
       });
     },
-    [clearDmRoomKeyRequestTimers, resetDmVoiceMediaSession, syncDecryptWorkerRoomKey]
+    [
+      clearDmRoomKeyRequestTimers,
+      resetDmVoiceMediaSession,
+      startDirectVoiceReceiveOnAudioSurface,
+      syncDecryptWorkerRoomKey,
+    ]
   );
   applyDecryptedRoomKeyRef.current = applyDecryptedRoomKey;
 
   const sendEncodedFrame = useCallback(
-    (opusFrame: Uint8Array) => {
+    (frame: GroupCallAudioSenderFrame) => {
+      const { opusFrame, vad, capturePerfMs, encoderInputPerfMs, encodeOutPerfMs } =
+        frame;
       const rk = roomKeyRef.current;
       const my = userInfo?.address;
       const roomId = dmRoomIdRef.current;
@@ -1039,6 +1025,17 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
       const seq = (++audioSeqRef.current) & 0xffff;
       const ts = Date.now() & 0xffffffff;
+      metricsRef.current.recordGcallSenderPreEncodePipeline({
+        workletToMainThreadMs: Math.max(0, encoderInputPerfMs - capturePerfMs),
+        mainThreadToEncoderOutputMs: Math.max(
+          0,
+          encodeOutPerfMs - encoderInputPerfMs
+        ),
+        workletToEncoderOutputMs: Math.max(0, encodeOutPerfMs - capturePerfMs),
+      });
+      metricsRef.current.recordGcallSenderEncoderToPacketTimestampGap(
+        Math.max(0, performance.now() - encodeOutPerfMs)
+      );
       const workerReady =
         decryptWorkerAppliedKeyVersionRef.current ===
         decryptWorkerKeyVersionRef.current;
@@ -1059,7 +1056,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
             type: 'encrypt',
             id,
             sourceAddr: my,
-            vad: isSpeakingRef.current,
+            vad,
             seq,
             timestampMs: ts,
             opusFrame: frameBuffer,
@@ -1072,7 +1069,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       try {
         packet = encodeAudioPacketV2(
           my,
-          isSpeakingRef.current,
+          vad,
           seq,
           ts,
           opusFrame,
@@ -1097,142 +1094,32 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const startReticulumCapture = useCallback(async () => {
     if (!userInfo?.address || !roomKeyRef.current) return;
-    if (encoderRef.current && encoderRef.current.state !== 'closed') return;
-
-    const gum = await getUserAudioStreamForCall(callAudioPrefsRef.current.inputDeviceId);
-    if (gum.clearedStaleInputDevice) {
-      setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
-    }
-    const stream = gum.stream;
-    if (!stream) {
-      console.error('[DM voice] getUserMedia failed');
-      pushDirectVoiceUiLog('warn', 'getUserMedia returned no stream');
-      return;
-    }
-    micStreamRef.current = stream;
-
-    const ctx = await prepareCallAudioContext();
-    if (!ctx || ctx.state === 'closed') {
-      pushDirectVoiceUiLog('warn', 'AudioContext unavailable for capture');
-      micStreamRef.current?.getTracks().forEach((t) => t.stop());
-      micStreamRef.current = null;
-      return;
-    }
-
-    const encoder = new (window as any).AudioEncoder({
-      output: (chunk: { copyTo: (b: Uint8Array) => void; byteLength: number }) => {
-        const frame = new Uint8Array(chunk.byteLength);
-        chunk.copyTo(frame);
-        sendEncodedFrame(frame);
-      },
-      error: (e: unknown) => {
-        console.error('[DM voice] AudioEncoder error:', e);
-        pushDirectVoiceUiLog('warn', 'AudioEncoder error', { err: String(e) });
-      },
-    });
     const encTuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
-    const baseEncoderConfig = {
-      codec: 'opus',
-      sampleRate: OPUS_SAMPLE_RATE,
-      numberOfChannels: OPUS_CHANNELS,
-      bitrate: encTuning.opusBitrate,
-    };
-    const fecEncoderConfig = {
-      ...baseEncoderConfig,
-      opus: {
-        application: 'voip',
-        signal: 'voice',
-        frameDuration: OPUS_FRAME_DURATION_MS * 1000,
-        packetlossperc: encTuning.opusExpectedPacketLossPercent,
-        useinbandfec: true,
-        usedtx: false,
-      },
-    };
-    let encoderConfig: Record<string, unknown> = baseEncoderConfig;
-    try {
-      const AudioEncoderCtor = (window as any).AudioEncoder;
-      const supportResult = await AudioEncoderCtor?.isConfigSupported?.(fecEncoderConfig);
-      if (supportResult?.supported) {
-        encoderConfig =
-          (supportResult.config as Record<string, unknown> | undefined) ??
-          (fecEncoderConfig as Record<string, unknown>);
-      } else {
-        encoderConfig = baseEncoderConfig;
-      }
-    } catch {
-      encoderConfig = baseEncoderConfig;
-    }
-    encoder.configure(encoderConfig as any);
-    encoderRef.current = encoder;
     opusEncoderLastConfiguredBitrateRef.current = encTuning.opusBitrate;
     opusSendPressureStateRef.current = createOpusSendPressureControllerState();
-    const fecOpusStatic =
-      typeof encoderConfig.opus === 'object' && encoderConfig.opus !== null
-        ? (encoderConfig.opus as Record<string, unknown>)
-        : null;
     opusEncoderApplyBitrateRef.current = (bps: number) => {
-      const enc = encoderRef.current;
-      if (!enc || enc.state === 'closed') return;
-      const base = {
-        codec: 'opus',
-        sampleRate: OPUS_SAMPLE_RATE,
-        numberOfChannels: OPUS_CHANNELS,
-        bitrate: bps,
-      };
-      const next = fecOpusStatic ? { ...base, opus: fecOpusStatic } : base;
-      try {
-        enc.configure(next as any);
-      } catch {
-        /* ignore */
-      }
+      dmSenderEngineRef.current?.setOpusBitrate(bps);
     };
 
-    await ctx.audioWorklet.addModule('/worklets/capture-processor.js');
-    const captureNode = new AudioWorkletNode(ctx, 'capture-processor');
-    captureWorkletRef.current = captureNode;
-
-    const keepAlive = ctx.createGain();
-    keepAlive.gain.value = 0.0001;
-    keepAliveGainRef.current = keepAlive;
-
-    captureNode.port.onmessage = (ev: MessageEvent) => {
-      const d = ev.data as { frame?: Float32Array; vad?: boolean };
-      const frame = d?.frame;
-      const enc = encoderRef.current;
-      if (!frame || !enc || enc.state === 'closed') return;
-      isSpeakingRef.current = d?.vad === true;
-      const f32 = frame instanceof Float32Array ? frame : new Float32Array(frame);
-      const i16 = float32ToInt16(f32);
-      const audioData = new (window as any).AudioData({
-        format: 's16',
-        sampleRate: OPUS_SAMPLE_RATE,
-        numberOfFrames: OPUS_FRAME_SAMPLES,
-        numberOfChannels: OPUS_CHANNELS,
-        timestamp: performance.now() * 1000,
-        data: i16,
-      });
-      try {
-        enc.encode(audioData);
-        audioData.close();
-      } catch {
-        audioData.close();
-      }
-    };
-
-    const source = ctx.createMediaStreamSource(stream);
-    micSourceRef.current = source;
-    source.connect(captureNode);
-    captureNode.connect(keepAlive);
-    keepAlive.connect(ctx.destination);
-    captureNode.port.postMessage({ type: 'mute', muted: isMutedRef.current });
-
-    await dmReceiveEngineRef.current?.configure({
+    await dmSenderEngineRef.current?.startOrUpdate({
+      inputDeviceId: callAudioPrefsRef.current.inputDeviceId ?? null,
       outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
-      hearCall: hearCallRef.current,
+      muted: isMutedRef.current,
       profile: readGroupCallAudioProfile(),
+      onVadChanged: (vad) => {
+        isSpeakingRef.current = vad;
+      },
+      onEncodedFrame: sendEncodedFrame,
     });
+
+    if (!dmReceiveOnAudioSurfaceRef.current) {
+      await dmReceiveEngineRef.current?.configure({
+        outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
+        hearCall: hearCallRef.current,
+        profile: readGroupCallAudioProfile(),
+      });
+    }
   }, [
-    prepareCallAudioContext,
     sendEncodedFrame,
     userInfo?.address,
   ]);
@@ -1438,6 +1325,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       crypto.getRandomValues(roomKey);
       roomKeyRef.current = roomKey;
       syncDecryptWorkerRoomKey(roomKey);
+      await startDirectVoiceReceiveOnAudioSurface();
 
       const ok = await sendCurrentDmRoomKey('dm-call-start');
       if (!ok) {
@@ -1465,6 +1353,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     sendCurrentDmRoomKey,
     setInfoSnackGlobal,
     setOpenSnackGlobal,
+    startDirectVoiceReceiveOnAudioSurface,
     startReticulumCapture,
     setupDecryptWorker,
     syncDecryptWorkerRoomKey,
@@ -1845,8 +1734,6 @@ export function useVoiceCall(): UseVoiceCallReturn {
         timestamp,
       });
 
-      await prepareCallAudioContext();
-
       isOutboundCallRef.current = true;
       peerAddressRef.current = targetAddress;
       callIdRef.current = callId;
@@ -1882,7 +1769,6 @@ export function useVoiceCall(): UseVoiceCallReturn {
       }
     },
     [
-      prepareCallAudioContext,
       showSystemNotReadyForCall,
       updateCallState,
       userInfo?.address,
@@ -1896,8 +1782,6 @@ export function useVoiceCall(): UseVoiceCallReturn {
     if (!(await isSystemReadyForCall(showSystemNotReadyForCall))) return;
 
     await reticulumTeardownChainRef.current.catch(() => {});
-    await prepareCallAudioContext();
-
     isOutboundCallRef.current = false;
     peerAddressRef.current = incoming.fromAddress;
     callIdRef.current = incoming.callId;
@@ -1957,7 +1841,6 @@ export function useVoiceCall(): UseVoiceCallReturn {
     flushPendingDmVoiceGcallKey,
     startDurationTimer,
     startReticulumMediaSession,
-    prepareCallAudioContext,
     showSystemNotReadyForCall,
     updateCallState,
     updateIncomingCall,
@@ -1989,18 +1872,17 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const toggleMute = useCallback(() => {
     const next = !isMutedRef.current;
-    micStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = !next;
-    });
-    captureWorkletRef.current?.port.postMessage({ type: 'mute', muted: next });
+    isMutedRef.current = next;
+    dmSenderEngineRef.current?.setMuted(next);
     setIsMuted(next);
   }, []);
 
   const setHearCall = useCallback((hear: boolean) => {
     hearCallRef.current = hear;
     setHearCallState(hear);
+    void updateDirectVoiceReceiveOnAudioSurface();
     void dmReceiveEngineRef.current?.configure({ hearCall: hear });
-  }, []);
+  }, [updateDirectVoiceReceiveOnAudioSurface]);
 
   const toggleHearCall = useCallback(() => {
     setHearCall(!hearCallRef.current);
@@ -2009,42 +1891,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const swapVoiceCallInput = useCallback(
     async (deviceId: string | null) => {
       if (callStateRef.current !== 'connected') return;
-      if (!micStreamRef.current || !roomKeyRef.current) return;
-
-      const curTrack = micStreamRef.current.getAudioTracks()[0];
-      const curId = curTrack?.getSettings?.().deviceId;
-      if (deviceId != null && curId === deviceId) return;
-
-      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(deviceId);
-      if (clearedStaleInputDevice) {
-        setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
-      }
-      if (!stream) return;
-
-      const newTrack = stream.getAudioTracks()[0];
-      if (!newTrack) return;
-      newTrack.enabled = !isMutedRef.current;
-
-      try {
-        micSourceRef.current?.disconnect();
-      } catch {
-        /* ignore */
-      }
-      micStreamRef.current.getTracks().forEach((t) => t.stop());
-      micStreamRef.current = stream;
-
-      const ctx = audioCtxRef.current;
-      const captureNode = captureWorkletRef.current;
-      const keepAlive = keepAliveGainRef.current;
-      if (ctx && captureNode && keepAlive) {
-        const newSource = ctx.createMediaStreamSource(stream);
-        micSourceRef.current = newSource;
-        newSource.connect(captureNode);
-        newSource.connect(keepAlive);
-        captureNode.port.postMessage({ type: 'mute', muted: isMutedRef.current });
-      }
+      if (!roomKeyRef.current) return;
+      await dmSenderEngineRef.current?.startOrUpdate({
+        inputDeviceId: deviceId,
+        outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
+        muted: isMutedRef.current,
+        profile: readGroupCallAudioProfile(),
+        onVadChanged: (vad) => {
+          isSpeakingRef.current = vad;
+        },
+        onEncodedFrame: sendEncodedFrame,
+      });
     },
-    [setCallAudioDevices]
+    [sendEncodedFrame]
   );
 
   useEffect(() => {
@@ -2053,7 +1912,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       prevInputPrefRef.current = undefined;
       return;
     }
-    if (!micStreamRef.current) return;
+    if (!roomKeyRef.current) return;
     const want = callAudioDevices.inputDeviceId;
     if (!inputSwapSeededRef.current) {
       inputSwapSeededRef.current = true;
@@ -2070,18 +1929,40 @@ export function useVoiceCall(): UseVoiceCallReturn {
     void (async () => {
       const out = callAudioDevices.outputDeviceId;
       const r = await applyCallAudioOutput(out, {
-        audioContext: audioCtxRef.current,
+        audioContext: null,
       });
       if (r.clearPersistedOutput) {
         setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
       }
-      await dmReceiveEngineRef.current?.configure({
-        outputDeviceId: r.clearPersistedOutput ? null : out,
-        hearCall: hearCallRef.current,
-        profile: readGroupCallAudioProfile(),
-      });
+      void updateDirectVoiceReceiveOnAudioSurface();
+      if (roomKeyRef.current) {
+        await dmSenderEngineRef.current?.startOrUpdate({
+          inputDeviceId: callAudioPrefsRef.current.inputDeviceId ?? null,
+          outputDeviceId: r.clearPersistedOutput ? null : out,
+          muted: isMutedRef.current,
+          profile: readGroupCallAudioProfile(),
+          onVadChanged: (vad) => {
+            isSpeakingRef.current = vad;
+          },
+          onEncodedFrame: sendEncodedFrame,
+        });
+      }
+      if (!dmReceiveOnAudioSurfaceRef.current) {
+        await dmReceiveEngineRef.current?.configure({
+          outputDeviceId: r.clearPersistedOutput ? null : out,
+          hearCall: hearCallRef.current,
+          profile: readGroupCallAudioProfile(),
+        });
+      }
     })();
-  }, [callState, callAudioDevices.outputDeviceId, callAudioWireNonce, setCallAudioDevices]);
+  }, [
+    callState,
+    callAudioDevices.outputDeviceId,
+    callAudioWireNonce,
+    sendEncodedFrame,
+    setCallAudioDevices,
+    updateDirectVoiceReceiveOnAudioSurface,
+  ]);
 
   useEffect(() => {
     const id = setInterval(() => {

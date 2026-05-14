@@ -196,6 +196,7 @@ export class GroupCallAudioSenderEngine {
   private encodeWorkerFallbackReason: string | null = null;
   private encodeWorkerSharedSamples: SharedArrayBuffer | null = null;
   private encodeWorkerSharedState: SharedArrayBuffer | null = null;
+  private opusBitrateOverride: number | null = null;
   private lastStartAtMs = 0;
   private lastStopAtMs = 0;
   private unsupportedReason: string | null = null;
@@ -245,6 +246,7 @@ export class GroupCallAudioSenderEngine {
     this.encodeWorkerFallbackReason = null;
     this.encodeWorkerSharedSamples = null;
     this.encodeWorkerSharedState = null;
+    this.opusBitrateOverride = null;
     this.senderEncodeMode = 'main-thread';
     this.audioContextSampleRate = null;
     this.captureInputSampleRate = null;
@@ -597,11 +599,16 @@ export class GroupCallAudioSenderEngine {
   }
 
   private buildEncoderConfig(tuning: GroupCallAudioTuning): AudioEncoderConfig {
+    const bitrate =
+      typeof this.opusBitrateOverride === 'number' &&
+      Number.isFinite(this.opusBitrateOverride)
+        ? Math.max(6_000, Math.round(this.opusBitrateOverride))
+        : tuning.opusBitrate;
     return {
       codec: 'opus',
       sampleRate: OPUS_SAMPLE_RATE,
       numberOfChannels: OPUS_CHANNELS,
-      bitrate: tuning.opusBitrate,
+      bitrate,
       opus: {
         application: 'voip',
         signal: 'voice',
@@ -1058,6 +1065,38 @@ export class GroupCallAudioSenderEngine {
     return this.lastVad;
   }
 
+  setOpusBitrate(bps: number | null): void {
+    const next =
+      typeof bps === 'number' && Number.isFinite(bps)
+        ? Math.max(6_000, Math.round(bps))
+        : null;
+    if (this.opusBitrateOverride === next) return;
+    this.opusBitrateOverride = next;
+    if (!this.activeConfig) return;
+    if (this.senderEncodeMode !== 'main-thread' && this.encodeWorker) {
+      this.configureEncodeWorkerForActiveConfig('bitrate-update');
+      return;
+    }
+    const current = this.encoder;
+    if (!current || current.state === 'closed') return;
+    try {
+      current.configure(
+        this.buildEncoderConfig(
+          getSenderAudioTuning(
+            this.activeConfig.profile,
+            this.activeConfig.cpuDegraded === true
+          )
+        )
+      );
+      this.lastEncoderResetReason = 'bitrate-update';
+      this.lastEncoderResetAtMs = Date.now();
+    } catch (error) {
+      this.lastEncoderError =
+        error instanceof Error ? error.message : String(error);
+      this.encoderErrorCount++;
+    }
+  }
+
   getDiagnosticsSnapshot(): Record<string, unknown> {
     const tracks = this.micStream?.getAudioTracks?.() ?? [];
     return {
@@ -1127,6 +1166,7 @@ export class GroupCallAudioSenderEngine {
       },
       encodeWorkerStats: this.encodeWorkerStats,
       activeConfig: this.activeConfig,
+      opusBitrateOverride: this.opusBitrateOverride,
       cpuDegraded: this.activeConfig?.cpuDegraded === true,
       effectiveTuning: this.activeConfig
         ? getSenderAudioTuning(

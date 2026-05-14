@@ -12,6 +12,24 @@ import { buildDirectVoiceCallChatId } from '../lib/call/directVoiceCallChatId';
 import nacl from '../encryption/nacl-fast';
 import { useVoiceCall } from './useVoiceCall';
 
+function goodSystemReadiness() {
+  return {
+    status: 'good',
+    reasons: [],
+    cpuLoad: 0.1,
+    memoryPressure: 'normal',
+    eventLoopLagMs: 0,
+  };
+}
+
+function electronApiWithGoodReadiness(extra: Record<string, unknown> = {}) {
+  return {
+    getSystemCallReadiness: vi.fn(async () => goodSystemReadiness()),
+    refreshSystemCallReadiness: vi.fn(async () => goodSystemReadiness()),
+    ...extra,
+  };
+}
+
 function base58Encode(bytes: Uint8Array): string {
   const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   let value = BigInt(0);
@@ -36,7 +54,7 @@ describe('useVoiceCall', () => {
     vi.restoreAllMocks();
   });
 
-  it('prepares and resumes the audio context when initiating a direct call', async () => {
+  it('initiates a direct call without prewarming the main renderer audio context', async () => {
     const resume = vi.fn(async () => {});
     class MockAudioContext {
       state: AudioContextState = 'suspended';
@@ -61,6 +79,7 @@ describe('useVoiceCall', () => {
         hangup: vi.fn(async () => ({ success: true })),
       },
       groupCall: { onEvent: vi.fn(() => vi.fn()) },
+      electronAPI: electronApiWithGoodReadiness(),
       sendMessage: vi.fn(async () => ({ signature: 'sig' })),
     });
 
@@ -82,7 +101,8 @@ describe('useVoiceCall', () => {
       }));
     });
 
-    expect(resume).toHaveBeenCalledTimes(1);
+    expect((window as any).call.initiate).toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
   });
 
   it('starts in idle state', () => {
@@ -255,7 +275,7 @@ describe('useVoiceCall', () => {
     });
   });
 
-  it('prepares and resumes the audio context when accepting a direct call', async () => {
+  it('accepts a direct call without prewarming the main renderer audio context', async () => {
     let eventHandler: ((event: string, payload: unknown) => void | Promise<void>) | null = null;
     const resume = vi.fn(async () => {});
     class MockAudioContext {
@@ -291,6 +311,7 @@ describe('useVoiceCall', () => {
         leave: vi.fn(async () => ({ success: true })),
         setLocalAddresses: vi.fn(async () => {}),
       },
+      electronAPI: electronApiWithGoodReadiness(),
       sendMessage: vi.fn(async (type: string) => {
         if (type === 'signPresenceMessage') {
           return { signature: 'sig' };
@@ -328,7 +349,8 @@ describe('useVoiceCall', () => {
     const roomId = await buildDmVoiceRoomId(
       buildDirectVoiceCallChatId(myAddr, peerAddr)
     );
-    expect(resume).toHaveBeenCalledTimes(1);
+    expect(callApi.accept).toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
     await waitFor(() =>
       expect((window as any).groupCall.leave).toHaveBeenCalledWith(
         roomId,
@@ -388,6 +410,7 @@ describe('useVoiceCall', () => {
         sendKeyRequest,
       },
       electronAPI: {
+        ...electronApiWithGoodReadiness(),
         reticulumGetLocalDestinationHash: vi.fn(async () => ({
           destinationHash: 'a'.repeat(32),
         })),
@@ -482,6 +505,7 @@ describe('useVoiceCall', () => {
       mediaSessionGeneration: 1,
     }));
     const sendKey = vi.fn(async () => ({ success: true }));
+    const audioSurfaceSendCommand = vi.fn(async () => ({ ok: true }));
     const peerPublicKey = base58Encode(nacl.sign.keyPair().publicKey);
 
     Object.assign(window as any, {
@@ -518,7 +542,11 @@ describe('useVoiceCall', () => {
         sendKey,
         sendAudio: vi.fn(async () => ({ success: true })),
       },
+      audioSurface: {
+        sendCommand: audioSurfaceSendCommand,
+      },
       electronAPI: {
+        ...electronApiWithGoodReadiness(),
         reticulumGetLocalDestinationHash: vi.fn(async () => ({
           destinationHash: 'b'.repeat(32),
         })),
@@ -559,6 +587,16 @@ describe('useVoiceCall', () => {
     });
 
     await waitFor(() => expect(sendKey).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'start-direct-voice-receive',
+          roomId,
+          peerAddress: peerAddr,
+          roomKey: expect.any(ArrayBuffer),
+        })
+      )
+    );
     sendKey.mockClear();
 
     await act(async () => {

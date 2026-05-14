@@ -58,6 +58,22 @@ export type AudioSurfaceCommand =
       type: 'set-audio-quality-profile';
       profile: GroupCallAudioQualityProfile;
     }
+  | {
+      type: 'start-direct-voice-receive';
+      roomId: string;
+      peerAddress: string;
+      roomKey: ArrayBuffer | Uint8Array;
+      outputDeviceId?: string | null;
+      hearCall?: boolean;
+      profile?: GroupCallAudioQualityProfile;
+    }
+  | {
+      type: 'update-direct-voice-receive';
+      outputDeviceId?: string | null;
+      hearCall?: boolean;
+      profile?: GroupCallAudioQualityProfile;
+    }
+  | { type: 'stop-direct-voice-receive' }
   | { type: 'clear-join-error' };
 
 export type AudioSurfaceResponse =
