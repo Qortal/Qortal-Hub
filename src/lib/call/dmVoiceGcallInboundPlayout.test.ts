@@ -193,7 +193,7 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
         activeSourceCount: 1,
         defaultHoldFrames: 1,
       })
-    ).toBe(3);
+    ).toBe(2);
 
     expect(
       computePostBurstSteadyPrimedHoldFrames({
