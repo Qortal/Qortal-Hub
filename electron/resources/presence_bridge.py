@@ -140,6 +140,7 @@ _GROUP_AUDIO_BINARY_HEADER_BYTES = 9
 _audio_links_by_id: Dict[str, Dict[str, Any]] = {}
 _audio_link_ids_by_object: Dict[int, str] = {}
 _outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
+_audio_link_desired_by_peer_hash: Dict[str, Dict[str, Any]] = {}
 _overlay_links_by_id: Dict[str, Dict[str, Any]] = {}
 _overlay_link_ids_by_object: Dict[int, str] = {}
 _active_overlay_link_id_by_peer_hash: Dict[str, str] = {}
@@ -188,6 +189,9 @@ _PACKET_PATH_RECENT_FAILURE_SECONDS = 2.0
 _PACKET_PATH_AWAIT_SECONDS = 0.12
 _PACKET_PATH_IDLE_AWAIT_SECONDS = 0.02
 _AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS = 2.0
+_AUDIO_LINK_ESTABLISH_TIMEOUT_SECONDS = 6.0
+_AUDIO_LINK_RETRY_MIN_SECONDS = 1.0
+_AUDIO_LINK_RETRY_MAX_SECONDS = 20.0
 _PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING = 2
 _PACKET_PATH_INBOUND_FRESH_SECONDS = 3.0
 _PACKET_PATH_POLL_INTERVAL_SECONDS = 0.01
@@ -2792,6 +2796,7 @@ class PresenceAnnounceHandler:
         _register_peer(peer_hash, announced_identity, "announce")
         _mark_candidate_peer(peer_hash, "announce")
         _retry_pending_overlay_connect_on_announce(peer_hash)
+        _retry_pending_audio_connect_on_announce(peer_hash)
 
 
 def build_outbound_destination(peer_identity):
@@ -3314,6 +3319,49 @@ def _retry_pending_overlay_connect_on_announce(peer_hash: str) -> None:
             f"peer={peer_key} previous_link={existing_link_id}"
         )
     _ensure_overlay_link(peer_key)
+
+
+def _retry_pending_audio_connect_on_announce(peer_hash: str) -> None:
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
+        return
+    desired = _audio_link_desired_by_peer_hash.get(peer_key)
+    if desired is None or desired.get("desired") is not True:
+        return
+    existing_link_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key)
+    existing = get_audio_link_state(existing_link_id) if existing_link_id else None
+    if existing is not None and existing.get("established") is True:
+        return
+    if existing is not None and existing_link_id:
+        link = existing.get("link")
+        if link is not None:
+            try:
+                link.set_link_closed_callback(None)
+            except Exception:
+                pass
+            try:
+                link.teardown()
+            except Exception:
+                pass
+        removed = remove_audio_link(existing_link_id)
+        if removed is not None:
+            emit_event(
+                "group_audio_link_closed",
+                {
+                    "linkId": existing_link_id,
+                    "peerPresenceHash": removed.get("peerPresenceHash") or "",
+                    "peerDestinationHash": removed.get("peerDestinationHash") or "",
+                    "incoming": removed.get("incoming") is True,
+                    "reason": "announce_retry",
+                },
+            )
+    if desired.get("retry_timer") is not None:
+        _cancel_audio_link_retry_timer(peer_key)
+    log(
+        "[presence_bridge] target=reticulum-audio-link audio_link_retry_on_announce "
+        f"peer={peer_key} existing_link={existing_link_id or 'none'}"
+    )
+    _schedule_audio_link_retry(peer_key, "announce", immediate=True)
 
 
 def _sync_overlay_links() -> None:
@@ -5022,6 +5070,12 @@ def remove_audio_link(link_id: str) -> Optional[Dict[str, Any]]:
     state = _audio_links_by_id.pop(link_id, None)
     if state is None:
         return None
+    timer = state.pop("establish_timeout_timer", None)
+    if timer is not None:
+        try:
+            timer.cancel()
+        except Exception:
+            pass
     link = state.get("link")
     if link is not None:
         _audio_link_ids_by_object.pop(id(link), None)
@@ -5031,6 +5085,214 @@ def remove_audio_link(link_id: str) -> Optional[Dict[str, Any]]:
         if existing == link_id:
             _outgoing_audio_link_id_by_peer_hash.pop(peer_hash, None)
     return state
+
+
+def _get_audio_link_desired_state(peer_key: str) -> Dict[str, Any]:
+    state = _audio_link_desired_by_peer_hash.get(peer_key)
+    if state is not None:
+        return state
+    state = {
+        "desired": True,
+        "attempts": 0,
+        "retry_delay": _AUDIO_LINK_RETRY_MIN_SECONDS,
+        "retry_timer": None,
+        "last_open_attempt_at": None,
+        "last_failure_reason": "",
+    }
+    _audio_link_desired_by_peer_hash[peer_key] = state
+    return state
+
+
+def _cancel_audio_link_retry_timer(peer_key: str) -> None:
+    desired = _audio_link_desired_by_peer_hash.get(peer_key)
+    if desired is None:
+        return
+    timer = desired.get("retry_timer")
+    if timer is not None:
+        try:
+            timer.cancel()
+        except Exception:
+            pass
+    desired["retry_timer"] = None
+
+
+def _set_audio_link_desired(peer_key: str, desired: bool) -> Dict[str, Any]:
+    state = _get_audio_link_desired_state(peer_key)
+    state["desired"] = desired
+    if desired:
+        return state
+    _cancel_audio_link_retry_timer(peer_key)
+    return state
+
+
+def _schedule_audio_link_retry(peer_key: str, reason: str, immediate: bool = False) -> None:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return
+    desired = _audio_link_desired_by_peer_hash.get(peer_key)
+    if desired is None or desired.get("desired") is not True:
+        return
+    if desired.get("retry_timer") is not None:
+        return
+    delay = 0.0 if immediate else float(
+        desired.get("retry_delay") or _AUDIO_LINK_RETRY_MIN_SECONDS
+    )
+    desired["last_failure_reason"] = reason
+
+    def retry() -> None:
+        desired_state = _audio_link_desired_by_peer_hash.get(peer_key)
+        if desired_state is None:
+            return
+        desired_state["retry_timer"] = None
+        if desired_state.get("desired") is not True:
+            return
+        _open_group_audio_link_for_peer(peer_key, retry_reason=reason)
+
+    timer = threading.Timer(delay, retry)
+    timer.daemon = True
+    desired["retry_timer"] = timer
+    timer.start()
+    log(
+        "[presence_bridge] target=reticulum-audio-link audio_link_retry_scheduled "
+        f"peer={peer_key} reason={reason} delay={delay:.2f}"
+    )
+
+
+def _schedule_audio_link_establish_timeout(link_id: str) -> None:
+    state = get_audio_link_state(link_id)
+    if state is None or state.get("incoming") is True:
+        return
+
+    def fire() -> None:
+        current = get_audio_link_state(link_id)
+        if current is None or current.get("established") is True:
+            return
+        peer_key = str(current.get("peerPresenceHash") or "").strip().lower()
+        link = current.get("link")
+        if link is not None:
+            try:
+                link.set_link_closed_callback(None)
+            except Exception:
+                pass
+            try:
+                link.teardown()
+            except Exception:
+                pass
+        removed = remove_audio_link(link_id)
+        if removed is None:
+            return
+        log(
+            "[presence_bridge] target=reticulum-audio-link audio_link_establish_timeout "
+            f"peer={peer_key} link={link_id}"
+        )
+        emit_event(
+            "group_audio_link_closed",
+            {
+                "linkId": link_id,
+                "peerPresenceHash": removed.get("peerPresenceHash") or "",
+                "peerDestinationHash": removed.get("peerDestinationHash") or "",
+                "incoming": removed.get("incoming") is True,
+                "reason": "establish_timeout",
+            },
+        )
+        _schedule_audio_link_retry(peer_key, "establish_timeout")
+
+    timer = threading.Timer(_AUDIO_LINK_ESTABLISH_TIMEOUT_SECONDS, fire)
+    timer.daemon = True
+    state["establish_timeout_timer"] = timer
+    timer.start()
+
+
+def _open_group_audio_link_for_peer(
+    peer_key: str,
+    *,
+    retry_reason: str = "open",
+) -> Tuple[bool, Dict[str, Any], str]:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return False, {"code": "missing_peer_presence_hash"}, "Missing peerPresenceHash"
+    if _destination is None:
+        return False, {"code": "bridge_not_started"}, "Bridge not started"
+    desired = _set_audio_link_desired(peer_key, True)
+    existing_link_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key)
+    if existing_link_id:
+        existing = get_audio_link_state(existing_link_id)
+        if existing is not None:
+            return True, {
+                "linkId": existing_link_id,
+                "established": existing.get("established") is True,
+            }, ""
+        _outgoing_audio_link_id_by_peer_hash.pop(peer_key, None)
+    peer_identity = _get_group_audio_peer_identity(peer_key)
+    if peer_identity is None:
+        return False, {"code": "unknown_peer_presence_hash"}, "Unknown peer presence hash"
+    try:
+        outbound = build_outbound_destination(peer_identity)
+        outbound_hash = destination_hash_hex(outbound.hash)
+        if outbound_hash != peer_key:
+            return False, {
+                "code": "peer_hash_mismatch",
+                "derived": outbound_hash,
+            }, "Reticulum public key does not match destination hash"
+        desired["attempts"] = int(desired.get("attempts") or 0) + 1
+        desired["last_open_attempt_at"] = time.time()
+        path_state, path_ready = _ensure_call_media_path(
+            peer_key,
+            outbound.hash,
+            active_call=True,
+            allow_wait=True,
+            reason=f"open_link:{retry_reason}",
+            await_seconds_override=_AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS,
+        )
+        if not path_ready:
+            desired["retry_delay"] = min(
+                _AUDIO_LINK_RETRY_MAX_SECONDS,
+                max(
+                    _AUDIO_LINK_RETRY_MIN_SECONDS,
+                    float(desired.get("retry_delay") or _AUDIO_LINK_RETRY_MIN_SECONDS) * 2,
+                ),
+            )
+            _schedule_audio_link_retry(peer_key, f"no_route:{path_state}")
+            return False, {
+                "code": "no_route",
+                "pathState": path_state,
+                "pathAwaitSeconds": _AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS,
+            }, "No confirmed Reticulum path for group audio link"
+        desired["retry_delay"] = _AUDIO_LINK_RETRY_MIN_SECONDS
+        link_id = str(uuid.uuid4())
+        link = RNS.Link(
+            outbound,
+            established_callback=on_outgoing_audio_link_established,
+            closed_callback=on_audio_link_closed,
+        )
+        _audio_links_by_id[link_id] = {
+            "link": link,
+            "peerPresenceHash": peer_key,
+            "peerDestinationHash": outbound_hash,
+            "incoming": False,
+            "established": False,
+            "created_at": time.time(),
+            "open_reason": retry_reason,
+            "open_attempt": desired["attempts"],
+        }
+        _audio_link_ids_by_object[id(link)] = link_id
+        _outgoing_audio_link_id_by_peer_hash[peer_key] = link_id
+        _schedule_audio_link_establish_timeout(link_id)
+        log(
+            "[presence_bridge] target=reticulum-audio-link audio_link_opening "
+            f"peer={peer_key} link={link_id} attempt={desired['attempts']} reason={retry_reason}"
+        )
+        return True, {"linkId": link_id, "established": False}, ""
+    except Exception as exc:
+        desired["retry_delay"] = min(
+            _AUDIO_LINK_RETRY_MAX_SECONDS,
+            max(
+                _AUDIO_LINK_RETRY_MIN_SECONDS,
+                float(desired.get("retry_delay") or _AUDIO_LINK_RETRY_MIN_SECONDS) * 2,
+            ),
+        )
+        _schedule_audio_link_retry(peer_key, "open_exception")
+        return False, {"code": "exception"}, str(exc)
 
 
 def emit_audio_link_established(link_id: str) -> None:
@@ -5068,9 +5330,17 @@ def on_audio_link_closed(link) -> None:
     link_id = get_audio_link_id(link)
     if link_id is None:
         return
+    state = get_audio_link_state(link_id)
+    peer_key = ""
+    incoming = False
+    if state is not None:
+        peer_key = str(state.get("peerPresenceHash") or "").strip().lower()
+        incoming = state.get("incoming") is True
     teardown_reason = getattr(link, "teardown_reason", None)
     reason = str(teardown_reason) if teardown_reason is not None else "closed"
     emit_audio_link_closed(link_id, reason)
+    if not incoming and reason not in ("local_close", "peer_state_reset"):
+        _schedule_audio_link_retry(peer_key, f"closed:{reason}")
 
 
 def on_audio_link_remote_identified(link, identity) -> None:
@@ -5183,11 +5453,28 @@ def on_outgoing_audio_link_established(link) -> None:
         return
     configure_audio_link(link, link_id)
     state["established"] = True
+    state["established_at"] = time.time()
+    timer = state.pop("establish_timeout_timer", None)
+    if timer is not None:
+        try:
+            timer.cancel()
+        except Exception:
+            pass
+    peer_key = str(state.get("peerPresenceHash") or "").strip().lower()
+    desired = _audio_link_desired_by_peer_hash.get(peer_key)
+    if desired is not None:
+        _cancel_audio_link_retry_timer(peer_key)
+        desired["retry_delay"] = _AUDIO_LINK_RETRY_MIN_SECONDS
+        desired["last_failure_reason"] = ""
     try:
         if _identity is not None:
             link.identify(_identity)
     except Exception as exc:
         log(f"[presence_bridge] audio link identify failed link={link_id}: {exc}")
+    log(
+        "[presence_bridge] target=reticulum-audio-link audio_link_established "
+        f"peer={peer_key} link={link_id}"
+    )
     emit_audio_link_established(link_id)
 
 
@@ -6330,75 +6617,11 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    peer_key = peer_hash.strip().lower()
-    peer_identity = _get_group_audio_peer_identity(peer_key)
-    if peer_identity is None:
-        emit_resp(
-            req_id,
-            False,
-            payload={"code": "unknown_peer_presence_hash"},
-            error="Unknown peer presence hash",
-        )
-        return
-
-    existing_link_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key)
-    if existing_link_id:
-        state = get_audio_link_state(existing_link_id)
-        if state is not None:
-            emit_resp(
-                req_id,
-                True,
-                payload={
-                    "linkId": existing_link_id,
-                    "established": state.get("established") is True,
-                },
-            )
-            return
-
-    try:
-        outbound = build_outbound_destination(peer_identity)
-        path_state, path_ready = _ensure_call_media_path(
-            peer_key,
-            outbound.hash,
-            active_call=True,
-            allow_wait=True,
-            reason="open_link",
-            await_seconds_override=_AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS,
-        )
-        if not path_ready:
-            emit_resp(
-                req_id,
-                False,
-                payload={
-                    "code": "no_route",
-                    "pathState": path_state,
-                    "pathAwaitSeconds": _AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS,
-                },
-                error="No confirmed Reticulum path for group audio link",
-            )
-            return
-        link_id = str(uuid.uuid4())
-        link = RNS.Link(
-            outbound,
-            established_callback=on_outgoing_audio_link_established,
-            closed_callback=on_audio_link_closed,
-        )
-        _audio_links_by_id[link_id] = {
-            "link": link,
-            "peerPresenceHash": peer_key,
-            "peerDestinationHash": destination_hash_hex(outbound.hash),
-            "incoming": False,
-            "established": False,
-        }
-        _audio_link_ids_by_object[id(link)] = link_id
-        _outgoing_audio_link_id_by_peer_hash[peer_key] = link_id
-        emit_resp(
-            req_id,
-            True,
-            payload={"linkId": link_id, "established": False},
-        )
-    except Exception as exc:
-        emit_resp(req_id, False, error=str(exc))
+    ok, resp_payload, error = _open_group_audio_link_for_peer(
+        peer_hash.strip().lower(),
+        retry_reason="command",
+    )
+    emit_resp(req_id, ok, payload=resp_payload, error=error or None)
 
 
 def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
@@ -6415,6 +6638,9 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
             error="Unknown audio link id",
         )
         return
+    peer_key = str(state.get("peerPresenceHash") or "").strip().lower()
+    if peer_key and _outgoing_audio_link_id_by_peer_hash.get(peer_key) == link_id:
+        _set_audio_link_desired(peer_key, False)
     link = state.get("link")
     try:
         if link is not None:
@@ -6436,6 +6662,7 @@ def handle_reset_group_audio_peer_state(req_id: str, payload: Dict[str, Any]) ->
         return
 
     closed = 0
+    _set_audio_link_desired(peer_key, False)
     for link_id, state in list(_audio_links_by_id.items()):
         if str(state.get("peerPresenceHash") or "").strip().lower() != peer_key:
             continue
