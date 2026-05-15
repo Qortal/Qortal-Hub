@@ -67,6 +67,19 @@ export interface DecodedAudioPacket {
   opusFrame: Uint8Array;
 }
 
+export interface DecodeAudioPacketsTiming {
+  selected: 'v3' | 'v2' | 'v1' | 'none';
+  packetCount: number;
+  totalMs: number;
+  v3Ms: number;
+  v2Ms: number;
+  v1Ms: number;
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
 /**
  * v2 encode. Returns a new Uint8Array (byteOffset 0); .buffer is transferable as a whole.
  */
@@ -306,6 +319,59 @@ export function decodeAudioPackets(
   if (v2) return [v2];
   const v1 = tryDecodeV1(buf, roomKey, provider);
   return v1 ? [v1] : [];
+}
+
+export function decodeAudioPacketsWithTiming(
+  buf: Uint8Array,
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider = defaultSecretBoxProvider
+): { packets: DecodedAudioPacket[]; timing: DecodeAudioPacketsTiming } {
+  const startedAt = nowMs();
+  const timing: DecodeAudioPacketsTiming = {
+    selected: 'none',
+    packetCount: 0,
+    totalMs: 0,
+    v3Ms: 0,
+    v2Ms: 0,
+    v1Ms: 0,
+  };
+  if (roomKey.length !== 32) {
+    timing.totalMs = nowMs() - startedAt;
+    return { packets: [], timing };
+  }
+
+  let stageStartedAt = nowMs();
+  const v3 = tryDecodeV3(buf, roomKey, provider);
+  timing.v3Ms = nowMs() - stageStartedAt;
+  if (v3.length > 0) {
+    timing.selected = 'v3';
+    timing.packetCount = v3.length;
+    timing.totalMs = nowMs() - startedAt;
+    return { packets: v3, timing };
+  }
+
+  stageStartedAt = nowMs();
+  const v2 = tryDecodeV2(buf, roomKey, provider);
+  timing.v2Ms = nowMs() - stageStartedAt;
+  if (v2) {
+    timing.selected = 'v2';
+    timing.packetCount = 1;
+    timing.totalMs = nowMs() - startedAt;
+    return { packets: [v2], timing };
+  }
+
+  stageStartedAt = nowMs();
+  const v1 = tryDecodeV1(buf, roomKey, provider);
+  timing.v1Ms = nowMs() - stageStartedAt;
+  if (v1) {
+    timing.selected = 'v1';
+    timing.packetCount = 1;
+    timing.totalMs = nowMs() - startedAt;
+    return { packets: [v1], timing };
+  }
+
+  timing.totalMs = nowMs() - startedAt;
+  return { packets: [], timing };
 }
 
 /**

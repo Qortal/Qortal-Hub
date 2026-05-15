@@ -4,8 +4,9 @@ import {
 } from '../call/dmVoiceGcallInboundPlayout';
 import { applyCallAudioOutput } from '../call/audioDevices';
 import {
-  decodeAudioPackets,
+  decodeAudioPacketsWithTiming,
   type DecodedAudioPacket,
+  type DecodeAudioPacketsTiming,
 } from './audioPacketCodec';
 import {
   getGroupCallAudioTuning,
@@ -118,6 +119,39 @@ const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_BUFFERED_MS_MIN = 88;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_DELTA_MIN_MS = -32;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN = 3;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX = 0.04;
+
+const GCALL_RECEIVE_STAGE_TIMING_WARN_MS = 20;
+const GCALL_RECEIVE_STAGE_RECENT_WORST_LIMIT = 32;
+
+type ReceiveStageTimingName =
+  | 'incomingTotal'
+  | 'packetDecodeTotal'
+  | 'packetDecodeV3'
+  | 'packetDecodeV2'
+  | 'packetDecodeV1'
+  | 'decodedPacketsTotal'
+  | 'decodedPacketsObserved'
+  | 'decodedPacketsGroup'
+  | 'getOrCreatePlayout'
+  | 'pushDecoded'
+  | 'metricsEmitSchedule';
+
+type ReceiveStageTimingAggregate = {
+  samples: number;
+  totalMs: number;
+  maxMs: number;
+  over20: number;
+  over80: number;
+  over160: number;
+  over320: number;
+};
+
+type ReceiveStageTimingRecentWorst = {
+  atMs: number;
+  name: ReceiveStageTimingName;
+  source: string;
+  valueMs: number;
+};
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX = 0.02;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_RATE_EMA_MIN = 0.992;
 const GCALL_SINGLE_SOURCE_DIAGNOSTIC_BUFFERED_FRAMES_MIN = 4;
@@ -654,6 +688,150 @@ export class GroupCallAudioReceiveEngine {
     profile: 'low-latency',
     postFailoverRootHoldUntilMs: 0,
   };
+  private readonly receiveStageTimingStats = new Map<
+    ReceiveStageTimingName,
+    ReceiveStageTimingAggregate
+  >();
+  private readonly receiveStageTimingRecentWorst: ReceiveStageTimingRecentWorst[] =
+    [];
+  private readonly packetDecodeSelectedCounts = new Map<
+    DecodeAudioPacketsTiming['selected'],
+    number
+  >();
+
+  private getReceiveStageTimingAggregate(
+    name: ReceiveStageTimingName
+  ): ReceiveStageTimingAggregate {
+    let aggregate = this.receiveStageTimingStats.get(name);
+    if (!aggregate) {
+      aggregate = {
+        samples: 0,
+        totalMs: 0,
+        maxMs: 0,
+        over20: 0,
+        over80: 0,
+        over160: 0,
+        over320: 0,
+      };
+      this.receiveStageTimingStats.set(name, aggregate);
+    }
+    return aggregate;
+  }
+
+  private recordReceiveStageTiming(
+    name: ReceiveStageTimingName,
+    valueMs: number,
+    sourceAddr = 'unknown'
+  ): void {
+    if (!Number.isFinite(valueMs) || valueMs < 0) return;
+    const aggregate = this.getReceiveStageTimingAggregate(name);
+    aggregate.samples += 1;
+    aggregate.totalMs += valueMs;
+    aggregate.maxMs = Math.max(aggregate.maxMs, valueMs);
+    if (valueMs >= 20) aggregate.over20 += 1;
+    if (valueMs >= 80) aggregate.over80 += 1;
+    if (valueMs >= 160) aggregate.over160 += 1;
+    if (valueMs >= 320) aggregate.over320 += 1;
+    if (valueMs < GCALL_RECEIVE_STAGE_TIMING_WARN_MS) return;
+    this.receiveStageTimingRecentWorst.push({
+      atMs: Date.now(),
+      name,
+      source: sourceAddr,
+      valueMs: Math.round(valueMs * 1000) / 1000,
+    });
+    this.receiveStageTimingRecentWorst.sort((a, b) => b.valueMs - a.valueMs);
+    if (
+      this.receiveStageTimingRecentWorst.length >
+      GCALL_RECEIVE_STAGE_RECENT_WORST_LIMIT
+    ) {
+      this.receiveStageTimingRecentWorst.length =
+        GCALL_RECEIVE_STAGE_RECENT_WORST_LIMIT;
+    }
+  }
+
+  private recordPacketDecodeTiming(
+    timing: DecodeAudioPacketsTiming,
+    sourceAddr: string
+  ): void {
+    this.packetDecodeSelectedCounts.set(
+      timing.selected,
+      (this.packetDecodeSelectedCounts.get(timing.selected) ?? 0) + 1
+    );
+    this.recordReceiveStageTiming(
+      'packetDecodeTotal',
+      timing.totalMs,
+      sourceAddr
+    );
+    this.recordReceiveStageTiming('packetDecodeV3', timing.v3Ms, sourceAddr);
+    this.recordReceiveStageTiming('packetDecodeV2', timing.v2Ms, sourceAddr);
+    this.recordReceiveStageTiming('packetDecodeV1', timing.v1Ms, sourceAddr);
+  }
+
+  private serializeReceiveStageTimingAggregate(
+    aggregate: ReceiveStageTimingAggregate
+  ): {
+    samples: number;
+    avgMs: number;
+    maxMs: number;
+    over20: number;
+    over80: number;
+    over160: number;
+    over320: number;
+  } {
+    return {
+      samples: aggregate.samples,
+      avgMs:
+        aggregate.samples > 0
+          ? Math.round((aggregate.totalMs / aggregate.samples) * 1000) / 1000
+          : 0,
+      maxMs: Math.round(aggregate.maxMs * 1000) / 1000,
+      over20: aggregate.over20,
+      over80: aggregate.over80,
+      over160: aggregate.over160,
+      over320: aggregate.over320,
+    };
+  }
+
+  private buildReceiveStageTimingDiagnostics(): {
+    byStage: Partial<
+      Record<
+        ReceiveStageTimingName,
+        {
+          samples: number;
+          avgMs: number;
+          maxMs: number;
+          over20: number;
+          over80: number;
+          over160: number;
+          over320: number;
+        }
+      >
+    >;
+    packetDecodeSelectedCounts: Partial<
+      Record<DecodeAudioPacketsTiming['selected'], number>
+    >;
+    recentWorst: ReceiveStageTimingRecentWorst[];
+  } {
+    const byStage: ReturnType<
+      GroupCallAudioReceiveEngine['buildReceiveStageTimingDiagnostics']
+    >['byStage'] = {};
+    for (const [name, aggregate] of this.receiveStageTimingStats.entries()) {
+      byStage[name] = this.serializeReceiveStageTimingAggregate(aggregate);
+    }
+    const packetDecodeSelectedCounts: Partial<
+      Record<DecodeAudioPacketsTiming['selected'], number>
+    > = {};
+    for (const [selected, count] of this.packetDecodeSelectedCounts.entries()) {
+      packetDecodeSelectedCounts[selected] = count;
+    }
+    return {
+      byStage,
+      packetDecodeSelectedCounts,
+      recentWorst: this.receiveStageTimingRecentWorst.map((entry) => ({
+        ...entry,
+      })),
+    };
+  }
 
   private setReceiveProfile(
     sourceAddr: string,
@@ -840,6 +1018,9 @@ export class GroupCallAudioReceiveEngine {
       };
     }>;
     profileTransitions: ReceiveProfileTransition[];
+    receiveStageTiming: ReturnType<
+      GroupCallAudioReceiveEngine['buildReceiveStageTimingDiagnostics']
+    >;
     playouts: Array<{
       peerAddress: string;
       decodePath: 'wasm-fec' | 'webcodecs' | 'uninitialized';
@@ -1000,6 +1181,7 @@ export class GroupCallAudioReceiveEngine {
       livePolicyProfilesBySource,
       livePolicyStateBySource,
       profileTransitions: [...this.receiveProfileTransitions],
+      receiveStageTiming: this.buildReceiveStageTimingDiagnostics(),
       playouts,
     };
   }
@@ -1032,6 +1214,7 @@ export class GroupCallAudioReceiveEngine {
       timestampMs: number;
     }>
   ): Promise<void> {
+    const totalStartedAt = performance.now();
     if (packets.length === 0) {
       this.recordDecodeFailure();
       traceGcallAudioSurface(
@@ -1040,6 +1223,7 @@ export class GroupCallAudioReceiveEngine {
       );
       return;
     }
+    const firstSourceAddr = packets[0]?.sourceAddr ?? 'unknown';
     if (!this.loggedFirstDecodedPacket) {
       this.loggedFirstDecodedPacket = true;
       const first = packets[0];
@@ -1050,6 +1234,7 @@ export class GroupCallAudioReceiveEngine {
       });
     }
     this.metrics.recordPacketDecoded(packets.length);
+    const observeStartedAt = performance.now();
     this.onDecodedPacketsObserved?.(
       packets.map((packet) => ({
         sourceAddr: packet.sourceAddr,
@@ -1058,6 +1243,12 @@ export class GroupCallAudioReceiveEngine {
         timestampMs: packet.timestampMs,
       }))
     );
+    this.recordReceiveStageTiming(
+      'decodedPacketsObserved',
+      performance.now() - observeStartedAt,
+      firstSourceAddr
+    );
+    const groupStartedAt = performance.now();
     const grouped = new Map<string, DecodedAudioPacket[]>();
     for (const packet of packets) {
       const normalized: DecodedAudioPacket = {
@@ -1074,11 +1265,39 @@ export class GroupCallAudioReceiveEngine {
       if (existing) existing.push(normalized);
       else grouped.set(packet.sourceAddr, [normalized]);
     }
+    this.recordReceiveStageTiming(
+      'decodedPacketsGroup',
+      performance.now() - groupStartedAt,
+      firstSourceAddr
+    );
     for (const [sourceAddr, list] of grouped) {
+      const playoutStartedAt = performance.now();
       const playout = await this.getOrCreatePlayout(sourceAddr);
+      this.recordReceiveStageTiming(
+        'getOrCreatePlayout',
+        performance.now() - playoutStartedAt,
+        sourceAddr
+      );
+      const pushStartedAt = performance.now();
       playout.pushDecoded(list);
+      this.recordReceiveStageTiming(
+        'pushDecoded',
+        performance.now() - pushStartedAt,
+        sourceAddr
+      );
     }
+    const metricsStartedAt = performance.now();
     this.scheduleMetricsEmit();
+    this.recordReceiveStageTiming(
+      'metricsEmitSchedule',
+      performance.now() - metricsStartedAt,
+      firstSourceAddr
+    );
+    this.recordReceiveStageTiming(
+      'decodedPacketsTotal',
+      performance.now() - totalStartedAt,
+      firstSourceAddr
+    );
   }
 
   async handleIncomingAudio(
@@ -1102,9 +1321,20 @@ export class GroupCallAudioReceiveEngine {
     }
     const startedAt = performance.now();
     this.noteIncomingAudio(payload.bridgeReceivedAtWallMs);
-    const packets = decodeAudioPackets(new Uint8Array(payload.data), roomKey);
+    const { packets, timing } = decodeAudioPacketsWithTiming(
+      new Uint8Array(payload.data),
+      roomKey
+    );
+    const sourceAddr =
+      packets[0]?.sourceAddr ??
+      payload.fromAddress ??
+      payload.resolvedFromAddress ??
+      'unknown';
+    this.recordPacketDecodeTiming(timing, sourceAddr);
     await this.handleDecodedPackets(packets);
-    this.metrics.recordIncomingPacketDuration(performance.now() - startedAt);
+    const totalMs = performance.now() - startedAt;
+    this.recordReceiveStageTiming('incomingTotal', totalMs, sourceAddr);
+    this.metrics.recordIncomingPacketDuration(totalMs);
     this.scheduleMetricsEmit();
     return packets.length;
   }
@@ -1126,6 +1356,12 @@ export class GroupCallAudioReceiveEngine {
       0,
       this.receiveProfileTransitions.length
     );
+    this.receiveStageTimingStats.clear();
+    this.receiveStageTimingRecentWorst.splice(
+      0,
+      this.receiveStageTimingRecentWorst.length
+    );
+    this.packetDecodeSelectedCounts.clear();
     this.resumeAudioContextPromise = null;
     this.clearMetricsEmitTimer();
     this.metrics = new GroupCallPerformanceTracker();
