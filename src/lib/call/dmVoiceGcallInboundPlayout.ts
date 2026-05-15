@@ -110,6 +110,9 @@ const GCALL_BURST_GAP_RECOVERY_GAP_MS = 900;
 const GCALL_BURST_GAP_RECOVERY_WINDOW_MS = 1_800;
 const GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER = 80;
 const GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS = 500;
+const GCALL_BURST_GAP_RECOVERY_LONG_GAP_MS = 1_200;
+const GCALL_BURST_GAP_RECOVERY_LONG_GAP_FRAME_TRIGGER = 48;
+const GCALL_BURST_GAP_RECOVERY_LONG_GAP_MIN_EXCESS_MS = 240;
 const GCALL_BURST_GAP_RECOVERY_KEEP_FRAMES = 8;
 const GCALL_BURST_GAP_RECOVERY_COOLDOWN_MS = 2_500;
 const GCALL_POST_BURST_LATENCY_LOCKOUT_MS = 25_000;
@@ -118,6 +121,7 @@ const GCALL_POST_BURST_LATENCY_SHED_TARGET_HEADROOM_FRAMES = 1;
 const GCALL_POST_BURST_LATENCY_SHED_MIN_OVER_TARGET_FRAMES = 2;
 const GCALL_POST_BURST_LOCKOUT_UNDERTARGET_MAX = 0.08;
 const GCALL_POST_BURST_LOCKOUT_PLAYOUT_RATE_MIN = 0.97;
+const GCALL_POST_BURST_READY_RESERVE_FRAMES = 3;
 const GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS = 24;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES = 18;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO = 0.75;
@@ -137,6 +141,7 @@ export function shouldStartBurstGapRecoveryWatch(opts: {
 }
 
 export function shouldCommitBurstGapRecovery(opts: {
+  burstGapMs?: number;
   burstWindowAgeMs: number;
   burstFrameCount: number;
   jitterBufferedFrames: number;
@@ -144,10 +149,17 @@ export function shouldCommitBurstGapRecovery(opts: {
   trimmedFramesDuringWatch: number;
   pcmStarved: boolean;
 }): boolean {
+  const longGap =
+    Number.isFinite(opts.burstGapMs) &&
+    (opts.burstGapMs ?? 0) >= GCALL_BURST_GAP_RECOVERY_LONG_GAP_MS;
+  const frameTrigger = longGap
+    ? GCALL_BURST_GAP_RECOVERY_LONG_GAP_FRAME_TRIGGER
+    : GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER;
+  const minExcessMs = longGap
+    ? GCALL_BURST_GAP_RECOVERY_LONG_GAP_MIN_EXCESS_MS
+    : GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS;
   const burstAudioMs = opts.burstFrameCount * OPUS_FRAME_DURATION_MS;
-  const fasterThanRealtime =
-    burstAudioMs >=
-    opts.burstWindowAgeMs + GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS;
+  const fasterThanRealtime = burstAudioMs >= opts.burstWindowAgeMs + minExcessMs;
   const nearJitterCap =
     opts.jitterMaxEntries > 0 &&
     opts.jitterBufferedFrames >= Math.floor(opts.jitterMaxEntries * 0.8);
@@ -155,7 +167,7 @@ export function shouldCommitBurstGapRecovery(opts: {
     opts.trimmedFramesDuringWatch > 0 || (opts.pcmStarved && nearJitterCap);
   return (
     opts.burstWindowAgeMs <= GCALL_BURST_GAP_RECOVERY_WINDOW_MS &&
-    opts.burstFrameCount >= GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER &&
+    opts.burstFrameCount >= frameTrigger &&
     fasterThanRealtime &&
     hasDamageEvidence
   );
@@ -217,6 +229,22 @@ export function computePostBurstLatencyShedFrames(opts: {
   return Math.min(
     GCALL_POST_BURST_LATENCY_SHED_MAX_FRAMES_PER_TICK,
     overTargetFrames
+  );
+}
+
+export function computePostBurstSteadyPrimedHoldFrames(opts: {
+  lockoutActive: boolean;
+  activeSourceCount: number;
+  defaultHoldFrames: number;
+}): number {
+  if (opts.lockoutActive && opts.activeSourceCount === 1) {
+    return GCALL_POST_BURST_READY_RESERVE_FRAMES;
+  }
+  return Math.max(
+    0,
+    Number.isFinite(opts.defaultHoldFrames)
+      ? Math.trunc(opts.defaultHoldFrames)
+      : 0
   );
 }
 
@@ -865,15 +893,32 @@ export class DmVoiceGcallInboundPlayout {
           ? Number.POSITIVE_INFINITY
           : Math.max(0, tickStartedAt - this.lastPushAtPerfMs);
       const bufferedFrames = jb.getBufferedFrames();
+      const metricsSnapshot = this.callbacks?.metricsRef?.current?.getSnapshot();
+      const postBurstLatencyLockoutActive = metricsSnapshot
+        ? shouldApplyPostBurstLatencyLockout({
+            nowMs: Date.now(),
+            lastRecoveryAtMs: this.lastBurstGapResetAtMs,
+            lastDroppedFrames: this.lastBurstGapDroppedFrames,
+            activeSourceCount,
+            playoutUnderTargetFraction:
+              metricsSnapshot.playoutUnderTargetFraction,
+            avgPlayoutRate: metricsSnapshot.avgPlayoutRate,
+          })
+        : false;
+      const n1SteadyHoldFrames = computeN1SteadyPrimedHoldFrames({
+        activeSourceCount,
+        adaptiveNetworkMode: this.lastJitterAdaptiveMode ?? 'low-latency',
+        hasObservedPlayoutStart: this.hasObservedPlayoutStart,
+        hasReadyFrame: jb.hasReadyFrame(),
+        bufferedFrames,
+        lastPushAgeMs,
+        targetPlayoutMs,
+      });
       jb.setSteadyPrimedHoldFrames(
-        computeN1SteadyPrimedHoldFrames({
+        computePostBurstSteadyPrimedHoldFrames({
+          lockoutActive: postBurstLatencyLockoutActive,
           activeSourceCount,
-          adaptiveNetworkMode: this.lastJitterAdaptiveMode ?? 'low-latency',
-          hasObservedPlayoutStart: this.hasObservedPlayoutStart,
-          hasReadyFrame: jb.hasReadyFrame(),
-          bufferedFrames,
-          lastPushAgeMs,
-          targetPlayoutMs,
+          defaultHoldFrames: n1SteadyHoldFrames,
         })
       );
       const shedFrames = this.shedRecoveredJitterLatency({
@@ -1096,6 +1141,7 @@ export class DmVoiceGcallInboundPlayout {
     );
     if (
       !shouldCommitBurstGapRecovery({
+        burstGapMs: this.burstGapWatchGapMs,
         burstWindowAgeMs: windowAgeMs,
         burstFrameCount: this.burstGapWatchFrames,
         jitterBufferedFrames: jb.getBufferedFrames(),
@@ -1230,7 +1276,13 @@ export class DmVoiceGcallInboundPlayout {
         geometryMode === 'recovery' && activeSourceCount >= 2
       )
     );
-    jb.setSteadyPrimedHoldFrames(geometryMode !== 'recovery' ? 1 : 0);
+    jb.setSteadyPrimedHoldFrames(
+      computePostBurstSteadyPrimedHoldFrames({
+        lockoutActive: postBurstLatencyLockoutActive,
+        activeSourceCount,
+        defaultHoldFrames: geometryMode !== 'recovery' ? 1 : 0,
+      })
+    );
   }
 
   private shedRecoveredJitterLatency(opts: {

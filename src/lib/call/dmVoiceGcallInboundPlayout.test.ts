@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   computePostBurstLatencyShedFrames,
+  computePostBurstSteadyPrimedHoldFrames,
   computeN1SteadyPrimedHoldFrames,
   computeStarvedBacklogDrainBudget,
   decideReadyStallForcePrime,
@@ -84,6 +85,32 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
     ).toBe(false);
   });
 
+  it('commits burst-gap recovery sooner after a long receive gap with damage evidence', () => {
+    expect(
+      shouldCommitBurstGapRecovery({
+        burstGapMs: 1_346,
+        burstWindowAgeMs: 750,
+        burstFrameCount: 52,
+        jitterBufferedFrames: 24,
+        jitterMaxEntries: 24,
+        trimmedFramesDuringWatch: 1,
+        pcmStarved: false,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldCommitBurstGapRecovery({
+        burstGapMs: 900,
+        burstWindowAgeMs: 750,
+        burstFrameCount: 52,
+        jitterBufferedFrames: 24,
+        jitterMaxEntries: 24,
+        trimmedFramesDuringWatch: 1,
+        pcmStarved: false,
+      })
+    ).toBe(false);
+  });
+
   it('uses burst-gap recovery as latency shedding when old jitter frames were dropped', () => {
     expect(
       shouldResetDecodedPlayoutStateAfterBurstGapRecovery({
@@ -155,6 +182,32 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
         lockoutActive: false,
         bufferedFrames: 31,
         targetPlayoutMs: 185,
+      })
+    ).toBe(0);
+  });
+
+  it('keeps a small ready reserve during post-burst lockout for single-source calls', () => {
+    expect(
+      computePostBurstSteadyPrimedHoldFrames({
+        lockoutActive: true,
+        activeSourceCount: 1,
+        defaultHoldFrames: 1,
+      })
+    ).toBe(3);
+
+    expect(
+      computePostBurstSteadyPrimedHoldFrames({
+        lockoutActive: false,
+        activeSourceCount: 1,
+        defaultHoldFrames: 1,
+      })
+    ).toBe(1);
+
+    expect(
+      computePostBurstSteadyPrimedHoldFrames({
+        lockoutActive: true,
+        activeSourceCount: 3,
+        defaultHoldFrames: 0,
       })
     ).toBe(0);
   });
