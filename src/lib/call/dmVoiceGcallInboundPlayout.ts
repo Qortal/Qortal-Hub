@@ -130,6 +130,43 @@ const GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO = 0.75;
 const GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK = 4;
 const GCALL_STARVED_BACKLOG_DRAIN_TARGET_HEADROOM_FRAMES = 2;
 const GCALL_STARVED_BACKLOG_DRAIN_TARGET_OVERAGE_FRAMES = 2;
+const GCALL_AUDIO_GAP_ATTRIBUTION_MAX_RECENT = 16;
+const GCALL_AUDIO_GAP_ATTRIBUTION_MIN_SEQ_GAP = 2;
+const GCALL_AUDIO_GAP_ATTRIBUTION_MIN_INGRESS_GAP_MS = 150;
+
+export type GcallAudioGapAttributionStage =
+  | 'decoded-ingress-gap'
+  | 'jitter-push-stale'
+  | 'jitter-push-trim'
+  | 'jitter-pop-missing'
+  | 'latency-shed'
+  | 'burst-gap-watch'
+  | 'burst-gap-recovery';
+
+export interface GcallAudioGapAttributionRecord {
+  sourceAddr: string;
+  stage: GcallAudioGapAttributionStage;
+  atMs: number;
+  expectedSeq?: number;
+  actualSeq?: number;
+  gapFrames?: number;
+  ingressGapMs?: number;
+  pushStatus?: 'accepted' | 'stale' | 'duplicate';
+  trimmedFrames?: number;
+  jitterBufferedFrames: number;
+  jitterMaxEntries: number;
+  jitterHasReadyFrame: boolean;
+  lastPlayedSeq: number;
+  burstGapMs?: number;
+  burstFrames?: number;
+  burstDroppedFrames?: number;
+  playoutBufferedMs: number;
+  preProcessBufferedMs: number;
+  outsideBandUnder: boolean;
+  concealmentUsed: boolean;
+  adaptiveMode: 'low-latency' | 'recovery' | null;
+  likelyCause: 'arrival-gap' | 'late-stale' | 'trimmed-backlog' | 'playout-skip';
+}
 
 export function shouldStartBurstGapRecoveryWatch(opts: {
   hasObservedPlayoutStart: boolean;
@@ -493,10 +530,67 @@ export class DmVoiceGcallInboundPlayout {
   private pcmPostRejectedFrames = 0;
   private pcmPostOverrunCount = 0;
   private lastPcmPostRejectedAtMs = 0;
+  private lastDecodedIngressSeq: number | null = null;
+  private lastDecodedIngressSeqAtMs = 0;
+  private audioGapAttributionCount = 0;
+  private audioGapAttributionMaxFrames = 0;
+  private audioGapAttributionLast: GcallAudioGapAttributionRecord | null = null;
+  private readonly audioGapAttributionRecent: GcallAudioGapAttributionRecord[] =
+    [];
 
   private resolveActiveSourceCount(): number {
     const n = this.callbacks?.getActiveSourceCount?.() ?? 1;
     return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
+  }
+
+  private recordAudioGapAttribution(
+    partial: Omit<
+      GcallAudioGapAttributionRecord,
+      | 'sourceAddr'
+      | 'atMs'
+      | 'jitterBufferedFrames'
+      | 'jitterMaxEntries'
+      | 'jitterHasReadyFrame'
+      | 'lastPlayedSeq'
+      | 'playoutBufferedMs'
+      | 'preProcessBufferedMs'
+      | 'outsideBandUnder'
+      | 'concealmentUsed'
+      | 'adaptiveMode'
+    > & { atMs?: number }
+  ): void {
+    const jb = this.jitter;
+    const record: GcallAudioGapAttributionRecord = {
+      sourceAddr: this.peerAddress,
+      atMs: partial.atMs ?? Date.now(),
+      jitterBufferedFrames: jb?.getBufferedFrames() ?? 0,
+      jitterMaxEntries: jb?.getMaxEntries() ?? 0,
+      jitterHasReadyFrame: jb?.hasReadyFrame() ?? false,
+      lastPlayedSeq: jb?.getLastPlayedSeq() ?? -1,
+      playoutBufferedMs: this.latestPlayoutBufferedMs,
+      preProcessBufferedMs: this.latestPreProcessBufferedMs,
+      outsideBandUnder: this.latestPlayoutOutsideBandUnder,
+      concealmentUsed: this.latestPlayoutConcealmentUsed,
+      adaptiveMode: this.lastJitterAdaptiveMode,
+      ...partial,
+    };
+    this.audioGapAttributionCount++;
+    this.audioGapAttributionMaxFrames = Math.max(
+      this.audioGapAttributionMaxFrames,
+      record.gapFrames ?? record.trimmedFrames ?? record.burstDroppedFrames ?? 0
+    );
+    this.audioGapAttributionLast = record;
+    this.audioGapAttributionRecent.push(record);
+    if (
+      this.audioGapAttributionRecent.length >
+      GCALL_AUDIO_GAP_ATTRIBUTION_MAX_RECENT
+    ) {
+      this.audioGapAttributionRecent.splice(
+        0,
+        this.audioGapAttributionRecent.length -
+          GCALL_AUDIO_GAP_ATTRIBUTION_MAX_RECENT
+      );
+    }
   }
 
   private async ensureWebCodecsDecoder(): Promise<void> {
@@ -606,6 +700,10 @@ export class DmVoiceGcallInboundPlayout {
     pcmPostRejectedFrames: number;
     pcmPostOverrunCount: number;
     lastPcmPostRejectedAtMs: number;
+    audioGapAttributionCount: number;
+    audioGapAttributionMaxFrames: number;
+    audioGapAttributionLast: GcallAudioGapAttributionRecord | null;
+    audioGapAttributionRecent: GcallAudioGapAttributionRecord[];
     wasmFecPipelineDiagnostics: GcallOpusFecPipelineDiagnostics | null;
     playbackNodeActive: boolean;
     schedulerNodeActive: boolean;
@@ -666,6 +764,10 @@ export class DmVoiceGcallInboundPlayout {
       pcmPostRejectedFrames: this.pcmPostRejectedFrames,
       pcmPostOverrunCount: this.pcmPostOverrunCount,
       lastPcmPostRejectedAtMs: this.lastPcmPostRejectedAtMs,
+      audioGapAttributionCount: this.audioGapAttributionCount,
+      audioGapAttributionMaxFrames: this.audioGapAttributionMaxFrames,
+      audioGapAttributionLast: this.audioGapAttributionLast,
+      audioGapAttributionRecent: [...this.audioGapAttributionRecent],
       wasmFecPipelineDiagnostics:
         this.fecPipeline?.getDiagnostics(this.peerAddress) ?? null,
       playbackNodeActive: this.playbackNode !== null,
@@ -1127,6 +1229,12 @@ export class DmVoiceGcallInboundPlayout {
     this.pcmPostRejectedFrames = 0;
     this.pcmPostOverrunCount = 0;
     this.lastPcmPostRejectedAtMs = 0;
+    this.lastDecodedIngressSeq = null;
+    this.lastDecodedIngressSeqAtMs = 0;
+    this.audioGapAttributionCount = 0;
+    this.audioGapAttributionMaxFrames = 0;
+    this.audioGapAttributionLast = null;
+    this.audioGapAttributionRecent.splice(0);
   }
 
   private resetDecodedPlayoutStateForBurstGap(): void {
@@ -1168,6 +1276,12 @@ export class DmVoiceGcallInboundPlayout {
     this.burstGapResetCount++;
     this.lastBurstGapMs = gapMs;
     this.lastJitterBurstHeadroomReason = 'burst-gap-watch';
+    this.recordAudioGapAttribution({
+      stage: 'burst-gap-watch',
+      ingressGapMs: gapMs,
+      burstGapMs: gapMs,
+      likelyCause: 'arrival-gap',
+    });
   }
 
   private maybeCommitBurstGapRecovery(nowMs: number): void {
@@ -1213,6 +1327,15 @@ export class DmVoiceGcallInboundPlayout {
     this.lastBurstGapDroppedFrames = dropped;
     this.lastBurstGapMs = this.burstGapWatchGapMs;
     this.lastBurstGapResetAtMs = nowMs;
+    this.recordAudioGapAttribution({
+      stage: 'burst-gap-recovery',
+      atMs: nowMs,
+      ingressGapMs: this.burstGapWatchGapMs,
+      burstGapMs: this.burstGapWatchGapMs,
+      burstFrames: this.burstGapWatchFrames,
+      burstDroppedFrames: dropped,
+      likelyCause: dropped > 0 ? 'trimmed-backlog' : 'arrival-gap',
+    });
     if (dropped > 0) {
       this.postBurstLatencyLockoutUntilMs =
         nowMs + GCALL_POST_BURST_LATENCY_LOCKOUT_MS;
@@ -1360,6 +1483,11 @@ export class DmVoiceGcallInboundPlayout {
         this.postBurstLatencyShedFrames += dropped;
         this.lastPostBurstLatencyShedFrames = dropped;
         this.lastPostBurstLatencyShedAtMs = Date.now();
+        this.recordAudioGapAttribution({
+          stage: 'latency-shed',
+          trimmedFrames: dropped,
+          likelyCause: 'trimmed-backlog',
+        });
       }
       return dropped;
     }
@@ -1428,6 +1556,14 @@ export class DmVoiceGcallInboundPlayout {
       });
     }
     const rawGap = jb.consumeLastRawGapAfterPop();
+    if (missedInc > 0) {
+      this.recordAudioGapAttribution({
+        stage: 'jitter-pop-missing',
+        actualSeq: playedSeq >= 0 ? playedSeq : undefined,
+        gapFrames: missedInc,
+        likelyCause: 'playout-skip',
+      });
+    }
     if (rawGap > tuning.wasmFecMaxGapReset) {
       w.postMessage({ type: 'reset', sourceAddr: this.peerAddress });
     }
@@ -1461,6 +1597,14 @@ export class DmVoiceGcallInboundPlayout {
         playedSeq,
       });
     }
+    if (missedInc > 0) {
+      this.recordAudioGapAttribution({
+        stage: 'jitter-pop-missing',
+        actualSeq: playedSeq >= 0 ? playedSeq : undefined,
+        gapFrames: missedInc,
+        likelyCause: 'playout-skip',
+      });
+    }
     try {
       const chunk = new EncodedAudioChunk({
         type: 'key',
@@ -1483,6 +1627,29 @@ export class DmVoiceGcallInboundPlayout {
     let pushedAny = false;
     for (const p of packets) {
       if (p.opusFrame?.length) {
+        const previousSeq = this.lastDecodedIngressSeq;
+        const previousSeqAtMs = this.lastDecodedIngressSeqAtMs;
+        if (previousSeq !== null) {
+          const expectedSeq = (previousSeq + 1) & 0xffff;
+          const seqGap = (p.seq - expectedSeq + 65536) & 0xffff;
+          const ingressGapMs =
+            previousSeqAtMs > 0 ? Math.max(0, nowMs - previousSeqAtMs) : 0;
+          if (
+            seqGap >= GCALL_AUDIO_GAP_ATTRIBUTION_MIN_SEQ_GAP ||
+            ingressGapMs >= GCALL_AUDIO_GAP_ATTRIBUTION_MIN_INGRESS_GAP_MS
+          ) {
+            this.recordAudioGapAttribution({
+              stage: 'decoded-ingress-gap',
+              expectedSeq,
+              actualSeq: p.seq,
+              gapFrames: seqGap > 0 && seqGap < 4096 ? seqGap : undefined,
+              ingressGapMs,
+              likelyCause: 'arrival-gap',
+            });
+          }
+        }
+        this.lastDecodedIngressSeq = p.seq;
+        this.lastDecodedIngressSeqAtMs = nowMs;
         const result = jb.push(p.seq, p.opusFrame);
         if (result.status === 'accepted') {
           this.jitterPushAccepted++;
@@ -1492,6 +1659,12 @@ export class DmVoiceGcallInboundPlayout {
           pushedAny = true;
         } else if (result.status === 'stale') {
           this.jitterPushStale++;
+          this.recordAudioGapAttribution({
+            stage: 'jitter-push-stale',
+            actualSeq: p.seq,
+            pushStatus: result.status,
+            likelyCause: 'late-stale',
+          });
         } else {
           this.jitterPushDuplicate++;
         }
@@ -1508,6 +1681,13 @@ export class DmVoiceGcallInboundPlayout {
           this.jitterPushTrimEvents++;
           this.jitterLastTrimmedFrames = result.trimmed;
           this.jitterLastTrimAtMs = Date.now();
+          this.recordAudioGapAttribution({
+            stage: 'jitter-push-trim',
+            actualSeq: p.seq,
+            pushStatus: result.status,
+            trimmedFrames: result.trimmed,
+            likelyCause: 'trimmed-backlog',
+          });
         }
       }
     }

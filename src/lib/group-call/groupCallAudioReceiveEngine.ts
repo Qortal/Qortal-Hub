@@ -1,4 +1,7 @@
-import { DmVoiceGcallInboundPlayout } from '../call/dmVoiceGcallInboundPlayout';
+import {
+  DmVoiceGcallInboundPlayout,
+  type GcallAudioGapAttributionRecord,
+} from '../call/dmVoiceGcallInboundPlayout';
 import { applyCallAudioOutput } from '../call/audioDevices';
 import {
   decodeAudioPackets,
@@ -875,6 +878,10 @@ export class GroupCallAudioReceiveEngine {
       pcmPostRejectedFrames?: number;
       pcmPostOverrunCount?: number;
       lastPcmPostRejectedAtMs?: number;
+      audioGapAttributionCount?: number;
+      audioGapAttributionMaxFrames?: number;
+      audioGapAttributionLast?: GcallAudioGapAttributionRecord | null;
+      audioGapAttributionRecent?: GcallAudioGapAttributionRecord[];
       wasmFecPipelineDiagnostics?: {
         queuedDecodeJobs: number;
         queuedDecodeJobsHighWater: number;

@@ -19,6 +19,7 @@ import {
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
 } from './gcall-diagnostics';
+import type { GcallAudioGapAttributionRecord } from '../call/dmVoiceGcallInboundPlayout';
 import packageJson from '../../../package.json';
 import {
   decryptBoxWithMyKeyForGroupCall,
@@ -228,6 +229,10 @@ type RuntimeRecentWindowTrend = {
     pcmPostRejectedFrames?: number;
     pcmPostOverrunCount?: number;
     lastPcmPostRejectedAtMs?: number;
+    audioGapAttributionCount?: number;
+    audioGapAttributionMaxFrames?: number;
+    audioGapAttributionLast?: GcallAudioGapAttributionRecord | null;
+    audioGapAttributionRecent?: GcallAudioGapAttributionRecord[];
     wasmFecPipelineDiagnostics?: {
       queuedDecodeJobs: number;
       queuedDecodeJobsHighWater: number;
@@ -2084,6 +2089,10 @@ export class GroupCallAudioEngineRuntime {
         pcmPostRejectedFrames: playout.pcmPostRejectedFrames,
         pcmPostOverrunCount: playout.pcmPostOverrunCount,
         lastPcmPostRejectedAtMs: playout.lastPcmPostRejectedAtMs,
+        audioGapAttributionCount: playout.audioGapAttributionCount,
+        audioGapAttributionMaxFrames: playout.audioGapAttributionMaxFrames,
+        audioGapAttributionLast: playout.audioGapAttributionLast,
+        audioGapAttributionRecent: playout.audioGapAttributionRecent,
         wasmFecPipelineDiagnostics: playout.wasmFecPipelineDiagnostics,
         lastJitterAdaptiveMode: playout.lastJitterAdaptiveMode,
       })),
