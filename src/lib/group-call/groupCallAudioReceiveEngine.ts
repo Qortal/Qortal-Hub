@@ -262,7 +262,8 @@ const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_JITTER_FRAMES_MIN = 14;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_PREBUFFER_FRAMES_MAX = 2;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_CONCEALMENT_EMA_MAX = 0.035;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MISSING_EMA_MAX = 0.04;
-const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_RATE_EMA_MIN = 0.998;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_RATE_EMA_MIN = 0.996;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_INGRESS_AGE_MAX_MS = 220;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_TARGET_MS = 145;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MAX_EXTRA_HOLD_FRAMES = 0;
 const GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX = 120;
@@ -2014,6 +2015,8 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_CONCEALMENT_EMA_MAX &&
           state.missingFrameEma <=
             GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MISSING_EMA_MAX &&
+          state.oldestFrameAgeEma <=
+            GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_INGRESS_AGE_MAX_MS &&
           state.rateEma >=
             GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_RATE_EMA_MIN &&
           !(
@@ -2392,15 +2395,20 @@ export class GroupCallAudioReceiveEngine {
             severeSingleSourcePressure && !cleanBufferedBacklogEscape,
           severeSingleSourceHold:
             effectiveSevereSingleSourceHold && !cleanBufferedBacklogEscape,
-          repairCollapseHold: effectiveRepairCollapseHold,
-          repairCollapsePressure,
-          repairHeavyHold,
-          repairHeavyPressure,
+          repairCollapseHold:
+            effectiveRepairCollapseHold && !cleanBufferedBacklogEscape,
+          repairCollapsePressure:
+            repairCollapsePressure && !cleanBufferedBacklogEscape,
+          repairHeavyHold: repairHeavyHold && !cleanBufferedBacklogEscape,
+          repairHeavyPressure:
+            repairHeavyPressure && !cleanBufferedBacklogEscape,
           damageBurstHold,
           damageBurstCollapsePressure:
-            damageBurstCollapsePressure || recentDamageCollapsePressure,
+            (damageBurstCollapsePressure || recentDamageCollapsePressure) &&
+            !cleanBufferedBacklogEscape,
           damageBurstRepairPressure:
-            damageBurstRepairPressure || recentDamageRepairPressure,
+            (damageBurstRepairPressure || recentDamageRepairPressure) &&
+            !cleanBufferedBacklogEscape,
           bufferedNotReadyHold,
           bufferedNotReadyPressure,
           persistentLeanHold: persistentLeanHold && !cleanBufferedBacklogEscape,

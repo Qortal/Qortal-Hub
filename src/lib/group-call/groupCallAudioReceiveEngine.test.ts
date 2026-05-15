@@ -8220,4 +8220,112 @@ describe('GroupCallAudioReceiveEngine', () => {
     expect(state.persistentLeanHoldUntilMs).toBe(0);
     vi.useRealTimers();
   });
+
+  it('lets clean ready backlog override stale repair-heavy hold', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation((frames) => frames);
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+      // @ts-expect-error narrow mock only supplies the fields used by this test.
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 31,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    const state = (engine as any).liveMultiSourceStateBySource.get('alice');
+    expect(state).toBeDefined();
+    state.currentReceiveProfile = 'repair-heavy-connected';
+    state.repairHeavyHoldUntilMs = Date.now() + 11_000;
+    state.persistentLeanHoldUntilMs = Date.now() + 10_000;
+    state.postRecoveryHoldUntilMs = Date.now() + 2_500;
+    state.concealmentEma = 0;
+    state.missingFrameEma = 0;
+    state.rateEma = 0.9972;
+    state.underTargetEma = 0.14;
+
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 12,
+      preProcessBufferedMs: 0,
+      targetPlayoutMs: 185,
+      oldestFrameAgeMs: 100,
+      rate: 0.9972,
+      outsideBand: true,
+      outsideBandUnder: true,
+      outsideBandOver: false,
+      deltaMs: -168,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'clean-low-latency',
+      },
+    ]);
+    expect(holdSpy.mock.calls[holdSpy.mock.calls.length - 1]?.[0]).toBe(0);
+    expect(resetTargetSpy).toHaveBeenCalled();
+    expect(state.repairHeavyHoldUntilMs).toBe(0);
+    expect(state.persistentLeanHoldUntilMs).toBe(0);
+    vi.useRealTimers();
+  });
 });
