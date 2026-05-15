@@ -3028,10 +3028,21 @@ export class GroupCallManager extends EventEmitter {
     };
   }
 
-  private rememberReticulumOverlayId(overlayId: string): void {
+  private reticulumOverlaySeenKey(
+    overlayId: string,
+    wireType?: unknown
+  ): string {
+    const type = typeof wireType === 'string' && wireType ? wireType : '?';
+    return `${type}:${overlayId}`;
+  }
+
+  private rememberReticulumOverlayId(
+    overlayId: string,
+    wireType?: unknown
+  ): void {
     const now = Date.now();
     this.seenReticulumOverlayIds.set(
-      overlayId,
+      this.reticulumOverlaySeenKey(overlayId, wireType),
       now + GC_RETICULUM_OVERLAY_SEEN_TTL_MS
     );
     for (const [id, expiresAt] of this.seenReticulumOverlayIds) {
@@ -3039,12 +3050,16 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
-  private hasSeenReticulumOverlayId(overlayId: string): boolean {
+  private hasSeenReticulumOverlayId(
+    overlayId: string,
+    wireType?: unknown
+  ): boolean {
     const now = Date.now();
-    const expiresAt = this.seenReticulumOverlayIds.get(overlayId);
+    const key = this.reticulumOverlaySeenKey(overlayId, wireType);
+    const expiresAt = this.seenReticulumOverlayIds.get(key);
     if (typeof expiresAt !== 'number') return false;
     if (expiresAt <= now) {
-      this.seenReticulumOverlayIds.delete(overlayId);
+      this.seenReticulumOverlayIds.delete(key);
       return false;
     }
     return true;
@@ -3463,7 +3478,7 @@ export class GroupCallManager extends EventEmitter {
     let overlayLogicalKey: string | null = null;
     const overlayMeta = this.parseReticulumOverlayMeta(wire);
     if (overlayMeta) {
-      if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) {
+      if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId, wire.t)) {
         if (wire.t === 'GJ') {
           const room =
             typeof wire.R === 'string' ? wire.R : String(wire.R ?? '?');
@@ -3486,7 +3501,7 @@ export class GroupCallManager extends EventEmitter {
         );
         return;
       }
-      this.rememberReticulumOverlayId(overlayMeta.overlayId);
+      this.rememberReticulumOverlayId(overlayMeta.overlayId, wire.t);
       if (overlayLogicalKey !== null) {
         this.rememberReticulumWireLogicalKey(overlayLogicalKey);
       }

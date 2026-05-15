@@ -1,10 +1,124 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeN1SteadyPrimedHoldFrames,
+  computeStarvedBacklogDrainBudget,
   decideReadyStallForcePrime,
+  shouldCommitBurstGapRecovery,
+  shouldStartBurstGapRecoveryWatch,
 } from './dmVoiceGcallInboundPlayout';
 
 describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
+  it('starts burst-gap watch only after post-start sustained receive gaps outside cooldown', () => {
+    expect(
+      shouldStartBurstGapRecoveryWatch({
+        hasObservedPlayoutStart: true,
+        gapMs: 950,
+        nowMs: 5_000,
+        lastRecoveryAtMs: 1_000,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldStartBurstGapRecoveryWatch({
+        hasObservedPlayoutStart: false,
+        gapMs: 1_500,
+        nowMs: 5_000,
+        lastRecoveryAtMs: 1_000,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldStartBurstGapRecoveryWatch({
+        hasObservedPlayoutStart: true,
+        gapMs: 500,
+        nowMs: 5_000,
+        lastRecoveryAtMs: 1_000,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldStartBurstGapRecoveryWatch({
+        hasObservedPlayoutStart: true,
+        gapMs: 950,
+        nowMs: 5_000,
+        lastRecoveryAtMs: 3_000,
+      })
+    ).toBe(false);
+  });
+
+  it('commits burst-gap recovery only for faster-than-realtime damaged bursts', () => {
+    expect(
+      shouldCommitBurstGapRecovery({
+        burstWindowAgeMs: 900,
+        burstFrameCount: 80,
+        jitterBufferedFrames: 36,
+        jitterMaxEntries: 40,
+        trimmedFramesDuringWatch: 4,
+        pcmStarved: false,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldCommitBurstGapRecovery({
+        burstWindowAgeMs: 1_200,
+        burstFrameCount: 80,
+        jitterBufferedFrames: 36,
+        jitterMaxEntries: 40,
+        trimmedFramesDuringWatch: 4,
+        pcmStarved: false,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldCommitBurstGapRecovery({
+        burstWindowAgeMs: 900,
+        burstFrameCount: 80,
+        jitterBufferedFrames: 16,
+        jitterMaxEntries: 40,
+        trimmedFramesDuringWatch: 0,
+        pcmStarved: false,
+      })
+    ).toBe(false);
+  });
+
+  it('accelerates drain only when ready Opus backlog is high and PCM is starved', () => {
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 40,
+        maxEntries: 40,
+        playoutBufferedMs: 0.3,
+        preProcessBufferedMs: 0.3,
+        outsideBandUnder: true,
+        concealmentUsed: true,
+      })
+    ).toBeGreaterThan(1);
+
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 40,
+        maxEntries: 40,
+        playoutBufferedMs: 80,
+        preProcessBufferedMs: 80,
+        outsideBandUnder: false,
+        concealmentUsed: false,
+      })
+    ).toBe(1);
+
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 12,
+        maxEntries: 40,
+        playoutBufferedMs: 0,
+        preProcessBufferedMs: 0,
+        outsideBandUnder: true,
+        concealmentUsed: true,
+      })
+    ).toBe(1);
+  });
+
   it('holds a 2-frame steady reserve for post-start 1:1 recovery only while the source is recently pushing and already ready', () => {
     expect(
       computeN1SteadyPrimedHoldFrames({

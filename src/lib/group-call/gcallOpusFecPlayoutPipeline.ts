@@ -36,14 +36,41 @@ export type PostPcmBatch = (
   ingressAtMs: number | null
 ) => boolean;
 
+export interface GcallOpusFecPipelineDiagnostics {
+  queuedDecodeJobs: number;
+  queuedDecodeJobsHighWater: number;
+  inflightDecode: boolean;
+  inflightDecodeAgeMs: number;
+  deferredPcmSlabs: number;
+  deferredPcmFrames: number;
+  deferredPcmFramesHighWater: number;
+  enqueuedDecodeJobs: number;
+  completedDecodeJobs: number;
+  postedPcmFrames: number;
+  rejectedPcmFrames: number;
+  deferredPcmTicks: number;
+  lastRejectedPcmAtMs: number;
+  lastDeferredPcmAtMs: number;
+}
+
 export class GcallOpusFecPlayoutPipeline {
   private readonly jobQueues = new Map<
     string,
     Array<{ packet: Uint8Array; gap: number; ingressAtMs: number | null }>
   >();
   private readonly inflight = new Map<string, number | null>();
+  private readonly inflightStartedAtMs = new Map<string, number>();
   private readonly deferredPcm = new Map<string, WasmFecPcmSlab[]>();
   private readonly postedThisTick = new Map<string, number>();
+  private readonly queuedDecodeJobsHighWater = new Map<string, number>();
+  private readonly deferredPcmFramesHighWater = new Map<string, number>();
+  private readonly enqueuedDecodeJobs = new Map<string, number>();
+  private readonly completedDecodeJobs = new Map<string, number>();
+  private readonly postedPcmFrames = new Map<string, number>();
+  private readonly rejectedPcmFrames = new Map<string, number>();
+  private readonly deferredPcmTicks = new Map<string, number>();
+  private readonly lastRejectedPcmAtMs = new Map<string, number>();
+  private readonly lastDeferredPcmAtMs = new Map<string, number>();
   private requestId = 0;
 
   constructor(
@@ -57,6 +84,37 @@ export class GcallOpusFecPlayoutPipeline {
 
   clearPostedThisTick(): void {
     this.postedThisTick.clear();
+  }
+
+  getDiagnostics(sourceAddr: string): GcallOpusFecPipelineDiagnostics {
+    const queuedDecodeJobs = this.jobQueues.get(sourceAddr)?.length ?? 0;
+    const deferred = this.deferredPcm.get(sourceAddr) ?? [];
+    const deferredPcmFrames = deferred.reduce(
+      (sum, slab) => sum + Math.max(0, slab.frameCount - slab.consumedFrames),
+      0
+    );
+    const startedAtMs = this.inflightStartedAtMs.get(sourceAddr) ?? 0;
+    return {
+      queuedDecodeJobs,
+      queuedDecodeJobsHighWater:
+        this.queuedDecodeJobsHighWater.get(sourceAddr) ?? queuedDecodeJobs,
+      inflightDecode: this.inflight.has(sourceAddr),
+      inflightDecodeAgeMs:
+        startedAtMs > 0 && this.inflight.has(sourceAddr)
+          ? Math.max(0, Date.now() - startedAtMs)
+          : 0,
+      deferredPcmSlabs: deferred.length,
+      deferredPcmFrames,
+      deferredPcmFramesHighWater:
+        this.deferredPcmFramesHighWater.get(sourceAddr) ?? deferredPcmFrames,
+      enqueuedDecodeJobs: this.enqueuedDecodeJobs.get(sourceAddr) ?? 0,
+      completedDecodeJobs: this.completedDecodeJobs.get(sourceAddr) ?? 0,
+      postedPcmFrames: this.postedPcmFrames.get(sourceAddr) ?? 0,
+      rejectedPcmFrames: this.rejectedPcmFrames.get(sourceAddr) ?? 0,
+      deferredPcmTicks: this.deferredPcmTicks.get(sourceAddr) ?? 0,
+      lastRejectedPcmAtMs: this.lastRejectedPcmAtMs.get(sourceAddr) ?? 0,
+      lastDeferredPcmAtMs: this.lastDeferredPcmAtMs.get(sourceAddr) ?? 0,
+    };
   }
 
   /** Same set as the jitter tick prefetch loop (deferred slabs + active speakers). */
@@ -121,6 +179,7 @@ export class GcallOpusFecPlayoutPipeline {
         const remainingBudget = GCALL_WASM_FEC_MAX_PCM_PER_TICK - posted;
         if (remainingBudget <= 0) {
           this.deferredPcm.set(sourceAddr, queue);
+          this.noteDeferredPcm(sourceAddr, queue);
           deferredTick = true;
           break;
         }
@@ -138,9 +197,19 @@ export class GcallOpusFecPlayoutPipeline {
           slab.ingressAtMs
         );
         if (!accepted) {
+          this.rejectedPcmFrames.set(
+            sourceAddr,
+            (this.rejectedPcmFrames.get(sourceAddr) ?? 0) + frameBatch
+          );
+          this.lastRejectedPcmAtMs.set(sourceAddr, Date.now());
           if (queue.length > 0) this.deferredPcm.set(sourceAddr, queue);
+          this.noteDeferredPcm(sourceAddr, queue);
           return;
         }
+        this.postedPcmFrames.set(
+          sourceAddr,
+          (this.postedPcmFrames.get(sourceAddr) ?? 0) + frameBatch
+        );
         slab.consumedFrames += frameBatch;
         posted += frameBatch;
         if (slab.consumedFrames >= slab.frameCount) {
@@ -148,12 +217,14 @@ export class GcallOpusFecPlayoutPipeline {
           continue;
         }
         this.deferredPcm.set(sourceAddr, queue);
+        this.noteDeferredPcm(sourceAddr, queue);
         deferredTick = true;
         break;
       }
       while (slab.consumedFrames < slab.frameCount) {
         if (posted >= GCALL_WASM_FEC_MAX_PCM_PER_TICK) {
           this.deferredPcm.set(sourceAddr, queue);
+          this.noteDeferredPcm(sourceAddr, queue);
           deferredTick = true;
           break outer;
         }
@@ -183,6 +254,22 @@ export class GcallOpusFecPlayoutPipeline {
     }
   }
 
+  private noteDeferredPcm(sourceAddr: string, queue: WasmFecPcmSlab[]): void {
+    const frames = queue.reduce(
+      (sum, slab) => sum + Math.max(0, slab.frameCount - slab.consumedFrames),
+      0
+    );
+    this.deferredPcmFramesHighWater.set(
+      sourceAddr,
+      Math.max(this.deferredPcmFramesHighWater.get(sourceAddr) ?? 0, frames)
+    );
+    this.deferredPcmTicks.set(
+      sourceAddr,
+      (this.deferredPcmTicks.get(sourceAddr) ?? 0) + 1
+    );
+    this.lastDeferredPcmAtMs.set(sourceAddr, Date.now());
+  }
+
   enqueueDecode(
     worker: Worker,
     sourceAddr: string,
@@ -193,6 +280,14 @@ export class GcallOpusFecPlayoutPipeline {
     const q = this.jobQueues.get(sourceAddr) ?? [];
     q.push({ packet, gap, ingressAtMs });
     this.jobQueues.set(sourceAddr, q);
+    this.enqueuedDecodeJobs.set(
+      sourceAddr,
+      (this.enqueuedDecodeJobs.get(sourceAddr) ?? 0) + 1
+    );
+    this.queuedDecodeJobsHighWater.set(
+      sourceAddr,
+      Math.max(this.queuedDecodeJobsHighWater.get(sourceAddr) ?? 0, q.length)
+    );
     this.pump(worker, sourceAddr);
   }
 
@@ -204,6 +299,7 @@ export class GcallOpusFecPlayoutPipeline {
     if (q.length === 0) this.jobQueues.delete(sourceAddr);
     else this.jobQueues.set(sourceAddr, q);
     this.inflight.set(sourceAddr, job.ingressAtMs);
+    this.inflightStartedAtMs.set(sourceAddr, Date.now());
     const requestId = ++this.requestId;
     const buf = job.packet.buffer.slice(
       job.packet.byteOffset,
@@ -223,6 +319,11 @@ export class GcallOpusFecPlayoutPipeline {
 
   completeInflight(sourceAddr: string): void {
     this.inflight.delete(sourceAddr);
+    this.inflightStartedAtMs.delete(sourceAddr);
+    this.completedDecodeJobs.set(
+      sourceAddr,
+      (this.completedDecodeJobs.get(sourceAddr) ?? 0) + 1
+    );
   }
 
   consumeInflightIngressAtMs(sourceAddr: string): number | null {
@@ -232,14 +333,34 @@ export class GcallOpusFecPlayoutPipeline {
   removeSource(sourceAddr: string): void {
     this.jobQueues.delete(sourceAddr);
     this.inflight.delete(sourceAddr);
+    this.inflightStartedAtMs.delete(sourceAddr);
     this.deferredPcm.delete(sourceAddr);
     this.postedThisTick.delete(sourceAddr);
+    this.queuedDecodeJobsHighWater.delete(sourceAddr);
+    this.deferredPcmFramesHighWater.delete(sourceAddr);
+    this.enqueuedDecodeJobs.delete(sourceAddr);
+    this.completedDecodeJobs.delete(sourceAddr);
+    this.postedPcmFrames.delete(sourceAddr);
+    this.rejectedPcmFrames.delete(sourceAddr);
+    this.deferredPcmTicks.delete(sourceAddr);
+    this.lastRejectedPcmAtMs.delete(sourceAddr);
+    this.lastDeferredPcmAtMs.delete(sourceAddr);
   }
 
   resetAll(): void {
     this.jobQueues.clear();
     this.inflight.clear();
+    this.inflightStartedAtMs.clear();
     this.deferredPcm.clear();
     this.postedThisTick.clear();
+    this.queuedDecodeJobsHighWater.clear();
+    this.deferredPcmFramesHighWater.clear();
+    this.enqueuedDecodeJobs.clear();
+    this.completedDecodeJobs.clear();
+    this.postedPcmFrames.clear();
+    this.rejectedPcmFrames.clear();
+    this.deferredPcmTicks.clear();
+    this.lastRejectedPcmAtMs.clear();
+    this.lastDeferredPcmAtMs.clear();
   }
 }

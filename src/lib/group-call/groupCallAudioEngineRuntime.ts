@@ -203,6 +203,42 @@ type RuntimeRecentWindowTrend = {
     jitterLastTrimAtMs?: number;
     jitterBurstHeadroomLevel?: number;
     jitterBurstHeadroomReason?: string | null;
+    burstGapResetCount?: number;
+    burstGapRecoveryCount?: number;
+    burstGapDroppedFrames?: number;
+    lastBurstGapMs?: number;
+    lastBurstGapFrames?: number;
+    lastBurstGapDroppedFrames?: number;
+    lastBurstGapResetAtMs?: number;
+    starvedBacklogDrainCount?: number;
+    starvedBacklogDrainFrames?: number;
+    lastStarvedBacklogDrainAtMs?: number;
+    lastStarvedBacklogDrainFrames?: number;
+    jitterDrainReadyTicks?: number;
+    jitterDrainReadyNoPopTicks?: number;
+    jitterDrainPoppedFrames?: number;
+    lastJitterDrainBudget?: number;
+    lastJitterDrainPoppedFrames?: number;
+    pcmPostAcceptedFrames?: number;
+    pcmPostRejectedFrames?: number;
+    pcmPostOverrunCount?: number;
+    lastPcmPostRejectedAtMs?: number;
+    wasmFecPipelineDiagnostics?: {
+      queuedDecodeJobs: number;
+      queuedDecodeJobsHighWater: number;
+      inflightDecode: boolean;
+      inflightDecodeAgeMs: number;
+      deferredPcmSlabs: number;
+      deferredPcmFrames: number;
+      deferredPcmFramesHighWater: number;
+      enqueuedDecodeJobs: number;
+      completedDecodeJobs: number;
+      postedPcmFrames: number;
+      rejectedPcmFrames: number;
+      deferredPcmTicks: number;
+      lastRejectedPcmAtMs: number;
+      lastDeferredPcmAtMs: number;
+    } | null;
     lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
   }>;
 };
@@ -2013,6 +2049,28 @@ export class GroupCallAudioEngineRuntime {
         jitterLastTrimAtMs: playout.jitterLastTrimAtMs,
         jitterBurstHeadroomLevel: playout.jitterBurstHeadroomLevel,
         jitterBurstHeadroomReason: playout.jitterBurstHeadroomReason,
+        burstGapResetCount: playout.burstGapResetCount,
+        burstGapRecoveryCount: playout.burstGapRecoveryCount,
+        burstGapDroppedFrames: playout.burstGapDroppedFrames,
+        lastBurstGapMs: playout.lastBurstGapMs,
+        lastBurstGapFrames: playout.lastBurstGapFrames,
+        lastBurstGapDroppedFrames: playout.lastBurstGapDroppedFrames,
+        lastBurstGapResetAtMs: playout.lastBurstGapResetAtMs,
+        starvedBacklogDrainCount: playout.starvedBacklogDrainCount,
+        starvedBacklogDrainFrames: playout.starvedBacklogDrainFrames,
+        lastStarvedBacklogDrainAtMs: playout.lastStarvedBacklogDrainAtMs,
+        lastStarvedBacklogDrainFrames:
+          playout.lastStarvedBacklogDrainFrames,
+        jitterDrainReadyTicks: playout.jitterDrainReadyTicks,
+        jitterDrainReadyNoPopTicks: playout.jitterDrainReadyNoPopTicks,
+        jitterDrainPoppedFrames: playout.jitterDrainPoppedFrames,
+        lastJitterDrainBudget: playout.lastJitterDrainBudget,
+        lastJitterDrainPoppedFrames: playout.lastJitterDrainPoppedFrames,
+        pcmPostAcceptedFrames: playout.pcmPostAcceptedFrames,
+        pcmPostRejectedFrames: playout.pcmPostRejectedFrames,
+        pcmPostOverrunCount: playout.pcmPostOverrunCount,
+        lastPcmPostRejectedAtMs: playout.lastPcmPostRejectedAtMs,
+        wasmFecPipelineDiagnostics: playout.wasmFecPipelineDiagnostics,
         lastJitterAdaptiveMode: playout.lastJitterAdaptiveMode,
       })),
     });

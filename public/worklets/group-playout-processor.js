@@ -158,8 +158,38 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
           40,
           Math.min(this._maxPlayoutTargetMs, d.targetPlayoutMs)
         );
+        return;
+      }
+      if (d?.type === 'reset') {
+        this._resetPlayoutState();
       }
     };
+  }
+
+  _resetPlayoutState() {
+    this._writePos = 0;
+    this._readPos = 0;
+    this._available = 0;
+    this._readFrac = 0;
+    this._smoothedRate = 1;
+    this._playoutStarted = false;
+    this._inPanic = false;
+    this._panicSamplesInPanic = 0;
+    this._panicZoneEnteredPending = false;
+    this._panicEntryBufferedMs = null;
+    this._lastTail.fill(0);
+    this._lastTailLen = 0;
+    this._lastTailWritePos = 0;
+    this._concealCursor = 0;
+    this._concealedThisBlock = false;
+    if (this._sharedState && this._sharedSampleCapacity > 0) {
+      Atomics.store(this._sharedState, STATE_READ_HEAD, 0);
+      Atomics.store(this._sharedState, STATE_WRITE_HEAD, 0);
+      Atomics.store(this._sharedState, STATE_FILLED_SAMPLES, 0);
+      this._sharedRing?.fill(0);
+    } else {
+      this._ring.fill(0);
+    }
   }
 
   _pushPcm(pcm) {

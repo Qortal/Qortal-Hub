@@ -20,7 +20,11 @@ import {
   shouldHoldAudioForReticulumRecoveryReason,
 } from './group-call';
 import { compactDmVoiceJoinWireChatId } from './dm-voice-wire';
-import { encodeJoinWire, encodeKeyWire } from './group-call-wire-reticulum';
+import {
+  encodeJoinIdentityWire,
+  encodeJoinWire,
+  encodeKeyWire,
+} from './group-call-wire-reticulum';
 import {
   byteLengthUtf8JsonWithBridgeSender,
   RT_RETICULUM_MAX_WIRE_JSON_BYTES,
@@ -6642,6 +6646,73 @@ describe('getReticulumOverlayLogicalDedupeKey', () => {
         L: 3,
       })
     ).toBeNull();
+  });
+
+  it('does not treat split join companion frames with the same overlay id as duplicates', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const registerPeerIdentityFromGroupJoin = vi.fn(async () => ({
+      ok: true as const,
+    }));
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      {
+        ...reticulumBridgeReadyStub(sent),
+        registerPeerIdentityFromGroupJoin,
+      } as any
+    );
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'group:812',
+      'Q-self',
+      'sig-self',
+      'pk-self',
+      100,
+      TEST_D32
+    );
+
+    const timestamp = Date.now();
+    const rk = Buffer.alloc(64, 7).toString('base64');
+    const join = encodeJoinWire({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer',
+      signature: 'sig-peer',
+      timestamp,
+      reticulumDestinationHash: 'b'.repeat(32),
+    });
+    const joinIdentity = encodeJoinIdentityWire({
+      fromAddress: 'Q-peer',
+      signature: 'sig-peer',
+      timestamp,
+      reticulumDestinationHash: 'b'.repeat(32),
+      reticulumIdentityPublicKeyBase64: rk,
+    });
+    const handleWire = (manager as any).handleReticulumGroupCallWire.bind(
+      manager
+    );
+    handleWire({ ...join, X: 'same-overlay-id', L: 2 }, 'peer-dest', 'peer-hash');
+    handleWire(
+      { ...joinIdentity, X: 'same-overlay-id', L: 2 },
+      'peer-dest',
+      'peer-hash'
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const room = (manager as any).rooms.get('gcall-qortal-812');
+    expect(room?.participants.get('Q-peer')).toMatchObject({
+      reticulumIdentityPublicKeyBase64: rk.replace(/=+$/u, ''),
+    });
+    expect(registerPeerIdentityFromGroupJoin).toHaveBeenCalledWith(
+      'b'.repeat(32),
+      rk.replace(/=+$/u, '')
+    );
+    manager.stop();
   });
 });
 

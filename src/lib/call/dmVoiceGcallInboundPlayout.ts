@@ -38,10 +38,12 @@ import {
 } from '../group-call/gcallWasmFecEnv';
 import {
   OPUS_CHANNELS,
+  OPUS_FRAME_DURATION_MS,
   OPUS_FRAME_SAMPLES,
   OPUS_SAMPLE_RATE,
 } from '../group-call/gcallVoiceAudioConstants';
 import { PerSourcePcmRing } from '../group-call/v2/perSourcePcmRing';
+import type { GcallOpusFecPipelineDiagnostics } from '../group-call/gcallOpusFecPlayoutPipeline';
 import OpusFecWorker from '../../workers/gcall-opus-fec.worker?worker';
 
 export interface DmVoiceGcallPlayoutWorkletMessage {
@@ -104,6 +106,85 @@ const GCALL_RECOVERY_LATENCY_SHED_MIN_OVER_TARGET_FRAMES = 3;
 const GCALL_RECOVERY_LATENCY_SHED_MIN_CAP_RATIO = 0.85;
 const GCALL_RECOVERY_LATENCY_SHED_UNDERTARGET_MAX = 0.12;
 const GCALL_RECOVERY_LATENCY_SHED_PLAYOUT_RATE_MIN = 0.985;
+const GCALL_BURST_GAP_RECOVERY_GAP_MS = 900;
+const GCALL_BURST_GAP_RECOVERY_WINDOW_MS = 1_800;
+const GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER = 80;
+const GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS = 500;
+const GCALL_BURST_GAP_RECOVERY_KEEP_FRAMES = 12;
+const GCALL_BURST_GAP_RECOVERY_COOLDOWN_MS = 2_500;
+const GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS = 24;
+const GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES = 18;
+const GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO = 0.75;
+const GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK = 4;
+
+export function shouldStartBurstGapRecoveryWatch(opts: {
+  hasObservedPlayoutStart: boolean;
+  gapMs: number;
+  nowMs: number;
+  lastRecoveryAtMs: number;
+}): boolean {
+  return (
+    opts.hasObservedPlayoutStart &&
+    opts.gapMs >= GCALL_BURST_GAP_RECOVERY_GAP_MS &&
+    opts.nowMs - opts.lastRecoveryAtMs >= GCALL_BURST_GAP_RECOVERY_COOLDOWN_MS
+  );
+}
+
+export function shouldCommitBurstGapRecovery(opts: {
+  burstWindowAgeMs: number;
+  burstFrameCount: number;
+  jitterBufferedFrames: number;
+  jitterMaxEntries: number;
+  trimmedFramesDuringWatch: number;
+  pcmStarved: boolean;
+}): boolean {
+  const burstAudioMs = opts.burstFrameCount * OPUS_FRAME_DURATION_MS;
+  const fasterThanRealtime =
+    burstAudioMs >=
+    opts.burstWindowAgeMs + GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS;
+  const nearJitterCap =
+    opts.jitterMaxEntries > 0 &&
+    opts.jitterBufferedFrames >= Math.floor(opts.jitterMaxEntries * 0.8);
+  const hasDamageEvidence =
+    opts.trimmedFramesDuringWatch > 0 || (opts.pcmStarved && nearJitterCap);
+  return (
+    opts.burstWindowAgeMs <= GCALL_BURST_GAP_RECOVERY_WINDOW_MS &&
+    opts.burstFrameCount >= GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER &&
+    fasterThanRealtime &&
+    hasDamageEvidence
+  );
+}
+
+export function computeStarvedBacklogDrainBudget(opts: {
+  hasReadyFrame: boolean;
+  bufferedFrames: number;
+  maxEntries: number;
+  playoutBufferedMs: number;
+  preProcessBufferedMs: number;
+  outsideBandUnder: boolean;
+  concealmentUsed: boolean;
+}): number {
+  if (!opts.hasReadyFrame || opts.bufferedFrames <= 1) return 1;
+  if (!Number.isFinite(opts.maxEntries) || opts.maxEntries <= 0) return 1;
+  const nearCapThreshold = Math.max(
+    GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES,
+    Math.floor(opts.maxEntries * GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO)
+  );
+  if (opts.bufferedFrames < nearCapThreshold) return 1;
+  const pcmBufferedMs = Math.max(
+    Number.isFinite(opts.playoutBufferedMs) ? opts.playoutBufferedMs : 0,
+    Number.isFinite(opts.preProcessBufferedMs) ? opts.preProcessBufferedMs : 0
+  );
+  if (pcmBufferedMs > GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS) return 1;
+  if (!opts.outsideBandUnder && !opts.concealmentUsed && pcmBufferedMs > 0) {
+    return 1;
+  }
+  const overThresholdFrames = Math.max(1, opts.bufferedFrames - nearCapThreshold);
+  return Math.min(
+    GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK,
+    Math.max(2, Math.ceil(overThresholdFrames / 4) + 1)
+  );
+}
 
 export function decideReadyStallForcePrime(opts: {
   hasObservedPlayoutStart: boolean;
@@ -244,6 +325,35 @@ export class DmVoiceGcallInboundPlayout {
   private jitterTrimmedFramesAtLastHeadroomStep = 0;
   private jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
   private lastJitterBurstHeadroomReason: string | null = null;
+  private lastDecodedPushWallMs = 0;
+  private burstGapWatchStartedAtMs = 0;
+  private burstGapWatchFrames = 0;
+  private burstGapWatchGapMs = 0;
+  private burstGapWatchTrimmedFramesStart = 0;
+  private burstGapResetCount = 0;
+  private burstGapRecoveryCount = 0;
+  private burstGapDroppedFrames = 0;
+  private lastBurstGapMs = 0;
+  private lastBurstGapFrames = 0;
+  private lastBurstGapDroppedFrames = 0;
+  private lastBurstGapResetAtMs = 0;
+  private latestPlayoutBufferedMs = 0;
+  private latestPreProcessBufferedMs = 0;
+  private latestPlayoutOutsideBandUnder = false;
+  private latestPlayoutConcealmentUsed = false;
+  private starvedBacklogDrainCount = 0;
+  private starvedBacklogDrainFrames = 0;
+  private lastStarvedBacklogDrainAtMs = 0;
+  private lastStarvedBacklogDrainFrames = 0;
+  private jitterDrainReadyTicks = 0;
+  private jitterDrainReadyNoPopTicks = 0;
+  private jitterDrainPoppedFrames = 0;
+  private lastJitterDrainBudget = 0;
+  private lastJitterDrainPoppedFrames = 0;
+  private pcmPostAcceptedFrames = 0;
+  private pcmPostRejectedFrames = 0;
+  private pcmPostOverrunCount = 0;
+  private lastPcmPostRejectedAtMs = 0;
 
   private resolveActiveSourceCount(): number {
     const n = this.callbacks?.getActiveSourceCount?.() ?? 1;
@@ -332,6 +442,27 @@ export class DmVoiceGcallInboundPlayout {
     jitterBurstHeadroomLevel: number;
     jitterBurstHeadroomHoldUntilMs: number;
     jitterBurstHeadroomReason: string | null;
+    burstGapResetCount: number;
+    burstGapRecoveryCount: number;
+    burstGapDroppedFrames: number;
+    lastBurstGapMs: number;
+    lastBurstGapFrames: number;
+    lastBurstGapDroppedFrames: number;
+    lastBurstGapResetAtMs: number;
+    starvedBacklogDrainCount: number;
+    starvedBacklogDrainFrames: number;
+    lastStarvedBacklogDrainAtMs: number;
+    lastStarvedBacklogDrainFrames: number;
+    jitterDrainReadyTicks: number;
+    jitterDrainReadyNoPopTicks: number;
+    jitterDrainPoppedFrames: number;
+    lastJitterDrainBudget: number;
+    lastJitterDrainPoppedFrames: number;
+    pcmPostAcceptedFrames: number;
+    pcmPostRejectedFrames: number;
+    pcmPostOverrunCount: number;
+    lastPcmPostRejectedAtMs: number;
+    wasmFecPipelineDiagnostics: GcallOpusFecPipelineDiagnostics | null;
     playbackNodeActive: boolean;
     schedulerNodeActive: boolean;
     lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
@@ -365,6 +496,28 @@ export class DmVoiceGcallInboundPlayout {
       jitterBurstHeadroomLevel: this.jitterBurstHeadroomState.level,
       jitterBurstHeadroomHoldUntilMs: this.jitterBurstHeadroomState.holdUntilMs,
       jitterBurstHeadroomReason: this.lastJitterBurstHeadroomReason,
+      burstGapResetCount: this.burstGapResetCount,
+      burstGapRecoveryCount: this.burstGapRecoveryCount,
+      burstGapDroppedFrames: this.burstGapDroppedFrames,
+      lastBurstGapMs: this.lastBurstGapMs,
+      lastBurstGapFrames: this.lastBurstGapFrames,
+      lastBurstGapDroppedFrames: this.lastBurstGapDroppedFrames,
+      lastBurstGapResetAtMs: this.lastBurstGapResetAtMs,
+      starvedBacklogDrainCount: this.starvedBacklogDrainCount,
+      starvedBacklogDrainFrames: this.starvedBacklogDrainFrames,
+      lastStarvedBacklogDrainAtMs: this.lastStarvedBacklogDrainAtMs,
+      lastStarvedBacklogDrainFrames: this.lastStarvedBacklogDrainFrames,
+      jitterDrainReadyTicks: this.jitterDrainReadyTicks,
+      jitterDrainReadyNoPopTicks: this.jitterDrainReadyNoPopTicks,
+      jitterDrainPoppedFrames: this.jitterDrainPoppedFrames,
+      lastJitterDrainBudget: this.lastJitterDrainBudget,
+      lastJitterDrainPoppedFrames: this.lastJitterDrainPoppedFrames,
+      pcmPostAcceptedFrames: this.pcmPostAcceptedFrames,
+      pcmPostRejectedFrames: this.pcmPostRejectedFrames,
+      pcmPostOverrunCount: this.pcmPostOverrunCount,
+      lastPcmPostRejectedAtMs: this.lastPcmPostRejectedAtMs,
+      wasmFecPipelineDiagnostics:
+        this.fecPipeline?.getDiagnostics(this.peerAddress) ?? null,
       playbackNodeActive: this.playbackNode !== null,
       schedulerNodeActive: this.schedulerNode !== null,
       lastJitterAdaptiveMode: this.lastJitterAdaptiveMode,
@@ -413,13 +566,21 @@ export class DmVoiceGcallInboundPlayout {
     pcm: Float32Array,
     ingressAtMs: number | null = null
   ): boolean {
+    const frameCount = Math.max(0, Math.floor(pcm.length / OPUS_FRAME_SAMPLES));
     const ring = this.pcmRing;
     if (ring) {
+      const overrunsBefore = ring.overruns;
       ring.write(pcm, { ingressAtMs });
+      this.pcmPostAcceptedFrames += frameCount;
+      this.pcmPostOverrunCount += Math.max(0, ring.overruns - overrunsBefore);
       return true;
     }
     const currentNode = this.playbackNode;
-    if (!currentNode) return false;
+    if (!currentNode) {
+      this.pcmPostRejectedFrames += frameCount;
+      this.lastPcmPostRejectedAtMs = Date.now();
+      return false;
+    }
     if (
       typeof ingressAtMs === 'number' &&
       Number.isFinite(ingressAtMs) &&
@@ -433,6 +594,7 @@ export class DmVoiceGcallInboundPlayout {
     const copy = new Float32Array(pcm.length);
     copy.set(pcm);
     currentNode.port.postMessage({ pcm: copy }, [copy.buffer]);
+    this.pcmPostAcceptedFrames += frameCount;
     return true;
   }
 
@@ -501,6 +663,17 @@ export class DmVoiceGcallInboundPlayout {
     playNode.port.onmessage = (e: MessageEvent) => {
       const d = e.data as DmVoiceGcallPlayoutWorkletMessage;
       if (d?.type !== 'gcallPlayoutMetrics') return;
+      if (Number.isFinite(d.bufferedMs)) {
+        this.latestPlayoutBufferedMs = Math.max(0, d.bufferedMs ?? 0);
+      }
+      if (Number.isFinite(d.preProcessBufferedMs)) {
+        this.latestPreProcessBufferedMs = Math.max(
+          0,
+          d.preProcessBufferedMs ?? 0
+        );
+      }
+      this.latestPlayoutOutsideBandUnder = d.outsideBandUnder === true;
+      this.latestPlayoutConcealmentUsed = d.concealmentUsed === true;
       if (d.playoutStarted) {
         this.hasObservedPlayoutStart = true;
         this.startupReadyStallSinceMs = null;
@@ -661,7 +834,37 @@ export class DmVoiceGcallInboundPlayout {
           this.fecPipeline.clearPostedThisTick();
           this.fecPipeline.prefetchDeferredForAllSources([this.peerAddress]);
         }
-        missedFramesThisTick = this.drainOneFrame();
+        const drainBudget = computeStarvedBacklogDrainBudget({
+          hasReadyFrame,
+          bufferedFrames: jb.getBufferedFrames(),
+          maxEntries: jb.getMaxEntries(),
+          playoutBufferedMs: this.latestPlayoutBufferedMs,
+          preProcessBufferedMs: this.latestPreProcessBufferedMs,
+          outsideBandUnder: this.latestPlayoutOutsideBandUnder,
+          concealmentUsed: this.latestPlayoutConcealmentUsed,
+        });
+        this.jitterDrainReadyTicks++;
+        this.lastJitterDrainBudget = drainBudget;
+        let drainedFramesThisTick = 0;
+        for (let i = 0; i < drainBudget; i++) {
+          if (!jb.hasReadyFrame()) break;
+          const beforeDrainFrames = jb.getBufferedFrames();
+          const missed = this.drainOneFrame();
+          const afterDrainFrames = jb.getBufferedFrames();
+          if (afterDrainFrames >= beforeDrainFrames) break;
+          missedFramesThisTick += missed;
+          drainedFramesThisTick++;
+        }
+        this.lastJitterDrainPoppedFrames = drainedFramesThisTick;
+        if (drainedFramesThisTick === 0) {
+          this.jitterDrainReadyNoPopTicks++;
+        }
+        if (drainedFramesThisTick > 1) {
+          this.starvedBacklogDrainCount++;
+          this.starvedBacklogDrainFrames += drainedFramesThisTick - 1;
+          this.lastStarvedBacklogDrainFrames = drainedFramesThisTick;
+          this.lastStarvedBacklogDrainAtMs = Date.now();
+        }
       }
       const tickFinishedAt = performance.now();
       if (
@@ -720,6 +923,129 @@ export class DmVoiceGcallInboundPlayout {
     this.jitterTrimmedFramesAtLastHeadroomStep = 0;
     this.jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
     this.lastJitterBurstHeadroomReason = null;
+    this.lastDecodedPushWallMs = 0;
+    this.burstGapWatchStartedAtMs = 0;
+    this.burstGapWatchFrames = 0;
+    this.burstGapWatchGapMs = 0;
+    this.burstGapWatchTrimmedFramesStart = 0;
+    this.burstGapResetCount = 0;
+    this.burstGapRecoveryCount = 0;
+    this.burstGapDroppedFrames = 0;
+    this.lastBurstGapMs = 0;
+    this.lastBurstGapFrames = 0;
+    this.lastBurstGapDroppedFrames = 0;
+    this.lastBurstGapResetAtMs = 0;
+    this.latestPlayoutBufferedMs = 0;
+    this.latestPreProcessBufferedMs = 0;
+    this.latestPlayoutOutsideBandUnder = false;
+    this.latestPlayoutConcealmentUsed = false;
+    this.starvedBacklogDrainCount = 0;
+    this.starvedBacklogDrainFrames = 0;
+    this.lastStarvedBacklogDrainAtMs = 0;
+    this.lastStarvedBacklogDrainFrames = 0;
+    this.jitterDrainReadyTicks = 0;
+    this.jitterDrainReadyNoPopTicks = 0;
+    this.jitterDrainPoppedFrames = 0;
+    this.lastJitterDrainBudget = 0;
+    this.lastJitterDrainPoppedFrames = 0;
+    this.pcmPostAcceptedFrames = 0;
+    this.pcmPostRejectedFrames = 0;
+    this.pcmPostOverrunCount = 0;
+    this.lastPcmPostRejectedAtMs = 0;
+  }
+
+  private resetDecodedPlayoutStateForBurstGap(): void {
+    this.pendingDecodedIngressAtMs = [];
+    this.pcmRing?.reset();
+    this.playbackNode?.port.postMessage({ type: 'reset' });
+    if (this.wasmFecActive && this.opusFecWorker) {
+      this.opusFecWorker.postMessage({
+        type: 'reset',
+        sourceAddr: this.peerAddress,
+      });
+    }
+    if (this.decoder && this.decoder.state !== 'closed') {
+      try {
+        this.decoder.reset();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private noteDecodedBurstGapBeforePush(nowMs: number): void {
+    if (this.lastDecodedPushWallMs <= 0) return;
+    const gapMs = nowMs - this.lastDecodedPushWallMs;
+    if (
+      !shouldStartBurstGapRecoveryWatch({
+        hasObservedPlayoutStart: this.hasObservedPlayoutStart,
+        gapMs,
+        nowMs,
+        lastRecoveryAtMs: this.lastBurstGapResetAtMs,
+      })
+    ) {
+      return;
+    }
+    this.burstGapWatchStartedAtMs = nowMs;
+    this.burstGapWatchFrames = 0;
+    this.burstGapWatchGapMs = gapMs;
+    this.burstGapWatchTrimmedFramesStart = this.jitterPushTrimmedFrames;
+    this.burstGapResetCount++;
+    this.lastBurstGapMs = gapMs;
+    this.lastJitterBurstHeadroomReason = 'burst-gap-watch';
+  }
+
+  private maybeCommitBurstGapRecovery(nowMs: number): void {
+    const jb = this.jitter;
+    if (!jb || this.burstGapWatchStartedAtMs <= 0) return;
+    const windowAgeMs = nowMs - this.burstGapWatchStartedAtMs;
+    if (windowAgeMs > GCALL_BURST_GAP_RECOVERY_WINDOW_MS) {
+      this.burstGapWatchStartedAtMs = 0;
+      this.burstGapWatchFrames = 0;
+      this.burstGapWatchGapMs = 0;
+      this.burstGapWatchTrimmedFramesStart = 0;
+      return;
+    }
+    const pcmBufferedMs = Math.max(
+      this.latestPlayoutBufferedMs,
+      this.latestPreProcessBufferedMs
+    );
+    if (
+      !shouldCommitBurstGapRecovery({
+        burstWindowAgeMs: windowAgeMs,
+        burstFrameCount: this.burstGapWatchFrames,
+        jitterBufferedFrames: jb.getBufferedFrames(),
+        jitterMaxEntries: jb.getMaxEntries(),
+        trimmedFramesDuringWatch: Math.max(
+          0,
+          this.jitterPushTrimmedFrames - this.burstGapWatchTrimmedFramesStart
+        ),
+        pcmStarved:
+          pcmBufferedMs <= GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS &&
+          (this.latestPlayoutOutsideBandUnder ||
+            this.latestPlayoutConcealmentUsed),
+      })
+    ) {
+      return;
+    }
+    const keepFrames = Math.max(1, GCALL_BURST_GAP_RECOVERY_KEEP_FRAMES);
+    const dropFrames = Math.max(0, jb.getBufferedFrames() - keepFrames);
+    const dropped = dropFrames > 0 ? jb.discardOldest(dropFrames) : 0;
+    this.burstGapRecoveryCount++;
+    this.burstGapDroppedFrames += dropped;
+    this.lastBurstGapFrames = this.burstGapWatchFrames;
+    this.lastBurstGapDroppedFrames = dropped;
+    this.lastBurstGapMs = this.burstGapWatchGapMs;
+    this.lastBurstGapResetAtMs = nowMs;
+    this.resetDecodedPlayoutStateForBurstGap();
+    jb.forcePrimeForRecoveryEscape(GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS, {
+      clearBurstRecoveryHold: true,
+    });
+    this.lastJitterBurstHeadroomReason = 'burst-gap-reanchor';
+    this.burstGapWatchStartedAtMs = 0;
+    this.burstGapWatchFrames = 0;
+    this.burstGapWatchGapMs = 0;
+    this.burstGapWatchTrimmedFramesStart = 0;
   }
 
   private syncJitterGeometryFromMetrics(stepHeadroom = true): void {
@@ -843,6 +1169,7 @@ export class DmVoiceGcallInboundPlayout {
     if (!jb.hasReadyFrame()) return 0;
     const frame = jb.pop();
     if (!frame) return 0;
+    this.jitterDrainPoppedFrames++;
     const missedInc = jb.consumePendingMissedFrames();
     const ingressAtMs = jb.consumeLastPoppedReceivedAtMs();
     const playedSeq = jb.getLastPlayedSeq();
@@ -876,6 +1203,7 @@ export class DmVoiceGcallInboundPlayout {
     if (!jb.hasReadyFrame()) return 0;
     const frame = jb.pop();
     if (!frame) return 0;
+    this.jitterDrainPoppedFrames++;
     const missedInc = jb.consumePendingMissedFrames();
     const ingressAtMs = jb.consumeLastPoppedReceivedAtMs();
     const playedSeq = jb.getLastPlayedSeq();
@@ -902,12 +1230,17 @@ export class DmVoiceGcallInboundPlayout {
   pushDecoded(packets: DecodedAudioPacket[]): void {
     const jb = this.jitter;
     if (!jb) return;
+    const nowMs = Date.now();
+    this.noteDecodedBurstGapBeforePush(nowMs);
     let pushedAny = false;
     for (const p of packets) {
       if (p.opusFrame?.length) {
         const result = jb.push(p.seq, p.opusFrame);
         if (result.status === 'accepted') {
           this.jitterPushAccepted++;
+          if (this.burstGapWatchStartedAtMs > 0) {
+            this.burstGapWatchFrames++;
+          }
           pushedAny = true;
         } else if (result.status === 'stale') {
           this.jitterPushStale++;
@@ -930,7 +1263,11 @@ export class DmVoiceGcallInboundPlayout {
         }
       }
     }
-    if (pushedAny) this.lastPushAtPerfMs = performance.now();
+    if (pushedAny) {
+      this.lastPushAtPerfMs = performance.now();
+      this.lastDecodedPushWallMs = nowMs;
+      this.maybeCommitBurstGapRecovery(nowMs);
+    }
   }
 
   async stop(): Promise<void> {
