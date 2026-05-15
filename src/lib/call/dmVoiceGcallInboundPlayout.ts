@@ -126,6 +126,8 @@ const GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS = 24;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES = 18;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO = 0.75;
 const GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK = 4;
+const GCALL_STARVED_BACKLOG_DRAIN_TARGET_HEADROOM_FRAMES = 2;
+const GCALL_STARVED_BACKLOG_DRAIN_TARGET_OVERAGE_FRAMES = 2;
 
 export function shouldStartBurstGapRecoveryWatch(opts: {
   hasObservedPlayoutStart: boolean;
@@ -252,6 +254,9 @@ export function computeStarvedBacklogDrainBudget(opts: {
   hasReadyFrame: boolean;
   bufferedFrames: number;
   maxEntries: number;
+  activeSourceCount?: number;
+  adaptiveNetworkMode?: 'low-latency' | 'recovery';
+  targetPlayoutMs?: number;
   playoutBufferedMs: number;
   preProcessBufferedMs: number;
   outsideBandUnder: boolean;
@@ -259,16 +264,39 @@ export function computeStarvedBacklogDrainBudget(opts: {
 }): number {
   if (!opts.hasReadyFrame || opts.bufferedFrames <= 1) return 1;
   if (!Number.isFinite(opts.maxEntries) || opts.maxEntries <= 0) return 1;
-  const nearCapThreshold = Math.max(
-    GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES,
-    Math.floor(opts.maxEntries * GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO)
-  );
-  if (opts.bufferedFrames < nearCapThreshold) return 1;
   const pcmBufferedMs = Math.max(
     Number.isFinite(opts.playoutBufferedMs) ? opts.playoutBufferedMs : 0,
     Number.isFinite(opts.preProcessBufferedMs) ? opts.preProcessBufferedMs : 0
   );
   if (pcmBufferedMs > GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS) return 1;
+  const recoverySingleRemote =
+    opts.activeSourceCount === 1 && opts.adaptiveNetworkMode === 'recovery';
+  const targetFrames =
+    Number.isFinite(opts.targetPlayoutMs) && (opts.targetPlayoutMs ?? 0) > 0
+      ? Math.max(
+          6,
+          Math.ceil((opts.targetPlayoutMs ?? 0) / OPUS_FRAME_DURATION_MS) +
+            GCALL_STARVED_BACKLOG_DRAIN_TARGET_HEADROOM_FRAMES
+        )
+      : 0;
+  const overTargetFrames =
+    recoverySingleRemote && targetFrames > 0
+      ? opts.bufferedFrames - targetFrames
+      : 0;
+  if (
+    recoverySingleRemote &&
+    overTargetFrames >= GCALL_STARVED_BACKLOG_DRAIN_TARGET_OVERAGE_FRAMES
+  ) {
+    return Math.min(
+      GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK,
+      Math.max(2, Math.ceil(overTargetFrames / 5) + 1)
+    );
+  }
+  const nearCapThreshold = Math.max(
+    GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES,
+    Math.floor(opts.maxEntries * GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO)
+  );
+  if (opts.bufferedFrames < nearCapThreshold) return 1;
   if (!opts.outsideBandUnder && !opts.concealmentUsed && pcmBufferedMs > 0) {
     return 1;
   }
@@ -963,6 +991,9 @@ export class DmVoiceGcallInboundPlayout {
           hasReadyFrame,
           bufferedFrames: jb.getBufferedFrames(),
           maxEntries: jb.getMaxEntries(),
+          activeSourceCount,
+          adaptiveNetworkMode: this.lastJitterAdaptiveMode ?? 'low-latency',
+          targetPlayoutMs,
           playoutBufferedMs: this.latestPlayoutBufferedMs,
           preProcessBufferedMs: this.latestPreProcessBufferedMs,
           outsideBandUnder: this.latestPlayoutOutsideBandUnder,

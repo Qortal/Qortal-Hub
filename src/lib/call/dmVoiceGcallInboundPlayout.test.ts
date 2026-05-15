@@ -250,6 +250,53 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
     ).toBe(1);
   });
 
+  it('accelerates 1:1 recovery drain when PCM is starved and jitter exceeds the live target', () => {
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 29,
+        maxEntries: 40,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        targetPlayoutMs: 185,
+        playoutBufferedMs: 4,
+        preProcessBufferedMs: 4,
+        outsideBandUnder: false,
+        concealmentUsed: false,
+      })
+    ).toBe(4);
+
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 29,
+        maxEntries: 40,
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        targetPlayoutMs: 185,
+        playoutBufferedMs: 4,
+        preProcessBufferedMs: 4,
+        outsideBandUnder: false,
+        concealmentUsed: false,
+      })
+    ).toBe(1);
+
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 13,
+        maxEntries: 40,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        targetPlayoutMs: 185,
+        playoutBufferedMs: 4,
+        preProcessBufferedMs: 4,
+        outsideBandUnder: false,
+        concealmentUsed: false,
+      })
+    ).toBe(1);
+  });
+
   it('holds a 2-frame steady reserve for post-start 1:1 recovery only while the source is recently pushing and already ready', () => {
     expect(
       computeN1SteadyPrimedHoldFrames({
