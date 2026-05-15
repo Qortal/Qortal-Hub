@@ -149,6 +149,54 @@ type RuntimeRendererThreadSample = {
   name: string;
 };
 
+type AudioStageTimingTimestamps =
+  NonNullable<GroupCallAudioReceivePayload['audioStageTimestamps']>;
+
+type AudioStageName =
+  | 'bridgeReceived'
+  | 'managerEmit'
+  | 'mainFanout'
+  | 'audioSurfaceHandler'
+  | 'decryptSubmit'
+  | 'decryptResult'
+  | 'jitterPush'
+  | 'syncDecodeStart'
+  | 'syncDecodeEnd';
+
+type AudioStageDeltaName =
+  | 'bridgeToManager'
+  | 'managerToMainFanout'
+  | 'mainFanoutToSurface'
+  | 'bridgeToSurface'
+  | 'managerToSurface'
+  | 'surfaceToDecryptSubmit'
+  | 'decryptSubmitToResult'
+  | 'decryptResultToJitterPush'
+  | 'surfaceToJitterPush'
+  | 'surfaceToSyncDecodeStart'
+  | 'syncDecodeDuration';
+
+type AudioStageAggregate = {
+  samples: number;
+  sumMs: number;
+  maxMs: number;
+  over80: number;
+  over160: number;
+  over320: number;
+  over640: number;
+};
+
+type AudioStageRecentWorst = {
+  atMs: number;
+  kind: 'gap' | 'delta';
+  name: string;
+  source: string | null;
+  valueMs: number;
+};
+
+const AUDIO_STAGE_TIMING_WARN_MS = 80;
+const AUDIO_STAGE_RECENT_WORST_LIMIT = 32;
+
 type RuntimeRecentWindowTrend = {
   atMs: number;
   reason: string[] | null;
@@ -732,6 +780,16 @@ export class GroupCallAudioEngineRuntime {
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
+  private readonly audioStageGapStats = new Map<
+    AudioStageName,
+    AudioStageAggregate
+  >();
+  private readonly audioStageDeltaStats = new Map<
+    AudioStageDeltaName,
+    AudioStageAggregate
+  >();
+  private readonly audioStageLastAtBySource = new Map<string, number>();
+  private readonly audioStageRecentWorst: AudioStageRecentWorst[] = [];
   private connectionHintBadSince: number | null = null;
   private connectionHintGoodSince: number | null = null;
   private connectionHintSevereSince: number | null = null;
@@ -747,6 +805,13 @@ export class GroupCallAudioEngineRuntime {
   private workerDecodeFailureCount = 0;
   private workerDecodeFailureRecoveryLastAt = 0;
   private readonly pendingDecryptIngressById = new Map<number, string>();
+  private readonly pendingDecryptStageById = new Map<
+    number,
+    {
+      sourceAddr: string;
+      timestamps: AudioStageTimingTimestamps;
+    }
+  >();
   private readonly rootDecodeFailureWindowStartedAtBySource = new Map<
     string,
     number
@@ -1133,6 +1198,216 @@ export class GroupCallAudioEngineRuntime {
         this.diagEvents.length - MAX_AUDIO_SURFACE_DIAG_EVENTS
       );
     }
+  }
+
+  private getAudioStageAggregate<K extends string>(
+    map: Map<K, AudioStageAggregate>,
+    key: K
+  ): AudioStageAggregate {
+    let aggregate = map.get(key);
+    if (!aggregate) {
+      aggregate = {
+        samples: 0,
+        sumMs: 0,
+        maxMs: 0,
+        over80: 0,
+        over160: 0,
+        over320: 0,
+        over640: 0,
+      };
+      map.set(key, aggregate);
+    }
+    return aggregate;
+  }
+
+  private recordAudioStageAggregate(
+    aggregate: AudioStageAggregate,
+    valueMs: number
+  ): void {
+    if (!Number.isFinite(valueMs) || valueMs < 0) return;
+    aggregate.samples++;
+    aggregate.sumMs += valueMs;
+    aggregate.maxMs = Math.max(aggregate.maxMs, valueMs);
+    if (valueMs >= 80) aggregate.over80++;
+    if (valueMs >= 160) aggregate.over160++;
+    if (valueMs >= 320) aggregate.over320++;
+    if (valueMs >= 640) aggregate.over640++;
+  }
+
+  private pushAudioStageRecentWorst(entry: AudioStageRecentWorst): void {
+    if (entry.valueMs < AUDIO_STAGE_TIMING_WARN_MS) return;
+    this.audioStageRecentWorst.push(entry);
+    this.audioStageRecentWorst.sort((a, b) => b.valueMs - a.valueMs);
+    if (this.audioStageRecentWorst.length > AUDIO_STAGE_RECENT_WORST_LIMIT) {
+      this.audioStageRecentWorst.splice(AUDIO_STAGE_RECENT_WORST_LIMIT);
+    }
+  }
+
+  private recordAudioStageGap(
+    stage: AudioStageName,
+    sourceAddr: string,
+    atMs: number
+  ): void {
+    if (!Number.isFinite(atMs) || atMs <= 0) return;
+    const source = sourceAddr || 'unknown';
+    const key = `${stage}:${source}`;
+    const previousAt = this.audioStageLastAtBySource.get(key) ?? 0;
+    this.audioStageLastAtBySource.set(key, atMs);
+    if (previousAt <= 0) return;
+    const gapMs = atMs - previousAt;
+    const aggregate = this.getAudioStageAggregate(
+      this.audioStageGapStats,
+      stage
+    );
+    this.recordAudioStageAggregate(aggregate, gapMs);
+    this.pushAudioStageRecentWorst({
+      atMs,
+      kind: 'gap',
+      name: stage,
+      source: truncateGcallDiagAddress(source),
+      valueMs: Math.round(gapMs * 1000) / 1000,
+    });
+  }
+
+  private recordAudioStageDelta(
+    name: AudioStageDeltaName,
+    sourceAddr: string,
+    startAtMs: number | null | undefined,
+    endAtMs: number | null | undefined
+  ): void {
+    if (
+      typeof startAtMs !== 'number' ||
+      typeof endAtMs !== 'number' ||
+      !Number.isFinite(startAtMs) ||
+      !Number.isFinite(endAtMs) ||
+      startAtMs <= 0 ||
+      endAtMs <= 0
+    ) {
+      return;
+    }
+    const deltaMs = endAtMs - startAtMs;
+    const aggregate = this.getAudioStageAggregate(
+      this.audioStageDeltaStats,
+      name
+    );
+    this.recordAudioStageAggregate(aggregate, deltaMs);
+    this.pushAudioStageRecentWorst({
+      atMs: endAtMs,
+      kind: 'delta',
+      name,
+      source: sourceAddr ? truncateGcallDiagAddress(sourceAddr) : null,
+      valueMs: Math.round(deltaMs * 1000) / 1000,
+    });
+  }
+
+  private cloneAudioStageTimestamps(
+    payload: GroupCallAudioReceivePayload,
+    patch?: Partial<AudioStageTimingTimestamps>
+  ): AudioStageTimingTimestamps {
+    return {
+      ...(payload.audioStageTimestamps ?? {}),
+      ...patch,
+    };
+  }
+
+  private recordAudioStageIngress(
+    audioPayload: GroupCallAudioReceivePayload
+  ): GroupCallAudioReceivePayload {
+    const sourceAddr =
+      audioPayload.fromAddress ?? audioPayload.resolvedFromAddress ?? 'unknown';
+    const handlerAt = Date.now();
+    const timestamps = this.cloneAudioStageTimestamps(audioPayload, {
+      audioSurfaceHandlerAtWallMs: handlerAt,
+    });
+    const bridgeAt =
+      timestamps.bridgeReceivedAtWallMs ?? audioPayload.bridgeReceivedAtWallMs;
+    if (typeof bridgeAt === 'number') {
+      this.recordAudioStageGap('bridgeReceived', sourceAddr, bridgeAt);
+    }
+    if (typeof timestamps.managerEmitAtWallMs === 'number') {
+      this.recordAudioStageGap(
+        'managerEmit',
+        sourceAddr,
+        timestamps.managerEmitAtWallMs
+      );
+    }
+    if (typeof timestamps.mainFanoutAtWallMs === 'number') {
+      this.recordAudioStageGap(
+        'mainFanout',
+        sourceAddr,
+        timestamps.mainFanoutAtWallMs
+      );
+    }
+    this.recordAudioStageGap('audioSurfaceHandler', sourceAddr, handlerAt);
+    this.recordAudioStageDelta(
+      'bridgeToManager',
+      sourceAddr,
+      bridgeAt,
+      timestamps.managerEmitAtWallMs
+    );
+    this.recordAudioStageDelta(
+      'managerToMainFanout',
+      sourceAddr,
+      timestamps.managerEmitAtWallMs,
+      timestamps.mainFanoutAtWallMs
+    );
+    this.recordAudioStageDelta(
+      'mainFanoutToSurface',
+      sourceAddr,
+      timestamps.mainFanoutAtWallMs,
+      handlerAt
+    );
+    this.recordAudioStageDelta(
+      'bridgeToSurface',
+      sourceAddr,
+      bridgeAt,
+      handlerAt
+    );
+    this.recordAudioStageDelta(
+      'managerToSurface',
+      sourceAddr,
+      timestamps.managerEmitAtWallMs,
+      handlerAt
+    );
+    return {
+      ...audioPayload,
+      audioStageTimestamps: timestamps,
+    };
+  }
+
+  private serializeAudioStageAggregate(
+    aggregate: AudioStageAggregate
+  ): Record<string, number> {
+    return {
+      samples: aggregate.samples,
+      avgMs:
+        aggregate.samples > 0
+          ? Math.round((aggregate.sumMs / aggregate.samples) * 1000) / 1000
+          : 0,
+      maxMs: Math.round(aggregate.maxMs * 1000) / 1000,
+      over80: aggregate.over80,
+      over160: aggregate.over160,
+      over320: aggregate.over320,
+      over640: aggregate.over640,
+    };
+  }
+
+  private buildAudioStageTimingDiagnostics(): Record<string, unknown> {
+    return {
+      gapByStage: Object.fromEntries(
+        [...this.audioStageGapStats.entries()].map(([key, value]) => [
+          key,
+          this.serializeAudioStageAggregate(value),
+        ])
+      ),
+      deltaByStage: Object.fromEntries(
+        [...this.audioStageDeltaStats.entries()].map(([key, value]) => [
+          key,
+          this.serializeAudioStageAggregate(value),
+        ])
+      ),
+      recentWorst: [...this.audioStageRecentWorst],
+    };
   }
 
   private truncateDiagHex(value: string | null | undefined): string | null {
@@ -2450,6 +2725,7 @@ export class GroupCallAudioEngineRuntime {
         lastDetail: this.cpuDegradedLastDetail,
       },
       rendererThread: this.buildRendererThreadDiagnosticsSnapshot(),
+      audioStageTiming: this.buildAudioStageTimingDiagnostics(),
       outboundMedia: this.buildOutboundMediaDiagnosticsSnapshot(),
       keyExchange: this.buildKeyExchangeDiagnosticsSnapshot(),
       decryptPool: this.decryptPool?.stats() ?? {
@@ -3467,7 +3743,9 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     if (event === 'gcall:audio') {
-      const audioPayload = payload as GroupCallAudioReceivePayload;
+      const audioPayload = this.recordAudioStageIngress(
+        payload as GroupCallAudioReceivePayload
+      );
       if (
         this.directVoiceRoomId &&
         audioPayload?.roomId === this.directVoiceRoomId
@@ -3659,8 +3937,27 @@ export class GroupCallAudioEngineRuntime {
         audioPayload.fromAddress ??
         audioPayload.resolvedFromAddress ??
         'unknown';
+      const decryptSubmitAtWallMs = Date.now();
+      const stageTimestamps = this.cloneAudioStageTimestamps(audioPayload, {
+        decryptSubmitAtWallMs,
+      });
+      this.recordAudioStageGap(
+        'decryptSubmit',
+        ingressPeerAddress,
+        decryptSubmitAtWallMs
+      );
+      this.recordAudioStageDelta(
+        'surfaceToDecryptSubmit',
+        ingressPeerAddress,
+        stageTimestamps.audioSurfaceHandlerAtWallMs,
+        decryptSubmitAtWallMs
+      );
       const decryptId = this.decryptId++;
       this.pendingDecryptIngressById.set(decryptId, ingressPeerAddress);
+      this.pendingDecryptStageById.set(decryptId, {
+        sourceAddr: ingressPeerAddress,
+        timestamps: stageTimestamps,
+      });
       const posted = this.decryptPool!.postDecrypt(
         ingressPeerAddress,
         decryptId,
@@ -3671,6 +3968,7 @@ export class GroupCallAudioEngineRuntime {
         return 1;
       }
       this.pendingDecryptIngressById.delete(decryptId);
+      this.pendingDecryptStageById.delete(decryptId);
       traceGcallAudioSurface(
         'pipeline: decrypt pool postDecrypt returned false, falling back',
         {
@@ -3679,7 +3977,38 @@ export class GroupCallAudioEngineRuntime {
       );
     }
     this.noteParticipantLiveEvidence(fromAddr, Date.now());
-    return this.receiveEngine.handleIncomingAudio(audioPayload, this.roomKey);
+    const syncDecodeStartAtWallMs = Date.now();
+    const syncStageTimestamps = this.cloneAudioStageTimestamps(audioPayload, {
+      syncDecodeStartAtWallMs,
+    });
+    this.recordAudioStageGap(
+      'syncDecodeStart',
+      fromAddr || 'unknown',
+      syncDecodeStartAtWallMs
+    );
+    this.recordAudioStageDelta(
+      'surfaceToSyncDecodeStart',
+      fromAddr || 'unknown',
+      syncStageTimestamps.audioSurfaceHandlerAtWallMs,
+      syncDecodeStartAtWallMs
+    );
+    const decodedCount = await this.receiveEngine.handleIncomingAudio(
+      { ...audioPayload, audioStageTimestamps: syncStageTimestamps },
+      this.roomKey
+    );
+    const syncDecodeEndAtWallMs = Date.now();
+    this.recordAudioStageGap(
+      'syncDecodeEnd',
+      fromAddr || 'unknown',
+      syncDecodeEndAtWallMs
+    );
+    this.recordAudioStageDelta(
+      'syncDecodeDuration',
+      fromAddr || 'unknown',
+      syncDecodeStartAtWallMs,
+      syncDecodeEndAtWallMs
+    );
+    return decodedCount;
   }
 
   private async handleIncomingRoomKey(
@@ -4993,6 +5322,7 @@ export class GroupCallAudioEngineRuntime {
     this.workerDecodeFailureCount = 0;
     this.workerDecodeFailureRecoveryLastAt = 0;
     this.pendingDecryptIngressById.clear();
+    this.pendingDecryptStageById.clear();
     this.rootDecodeFailureWindowStartedAtBySource.clear();
     this.rootDecodeFailureCountBySource.clear();
     this.rootDecodeFailureKeyReplayLastAtBySource.clear();
@@ -7234,6 +7564,22 @@ export class GroupCallAudioEngineRuntime {
     const ingressPeerAddress =
       this.pendingDecryptIngressById.get(entry.id) ?? '';
     this.pendingDecryptIngressById.delete(entry.id);
+    const stageEntry = this.pendingDecryptStageById.get(entry.id);
+    this.pendingDecryptStageById.delete(entry.id);
+    const decryptResultAtWallMs = Date.now();
+    if (stageEntry) {
+      this.recordAudioStageGap(
+        'decryptResult',
+        stageEntry.sourceAddr,
+        decryptResultAtWallMs
+      );
+      this.recordAudioStageDelta(
+        'decryptSubmitToResult',
+        stageEntry.sourceAddr,
+        stageEntry.timestamps.decryptSubmitAtWallMs,
+        decryptResultAtWallMs
+      );
+    }
     if (entry.status === 'decode-failed') {
       this.receiveEngine.recordDecodeFailure();
       traceGcallAudioSurface(
@@ -7257,6 +7603,26 @@ export class GroupCallAudioEngineRuntime {
     const decodedPackets = entry.decoded
       ? [entry.decoded]
       : (entry.decodedMulti ?? []);
+    const jitterPushAtWallMs = Date.now();
+    if (stageEntry) {
+      this.recordAudioStageGap(
+        'jitterPush',
+        stageEntry.sourceAddr,
+        jitterPushAtWallMs
+      );
+      this.recordAudioStageDelta(
+        'decryptResultToJitterPush',
+        stageEntry.sourceAddr,
+        decryptResultAtWallMs,
+        jitterPushAtWallMs
+      );
+      this.recordAudioStageDelta(
+        'surfaceToJitterPush',
+        stageEntry.sourceAddr,
+        stageEntry.timestamps.audioSurfaceHandlerAtWallMs,
+        jitterPushAtWallMs
+      );
+    }
     await this.receiveEngine.handleDecodedPackets(decodedPackets);
   }
 

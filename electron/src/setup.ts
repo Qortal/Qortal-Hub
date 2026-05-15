@@ -2575,6 +2575,31 @@ function gcallAudioPayloadBytes(data: unknown): number {
   return 0;
 }
 
+function withGcallAudioMainFanoutTimestamp(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload;
+  }
+  const record = payload as Record<string, unknown>;
+  const existingStage =
+    record.audioStageTimestamps &&
+    typeof record.audioStageTimestamps === 'object' &&
+    !Array.isArray(record.audioStageTimestamps)
+      ? (record.audioStageTimestamps as Record<string, unknown>)
+      : {};
+  return {
+    ...record,
+    audioStageTimestamps: {
+      ...existingStage,
+      bridgeReceivedAtWallMs:
+        typeof record.bridgeReceivedAtWallMs === 'number' &&
+        record.bridgeReceivedAtWallMs > 0
+          ? record.bridgeReceivedAtWallMs
+          : existingStage.bridgeReceivedAtWallMs,
+      mainFanoutAtWallMs: Date.now(),
+    },
+  };
+}
+
 export function attachGroupCallListeners(
   manager: ReturnType<typeof getGroupCallManager>
 ): void {
@@ -2607,7 +2632,11 @@ export function attachGroupCallListeners(
       gcallMainAudioCountWindow = 0;
       gcallMainAudioWindowT0 = now;
     }
-    broadcastToSet(gcallSubscribers, 'gcall:audio', payload);
+    broadcastToSet(
+      gcallSubscribers,
+      'gcall:audio',
+      withGcallAudioMainFanoutTimestamp(payload)
+    );
   });
   manager.on('gcall:key', (payload: unknown) => {
     const p = payload as { roomId?: string; fromAddress?: string; verified?: boolean };

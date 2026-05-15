@@ -592,6 +592,17 @@ export interface GroupCallAudioReceivePayload {
   data: ArrayBuffer;
   transport?: 'link' | 'packet' | 'unknown';
   bridgeReceivedAtWallMs?: number | null;
+  audioStageTimestamps?: {
+    bridgeReceivedAtWallMs?: number | null;
+    managerEmitAtWallMs?: number | null;
+    mainFanoutAtWallMs?: number | null;
+    audioSurfaceHandlerAtWallMs?: number | null;
+    decryptSubmitAtWallMs?: number | null;
+    decryptResultAtWallMs?: number | null;
+    jitterPushAtWallMs?: number | null;
+    syncDecodeStartAtWallMs?: number | null;
+    syncDecodeEndAtWallMs?: number | null;
+  };
   fromAddress?: string;
   resolvedFromAddress?: string | null;
 }
