@@ -4231,9 +4231,11 @@ export class GroupCallManager extends EventEmitter {
       }
     }
 
-    for (const peer of room.participants.keys()) {
-      if (!peer || this.localAddresses.has(peer)) continue;
-      targets.add(peer);
+    if (targets.size === 0) {
+      for (const peer of room.participants.keys()) {
+        if (!peer || this.localAddresses.has(peer)) continue;
+        targets.add(peer);
+      }
     }
 
     for (const address of [...targets]) {
@@ -8064,7 +8066,21 @@ export class GroupCallManager extends EventEmitter {
         clusters: env.clusters,
         lastSeen: env.lastSeen,
       };
-      if (env.topologyEpoch < room.topologyEpoch) {
+      const currentRoot = room.lastTopology?.rootForwarder?.trim() ?? '';
+      const incomingRoot = incomingTopology.rootForwarder?.trim() ?? '';
+      const acceptRemoteAuthorityOverLocalRoot =
+        Boolean(currentRoot) &&
+        this.localAddresses.has(currentRoot) &&
+        Boolean(incomingRoot) &&
+        !this.localAddresses.has(incomingRoot) &&
+        room.participants.has(incomingRoot) &&
+        [...room.participants.keys()].filter(
+          (address) => address && !this.localAddresses.has(address)
+        ).length >= 2;
+      if (
+        env.topologyEpoch < room.topologyEpoch &&
+        !acceptRemoteAuthorityOverLocalRoot
+      ) {
         const now = Date.now();
         if (now - this.lastStaleTopologyLogAt >= GC_STALE_TOPOLOGY_LOG_MIN_MS) {
           this.lastStaleTopologyLogAt = now;
@@ -8073,6 +8089,14 @@ export class GroupCallManager extends EventEmitter {
           );
         }
         return;
+      }
+      if (
+        env.topologyEpoch < room.topologyEpoch &&
+        acceptRemoteAuthorityOverLocalRoot
+      ) {
+        loggerLog(
+          `[GCall] Accepted stale remote-root GC_TOPOLOGY to resolve local-root split-brain room=${env.roomId} incomingEpoch=${env.topologyEpoch} currentEpoch=${room.topologyEpoch} currentRoot=${currentRoot} incomingRoot=${incomingRoot}`
+        );
       }
       if (
         room.lastTopology &&

@@ -257,6 +257,10 @@ type RuntimeRecentWindowTrend = {
     postBurstLatencyShedFrames?: number;
     lastPostBurstLatencyShedAtMs?: number;
     lastPostBurstLatencyShedFrames?: number;
+    liveLatencyGovernorShedFrames?: number;
+    liveLatencyGovernorResetCount?: number;
+    lastLiveLatencyGovernorAtMs?: number;
+    lastLiveLatencyGovernorReason?: string | null;
     burstGapResetCount?: number;
     burstGapRecoveryCount?: number;
     burstGapDroppedFrames?: number;
@@ -403,6 +407,21 @@ type GcallSendAudioDiagnostics = {
       lastFd4EnqueueAtMs?: number;
       lastActivityAtMs?: number;
       lastRoomId?: string;
+      sendGapMsMax?: number;
+      receiveGapMsMax?: number;
+      sendGapOver80Count?: number;
+      sendGapOver160Count?: number;
+      sendGapOver320Count?: number;
+      sendGapOver640Count?: number;
+      sendGapOver1000Count?: number;
+      receiveGapOver80Count?: number;
+      receiveGapOver160Count?: number;
+      receiveGapOver320Count?: number;
+      receiveGapOver640Count?: number;
+      receiveGapOver1000Count?: number;
+      preRnsSendAgeMsMax?: number;
+      rnsSendDurationMsMax?: number;
+      receiveToFd4EnqueueMsMax?: number;
     }>;
   };
 };
@@ -2343,6 +2362,14 @@ export class GroupCallAudioEngineRuntime {
           playout.lastPostBurstLatencyShedAtMs,
         lastPostBurstLatencyShedFrames:
           playout.lastPostBurstLatencyShedFrames,
+        liveLatencyGovernorShedFrames:
+          playout.liveLatencyGovernorShedFrames,
+        liveLatencyGovernorResetCount:
+          playout.liveLatencyGovernorResetCount,
+        lastLiveLatencyGovernorAtMs:
+          playout.lastLiveLatencyGovernorAtMs,
+        lastLiveLatencyGovernorReason:
+          playout.lastLiveLatencyGovernorReason,
         burstGapResetCount: playout.burstGapResetCount,
         burstGapRecoveryCount: playout.burstGapRecoveryCount,
         burstGapDroppedFrames: playout.burstGapDroppedFrames,
@@ -3919,6 +3946,15 @@ export class GroupCallAudioEngineRuntime {
       this.decryptPoolAppliedKeyVersion === this.decryptPoolKeyVersion;
     const fromAddr =
       audioPayload.fromAddress ?? audioPayload.resolvedFromAddress ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (myAddress && fromAddr.trim() === myAddress) {
+      this.recordDiagEvent('self-audio-dropped', {
+        roomId: this.snapshot.roomId,
+        fromAddress: truncateGcallDiagAddress(fromAddr),
+        byteLen,
+      });
+      return 0;
+    }
     if (
       !this.warnedNonArrayBufferAudioData &&
       poolReady &&
@@ -4951,18 +4987,36 @@ export class GroupCallAudioEngineRuntime {
       this.selfMintedRoomKey &&
       (this.topology?.rootForwarder?.trim() ?? '') === myAddress &&
       addresses.some((address) => address.trim() && address !== myAddress);
+    const shouldPreferConflictingRootForThreePlus =
+      addresses.length >= 3 &&
+      Boolean(conflictingRoot) &&
+      conflictingRoot !== myAddress;
     const trustedElectionRoot = getTrustedRootForRejoinElection({
       currentRoot:
+        shouldPreferConflictingRootForThreePlus ||
         this.isProvisionalLocalRootActive(nowMs) ||
         shouldReconsiderSelfMintedRootFromLiveEvidence
           ? null
           : this.topology?.rootForwarder,
-      trustedRemoteRoot: this.trustedRemoteRoot,
+      trustedRemoteRoot: shouldPreferConflictingRootForThreePlus
+        ? (conflictingRoot ?? '')
+        : this.trustedRemoteRoot,
       trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
       nowMs,
       staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
       rosterAddresses: addresses,
     });
+    if (shouldPreferConflictingRootForThreePlus) {
+      this.recordDiagEvent('conflicting-root-preferred-for-election', {
+        roomId,
+        reason,
+        conflictingRemoteRoot: truncateGcallDiagAddress(conflictingRoot ?? ''),
+        participantCount: addresses.length,
+        currentRoot: truncateGcallDiagAddress(
+          this.topology?.rootForwarder ?? ''
+        ),
+      });
+    }
     if (shouldReconsiderSelfMintedRootFromLiveEvidence) {
       this.recordDiagEvent('self-minted-root-reconsidered-from-live-evidence', {
         roomId,
@@ -6153,10 +6207,19 @@ export class GroupCallAudioEngineRuntime {
       source === 'remote-event' &&
       current?.rootForwarder?.trim() === myAddress.trim() &&
       this.canReconcileProvisionalLocalRootWithRemote(incomingRoot, nowMs);
+    const acceptRemoteAuthorityOverLocalRoot =
+      source === 'remote-event' &&
+      Boolean(current) &&
+      current?.rootForwarder?.trim() === myAddress.trim() &&
+      Boolean(incomingRoot) &&
+      incomingRoot !== myAddress.trim() &&
+      this.countRemoteParticipants() >= 2 &&
+      this.isAddressInCurrentRoster(incomingRoot);
     if (
       current &&
       normalized.topologyEpoch < current.topologyEpoch &&
-      !acceptProvisionalIncumbentTopology
+      !acceptProvisionalIncumbentTopology &&
+      !acceptRemoteAuthorityOverLocalRoot
     ) {
       traceGcallAudioSurface('pipeline: topology dropped as stale', {
         roomId: normalized.roomId,
@@ -6165,6 +6228,19 @@ export class GroupCallAudioEngineRuntime {
         currentEpoch: current.topologyEpoch,
       });
       return false;
+    }
+    if (
+      current &&
+      normalized.topologyEpoch < current.topologyEpoch &&
+      acceptRemoteAuthorityOverLocalRoot
+    ) {
+      this.recordDiagEvent('local-root-demoted-by-stale-remote-topology', {
+        roomId: normalized.roomId,
+        incomingRoot: truncateGcallDiagAddress(incomingRoot),
+        incomingEpoch: normalized.topologyEpoch,
+        currentEpoch: current.topologyEpoch,
+        participantCount: this.snapshot.participants.length,
+      });
     }
     if (
       current &&

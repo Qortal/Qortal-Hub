@@ -249,6 +249,7 @@ _audio_executor_command_while_queued_ms_max = 0.0
 _audio_executor_command_slow_count = 0
 _audio_media_route_stats: Dict[str, Dict[str, Any]] = {}
 _AUDIO_MEDIA_ROUTE_STATS_MAX = 64
+_AUDIO_ROUTE_GAP_BUCKETS_MS = (80, 160, 320, 640, 1000)
 _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
 _AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS = 120.0
 _AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS = 80.0
@@ -392,6 +393,21 @@ def _get_audio_route_stats(
             "lastFd4EnqueueAtMs": 0,
             "lastActivityAtMs": 0,
             "lastRoomId": "",
+            "sendGapMsMax": 0,
+            "receiveGapMsMax": 0,
+            "sendGapOver80Count": 0,
+            "sendGapOver160Count": 0,
+            "sendGapOver320Count": 0,
+            "sendGapOver640Count": 0,
+            "sendGapOver1000Count": 0,
+            "receiveGapOver80Count": 0,
+            "receiveGapOver160Count": 0,
+            "receiveGapOver320Count": 0,
+            "receiveGapOver640Count": 0,
+            "receiveGapOver1000Count": 0,
+            "preRnsSendAgeMsMax": 0,
+            "rnsSendDurationMsMax": 0,
+            "receiveToFd4EnqueueMsMax": 0,
         }
         _audio_media_route_stats[key] = stats
     if peer_presence_hash:
@@ -401,6 +417,26 @@ def _get_audio_route_stats(
     if incoming is not None:
         stats["incoming"] = incoming is True
     return stats
+
+
+def _note_audio_route_gap(
+    stats: Dict[str, Any],
+    *,
+    previous_key: str,
+    max_key: str,
+    bucket_prefix: str,
+    now_ms: int,
+) -> None:
+    previous_ms = int(stats.get(previous_key) or 0)
+    if previous_ms <= 0:
+        return
+    gap_ms = max(0, now_ms - previous_ms)
+    if gap_ms > int(stats.get(max_key) or 0):
+        stats[max_key] = gap_ms
+    for bucket_ms in _AUDIO_ROUTE_GAP_BUCKETS_MS:
+        if gap_ms >= bucket_ms:
+            key = f"{bucket_prefix}GapOver{bucket_ms}Count"
+            stats[key] = int(stats.get(key) or 0) + 1
 
 
 def _now_wall_ms() -> int:
@@ -416,6 +452,8 @@ def _note_audio_route_send(
     byte_count: int = 0,
     ok: bool = True,
     incoming: Optional[bool] = None,
+    source_received_at_wall_ms: Optional[int] = None,
+    send_duration_ms: Optional[float] = None,
 ) -> None:
     stats = _get_audio_route_stats(
         transport, route_key, peer_presence_hash, peer_destination_hash, incoming
@@ -424,9 +462,24 @@ def _note_audio_route_send(
     stats["lastRoomId"] = str(room_id or "")
     stats["lastActivityAtMs"] = now_ms
     if ok:
+        _note_audio_route_gap(
+            stats,
+            previous_key="lastSendAtMs",
+            max_key="sendGapMsMax",
+            bucket_prefix="send",
+            now_ms=now_ms,
+        )
         stats["sentFrames"] = int(stats.get("sentFrames") or 0) + 1
         stats["sentBytes"] = int(stats.get("sentBytes") or 0) + max(0, int(byte_count or 0))
         stats["lastSendAtMs"] = now_ms
+        if isinstance(source_received_at_wall_ms, int) and source_received_at_wall_ms > 0:
+            age_ms = max(0, now_ms - source_received_at_wall_ms)
+            if age_ms > int(stats.get("preRnsSendAgeMsMax") or 0):
+                stats["preRnsSendAgeMsMax"] = age_ms
+        if isinstance(send_duration_ms, (int, float)):
+            duration_ms = max(0.0, float(send_duration_ms))
+            if duration_ms > float(stats.get("rnsSendDurationMsMax") or 0):
+                stats["rnsSendDurationMsMax"] = duration_ms
     else:
         stats["sendFailures"] = int(stats.get("sendFailures") or 0) + 1
         stats["lastSendFailureAtMs"] = now_ms
@@ -442,11 +495,24 @@ def _note_audio_route_receive(
     byte_count: int = 0,
     fd4_enqueued: Optional[bool] = None,
     incoming: Optional[bool] = None,
+    received_at_wall_ms: Optional[int] = None,
+    fd4_enqueued_at_wall_ms: Optional[int] = None,
 ) -> None:
     stats = _get_audio_route_stats(
         transport, route_key, peer_presence_hash, peer_destination_hash, incoming
     )
-    now_ms = _now_wall_ms()
+    now_ms = (
+        received_at_wall_ms
+        if isinstance(received_at_wall_ms, int) and received_at_wall_ms > 0
+        else _now_wall_ms()
+    )
+    _note_audio_route_gap(
+        stats,
+        previous_key="lastReceiveAtMs",
+        max_key="receiveGapMsMax",
+        bucket_prefix="receive",
+        now_ms=now_ms,
+    )
     stats["receivedFrames"] = int(stats.get("receivedFrames") or 0) + 1
     stats["receivedBytes"] = int(stats.get("receivedBytes") or 0) + max(0, int(byte_count or 0))
     stats["lastReceiveAtMs"] = now_ms
@@ -454,7 +520,15 @@ def _note_audio_route_receive(
     stats["lastRoomId"] = str(room_id or "")
     if fd4_enqueued is True:
         stats["fd4EnqueuedFrames"] = int(stats.get("fd4EnqueuedFrames") or 0) + 1
-        stats["lastFd4EnqueueAtMs"] = now_ms
+        fd4_ms = (
+            fd4_enqueued_at_wall_ms
+            if isinstance(fd4_enqueued_at_wall_ms, int) and fd4_enqueued_at_wall_ms > 0
+            else _now_wall_ms()
+        )
+        stats["lastFd4EnqueueAtMs"] = fd4_ms
+        enqueue_delay_ms = max(0, fd4_ms - now_ms)
+        if enqueue_delay_ms > int(stats.get("receiveToFd4EnqueueMsMax") or 0):
+            stats["receiveToFd4EnqueueMsMax"] = enqueue_delay_ms
     elif fd4_enqueued is False:
         stats["fd4EnqueueFailures"] = int(stats.get("fd4EnqueueFailures") or 0) + 1
     _mark_audio_queue_state_dirty()
@@ -776,7 +850,7 @@ def _note_decoded_queue_dwell_ms(dwell_ms: float) -> None:
         _mark_audio_queue_state_dirty()
 
 
-def _note_rns_send_duration(start_monotonic: float) -> None:
+def _note_rns_send_duration(start_monotonic: float) -> float:
     global _audio_rns_send_duration_ms_max, _audio_rns_send_slow_count
     duration_ms = max(0.0, (time.monotonic() - start_monotonic) * 1000.0)
     if duration_ms > _audio_rns_send_duration_ms_max:
@@ -789,6 +863,7 @@ def _note_rns_send_duration(start_monotonic: float) -> None:
             f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-send-slow "
             f"duration_ms={duration_ms:.3f} threshold_ms={_AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS:.1f}"
         )
+    return duration_ms
 
 
 def _note_packet_path_check_duration(start_monotonic: float) -> None:
@@ -990,7 +1065,7 @@ def _process_audio_batch(frames: list) -> None:
                 packet = RNS.Packet(link, wire_bytes, create_receipt=False)
                 send_start = time.monotonic()
                 result = packet.send()
-                _note_rns_send_duration(send_start)
+                send_duration_ms = _note_rns_send_duration(send_start)
                 if result is False:
                     _audio_packet_send_failures += 1
                     _note_audio_route_send(
@@ -1002,6 +1077,8 @@ def _process_audio_batch(frames: list) -> None:
                         len(wire_bytes),
                         ok=False,
                         incoming=state.get("incoming") is True,
+                        source_received_at_wall_ms=_received_at_wall_ms,
+                        send_duration_ms=send_duration_ms,
                     )
                     _mark_audio_queue_state_dirty()
                     emit_event(
@@ -1024,6 +1101,8 @@ def _process_audio_batch(frames: list) -> None:
                         len(wire_bytes),
                         ok=True,
                         incoming=state.get("incoming") is True,
+                        source_received_at_wall_ms=_received_at_wall_ms,
+                        send_duration_ms=send_duration_ms,
                     )
                     if not _audio_ipc_rns_first_send_ok_logged:
                         _audio_ipc_rns_first_send_ok_logged = True
@@ -1127,7 +1206,7 @@ def _process_audio_batch(frames: list) -> None:
             packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
             send_start = time.monotonic()
             result = packet.send()
-            _note_rns_send_duration(send_start)
+            send_duration_ms = _note_rns_send_duration(send_start)
             if result is False:
                 _audio_packet_send_failures += 1
                 _note_audio_route_send(
@@ -1138,6 +1217,8 @@ def _process_audio_batch(frames: list) -> None:
                     str(peer_call_hash or destination_hash_hex(destination_hash)),
                     len(wire_bytes),
                     ok=False,
+                    source_received_at_wall_ms=_received_at_wall_ms,
+                    send_duration_ms=send_duration_ms,
                 )
                 _note_call_media_send_result(peer_hash, False)
                 _mark_audio_queue_state_dirty()
@@ -1159,6 +1240,8 @@ def _process_audio_batch(frames: list) -> None:
                 str(peer_call_hash or destination_hash_hex(destination_hash)),
                 len(wire_bytes),
                 ok=True,
+                source_received_at_wall_ms=_received_at_wall_ms,
+                send_duration_ms=send_duration_ms,
             )
             _note_call_media_send_result(peer_hash, True)
             if not _audio_ipc_rns_first_send_ok_logged:
@@ -5005,6 +5088,7 @@ def on_audio_link_remote_identified(link, identity) -> None:
 
 
 def on_audio_link_packet(message, packet) -> None:
+    received_at_wall_ms = _now_wall_ms()
     link = getattr(packet, "link", None)
     link_id = get_audio_link_id(link) if link is not None else None
     if link_id is None:
@@ -5028,12 +5112,13 @@ def on_audio_link_packet(message, packet) -> None:
                         room_id,
                         str(state.get("peerPresenceHash") or ""),
                         str(state.get("peerDestinationHash") or ""),
-                        int(time.time() * 1000),
+                        received_at_wall_ms,
                         raw_audio,
                     )
                 ]
             )
             fd4_ok = _emit_binary_audio(chunk)
+            fd4_enqueued_at_wall_ms = _now_wall_ms()
             _note_audio_route_receive(
                 "link",
                 link_id,
@@ -5043,6 +5128,8 @@ def on_audio_link_packet(message, packet) -> None:
                 len(raw_audio),
                 fd4_enqueued=fd4_ok,
                 incoming=state.get("incoming") is True,
+                received_at_wall_ms=received_at_wall_ms,
+                fd4_enqueued_at_wall_ms=fd4_enqueued_at_wall_ms,
             )
         except Exception as exc:
             _note_audio_route_receive(
@@ -5054,6 +5141,7 @@ def on_audio_link_packet(message, packet) -> None:
                 len(raw_audio),
                 fd4_enqueued=False,
                 incoming=state.get("incoming") is True,
+                received_at_wall_ms=received_at_wall_ms,
             )
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
         return
@@ -5247,6 +5335,7 @@ def on_incoming_unified_link_established(link) -> None:
 
 
 def on_hub_packet_received(data, packet) -> None:
+    received_at_wall_ms = _now_wall_ms()
     decoded_audio = _decode_group_audio_wire(data)
     if decoded_audio is not None:
         room_id, sender_dest, raw_audio = decoded_audio
@@ -5259,13 +5348,14 @@ def on_hub_packet_received(data, packet) -> None:
                         room_id,
                         peer_presence_hash,
                         sender_dest,
-                        int(time.time() * 1000),
+                        received_at_wall_ms,
                         raw_audio,
                     )
                 ]
             )
             _note_call_media_inbound(peer_presence_hash, sender_dest)
             fd4_ok = _emit_binary_audio(chunk)
+            fd4_enqueued_at_wall_ms = _now_wall_ms()
             _note_audio_route_receive(
                 "packet",
                 str(peer_presence_hash or sender_dest or ""),
@@ -5274,6 +5364,8 @@ def on_hub_packet_received(data, packet) -> None:
                 str(sender_dest or ""),
                 len(raw_audio),
                 fd4_enqueued=fd4_ok,
+                received_at_wall_ms=received_at_wall_ms,
+                fd4_enqueued_at_wall_ms=fd4_enqueued_at_wall_ms,
             )
         except Exception as exc:
             _note_audio_route_receive(
@@ -5284,6 +5376,7 @@ def on_hub_packet_received(data, packet) -> None:
                 str(sender_dest or ""),
                 len(raw_audio),
                 fd4_enqueued=False,
+                received_at_wall_ms=received_at_wall_ms,
             )
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
         return

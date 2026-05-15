@@ -5064,6 +5064,67 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
+  it('uses topology-only audio targets for 3+ rooms instead of expanding to every peer', () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-member']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-member',
+      'sig-member',
+      'pk-member',
+      100,
+      TEST_D32
+    );
+
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-root', {
+      publicKey: 'pk-root',
+      joinedAt: 101,
+      reticulumDestinationHash: 'd:Q-root',
+    });
+    room.participants.set('Q-forwarder', {
+      publicKey: 'pk-forwarder',
+      joinedAt: 102,
+      reticulumDestinationHash: 'd:Q-forwarder',
+    });
+    room.participants.set('Q-other', {
+      publicKey: 'pk-other',
+      joinedAt: 103,
+      reticulumDestinationHash: 'd:Q-other',
+    });
+    room.lastTopology = {
+      topologyEpoch: 1,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-forwarder',
+      clusters: [
+        {
+          members: ['Q-member'],
+          forwarder: 'Q-root',
+          standby: 'Q-forwarder',
+          standby2: '',
+        },
+        {
+          members: ['Q-forwarder', 'Q-other'],
+          forwarder: 'Q-forwarder',
+          standby: 'Q-root',
+          standby2: 'Q-member',
+        },
+      ],
+      lastSeen: Date.now(),
+    };
+
+    expect([...(manager as any).computeReticulumAudioTargetsForRoom(room)]).toEqual([
+      'Q-root',
+    ]);
+    manager.stop();
+  });
+
   it('replays retained join identity directly to a late joiner so they can resolve existing peers immediately', async () => {
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
     const now = Date.now();

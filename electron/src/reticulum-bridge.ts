@@ -195,6 +195,21 @@ export type ReticulumAudioMediaRouteDiagnostic = {
   lastFd4EnqueueAtMs: number;
   lastActivityAtMs: number;
   lastRoomId: string;
+  sendGapMsMax: number;
+  receiveGapMsMax: number;
+  sendGapOver80Count: number;
+  sendGapOver160Count: number;
+  sendGapOver320Count: number;
+  sendGapOver640Count: number;
+  sendGapOver1000Count: number;
+  receiveGapOver80Count: number;
+  receiveGapOver160Count: number;
+  receiveGapOver320Count: number;
+  receiveGapOver640Count: number;
+  receiveGapOver1000Count: number;
+  preRnsSendAgeMsMax: number;
+  rnsSendDurationMsMax: number;
+  receiveToFd4EnqueueMsMax: number;
 };
 
 export type ReticulumEnqueueGroupAudioResult =
@@ -1304,6 +1319,21 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       lastFd4EnqueueAtMs: num('lastFd4EnqueueAtMs'),
       lastActivityAtMs: num('lastActivityAtMs'),
       lastRoomId: str('lastRoomId'),
+      sendGapMsMax: num('sendGapMsMax'),
+      receiveGapMsMax: num('receiveGapMsMax'),
+      sendGapOver80Count: num('sendGapOver80Count'),
+      sendGapOver160Count: num('sendGapOver160Count'),
+      sendGapOver320Count: num('sendGapOver320Count'),
+      sendGapOver640Count: num('sendGapOver640Count'),
+      sendGapOver1000Count: num('sendGapOver1000Count'),
+      receiveGapOver80Count: num('receiveGapOver80Count'),
+      receiveGapOver160Count: num('receiveGapOver160Count'),
+      receiveGapOver320Count: num('receiveGapOver320Count'),
+      receiveGapOver640Count: num('receiveGapOver640Count'),
+      receiveGapOver1000Count: num('receiveGapOver1000Count'),
+      preRnsSendAgeMsMax: num('preRnsSendAgeMsMax'),
+      rnsSendDurationMsMax: num('rnsSendDurationMsMax'),
+      receiveToFd4EnqueueMsMax: num('receiveToFd4EnqueueMsMax'),
     };
   }
 

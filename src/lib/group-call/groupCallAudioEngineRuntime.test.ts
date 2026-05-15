@@ -993,6 +993,36 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(decoded?.vad).toBe(true);
   });
 
+  it('drops group audio that resolves to the local address before decode', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const handleIncomingAudio = vi.fn(async () => 1);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    (runtime as any).snapshot = {
+      ...(runtime as any).snapshot,
+      roomId: 'room-1',
+    };
+    (runtime as any).receiveEngine = {
+      handleIncomingAudio,
+      dispose: vi.fn(),
+    };
+
+    const decodedCount = await (runtime as any).processIncomingAudioPayload({
+      roomId: 'room-1',
+      data: new Uint8Array([1, 2, 3]).buffer,
+      fromAddress: 'Qlocal',
+      bridgeReceivedAtWallMs: Date.now(),
+    });
+
+    expect(decodedCount).toBe(0);
+    expect(handleIncomingAudio).not.toHaveBeenCalled();
+  });
+
   it('backfills a visible participant from successfully decoded remote audio', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -5141,6 +5171,68 @@ describe('GroupCallAudioEngineRuntime', () => {
       nowMs + 500
     );
     vi.useRealTimers();
+  });
+
+  it('allows a verified stale remote topology to demote a local root in 3+ split-brain', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    (runtime as any).snapshot = {
+      ...(runtime as any).snapshot,
+      roomState: 'connected',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+        { address: 'Qother', publicKey: 'pub-other', joinedAt: 3 },
+      ],
+    };
+    (runtime as any).topology = {
+      roomId: 'room-1',
+      topologyEpoch: 6,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+      lastSeen: nowMs,
+    };
+
+    const applied = await (runtime as any).applyTopology(
+      {
+        roomId: 'room-1',
+        topologyEpoch: 4,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer', 'Qother'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs + 1,
+      },
+      'remote-event'
+    );
+
+    expect(applied).toBe(true);
+    expect((runtime as any).topology.rootForwarder).toBe('Qpeer');
   });
 
   it('clears stale authority-settle delay when the conflicting root is resolved by departure', async () => {
