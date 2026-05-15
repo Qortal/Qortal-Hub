@@ -266,6 +266,12 @@ const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_RATE_EMA_MIN = 0.996;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_INGRESS_AGE_MAX_MS = 220;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_TARGET_MS = 145;
 const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MAX_EXTRA_HOLD_FRAMES = 0;
+const GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_TARGET_MS = 185;
+const GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_MISSING_EMA_MAX = 0.04;
+const GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_INGRESS_AGE_MAX_MS = 220;
+const GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_RATE_EMA_MIN = 0.97;
+const GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_UNDERTARGET_EMA_MAX = 0.4;
+const GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_MAX_EXTRA_HOLD_FRAMES = 0;
 const GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX = 120;
 
 interface LiveMultiSourceState {
@@ -844,6 +850,11 @@ export class GroupCallAudioReceiveEngine {
       jitterBurstHeadroomLevel: number;
       jitterBurstHeadroomHoldUntilMs: number;
       jitterBurstHeadroomReason: string | null;
+      postBurstLatencyLockoutActive?: boolean;
+      postBurstLatencyLockoutUntilMs?: number;
+      postBurstLatencyShedFrames?: number;
+      lastPostBurstLatencyShedAtMs?: number;
+      lastPostBurstLatencyShedFrames?: number;
       burstGapResetCount?: number;
       burstGapRecoveryCount?: number;
       burstGapDroppedFrames?: number;
@@ -2036,6 +2047,16 @@ export class GroupCallAudioReceiveEngine {
           state.silentLeanHoldUntilMs = 0;
           state.postRecoveryHoldUntilMs = 0;
         }
+        const postBurstLatencyPolicyCap =
+          !!playoutDiagnostics.postBurstLatencyLockoutActive &&
+          state.missingFrameEma <=
+            GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_MISSING_EMA_MAX &&
+          state.oldestFrameAgeEma <=
+            GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_INGRESS_AGE_MAX_MS &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_RATE_EMA_MIN &&
+          state.underTargetEma <=
+            GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_UNDERTARGET_EMA_MAX;
         const diagnosticBufferedNotReadyPressure =
           !state.lastJitterHasReadyFrame &&
           !state.lastConcealmentUsed &&
@@ -2482,15 +2503,17 @@ export class GroupCallAudioReceiveEngine {
           shouldHoldRepairHeavyRecoveryMode ||
           shouldHoldWeakLeanRecoveryMode;
         if (shouldHoldSingleSourceRecoveryMode) {
-          dmMarkPeerUnstable(
-            this.peerRecoveryState,
-            sourceAddr,
-            shouldHoldWeakLeanRecoveryMode || shouldHoldRepairHeavyRecoveryMode
-              ? 2
-              : 3,
-            nowMs
-          );
-          this.recomputeAdaptiveNetworkMode(nowMs);
+          if (!postBurstLatencyPolicyCap) {
+            dmMarkPeerUnstable(
+              this.peerRecoveryState,
+              sourceAddr,
+              shouldHoldWeakLeanRecoveryMode || shouldHoldRepairHeavyRecoveryMode
+                ? 2
+                : 3,
+              nowMs
+            );
+            this.recomputeAdaptiveNetworkMode(nowMs);
+          }
           playout.syncAdaptiveJitterGeometry();
         }
         if (profile === 'clean-low-latency') {
@@ -2509,6 +2532,7 @@ export class GroupCallAudioReceiveEngine {
         );
         let targetMs = staticTargetMs + targetBoostMs;
         const floorMs = singleSourceReceiveProfileFloorMs(profile);
+        let appliedFloorMs = floorMs;
         if (floorMs !== null) {
           targetMs = Math.max(targetMs, floorMs);
         }
@@ -2520,6 +2544,18 @@ export class GroupCallAudioReceiveEngine {
               GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_TARGET_MS
             )
           );
+        }
+        if (postBurstLatencyPolicyCap) {
+          targetMs = Math.min(
+            targetMs,
+            Math.max(
+              staticTargetMs,
+              GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_TARGET_MS
+            )
+          );
+          if (appliedFloorMs !== null) {
+            appliedFloorMs = Math.min(appliedFloorMs, targetMs);
+          }
         }
         const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs(
           {
@@ -2537,13 +2573,27 @@ export class GroupCallAudioReceiveEngine {
         if (feasibleTargetMs !== null) {
           targetMs = Math.max(targetMs, feasibleTargetMs);
         }
+        if (postBurstLatencyPolicyCap) {
+          targetMs = Math.min(
+            targetMs,
+            Math.max(
+              staticTargetMs,
+              GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_TARGET_MS
+            )
+          );
+          if (appliedFloorMs !== null) {
+            appliedFloorMs = Math.min(appliedFloorMs, targetMs);
+          }
+        }
         const desiredBufferedFrames = Math.max(
           2,
           Math.round(targetMs / OPUS_FRAME_DURATION_MS)
         );
         const maxExtraHoldFrames = cleanBufferedBacklogEscape
           ? GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MAX_EXTRA_HOLD_FRAMES
-          : profile === 'collapse-recovery' || profile === 'repair-collapse'
+          : postBurstLatencyPolicyCap
+            ? GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_MAX_EXTRA_HOLD_FRAMES
+            : profile === 'collapse-recovery' || profile === 'repair-collapse'
             ? GCALL_SINGLE_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES
             : profile === 'repair-heavy-connected'
               ? GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MAX_EXTRA_HOLD_FRAMES
@@ -2564,7 +2614,7 @@ export class GroupCallAudioReceiveEngine {
           ? appliedExtraHoldFrames
           : requestedExtraHoldFrames;
         state.lastAppliedTargetMs = targetMs;
-        state.lastAppliedFloorMs = floorMs;
+        state.lastAppliedFloorMs = appliedFloorMs;
         state.lastAppliedTargetBoostMs = targetBoostMs;
         state.lastAppliedExtraHoldFrames = extraHoldFrames;
         playout.setDynamicTargetPlayoutMs(targetMs);

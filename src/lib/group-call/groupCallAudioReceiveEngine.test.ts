@@ -8221,6 +8221,121 @@ describe('GroupCallAudioReceiveEngine', () => {
     vi.useRealTimers();
   });
 
+  it('caps single-source collapse target during clean post-burst latency lockout', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation((frames) => frames);
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+      // @ts-expect-error narrow mock only supplies the fields used by this test.
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 8,
+        jitterHasReadyFrame: false,
+        postBurstLatencyLockoutActive: true,
+        postBurstLatencyLockoutUntilMs: Date.now() + 10_000,
+        postBurstLatencyShedFrames: 45,
+        lastPostBurstLatencyShedAtMs: Date.now(),
+        lastPostBurstLatencyShedFrames: 4,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'low-latency',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    const state = (engine as any).liveMultiSourceStateBySource.get('alice');
+    expect(state).toBeDefined();
+    state.currentReceiveProfile = 'collapse-recovery';
+    state.sampleCount = 10;
+    state.severeSingleSourceHoldUntilMs = Date.now() + 5_000;
+    state.repairCollapseHoldUntilMs = Date.now() + 5_000;
+    state.repairHeavyHoldUntilMs = Date.now() + 5_000;
+    state.recentDamageHoldUntilMs = Date.now() + 5_000;
+    state.concealmentEma = 0.052;
+    state.missingFrameEma = 0;
+    state.underTargetEma = 0.066;
+    state.rateEma = 0.995;
+    state.oldestFrameAgeEma = 5;
+    state.targetPlayoutMs = 185;
+
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 2.4,
+      preProcessBufferedMs: 0,
+      targetPlayoutMs: 185,
+      oldestFrameAgeMs: 5,
+      rate: 0.995,
+      outsideBand: true,
+      outsideBandUnder: true,
+      outsideBandOver: false,
+      deltaMs: -182,
+      playoutStarted: true,
+      concealmentUsed: true,
+    });
+
+    const diagnostics = engine.getDiagnosticsSnapshot();
+    const aliceState = diagnostics.livePolicyStateBySource.find(
+      (entry) => entry.peerAddress === 'alice'
+    );
+    expect(aliceState?.lastAppliedTargetMs).toBeLessThanOrEqual(185);
+    expect(aliceState?.lastAppliedFloorMs).toBeLessThanOrEqual(185);
+    expect(aliceState?.lastAppliedExtraHoldFrames).toBe(0);
+    expect(targetSpy.mock.calls[targetSpy.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(
+      185
+    );
+    expect(holdSpy.mock.calls[holdSpy.mock.calls.length - 1]?.[0]).toBe(0);
+    vi.useRealTimers();
+  });
+
   it('lets clean ready backlog override stale repair-heavy hold', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
