@@ -203,6 +203,11 @@ type RuntimeRecentWindowTrend = {
     jitterLastTrimAtMs?: number;
     jitterBurstHeadroomLevel?: number;
     jitterBurstHeadroomReason?: string | null;
+    postBurstLatencyLockoutActive?: boolean;
+    postBurstLatencyLockoutUntilMs?: number;
+    postBurstLatencyShedFrames?: number;
+    lastPostBurstLatencyShedAtMs?: number;
+    lastPostBurstLatencyShedFrames?: number;
     burstGapResetCount?: number;
     burstGapRecoveryCount?: number;
     burstGapDroppedFrames?: number;
@@ -2049,6 +2054,15 @@ export class GroupCallAudioEngineRuntime {
         jitterLastTrimAtMs: playout.jitterLastTrimAtMs,
         jitterBurstHeadroomLevel: playout.jitterBurstHeadroomLevel,
         jitterBurstHeadroomReason: playout.jitterBurstHeadroomReason,
+        postBurstLatencyLockoutActive:
+          playout.postBurstLatencyLockoutActive,
+        postBurstLatencyLockoutUntilMs:
+          playout.postBurstLatencyLockoutUntilMs,
+        postBurstLatencyShedFrames: playout.postBurstLatencyShedFrames,
+        lastPostBurstLatencyShedAtMs:
+          playout.lastPostBurstLatencyShedAtMs,
+        lastPostBurstLatencyShedFrames:
+          playout.lastPostBurstLatencyShedFrames,
         burstGapResetCount: playout.burstGapResetCount,
         burstGapRecoveryCount: playout.burstGapRecoveryCount,
         burstGapDroppedFrames: playout.burstGapDroppedFrames,

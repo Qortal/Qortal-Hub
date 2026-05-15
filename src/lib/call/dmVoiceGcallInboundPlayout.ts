@@ -112,6 +112,12 @@ const GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER = 80;
 const GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS = 500;
 const GCALL_BURST_GAP_RECOVERY_KEEP_FRAMES = 8;
 const GCALL_BURST_GAP_RECOVERY_COOLDOWN_MS = 2_500;
+const GCALL_POST_BURST_LATENCY_LOCKOUT_MS = 25_000;
+const GCALL_POST_BURST_LATENCY_SHED_MAX_FRAMES_PER_TICK = 4;
+const GCALL_POST_BURST_LATENCY_SHED_TARGET_HEADROOM_FRAMES = 1;
+const GCALL_POST_BURST_LATENCY_SHED_MIN_OVER_TARGET_FRAMES = 2;
+const GCALL_POST_BURST_LOCKOUT_UNDERTARGET_MAX = 0.08;
+const GCALL_POST_BURST_LOCKOUT_PLAYOUT_RATE_MIN = 0.97;
 const GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS = 24;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES = 18;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO = 0.75;
@@ -159,6 +165,59 @@ export function shouldResetDecodedPlayoutStateAfterBurstGapRecovery(opts: {
   droppedFrames: number;
 }): boolean {
   return opts.droppedFrames <= 0;
+}
+
+export function shouldApplyPostBurstLatencyLockout(opts: {
+  nowMs: number;
+  lastRecoveryAtMs: number;
+  lastDroppedFrames: number;
+  activeSourceCount: number;
+  playoutUnderTargetFraction: number;
+  avgPlayoutRate: number;
+}): boolean {
+  if (opts.activeSourceCount !== 1) return false;
+  if (opts.lastRecoveryAtMs <= 0 || opts.lastDroppedFrames <= 0) return false;
+  const ageMs = opts.nowMs - opts.lastRecoveryAtMs;
+  if (ageMs < 0 || ageMs > GCALL_POST_BURST_LATENCY_LOCKOUT_MS) return false;
+  const underTarget = Number.isFinite(opts.playoutUnderTargetFraction)
+    ? opts.playoutUnderTargetFraction
+    : 1;
+  const avgPlayoutRate =
+    Number.isFinite(opts.avgPlayoutRate) && opts.avgPlayoutRate > 0
+      ? opts.avgPlayoutRate
+      : 0;
+  return (
+    underTarget <= GCALL_POST_BURST_LOCKOUT_UNDERTARGET_MAX &&
+    avgPlayoutRate >= GCALL_POST_BURST_LOCKOUT_PLAYOUT_RATE_MIN
+  );
+}
+
+export function computePostBurstLatencyShedFrames(opts: {
+  lockoutActive: boolean;
+  bufferedFrames: number;
+  targetPlayoutMs: number;
+}): number {
+  if (!opts.lockoutActive) return 0;
+  if (!Number.isFinite(opts.targetPlayoutMs) || opts.targetPlayoutMs <= 0) {
+    return 0;
+  }
+  const bufferedFrames = Math.max(
+    0,
+    Number.isFinite(opts.bufferedFrames) ? Math.trunc(opts.bufferedFrames) : 0
+  );
+  const targetFrames = Math.max(
+    6,
+    Math.ceil(opts.targetPlayoutMs / OPUS_FRAME_DURATION_MS) +
+      GCALL_POST_BURST_LATENCY_SHED_TARGET_HEADROOM_FRAMES
+  );
+  const overTargetFrames = bufferedFrames - targetFrames;
+  if (overTargetFrames < GCALL_POST_BURST_LATENCY_SHED_MIN_OVER_TARGET_FRAMES) {
+    return 0;
+  }
+  return Math.min(
+    GCALL_POST_BURST_LATENCY_SHED_MAX_FRAMES_PER_TICK,
+    overTargetFrames
+  );
 }
 
 export function computeStarvedBacklogDrainBudget(opts: {
@@ -343,6 +402,10 @@ export class DmVoiceGcallInboundPlayout {
   private lastBurstGapFrames = 0;
   private lastBurstGapDroppedFrames = 0;
   private lastBurstGapResetAtMs = 0;
+  private postBurstLatencyLockoutUntilMs = 0;
+  private postBurstLatencyShedFrames = 0;
+  private lastPostBurstLatencyShedAtMs = 0;
+  private lastPostBurstLatencyShedFrames = 0;
   private latestPlayoutBufferedMs = 0;
   private latestPreProcessBufferedMs = 0;
   private latestPlayoutOutsideBandUnder = false;
@@ -448,6 +511,11 @@ export class DmVoiceGcallInboundPlayout {
     jitterBurstHeadroomLevel: number;
     jitterBurstHeadroomHoldUntilMs: number;
     jitterBurstHeadroomReason: string | null;
+    postBurstLatencyLockoutActive: boolean;
+    postBurstLatencyLockoutUntilMs: number;
+    postBurstLatencyShedFrames: number;
+    lastPostBurstLatencyShedAtMs: number;
+    lastPostBurstLatencyShedFrames: number;
     burstGapResetCount: number;
     burstGapRecoveryCount: number;
     burstGapDroppedFrames: number;
@@ -502,6 +570,12 @@ export class DmVoiceGcallInboundPlayout {
       jitterBurstHeadroomLevel: this.jitterBurstHeadroomState.level,
       jitterBurstHeadroomHoldUntilMs: this.jitterBurstHeadroomState.holdUntilMs,
       jitterBurstHeadroomReason: this.lastJitterBurstHeadroomReason,
+      postBurstLatencyLockoutActive:
+        Date.now() < this.postBurstLatencyLockoutUntilMs,
+      postBurstLatencyLockoutUntilMs: this.postBurstLatencyLockoutUntilMs,
+      postBurstLatencyShedFrames: this.postBurstLatencyShedFrames,
+      lastPostBurstLatencyShedAtMs: this.lastPostBurstLatencyShedAtMs,
+      lastPostBurstLatencyShedFrames: this.lastPostBurstLatencyShedFrames,
       burstGapResetCount: this.burstGapResetCount,
       burstGapRecoveryCount: this.burstGapRecoveryCount,
       burstGapDroppedFrames: this.burstGapDroppedFrames,
@@ -941,6 +1015,10 @@ export class DmVoiceGcallInboundPlayout {
     this.lastBurstGapFrames = 0;
     this.lastBurstGapDroppedFrames = 0;
     this.lastBurstGapResetAtMs = 0;
+    this.postBurstLatencyLockoutUntilMs = 0;
+    this.postBurstLatencyShedFrames = 0;
+    this.lastPostBurstLatencyShedAtMs = 0;
+    this.lastPostBurstLatencyShedFrames = 0;
     this.latestPlayoutBufferedMs = 0;
     this.latestPreProcessBufferedMs = 0;
     this.latestPlayoutOutsideBandUnder = false;
@@ -1043,6 +1121,10 @@ export class DmVoiceGcallInboundPlayout {
     this.lastBurstGapDroppedFrames = dropped;
     this.lastBurstGapMs = this.burstGapWatchGapMs;
     this.lastBurstGapResetAtMs = nowMs;
+    if (dropped > 0) {
+      this.postBurstLatencyLockoutUntilMs =
+        nowMs + GCALL_POST_BURST_LATENCY_LOCKOUT_MS;
+    }
     const shouldResetDecodedPlayout =
       shouldResetDecodedPlayoutStateAfterBurstGapRecovery({
         droppedFrames: dropped,
@@ -1080,6 +1162,15 @@ export class DmVoiceGcallInboundPlayout {
     const mode = this.forcedJitterAdaptiveMode ?? metricsMode;
     const activeSourceCount = this.resolveActiveSourceCount();
     const snapshot = m.getSnapshot();
+    const nowMs = Date.now();
+    const postBurstLatencyLockoutActive = shouldApplyPostBurstLatencyLockout({
+      nowMs,
+      lastRecoveryAtMs: this.lastBurstGapResetAtMs,
+      lastDroppedFrames: this.lastBurstGapDroppedFrames,
+      activeSourceCount,
+      playoutUnderTargetFraction: snapshot.playoutUnderTargetFraction,
+      avgPlayoutRate: snapshot.avgPlayoutRate,
+    });
     if (stepHeadroom) {
       const trimCount =
         this.jitterPushTrimmedFrames -
@@ -1090,8 +1181,8 @@ export class DmVoiceGcallInboundPlayout {
         jb.getBufferedFrames();
       const stepped = stepGcallJitterBurstHeadroom({
         state: this.jitterBurstHeadroomState,
-        enabled: mode === 'recovery',
-        nowMs: Date.now(),
+        enabled: mode === 'recovery' && !postBurstLatencyLockoutActive,
+        nowMs,
         trimCount,
         depthHighWater,
         maxDepthFrames: jb.getMaxEntries(),
@@ -1102,16 +1193,27 @@ export class DmVoiceGcallInboundPlayout {
       if (stepped.reason) this.lastJitterBurstHeadroomReason = stepped.reason;
     }
     if (
-      this.lastJitterAdaptiveMode === mode &&
+      postBurstLatencyLockoutActive &&
+      this.jitterBurstHeadroomState.level !== 0
+    ) {
+      this.jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
+      this.lastJitterBurstHeadroomReason = 'post-burst-latency-lockout';
+    }
+    const geometryMode =
+      postBurstLatencyLockoutActive && mode === 'recovery'
+        ? 'low-latency'
+        : mode;
+    if (
+      this.lastJitterAdaptiveMode === geometryMode &&
       this.lastJitterActiveSourceCount === activeSourceCount &&
       !stepHeadroom
     ) {
       return;
     }
-    this.lastJitterAdaptiveMode = mode;
+    this.lastJitterAdaptiveMode = geometryMode;
     this.lastJitterActiveSourceCount = activeSourceCount;
     const base =
-      mode === 'recovery'
+      geometryMode === 'recovery'
         ? getEffectiveJitterTuning(tuning, 'recovery', {
             tier2MultiSource: true,
             activeSourceCount,
@@ -1125,10 +1227,10 @@ export class DmVoiceGcallInboundPlayout {
     jb.setSoftUnprimeMs(
       computeSoftUnprimeMsForTier2(
         activeSourceCount,
-        mode === 'recovery' && activeSourceCount >= 2
+        geometryMode === 'recovery' && activeSourceCount >= 2
       )
     );
-    jb.setSteadyPrimedHoldFrames(mode !== 'recovery' ? 1 : 0);
+    jb.setSteadyPrimedHoldFrames(geometryMode !== 'recovery' ? 1 : 0);
   }
 
   private shedRecoveredJitterLatency(opts: {
@@ -1138,6 +1240,27 @@ export class DmVoiceGcallInboundPlayout {
     const jb = this.jitter;
     const metrics = this.callbacks?.metricsRef?.current?.getSnapshot();
     if (!jb || !metrics) return 0;
+    const postBurstShedFrames = computePostBurstLatencyShedFrames({
+      lockoutActive: shouldApplyPostBurstLatencyLockout({
+        nowMs: Date.now(),
+        lastRecoveryAtMs: this.lastBurstGapResetAtMs,
+        lastDroppedFrames: this.lastBurstGapDroppedFrames,
+        activeSourceCount: this.resolveActiveSourceCount(),
+        playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
+        avgPlayoutRate: metrics.avgPlayoutRate,
+      }),
+      bufferedFrames: opts.bufferedFrames,
+      targetPlayoutMs: opts.targetPlayoutMs,
+    });
+    if (postBurstShedFrames > 0) {
+      const dropped = jb.discardOldest(postBurstShedFrames);
+      if (dropped > 0) {
+        this.postBurstLatencyShedFrames += dropped;
+        this.lastPostBurstLatencyShedFrames = dropped;
+        this.lastPostBurstLatencyShedAtMs = Date.now();
+      }
+      return dropped;
+    }
     if ((this.lastJitterAdaptiveMode ?? 'low-latency') !== 'recovery') {
       return 0;
     }

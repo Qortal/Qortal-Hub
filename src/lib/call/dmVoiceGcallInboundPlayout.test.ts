@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computePostBurstLatencyShedFrames,
   computeN1SteadyPrimedHoldFrames,
   computeStarvedBacklogDrainBudget,
   decideReadyStallForcePrime,
   shouldCommitBurstGapRecovery,
+  shouldApplyPostBurstLatencyLockout,
   shouldResetDecodedPlayoutStateAfterBurstGapRecovery,
   shouldStartBurstGapRecoveryWatch,
 } from './dmVoiceGcallInboundPlayout';
@@ -94,6 +96,67 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
         droppedFrames: 0,
       })
     ).toBe(true);
+  });
+
+  it('keeps post-burst latency lockout only for clean single-source recovery', () => {
+    expect(
+      shouldApplyPostBurstLatencyLockout({
+        nowMs: 12_000,
+        lastRecoveryAtMs: 1_000,
+        lastDroppedFrames: 32,
+        activeSourceCount: 1,
+        playoutUnderTargetFraction: 0.02,
+        avgPlayoutRate: 0.999,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldApplyPostBurstLatencyLockout({
+        nowMs: 12_000,
+        lastRecoveryAtMs: 1_000,
+        lastDroppedFrames: 32,
+        activeSourceCount: 2,
+        playoutUnderTargetFraction: 0.02,
+        avgPlayoutRate: 0.999,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldApplyPostBurstLatencyLockout({
+        nowMs: 12_000,
+        lastRecoveryAtMs: 1_000,
+        lastDroppedFrames: 32,
+        activeSourceCount: 1,
+        playoutUnderTargetFraction: 0.2,
+        avgPlayoutRate: 0.999,
+      })
+    ).toBe(false);
+  });
+
+  it('sheds extra post-burst latency toward the live target while lockout is active', () => {
+    expect(
+      computePostBurstLatencyShedFrames({
+        lockoutActive: true,
+        bufferedFrames: 31,
+        targetPlayoutMs: 185,
+      })
+    ).toBe(4);
+
+    expect(
+      computePostBurstLatencyShedFrames({
+        lockoutActive: true,
+        bufferedFrames: 9,
+        targetPlayoutMs: 120,
+      })
+    ).toBe(2);
+
+    expect(
+      computePostBurstLatencyShedFrames({
+        lockoutActive: false,
+        bufferedFrames: 31,
+        targetPlayoutMs: 185,
+      })
+    ).toBe(0);
   });
 
   it('accelerates drain only when ready Opus backlog is high and PCM is starved', () => {
