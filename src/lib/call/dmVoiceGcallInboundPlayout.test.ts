@@ -167,6 +167,14 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
         bufferedFrames: 31,
         targetPlayoutMs: 185,
       })
+    ).toBe(8);
+
+    expect(
+      computePostBurstLatencyShedFrames({
+        lockoutActive: true,
+        bufferedFrames: 18,
+        targetPlayoutMs: 185,
+      })
     ).toBe(4);
 
     expect(
