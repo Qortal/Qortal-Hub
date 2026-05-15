@@ -3,6 +3,7 @@ import {
   computePostBurstLatencyShedFrames,
   computePostBurstSteadyPrimedHoldFrames,
   computeN1SteadyPrimedHoldFrames,
+  computeLiveLatencyGovernorAction,
   computeStarvedBacklogDrainBudget,
   decideReadyStallForcePrime,
   shouldCommitBurstGapRecovery,
@@ -218,6 +219,69 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
         defaultHoldFrames: 0,
       })
     ).toBe(0);
+  });
+
+  it('sheds old decoded PCM and jitter when single-source live latency exceeds the ceiling', () => {
+    expect(
+      computeLiveLatencyGovernorAction({
+        hasObservedPlayoutStart: true,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        oldestFrameAgeMs: 1_500,
+        pcmBufferedMs: 240,
+        jitterBufferedFrames: 12,
+      })
+    ).toEqual({
+      pcmDropFrames: 10,
+      jitterDropFrames: 10,
+      resetPcm: false,
+      reason: 'live-latency-governor',
+    });
+
+    expect(
+      computeLiveLatencyGovernorAction({
+        hasObservedPlayoutStart: true,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        oldestFrameAgeMs: 650,
+        pcmBufferedMs: 240,
+        jitterBufferedFrames: 12,
+      })
+    ).toEqual({
+      pcmDropFrames: 0,
+      jitterDropFrames: 0,
+      resetPcm: false,
+      reason: null,
+    });
+  });
+
+  it('uses a wider latency governor ceiling for recovery and multi-source calls', () => {
+    expect(
+      computeLiveLatencyGovernorAction({
+        hasObservedPlayoutStart: true,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        oldestFrameAgeMs: 1_000,
+        pcmBufferedMs: 240,
+        jitterBufferedFrames: 12,
+      }).reason
+    ).toBeNull();
+
+    expect(
+      computeLiveLatencyGovernorAction({
+        hasObservedPlayoutStart: true,
+        activeSourceCount: 3,
+        adaptiveNetworkMode: 'low-latency',
+        oldestFrameAgeMs: 1_050,
+        pcmBufferedMs: 240,
+        jitterBufferedFrames: 12,
+      })
+    ).toEqual({
+      pcmDropFrames: 9,
+      jitterDropFrames: 8,
+      resetPcm: false,
+      reason: 'live-latency-governor',
+    });
   });
 
   it('accelerates drain only when ready Opus backlog is high and PCM is starved', () => {

@@ -130,6 +130,17 @@ const GCALL_STARVED_BACKLOG_DRAIN_MIN_CAP_RATIO = 0.75;
 const GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK = 4;
 const GCALL_STARVED_BACKLOG_DRAIN_TARGET_HEADROOM_FRAMES = 2;
 const GCALL_STARVED_BACKLOG_DRAIN_TARGET_OVERAGE_FRAMES = 2;
+const GCALL_LIVE_LATENCY_GOVERNOR_SINGLE_CEILING_MS = 720;
+const GCALL_LIVE_LATENCY_GOVERNOR_SINGLE_RELEASE_MS = 420;
+const GCALL_LIVE_LATENCY_GOVERNOR_MULTI_CEILING_MS = 980;
+const GCALL_LIVE_LATENCY_GOVERNOR_MULTI_RELEASE_MS = 620;
+const GCALL_LIVE_LATENCY_GOVERNOR_RECOVERY_CEILING_MS = 1_100;
+const GCALL_LIVE_LATENCY_GOVERNOR_RECOVERY_RELEASE_MS = 720;
+const GCALL_LIVE_LATENCY_GOVERNOR_EMERGENCY_MS = 1_500;
+const GCALL_LIVE_LATENCY_GOVERNOR_MIN_PCM_RESERVE_FRAMES = 2;
+const GCALL_LIVE_LATENCY_GOVERNOR_MULTI_MIN_PCM_RESERVE_FRAMES = 3;
+const GCALL_LIVE_LATENCY_GOVERNOR_KEEP_JITTER_FRAMES = 2;
+const GCALL_LIVE_LATENCY_GOVERNOR_MULTI_KEEP_JITTER_FRAMES = 4;
 const GCALL_AUDIO_GAP_ATTRIBUTION_MAX_RECENT = 16;
 const GCALL_AUDIO_GAP_ATTRIBUTION_MIN_SEQ_GAP = 2;
 const GCALL_AUDIO_GAP_ATTRIBUTION_MIN_INGRESS_GAP_MS = 150;
@@ -358,6 +369,105 @@ export function computeStarvedBacklogDrainBudget(opts: {
   );
 }
 
+export function computeLiveLatencyGovernorAction(opts: {
+  hasObservedPlayoutStart: boolean;
+  activeSourceCount: number;
+  adaptiveNetworkMode?: 'low-latency' | 'recovery' | null;
+  oldestFrameAgeMs: number;
+  pcmBufferedMs: number;
+  jitterBufferedFrames: number;
+}): {
+  pcmDropFrames: number;
+  jitterDropFrames: number;
+  resetPcm: boolean;
+  reason: 'live-latency-governor' | null;
+} {
+  if (!opts.hasObservedPlayoutStart) {
+    return {
+      pcmDropFrames: 0,
+      jitterDropFrames: 0,
+      resetPcm: false,
+      reason: null,
+    };
+  }
+  const oldestFrameAgeMs = Number.isFinite(opts.oldestFrameAgeMs)
+    ? Math.max(0, opts.oldestFrameAgeMs)
+    : 0;
+  if (oldestFrameAgeMs <= 0) {
+    return {
+      pcmDropFrames: 0,
+      jitterDropFrames: 0,
+      resetPcm: false,
+      reason: null,
+    };
+  }
+  const activeSourceCount = Math.max(
+    1,
+    Number.isFinite(opts.activeSourceCount)
+      ? Math.floor(opts.activeSourceCount)
+      : 1
+  );
+  const recoveryMode = opts.adaptiveNetworkMode === 'recovery';
+  const ceilingMs = recoveryMode
+    ? GCALL_LIVE_LATENCY_GOVERNOR_RECOVERY_CEILING_MS
+    : activeSourceCount >= 2
+      ? GCALL_LIVE_LATENCY_GOVERNOR_MULTI_CEILING_MS
+      : GCALL_LIVE_LATENCY_GOVERNOR_SINGLE_CEILING_MS;
+  if (oldestFrameAgeMs <= ceilingMs) {
+    return {
+      pcmDropFrames: 0,
+      jitterDropFrames: 0,
+      resetPcm: false,
+      reason: null,
+    };
+  }
+  const releaseMs = recoveryMode
+    ? GCALL_LIVE_LATENCY_GOVERNOR_RECOVERY_RELEASE_MS
+    : activeSourceCount >= 2
+      ? GCALL_LIVE_LATENCY_GOVERNOR_MULTI_RELEASE_MS
+      : GCALL_LIVE_LATENCY_GOVERNOR_SINGLE_RELEASE_MS;
+  const pcmBufferedFrames = Math.max(
+    0,
+    Math.floor(
+      (Number.isFinite(opts.pcmBufferedMs) ? opts.pcmBufferedMs : 0) /
+        OPUS_FRAME_DURATION_MS
+    )
+  );
+  const minPcmReserveFrames =
+    activeSourceCount >= 2
+      ? GCALL_LIVE_LATENCY_GOVERNOR_MULTI_MIN_PCM_RESERVE_FRAMES
+      : GCALL_LIVE_LATENCY_GOVERNOR_MIN_PCM_RESERVE_FRAMES;
+  const ageDropFrames = Math.ceil(
+    Math.max(0, oldestFrameAgeMs - releaseMs) / OPUS_FRAME_DURATION_MS
+  );
+  const pcmDropFrames = Math.max(
+    0,
+    Math.min(ageDropFrames, pcmBufferedFrames - minPcmReserveFrames)
+  );
+  const keepJitterFrames =
+    activeSourceCount >= 2
+      ? GCALL_LIVE_LATENCY_GOVERNOR_MULTI_KEEP_JITTER_FRAMES
+      : GCALL_LIVE_LATENCY_GOVERNOR_KEEP_JITTER_FRAMES;
+  const jitterDropFrames = Math.max(
+    0,
+    (Number.isFinite(opts.jitterBufferedFrames)
+      ? Math.floor(opts.jitterBufferedFrames)
+      : 0) - keepJitterFrames
+  );
+  const resetPcm =
+    pcmDropFrames <= 0 &&
+    oldestFrameAgeMs >= GCALL_LIVE_LATENCY_GOVERNOR_EMERGENCY_MS;
+  return {
+    pcmDropFrames,
+    jitterDropFrames,
+    resetPcm,
+    reason:
+      pcmDropFrames > 0 || jitterDropFrames > 0 || resetPcm
+        ? 'live-latency-governor'
+        : null,
+  };
+}
+
 export function decideReadyStallForcePrime(opts: {
   hasObservedPlayoutStart: boolean;
   activeSourceCount: number;
@@ -515,8 +625,13 @@ export class DmVoiceGcallInboundPlayout {
   private lastPostBurstLatencyShedFrames = 0;
   private latestPlayoutBufferedMs = 0;
   private latestPreProcessBufferedMs = 0;
+  private latestOldestFrameAgeMs = 0;
   private latestPlayoutOutsideBandUnder = false;
   private latestPlayoutConcealmentUsed = false;
+  private liveLatencyGovernorShedFrames = 0;
+  private liveLatencyGovernorResetCount = 0;
+  private lastLiveLatencyGovernorAtMs = 0;
+  private lastLiveLatencyGovernorReason: string | null = null;
   private starvedBacklogDrainCount = 0;
   private starvedBacklogDrainFrames = 0;
   private lastStarvedBacklogDrainAtMs = 0;
@@ -680,6 +795,10 @@ export class DmVoiceGcallInboundPlayout {
     postBurstLatencyShedFrames: number;
     lastPostBurstLatencyShedAtMs: number;
     lastPostBurstLatencyShedFrames: number;
+    liveLatencyGovernorShedFrames: number;
+    liveLatencyGovernorResetCount: number;
+    lastLiveLatencyGovernorAtMs: number;
+    lastLiveLatencyGovernorReason: string | null;
     burstGapResetCount: number;
     burstGapRecoveryCount: number;
     burstGapDroppedFrames: number;
@@ -744,6 +863,10 @@ export class DmVoiceGcallInboundPlayout {
       postBurstLatencyShedFrames: this.postBurstLatencyShedFrames,
       lastPostBurstLatencyShedAtMs: this.lastPostBurstLatencyShedAtMs,
       lastPostBurstLatencyShedFrames: this.lastPostBurstLatencyShedFrames,
+      liveLatencyGovernorShedFrames: this.liveLatencyGovernorShedFrames,
+      liveLatencyGovernorResetCount: this.liveLatencyGovernorResetCount,
+      lastLiveLatencyGovernorAtMs: this.lastLiveLatencyGovernorAtMs,
+      lastLiveLatencyGovernorReason: this.lastLiveLatencyGovernorReason,
       burstGapResetCount: this.burstGapResetCount,
       burstGapRecoveryCount: this.burstGapRecoveryCount,
       burstGapDroppedFrames: this.burstGapDroppedFrames,
@@ -924,6 +1047,9 @@ export class DmVoiceGcallInboundPlayout {
           d.preProcessBufferedMs ?? 0
         );
       }
+      if (Number.isFinite(d.oldestFrameAgeMs)) {
+        this.latestOldestFrameAgeMs = Math.max(0, d.oldestFrameAgeMs ?? 0);
+      }
       this.latestPlayoutOutsideBandUnder = d.outsideBandUnder === true;
       this.latestPlayoutConcealmentUsed = d.concealmentUsed === true;
       if (d.playoutStarted) {
@@ -1065,12 +1191,19 @@ export class DmVoiceGcallInboundPlayout {
           defaultHoldFrames: n1SteadyHoldFrames,
         })
       );
-      const shedFrames = this.shedRecoveredJitterLatency({
+      const liveLatencyShedFrames = this.applyLiveLatencyGovernor({
         bufferedFrames,
+      });
+      const afterGovernorBufferedFrames =
+        liveLatencyShedFrames > 0 ? jb.getBufferedFrames() : bufferedFrames;
+      const shedFrames = this.shedRecoveredJitterLatency({
+        bufferedFrames: afterGovernorBufferedFrames,
         targetPlayoutMs,
       });
       const effectiveBufferedFrames =
-        shedFrames > 0 ? jb.getBufferedFrames() : bufferedFrames;
+        liveLatencyShedFrames > 0 || shedFrames > 0
+          ? jb.getBufferedFrames()
+          : bufferedFrames;
       let hasReadyFrame = jb.hasReadyFrame();
       if (!hasReadyFrame) {
         const readyStallForcePrime = decideReadyStallForcePrime({
@@ -1214,8 +1347,13 @@ export class DmVoiceGcallInboundPlayout {
     this.lastPostBurstLatencyShedFrames = 0;
     this.latestPlayoutBufferedMs = 0;
     this.latestPreProcessBufferedMs = 0;
+    this.latestOldestFrameAgeMs = 0;
     this.latestPlayoutOutsideBandUnder = false;
     this.latestPlayoutConcealmentUsed = false;
+    this.liveLatencyGovernorShedFrames = 0;
+    this.liveLatencyGovernorResetCount = 0;
+    this.lastLiveLatencyGovernorAtMs = 0;
+    this.lastLiveLatencyGovernorReason = null;
     this.starvedBacklogDrainCount = 0;
     this.starvedBacklogDrainFrames = 0;
     this.lastStarvedBacklogDrainAtMs = 0;
@@ -1526,6 +1664,58 @@ export class DmVoiceGcallInboundPlayout {
         overTargetFrames
       )
     );
+  }
+
+  private applyLiveLatencyGovernor(opts: {
+    bufferedFrames: number;
+  }): number {
+    const jb = this.jitter;
+    if (!jb) return 0;
+    const action = computeLiveLatencyGovernorAction({
+      hasObservedPlayoutStart: this.hasObservedPlayoutStart,
+      activeSourceCount: this.resolveActiveSourceCount(),
+      adaptiveNetworkMode: this.lastJitterAdaptiveMode,
+      oldestFrameAgeMs: this.latestOldestFrameAgeMs,
+      pcmBufferedMs: Math.max(
+        this.latestPlayoutBufferedMs,
+        this.latestPreProcessBufferedMs
+      ),
+      jitterBufferedFrames: opts.bufferedFrames,
+    });
+    if (!action.reason) return 0;
+
+    const nowMs = Date.now();
+    let dropped = 0;
+    if (action.pcmDropFrames > 0) {
+      if (this.pcmRing) {
+        dropped += this.pcmRing.dropOldestFrames(action.pcmDropFrames);
+      } else {
+        this.playbackNode?.port.postMessage({ type: 'reset' });
+        this.liveLatencyGovernorResetCount++;
+      }
+    } else if (action.resetPcm) {
+      this.pcmRing?.reset();
+      this.playbackNode?.port.postMessage({ type: 'reset' });
+      this.liveLatencyGovernorResetCount++;
+    }
+    if (action.jitterDropFrames > 0) {
+      dropped += jb.discardOldest(action.jitterDropFrames);
+    }
+    if (dropped > 0 || action.resetPcm) {
+      this.liveLatencyGovernorShedFrames += dropped;
+      this.lastLiveLatencyGovernorAtMs = nowMs;
+      this.lastLiveLatencyGovernorReason = action.reason;
+      this.recordAudioGapAttribution({
+        stage: 'latency-shed',
+        atMs: nowMs,
+        trimmedFrames: dropped,
+        likelyCause: 'trimmed-backlog',
+      });
+      jb.forcePrimeForRecoveryEscape(GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS, {
+        clearBurstRecoveryHold: true,
+      });
+    }
+    return dropped;
   }
 
   private drainOneFrame(): number {

@@ -6,8 +6,8 @@
 import type { GroupCallAudioTuning } from './groupCallAudioProfile';
 import { GCALL_GLOBAL_PLAYOUT_CAP_MS } from './gcallPlayoutPolicy';
 
-/** Group hook uses a modest low-latency baseline with a little extra headroom for 1:1 steady-state smoothness. */
-const STATIC_PLAYOUT_BASE_LOW_LATENCY_MS = 124;
+/** Clean low-latency steady state should not keep a recovery-sized reserve. */
+const STATIC_PLAYOUT_BASE_LOW_LATENCY_MS = 96;
 const STATIC_PLAYOUT_BASE_HIGH_STABILITY_MS = 134;
 
 export function computeStaticPlayoutTargetMsForTuning(

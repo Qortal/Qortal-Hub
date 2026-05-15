@@ -119,6 +119,7 @@ const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_BUFFERED_MS_MIN = 88;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_DAMAGE_DELTA_MIN_MS = -32;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN = 3;
 const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX = 0.04;
+const GCALL_LOW_LATENCY_RECOVERY_BASE_TARGET_MS = 124;
 
 const GCALL_RECEIVE_STAGE_TIMING_WARN_MS = 20;
 const GCALL_RECEIVE_STAGE_RECENT_WORST_LIMIT = 32;
@@ -1054,6 +1055,10 @@ export class GroupCallAudioReceiveEngine {
       postBurstLatencyShedFrames?: number;
       lastPostBurstLatencyShedAtMs?: number;
       lastPostBurstLatencyShedFrames?: number;
+      liveLatencyGovernorShedFrames?: number;
+      liveLatencyGovernorResetCount?: number;
+      lastLiveLatencyGovernorAtMs?: number;
+      lastLiveLatencyGovernorReason?: string | null;
       burstGapResetCount?: number;
       burstGapRecoveryCount?: number;
       burstGapDroppedFrames?: number;
@@ -1762,6 +1767,10 @@ export class GroupCallAudioReceiveEngine {
     const staticTargetMs = computeStaticPlayoutTargetMsForTuning(
       getGroupCallAudioTuning(this.config.profile)
     );
+    const recoveryBaseTargetMs =
+      this.config.profile === 'low-latency'
+        ? Math.max(staticTargetMs, GCALL_LOW_LATENCY_RECOVERY_BASE_TARGET_MS)
+        : staticTargetMs;
     const weakLegPresent =
       activeSourceCount >= 2 &&
       [...this.liveMultiSourceStateBySource.values()].some(
@@ -2793,7 +2802,7 @@ export class GroupCallAudioReceiveEngine {
           profile,
           state
         );
-        let targetMs = staticTargetMs + targetBoostMs;
+        let targetMs = recoveryBaseTargetMs + targetBoostMs;
         const floorMs = singleSourceReceiveProfileFloorMs(profile);
         let appliedFloorMs = floorMs;
         if (floorMs !== null) {
@@ -3017,7 +3026,7 @@ export class GroupCallAudioReceiveEngine {
         profile,
         multiSourceSourceCollapsePressure
       );
-      let targetMs = staticTargetMs + targetBoostMs;
+      let targetMs = recoveryBaseTargetMs + targetBoostMs;
       if (floorMs !== null) {
         targetMs = Math.max(targetMs, floorMs);
       }
