@@ -3,6 +3,122 @@ import { GroupCallAudioReceiveEngine } from './groupCallAudioReceiveEngine';
 import { DmVoiceGcallInboundPlayout } from '../call/dmVoiceGcallInboundPlayout';
 
 describe('GroupCallAudioReceiveEngine', () => {
+  it('uses an existing playout synchronously on the decoded-packet hot path', async () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        resume = vi.fn();
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockResolvedValue();
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockReturnValue({
+      peerAddress: 'alice',
+      decodePath: 'wasm-fec',
+      wasmFecActive: true,
+      hasOpusFecWorker: true,
+      hasWebCodecsDecoder: false,
+      decoderState: null,
+      hasSharedPcmRing: true,
+      sharedRingEnabled: true,
+      jitterActive: true,
+      jitterBufferedFrames: 12,
+      jitterHasReadyFrame: true,
+      playbackNodeActive: true,
+      schedulerNodeActive: true,
+      lastJitterAdaptiveMode: null,
+    });
+    const pushDecoded = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'pushDecoded')
+      .mockImplementation(() => {});
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+    const getOrCreate = vi.spyOn(engine as any, 'getOrCreatePlayout');
+
+    await engine.handleDecodedPackets([
+      {
+        sourceAddr: 'alice',
+        seq: 1,
+        opusFrame: new Uint8Array([1]),
+        vad: true,
+        timestampMs: 100,
+      },
+    ]);
+
+    expect(getOrCreate).not.toHaveBeenCalled();
+    expect(pushDecoded).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates concurrent first playout creation for the same source', async () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        resume = vi.fn();
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+    let resolveStart: (() => void) | null = null;
+    const startPromise = new Promise<void>((resolve) => {
+      resolveStart = resolve;
+    });
+    const start = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'start')
+      .mockImplementation(() => startPromise);
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockReturnValue({
+      peerAddress: 'alice',
+      decodePath: 'wasm-fec',
+      wasmFecActive: true,
+      hasOpusFecWorker: true,
+      hasWebCodecsDecoder: false,
+      decoderState: null,
+      hasSharedPcmRing: true,
+      sharedRingEnabled: true,
+      jitterActive: true,
+      jitterBufferedFrames: 12,
+      jitterHasReadyFrame: true,
+      playbackNodeActive: true,
+      schedulerNodeActive: true,
+      lastJitterAdaptiveMode: null,
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    const first = (engine as any).getOrCreatePlayout('alice');
+    const second = (engine as any).getOrCreatePlayout('alice');
+    await Promise.resolve();
+
+    expect(start).toHaveBeenCalledTimes(1);
+    resolveStart?.();
+    const [firstPlayout, secondPlayout] = await Promise.all([first, second]);
+
+    expect(firstPlayout).toBe(secondPlayout);
+    expect((engine as any).pendingPlayouts.size).toBe(0);
+  });
+
   it('resumes the hidden playback AudioContext before group playout starts', async () => {
     const resume = vi.fn(async function (this: { state: string }) {
       this.state = 'running';

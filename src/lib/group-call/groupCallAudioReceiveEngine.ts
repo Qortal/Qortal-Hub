@@ -653,6 +653,10 @@ export class GroupCallAudioReceiveEngine {
   private metrics = new GroupCallPerformanceTracker();
   private readonly metricsRef = { current: this.metrics };
   private readonly playouts = new Map<string, DmVoiceGcallInboundPlayout>();
+  private readonly pendingPlayouts = new Map<
+    string,
+    Promise<DmVoiceGcallInboundPlayout>
+  >();
   private readonly outputNodeBySource = new Map<string, GainNode>();
   private readonly onMetricsChanged: (
     snapshot: GroupCallMetricsSnapshot
@@ -1272,7 +1276,10 @@ export class GroupCallAudioReceiveEngine {
     );
     for (const [sourceAddr, list] of grouped) {
       const playoutStartedAt = performance.now();
-      const playout = await this.getOrCreatePlayout(sourceAddr);
+      let playout = this.playouts.get(sourceAddr) ?? null;
+      if (!playout) {
+        playout = await this.getOrCreatePlayout(sourceAddr);
+      }
       this.recordReceiveStageTiming(
         'getOrCreatePlayout',
         performance.now() - playoutStartedAt,
@@ -1347,6 +1354,7 @@ export class GroupCallAudioReceiveEngine {
       disconnectNodeSafe(output);
     }
     this.playouts.clear();
+    this.pendingPlayouts.clear();
     this.outputNodeBySource.clear();
     this.loggedFirstDecodedPacket = false;
     this.loggedFirstPlayoutStartBySource.clear();
@@ -1376,6 +1384,7 @@ export class GroupCallAudioReceiveEngine {
     const playout = this.playouts.get(normalized);
     const output = this.outputNodeBySource.get(normalized) ?? null;
     this.playouts.delete(normalized);
+    this.pendingPlayouts.delete(normalized);
     this.outputNodeBySource.delete(normalized);
     this.loggedFirstPlayoutStartBySource.delete(normalized);
     this.liveMultiSourceStateBySource.delete(normalized);
@@ -3177,7 +3186,27 @@ export class GroupCallAudioReceiveEngine {
   ): Promise<DmVoiceGcallInboundPlayout> {
     const existing = this.playouts.get(sourceAddr);
     if (existing) return existing;
+    const pending = this.pendingPlayouts.get(sourceAddr);
+    if (pending) return pending;
+    const createPromise = this.createPlayout(sourceAddr);
+    this.pendingPlayouts.set(sourceAddr, createPromise);
+    try {
+      return await createPromise;
+    } finally {
+      if (this.pendingPlayouts.get(sourceAddr) === createPromise) {
+        this.pendingPlayouts.delete(sourceAddr);
+      }
+    }
+  }
+
+  private async createPlayout(
+    sourceAddr: string
+  ): Promise<DmVoiceGcallInboundPlayout> {
+    const existing = this.playouts.get(sourceAddr);
+    if (existing) return existing;
     const ctx = await this.ensureAudioContext();
+    const existingAfterContext = this.playouts.get(sourceAddr);
+    if (existingAfterContext) return existingAfterContext;
     const output = ctx.createGain();
     output.gain.value = 1;
     output.connect(this.masterGain!);
