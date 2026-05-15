@@ -120,13 +120,15 @@ export function createGcallJitterBurstHeadroomState(): GcallJitterBurstHeadroomS
 
 export function applyGcallJitterBurstHeadroom(
   tuning: { jitterBufferSize: number; jitterStartBufferSize: number },
-  level: GcallJitterBurstHeadroomLevel
+  level: GcallJitterBurstHeadroomLevel,
+  opts?: { boostStartThreshold?: boolean }
 ): { jitterBufferSize: number; jitterStartBufferSize: number } {
   if (level <= 0) return tuning;
+  const boostStartThreshold = opts?.boostStartThreshold ?? true;
   const bufferBoost =
     level >= 3 ? 28 : level >= 2 ? 8 : 4;
   const startBoost =
-    level >= 3 ? 8 : level >= 2 ? 4 : 2;
+    boostStartThreshold ? (level >= 3 ? 8 : level >= 2 ? 4 : 2) : 0;
   return {
     jitterBufferSize: tuning.jitterBufferSize + bufferBoost,
     jitterStartBufferSize: tuning.jitterStartBufferSize + startBoost,

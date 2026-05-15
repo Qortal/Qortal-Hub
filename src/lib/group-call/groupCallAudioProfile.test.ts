@@ -119,6 +119,16 @@ describe('gcall jitter burst headroom', () => {
     ).toEqual({ jitterBufferSize: 40, jitterStartBufferSize: 18 });
   });
 
+  it('can expand burst capacity without raising the ready threshold', () => {
+    expect(
+      applyGcallJitterBurstHeadroom(
+        { jitterBufferSize: 12, jitterStartBufferSize: 11 },
+        2,
+        { boostStartThreshold: false }
+      )
+    ).toEqual({ jitterBufferSize: 20, jitterStartBufferSize: 11 });
+  });
+
   it('arms burst headroom on direct trim pressure', () => {
     const state = createGcallJitterBurstHeadroomState();
     const armed = stepGcallJitterBurstHeadroom({

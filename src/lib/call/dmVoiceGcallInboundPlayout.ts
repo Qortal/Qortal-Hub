@@ -1267,7 +1267,11 @@ export class DmVoiceGcallInboundPlayout {
         : getEffectiveJitterTuning(tuning, 'low-latency');
     const eff = applyGcallJitterBurstHeadroom(
       base,
-      this.jitterBurstHeadroomState.level
+      this.jitterBurstHeadroomState.level,
+      {
+        boostStartThreshold:
+          !(activeSourceCount === 1 && this.hasObservedPlayoutStart),
+      }
     );
     jb.applyJitterTuning(eff);
     jb.setSoftUnprimeMs(
