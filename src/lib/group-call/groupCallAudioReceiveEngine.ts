@@ -258,6 +258,13 @@ const GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS = 900;
 const GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS = 14_000;
 const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN = 148;
 const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS = -4;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_JITTER_FRAMES_MIN = 14;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_PREBUFFER_FRAMES_MAX = 2;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_CONCEALMENT_EMA_MAX = 0.035;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MISSING_EMA_MAX = 0.04;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_RATE_EMA_MIN = 0.998;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_TARGET_MS = 145;
+const GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MAX_EXTRA_HOLD_FRAMES = 0;
 const GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX = 120;
 
 interface LiveMultiSourceState {
@@ -1996,6 +2003,36 @@ export class GroupCallAudioReceiveEngine {
             state.missingFrameEma >=
               GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_MISSING_EMA_MIN ||
             state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX);
+        const cleanBufferedBacklogEscape =
+          state.lastJitterHasReadyFrame &&
+          state.lastJitterBufferedFrames >=
+            GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_JITTER_FRAMES_MIN &&
+          state.preProcessBufferedFrames <=
+            GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_PREBUFFER_FRAMES_MAX &&
+          !state.lastConcealmentUsed &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_CONCEALMENT_EMA_MAX &&
+          state.missingFrameEma <=
+            GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MISSING_EMA_MAX &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_RATE_EMA_MIN &&
+          !(
+            state.severeSingleSourceHoldUntilMs > nowMs &&
+            state.currentReceiveProfile === 'repair-collapse'
+          ) &&
+          !damageBurstHold &&
+          !recentDamageHold;
+        if (cleanBufferedBacklogEscape) {
+          state.severeSingleSourceHoldUntilMs = 0;
+          state.repairCollapseHoldUntilMs = 0;
+          state.repairHeavyHoldUntilMs = 0;
+          state.damageBurstHoldUntilMs = 0;
+          state.recentDamageHoldUntilMs = 0;
+          state.bufferedNotReadyHoldUntilMs = 0;
+          state.persistentLeanHoldUntilMs = 0;
+          state.silentLeanHoldUntilMs = 0;
+          state.postRecoveryHoldUntilMs = 0;
+        }
         const diagnosticBufferedNotReadyPressure =
           !state.lastJitterHasReadyFrame &&
           !state.lastConcealmentUsed &&
@@ -2351,8 +2388,10 @@ export class GroupCallAudioReceiveEngine {
           currentReady: state.lastJitterHasReadyFrame,
           recoveryModeActive,
           postFailoverRootProfileActive,
-          severeSingleSourcePressure,
-          severeSingleSourceHold: effectiveSevereSingleSourceHold,
+          severeSingleSourcePressure:
+            severeSingleSourcePressure && !cleanBufferedBacklogEscape,
+          severeSingleSourceHold:
+            effectiveSevereSingleSourceHold && !cleanBufferedBacklogEscape,
           repairCollapseHold: effectiveRepairCollapseHold,
           repairCollapsePressure,
           repairHeavyHold,
@@ -2364,13 +2403,18 @@ export class GroupCallAudioReceiveEngine {
             damageBurstRepairPressure || recentDamageRepairPressure,
           bufferedNotReadyHold,
           bufferedNotReadyPressure,
-          persistentLeanHold,
-          persistentLeanPressure,
-          silentLeanHold,
-          silentLeanPressure,
-          postRecoveryHold: postRecoveryHold && !steadyHealthyEscape,
+          persistentLeanHold: persistentLeanHold && !cleanBufferedBacklogEscape,
+          persistentLeanPressure:
+            persistentLeanPressure && !cleanBufferedBacklogEscape,
+          silentLeanHold: silentLeanHold && !cleanBufferedBacklogEscape,
+          silentLeanPressure: silentLeanPressure && !cleanBufferedBacklogEscape,
+          postRecoveryHold:
+            postRecoveryHold &&
+            !steadyHealthyEscape &&
+            !cleanBufferedBacklogEscape,
           singleSourcePressure:
             (singleSourcePressure || sustainedDamagePressure) &&
+            !cleanBufferedBacklogEscape &&
             !steadyHealthyEscape,
           mildSteadyAssist:
             (mildSteadyAssist ||
@@ -2378,8 +2422,10 @@ export class GroupCallAudioReceiveEngine {
               recentDamageRepairPressure ||
               currentUnderTargetPressure ||
               currentSlowRatePressure) &&
+            !cleanBufferedBacklogEscape &&
             !steadyHealthyEscape,
-          steadyHealthyEscape,
+          steadyHealthyEscape:
+            steadyHealthyEscape || cleanBufferedBacklogEscape,
         });
         this.setReceiveProfile(sourceAddr, state, profile, nowMs);
         const shouldHoldWeakLeanRecoveryMode =
@@ -2458,6 +2504,15 @@ export class GroupCallAudioReceiveEngine {
         if (floorMs !== null) {
           targetMs = Math.max(targetMs, floorMs);
         }
+        if (cleanBufferedBacklogEscape) {
+          targetMs = Math.min(
+            targetMs,
+            Math.max(
+              staticTargetMs,
+              GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_TARGET_MS
+            )
+          );
+        }
         const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs(
           {
             currentAdaptiveMaxTargetMs: targetMs,
@@ -2478,8 +2533,9 @@ export class GroupCallAudioReceiveEngine {
           2,
           Math.round(targetMs / OPUS_FRAME_DURATION_MS)
         );
-        const maxExtraHoldFrames =
-          profile === 'collapse-recovery' || profile === 'repair-collapse'
+        const maxExtraHoldFrames = cleanBufferedBacklogEscape
+          ? GCALL_SINGLE_SOURCE_CLEAN_BACKLOG_ESCAPE_MAX_EXTRA_HOLD_FRAMES
+          : profile === 'collapse-recovery' || profile === 'repair-collapse'
             ? GCALL_SINGLE_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES
             : profile === 'repair-heavy-connected'
               ? GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MAX_EXTRA_HOLD_FRAMES
