@@ -256,6 +256,7 @@ export function computeStarvedBacklogDrainBudget(opts: {
   maxEntries: number;
   activeSourceCount?: number;
   adaptiveNetworkMode?: 'low-latency' | 'recovery';
+  burstHeadroomActive?: boolean;
   targetPlayoutMs?: number;
   playoutBufferedMs: number;
   preProcessBufferedMs: number;
@@ -269,8 +270,10 @@ export function computeStarvedBacklogDrainBudget(opts: {
     Number.isFinite(opts.preProcessBufferedMs) ? opts.preProcessBufferedMs : 0
   );
   if (pcmBufferedMs > GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS) return 1;
-  const recoverySingleRemote =
-    opts.activeSourceCount === 1 && opts.adaptiveNetworkMode === 'recovery';
+  const targetDrainSingleRemote =
+    opts.activeSourceCount === 1 &&
+    (opts.adaptiveNetworkMode === 'recovery' ||
+      Boolean(opts.burstHeadroomActive));
   const targetFrames =
     Number.isFinite(opts.targetPlayoutMs) && (opts.targetPlayoutMs ?? 0) > 0
       ? Math.max(
@@ -280,11 +283,11 @@ export function computeStarvedBacklogDrainBudget(opts: {
         )
       : 0;
   const overTargetFrames =
-    recoverySingleRemote && targetFrames > 0
+    targetDrainSingleRemote && targetFrames > 0
       ? opts.bufferedFrames - targetFrames
       : 0;
   if (
-    recoverySingleRemote &&
+    targetDrainSingleRemote &&
     overTargetFrames >= GCALL_STARVED_BACKLOG_DRAIN_TARGET_OVERAGE_FRAMES
   ) {
     return Math.min(
@@ -993,6 +996,7 @@ export class DmVoiceGcallInboundPlayout {
           maxEntries: jb.getMaxEntries(),
           activeSourceCount,
           adaptiveNetworkMode: this.lastJitterAdaptiveMode ?? 'low-latency',
+          burstHeadroomActive: this.jitterBurstHeadroomState.level > 0,
           targetPlayoutMs,
           playoutBufferedMs: this.latestPlayoutBufferedMs,
           preProcessBufferedMs: this.latestPreProcessBufferedMs,

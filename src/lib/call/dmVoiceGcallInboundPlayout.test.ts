@@ -297,6 +297,40 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
     ).toBe(1);
   });
 
+  it('keeps target-based drain active after recovery exits while burst headroom remains armed', () => {
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 23,
+        maxEntries: 20,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        burstHeadroomActive: true,
+        targetPlayoutMs: 120,
+        playoutBufferedMs: 21,
+        preProcessBufferedMs: 21,
+        outsideBandUnder: false,
+        concealmentUsed: false,
+      })
+    ).toBe(4);
+
+    expect(
+      computeStarvedBacklogDrainBudget({
+        hasReadyFrame: true,
+        bufferedFrames: 23,
+        maxEntries: 20,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        burstHeadroomActive: false,
+        targetPlayoutMs: 120,
+        playoutBufferedMs: 21,
+        preProcessBufferedMs: 21,
+        outsideBandUnder: false,
+        concealmentUsed: false,
+      })
+    ).toBe(1);
+  });
+
   it('holds a 2-frame steady reserve for post-start 1:1 recovery only while the source is recently pushing and already ready', () => {
     expect(
       computeN1SteadyPrimedHoldFrames({
