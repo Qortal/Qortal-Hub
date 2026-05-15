@@ -110,7 +110,7 @@ const GCALL_BURST_GAP_RECOVERY_GAP_MS = 900;
 const GCALL_BURST_GAP_RECOVERY_WINDOW_MS = 1_800;
 const GCALL_BURST_GAP_RECOVERY_FRAME_TRIGGER = 80;
 const GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS = 500;
-const GCALL_BURST_GAP_RECOVERY_KEEP_FRAMES = 12;
+const GCALL_BURST_GAP_RECOVERY_KEEP_FRAMES = 8;
 const GCALL_BURST_GAP_RECOVERY_COOLDOWN_MS = 2_500;
 const GCALL_STARVED_BACKLOG_DRAIN_PCM_MAX_MS = 24;
 const GCALL_STARVED_BACKLOG_DRAIN_MIN_FRAMES = 18;
@@ -153,6 +153,12 @@ export function shouldCommitBurstGapRecovery(opts: {
     fasterThanRealtime &&
     hasDamageEvidence
   );
+}
+
+export function shouldResetDecodedPlayoutStateAfterBurstGapRecovery(opts: {
+  droppedFrames: number;
+}): boolean {
+  return opts.droppedFrames <= 0;
 }
 
 export function computeStarvedBacklogDrainBudget(opts: {
@@ -1037,11 +1043,28 @@ export class DmVoiceGcallInboundPlayout {
     this.lastBurstGapDroppedFrames = dropped;
     this.lastBurstGapMs = this.burstGapWatchGapMs;
     this.lastBurstGapResetAtMs = nowMs;
-    this.resetDecodedPlayoutStateForBurstGap();
+    const shouldResetDecodedPlayout =
+      shouldResetDecodedPlayoutStateAfterBurstGapRecovery({
+        droppedFrames: dropped,
+      });
+    if (shouldResetDecodedPlayout) {
+      this.resetDecodedPlayoutStateForBurstGap();
+    } else {
+      this.jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
+      this.jitterTrimmedFramesAtLastHeadroomStep =
+        this.jitterPushTrimmedFrames;
+      this.jitterPushDepthHighWaterSinceLastHeadroomStep =
+        jb.getBufferedFrames();
+      this.lastJitterAdaptiveMode = null;
+      this.lastJitterBurstHeadroomReason = 'burst-gap-latency-shed';
+      this.syncJitterGeometryFromMetrics(false);
+    }
     jb.forcePrimeForRecoveryEscape(GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS, {
       clearBurstRecoveryHold: true,
     });
-    this.lastJitterBurstHeadroomReason = 'burst-gap-reanchor';
+    if (shouldResetDecodedPlayout) {
+      this.lastJitterBurstHeadroomReason = 'burst-gap-reanchor';
+    }
     this.burstGapWatchStartedAtMs = 0;
     this.burstGapWatchFrames = 0;
     this.burstGapWatchGapMs = 0;

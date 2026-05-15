@@ -4,6 +4,7 @@ import {
   computeStarvedBacklogDrainBudget,
   decideReadyStallForcePrime,
   shouldCommitBurstGapRecovery,
+  shouldResetDecodedPlayoutStateAfterBurstGapRecovery,
   shouldStartBurstGapRecoveryWatch,
 } from './dmVoiceGcallInboundPlayout';
 
@@ -79,6 +80,20 @@ describe('DmVoiceGcallInboundPlayout startup force-prime', () => {
         pcmStarved: false,
       })
     ).toBe(false);
+  });
+
+  it('uses burst-gap recovery as latency shedding when old jitter frames were dropped', () => {
+    expect(
+      shouldResetDecodedPlayoutStateAfterBurstGapRecovery({
+        droppedFrames: 24,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldResetDecodedPlayoutStateAfterBurstGapRecovery({
+        droppedFrames: 0,
+      })
+    ).toBe(true);
   });
 
   it('accelerates drain only when ready Opus backlog is high and PCM is starved', () => {
