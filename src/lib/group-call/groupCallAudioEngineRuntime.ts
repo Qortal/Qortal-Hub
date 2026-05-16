@@ -311,6 +311,7 @@ type OutboundMediaTargetDiagnostics = {
   attempts: number;
   successes: number;
   failures: number;
+  firstAttemptAtMs: number;
   lastAttemptAtMs: number;
   lastSuccessAtMs: number;
   lastFailureAtMs: number;
@@ -1900,6 +1901,7 @@ export class GroupCallAudioEngineRuntime {
       attempts: 0,
       successes: 0,
       failures: 0,
+      firstAttemptAtMs: 0,
       lastAttemptAtMs: 0,
       lastSuccessAtMs: 0,
       lastFailureAtMs: 0,
@@ -2673,6 +2675,17 @@ export class GroupCallAudioEngineRuntime {
     return this.filterBootstrapOnlyMediaTargets([...new Set(targets)]);
   }
 
+  private getMediaTargetSettleAnchorMs(address: string): number {
+    const firstAttemptAtMs =
+      this.outboundTargetDiagnostics.get(address)?.firstAttemptAtMs ?? 0;
+    return Math.max(this.lastJoinSuccessAtMs, firstAttemptAtMs);
+  }
+
+  private getMediaTargetSettleAgeMs(address: string, now: number): number {
+    const anchorMs = this.getMediaTargetSettleAnchorMs(address);
+    return anchorMs > 0 ? now - anchorMs : Number.POSITIVE_INFINITY;
+  }
+
   private maybeRequestZeroInboundMediaRecovery(
     metrics: GroupCallMetricsSnapshot
   ): void {
@@ -2697,6 +2710,18 @@ export class GroupCallAudioEngineRuntime {
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
     for (const address of uniqueTargets) {
+      const settleAgeMs = this.getMediaTargetSettleAgeMs(address, now);
+      if (settleAgeMs < LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS) {
+        this.recordDiagEvent('zero-inbound-media-recovery-suppressed-startup', {
+          roomId: this.snapshot.roomId,
+          peerAddress: address,
+          settleAgeMs,
+          graceMs: LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS,
+          outboundSendSuccesses: this.outboundSendSuccesses,
+          packetsReceived: metrics.packetsReceived,
+        });
+        continue;
+      }
       const lastAt =
         this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
       if (
@@ -5440,10 +5465,7 @@ export class GroupCallAudioEngineRuntime {
       Date.now() - lastUnreadyAt <= 30_000;
     if (!linkClosedOrTimedOut && !linkCurrentlyUnready) return;
     const nowMs = Date.now();
-    const startupAgeMs =
-      this.lastJoinSuccessAtMs > 0
-        ? nowMs - this.lastJoinSuccessAtMs
-        : Number.POSITIVE_INFINITY;
+    const startupAgeMs = this.getMediaTargetSettleAgeMs(peer, nowMs);
     const linkStillSettling =
       diagnostics.linkOpening === true ||
       (typeof diagnostics.linkEstablishPendingAgeMs === 'number' &&
@@ -5459,7 +5481,7 @@ export class GroupCallAudioEngineRuntime {
         roomId: this.snapshot.roomId,
         reason,
         peer: truncateGcallDiagAddress(peer),
-        sinceJoinMs: startupAgeMs,
+        settleAgeMs: startupAgeMs,
         graceMs: TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS,
         linkOpening: diagnostics.linkOpening ?? null,
         linkEstablishPendingAgeMs: diagnostics.linkEstablishPendingAgeMs ?? null,
@@ -7985,6 +8007,9 @@ export class GroupCallAudioEngineRuntime {
       const diag = this.getOutboundTargetDiagnostics(target);
       diag.attempts++;
       diag.lastAttemptAtMs = Date.now();
+      if (diag.firstAttemptAtMs <= 0) {
+        diag.firstAttemptAtMs = diag.lastAttemptAtMs;
+      }
       this.outboundSendAttempts++;
       this.outboundLastSendAttemptAtMs = diag.lastAttemptAtMs;
       return diag;
