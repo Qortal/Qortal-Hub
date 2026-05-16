@@ -650,6 +650,8 @@ const LOW_INBOUND_MEDIA_RECOVERY_MAX_INBOUND_TO_OUTBOUND_RATIO = 0.35;
 const LOW_INBOUND_MEDIA_RECOVERY_UNDERTARGET_MIN = 0.12;
 const LOW_INBOUND_MEDIA_RECOVERY_RATE_BELOW_097_MIN = 0.1;
 const LOW_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 100;
+const LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS = 12_000;
+const TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS = 8_000;
 const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_INCOMING_PACKET_MS = 1_000;
 const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_BRIDGE_TO_RENDERER_MS = 750;
 const BURSTY_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 80;
@@ -2767,6 +2769,23 @@ export class GroupCallAudioEngineRuntime {
     const uniqueTargets = this.getMediaRecoveryTargets();
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
+    if (
+      this.lastJoinSuccessAtMs > 0 &&
+      now - this.lastJoinSuccessAtMs <
+        LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS
+    ) {
+      this.recordDiagEvent('low-inbound-media-recovery-suppressed-startup', {
+        roomId: this.snapshot.roomId,
+        sinceJoinMs: now - this.lastJoinSuccessAtMs,
+        graceMs: LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS,
+        outboundSendSuccesses: this.outboundSendSuccesses,
+        packetsReceived: metrics.packetsReceived,
+        inboundToOutboundRatio,
+        concealmentTicks: metrics.concealmentTicks,
+        missingFrames: metrics.missingFrames,
+      });
+      return;
+    }
     for (const address of uniqueTargets) {
       const lastAt =
         this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
@@ -5420,6 +5439,34 @@ export class GroupCallAudioEngineRuntime {
       lastUnreadyAt > 0 &&
       Date.now() - lastUnreadyAt <= 30_000;
     if (!linkClosedOrTimedOut && !linkCurrentlyUnready) return;
+    const nowMs = Date.now();
+    const startupAgeMs =
+      this.lastJoinSuccessAtMs > 0
+        ? nowMs - this.lastJoinSuccessAtMs
+        : Number.POSITIVE_INFINITY;
+    const linkStillSettling =
+      diagnostics.linkOpening === true ||
+      (typeof diagnostics.linkEstablishPendingAgeMs === 'number' &&
+        diagnostics.linkEstablishPendingAgeMs <
+          TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS) ||
+      (lastUnreadyAt > 0 &&
+        nowMs - lastUnreadyAt < TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS);
+    if (
+      startupAgeMs < TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS &&
+      linkStillSettling
+    ) {
+      this.recordDiagEvent('two-party-link-resync-suppressed-startup', {
+        roomId: this.snapshot.roomId,
+        reason,
+        peer: truncateGcallDiagAddress(peer),
+        sinceJoinMs: startupAgeMs,
+        graceMs: TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS,
+        linkOpening: diagnostics.linkOpening ?? null,
+        linkEstablishPendingAgeMs: diagnostics.linkEstablishPendingAgeMs ?? null,
+        lastLinkUnreadyAgeMs: lastUnreadyAt > 0 ? nowMs - lastUnreadyAt : null,
+      });
+      return;
+    }
     void this.forceTwoPartyDeterministicTopologyResync(
       peer,
       `link-recovery:${reason || 'unready'}`

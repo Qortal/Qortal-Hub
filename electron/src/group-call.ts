@@ -311,6 +311,12 @@ const GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS = 8_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS = 45_000;
 const GC_RETICULUM_AUDIO_LINK_STICKY_MS = 15_000;
 const GC_RETICULUM_AUDIO_DUPLICATE_LINK_CLOSE_GRACE_MS = 7_500;
+/**
+ * During first contact, let the deterministic link owner open first. If that
+ * does not produce an incoming/established link quickly, the non-owner falls
+ * back to opening normally so link establishment still recovers.
+ */
+const GC_RETICULUM_AUDIO_OWNER_OPEN_GRACE_MS = 4_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
@@ -804,6 +810,7 @@ interface ReticulumAudioAwaitingRouteState {
 
 interface ReticulumAudioPeerState {
   address: string;
+  createdAtMs: number;
   peerPresenceHash: string;
   peerDestinationHash: string;
   transport: ReticulumMediaTransportKind;
@@ -4838,7 +4845,7 @@ export class GroupCallManager extends EventEmitter {
     const until = Date.now() + Math.max(0, delayMs);
     const existingUntil =
       this.reticulumAudioOpenDeferUntilByAddress.get(address) ?? 0;
-    if (existingUntil >= until) return;
+    if (existingUntil > Date.now()) return;
     this.reticulumAudioOpenDeferUntilByAddress.set(address, until);
     const existingTimer =
       this.reticulumAudioOpenDeferTimersByAddress.get(address);
@@ -4856,6 +4863,25 @@ export class GroupCallManager extends EventEmitter {
     );
     timer.unref?.();
     this.reticulumAudioOpenDeferTimersByAddress.set(address, timer);
+  }
+
+  private shouldDeferReticulumAudioOpenForOwnerGrace(
+    address: string,
+    state: ReticulumAudioPeerState,
+    now = Date.now()
+  ): boolean {
+    if (state.established || state.linkId || state.opening) return false;
+    const localAddress = this.getReticulumAudioLocalAddressForState(state);
+    if (!localAddress) return false;
+    if (this.isLocalAddressReticulumAudioLinkOwner(localAddress, address)) {
+      return false;
+    }
+    const createdAtMs = state.createdAtMs || now;
+    const remainingMs =
+      createdAtMs + GC_RETICULUM_AUDIO_OWNER_OPEN_GRACE_MS - now;
+    if (remainingMs <= 0) return false;
+    this.deferReticulumAudioOpenForAddress(address, remainingMs);
+    return true;
   }
 
   private isReticulumAudioOpenDeferred(address: string): boolean {
@@ -6012,6 +6038,9 @@ export class GroupCallManager extends EventEmitter {
     ) {
       return;
     }
+    if (this.shouldDeferReticulumAudioOpenForOwnerGrace(address, state)) {
+      return;
+    }
     state.opening = true;
     state.linkEstablishLastAttemptAtMs = Date.now();
     state.linkOpenAttempts++;
@@ -6195,6 +6224,7 @@ export class GroupCallManager extends EventEmitter {
     if (!state) {
       state = {
         address,
+        createdAtMs: Date.now(),
         peerPresenceHash,
         peerDestinationHash: '',
         transport,
@@ -7304,6 +7334,7 @@ export class GroupCallManager extends EventEmitter {
       if (!state) {
         state = {
           address,
+          createdAtMs: Date.now(),
           peerPresenceHash: desired.peerPresenceHash,
           peerDestinationHash: '',
           transport: this.getEffectiveReticulumAudioTransport(null),
