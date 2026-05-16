@@ -30,6 +30,43 @@ export type AudioSurfaceCommand =
       type: 'set-audio-quality-profile';
       profile: 'low-latency' | 'high-stability';
     }
+  | {
+      type: 'start-direct-voice-receive';
+      roomId: string;
+      peerAddress: string;
+      roomKey: ArrayBuffer | Uint8Array;
+      outputDeviceId?: string | null;
+      hearCall?: boolean;
+      profile?: 'low-latency' | 'high-stability';
+    }
+  | {
+      type: 'update-direct-voice-receive';
+      outputDeviceId?: string | null;
+      hearCall?: boolean;
+      profile?: 'low-latency' | 'high-stability';
+    }
+  | { type: 'stop-direct-voice-receive' }
+  | {
+      type: 'start-direct-voice-media';
+      roomId: string;
+      peerAddress: string;
+      localAddress: string;
+      roomKey: ArrayBuffer | Uint8Array;
+      inputDeviceId?: string | null;
+      outputDeviceId?: string | null;
+      muted?: boolean;
+      hearCall?: boolean;
+      profile?: 'low-latency' | 'high-stability';
+    }
+  | {
+      type: 'update-direct-voice-media';
+      inputDeviceId?: string | null;
+      outputDeviceId?: string | null;
+      muted?: boolean;
+      hearCall?: boolean;
+      profile?: 'low-latency' | 'high-stability';
+    }
+  | { type: 'stop-direct-voice-media' }
   | { type: 'clear-join-error' };
 
 export type AudioSurfaceResponseLike = {

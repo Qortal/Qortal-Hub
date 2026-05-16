@@ -121,12 +121,16 @@ describe('useVoiceCall', () => {
   });
 
   it('auto-rejects direct call:incoming when caller is on blocked address list', async () => {
-    let eventHandler: ((event: string, payload: unknown) => void | Promise<void>) | null = null;
+    let eventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
     const callApi = {
-      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-        eventHandler = cb;
-        return vi.fn();
-      }),
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          eventHandler = cb;
+          return vi.fn();
+        }
+      ),
       setLocalAddresses: vi.fn(async () => ({ success: true })),
       reject: vi.fn(async () => ({ success: true })),
     };
@@ -172,12 +176,16 @@ describe('useVoiceCall', () => {
   });
 
   it('auto-rejects direct call:incoming when caller is not in persisted DM friends', async () => {
-    let eventHandler: ((event: string, payload: unknown) => void | Promise<void>) | null = null;
+    let eventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
     const callApi = {
-      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-        eventHandler = cb;
-        return vi.fn();
-      }),
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          eventHandler = cb;
+          return vi.fn();
+        }
+      ),
       setLocalAddresses: vi.fn(async () => ({ success: true })),
       reject: vi.fn(async () => ({ success: true })),
     };
@@ -224,12 +232,16 @@ describe('useVoiceCall', () => {
   });
 
   it('allows direct call:incoming when caller is in persisted DM friends', async () => {
-    let eventHandler: ((event: string, payload: unknown) => void | Promise<void>) | null = null;
+    let eventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
     const callApi = {
-      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-        eventHandler = cb;
-        return vi.fn();
-      }),
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          eventHandler = cb;
+          return vi.fn();
+        }
+      ),
       setLocalAddresses: vi.fn(async () => ({ success: true })),
       reject: vi.fn(async () => ({ success: true })),
     };
@@ -276,7 +288,9 @@ describe('useVoiceCall', () => {
   });
 
   it('accepts a direct call without prewarming the main renderer audio context', async () => {
-    let eventHandler: ((event: string, payload: unknown) => void | Promise<void>) | null = null;
+    let eventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
     const resume = vi.fn(async () => {});
     class MockAudioContext {
       state: AudioContextState = 'suspended';
@@ -293,10 +307,12 @@ describe('useVoiceCall', () => {
     }
 
     const callApi = {
-      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-        eventHandler = cb;
-        return vi.fn();
-      }),
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          eventHandler = cb;
+          return vi.fn();
+        }
+      ),
       setLocalAddresses: vi.fn(async () => ({ success: true })),
       accept: vi.fn(async () => ({ success: true })),
       hangup: vi.fn(async () => ({ success: true })),
@@ -371,10 +387,12 @@ describe('useVoiceCall', () => {
       | null = null;
 
     const callApi = {
-      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-        callEventHandler = cb;
-        return vi.fn();
-      }),
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          callEventHandler = cb;
+          return vi.fn();
+        }
+      ),
       setLocalAddresses: vi.fn(async () => ({ success: true })),
       accept: vi.fn(async () => ({ success: true })),
       hangup: vi.fn(async () => ({ success: true })),
@@ -400,10 +418,12 @@ describe('useVoiceCall', () => {
       },
       call: callApi,
       groupCall: {
-        onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-          gcallEventHandler = cb;
-          return vi.fn();
-        }),
+        onEvent: vi.fn(
+          (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+            gcallEventHandler = cb;
+            return vi.fn();
+          }
+        ),
         join,
         setLocalAddresses: vi.fn(async () => {}),
         requestPeerMediaRecovery,
@@ -491,10 +511,12 @@ describe('useVoiceCall', () => {
       | null = null;
 
     const callApi = {
-      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-        callEventHandler = cb;
-        return vi.fn();
-      }),
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          callEventHandler = cb;
+          return vi.fn();
+        }
+      ),
       setLocalAddresses: vi.fn(async () => ({ success: true })),
       initiate: vi.fn(async () => ({ success: true })),
       hangup: vi.fn(async () => ({ success: true })),
@@ -532,10 +554,12 @@ describe('useVoiceCall', () => {
       },
       call: callApi,
       groupCall: {
-        onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
-          gcallEventHandler = cb;
-          return vi.fn();
-        }),
+        onEvent: vi.fn(
+          (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+            gcallEventHandler = cb;
+            return vi.fn();
+          }
+        ),
         join,
         setLocalAddresses: vi.fn(async () => {}),
         requestPeerMediaRecovery: vi.fn(async () => ({ success: true })),
@@ -590,9 +614,10 @@ describe('useVoiceCall', () => {
     await waitFor(() =>
       expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'start-direct-voice-receive',
+          type: 'start-direct-voice-media',
           roomId,
           peerAddress: peerAddr,
+          localAddress: myAddr,
           roomKey: expect.any(ArrayBuffer),
         })
       )
@@ -616,5 +641,122 @@ describe('useVoiceCall', () => {
     await waitFor(() => expect(sendKey).toHaveBeenCalled());
     expect(sendKey.mock.calls[0]?.[0]).toBe(roomId);
     expect(sendKey.mock.calls[0]?.[1]).toBe(peerAddr);
+  });
+
+  it('falls back to direct voice receive when audio-surface DM media start fails', async () => {
+    let callEventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
+
+    const callApi = {
+      onEvent: vi.fn(
+        (cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          callEventHandler = cb;
+          return vi.fn();
+        }
+      ),
+      setLocalAddresses: vi.fn(async () => ({ success: true })),
+      initiate: vi.fn(async () => ({ success: true })),
+      hangup: vi.fn(async () => ({ success: true })),
+    };
+    const join = vi.fn(async () => ({
+      success: true,
+      callSessionId: 'call-session',
+      mediaSessionGeneration: 1,
+    }));
+    const audioSurfaceSendCommand = vi.fn(
+      async (command: { type?: string }) => {
+        if (command.type === 'start-direct-voice-media') {
+          return { ok: false, error: 'surface-start-failed' };
+        }
+        return { ok: true };
+      }
+    );
+    const peerPublicKey = base58Encode(nacl.sign.keyPair().publicKey);
+
+    Object.assign(window as any, {
+      AudioContext: class MockAudioContext {
+        state: AudioContextState = 'running';
+        sampleRate = 48_000;
+        baseLatency = 0;
+        constructor(_: AudioContextOptions) {}
+        resume = vi.fn(async () => {});
+        close = vi.fn(async () => {
+          this.state = 'closed';
+        });
+      },
+      call: callApi,
+      groupCall: {
+        onEvent: vi.fn(() => vi.fn()),
+        join,
+        setLocalAddresses: vi.fn(async () => {}),
+        requestPeerMediaRecovery: vi.fn(async () => ({ success: true })),
+        sendKey: vi.fn(async () => ({ success: true })),
+        sendAudio: vi.fn(async () => ({ success: true })),
+      },
+      audioSurface: {
+        sendCommand: audioSurfaceSendCommand,
+      },
+      electronAPI: {
+        ...electronApiWithGoodReadiness(),
+        reticulumGetLocalDestinationHash: vi.fn(async () => ({
+          destinationHash: 'c'.repeat(32),
+        })),
+        reticulumGetLocalIdentityPublicKeyBase64: vi.fn(async () => ({
+          publicKeyBase64: 'cmV0aWN1bHVtLWlkZW50aXR5',
+        })),
+      },
+      sendMessage: vi.fn(async () => ({ signature: 'sig' })),
+    });
+
+    const myAddr = 'Qme';
+    const peerAddr = 'Qbuddy';
+    const chatId = buildDirectVoiceCallChatId(myAddr, peerAddr);
+    const roomId = await buildDmVoiceRoomId(chatId);
+    const store = createStore();
+    store.set(userInfoAtom, { address: myAddr, publicKey: 'pub' });
+    store.set(blockedAddressesAtom, {});
+    store.set(dmFriendsByAddressAtom, {
+      [peerAddr]: { publicKey: peerPublicKey, addedAt: 1 },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Provider store={store}>{children}</Provider>
+    );
+
+    const { result } = renderHook(() => useVoiceCall(), { wrapper });
+
+    await act(async () => {
+      await result.current.initiateCall(peerAddr, chatId, async () => ({
+        signature: 'sig',
+        publicKey: 'pub',
+      }));
+    });
+    const callId = callApi.initiate.mock.calls[0]?.[5] as string;
+
+    await act(async () => {
+      await callEventHandler?.('call:accepted', { callId });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() =>
+      expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'start-direct-voice-media',
+          roomId,
+          peerAddress: peerAddr,
+          localAddress: myAddr,
+        })
+      )
+    );
+    await waitFor(() =>
+      expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'start-direct-voice-receive',
+          roomId,
+          peerAddress: peerAddr,
+          roomKey: expect.any(ArrayBuffer),
+        })
+      )
+    );
   });
 });

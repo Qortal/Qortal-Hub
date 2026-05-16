@@ -992,6 +992,84 @@ describe('GroupCallAudioEngineRuntime', () => {
     const decoded = decodeAudioPacket(sentPacket, roomKey);
     expect(decoded?.sourceAddr).toBe('Qlocal');
     expect(decoded?.vad).toBe(true);
+
+    await runtime.handleCommand({ type: 'stop-direct-voice-media' });
+  });
+
+  it('runs direct voice media on a separate sender and targets only the DM peer', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const roomKey = new Uint8Array(32).fill(5);
+
+    const response = await runtime.handleCommand({
+      type: 'start-direct-voice-media',
+      roomId: 'dmv:abc123abc123abc123',
+      peerAddress: 'Qpeer',
+      localAddress: 'Qlocal',
+      roomKey,
+      inputDeviceId: null,
+      outputDeviceId: null,
+      muted: false,
+      hearCall: true,
+      profile: 'low-latency',
+    });
+    expect(response).toEqual({
+      ok: true,
+      payload: { usingAudioSurfaceMedia: true },
+    });
+
+    latestCapturePort?.onmessage?.({
+      data: {
+        frame: new Float32Array(960).fill(0.25),
+        vad: true,
+      },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sendAudio).toHaveBeenCalledTimes(1);
+    expect(sendAudio).toHaveBeenCalledWith(
+      'dmv:abc123abc123abc123',
+      'Qpeer',
+      expect.any(Uint8Array),
+      expect.objectContaining({ rendererSendAtWallMs: expect.any(Number) })
+    );
+    const sentPacket = sendAudio.mock.calls[0]?.[2] as Uint8Array;
+    const decoded = decodeAudioPacket(sentPacket, roomKey);
+    expect(decoded?.sourceAddr).toBe('Qlocal');
+    expect(decoded?.vad).toBe(true);
+  });
+
+  it('keeps group mute separate from direct voice media mute', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const roomKey = new Uint8Array(32).fill(6);
+
+    await runtime.handleCommand({
+      type: 'start-direct-voice-media',
+      roomId: 'dmv:def456def456def456',
+      peerAddress: 'Qpeer',
+      localAddress: 'Qlocal',
+      roomKey,
+      muted: false,
+    });
+    await runtime.handleCommand({ type: 'set-muted', muted: true });
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array(960).fill(0.25), vad: true },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendAudio).toHaveBeenCalledTimes(1);
+
+    await runtime.handleCommand({
+      type: 'update-direct-voice-media',
+      muted: true,
+    });
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array(960).fill(0.25), vad: true },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendAudio).toHaveBeenCalledTimes(1);
+
+    await runtime.handleCommand({ type: 'stop-direct-voice-media' });
   });
 
   it('drops group audio that resolves to the local address before decode', async () => {

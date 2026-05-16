@@ -42,7 +42,11 @@ import {
 } from './gcallAudioSurfaceTrace';
 import { encodeAudioPacketV2 } from './audioPacketCodec';
 import { buildMediaKeyCommitmentHex } from './mediaKeyCommitment';
-import { GroupCallAudioSenderEngine } from './groupCallAudioSenderEngine';
+import {
+  GroupCallAudioSenderEngine,
+  type GroupCallAudioSenderFrame,
+} from './groupCallAudioSenderEngine';
+import type { GroupCallAudioQualityProfile } from './groupCallAudioProfile';
 import {
   GroupCallAudioReceiveEngine,
   type GroupCallAudioReceivePayload,
@@ -787,6 +791,7 @@ export class GroupCallAudioEngineRuntime {
   private bootstrapRevisionApplied = 0;
   private readonly listeners = new Set<EventListener>();
   private readonly senderEngine = new GroupCallAudioSenderEngine();
+  private readonly directVoiceSenderEngine = new GroupCallAudioSenderEngine();
   private readonly receiveEngine: GroupCallAudioReceiveEngine;
   private directVoiceReceiveEngine: GroupCallAudioReceiveEngine | null = null;
   private snapshot: GroupCallControllerSnapshot =
@@ -798,7 +803,19 @@ export class GroupCallAudioEngineRuntime {
   private outputDeviceId: string | null = null;
   private directVoiceRoomId = '';
   private directVoicePeerAddress = '';
+  private directVoiceLocalAddress = '';
   private directVoiceRoomKey: Uint8Array | null = null;
+  private directVoiceSeq = 0;
+  private directVoiceMuted = false;
+  private directVoiceInputDeviceId: string | null = null;
+  private directVoiceOutputDeviceId: string | null = null;
+  private directVoiceHearCall = true;
+  private directVoiceProfile: GroupCallAudioQualityProfile = 'low-latency';
+  private directVoiceOutboundSendAttempts = 0;
+  private directVoiceOutboundSendSuccesses = 0;
+  private directVoiceOutboundSendFailures = 0;
+  private directVoiceOutboundLastFailureMessage: string | null = null;
+  private directVoiceOutboundLastSendAtMs = 0;
   private unsubscribeGroupCallEvents: (() => void) | null = null;
   private currentChatId = '';
   private topology: GroupCallTopology | null = null;
@@ -1015,6 +1032,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearParticipantRosterRefreshTimer();
     this.stopRendererThreadMonitor();
     void this.senderEngine.stop();
+    void this.directVoiceSenderEngine.stop();
     void this.receiveEngine.dispose();
     void this.directVoiceReceiveEngine?.dispose();
     this.directVoiceReceiveEngine = null;
@@ -1126,6 +1144,13 @@ export class GroupCallAudioEngineRuntime {
         case 'stop-direct-voice-receive':
           await this.stopDirectVoiceReceive();
           return { ok: true };
+        case 'start-direct-voice-media':
+          return await this.startDirectVoiceMedia(command);
+        case 'update-direct-voice-media':
+          return await this.updateDirectVoiceMedia(command);
+        case 'stop-direct-voice-media':
+          await this.stopDirectVoiceMedia();
+          return { ok: true };
         case 'clear-join-error':
           this.snapshot = { ...this.snapshot, gcallJoinError: null };
           this.emitSnapshot();
@@ -1185,7 +1210,212 @@ export class GroupCallAudioEngineRuntime {
     return { ok: true };
   }
 
+  private async startDirectVoiceMedia(
+    command: Extract<AudioSurfaceCommand, { type: 'start-direct-voice-media' }>
+  ): Promise<AudioSurfaceResponse> {
+    const roomId = command.roomId.trim();
+    const peerAddress = command.peerAddress.trim();
+    const localAddress = command.localAddress.trim();
+    const key = this.normalizeDirectVoiceRoomKey(command.roomKey);
+    if (!roomId || !peerAddress || !localAddress || !key) {
+      return { ok: false, error: 'invalid-direct-voice-media-config' };
+    }
+
+    const sessionChanged =
+      this.directVoiceRoomId &&
+      (this.directVoiceRoomId !== roomId ||
+        this.directVoicePeerAddress !== peerAddress ||
+        this.directVoiceLocalAddress !== localAddress);
+    if (sessionChanged) {
+      await this.directVoiceSenderEngine.stop();
+      await this.directVoiceReceiveEngine?.reset();
+    }
+
+    this.directVoiceRoomId = roomId;
+    this.directVoicePeerAddress = peerAddress;
+    this.directVoiceLocalAddress = localAddress;
+    this.directVoiceRoomKey = key;
+    this.resetDirectVoiceOutboundDiagnostics();
+    this.directVoiceInputDeviceId =
+      command.inputDeviceId !== undefined
+        ? command.inputDeviceId
+        : this.inputDeviceId;
+    this.directVoiceOutputDeviceId =
+      command.outputDeviceId !== undefined
+        ? command.outputDeviceId
+        : this.outputDeviceId;
+    this.directVoiceMuted = command.muted === true;
+    this.directVoiceHearCall = command.hearCall !== false;
+    this.directVoiceProfile =
+      command.profile ?? this.snapshot.audioQualityProfile;
+    this.ensureGroupCallSubscription();
+
+    await this.getDirectVoiceReceiveEngine().configure({
+      outputDeviceId: this.directVoiceOutputDeviceId,
+      hearCall: this.directVoiceHearCall,
+      profile: this.directVoiceProfile,
+    });
+    await this.directVoiceSenderEngine.startOrUpdate({
+      inputDeviceId: this.directVoiceInputDeviceId,
+      outputDeviceId: this.directVoiceOutputDeviceId,
+      muted: this.directVoiceMuted,
+      profile: this.directVoiceProfile,
+      onEncodedFrame: (frame) => {
+        void this.dispatchDirectVoiceEncodedFrame(frame);
+      },
+    });
+    const senderDiagnostics =
+      this.directVoiceSenderEngine.getDiagnosticsSnapshot();
+    if (typeof senderDiagnostics.unsupportedReason === 'string') {
+      const unsupportedReason = senderDiagnostics.unsupportedReason;
+      await this.stopDirectVoiceMedia();
+      return { ok: false, error: unsupportedReason };
+    }
+    this.recordDiagEvent('direct-voice-media-started', {
+      roomId,
+      peerAddress: truncateGcallDiagAddress(peerAddress),
+      localAddress: truncateGcallDiagAddress(localAddress),
+    });
+    return { ok: true, payload: { usingAudioSurfaceMedia: true } };
+  }
+
+  private async updateDirectVoiceMedia(
+    command: Extract<AudioSurfaceCommand, { type: 'update-direct-voice-media' }>
+  ): Promise<AudioSurfaceResponse> {
+    if (!this.directVoiceRoomId || !this.directVoiceRoomKey) {
+      return { ok: true };
+    }
+    if (command.inputDeviceId !== undefined) {
+      this.directVoiceInputDeviceId = command.inputDeviceId;
+    }
+    if (command.outputDeviceId !== undefined) {
+      this.directVoiceOutputDeviceId = command.outputDeviceId;
+    }
+    if (typeof command.muted === 'boolean') {
+      this.directVoiceMuted = command.muted;
+      this.directVoiceSenderEngine.setMuted(command.muted);
+    }
+    if (typeof command.hearCall === 'boolean') {
+      this.directVoiceHearCall = command.hearCall;
+    }
+    if (command.profile) {
+      this.directVoiceProfile = command.profile;
+    }
+
+    if (this.directVoiceReceiveEngine) {
+      await this.directVoiceReceiveEngine.configure({
+        ...(command.outputDeviceId !== undefined
+          ? { outputDeviceId: this.directVoiceOutputDeviceId }
+          : {}),
+        ...(typeof command.hearCall === 'boolean'
+          ? { hearCall: this.directVoiceHearCall }
+          : {}),
+        ...(command.profile ? { profile: this.directVoiceProfile } : {}),
+      });
+    }
+    await this.directVoiceSenderEngine.startOrUpdate({
+      inputDeviceId: this.directVoiceInputDeviceId,
+      outputDeviceId: this.directVoiceOutputDeviceId,
+      muted: this.directVoiceMuted,
+      profile: this.directVoiceProfile,
+      onEncodedFrame: (frame) => {
+        void this.dispatchDirectVoiceEncodedFrame(frame);
+      },
+    });
+    return { ok: true };
+  }
+
+  private async stopDirectVoiceMedia(): Promise<void> {
+    if (!this.directVoiceRoomId && !this.directVoiceRoomKey) return;
+    this.recordDiagEvent('direct-voice-media-stopped', {
+      roomId: this.directVoiceRoomId,
+      peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
+    });
+    await this.directVoiceSenderEngine.stop();
+    this.directVoiceRoomId = '';
+    this.directVoicePeerAddress = '';
+    this.directVoiceLocalAddress = '';
+    this.directVoiceRoomKey = null;
+    this.directVoiceSeq = 0;
+    this.directVoiceMuted = false;
+    this.directVoiceInputDeviceId = null;
+    this.directVoiceOutputDeviceId = null;
+    this.directVoiceHearCall = true;
+    this.directVoiceProfile = this.snapshot.audioQualityProfile;
+    await this.directVoiceReceiveEngine?.reset();
+  }
+
+  private async dispatchDirectVoiceEncodedFrame(
+    frame: GroupCallAudioSenderFrame
+  ): Promise<void> {
+    if (
+      !this.directVoiceRoomKey ||
+      !this.directVoiceRoomId ||
+      !this.directVoicePeerAddress ||
+      !this.directVoiceLocalAddress ||
+      this.directVoiceMuted
+    ) {
+      return;
+    }
+    if (typeof window.groupCall?.sendAudio !== 'function') {
+      this.directVoiceOutboundSendFailures++;
+      this.directVoiceOutboundLastFailureMessage =
+        'window.groupCall.sendAudio unavailable';
+      this.recordDiagEvent('direct-voice-audio-send-failed', {
+        roomId: this.directVoiceRoomId,
+        peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
+        message: this.directVoiceOutboundLastFailureMessage,
+      });
+      return;
+    }
+    const seq = ++this.directVoiceSeq & 0xffff;
+    const packet = encodeAudioPacketV2(
+      this.directVoiceLocalAddress,
+      frame.vad,
+      seq,
+      Date.now() & 0xffffffff,
+      frame.opusFrame,
+      this.directVoiceRoomKey
+    );
+    this.directVoiceOutboundSendAttempts++;
+    this.directVoiceOutboundLastSendAtMs = Date.now();
+    try {
+      const result = (await window.groupCall.sendAudio(
+        this.directVoiceRoomId,
+        this.directVoicePeerAddress,
+        packet,
+        { rendererSendAtWallMs: this.directVoiceOutboundLastSendAtMs }
+      )) as GcallSendAudioResult | undefined;
+      if (result?.success === false) {
+        throw new Error(result.error ?? 'sendAudio returned failure');
+      }
+      this.directVoiceOutboundSendSuccesses++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.directVoiceOutboundSendFailures++;
+      this.directVoiceOutboundLastFailureMessage = message;
+      this.recordDiagEvent('direct-voice-audio-send-failed', {
+        roomId: this.directVoiceRoomId,
+        peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
+        message,
+      });
+    }
+  }
+
+  private resetDirectVoiceOutboundDiagnostics(): void {
+    this.directVoiceSeq = 0;
+    this.directVoiceOutboundSendAttempts = 0;
+    this.directVoiceOutboundSendSuccesses = 0;
+    this.directVoiceOutboundSendFailures = 0;
+    this.directVoiceOutboundLastFailureMessage = null;
+    this.directVoiceOutboundLastSendAtMs = 0;
+  }
+
   private async stopDirectVoiceReceive(): Promise<void> {
+    if (this.directVoiceLocalAddress) {
+      await this.stopDirectVoiceMedia();
+      return;
+    }
     if (!this.directVoiceRoomId && !this.directVoiceRoomKey) return;
     this.recordDiagEvent('direct-voice-receive-stopped', {
       roomId: this.directVoiceRoomId,
@@ -5536,7 +5766,8 @@ export class GroupCallAudioEngineRuntime {
           linkOpening: diagnostics.linkOpening ?? null,
           linkEstablishPendingAgeMs:
             diagnostics.linkEstablishPendingAgeMs ?? null,
-          lastLinkUnreadyAgeMs: lastUnreadyAt > 0 ? nowMs - lastUnreadyAt : null,
+          lastLinkUnreadyAgeMs:
+            lastUnreadyAt > 0 ? nowMs - lastUnreadyAt : null,
         }
       );
       return;

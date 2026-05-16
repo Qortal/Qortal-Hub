@@ -74,6 +74,27 @@ export type AudioSurfaceCommand =
       profile?: GroupCallAudioQualityProfile;
     }
   | { type: 'stop-direct-voice-receive' }
+  | {
+      type: 'start-direct-voice-media';
+      roomId: string;
+      peerAddress: string;
+      localAddress: string;
+      roomKey: ArrayBuffer | Uint8Array;
+      inputDeviceId?: string | null;
+      outputDeviceId?: string | null;
+      muted?: boolean;
+      hearCall?: boolean;
+      profile?: GroupCallAudioQualityProfile;
+    }
+  | {
+      type: 'update-direct-voice-media';
+      inputDeviceId?: string | null;
+      outputDeviceId?: string | null;
+      muted?: boolean;
+      hearCall?: boolean;
+      profile?: GroupCallAudioQualityProfile;
+    }
+  | { type: 'stop-direct-voice-media' }
   | { type: 'clear-join-error' };
 
 export type AudioSurfaceResponse =
