@@ -4084,6 +4084,15 @@ export class GroupCallManager extends EventEmitter {
     this.rooms.delete(roomId);
     this.qortalReticulumTargetsByRoomId.delete(roomId);
     this.transportHealthByRoom.delete(roomId);
+    void this.reticulumBridge
+      ?.clearGroupAudioDiagnostics(roomId)
+      .catch((err) => {
+        loggerWarn(
+          `[GCall] Failed clearing group audio diagnostics for room ${roomId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      });
     if (shouldDelayReticulumAudioTeardown) {
       this.scheduleReticulumAudioLinkTeardownAfterLeave(
         roomId,

@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 
 const PROGRESS_PREFIX = '__RET_ENSURE__:';
+const RETICULUM_REQUIRED_SOURCE = 'github.com/Philreact/Reticulum';
 
 function resourcesDir(): string {
   return path.join(__dirname, '..', '..', 'resources');
@@ -28,6 +29,25 @@ function canImportModule(
   return r.status === 0;
 }
 
+function canImportRequiredReticulum(py: string, shell: boolean): boolean {
+  const code = `
+import importlib.metadata as md
+try:
+    import RNS
+    dist = md.distribution("rns")
+    direct = dist.read_text("direct_url.json") or ""
+    raise SystemExit(0 if "${RETICULUM_REQUIRED_SOURCE}" in direct else 1)
+except Exception:
+    raise SystemExit(1)
+`;
+  const r = spawnSync(py, ['-c', code], {
+    encoding: 'utf8',
+    windowsHide: true,
+    shell,
+  });
+  return r.status === 0;
+}
+
 /** Same fast checks as ensure-reticulum-for-dev.mjs (keep in sync). */
 export function needsDevReticulumEnsure(): boolean {
   if (!electronIsDev) return false;
@@ -35,12 +55,6 @@ export function needsDevReticulumEnsure(): boolean {
   if (app.isPackaged) return false;
 
   const res = resourcesDir();
-  const frozen =
-    process.platform === 'win32'
-      ? path.join(res, 'reticulum', 'rnsd.exe')
-      : path.join(res, 'reticulum', 'rnsd');
-  if (fs.existsSync(frozen)) return false;
-
   const venvCandidates =
     process.platform === 'win32'
       ? [path.join(res, 'reticulum-runtime', 'venv', 'Scripts', 'python.exe')]
@@ -51,7 +65,7 @@ export function needsDevReticulumEnsure(): boolean {
 
   for (const py of venvCandidates) {
     if (!py || !fs.existsSync(py)) continue;
-    if (!canImportModule(py, 'RNS', false)) continue;
+    if (!canImportRequiredReticulum(py, false)) return true;
     if (canImportModule(py, 'LXMF', false)) return false;
     return true;
   }
@@ -60,7 +74,7 @@ export function needsDevReticulumEnsure(): boolean {
     process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
   const shell = process.platform === 'win32';
   for (const name of names) {
-    if (!canImportModule(name, 'RNS', shell)) continue;
+    if (!canImportRequiredReticulum(name, shell)) continue;
     if (canImportModule(name, 'LXMF', shell)) return false;
     return true;
   }
@@ -99,7 +113,7 @@ const STATUS_MAP: Record<string, string> = {
   get_pip_check: 'Checking Python environment…',
   get_pip_download: 'Downloading Python tooling…',
   get_pip_run: 'Installing pip…',
-  pip_install_rns: 'Installing Reticulum (rns) and LXMF from PyPI…',
+  pip_install_rns: 'Installing Qortal Reticulum runtime and LXMF…',
   done: 'Done.',
 };
 

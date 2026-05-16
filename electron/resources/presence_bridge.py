@@ -1331,6 +1331,23 @@ def _audio_media_route_diagnostics() -> list:
         return [dict(route) for route in routes[:16]]
 
 
+def _clear_audio_media_route_diagnostics(room_id: str = "") -> int:
+    normalized_room_id = str(room_id or "").strip()
+    with _state_lock:
+        if not normalized_room_id:
+            cleared = len(_audio_media_route_stats)
+            _audio_media_route_stats.clear()
+            return cleared
+        keys = [
+            key
+            for key, stats in _audio_media_route_stats.items()
+            if str(stats.get("lastRoomId") or "") == normalized_room_id
+        ]
+        for key in keys:
+            _audio_media_route_stats.pop(key, None)
+        return len(keys)
+
+
 def _notify_rns_work_available() -> None:
     if _rns_wake_write_fd is None:
         return
@@ -2469,6 +2486,8 @@ def _handle_rns_command_message(
 
 def _scheduler_lane_for_command(action: Any) -> str:
     action_name = str(action or "")
+    if action_name in {"clear_group_audio_diagnostics"}:
+        return "control-send"
     if action_name in {
         "open_group_audio_link",
         "close_group_audio_link",
@@ -8344,6 +8363,17 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_warm_group_audio_path(req_id, payload)
     elif action == "send_group_audio_link_heartbeat":
         handle_send_group_audio_link_heartbeat(req_id, payload)
+    elif action == "clear_group_audio_diagnostics":
+        room_id = str(payload.get("roomId") or "")
+        cleared = _clear_audio_media_route_diagnostics(room_id)
+        emit_resp(
+            req_id,
+            True,
+            payload={
+                "clearedMediaRouteDiagnostics": cleared,
+                "roomId": room_id,
+            },
+        )
     elif action == "get_local_identity_public_key":
         handle_get_local_identity_public_key(req_id, payload)
     elif action == "register_peer_identity":

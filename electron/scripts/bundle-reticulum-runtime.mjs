@@ -11,6 +11,9 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const runtimeDir = path.resolve(__dirname, '..', 'resources', 'reticulum-runtime');
 const venvDir = path.join(runtimeDir, 'venv');
+const RETICULUM_PIP_PACKAGE =
+  process.env.QORTAL_RETICULUM_PIP_PACKAGE ??
+  'git+https://github.com/Philreact/Reticulum.git@master';
 
 const py =
   process.env.PYTHON ??
@@ -53,14 +56,14 @@ if (!fs.existsSync(venvPip)) {
   process.exit(1);
 }
 
-console.log('Installing / upgrading rns + lxmf…');
+console.log(`Installing / upgrading Reticulum from ${RETICULUM_PIP_PACKAGE} + lxmf…`);
 run(venvPip, ['install', '--upgrade', 'pip']);
-run(venvPip, ['install', '--upgrade', 'rns', 'lxmf']);
+run(venvPip, ['install', '--upgrade', RETICULUM_PIP_PACKAGE, 'lxmf']);
 
 const marker = path.join(runtimeDir, 'BUNDLE_READY');
 fs.writeFileSync(
   marker,
-  `bundled_at=${new Date().toISOString()}\npython=${py}\n`,
+  `bundled_at=${new Date().toISOString()}\npython=${py}\nreticulum=${RETICULUM_PIP_PACKAGE}\n`,
   'utf8'
 );
 console.log(`Done. Wrote ${marker}`);

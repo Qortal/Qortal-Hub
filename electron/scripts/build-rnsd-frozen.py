@@ -19,6 +19,10 @@ import urllib.request
 from pathlib import Path
 
 GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
+RETICULUM_PIP_PACKAGE = os.environ.get(
+    "QORTAL_RETICULUM_PIP_PACKAGE",
+    "git+https://github.com/Philreact/Reticulum.git@master",
+)
 PIP_ENV = {
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "PIP_BREAK_SYSTEM_PACKAGES": "1",
@@ -221,8 +225,7 @@ def main() -> None:
 
     pyexe = sys.executable
     ensure_pip(pyexe)
-    if not has_module(pyexe, "RNS"):
-        pip_install(pyexe, ["rns"])
+    pip_install(pyexe, [RETICULUM_PIP_PACKAGE])
     if not has_module(pyexe, "LXMF"):
         pip_install(pyexe, ["lxmf"])
     if not has_module(pyexe, "PyInstaller"):
@@ -241,7 +244,7 @@ def main() -> None:
 
     marker = args.output_dir / "BUNDLE_READY"
     marker.write_text(
-        f"frozen_at={datetime.datetime.now(datetime.timezone.utc).isoformat()}\npython={pyexe}\n",
+        f"frozen_at={datetime.datetime.now(datetime.timezone.utc).isoformat()}\npython={pyexe}\nreticulum={RETICULUM_PIP_PACKAGE}\n",
         encoding="utf-8",
     )
     print(f"Wrote {marker}")

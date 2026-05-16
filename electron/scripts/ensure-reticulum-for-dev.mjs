@@ -4,7 +4,8 @@
  *
  * 1. Frozen `resources/reticulum/rnsd` — no Python (use `npm run bundle:reticulum` in CI).
  * 2. Existing dev venv or system Python with RNS and LXMF (AutoInterface discovery).
- * 3. Otherwise: download PyPA `get-pip.py`, bootstrap pip into user site, `pip install --user rns lxmf`.
+ * 3. Otherwise: download PyPA `get-pip.py`, bootstrap pip into user site,
+ *    and install the Qortal Reticulum fork + lxmf.
  *
  * Requires: Python **3.9+** on PATH (standard on Ubuntu desktop) and network once for get-pip + PyPI.
  * Skip: QORTAL_RETICULUM_SKIP_ENSURE=1
@@ -23,6 +24,10 @@ const electronRoot = path.resolve(__dirname, '..');
 const resources = path.join(electronRoot, 'resources');
 
 const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py';
+const RETICULUM_PIP_PACKAGE =
+  process.env.QORTAL_RETICULUM_PIP_PACKAGE ??
+  'git+https://github.com/Philreact/Reticulum.git@master';
+const RETICULUM_REQUIRED_SOURCE = 'github.com/Philreact/Reticulum';
 const quiet = process.env.RETICULUM_ENSURE_QUIET === '1';
 
 const systemNames =
@@ -52,6 +57,21 @@ const pipEnv = {
 function canImportRNS(pythonPath) {
   if (!pythonPath || !fs.existsSync(pythonPath)) return false;
   return spawnPy(pythonPath, ['-c', 'import RNS']).status === 0;
+}
+
+function canImportRequiredRNS(pythonPath) {
+  if (!pythonPath) return false;
+  const code = `
+import importlib.metadata as md
+try:
+    import RNS
+    dist = md.distribution("rns")
+    direct = dist.read_text("direct_url.json") or ""
+    raise SystemExit(0 if "${RETICULUM_REQUIRED_SOURCE}" in direct else 1)
+except Exception:
+    raise SystemExit(1)
+`;
+  return spawnPy(pythonPath, ['-c', code]).status === 0;
 }
 
 function canImportLXMF(pythonPath) {
@@ -129,61 +149,46 @@ async function ensureUserPip(name) {
   return hasPipModule(name);
 }
 
-function tryPipUserInstallRnsAndLxmf() {
+function reticulumInstallArgs({ user }) {
+  const base = ['-m', 'pip', 'install'];
+  if (user) base.push('--user');
+  return [base, RETICULUM_PIP_PACKAGE, 'lxmf'];
+}
+
+function tryPipInstallRnsAndLxmf(name, { user }) {
+  const [base, reticulumPackage, lxmfPackage] = reticulumInstallArgs({ user });
   const attempts =
     process.platform === 'win32'
       ? [
-          ['-m', 'pip', 'install', '--user', 'rns', 'lxmf'],
-          [
-            '-m',
-            'pip',
-            'install',
-            '--user',
-            '--break-system-packages',
-            'rns',
-            'lxmf',
-          ],
+          [...base, reticulumPackage, lxmfPackage],
+          [...base, '--break-system-packages', reticulumPackage, lxmfPackage],
         ]
       : [
-          [
-            '-m',
-            'pip',
-            'install',
-            '--user',
-            '--break-system-packages',
-            'rns',
-            'lxmf',
-          ],
-          ['-m', 'pip', 'install', '--user', 'rns', 'lxmf'],
+          [...base, '--break-system-packages', reticulumPackage, lxmfPackage],
+          [...base, reticulumPackage, lxmfPackage],
         ];
+  for (const args of attempts) {
+    const pip = spawnPy(name, args, {
+      env: pipEnv,
+    });
+    if (pip.status !== 0) continue;
+    if (canImportRequiredRNS(name) && spawnPy(name, ['-c', 'import LXMF']).status === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function tryPipUserInstallRnsAndLxmf() {
   for (const name of systemNames) {
     if (!isPython39Plus(name)) continue;
-    for (const args of attempts) {
-      const pip = spawnPy(name, args, {
-        env: pipEnv,
-      });
-      if (pip.status !== 0) continue;
-      if (
-        spawnPy(name, ['-c', 'import RNS']).status === 0 &&
-        spawnPy(name, ['-c', 'import LXMF']).status === 0
-      ) {
-        return true;
-      }
-    }
+    if (tryPipInstallRnsAndLxmf(name, { user: true })) return true;
   }
   return false;
 }
 
 async function main() {
   if (process.env.QORTAL_RETICULUM_SKIP_ENSURE === '1') {
-    return;
-  }
-
-  const frozen =
-    process.platform === 'win32'
-      ? path.join(resources, 'reticulum', 'rnsd.exe')
-      : path.join(resources, 'reticulum', 'rnsd');
-  if (fs.existsSync(frozen)) {
     return;
   }
 
@@ -197,25 +202,26 @@ async function main() {
 
   for (const p of venvPythonCandidates) {
     if (!fs.existsSync(p)) continue;
-    if (canImportRNS(p) && canImportLXMF(p)) return;
-    if (canImportRNS(p) && !canImportLXMF(p)) {
-      const r = spawnPy(p, ['-m', 'pip', 'install', 'lxmf'], { env: pipEnv });
-      if (r.status === 0 && canImportLXMF(p)) return;
+    if (canImportRequiredRNS(p) && canImportLXMF(p)) return;
+    if (canImportRNS(p)) {
+      console.log(
+        `[ensure-reticulum] Updating dev venv Reticulum to ${RETICULUM_PIP_PACKAGE}`
+      );
+      if (tryPipInstallRnsAndLxmf(p, { user: false })) return;
     }
   }
 
   for (const name of systemNames) {
-    if (
-      spawnPy(name, ['-c', 'import RNS']).status === 0 &&
-      spawnPy(name, ['-c', 'import LXMF']).status === 0
-    ) {
+    if (canImportRequiredRNS(name) && spawnPy(name, ['-c', 'import LXMF']).status === 0) {
       return;
     }
   }
 
   progress('need_install');
   progress('get_pip_check');
-  console.log('[ensure-reticulum] Ensuring pip + rns + lxmf (user install, no sudo)…');
+  console.log(
+    `[ensure-reticulum] Ensuring pip + Reticulum fork + lxmf (user install, no sudo): ${RETICULUM_PIP_PACKAGE}`
+  );
 
   for (const name of systemNames) {
     if (!isPython39Plus(name)) continue;

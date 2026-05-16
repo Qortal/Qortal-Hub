@@ -112,6 +112,7 @@ type BridgeCmdFrame = {
     | 'close_group_audio_link'
     | 'reset_group_audio_peer_state'
     | 'warm_group_audio_path'
+    | 'clear_group_audio_diagnostics'
     | 'get_local_identity_public_key'
     | 'register_peer_identity';
   id: string;
@@ -1316,6 +1317,59 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       peerPresenceHash: peerHash,
       reason,
     });
+  }
+
+  async clearGroupAudioDiagnostics(
+    roomId?: string
+  ): Promise<ReticulumSendResult> {
+    this.audioFrameQueues.clear();
+    this.audioQueuedLinkOrder = [];
+    this.audioQueuedFrames = 0;
+    this.audioQueuedBytes = 0;
+    this.lastAudioQueueSnapshot = {
+      ...this.getAudioQueueSnapshot(),
+      mediaRouteDiagnostics: [],
+    };
+    try {
+      await this.start();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        reason: 'bridge-exception',
+        error: message,
+      };
+    }
+    if (this.state !== 'ready') {
+      return { ok: false, reason: 'bridge-not-ready' };
+    }
+    try {
+      const resp = await this.sendCommand('clear_group_audio_diagnostics', {
+        ...(roomId ? { roomId } : {}),
+      });
+      if (resp.ok) {
+        loggerLog(
+          `[ReticulumBridge] Cleared group audio diagnostics room=${roomId || '*'} cleared=${String(
+            resp.payload?.clearedMediaRouteDiagnostics ?? '?'
+          )}`
+        );
+        return { ok: true };
+      }
+      return {
+        ok: false,
+        reason: this.mapSendFailureReason(resp),
+        ...(resp.error ? { error: resp.error } : {}),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        reason: message.includes('timed out')
+          ? 'bridge-timeout'
+          : 'bridge-exception',
+        error: message,
+      };
+    }
   }
 
   async warmGroupAudioPath(
