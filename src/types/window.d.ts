@@ -561,6 +561,7 @@ declare global {
             rnsCallbackSchedulerGapOver250Count: number;
             rnsCallbackSchedulerGapOver500Count: number;
             rnsCallbackSchedulerGapOver1000Count: number;
+            schedulerDiagnostics?: Array<Record<string, unknown>>;
             rendererToBridgeEnqueueMsMax: number;
             managerFlushToBridgeEnqueueMsMax: number;
             bridgeEnqueueToFd3WriteMsMax: number;
@@ -651,6 +652,7 @@ declare global {
             rnsCallbackSchedulerGapOver250Count: number;
             rnsCallbackSchedulerGapOver500Count: number;
             rnsCallbackSchedulerGapOver1000Count: number;
+            schedulerDiagnostics?: Array<Record<string, unknown>>;
             rendererToBridgeEnqueueMsMax: number;
             managerFlushToBridgeEnqueueMsMax: number;
             bridgeEnqueueToFd3WriteMsMax: number;

@@ -197,7 +197,23 @@ export type ReticulumAudioQueueSnapshot = {
   bridgeEnqueueToFd3WriteMsMax: number;
   bridgeEnqueueToFd3WriteQueueDwellMsMax: number;
   rendererToFd3WriteMsMax: number;
+  schedulerDiagnostics?: ReticulumSchedulerLaneDiagnostic[];
   mediaRouteDiagnostics?: ReticulumAudioMediaRouteDiagnostic[];
+};
+
+export type ReticulumSchedulerLaneDiagnostic = {
+  lane: string;
+  logicalLane: string;
+  queueMax: number;
+  queueDepth: number;
+  queueDepthHighWater: number;
+  droppedTasks: number;
+  completedTasks: number;
+  enqueuedTasks: number;
+  dwellMsMax: number;
+  busyMsMax: number;
+  slowTaskCount: number;
+  lastTask: string;
 };
 
 export type ReticulumAudioMediaRouteDiagnostic = {
@@ -451,6 +467,7 @@ type BridgeEventFrame =
         rnsCallbackSchedulerGapOver250Count?: number;
         rnsCallbackSchedulerGapOver500Count?: number;
         rnsCallbackSchedulerGapOver1000Count?: number;
+        schedulerDiagnostics?: Array<Record<string, unknown>>;
         mediaRouteDiagnostics?: Array<Record<string, unknown>>;
       };
     }
@@ -777,6 +794,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     bridgeEnqueueToFd3WriteMsMax: 0,
     bridgeEnqueueToFd3WriteQueueDwellMsMax: 0,
     rendererToFd3WriteMsMax: 0,
+    schedulerDiagnostics: [],
     mediaRouteDiagnostics: [],
   };
   /** One-shot diagnostics: confirm binary egress/ingress actually ran. */
@@ -1455,6 +1473,33 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       preRnsSendAgeMsMax: num('preRnsSendAgeMsMax'),
       rnsSendDurationMsMax: num('rnsSendDurationMsMax'),
       receiveToFd4EnqueueMsMax: num('receiveToFd4EnqueueMsMax'),
+    };
+  }
+
+  private normalizeSchedulerLaneDiagnostic(
+    input: Record<string, unknown>
+  ): ReticulumSchedulerLaneDiagnostic {
+    const num = (key: string): number => {
+      const value = input[key];
+      return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    };
+    const str = (key: string): string => {
+      const value = input[key];
+      return typeof value === 'string' ? value : '';
+    };
+    return {
+      lane: str('lane'),
+      logicalLane: str('logicalLane'),
+      queueMax: num('queueMax'),
+      queueDepth: num('queueDepth'),
+      queueDepthHighWater: num('queueDepthHighWater'),
+      droppedTasks: num('droppedTasks'),
+      completedTasks: num('completedTasks'),
+      enqueuedTasks: num('enqueuedTasks'),
+      dwellMsMax: num('dwellMsMax'),
+      busyMsMax: num('busyMsMax'),
+      slowTaskCount: num('slowTaskCount'),
+      lastTask: str('lastTask'),
     };
   }
 
@@ -2748,6 +2793,15 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
               ? frame.payload.rnsCallbackSchedulerGapOver1000Count
               : this.lastAudioQueueSnapshot
                   .rnsCallbackSchedulerGapOver1000Count,
+          schedulerDiagnostics: Array.isArray(
+            frame.payload?.schedulerDiagnostics
+          )
+            ? frame.payload.schedulerDiagnostics
+                .filter((item): item is Record<string, unknown> => {
+                  return !!item && typeof item === 'object';
+                })
+                .map((item) => this.normalizeSchedulerLaneDiagnostic(item))
+            : this.lastAudioQueueSnapshot.schedulerDiagnostics,
           mediaRouteDiagnostics: Array.isArray(
             frame.payload?.mediaRouteDiagnostics
           )

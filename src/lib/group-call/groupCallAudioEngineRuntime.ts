@@ -397,6 +397,7 @@ type GcallSendAudioDiagnostics = {
     rnsCallbackSchedulerGapOver250Count?: number;
     rnsCallbackSchedulerGapOver500Count?: number;
     rnsCallbackSchedulerGapOver1000Count?: number;
+    schedulerDiagnostics?: Array<Record<string, unknown>>;
     rendererToBridgeEnqueueMsMax?: number;
     managerFlushToBridgeEnqueueMsMax?: number;
     bridgeEnqueueToFd3WriteMsMax?: number;
@@ -1939,6 +1940,7 @@ export class GroupCallAudioEngineRuntime {
         diagnostics.bridge?.rnsCallbackSchedulerGapOver500Count,
       rnsCallbackSchedulerGapOver1000Count:
         diagnostics.bridge?.rnsCallbackSchedulerGapOver1000Count,
+      schedulerDiagnostics: diagnostics.bridge?.schedulerDiagnostics,
     });
     this.noteCpuDegradedBridgePressure(diagnostics);
     this.maybeResyncTwoPartyTopologyFromLinkDiagnostics(diagnostics);
