@@ -286,16 +286,35 @@ _audio_rns_raw_inbound_to_link_receive_over_1000_count = 0
 _audio_rns_raw_inbound_to_link_receive_samples = 0
 _audio_rns_raw_inbound_interface_last = ""
 _audio_rns_raw_inbound_interface_worst = ""
+_audio_rns_shared_frame_gap_ms_max = 0.0
+_audio_rns_shared_frame_gap_over_80_count = 0
+_audio_rns_shared_frame_gap_over_160_count = 0
+_audio_rns_shared_frame_gap_over_320_count = 0
+_audio_rns_shared_frame_gap_over_640_count = 0
+_audio_rns_shared_frame_gap_over_1000_count = 0
+_audio_rns_shared_frame_to_transport_inbound_ms_max = 0.0
+_audio_rns_shared_frame_to_transport_inbound_over_80_count = 0
+_audio_rns_shared_frame_to_transport_inbound_over_160_count = 0
+_audio_rns_shared_frame_to_transport_inbound_over_320_count = 0
+_audio_rns_shared_frame_to_transport_inbound_over_640_count = 0
+_audio_rns_shared_frame_to_transport_inbound_over_1000_count = 0
+_audio_rns_shared_frame_to_transport_inbound_samples = 0
+_audio_rns_shared_frame_interface_last = ""
+_audio_rns_shared_frame_interface_worst = ""
 _audio_media_route_stats: Dict[str, Dict[str, Any]] = {}
 _audio_link_receive_probe_by_packet_id: Dict[int, Dict[str, Any]] = {}
 _audio_rns_raw_inbound_probe_by_packet_hash: Dict[bytes, Dict[str, Any]] = {}
 _audio_rns_raw_inbound_last_wall_ms_by_destination_hash: Dict[str, int] = {}
+_audio_rns_shared_frame_probe_by_packet_hash: Dict[bytes, Dict[str, Any]] = {}
+_audio_rns_shared_frame_last_wall_ms_by_destination_hash: Dict[str, int] = {}
 _rns_link_receive_probe_installed = False
 _rns_transport_inbound_probe_installed = False
+_rns_shared_frame_probe_installed = False
 _rns_link_receive_probe_context = threading.local()
 _AUDIO_MEDIA_ROUTE_STATS_MAX = 64
 _AUDIO_LINK_RECEIVE_PROBE_MAX = 2048
 _AUDIO_RNS_RAW_INBOUND_PROBE_MAX = 4096
+_AUDIO_RNS_SHARED_FRAME_PROBE_MAX = 4096
 _AUDIO_ROUTE_GAP_BUCKETS_MS = (80, 160, 320, 640, 1000)
 _AUDIO_RNS_CALLBACK_SCHEDULER_MONITOR_INTERVAL_SECONDS = 0.05
 _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
@@ -672,6 +691,20 @@ def _get_audio_route_stats(
             "rnsRawInboundToLinkReceiveOver1000Count": 0,
             "rnsRawInboundInterfaceLast": "",
             "rnsRawInboundInterfaceWorst": "",
+            "rnsSharedFrameGapMsMax": 0,
+            "rnsSharedFrameGapOver80Count": 0,
+            "rnsSharedFrameGapOver160Count": 0,
+            "rnsSharedFrameGapOver320Count": 0,
+            "rnsSharedFrameGapOver640Count": 0,
+            "rnsSharedFrameGapOver1000Count": 0,
+            "rnsSharedFrameToTransportInboundMsMax": 0,
+            "rnsSharedFrameToTransportInboundOver80Count": 0,
+            "rnsSharedFrameToTransportInboundOver160Count": 0,
+            "rnsSharedFrameToTransportInboundOver320Count": 0,
+            "rnsSharedFrameToTransportInboundOver640Count": 0,
+            "rnsSharedFrameToTransportInboundOver1000Count": 0,
+            "rnsSharedFrameInterfaceLast": "",
+            "rnsSharedFrameInterfaceWorst": "",
             "preRnsSendAgeMsMax": 0,
             "rnsSendDurationMsMax": 0,
             "receiveToFd4EnqueueMsMax": 0,
@@ -772,6 +805,50 @@ def _increment_raw_to_link_buckets(duration_ms: float) -> None:
         _audio_rns_raw_inbound_to_link_receive_over_1000_count += 1
 
 
+def _increment_shared_frame_gap_buckets(gap_ms: float) -> None:
+    global _audio_rns_shared_frame_gap_over_80_count
+    global _audio_rns_shared_frame_gap_over_160_count
+    global _audio_rns_shared_frame_gap_over_320_count
+    global _audio_rns_shared_frame_gap_over_640_count
+    global _audio_rns_shared_frame_gap_over_1000_count
+    if gap_ms >= 80:
+        _audio_rns_shared_frame_gap_over_80_count += 1
+    if gap_ms >= 160:
+        _audio_rns_shared_frame_gap_over_160_count += 1
+    if gap_ms >= 320:
+        _audio_rns_shared_frame_gap_over_320_count += 1
+    if gap_ms >= 640:
+        _audio_rns_shared_frame_gap_over_640_count += 1
+    if gap_ms >= 1000:
+        _audio_rns_shared_frame_gap_over_1000_count += 1
+
+
+def _increment_shared_to_transport_buckets(duration_ms: float) -> None:
+    global _audio_rns_shared_frame_to_transport_inbound_over_80_count
+    global _audio_rns_shared_frame_to_transport_inbound_over_160_count
+    global _audio_rns_shared_frame_to_transport_inbound_over_320_count
+    global _audio_rns_shared_frame_to_transport_inbound_over_640_count
+    global _audio_rns_shared_frame_to_transport_inbound_over_1000_count
+    if duration_ms >= 80:
+        _audio_rns_shared_frame_to_transport_inbound_over_80_count += 1
+    if duration_ms >= 160:
+        _audio_rns_shared_frame_to_transport_inbound_over_160_count += 1
+    if duration_ms >= 320:
+        _audio_rns_shared_frame_to_transport_inbound_over_320_count += 1
+    if duration_ms >= 640:
+        _audio_rns_shared_frame_to_transport_inbound_over_640_count += 1
+    if duration_ms >= 1000:
+        _audio_rns_shared_frame_to_transport_inbound_over_1000_count += 1
+
+
+def _prune_rns_shared_frame_probe_cache() -> None:
+    if len(_audio_rns_shared_frame_probe_by_packet_hash) <= _AUDIO_RNS_SHARED_FRAME_PROBE_MAX:
+        return
+    overflow = len(_audio_rns_shared_frame_probe_by_packet_hash) - _AUDIO_RNS_SHARED_FRAME_PROBE_MAX
+    for packet_hash in list(_audio_rns_shared_frame_probe_by_packet_hash.keys())[: max(1, overflow)]:
+        _audio_rns_shared_frame_probe_by_packet_hash.pop(packet_hash, None)
+
+
 def _prune_rns_raw_inbound_probe_cache() -> None:
     if len(_audio_rns_raw_inbound_probe_by_packet_hash) <= _AUDIO_RNS_RAW_INBOUND_PROBE_MAX:
         return
@@ -780,9 +857,9 @@ def _prune_rns_raw_inbound_probe_cache() -> None:
         _audio_rns_raw_inbound_probe_by_packet_hash.pop(packet_hash, None)
 
 
-def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
-    global _audio_rns_raw_inbound_gap_ms_max, _audio_rns_raw_inbound_interface_last
-    global _audio_rns_raw_inbound_interface_worst
+def _record_rns_shared_frame_probe(raw: Any, interface: Any) -> None:
+    global _audio_rns_shared_frame_gap_ms_max, _audio_rns_shared_frame_interface_last
+    global _audio_rns_shared_frame_interface_worst
     if not isinstance(raw, (bytes, bytearray)) or len(raw) < 4:
         return
     try:
@@ -805,6 +882,77 @@ def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
         now_wall_ms = _now_wall_ms()
         interface_name = _interface_label(interface)
         with _state_lock:
+            previous_ms = int(_audio_rns_shared_frame_last_wall_ms_by_destination_hash.get(destination_hex) or 0)
+            frame_gap_ms = 0
+            if previous_ms > 0:
+                frame_gap_ms = max(0, now_wall_ms - previous_ms)
+                if frame_gap_ms > _audio_rns_shared_frame_gap_ms_max:
+                    _audio_rns_shared_frame_gap_ms_max = float(frame_gap_ms)
+                    _audio_rns_shared_frame_interface_worst = interface_name
+                _increment_shared_frame_gap_buckets(float(frame_gap_ms))
+            _audio_rns_shared_frame_last_wall_ms_by_destination_hash[destination_hex] = now_wall_ms
+            _audio_rns_shared_frame_interface_last = interface_name
+            _audio_rns_shared_frame_probe_by_packet_hash[bytes(packet_hash)] = {
+                "monotonic": now_mono,
+                "wallMs": now_wall_ms,
+                "destinationHash": destination_hex,
+                "interface": interface_name,
+                "frameGapMs": frame_gap_ms,
+            }
+            _prune_rns_shared_frame_probe_cache()
+            _mark_audio_queue_state_dirty()
+    except Exception:
+        return
+
+
+def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
+    global _audio_rns_raw_inbound_gap_ms_max, _audio_rns_raw_inbound_interface_last
+    global _audio_rns_raw_inbound_interface_worst
+    global _audio_rns_shared_frame_to_transport_inbound_ms_max
+    global _audio_rns_shared_frame_to_transport_inbound_samples
+    global _audio_rns_shared_frame_interface_last, _audio_rns_shared_frame_interface_worst
+    if not isinstance(raw, (bytes, bytearray)) or len(raw) < 4:
+        return
+    try:
+        packet = RNS.Packet(None, bytes(raw), create_receipt=False)
+        if not packet.unpack():
+            return
+        if (
+            getattr(packet, "packet_type", None) != getattr(RNS.Packet, "DATA", object())
+            or getattr(packet, "destination_type", None) != getattr(RNS.Destination, "LINK", object())
+        ):
+            return
+        packet_hash = getattr(packet, "packet_hash", None)
+        destination_hash = getattr(packet, "destination_hash", None)
+        if not isinstance(packet_hash, (bytes, bytearray)):
+            return
+        destination_hex = bytes(destination_hash or b"").hex()
+        if not destination_hex:
+            return
+        now_mono = time.monotonic()
+        now_wall_ms = _now_wall_ms()
+        interface_name = _interface_label(interface)
+        shared_probe = None
+        with _state_lock:
+            shared_probe = _audio_rns_shared_frame_probe_by_packet_hash.pop(bytes(packet_hash), None)
+            shared_to_transport_ms = 0.0
+            shared_frame_gap_ms = 0.0
+            shared_interface_name = ""
+            if shared_probe is not None:
+                shared_mono = float(shared_probe.get("monotonic") or 0.0)
+                shared_to_transport_ms = (
+                    max(0.0, (now_mono - shared_mono) * 1000.0)
+                    if shared_mono > 0
+                    else 0.0
+                )
+                shared_frame_gap_ms = max(0.0, float(shared_probe.get("frameGapMs") or 0.0))
+                shared_interface_name = str(shared_probe.get("interface") or interface_name)
+                _audio_rns_shared_frame_to_transport_inbound_samples += 1
+                _audio_rns_shared_frame_interface_last = shared_interface_name
+                if shared_to_transport_ms > _audio_rns_shared_frame_to_transport_inbound_ms_max:
+                    _audio_rns_shared_frame_to_transport_inbound_ms_max = shared_to_transport_ms
+                    _audio_rns_shared_frame_interface_worst = shared_interface_name
+                _increment_shared_to_transport_buckets(shared_to_transport_ms)
             previous_ms = int(_audio_rns_raw_inbound_last_wall_ms_by_destination_hash.get(destination_hex) or 0)
             raw_gap_ms = 0
             if previous_ms > 0:
@@ -821,6 +969,9 @@ def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
                 "destinationHash": destination_hex,
                 "interface": interface_name,
                 "rawGapMs": raw_gap_ms,
+                "sharedFrameGapMs": shared_frame_gap_ms,
+                "sharedFrameToTransportInboundMs": shared_to_transport_ms,
+                "sharedFrameInterface": shared_interface_name,
             }
             _prune_rns_raw_inbound_probe_cache()
             _mark_audio_queue_state_dirty()
@@ -888,6 +1039,11 @@ def _qortal_link_receive_probe(
             raw_to_link_ms = max(0.0, (now_mono - raw_mono) * 1000.0) if raw_mono > 0 else 0.0
             interface_name = str(raw_probe.get("interface") or "")
             raw_gap_ms = max(0.0, float(raw_probe.get("rawGapMs") or 0.0))
+            shared_frame_gap_ms = max(0.0, float(raw_probe.get("sharedFrameGapMs") or 0.0))
+            shared_to_transport_ms = max(
+                0.0, float(raw_probe.get("sharedFrameToTransportInboundMs") or 0.0)
+            )
+            shared_interface_name = str(raw_probe.get("sharedFrameInterface") or interface_name)
             if raw_to_link_ms > float(stats.get("rnsRawInboundToLinkReceiveMsMax") or 0):
                 stats["rnsRawInboundToLinkReceiveMsMax"] = raw_to_link_ms
                 stats["rnsRawInboundInterfaceWorst"] = interface_name
@@ -904,6 +1060,23 @@ def _qortal_link_receive_probe(
                 if raw_gap_ms >= bucket_ms:
                     key = f"rnsRawInboundGapOver{bucket_ms}Count"
                     stats[key] = int(stats.get(key) or 0) + 1
+            if shared_frame_gap_ms > float(stats.get("rnsSharedFrameGapMsMax") or 0):
+                stats["rnsSharedFrameGapMsMax"] = shared_frame_gap_ms
+            for bucket_ms in _AUDIO_ROUTE_GAP_BUCKETS_MS:
+                if shared_frame_gap_ms >= bucket_ms:
+                    key = f"rnsSharedFrameGapOver{bucket_ms}Count"
+                    stats[key] = int(stats.get(key) or 0) + 1
+            if shared_to_transport_ms > float(
+                stats.get("rnsSharedFrameToTransportInboundMsMax") or 0
+            ):
+                stats["rnsSharedFrameInterfaceWorst"] = shared_interface_name
+            stats["rnsSharedFrameInterfaceLast"] = shared_interface_name
+            _note_audio_route_bucketed_duration(
+                stats,
+                duration_ms=shared_to_transport_ms,
+                max_key="rnsSharedFrameToTransportInboundMsMax",
+                bucket_prefix="rnsSharedFrameToTransportInbound",
+            )
             with _state_lock:
                 _audio_rns_raw_inbound_to_link_receive_samples += 1
                 _audio_rns_raw_inbound_interface_last = interface_name
@@ -1004,6 +1177,31 @@ def install_rns_link_receive_probe() -> None:
 
     setattr(RNS.Link, "receive", probed_receive)
     _rns_link_receive_probe_installed = True
+
+
+def install_rns_shared_frame_probe() -> None:
+    """Track shared-instance frame arrival before it enters RNS.Transport."""
+    global _rns_shared_frame_probe_installed
+    if _rns_shared_frame_probe_installed:
+        return
+    try:
+        from RNS.Interfaces.LocalInterface import LocalClientInterface
+    except Exception:
+        return
+    original_process_incoming = getattr(LocalClientInterface, "process_incoming", None)
+    if not callable(original_process_incoming):
+        return
+
+    def probed_process_incoming(self, data):
+        try:
+            if getattr(self, "is_connected_to_shared_instance", False):
+                _record_rns_shared_frame_probe(data, self)
+        except Exception:
+            pass
+        return original_process_incoming(self, data)
+
+    setattr(LocalClientInterface, "process_incoming", probed_process_incoming)
+    _rns_shared_frame_probe_installed = True
 
 
 def install_rns_transport_inbound_probe() -> None:
@@ -1248,6 +1446,21 @@ def _emit_audio_queue_state(force: bool = False) -> None:
             "rnsRawInboundToLinkReceiveSamples": _audio_rns_raw_inbound_to_link_receive_samples,
             "rnsRawInboundInterfaceLast": _audio_rns_raw_inbound_interface_last,
             "rnsRawInboundInterfaceWorst": _audio_rns_raw_inbound_interface_worst,
+            "rnsSharedFrameGapMsMax": _audio_rns_shared_frame_gap_ms_max,
+            "rnsSharedFrameGapOver80Count": _audio_rns_shared_frame_gap_over_80_count,
+            "rnsSharedFrameGapOver160Count": _audio_rns_shared_frame_gap_over_160_count,
+            "rnsSharedFrameGapOver320Count": _audio_rns_shared_frame_gap_over_320_count,
+            "rnsSharedFrameGapOver640Count": _audio_rns_shared_frame_gap_over_640_count,
+            "rnsSharedFrameGapOver1000Count": _audio_rns_shared_frame_gap_over_1000_count,
+            "rnsSharedFrameToTransportInboundMsMax": _audio_rns_shared_frame_to_transport_inbound_ms_max,
+            "rnsSharedFrameToTransportInboundOver80Count": _audio_rns_shared_frame_to_transport_inbound_over_80_count,
+            "rnsSharedFrameToTransportInboundOver160Count": _audio_rns_shared_frame_to_transport_inbound_over_160_count,
+            "rnsSharedFrameToTransportInboundOver320Count": _audio_rns_shared_frame_to_transport_inbound_over_320_count,
+            "rnsSharedFrameToTransportInboundOver640Count": _audio_rns_shared_frame_to_transport_inbound_over_640_count,
+            "rnsSharedFrameToTransportInboundOver1000Count": _audio_rns_shared_frame_to_transport_inbound_over_1000_count,
+            "rnsSharedFrameToTransportInboundSamples": _audio_rns_shared_frame_to_transport_inbound_samples,
+            "rnsSharedFrameInterfaceLast": _audio_rns_shared_frame_interface_last,
+            "rnsSharedFrameInterfaceWorst": _audio_rns_shared_frame_interface_worst,
             "schedulerDiagnostics": _scheduler_diagnostics(),
             "mediaRouteDiagnostics": _audio_media_route_diagnostics(),
         },
@@ -6872,6 +7085,7 @@ def ensure_started(config_dir: str):
         RNS.Transport.register_announce_handler(_announce_handler)
         ensure_transport_monitor_started()
         ensure_rns_callback_scheduler_monitor_started()
+        install_rns_shared_frame_probe()
         install_rns_transport_inbound_probe()
         install_rns_link_receive_probe()
         return _destination

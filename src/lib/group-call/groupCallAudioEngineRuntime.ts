@@ -412,6 +412,21 @@ type GcallSendAudioDiagnostics = {
     rnsRawInboundToLinkReceiveSamples?: number;
     rnsRawInboundInterfaceLast?: string;
     rnsRawInboundInterfaceWorst?: string;
+    rnsSharedFrameGapMsMax?: number;
+    rnsSharedFrameGapOver80Count?: number;
+    rnsSharedFrameGapOver160Count?: number;
+    rnsSharedFrameGapOver320Count?: number;
+    rnsSharedFrameGapOver640Count?: number;
+    rnsSharedFrameGapOver1000Count?: number;
+    rnsSharedFrameToTransportInboundMsMax?: number;
+    rnsSharedFrameToTransportInboundOver80Count?: number;
+    rnsSharedFrameToTransportInboundOver160Count?: number;
+    rnsSharedFrameToTransportInboundOver320Count?: number;
+    rnsSharedFrameToTransportInboundOver640Count?: number;
+    rnsSharedFrameToTransportInboundOver1000Count?: number;
+    rnsSharedFrameToTransportInboundSamples?: number;
+    rnsSharedFrameInterfaceLast?: string;
+    rnsSharedFrameInterfaceWorst?: string;
     schedulerDiagnostics?: Array<Record<string, unknown>>;
     rendererToBridgeEnqueueMsMax?: number;
     managerFlushToBridgeEnqueueMsMax?: number;
@@ -478,6 +493,20 @@ type GcallSendAudioDiagnostics = {
       rnsRawInboundToLinkReceiveOver1000Count?: number;
       rnsRawInboundInterfaceLast?: string;
       rnsRawInboundInterfaceWorst?: string;
+      rnsSharedFrameGapMsMax?: number;
+      rnsSharedFrameGapOver80Count?: number;
+      rnsSharedFrameGapOver160Count?: number;
+      rnsSharedFrameGapOver320Count?: number;
+      rnsSharedFrameGapOver640Count?: number;
+      rnsSharedFrameGapOver1000Count?: number;
+      rnsSharedFrameToTransportInboundMsMax?: number;
+      rnsSharedFrameToTransportInboundOver80Count?: number;
+      rnsSharedFrameToTransportInboundOver160Count?: number;
+      rnsSharedFrameToTransportInboundOver320Count?: number;
+      rnsSharedFrameToTransportInboundOver640Count?: number;
+      rnsSharedFrameToTransportInboundOver1000Count?: number;
+      rnsSharedFrameInterfaceLast?: string;
+      rnsSharedFrameInterfaceWorst?: string;
       rendererToBridgeEnqueueMsMax?: number;
       managerFlushToBridgeEnqueueMsMax?: number;
       bridgeEnqueueToFd3WriteMsMax?: number;
@@ -1998,6 +2027,35 @@ export class GroupCallAudioEngineRuntime {
         diagnostics.bridge?.rnsRawInboundInterfaceLast,
       rnsRawInboundInterfaceWorst:
         diagnostics.bridge?.rnsRawInboundInterfaceWorst,
+      rnsSharedFrameGapMsMax: diagnostics.bridge?.rnsSharedFrameGapMsMax,
+      rnsSharedFrameGapOver80Count:
+        diagnostics.bridge?.rnsSharedFrameGapOver80Count,
+      rnsSharedFrameGapOver160Count:
+        diagnostics.bridge?.rnsSharedFrameGapOver160Count,
+      rnsSharedFrameGapOver320Count:
+        diagnostics.bridge?.rnsSharedFrameGapOver320Count,
+      rnsSharedFrameGapOver640Count:
+        diagnostics.bridge?.rnsSharedFrameGapOver640Count,
+      rnsSharedFrameGapOver1000Count:
+        diagnostics.bridge?.rnsSharedFrameGapOver1000Count,
+      rnsSharedFrameToTransportInboundMsMax:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundMsMax,
+      rnsSharedFrameToTransportInboundOver80Count:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundOver80Count,
+      rnsSharedFrameToTransportInboundOver160Count:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundOver160Count,
+      rnsSharedFrameToTransportInboundOver320Count:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundOver320Count,
+      rnsSharedFrameToTransportInboundOver640Count:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundOver640Count,
+      rnsSharedFrameToTransportInboundOver1000Count:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundOver1000Count,
+      rnsSharedFrameToTransportInboundSamples:
+        diagnostics.bridge?.rnsSharedFrameToTransportInboundSamples,
+      rnsSharedFrameInterfaceLast:
+        diagnostics.bridge?.rnsSharedFrameInterfaceLast,
+      rnsSharedFrameInterfaceWorst:
+        diagnostics.bridge?.rnsSharedFrameInterfaceWorst,
       schedulerDiagnostics: diagnostics.bridge?.schedulerDiagnostics,
     });
     this.noteCpuDegradedBridgePressure(diagnostics);

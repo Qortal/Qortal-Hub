@@ -207,6 +207,21 @@ export type ReticulumAudioQueueSnapshot = {
   rnsRawInboundToLinkReceiveSamples: number;
   rnsRawInboundInterfaceLast: string;
   rnsRawInboundInterfaceWorst: string;
+  rnsSharedFrameGapMsMax: number;
+  rnsSharedFrameGapOver80Count: number;
+  rnsSharedFrameGapOver160Count: number;
+  rnsSharedFrameGapOver320Count: number;
+  rnsSharedFrameGapOver640Count: number;
+  rnsSharedFrameGapOver1000Count: number;
+  rnsSharedFrameToTransportInboundMsMax: number;
+  rnsSharedFrameToTransportInboundOver80Count: number;
+  rnsSharedFrameToTransportInboundOver160Count: number;
+  rnsSharedFrameToTransportInboundOver320Count: number;
+  rnsSharedFrameToTransportInboundOver640Count: number;
+  rnsSharedFrameToTransportInboundOver1000Count: number;
+  rnsSharedFrameToTransportInboundSamples: number;
+  rnsSharedFrameInterfaceLast: string;
+  rnsSharedFrameInterfaceWorst: string;
   rendererToBridgeEnqueueMsMax: number;
   managerFlushToBridgeEnqueueMsMax: number;
   bridgeEnqueueToFd3WriteMsMax: number;
@@ -291,6 +306,20 @@ export type ReticulumAudioMediaRouteDiagnostic = {
   rnsRawInboundToLinkReceiveOver1000Count?: number;
   rnsRawInboundInterfaceLast?: string;
   rnsRawInboundInterfaceWorst?: string;
+  rnsSharedFrameGapMsMax?: number;
+  rnsSharedFrameGapOver80Count?: number;
+  rnsSharedFrameGapOver160Count?: number;
+  rnsSharedFrameGapOver320Count?: number;
+  rnsSharedFrameGapOver640Count?: number;
+  rnsSharedFrameGapOver1000Count?: number;
+  rnsSharedFrameToTransportInboundMsMax?: number;
+  rnsSharedFrameToTransportInboundOver80Count?: number;
+  rnsSharedFrameToTransportInboundOver160Count?: number;
+  rnsSharedFrameToTransportInboundOver320Count?: number;
+  rnsSharedFrameToTransportInboundOver640Count?: number;
+  rnsSharedFrameToTransportInboundOver1000Count?: number;
+  rnsSharedFrameInterfaceLast?: string;
+  rnsSharedFrameInterfaceWorst?: string;
   rendererToBridgeEnqueueMsMax?: number;
   managerFlushToBridgeEnqueueMsMax?: number;
   bridgeEnqueueToFd3WriteMsMax?: number;
@@ -511,6 +540,21 @@ type BridgeEventFrame =
         rnsRawInboundToLinkReceiveSamples?: number;
         rnsRawInboundInterfaceLast?: string;
         rnsRawInboundInterfaceWorst?: string;
+        rnsSharedFrameGapMsMax?: number;
+        rnsSharedFrameGapOver80Count?: number;
+        rnsSharedFrameGapOver160Count?: number;
+        rnsSharedFrameGapOver320Count?: number;
+        rnsSharedFrameGapOver640Count?: number;
+        rnsSharedFrameGapOver1000Count?: number;
+        rnsSharedFrameToTransportInboundMsMax?: number;
+        rnsSharedFrameToTransportInboundOver80Count?: number;
+        rnsSharedFrameToTransportInboundOver160Count?: number;
+        rnsSharedFrameToTransportInboundOver320Count?: number;
+        rnsSharedFrameToTransportInboundOver640Count?: number;
+        rnsSharedFrameToTransportInboundOver1000Count?: number;
+        rnsSharedFrameToTransportInboundSamples?: number;
+        rnsSharedFrameInterfaceLast?: string;
+        rnsSharedFrameInterfaceWorst?: string;
         schedulerDiagnostics?: Array<Record<string, unknown>>;
         mediaRouteDiagnostics?: Array<Record<string, unknown>>;
       };
@@ -848,6 +892,21 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     rnsRawInboundToLinkReceiveSamples: 0,
     rnsRawInboundInterfaceLast: '',
     rnsRawInboundInterfaceWorst: '',
+    rnsSharedFrameGapMsMax: 0,
+    rnsSharedFrameGapOver80Count: 0,
+    rnsSharedFrameGapOver160Count: 0,
+    rnsSharedFrameGapOver320Count: 0,
+    rnsSharedFrameGapOver640Count: 0,
+    rnsSharedFrameGapOver1000Count: 0,
+    rnsSharedFrameToTransportInboundMsMax: 0,
+    rnsSharedFrameToTransportInboundOver80Count: 0,
+    rnsSharedFrameToTransportInboundOver160Count: 0,
+    rnsSharedFrameToTransportInboundOver320Count: 0,
+    rnsSharedFrameToTransportInboundOver640Count: 0,
+    rnsSharedFrameToTransportInboundOver1000Count: 0,
+    rnsSharedFrameToTransportInboundSamples: 0,
+    rnsSharedFrameInterfaceLast: '',
+    rnsSharedFrameInterfaceWorst: '',
     rendererToBridgeEnqueueMsMax: 0,
     managerFlushToBridgeEnqueueMsMax: 0,
     bridgeEnqueueToFd3WriteMsMax: 0,
@@ -1561,6 +1620,32 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       ),
       rnsRawInboundInterfaceLast: str('rnsRawInboundInterfaceLast'),
       rnsRawInboundInterfaceWorst: str('rnsRawInboundInterfaceWorst'),
+      rnsSharedFrameGapMsMax: num('rnsSharedFrameGapMsMax'),
+      rnsSharedFrameGapOver80Count: num('rnsSharedFrameGapOver80Count'),
+      rnsSharedFrameGapOver160Count: num('rnsSharedFrameGapOver160Count'),
+      rnsSharedFrameGapOver320Count: num('rnsSharedFrameGapOver320Count'),
+      rnsSharedFrameGapOver640Count: num('rnsSharedFrameGapOver640Count'),
+      rnsSharedFrameGapOver1000Count: num('rnsSharedFrameGapOver1000Count'),
+      rnsSharedFrameToTransportInboundMsMax: num(
+        'rnsSharedFrameToTransportInboundMsMax'
+      ),
+      rnsSharedFrameToTransportInboundOver80Count: num(
+        'rnsSharedFrameToTransportInboundOver80Count'
+      ),
+      rnsSharedFrameToTransportInboundOver160Count: num(
+        'rnsSharedFrameToTransportInboundOver160Count'
+      ),
+      rnsSharedFrameToTransportInboundOver320Count: num(
+        'rnsSharedFrameToTransportInboundOver320Count'
+      ),
+      rnsSharedFrameToTransportInboundOver640Count: num(
+        'rnsSharedFrameToTransportInboundOver640Count'
+      ),
+      rnsSharedFrameToTransportInboundOver1000Count: num(
+        'rnsSharedFrameToTransportInboundOver1000Count'
+      ),
+      rnsSharedFrameInterfaceLast: str('rnsSharedFrameInterfaceLast'),
+      rnsSharedFrameInterfaceWorst: str('rnsSharedFrameInterfaceWorst'),
       preRnsSendAgeMsMax: num('preRnsSendAgeMsMax'),
       rnsSendDurationMsMax: num('rnsSendDurationMsMax'),
       receiveToFd4EnqueueMsMax: num('receiveToFd4EnqueueMsMax'),
@@ -2954,6 +3039,80 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             typeof frame.payload?.rnsRawInboundInterfaceWorst === 'string'
               ? frame.payload.rnsRawInboundInterfaceWorst
               : this.lastAudioQueueSnapshot.rnsRawInboundInterfaceWorst,
+          rnsSharedFrameGapMsMax:
+            typeof frame.payload?.rnsSharedFrameGapMsMax === 'number'
+              ? frame.payload.rnsSharedFrameGapMsMax
+              : this.lastAudioQueueSnapshot.rnsSharedFrameGapMsMax,
+          rnsSharedFrameGapOver80Count:
+            typeof frame.payload?.rnsSharedFrameGapOver80Count === 'number'
+              ? frame.payload.rnsSharedFrameGapOver80Count
+              : this.lastAudioQueueSnapshot.rnsSharedFrameGapOver80Count,
+          rnsSharedFrameGapOver160Count:
+            typeof frame.payload?.rnsSharedFrameGapOver160Count === 'number'
+              ? frame.payload.rnsSharedFrameGapOver160Count
+              : this.lastAudioQueueSnapshot.rnsSharedFrameGapOver160Count,
+          rnsSharedFrameGapOver320Count:
+            typeof frame.payload?.rnsSharedFrameGapOver320Count === 'number'
+              ? frame.payload.rnsSharedFrameGapOver320Count
+              : this.lastAudioQueueSnapshot.rnsSharedFrameGapOver320Count,
+          rnsSharedFrameGapOver640Count:
+            typeof frame.payload?.rnsSharedFrameGapOver640Count === 'number'
+              ? frame.payload.rnsSharedFrameGapOver640Count
+              : this.lastAudioQueueSnapshot.rnsSharedFrameGapOver640Count,
+          rnsSharedFrameGapOver1000Count:
+            typeof frame.payload?.rnsSharedFrameGapOver1000Count === 'number'
+              ? frame.payload.rnsSharedFrameGapOver1000Count
+              : this.lastAudioQueueSnapshot.rnsSharedFrameGapOver1000Count,
+          rnsSharedFrameToTransportInboundMsMax:
+            typeof frame.payload?.rnsSharedFrameToTransportInboundMsMax ===
+            'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundMsMax
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundMsMax,
+          rnsSharedFrameToTransportInboundOver80Count:
+            typeof frame.payload
+              ?.rnsSharedFrameToTransportInboundOver80Count === 'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundOver80Count
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundOver80Count,
+          rnsSharedFrameToTransportInboundOver160Count:
+            typeof frame.payload
+              ?.rnsSharedFrameToTransportInboundOver160Count === 'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundOver160Count
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundOver160Count,
+          rnsSharedFrameToTransportInboundOver320Count:
+            typeof frame.payload
+              ?.rnsSharedFrameToTransportInboundOver320Count === 'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundOver320Count
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundOver320Count,
+          rnsSharedFrameToTransportInboundOver640Count:
+            typeof frame.payload
+              ?.rnsSharedFrameToTransportInboundOver640Count === 'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundOver640Count
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundOver640Count,
+          rnsSharedFrameToTransportInboundOver1000Count:
+            typeof frame.payload
+              ?.rnsSharedFrameToTransportInboundOver1000Count === 'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundOver1000Count
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundOver1000Count,
+          rnsSharedFrameToTransportInboundSamples:
+            typeof frame.payload?.rnsSharedFrameToTransportInboundSamples ===
+            'number'
+              ? frame.payload.rnsSharedFrameToTransportInboundSamples
+              : this.lastAudioQueueSnapshot
+                  .rnsSharedFrameToTransportInboundSamples,
+          rnsSharedFrameInterfaceLast:
+            typeof frame.payload?.rnsSharedFrameInterfaceLast === 'string'
+              ? frame.payload.rnsSharedFrameInterfaceLast
+              : this.lastAudioQueueSnapshot.rnsSharedFrameInterfaceLast,
+          rnsSharedFrameInterfaceWorst:
+            typeof frame.payload?.rnsSharedFrameInterfaceWorst === 'string'
+              ? frame.payload.rnsSharedFrameInterfaceWorst
+              : this.lastAudioQueueSnapshot.rnsSharedFrameInterfaceWorst,
           schedulerDiagnostics: Array.isArray(
             frame.payload?.schedulerDiagnostics
           )
