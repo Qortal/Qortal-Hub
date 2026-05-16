@@ -192,6 +192,21 @@ export type ReticulumAudioQueueSnapshot = {
   rnsCallbackSchedulerGapOver250Count: number;
   rnsCallbackSchedulerGapOver500Count: number;
   rnsCallbackSchedulerGapOver1000Count: number;
+  rnsRawInboundGapMsMax: number;
+  rnsRawInboundGapOver80Count: number;
+  rnsRawInboundGapOver160Count: number;
+  rnsRawInboundGapOver320Count: number;
+  rnsRawInboundGapOver640Count: number;
+  rnsRawInboundGapOver1000Count: number;
+  rnsRawInboundToLinkReceiveMsMax: number;
+  rnsRawInboundToLinkReceiveOver80Count: number;
+  rnsRawInboundToLinkReceiveOver160Count: number;
+  rnsRawInboundToLinkReceiveOver320Count: number;
+  rnsRawInboundToLinkReceiveOver640Count: number;
+  rnsRawInboundToLinkReceiveOver1000Count: number;
+  rnsRawInboundToLinkReceiveSamples: number;
+  rnsRawInboundInterfaceLast: string;
+  rnsRawInboundInterfaceWorst: string;
   rendererToBridgeEnqueueMsMax: number;
   managerFlushToBridgeEnqueueMsMax: number;
   bridgeEnqueueToFd3WriteMsMax: number;
@@ -262,6 +277,20 @@ export type ReticulumAudioMediaRouteDiagnostic = {
   linkCallbackDispatchToStartOver320Count?: number;
   linkCallbackDispatchToStartOver640Count?: number;
   linkCallbackDispatchToStartOver1000Count?: number;
+  rnsRawInboundGapMsMax?: number;
+  rnsRawInboundGapOver80Count?: number;
+  rnsRawInboundGapOver160Count?: number;
+  rnsRawInboundGapOver320Count?: number;
+  rnsRawInboundGapOver640Count?: number;
+  rnsRawInboundGapOver1000Count?: number;
+  rnsRawInboundToLinkReceiveMsMax?: number;
+  rnsRawInboundToLinkReceiveOver80Count?: number;
+  rnsRawInboundToLinkReceiveOver160Count?: number;
+  rnsRawInboundToLinkReceiveOver320Count?: number;
+  rnsRawInboundToLinkReceiveOver640Count?: number;
+  rnsRawInboundToLinkReceiveOver1000Count?: number;
+  rnsRawInboundInterfaceLast?: string;
+  rnsRawInboundInterfaceWorst?: string;
   rendererToBridgeEnqueueMsMax?: number;
   managerFlushToBridgeEnqueueMsMax?: number;
   bridgeEnqueueToFd3WriteMsMax?: number;
@@ -467,6 +496,21 @@ type BridgeEventFrame =
         rnsCallbackSchedulerGapOver250Count?: number;
         rnsCallbackSchedulerGapOver500Count?: number;
         rnsCallbackSchedulerGapOver1000Count?: number;
+        rnsRawInboundGapMsMax?: number;
+        rnsRawInboundGapOver80Count?: number;
+        rnsRawInboundGapOver160Count?: number;
+        rnsRawInboundGapOver320Count?: number;
+        rnsRawInboundGapOver640Count?: number;
+        rnsRawInboundGapOver1000Count?: number;
+        rnsRawInboundToLinkReceiveMsMax?: number;
+        rnsRawInboundToLinkReceiveOver80Count?: number;
+        rnsRawInboundToLinkReceiveOver160Count?: number;
+        rnsRawInboundToLinkReceiveOver320Count?: number;
+        rnsRawInboundToLinkReceiveOver640Count?: number;
+        rnsRawInboundToLinkReceiveOver1000Count?: number;
+        rnsRawInboundToLinkReceiveSamples?: number;
+        rnsRawInboundInterfaceLast?: string;
+        rnsRawInboundInterfaceWorst?: string;
         schedulerDiagnostics?: Array<Record<string, unknown>>;
         mediaRouteDiagnostics?: Array<Record<string, unknown>>;
       };
@@ -789,6 +833,21 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     rnsCallbackSchedulerGapOver250Count: 0,
     rnsCallbackSchedulerGapOver500Count: 0,
     rnsCallbackSchedulerGapOver1000Count: 0,
+    rnsRawInboundGapMsMax: 0,
+    rnsRawInboundGapOver80Count: 0,
+    rnsRawInboundGapOver160Count: 0,
+    rnsRawInboundGapOver320Count: 0,
+    rnsRawInboundGapOver640Count: 0,
+    rnsRawInboundGapOver1000Count: 0,
+    rnsRawInboundToLinkReceiveMsMax: 0,
+    rnsRawInboundToLinkReceiveOver80Count: 0,
+    rnsRawInboundToLinkReceiveOver160Count: 0,
+    rnsRawInboundToLinkReceiveOver320Count: 0,
+    rnsRawInboundToLinkReceiveOver640Count: 0,
+    rnsRawInboundToLinkReceiveOver1000Count: 0,
+    rnsRawInboundToLinkReceiveSamples: 0,
+    rnsRawInboundInterfaceLast: '',
+    rnsRawInboundInterfaceWorst: '',
     rendererToBridgeEnqueueMsMax: 0,
     managerFlushToBridgeEnqueueMsMax: 0,
     bridgeEnqueueToFd3WriteMsMax: 0,
@@ -1476,6 +1535,32 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       linkCallbackDispatchToStartOver1000Count: num(
         'linkCallbackDispatchToStartOver1000Count'
       ),
+      rnsRawInboundGapMsMax: num('rnsRawInboundGapMsMax'),
+      rnsRawInboundGapOver80Count: num('rnsRawInboundGapOver80Count'),
+      rnsRawInboundGapOver160Count: num('rnsRawInboundGapOver160Count'),
+      rnsRawInboundGapOver320Count: num('rnsRawInboundGapOver320Count'),
+      rnsRawInboundGapOver640Count: num('rnsRawInboundGapOver640Count'),
+      rnsRawInboundGapOver1000Count: num('rnsRawInboundGapOver1000Count'),
+      rnsRawInboundToLinkReceiveMsMax: num(
+        'rnsRawInboundToLinkReceiveMsMax'
+      ),
+      rnsRawInboundToLinkReceiveOver80Count: num(
+        'rnsRawInboundToLinkReceiveOver80Count'
+      ),
+      rnsRawInboundToLinkReceiveOver160Count: num(
+        'rnsRawInboundToLinkReceiveOver160Count'
+      ),
+      rnsRawInboundToLinkReceiveOver320Count: num(
+        'rnsRawInboundToLinkReceiveOver320Count'
+      ),
+      rnsRawInboundToLinkReceiveOver640Count: num(
+        'rnsRawInboundToLinkReceiveOver640Count'
+      ),
+      rnsRawInboundToLinkReceiveOver1000Count: num(
+        'rnsRawInboundToLinkReceiveOver1000Count'
+      ),
+      rnsRawInboundInterfaceLast: str('rnsRawInboundInterfaceLast'),
+      rnsRawInboundInterfaceWorst: str('rnsRawInboundInterfaceWorst'),
       preRnsSendAgeMsMax: num('preRnsSendAgeMsMax'),
       rnsSendDurationMsMax: num('rnsSendDurationMsMax'),
       receiveToFd4EnqueueMsMax: num('receiveToFd4EnqueueMsMax'),
@@ -2799,6 +2884,76 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
               ? frame.payload.rnsCallbackSchedulerGapOver1000Count
               : this.lastAudioQueueSnapshot
                   .rnsCallbackSchedulerGapOver1000Count,
+          rnsRawInboundGapMsMax:
+            typeof frame.payload?.rnsRawInboundGapMsMax === 'number'
+              ? frame.payload.rnsRawInboundGapMsMax
+              : this.lastAudioQueueSnapshot.rnsRawInboundGapMsMax,
+          rnsRawInboundGapOver80Count:
+            typeof frame.payload?.rnsRawInboundGapOver80Count === 'number'
+              ? frame.payload.rnsRawInboundGapOver80Count
+              : this.lastAudioQueueSnapshot.rnsRawInboundGapOver80Count,
+          rnsRawInboundGapOver160Count:
+            typeof frame.payload?.rnsRawInboundGapOver160Count === 'number'
+              ? frame.payload.rnsRawInboundGapOver160Count
+              : this.lastAudioQueueSnapshot.rnsRawInboundGapOver160Count,
+          rnsRawInboundGapOver320Count:
+            typeof frame.payload?.rnsRawInboundGapOver320Count === 'number'
+              ? frame.payload.rnsRawInboundGapOver320Count
+              : this.lastAudioQueueSnapshot.rnsRawInboundGapOver320Count,
+          rnsRawInboundGapOver640Count:
+            typeof frame.payload?.rnsRawInboundGapOver640Count === 'number'
+              ? frame.payload.rnsRawInboundGapOver640Count
+              : this.lastAudioQueueSnapshot.rnsRawInboundGapOver640Count,
+          rnsRawInboundGapOver1000Count:
+            typeof frame.payload?.rnsRawInboundGapOver1000Count === 'number'
+              ? frame.payload.rnsRawInboundGapOver1000Count
+              : this.lastAudioQueueSnapshot.rnsRawInboundGapOver1000Count,
+          rnsRawInboundToLinkReceiveMsMax:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveMsMax === 'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveMsMax
+              : this.lastAudioQueueSnapshot.rnsRawInboundToLinkReceiveMsMax,
+          rnsRawInboundToLinkReceiveOver80Count:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveOver80Count ===
+            'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveOver80Count
+              : this.lastAudioQueueSnapshot
+                  .rnsRawInboundToLinkReceiveOver80Count,
+          rnsRawInboundToLinkReceiveOver160Count:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveOver160Count ===
+            'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveOver160Count
+              : this.lastAudioQueueSnapshot
+                  .rnsRawInboundToLinkReceiveOver160Count,
+          rnsRawInboundToLinkReceiveOver320Count:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveOver320Count ===
+            'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveOver320Count
+              : this.lastAudioQueueSnapshot
+                  .rnsRawInboundToLinkReceiveOver320Count,
+          rnsRawInboundToLinkReceiveOver640Count:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveOver640Count ===
+            'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveOver640Count
+              : this.lastAudioQueueSnapshot
+                  .rnsRawInboundToLinkReceiveOver640Count,
+          rnsRawInboundToLinkReceiveOver1000Count:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveOver1000Count ===
+            'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveOver1000Count
+              : this.lastAudioQueueSnapshot
+                  .rnsRawInboundToLinkReceiveOver1000Count,
+          rnsRawInboundToLinkReceiveSamples:
+            typeof frame.payload?.rnsRawInboundToLinkReceiveSamples === 'number'
+              ? frame.payload.rnsRawInboundToLinkReceiveSamples
+              : this.lastAudioQueueSnapshot.rnsRawInboundToLinkReceiveSamples,
+          rnsRawInboundInterfaceLast:
+            typeof frame.payload?.rnsRawInboundInterfaceLast === 'string'
+              ? frame.payload.rnsRawInboundInterfaceLast
+              : this.lastAudioQueueSnapshot.rnsRawInboundInterfaceLast,
+          rnsRawInboundInterfaceWorst:
+            typeof frame.payload?.rnsRawInboundInterfaceWorst === 'string'
+              ? frame.payload.rnsRawInboundInterfaceWorst
+              : this.lastAudioQueueSnapshot.rnsRawInboundInterfaceWorst,
           schedulerDiagnostics: Array.isArray(
             frame.payload?.schedulerDiagnostics
           )

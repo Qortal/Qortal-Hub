@@ -397,6 +397,21 @@ type GcallSendAudioDiagnostics = {
     rnsCallbackSchedulerGapOver250Count?: number;
     rnsCallbackSchedulerGapOver500Count?: number;
     rnsCallbackSchedulerGapOver1000Count?: number;
+    rnsRawInboundGapMsMax?: number;
+    rnsRawInboundGapOver80Count?: number;
+    rnsRawInboundGapOver160Count?: number;
+    rnsRawInboundGapOver320Count?: number;
+    rnsRawInboundGapOver640Count?: number;
+    rnsRawInboundGapOver1000Count?: number;
+    rnsRawInboundToLinkReceiveMsMax?: number;
+    rnsRawInboundToLinkReceiveOver80Count?: number;
+    rnsRawInboundToLinkReceiveOver160Count?: number;
+    rnsRawInboundToLinkReceiveOver320Count?: number;
+    rnsRawInboundToLinkReceiveOver640Count?: number;
+    rnsRawInboundToLinkReceiveOver1000Count?: number;
+    rnsRawInboundToLinkReceiveSamples?: number;
+    rnsRawInboundInterfaceLast?: string;
+    rnsRawInboundInterfaceWorst?: string;
     schedulerDiagnostics?: Array<Record<string, unknown>>;
     rendererToBridgeEnqueueMsMax?: number;
     managerFlushToBridgeEnqueueMsMax?: number;
@@ -449,6 +464,20 @@ type GcallSendAudioDiagnostics = {
       linkCallbackDispatchToStartOver320Count?: number;
       linkCallbackDispatchToStartOver640Count?: number;
       linkCallbackDispatchToStartOver1000Count?: number;
+      rnsRawInboundGapMsMax?: number;
+      rnsRawInboundGapOver80Count?: number;
+      rnsRawInboundGapOver160Count?: number;
+      rnsRawInboundGapOver320Count?: number;
+      rnsRawInboundGapOver640Count?: number;
+      rnsRawInboundGapOver1000Count?: number;
+      rnsRawInboundToLinkReceiveMsMax?: number;
+      rnsRawInboundToLinkReceiveOver80Count?: number;
+      rnsRawInboundToLinkReceiveOver160Count?: number;
+      rnsRawInboundToLinkReceiveOver320Count?: number;
+      rnsRawInboundToLinkReceiveOver640Count?: number;
+      rnsRawInboundToLinkReceiveOver1000Count?: number;
+      rnsRawInboundInterfaceLast?: string;
+      rnsRawInboundInterfaceWorst?: string;
       rendererToBridgeEnqueueMsMax?: number;
       managerFlushToBridgeEnqueueMsMax?: number;
       bridgeEnqueueToFd3WriteMsMax?: number;
@@ -1940,6 +1969,35 @@ export class GroupCallAudioEngineRuntime {
         diagnostics.bridge?.rnsCallbackSchedulerGapOver500Count,
       rnsCallbackSchedulerGapOver1000Count:
         diagnostics.bridge?.rnsCallbackSchedulerGapOver1000Count,
+      rnsRawInboundGapMsMax: diagnostics.bridge?.rnsRawInboundGapMsMax,
+      rnsRawInboundGapOver80Count:
+        diagnostics.bridge?.rnsRawInboundGapOver80Count,
+      rnsRawInboundGapOver160Count:
+        diagnostics.bridge?.rnsRawInboundGapOver160Count,
+      rnsRawInboundGapOver320Count:
+        diagnostics.bridge?.rnsRawInboundGapOver320Count,
+      rnsRawInboundGapOver640Count:
+        diagnostics.bridge?.rnsRawInboundGapOver640Count,
+      rnsRawInboundGapOver1000Count:
+        diagnostics.bridge?.rnsRawInboundGapOver1000Count,
+      rnsRawInboundToLinkReceiveMsMax:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveMsMax,
+      rnsRawInboundToLinkReceiveOver80Count:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveOver80Count,
+      rnsRawInboundToLinkReceiveOver160Count:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveOver160Count,
+      rnsRawInboundToLinkReceiveOver320Count:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveOver320Count,
+      rnsRawInboundToLinkReceiveOver640Count:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveOver640Count,
+      rnsRawInboundToLinkReceiveOver1000Count:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveOver1000Count,
+      rnsRawInboundToLinkReceiveSamples:
+        diagnostics.bridge?.rnsRawInboundToLinkReceiveSamples,
+      rnsRawInboundInterfaceLast:
+        diagnostics.bridge?.rnsRawInboundInterfaceLast,
+      rnsRawInboundInterfaceWorst:
+        diagnostics.bridge?.rnsRawInboundInterfaceWorst,
       schedulerDiagnostics: diagnostics.bridge?.schedulerDiagnostics,
     });
     this.noteCpuDegradedBridgePressure(diagnostics);
