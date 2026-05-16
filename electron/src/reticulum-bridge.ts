@@ -2180,9 +2180,15 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       ...process.env,
       ...(launch.envExtra ?? {}),
       PYTHONUNBUFFERED: '1',
+      QORTAL_RNS_LINK_TRACE: app.isPackaged
+        ? process.env.QORTAL_RNS_LINK_TRACE ?? '0'
+        : '1',
       QORTAL_RETICULUM_CONFIG_DIR: configDir,
       QORTAL_RETICULUM_IDENTITY_PATH: identityPath,
     };
+    loggerLog(
+      `[ReticulumBridge] Launch env QORTAL_RNS_LINK_TRACE=${env.QORTAL_RNS_LINK_TRACE}`
+    );
 
     const child = spawn(launch.cmd, launch.args, {
       cwd: launch.cwd,

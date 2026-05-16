@@ -206,6 +206,7 @@ const GC_RETICULUM_AUDIO_PENDING_FANOUT_SOFT_LIMIT = 3;
 const GC_RETICULUM_AUDIO_PENDING_HIGH_FANOUT_LIMIT = 12;
 const GC_RETICULUM_LINK_CONTROL_PENDING_MAX_FRAMES = 32;
 const GC_RETICULUM_LINK_CONTROL_PENDING_MAX_AGE_MS = 20_000;
+const GC_RETICULUM_UNRESOLVED_LINK_AUTH_GRACE_MS = 10_000;
 const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_FRAMES = 6;
 const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS = 300;
 const GC_RETICULUM_AUDIO_PREROUTE_RETRY_DELAY_MS = 30;
@@ -1531,6 +1532,10 @@ export class GroupCallManager extends EventEmitter {
     string,
     { reason: string; atMs: number }
   >();
+  private reticulumAudioUnresolvedLinkAuthSinceById = new Map<
+    string,
+    { atMs: number; roomId: string; reason: string; count: number }
+  >();
   private reticulumAudioDeferredCloseTimersByLinkId = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -2301,6 +2306,7 @@ export class GroupCallManager extends EventEmitter {
     this.reticulumAudioPeersByAddress.clear();
     this.reticulumAudioAddressByLinkId.clear();
     this.reticulumAudioClosingLinkReasonsById.clear();
+    this.reticulumAudioUnresolvedLinkAuthSinceById.clear();
     for (const timer of this.reticulumAudioDeferredCloseTimersByLinkId.values()) {
       clearTimeout(timer);
     }
@@ -2893,6 +2899,18 @@ export class GroupCallManager extends EventEmitter {
     for (const [key, joinEnv] of this.retainedVerifiedJoinByRoomAndAddress) {
       if (!key.startsWith(`${roomId}:`)) continue;
       if (joinEnv.fromAddress === excludeAddress) continue;
+      const rejectReason = gcJoinTimestampRejectReason(
+        joinEnv.timestamp,
+        Date.now()
+      );
+      if (rejectReason) {
+        this.logGcJoinDropThrottled(
+          joinEnv.fromAddress,
+          `retained_replay_${rejectReason}`,
+          `[GCall] Skipping retained GC_JOIN replay (${rejectReason}) room=${roomId} from=${joinEnv.fromAddress} target=${targetAddress}`
+        );
+        continue;
+      }
       frames.push(
         encodeJoinWire({
           ...joinEnv,
@@ -5151,10 +5169,45 @@ export class GroupCallManager extends EventEmitter {
   ): void {
     if (!linkId) return;
     this.pruneReticulumAudioClosingLinks(now);
+    this.reticulumAudioUnresolvedLinkAuthSinceById.delete(linkId);
     this.reticulumAudioClosingLinkReasonsById.set(linkId, {
       reason,
       atMs: now,
     });
+  }
+
+  private shouldHoldUnresolvedReticulumLinkForAuth(
+    linkId: string,
+    roomId: string,
+    reason: string,
+    now = Date.now()
+  ): boolean {
+    if (!linkId || this.isReticulumAudioLinkLocallyClosing(linkId, now)) {
+      return false;
+    }
+    const existing = this.reticulumAudioUnresolvedLinkAuthSinceById.get(linkId);
+    if (!existing) {
+      this.reticulumAudioUnresolvedLinkAuthSinceById.set(linkId, {
+        atMs: now,
+        roomId,
+        reason,
+        count: 1,
+      });
+      loggerLog(
+        `[GCall] Holding unresolved Reticulum audio link for auth room=${roomId} linkId=${linkId} reason=${reason} graceMs=${GC_RETICULUM_UNRESOLVED_LINK_AUTH_GRACE_MS}`
+      );
+      return true;
+    }
+    existing.count += 1;
+    existing.reason = reason;
+    if (now - existing.atMs <= GC_RETICULUM_UNRESOLVED_LINK_AUTH_GRACE_MS) {
+      return true;
+    }
+    loggerLog(
+      `[GCall] Reticulum unresolved audio link auth timed out room=${existing.roomId || roomId} linkId=${linkId} reason=${reason} count=${existing.count}`
+    );
+    this.reticulumAudioUnresolvedLinkAuthSinceById.delete(linkId);
+    return false;
   }
 
   private isReticulumAudioLinkLocallyClosing(
@@ -8507,6 +8560,15 @@ export class GroupCallManager extends EventEmitter {
     );
     if (!hasLocalInterest) return;
     if (!address) {
+      if (
+        this.shouldHoldUnresolvedReticulumLinkForAuth(
+          linkId,
+          wire.R,
+          'heartbeat-unresolved-address'
+        )
+      ) {
+        return;
+      }
       this.closeReticulumAudioLinkQuietly(
         linkId,
         'heartbeat-unresolved-address'
@@ -8765,6 +8827,7 @@ export class GroupCallManager extends EventEmitter {
     if (signedHash) {
       this.rememberReticulumPeerPresenceHash(env.fromAddress, signedHash);
     }
+    this.reticulumAudioUnresolvedLinkAuthSinceById.delete(job.linkId);
     let state = this.reticulumAudioPeersByAddress.get(env.fromAddress);
     if (!state) {
       state = this.ensureReticulumAudioPeerState(env.roomId, env.fromAddress);
@@ -8860,6 +8923,15 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     if (inboundLinkControlWire && !fromAddress) {
+      if (
+        this.shouldHoldUnresolvedReticulumLinkForAuth(
+          payload.linkId,
+          payload.roomId,
+          'control-unresolved-address'
+        )
+      ) {
+        return;
+      }
       this.closeReticulumAudioLinkQuietly(
         payload.linkId,
         'control-unresolved-address'
@@ -9099,6 +9171,7 @@ export class GroupCallManager extends EventEmitter {
     incoming: boolean;
     reason: string;
   }): void {
+    this.reticulumAudioUnresolvedLinkAuthSinceById.delete(payload.linkId);
     const locallyClosing = this.isReticulumAudioLinkLocallyClosing(
       payload.linkId
     );

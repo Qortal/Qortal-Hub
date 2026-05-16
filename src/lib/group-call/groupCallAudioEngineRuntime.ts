@@ -653,6 +653,7 @@ const LOW_INBOUND_MEDIA_RECOVERY_RATE_BELOW_097_MIN = 0.1;
 const LOW_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 100;
 const LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS = 12_000;
 const TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS = 8_000;
+const STARTUP_SUPPRESSION_DIAG_COOLDOWN_MS = 5_000;
 const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_INCOMING_PACKET_MS = 1_000;
 const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_BRIDGE_TO_RENDERER_MS = 750;
 const BURSTY_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 80;
@@ -894,6 +895,10 @@ export class GroupCallAudioEngineRuntime {
   private readonly participantJoinIdentityByAddress = new Map<string, string>();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
+  private readonly throttledDiagEvents = new Map<
+    string,
+    { firstAtMs: number; lastEmitAtMs: number; suppressedSinceEmit: number }
+  >();
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
   private readonly audioStageGapStats = new Map<
     AudioStageName,
@@ -1316,6 +1321,38 @@ export class GroupCallAudioEngineRuntime {
         this.diagEvents.length - MAX_AUDIO_SURFACE_DIAG_EVENTS
       );
     }
+  }
+
+  private recordThrottledDiagEvent(
+    tag: string,
+    throttleKey: string,
+    payload?: Record<string, unknown>,
+    cooldownMs = STARTUP_SUPPRESSION_DIAG_COOLDOWN_MS
+  ): void {
+    const nowMs = Date.now();
+    const key = `${tag}:${throttleKey}`;
+    const existing = this.throttledDiagEvents.get(key);
+    if (!existing) {
+      this.throttledDiagEvents.set(key, {
+        firstAtMs: nowMs,
+        lastEmitAtMs: nowMs,
+        suppressedSinceEmit: 0,
+      });
+      this.recordDiagEvent(tag, payload);
+      return;
+    }
+
+    existing.suppressedSinceEmit += 1;
+    if (nowMs - existing.lastEmitAtMs < cooldownMs) return;
+
+    const suppressedSinceLast = existing.suppressedSinceEmit;
+    existing.lastEmitAtMs = nowMs;
+    existing.suppressedSinceEmit = 0;
+    this.recordDiagEvent(tag, {
+      ...payload,
+      firstSuppressedAtMs: existing.firstAtMs,
+      suppressedSinceLast,
+    });
   }
 
   private getAudioStageAggregate<K extends string>(
@@ -2712,14 +2749,18 @@ export class GroupCallAudioEngineRuntime {
     for (const address of uniqueTargets) {
       const settleAgeMs = this.getMediaTargetSettleAgeMs(address, now);
       if (settleAgeMs < LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS) {
-        this.recordDiagEvent('zero-inbound-media-recovery-suppressed-startup', {
-          roomId: this.snapshot.roomId,
-          peerAddress: address,
-          settleAgeMs,
-          graceMs: LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS,
-          outboundSendSuccesses: this.outboundSendSuccesses,
-          packetsReceived: metrics.packetsReceived,
-        });
+        this.recordThrottledDiagEvent(
+          'zero-inbound-media-recovery-suppressed-startup',
+          `${this.snapshot.roomId}:${address}`,
+          {
+            roomId: this.snapshot.roomId,
+            peerAddress: address,
+            settleAgeMs,
+            graceMs: LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS,
+            outboundSendSuccesses: this.outboundSendSuccesses,
+            packetsReceived: metrics.packetsReceived,
+          }
+        );
         continue;
       }
       const lastAt =
@@ -2799,16 +2840,20 @@ export class GroupCallAudioEngineRuntime {
       now - this.lastJoinSuccessAtMs <
         LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS
     ) {
-      this.recordDiagEvent('low-inbound-media-recovery-suppressed-startup', {
-        roomId: this.snapshot.roomId,
-        sinceJoinMs: now - this.lastJoinSuccessAtMs,
-        graceMs: LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS,
-        outboundSendSuccesses: this.outboundSendSuccesses,
-        packetsReceived: metrics.packetsReceived,
-        inboundToOutboundRatio,
-        concealmentTicks: metrics.concealmentTicks,
-        missingFrames: metrics.missingFrames,
-      });
+      this.recordThrottledDiagEvent(
+        'low-inbound-media-recovery-suppressed-startup',
+        `${this.snapshot.roomId}`,
+        {
+          roomId: this.snapshot.roomId,
+          sinceJoinMs: now - this.lastJoinSuccessAtMs,
+          graceMs: LOW_INBOUND_MEDIA_RECOVERY_STARTUP_GRACE_MS,
+          outboundSendSuccesses: this.outboundSendSuccesses,
+          packetsReceived: metrics.packetsReceived,
+          inboundToOutboundRatio,
+          concealmentTicks: metrics.concealmentTicks,
+          missingFrames: metrics.missingFrames,
+        }
+      );
       return;
     }
     for (const address of uniqueTargets) {
@@ -3418,6 +3463,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
+    this.throttledDiagEvents.clear();
     this.zeroInboundMediaRecoveryLastAtByAddress.clear();
     this.resetOutboundMediaDiagnostics();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
@@ -3701,6 +3747,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
+    this.throttledDiagEvents.clear();
     this.resetOutboundMediaDiagnostics();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.memberGateGroupId = null;
@@ -5477,16 +5524,21 @@ export class GroupCallAudioEngineRuntime {
       startupAgeMs < TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS &&
       linkStillSettling
     ) {
-      this.recordDiagEvent('two-party-link-resync-suppressed-startup', {
-        roomId: this.snapshot.roomId,
-        reason,
-        peer: truncateGcallDiagAddress(peer),
-        settleAgeMs: startupAgeMs,
-        graceMs: TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS,
-        linkOpening: diagnostics.linkOpening ?? null,
-        linkEstablishPendingAgeMs: diagnostics.linkEstablishPendingAgeMs ?? null,
-        lastLinkUnreadyAgeMs: lastUnreadyAt > 0 ? nowMs - lastUnreadyAt : null,
-      });
+      this.recordThrottledDiagEvent(
+        'two-party-link-resync-suppressed-startup',
+        `${this.snapshot.roomId}:${peer}:${reason}`,
+        {
+          roomId: this.snapshot.roomId,
+          reason,
+          peer: truncateGcallDiagAddress(peer),
+          settleAgeMs: startupAgeMs,
+          graceMs: TWO_PARTY_LINK_RESYNC_STARTUP_GRACE_MS,
+          linkOpening: diagnostics.linkOpening ?? null,
+          linkEstablishPendingAgeMs:
+            diagnostics.linkEstablishPendingAgeMs ?? null,
+          lastLinkUnreadyAgeMs: lastUnreadyAt > 0 ? nowMs - lastUnreadyAt : null,
+        }
+      );
       return;
     }
     void this.forceTwoPartyDeterministicTopologyResync(

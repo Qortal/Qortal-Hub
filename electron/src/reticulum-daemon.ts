@@ -23,6 +23,7 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
 import net from 'net';
+import os from 'os';
 import path from 'path';
 import { log as loggerLog, error as loggerError } from './logger';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
@@ -75,6 +76,7 @@ const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
+const RETICULUM_PRIORITY_NICE_DEFAULT = -7;
 const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
 const QCHAT_FILE_OFFER_TTL_MS = 2 * 60 * 60 * 1000;
 const QCHAT_FILE_COMPLETED_CACHE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -191,6 +193,37 @@ type QchatFilePendingSendRecord = {
 const qchatFilePendingSends = new Map<string, QchatFilePendingSendRecord>();
 let qchatFileHydratedBridge: unknown = null;
 const qchatFileCompletedSends = new Map<string, number>();
+
+function parseReticulumPriorityNice(): number | null {
+  const raw = String(process.env.QORTAL_RETICULUM_PRIORITY_NICE ?? '').trim();
+  if (raw.toLowerCase() === 'off' || raw === '0') return null;
+  const requested = raw ? Number(raw) : RETICULUM_PRIORITY_NICE_DEFAULT;
+  if (!Number.isFinite(requested)) return RETICULUM_PRIORITY_NICE_DEFAULT;
+  return Math.max(-20, Math.min(19, Math.trunc(requested)));
+}
+
+function tryRaiseReticulumProcessPriority(pid: number): void {
+  const requested = parseReticulumPriorityNice();
+  if (requested === null) {
+    loggerLog('[ReticulumPriority] rnsd: disabled');
+    return;
+  }
+  try {
+    const before = os.getPriority(pid);
+    os.setPriority(pid, requested);
+    const after = os.getPriority(pid);
+    const message = `[ReticulumPriority] rnsd: pid=${pid} before=${before} requested=${requested} after=${after}`;
+    loggerLog(message);
+    appendReticulumFileLog(message);
+  } catch (err) {
+    const message =
+      `[ReticulumPriority] rnsd: pid=${pid} requested=${requested} failed=${String(
+        err instanceof Error ? err.message : err
+      )}`;
+    loggerLog(message);
+    appendReticulumFileLog(message);
+  }
+}
 
 type ReticulumSharedDaemonState = {
   pid: number;
@@ -1282,7 +1315,13 @@ function probeReticulumVersion(
   plan: Extract<LaunchPlan, { cmd: string }>
 ): string | null {
   try {
-    const env = { ...process.env, ...(plan.envExtra ?? {}) };
+    const env = {
+      ...process.env,
+      ...(plan.envExtra ?? {}),
+      QORTAL_RNS_LINK_TRACE: app.isPackaged
+        ? process.env.QORTAL_RNS_LINK_TRACE ?? '0'
+        : '1',
+    };
     if (plan.mode === 'frozen') {
       const result = spawnSync(plan.cmd, ['--version'], {
         cwd: plan.cwd,
@@ -1773,7 +1812,16 @@ export function startBundledReticulumDaemon(): void {
   }
 
   try {
-    const env = { ...process.env, ...(plan.envExtra ?? {}) };
+    const env = {
+      ...process.env,
+      ...(plan.envExtra ?? {}),
+      QORTAL_RNS_LINK_TRACE: app.isPackaged
+        ? process.env.QORTAL_RNS_LINK_TRACE ?? '0'
+        : '1',
+    };
+    loggerLog(
+      `[Reticulum] Launch env QORTAL_RNS_LINK_TRACE=${env.QORTAL_RNS_LINK_TRACE}`
+    );
     const subprocess = spawn(plan.cmd, plan.args, {
       cwd: plan.cwd,
       env,
@@ -1784,6 +1832,7 @@ export function startBundledReticulumDaemon(): void {
     lastStartMode = plan.mode;
     if (typeof subprocess.pid === 'number') {
       persistReticulumSharedDaemonState(subprocess.pid);
+      tryRaiseReticulumProcessPriority(subprocess.pid);
     }
 
     subprocess.stdout.on('data', (d) => emitReticulumLog('stdout', d));
