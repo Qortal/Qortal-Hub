@@ -38,6 +38,19 @@ import { GC_RETICULUM_WIRE_BUILD_MARKER } from './group-call-wire-reticulum';
 const RETICULUM_AUDIO_QUEUED_AT_MS = Symbol.for(
   'qortal.reticulumAudioQueuedAtMs'
 );
+const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
+  'qortal.gcallAudioRendererSendAtMs'
+);
+const GCALL_AUDIO_MANAGER_FLUSH_AT_MS = Symbol.for(
+  'qortal.gcallAudioManagerFlushAtMs'
+);
+
+function readNumberSymbol(data: Buffer, symbol: symbol): number | undefined {
+  const value = Reflect.get(data, symbol);
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
 
 /**
  * Python emits overlay_link_state after every overlay send with these traffic labels
@@ -57,7 +70,9 @@ function shouldLogOverlayLinkStateEvent(reason: string): boolean {
   return true;
 }
 
-function overlayAgeDetail(payload: Record<string, unknown> | undefined): string {
+function overlayAgeDetail(
+  payload: Record<string, unknown> | undefined
+): string {
   if (!payload) return '';
   const parts: string[] = [];
   for (const key of [
@@ -177,6 +192,11 @@ export type ReticulumAudioQueueSnapshot = {
   rnsCallbackSchedulerGapOver250Count: number;
   rnsCallbackSchedulerGapOver500Count: number;
   rnsCallbackSchedulerGapOver1000Count: number;
+  rendererToBridgeEnqueueMsMax: number;
+  managerFlushToBridgeEnqueueMsMax: number;
+  bridgeEnqueueToFd3WriteMsMax: number;
+  bridgeEnqueueToFd3WriteQueueDwellMsMax: number;
+  rendererToFd3WriteMsMax: number;
   mediaRouteDiagnostics?: ReticulumAudioMediaRouteDiagnostic[];
 };
 
@@ -226,6 +246,11 @@ export type ReticulumAudioMediaRouteDiagnostic = {
   linkCallbackDispatchToStartOver320Count?: number;
   linkCallbackDispatchToStartOver640Count?: number;
   linkCallbackDispatchToStartOver1000Count?: number;
+  rendererToBridgeEnqueueMsMax?: number;
+  managerFlushToBridgeEnqueueMsMax?: number;
+  bridgeEnqueueToFd3WriteMsMax?: number;
+  bridgeEnqueueToFd3WriteQueueDwellMsMax?: number;
+  rendererToFd3WriteMsMax?: number;
   preRnsSendAgeMsMax: number;
   rnsSendDurationMsMax: number;
   receiveToFd4EnqueueMsMax: number;
@@ -631,7 +656,20 @@ type QueuedAudioFrame = {
   peerDestinationHash: string;
   data: Buffer;
   queuedAtMs: number;
+  rendererSendAtMs?: number;
+  managerFlushAtMs?: number;
+  bridgeEnqueuedAtMs: number;
   sizeBytes: number;
+};
+
+type AudioBinaryWriteQueueItem = {
+  buf: Buffer;
+  queuedAtMs: number;
+  frames: Array<{
+    routeKey: string;
+    rendererSendAtMs?: number;
+    bridgeEnqueuedAtMs: number;
+  }>;
 };
 
 export class ReticulumBridge extends EventEmitter implements PresenceTransport {
@@ -676,7 +714,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
    * in phil-kenny-one-on-one-60: 49 drops vs 0 on standby; bridge high-water sat at per-link max).
    */
   private readonly audioBinaryWriteQueueMax = 12;
-  private audioBinaryWriteQueue: Buffer[] = [];
+  private audioBinaryWriteQueue: AudioBinaryWriteQueueItem[] = [];
   private waitingForAudioBinaryDrain = false;
   private audioFlushScheduled = false;
   private audioInBuffer = Buffer.alloc(0);
@@ -734,6 +772,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     rnsCallbackSchedulerGapOver250Count: 0,
     rnsCallbackSchedulerGapOver500Count: 0,
     rnsCallbackSchedulerGapOver1000Count: 0,
+    rendererToBridgeEnqueueMsMax: 0,
+    managerFlushToBridgeEnqueueMsMax: 0,
+    bridgeEnqueueToFd3WriteMsMax: 0,
+    bridgeEnqueueToFd3WriteQueueDwellMsMax: 0,
+    rendererToFd3WriteMsMax: 0,
     mediaRouteDiagnostics: [],
   };
   /** One-shot diagnostics: confirm binary egress/ingress actually ran. */
@@ -1224,7 +1267,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   }
 
   private enqueueAudioFrame(
-    frameInput: Omit<QueuedAudioFrame, 'queuedAtMs' | 'sizeBytes'>
+    frameInput: Omit<
+      QueuedAudioFrame,
+      | 'queuedAtMs'
+      | 'rendererSendAtMs'
+      | 'managerFlushAtMs'
+      | 'bridgeEnqueuedAtMs'
+      | 'sizeBytes'
+    >
   ): ReticulumEnqueueGroupAudioResult {
     if (!Buffer.isBuffer(frameInput.data)) {
       return { ok: false, reason: 'audio-enqueue-failed' };
@@ -1251,20 +1301,38 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       queuePressureDrops++;
       dropped = true;
     }
-    const queuedAtMs = (
-      frameInput.data as Buffer & {
-        [RETICULUM_AUDIO_QUEUED_AT_MS]?: unknown;
-      }
-    )[RETICULUM_AUDIO_QUEUED_AT_MS];
+    const queuedAtMs = readNumberSymbol(
+      frameInput.data,
+      RETICULUM_AUDIO_QUEUED_AT_MS
+    );
+    const rendererSendAtMs = readNumberSymbol(
+      frameInput.data,
+      GCALL_AUDIO_RENDERER_SEND_AT_MS
+    );
+    const managerFlushAtMs = readNumberSymbol(
+      frameInput.data,
+      GCALL_AUDIO_MANAGER_FLUSH_AT_MS
+    );
+    const bridgeEnqueuedAtMs = Date.now();
+    if (rendererSendAtMs) {
+      this.lastAudioQueueSnapshot.rendererToBridgeEnqueueMsMax = Math.max(
+        this.lastAudioQueueSnapshot.rendererToBridgeEnqueueMsMax,
+        Math.max(0, bridgeEnqueuedAtMs - rendererSendAtMs)
+      );
+    }
+    if (managerFlushAtMs) {
+      this.lastAudioQueueSnapshot.managerFlushToBridgeEnqueueMsMax = Math.max(
+        this.lastAudioQueueSnapshot.managerFlushToBridgeEnqueueMsMax,
+        Math.max(0, bridgeEnqueuedAtMs - managerFlushAtMs)
+      );
+    }
     const frame: QueuedAudioFrame = {
       ...frameInput,
       data: Buffer.from(frameInput.data),
-      queuedAtMs:
-        typeof queuedAtMs === 'number' &&
-        Number.isFinite(queuedAtMs) &&
-        queuedAtMs > 0
-          ? queuedAtMs
-          : Date.now(),
+      queuedAtMs: queuedAtMs ?? bridgeEnqueuedAtMs,
+      rendererSendAtMs,
+      managerFlushAtMs,
+      bridgeEnqueuedAtMs,
       sizeBytes: frameInput.data.length,
     };
     queue.push(frame);
@@ -1320,9 +1388,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   ): ReticulumAudioMediaRouteDiagnostic {
     const num = (key: string): number => {
       const value = input[key];
-      return typeof value === 'number' && Number.isFinite(value)
-        ? value
-        : 0;
+      return typeof value === 'number' && Number.isFinite(value) ? value : 0;
     };
     const str = (key: string): string => {
       const value = input[key];
@@ -1369,12 +1435,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       linkReceiveToCallbackDispatchMsMax: num(
         'linkReceiveToCallbackDispatchMsMax'
       ),
-      linkCallbackDispatchToStartMsMax: num(
-        'linkCallbackDispatchToStartMsMax'
-      ),
-      linkReceiveToCallbackStartMsMax: num(
-        'linkReceiveToCallbackStartMsMax'
-      ),
+      linkCallbackDispatchToStartMsMax: num('linkCallbackDispatchToStartMsMax'),
+      linkReceiveToCallbackStartMsMax: num('linkReceiveToCallbackStartMsMax'),
       linkCallbackDispatchToStartOver80Count: num(
         'linkCallbackDispatchToStartOver80Count'
       ),
@@ -1706,7 +1768,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     );
   }
 
-  private hasEstablishedOverlaySnapshotForPeer(peerPresenceHash: string): boolean {
+  private hasEstablishedOverlaySnapshotForPeer(
+    peerPresenceHash: string
+  ): boolean {
     const peerKey = peerPresenceHash.trim().toLowerCase();
     if (!peerKey) return false;
     for (const snap of this.overlayLinkSnapshots.values()) {
@@ -2087,6 +2151,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       this.audioBinaryWriteQueue.length < this.audioBinaryWriteQueueMax
     ) {
       const batch: ReticulumAudioFrame[] = [];
+      const batchTiming: AudioBinaryWriteQueueItem['frames'] = [];
       let bodyBudget = 2;
       const maxBody = Math.min(60000, RETICULUM_AUDIO_MAX_BODY_BYTES);
       let madeProgress = false;
@@ -2146,6 +2211,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           receivedAtWallMs: next.queuedAtMs,
           payload: next.data,
         });
+        batchTiming.push({
+          routeKey,
+          rendererSendAtMs: next.rendererSendAtMs,
+          bridgeEnqueuedAtMs: next.bridgeEnqueuedAtMs,
+        });
         bodyBudget = nextBody;
         madeProgress = true;
         this.compactAudioQueueLink(routeKey);
@@ -2159,7 +2229,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       if (batch.length === 0 || !madeProgress) break;
       try {
         const buf = encodeReticulumAudioBatch(batch);
-        this.audioBinaryWriteQueue.push(buf);
+        this.audioBinaryWriteQueue.push({
+          buf,
+          queuedAtMs: Date.now(),
+          frames: batchTiming,
+        });
       } catch (err) {
         loggerError('[ReticulumBridge] encode audio batch failed:', err);
       }
@@ -2175,12 +2249,33 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       once(event: 'drain', listener: () => void): typeof stream;
     };
     while (this.audioBinaryWriteQueue.length > 0) {
-      const buf = this.audioBinaryWriteQueue[0]!;
-      const ok = stream.write(buf);
+      const item = this.audioBinaryWriteQueue[0]!;
+      const noteWriteTiming = () => {
+        const nowMs = Date.now();
+        this.lastAudioQueueSnapshot.bridgeEnqueueToFd3WriteQueueDwellMsMax =
+          Math.max(
+            this.lastAudioQueueSnapshot.bridgeEnqueueToFd3WriteQueueDwellMsMax,
+            Math.max(0, nowMs - item.queuedAtMs)
+          );
+        for (const frame of item.frames) {
+          this.lastAudioQueueSnapshot.bridgeEnqueueToFd3WriteMsMax = Math.max(
+            this.lastAudioQueueSnapshot.bridgeEnqueueToFd3WriteMsMax,
+            Math.max(0, nowMs - frame.bridgeEnqueuedAtMs)
+          );
+          if (frame.rendererSendAtMs) {
+            this.lastAudioQueueSnapshot.rendererToFd3WriteMsMax = Math.max(
+              this.lastAudioQueueSnapshot.rendererToFd3WriteMsMax,
+              Math.max(0, nowMs - frame.rendererSendAtMs)
+            );
+          }
+        }
+      };
+      const ok = stream.write(item.buf);
       if (!ok) {
         this.waitingForAudioBinaryDrain = true;
         stream.once('drain', () => {
           this.waitingForAudioBinaryDrain = false;
+          noteWriteTiming();
           this.audioBinaryWriteQueue.shift();
           if (!this.audioIpcFd3FirstBatchLogged) {
             this.audioIpcFd3FirstBatchLogged = true;
@@ -2198,6 +2293,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         });
         return;
       }
+      noteWriteTiming();
       this.audioBinaryWriteQueue.shift();
       if (!this.audioIpcFd3FirstBatchLogged) {
         this.audioIpcFd3FirstBatchLogged = true;
@@ -2659,9 +2755,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
                 .filter((item): item is Record<string, unknown> => {
                   return !!item && typeof item === 'object';
                 })
-                .map((item) =>
-                  this.normalizeAudioMediaRouteDiagnostic(item)
-                )
+                .map((item) => this.normalizeAudioMediaRouteDiagnostic(item))
             : this.lastAudioQueueSnapshot.mediaRouteDiagnostics,
         };
         return;

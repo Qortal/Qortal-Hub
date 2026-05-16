@@ -88,16 +88,78 @@ import {
 const RETICULUM_AUDIO_QUEUED_AT_MS = Symbol.for(
   'qortal.reticulumAudioQueuedAtMs'
 );
+const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
+  'qortal.gcallAudioRendererSendAtMs'
+);
+const GCALL_AUDIO_MAIN_IPC_AT_MS = Symbol.for('qortal.gcallAudioMainIpcAtMs');
+const GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS = Symbol.for(
+  'qortal.gcallAudioManagerEnqueuedAtMs'
+);
+const GCALL_AUDIO_MANAGER_FLUSH_AT_MS = Symbol.for(
+  'qortal.gcallAudioManagerFlushAtMs'
+);
+
+type ReticulumAudioTimingMetadata = {
+  rendererSendAtMs?: number;
+  mainIpcAtMs?: number;
+  managerEnqueuedAtMs?: number;
+  managerFlushAtMs?: number;
+};
+
+function readNumberSymbol(data: Buffer, symbol: symbol): number | undefined {
+  const value = Reflect.get(data, symbol);
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function readReticulumAudioTiming(data: Buffer): ReticulumAudioTimingMetadata {
+  return {
+    rendererSendAtMs: readNumberSymbol(data, GCALL_AUDIO_RENDERER_SEND_AT_MS),
+    mainIpcAtMs: readNumberSymbol(data, GCALL_AUDIO_MAIN_IPC_AT_MS),
+    managerEnqueuedAtMs: readNumberSymbol(
+      data,
+      GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS
+    ),
+    managerFlushAtMs: readNumberSymbol(data, GCALL_AUDIO_MANAGER_FLUSH_AT_MS),
+  };
+}
+
+function defineNumberSymbol(
+  data: Buffer,
+  symbol: symbol,
+  value: number | undefined
+): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return;
+  }
+  Object.defineProperty(data, symbol, {
+    value,
+    enumerable: false,
+    configurable: true,
+  });
+}
 
 function withReticulumAudioQueuedAt(data: Buffer, queuedAtMs: number): Buffer {
   const out = Buffer.from(data);
-  if (Number.isFinite(queuedAtMs) && queuedAtMs > 0) {
-    Object.defineProperty(out, RETICULUM_AUDIO_QUEUED_AT_MS, {
-      value: queuedAtMs,
-      enumerable: false,
-      configurable: true,
-    });
-  }
+  const timing = readReticulumAudioTiming(data);
+  defineNumberSymbol(out, RETICULUM_AUDIO_QUEUED_AT_MS, queuedAtMs);
+  defineNumberSymbol(
+    out,
+    GCALL_AUDIO_RENDERER_SEND_AT_MS,
+    timing.rendererSendAtMs
+  );
+  defineNumberSymbol(out, GCALL_AUDIO_MAIN_IPC_AT_MS, timing.mainIpcAtMs);
+  defineNumberSymbol(
+    out,
+    GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS,
+    timing.managerEnqueuedAtMs
+  );
+  defineNumberSymbol(
+    out,
+    GCALL_AUDIO_MANAGER_FLUSH_AT_MS,
+    timing.managerFlushAtMs
+  );
   return out;
 }
 
@@ -721,6 +783,8 @@ interface ReticulumAudioPendingFrame {
   roomId: string;
   data: Buffer;
   enqueuedAtMs: number;
+  rendererSendAtMs?: number;
+  mainIpcAtMs?: number;
 }
 
 interface ReticulumLinkControlPendingFrame {
@@ -798,6 +862,10 @@ interface ReticulumAudioPeerState {
   lastLinkUnreadyLinkId: string;
   pathDiversityUntilMs: number;
   pathDiversityReason: string;
+  rendererToMainIpcMsMax: number;
+  mainIpcToManagerEnqueueMsMax: number;
+  managerPendingDwellMsMax: number;
+  managerFlushToBridgeEnqueueMsMax: number;
 }
 
 interface GcReticulumAudioSendDiagnostics {
@@ -848,6 +916,10 @@ interface GcReticulumAudioSendDiagnostics {
   pathDiversityMirrorAttempts?: number;
   pathDiversityMirrorSuccesses?: number;
   pathDiversityMirrorFailures?: number;
+  rendererToMainIpcMsMax?: number;
+  mainIpcToManagerEnqueueMsMax?: number;
+  managerPendingDwellMsMax?: number;
+  managerFlushToBridgeEnqueueMsMax?: number;
   bridge?: ReticulumAudioQueueSnapshot;
 }
 
@@ -943,6 +1015,22 @@ function mergeGcReticulumAudioSendDiagnostics(
     pathDiversityMirrorFailures:
       (a.pathDiversityMirrorFailures ?? 0) +
       (b.pathDiversityMirrorFailures ?? 0),
+    rendererToMainIpcMsMax: Math.max(
+      a.rendererToMainIpcMsMax ?? 0,
+      b.rendererToMainIpcMsMax ?? 0
+    ),
+    mainIpcToManagerEnqueueMsMax: Math.max(
+      a.mainIpcToManagerEnqueueMsMax ?? 0,
+      b.mainIpcToManagerEnqueueMsMax ?? 0
+    ),
+    managerPendingDwellMsMax: Math.max(
+      a.managerPendingDwellMsMax ?? 0,
+      b.managerPendingDwellMsMax ?? 0
+    ),
+    managerFlushToBridgeEnqueueMsMax: Math.max(
+      a.managerFlushToBridgeEnqueueMsMax ?? 0,
+      b.managerFlushToBridgeEnqueueMsMax ?? 0
+    ),
     ...(b.targetAddress
       ? { targetAddress: b.targetAddress }
       : a.targetAddress
@@ -6159,6 +6247,10 @@ export class GroupCallManager extends EventEmitter {
         lastLinkUnreadyLinkId: '',
         pathDiversityUntilMs: 0,
         pathDiversityReason: '',
+        rendererToMainIpcMsMax: 0,
+        mainIpcToManagerEnqueueMsMax: 0,
+        managerPendingDwellMsMax: 0,
+        managerFlushToBridgeEnqueueMsMax: 0,
       };
       this.reticulumAudioPeersByAddress.set(address, state);
       this.reticulumAudioAddressByLinkId.set(state.routeKey, address);
@@ -6244,7 +6336,14 @@ export class GroupCallManager extends EventEmitter {
       state.pending.shift();
       staleDrops++;
     }
-    state.pending.push({ roomId, data: Buffer.from(data), enqueuedAtMs: now });
+    const timing = readReticulumAudioTiming(data);
+    state.pending.push({
+      roomId,
+      data: Buffer.from(data),
+      enqueuedAtMs: now,
+      rendererSendAtMs: timing.rendererSendAtMs,
+      mainIpcAtMs: timing.mainIpcAtMs,
+    });
     let queuePressureDrops = 0;
     while (
       state.pending.length > GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_FRAMES
@@ -6301,7 +6400,20 @@ export class GroupCallManager extends EventEmitter {
       this.enqueuePendingReticulumAudio(
         targetState,
         pending.roomId,
-        pending.data
+        (() => {
+          const promoted = Buffer.from(pending.data);
+          defineNumberSymbol(
+            promoted,
+            GCALL_AUDIO_RENDERER_SEND_AT_MS,
+            pending.rendererSendAtMs
+          );
+          defineNumberSymbol(
+            promoted,
+            GCALL_AUDIO_MAIN_IPC_AT_MS,
+            pending.mainIpcAtMs
+          );
+          return promoted;
+        })()
       );
     }
     this.clearAwaitingRouteReticulumAudio(address, buffered);
@@ -6559,6 +6671,19 @@ export class GroupCallManager extends EventEmitter {
     data: Buffer
   ): { queuePressureDrops: number; staleDrops: number } {
     const now = Date.now();
+    const timing = readReticulumAudioTiming(data);
+    if (timing.rendererSendAtMs && timing.mainIpcAtMs) {
+      state.rendererToMainIpcMsMax = Math.max(
+        state.rendererToMainIpcMsMax,
+        Math.max(0, timing.mainIpcAtMs - timing.rendererSendAtMs)
+      );
+    }
+    if (timing.mainIpcAtMs) {
+      state.mainIpcToManagerEnqueueMsMax = Math.max(
+        state.mainIpcToManagerEnqueueMsMax,
+        Math.max(0, now - timing.mainIpcAtMs)
+      );
+    }
     let staleDrops = 0;
     const maxAgeMs = this.getReticulumAudioPendingMaxAgeMs(state);
     while (
@@ -6568,7 +6693,13 @@ export class GroupCallManager extends EventEmitter {
       state.pending.shift();
       staleDrops++;
     }
-    state.pending.push({ roomId, data: Buffer.from(data), enqueuedAtMs: now });
+    state.pending.push({
+      roomId,
+      data: Buffer.from(data),
+      enqueuedAtMs: now,
+      rendererSendAtMs: timing.rendererSendAtMs,
+      mainIpcAtMs: timing.mainIpcAtMs,
+    });
     let queuePressureDrops = 0;
     const perPeerLimit = this.computeReticulumAudioPendingLimit(state);
     while (state.pending.length > perPeerLimit) {
@@ -6704,6 +6835,15 @@ export class GroupCallManager extends EventEmitter {
       ...(deltas?.pathDiversityMirrorFailures != null
         ? { pathDiversityMirrorFailures: deltas.pathDiversityMirrorFailures }
         : {}),
+      ...(state
+        ? {
+            rendererToMainIpcMsMax: state.rendererToMainIpcMsMax,
+            mainIpcToManagerEnqueueMsMax: state.mainIpcToManagerEnqueueMsMax,
+            managerPendingDwellMsMax: state.managerPendingDwellMsMax,
+            managerFlushToBridgeEnqueueMsMax:
+              state.managerFlushToBridgeEnqueueMsMax,
+          }
+        : {}),
       bridge:
         state && this.reticulumBridge
           ? this.reticulumBridge.getAudioQueueSnapshot(state.routeKey)
@@ -6784,19 +6924,48 @@ export class GroupCallManager extends EventEmitter {
         continue;
       }
       const next = state.pending.shift()!;
+      const flushAtMs = Date.now();
+      state.managerPendingDwellMsMax = Math.max(
+        state.managerPendingDwellMsMax,
+        Math.max(0, flushAtMs - next.enqueuedAtMs)
+      );
+      const bridgeData = withReticulumAudioQueuedAt(
+        next.data,
+        next.enqueuedAtMs
+      );
+      defineNumberSymbol(
+        bridgeData,
+        GCALL_AUDIO_RENDERER_SEND_AT_MS,
+        next.rendererSendAtMs
+      );
+      defineNumberSymbol(
+        bridgeData,
+        GCALL_AUDIO_MAIN_IPC_AT_MS,
+        next.mainIpcAtMs
+      );
+      defineNumberSymbol(
+        bridgeData,
+        GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS,
+        next.enqueuedAtMs
+      );
+      defineNumberSymbol(
+        bridgeData,
+        GCALL_AUDIO_MANAGER_FLUSH_AT_MS,
+        flushAtMs
+      );
       const result: ReticulumEnqueueGroupAudioResult =
         state.transport === 'packet'
           ? bridge.enqueuePacketGroupAudio(
               state.peerPresenceHash,
               next.roomId,
-              withReticulumAudioQueuedAt(next.data, next.enqueuedAtMs),
+              bridgeData,
               state.peerDestinationHash
             )
-          : bridge.enqueueGroupAudio(
-              state.linkId!,
-              next.roomId,
-              withReticulumAudioQueuedAt(next.data, next.enqueuedAtMs)
-            );
+          : bridge.enqueueGroupAudio(state.linkId!, next.roomId, bridgeData);
+      state.managerFlushToBridgeEnqueueMsMax = Math.max(
+        state.managerFlushToBridgeEnqueueMsMax,
+        Math.max(0, Date.now() - flushAtMs)
+      );
       if (result.ok) {
         queuePressureDrops += result.queuePressureDrops;
         staleDrops += result.staleDrops;
@@ -6820,13 +6989,13 @@ export class GroupCallManager extends EventEmitter {
                 ? bridge.enqueueGroupAudio(
                     state.linkId,
                     next.roomId,
-                    withReticulumAudioQueuedAt(next.data, next.enqueuedAtMs)
+                    bridgeData
                   )
                 : null
               : bridge.enqueuePacketGroupAudio(
                   state.peerPresenceHash,
                   next.roomId,
-                  withReticulumAudioQueuedAt(next.data, next.enqueuedAtMs),
+                  bridgeData,
                   state.peerDestinationHash
                 );
           if (mirrorResult) {
@@ -7187,6 +7356,10 @@ export class GroupCallManager extends EventEmitter {
           lastLinkUnreadyLinkId: '',
           pathDiversityUntilMs: 0,
           pathDiversityReason: '',
+          rendererToMainIpcMsMax: 0,
+          mainIpcToManagerEnqueueMsMax: 0,
+          managerPendingDwellMsMax: 0,
+          managerFlushToBridgeEnqueueMsMax: 0,
         };
         this.reticulumAudioPeersByAddress.set(address, state);
         this.reticulumAudioAddressByLinkId.set(state.routeKey, address);

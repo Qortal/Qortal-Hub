@@ -923,7 +923,8 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(sendAudio).toHaveBeenCalledWith(
       'room-1',
       'Qpeer',
-      expect.any(Uint8Array)
+      expect.any(Uint8Array),
+      expect.objectContaining({ rendererSendAtWallMs: expect.any(Number) })
     );
 
     groupCallEventHandler?.('gcall:audio', {
@@ -5654,7 +5655,8 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(sendAudio).toHaveBeenCalledWith(
       'room-1',
       'Qpeer',
-      expect.any(Uint8Array)
+      expect.any(Uint8Array),
+      expect.objectContaining({ rendererSendAtWallMs: expect.any(Number) })
     );
   });
 
@@ -6370,7 +6372,8 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(sendAudio).toHaveBeenCalledWith(
       'gcall-qortal-812',
       'Qpeer',
-      expect.any(Uint8Array)
+      expect.any(Uint8Array),
+      expect.objectContaining({ rendererSendAtWallMs: expect.any(Number) })
     );
   });
 

@@ -121,6 +121,34 @@ import {
   startSystemCallReadinessMonitor,
 } from './system-call-readiness';
 
+const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
+  'qortal.gcallAudioRendererSendAtMs'
+);
+const GCALL_AUDIO_MAIN_IPC_AT_MS = Symbol.for('qortal.gcallAudioMainIpcAtMs');
+
+function attachGroupAudioIpcTiming(
+  buf: Buffer,
+  timing?: { rendererSendAtWallMs?: number }
+): void {
+  const rendererSendAtMs = timing?.rendererSendAtWallMs;
+  if (
+    typeof rendererSendAtMs === 'number' &&
+    Number.isFinite(rendererSendAtMs) &&
+    rendererSendAtMs > 0
+  ) {
+    Object.defineProperty(buf, GCALL_AUDIO_RENDERER_SEND_AT_MS, {
+      value: rendererSendAtMs,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+  Object.defineProperty(buf, GCALL_AUDIO_MAIN_IPC_AT_MS, {
+    value: Date.now(),
+    enumerable: false,
+    configurable: true,
+  });
+}
+
 const AdmZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
@@ -174,8 +202,8 @@ function isMainShellSender(sender: Electron.WebContents): boolean {
   const mainWindow = myCapacitorApp?.getMainWindow?.();
   return Boolean(
     mainWindow &&
-      !mainWindow.isDestroyed() &&
-      mainWindow.webContents.id === sender.id
+    !mainWindow.isDestroyed() &&
+    mainWindow.webContents.id === sender.id
   );
 }
 
@@ -382,8 +410,7 @@ export class ElectronCapacitorApp {
       markAudioSurfaceHostClosed();
     });
     const targetUrl = buildAudioSurfaceUrl(
-      this.audioSurfaceHttpsOrigin ??
-        this.MainWindow.webContents.getURL(),
+      this.audioSurfaceHttpsOrigin ?? this.MainWindow.webContents.getURL(),
       this.customScheme,
       this.audioSurfaceScheme
     );
@@ -424,7 +451,9 @@ export class ElectronCapacitorApp {
     if (electronIsDev) {
       try {
         window.webContents.openDevTools({ mode: 'detach' });
-        loggerLog('[GCall:audio-surface] dev: opened DevTools for audio-surface window');
+        loggerLog(
+          '[GCall:audio-surface] dev: opened DevTools for audio-surface window'
+        );
       } catch (e) {
         loggerWarn('[GCall:audio-surface] dev: openDevTools failed', e);
       }
@@ -2619,13 +2648,21 @@ export function attachGroupCallListeners(
     if (gcallMainAudioWindowT0 === 0) gcallMainAudioWindowT0 = now;
     if (!gcallMainFirstAudio) {
       gcallMainFirstAudio = true;
-      const p0 = payload as { roomId?: string; fromAddress?: string; data?: unknown };
+      const p0 = payload as {
+        roomId?: string;
+        fromAddress?: string;
+        data?: unknown;
+      };
       loggerLog(
         `[GCall:main] gcall:audio first from manager roomId=${p0?.roomId} from=${p0?.fromAddress} bytes~=${gcallAudioPayloadBytes(p0?.data)} → ${gcallSubscribers.size} IPC subscriber(s)`
       );
     }
     if (now - gcallMainAudioWindowT0 >= GCALL_MAIN_AUDIO_LOG_MS) {
-      const p = payload as { roomId?: string; fromAddress?: string; data?: unknown };
+      const p = payload as {
+        roomId?: string;
+        fromAddress?: string;
+        data?: unknown;
+      };
       loggerLog(
         `[GCall:main] gcall:audio throttled: ${gcallMainAudioCountWindow} pkt in ~${now - gcallMainAudioWindowT0}ms roomId=${p?.roomId} from=${p?.fromAddress} bytes~=${gcallAudioPayloadBytes(p?.data)} subs=${gcallSubscribers.size}`
       );
@@ -2639,7 +2676,11 @@ export function attachGroupCallListeners(
     );
   });
   manager.on('gcall:key', (payload: unknown) => {
-    const p = payload as { roomId?: string; fromAddress?: string; verified?: boolean };
+    const p = payload as {
+      roomId?: string;
+      fromAddress?: string;
+      verified?: boolean;
+    };
     loggerLog(
       `[GCall:main] gcall:key from manager roomId=${p?.roomId} from=${p?.fromAddress} verified=${p?.verified} → ${gcallSubscribers.size} subscriber(s)`
     );
@@ -2794,11 +2835,13 @@ ipcMain.handle(
     _event,
     roomId: string,
     toAddress: string,
-    data: Buffer | Uint8Array
+    data: Buffer | Uint8Array,
+    timing?: { rendererSendAtWallMs?: number }
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    attachGroupAudioIpcTiming(buf, timing);
     const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
     if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
       return { success: false, error: 'payload-too-large' };
@@ -2821,11 +2864,13 @@ ipcMain.handle(
     _event,
     roomId: string,
     toAddresses: string[],
-    data: Buffer | Uint8Array
+    data: Buffer | Uint8Array,
+    timing?: { rendererSendAtWallMs?: number }
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    attachGroupAudioIpcTiming(buf, timing);
     const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
     if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
       return { success: false, error: 'payload-too-large' };
@@ -3101,80 +3146,97 @@ ipcMain.handle('audio-surface:ensure-ready', async (event) => {
   }
   await myCapacitorApp.ensureAudioSurfaceWindow();
   await waitForAudioSurfaceHostReady();
-  loggerLog('[GCall:audio-surface] ensure-ready: ok (audio window + host ready)');
+  loggerLog(
+    '[GCall:audio-surface] ensure-ready: ok (audio window + host ready)'
+  );
   return { success: true };
 });
 
-ipcMain.handle('audio-surface:send-command', async (_event, command: AudioSurfaceCommand) => {
-  if (!isMainShellSender(_event.sender)) {
-    loggerLog('[GCall:audio-surface] send-command: rejected (not main shell)', {
-      type: command.type,
-    });
-    return { ok: false, error: 'audio-surface-main-shell-required' };
-  }
-  if (command.type === 'join-group-call') {
-    loggerLog('[GCall:audio-surface] send-command: join-group-call', {
-      roomId: command.roomId,
-      chatId: command.chatId,
-    });
-  }
-  await myCapacitorApp.ensureAudioSurfaceWindow();
-  await waitForAudioSurfaceHostReady();
-  const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
-  if (!audioWindow || audioWindow.isDestroyed()) {
-    loggerLog('[GCall:audio-surface] send-command: audio window missing/destroyed');
-    return { ok: false, error: 'audio-surface-window-unavailable' };
-  }
-  const commandId = `${Date.now()}:${Math.random().toString(16).slice(2)}`;
-  const envelope: AudioSurfaceCommandEnvelope = { commandId, command };
-  const response = await new Promise<AudioSurfaceResponseLike>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pendingAudioSurfaceCommands.delete(commandId);
-      reject(new Error('audio-surface-command-timeout'));
-    }, 30_000);
-    pendingAudioSurfaceCommands.set(commandId, {
-      resolve: (value) => {
-        clearTimeout(timeout);
-        resolve(value);
-      },
-      reject: (reason) => {
-        clearTimeout(timeout);
-        reject(reason);
-      },
-    });
-    audioWindow.webContents.send('audio-surface:host-command', envelope);
-  }).catch((error) => ({
-    ok: false,
-    error: error instanceof Error ? error.message : 'audio-surface-command-failed',
-  }));
-  if (
-    command.type === 'join-group-call' ||
-    (response as { ok?: boolean }).ok === false
-  ) {
-    loggerLog('[GCall:audio-surface] send-command: response', {
-      type: command.type,
-      ok: (response as { ok?: boolean }).ok,
+ipcMain.handle(
+  'audio-surface:send-command',
+  async (_event, command: AudioSurfaceCommand) => {
+    if (!isMainShellSender(_event.sender)) {
+      loggerLog(
+        '[GCall:audio-surface] send-command: rejected (not main shell)',
+        {
+          type: command.type,
+        }
+      );
+      return { ok: false, error: 'audio-surface-main-shell-required' };
+    }
+    if (command.type === 'join-group-call') {
+      loggerLog('[GCall:audio-surface] send-command: join-group-call', {
+        roomId: command.roomId,
+        chatId: command.chatId,
+      });
+    }
+    await myCapacitorApp.ensureAudioSurfaceWindow();
+    await waitForAudioSurfaceHostReady();
+    const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
+    if (!audioWindow || audioWindow.isDestroyed()) {
+      loggerLog(
+        '[GCall:audio-surface] send-command: audio window missing/destroyed'
+      );
+      return { ok: false, error: 'audio-surface-window-unavailable' };
+    }
+    const commandId = `${Date.now()}:${Math.random().toString(16).slice(2)}`;
+    const envelope: AudioSurfaceCommandEnvelope = { commandId, command };
+    const response = await new Promise<AudioSurfaceResponseLike>(
+      (resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pendingAudioSurfaceCommands.delete(commandId);
+          reject(new Error('audio-surface-command-timeout'));
+        }, 30_000);
+        pendingAudioSurfaceCommands.set(commandId, {
+          resolve: (value) => {
+            clearTimeout(timeout);
+            resolve(value);
+          },
+          reject: (reason) => {
+            clearTimeout(timeout);
+            reject(reason);
+          },
+        });
+        audioWindow.webContents.send('audio-surface:host-command', envelope);
+      }
+    ).catch((error) => ({
+      ok: false,
       error:
-        (response as { ok?: boolean; error?: string }).ok === false
-          ? (response as { error?: string }).error
-          : undefined,
-    });
+        error instanceof Error ? error.message : 'audio-surface-command-failed',
+    }));
+    if (
+      command.type === 'join-group-call' ||
+      (response as { ok?: boolean }).ok === false
+    ) {
+      loggerLog('[GCall:audio-surface] send-command: response', {
+        type: command.type,
+        ok: (response as { ok?: boolean }).ok,
+        error:
+          (response as { ok?: boolean; error?: string }).ok === false
+            ? (response as { error?: string }).error
+            : undefined,
+      });
+    }
+    return response;
   }
-  return response;
-});
+);
 
 ipcMain.on('audio-surface:subscribe', (event) => {
   if (!isMainShellSender(event.sender)) {
-    loggerWarn('[AudioSurface] rejecting subscribe from non-main-shell sender', {
-      senderId: event.sender.id,
-    });
+    loggerWarn(
+      '[AudioSurface] rejecting subscribe from non-main-shell sender',
+      {
+        senderId: event.sender.id,
+      }
+    );
     return;
   }
   audioSurfaceSubscribers.add(event.sender);
   if (audioSurfaceBridgeState.hostReady) {
     event.sender.send('audio-surface:event', {
       type: 'engine-ready',
-      bootstrapRevisionApplied: audioSurfaceBridgeState.bootstrapRevisionApplied,
+      bootstrapRevisionApplied:
+        audioSurfaceBridgeState.bootstrapRevisionApplied,
     } satisfies AudioSurfaceEvent);
   }
   if (audioSurfaceBridgeState.snapshot !== null) {
@@ -3227,7 +3289,9 @@ ipcMain.handle(
     const commandId = envelope?.commandId;
     const response = envelope?.response;
     if (typeof commandId !== 'string' || !commandId) {
-      loggerWarn('[AudioSurface] command-result: missing commandId', { envelope });
+      loggerWarn('[AudioSurface] command-result: missing commandId', {
+        envelope,
+      });
       return { ack: false as const, reason: 'missing-command-id' };
     }
     const pending = pendingAudioSurfaceCommands.get(commandId);
@@ -3247,7 +3311,9 @@ ipcMain.handle(
 
 ipcMain.on('gcall:subscribe', (event) => {
   gcallSubscribers.add(event.sender);
-  const url = event.sender.isDestroyed() ? '' : String(event.sender.getURL() ?? '');
+  const url = event.sender.isDestroyed()
+    ? ''
+    : String(event.sender.getURL() ?? '');
   loggerLog(
     `[GCall:main] gcall:subscribe from sender (total gcall subscribers=${gcallSubscribers.size}) ${url ? `url=${url.slice(0, 80)}` : ''}`
   );

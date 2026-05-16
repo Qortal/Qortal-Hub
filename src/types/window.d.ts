@@ -482,7 +482,8 @@ declare global {
       sendAudio: (
         roomId: string,
         toAddress: string,
-        data: Uint8Array
+        data: Uint8Array,
+        timing?: { rendererSendAtWallMs?: number }
       ) => Promise<{
         success: boolean;
         error?: string;
@@ -510,6 +511,10 @@ declare global {
           pathDiversityMirrorAttempts?: number;
           pathDiversityMirrorSuccesses?: number;
           pathDiversityMirrorFailures?: number;
+          rendererToMainIpcMsMax?: number;
+          mainIpcToManagerEnqueueMsMax?: number;
+          managerPendingDwellMsMax?: number;
+          managerFlushToBridgeEnqueueMsMax?: number;
           bridge?: {
             bridgeQueuedFrames: number;
             bridgeQueuedBytes: number;
@@ -556,13 +561,19 @@ declare global {
             rnsCallbackSchedulerGapOver250Count: number;
             rnsCallbackSchedulerGapOver500Count: number;
             rnsCallbackSchedulerGapOver1000Count: number;
+            rendererToBridgeEnqueueMsMax: number;
+            managerFlushToBridgeEnqueueMsMax: number;
+            bridgeEnqueueToFd3WriteMsMax: number;
+            bridgeEnqueueToFd3WriteQueueDwellMsMax: number;
+            rendererToFd3WriteMsMax: number;
           };
         };
       }>;
       sendAudioBatch?: (
         roomId: string,
         toAddresses: string[],
-        data: Uint8Array
+        data: Uint8Array,
+        timing?: { rendererSendAtWallMs?: number }
       ) => Promise<{
         success: boolean;
         error?: string;
@@ -590,6 +601,10 @@ declare global {
           pathDiversityMirrorAttempts?: number;
           pathDiversityMirrorSuccesses?: number;
           pathDiversityMirrorFailures?: number;
+          rendererToMainIpcMsMax?: number;
+          mainIpcToManagerEnqueueMsMax?: number;
+          managerPendingDwellMsMax?: number;
+          managerFlushToBridgeEnqueueMsMax?: number;
           bridge?: {
             bridgeQueuedFrames: number;
             bridgeQueuedBytes: number;
@@ -636,6 +651,11 @@ declare global {
             rnsCallbackSchedulerGapOver250Count: number;
             rnsCallbackSchedulerGapOver500Count: number;
             rnsCallbackSchedulerGapOver1000Count: number;
+            rendererToBridgeEnqueueMsMax: number;
+            managerFlushToBridgeEnqueueMsMax: number;
+            bridgeEnqueueToFd3WriteMsMax: number;
+            bridgeEnqueueToFd3WriteQueueDwellMsMax: number;
+            rendererToFd3WriteMsMax: number;
           };
         };
       }>;

@@ -149,8 +149,9 @@ type RuntimeRendererThreadSample = {
   name: string;
 };
 
-type AudioStageTimingTimestamps =
-  NonNullable<GroupCallAudioReceivePayload['audioStageTimestamps']>;
+type AudioStageTimingTimestamps = NonNullable<
+  GroupCallAudioReceivePayload['audioStageTimestamps']
+>;
 
 type AudioStageName =
   | 'bridgeReceived'
@@ -351,6 +352,10 @@ type GcallSendAudioDiagnostics = {
   pathDiversityMirrorAttempts?: number;
   pathDiversityMirrorSuccesses?: number;
   pathDiversityMirrorFailures?: number;
+  rendererToMainIpcMsMax?: number;
+  mainIpcToManagerEnqueueMsMax?: number;
+  managerPendingDwellMsMax?: number;
+  managerFlushToBridgeEnqueueMsMax?: number;
   bridge?: {
     bridgeQueuedFrames?: number;
     bridgeQueuedOldestAgeMs?: number;
@@ -392,6 +397,11 @@ type GcallSendAudioDiagnostics = {
     rnsCallbackSchedulerGapOver250Count?: number;
     rnsCallbackSchedulerGapOver500Count?: number;
     rnsCallbackSchedulerGapOver1000Count?: number;
+    rendererToBridgeEnqueueMsMax?: number;
+    managerFlushToBridgeEnqueueMsMax?: number;
+    bridgeEnqueueToFd3WriteMsMax?: number;
+    bridgeEnqueueToFd3WriteQueueDwellMsMax?: number;
+    rendererToFd3WriteMsMax?: number;
     mediaRouteDiagnostics?: Array<{
       transport?: string;
       routeKey?: string;
@@ -438,6 +448,11 @@ type GcallSendAudioDiagnostics = {
       linkCallbackDispatchToStartOver320Count?: number;
       linkCallbackDispatchToStartOver640Count?: number;
       linkCallbackDispatchToStartOver1000Count?: number;
+      rendererToBridgeEnqueueMsMax?: number;
+      managerFlushToBridgeEnqueueMsMax?: number;
+      bridgeEnqueueToFd3WriteMsMax?: number;
+      bridgeEnqueueToFd3WriteQueueDwellMsMax?: number;
+      rendererToFd3WriteMsMax?: number;
       preRnsSendAgeMsMax?: number;
       rnsSendDurationMsMax?: number;
       receiveToFd4EnqueueMsMax?: number;
@@ -1069,7 +1084,10 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private async startDirectVoiceReceive(
-    command: Extract<AudioSurfaceCommand, { type: 'start-direct-voice-receive' }>
+    command: Extract<
+      AudioSurfaceCommand,
+      { type: 'start-direct-voice-receive' }
+    >
   ): Promise<AudioSurfaceResponse> {
     const roomId = command.roomId.trim();
     const peerAddress = command.peerAddress.trim();
@@ -2382,23 +2400,15 @@ export class GroupCallAudioEngineRuntime {
         jitterLastTrimAtMs: playout.jitterLastTrimAtMs,
         jitterBurstHeadroomLevel: playout.jitterBurstHeadroomLevel,
         jitterBurstHeadroomReason: playout.jitterBurstHeadroomReason,
-        postBurstLatencyLockoutActive:
-          playout.postBurstLatencyLockoutActive,
-        postBurstLatencyLockoutUntilMs:
-          playout.postBurstLatencyLockoutUntilMs,
+        postBurstLatencyLockoutActive: playout.postBurstLatencyLockoutActive,
+        postBurstLatencyLockoutUntilMs: playout.postBurstLatencyLockoutUntilMs,
         postBurstLatencyShedFrames: playout.postBurstLatencyShedFrames,
-        lastPostBurstLatencyShedAtMs:
-          playout.lastPostBurstLatencyShedAtMs,
-        lastPostBurstLatencyShedFrames:
-          playout.lastPostBurstLatencyShedFrames,
-        liveLatencyGovernorShedFrames:
-          playout.liveLatencyGovernorShedFrames,
-        liveLatencyGovernorResetCount:
-          playout.liveLatencyGovernorResetCount,
-        lastLiveLatencyGovernorAtMs:
-          playout.lastLiveLatencyGovernorAtMs,
-        lastLiveLatencyGovernorReason:
-          playout.lastLiveLatencyGovernorReason,
+        lastPostBurstLatencyShedAtMs: playout.lastPostBurstLatencyShedAtMs,
+        lastPostBurstLatencyShedFrames: playout.lastPostBurstLatencyShedFrames,
+        liveLatencyGovernorShedFrames: playout.liveLatencyGovernorShedFrames,
+        liveLatencyGovernorResetCount: playout.liveLatencyGovernorResetCount,
+        lastLiveLatencyGovernorAtMs: playout.lastLiveLatencyGovernorAtMs,
+        lastLiveLatencyGovernorReason: playout.lastLiveLatencyGovernorReason,
         burstGapResetCount: playout.burstGapResetCount,
         burstGapRecoveryCount: playout.burstGapRecoveryCount,
         burstGapDroppedFrames: playout.burstGapDroppedFrames,
@@ -2409,8 +2419,7 @@ export class GroupCallAudioEngineRuntime {
         starvedBacklogDrainCount: playout.starvedBacklogDrainCount,
         starvedBacklogDrainFrames: playout.starvedBacklogDrainFrames,
         lastStarvedBacklogDrainAtMs: playout.lastStarvedBacklogDrainAtMs,
-        lastStarvedBacklogDrainFrames:
-          playout.lastStarvedBacklogDrainFrames,
+        lastStarvedBacklogDrainFrames: playout.lastStarvedBacklogDrainFrames,
         jitterDrainReadyTicks: playout.jitterDrainReadyTicks,
         jitterDrainReadyNoPopTicks: playout.jitterDrainReadyNoPopTicks,
         jitterDrainPoppedFrames: playout.jitterDrainPoppedFrames,
@@ -3939,7 +3948,10 @@ export class GroupCallAudioEngineRuntime {
   ): Promise<void> {
     const fromAddr =
       audioPayload.fromAddress ?? audioPayload.resolvedFromAddress ?? '';
-    if (!this.directVoiceRoomKey || audioPayload.roomId !== this.directVoiceRoomId) {
+    if (
+      !this.directVoiceRoomKey ||
+      audioPayload.roomId !== this.directVoiceRoomId
+    ) {
       return;
     }
     if (!fromAddr || fromAddr !== this.directVoicePeerAddress) {
@@ -7841,10 +7853,12 @@ export class GroupCallAudioEngineRuntime {
     ) {
       const diagnostics = targets.map(markAttempt);
       try {
+        const rendererSendAtWallMs = Date.now();
         const result = (await window.groupCall.sendAudioBatch(
           this.snapshot.roomId,
           targets,
-          packet
+          packet,
+          { rendererSendAtWallMs }
         )) as GcallSendAudioResult | undefined;
         this.recordOutboundMainDiagnostics(result?.diagnostics);
         if (result?.success === false) {
@@ -7868,10 +7882,12 @@ export class GroupCallAudioEngineRuntime {
           if (typeof window.groupCall?.sendAudio !== 'function') {
             throw new Error('window.groupCall.sendAudio unavailable');
           }
+          const rendererSendAtWallMs = Date.now();
           const result = (await window.groupCall.sendAudio(
             this.snapshot.roomId,
             address,
-            packet
+            packet,
+            { rendererSendAtWallMs }
           )) as GcallSendAudioResult | undefined;
           this.recordOutboundMainDiagnostics(result?.diagnostics);
           if (result?.diagnostics) {

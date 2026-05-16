@@ -456,10 +456,11 @@ try {
            * `window.sendMessage` → `signPresenceMessage` (see groupCallJoinSigning).
            * IPC runs signing in the main shell renderer.
            */
-          gcallProxySignPresenceMessage: (
-            payload: Record<string, unknown>
-          ) =>
-            ipcRenderer.invoke('gcall:proxySignPresenceMessage', payload) as Promise<{
+          gcallProxySignPresenceMessage: (payload: Record<string, unknown>) =>
+            ipcRenderer.invoke(
+              'gcall:proxySignPresenceMessage',
+              payload
+            ) as Promise<{
               signature?: string;
               error?: string;
               message?: string;
@@ -1389,15 +1390,27 @@ try {
       ),
 
     /** Send a group audio packet to a specific participant via the main transport. */
-    sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
-      ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
+    sendAudio: async (
+      roomId: string,
+      toAddress: string,
+      data: Uint8Array,
+      timing?: { rendererSendAtWallMs?: number }
+    ) => ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data, timing),
 
     /** Same encoded frame to multiple peers in one IPC round-trip (chunked in renderer). */
     sendAudioBatch: async (
       roomId: string,
       toAddresses: string[],
-      data: Uint8Array
-    ) => ipcRenderer.invoke('gcall:sendAudioBatch', roomId, toAddresses, data),
+      data: Uint8Array,
+      timing?: { rendererSendAtWallMs?: number }
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:sendAudioBatch',
+        roomId,
+        toAddresses,
+        data,
+        timing
+      ),
 
     requestPeerMediaRecovery: async (
       roomId: string,

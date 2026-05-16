@@ -132,13 +132,25 @@ contextBridge.exposeInMainWorld('groupCall', {
       payload,
       signature
     ),
-  sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
-    ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
+  sendAudio: async (
+    roomId: string,
+    toAddress: string,
+    data: Uint8Array,
+    timing?: { rendererSendAtWallMs?: number }
+  ) => ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data, timing),
   sendAudioBatch: async (
     roomId: string,
     toAddresses: string[],
-    data: Uint8Array
-  ) => ipcRenderer.invoke('gcall:sendAudioBatch', roomId, toAddresses, data),
+    data: Uint8Array,
+    timing?: { rendererSendAtWallMs?: number }
+  ) =>
+    ipcRenderer.invoke(
+      'gcall:sendAudioBatch',
+      roomId,
+      toAddresses,
+      data,
+      timing
+    ),
   requestPeerMediaRecovery: async (
     roomId: string,
     address: string,
