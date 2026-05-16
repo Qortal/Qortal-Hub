@@ -804,23 +804,20 @@ setattr(RNS, "_qortal_link_receive_probe", _qortal_link_receive_probe)
 
 
 def install_rns_link_receive_probe() -> None:
-    """Track RNS.Link.receive -> packet-callback scheduling without editing vendored RNS files."""
+    """Track RNS.Link.receive timing without replacing global threading primitives."""
     global _rns_link_receive_probe_installed
     if _rns_link_receive_probe_installed:
         return
     original_receive = getattr(RNS.Link, "receive", None)
-    original_thread = threading.Thread
     if not callable(original_receive):
         return
 
     def probed_receive(self, packet):
-        probe_context = None
         try:
             if (
                 getattr(packet, "packet_type", None) == getattr(RNS.Packet, "DATA", object())
                 and getattr(packet, "context", None) == getattr(RNS.Packet, "NONE", object())
             ):
-                probe_context = {"link": self, "packet": packet}
                 _qortal_link_receive_probe(
                     "receive_enter",
                     self,
@@ -829,60 +826,10 @@ def install_rns_link_receive_probe() -> None:
                     time.time(),
                 )
         except Exception:
-            probe_context = None
-        previous_context = getattr(_rns_link_receive_probe_context, "current", None)
-        _rns_link_receive_probe_context.current = probe_context
-        try:
-            return original_receive(self, packet)
-        finally:
-            _rns_link_receive_probe_context.current = previous_context
-
-    class QortalProbeThread(original_thread):
-        def __init__(self, *args, **kwargs):
-            context = getattr(_rns_link_receive_probe_context, "current", None)
-            if context is not None:
-                args_list = list(args)
-                target = kwargs.get("target")
-                target_index: Optional[int] = None
-                if target is None and len(args_list) >= 2:
-                    target = args_list[1]
-                    target_index = 1
-                if callable(target):
-                    link = context.get("link")
-                    packet = context.get("packet")
-                    try:
-                        _qortal_link_receive_probe(
-                            "callback_dispatch",
-                            link,
-                            packet,
-                            time.monotonic(),
-                            time.time(),
-                        )
-                    except Exception:
-                        pass
-
-                    def wrapped_target(*target_args, **target_kwargs):
-                        try:
-                            _qortal_link_receive_probe(
-                                "callback_start",
-                                link,
-                                packet,
-                                time.monotonic(),
-                                time.time(),
-                            )
-                        except Exception:
-                            pass
-                        return target(*target_args, **target_kwargs)
-
-                    if target_index is not None:
-                        args_list[target_index] = wrapped_target
-                        args = tuple(args_list)
-                    else:
-                        kwargs["target"] = wrapped_target
-            super().__init__(*args, **kwargs)
+            pass
+        return original_receive(self, packet)
 
     setattr(RNS.Link, "receive", probed_receive)
-    threading.Thread = QortalProbeThread
     _rns_link_receive_probe_installed = True
 
 
@@ -1460,13 +1407,15 @@ def _process_audio_batch(frames: list) -> None:
     process_start = time.monotonic()
     for link_id, room_id, peer_presence_hash, peer_call_hash, _received_at_wall_ms, raw in frames:
         if link_id:
-            snapshot = _snapshot_audio_link_for_send(link_id)
+            peer_key_hint = str(peer_presence_hash or peer_call_hash or "").strip().lower()
+            snapshot = _snapshot_audio_link_for_send(link_id, peer_key_hint)
             send_link_id = str(snapshot.get("linkId") or link_id) if snapshot is not None else link_id
             if snapshot is None:
                 emit_event(
                     "group_audio_send_failed",
                     {
                         "linkId": link_id,
+                        "peerPresenceHash": peer_key_hint,
                         "reason": "unknown_link_id",
                         "code": "unknown_link_id",
                         "transport": "link",
@@ -5805,15 +5754,27 @@ def _canonical_audio_link_id_for_peer(peer_key: str) -> str:
     return ""
 
 
-def _snapshot_audio_link_for_send(link_id: str) -> Optional[Dict[str, Any]]:
+def _snapshot_audio_link_for_send(
+    link_id: str,
+    peer_key_hint: str = "",
+) -> Optional[Dict[str, Any]]:
     with _state_lock:
         state = _audio_links_by_id.get(link_id)
+        peer_key_hint = str(peer_key_hint or "").strip().lower()
         if state is None:
-            return None
+            canonical_id = _active_audio_link_id_by_peer_hash.get(peer_key_hint) if peer_key_hint else ""
+            if not canonical_id:
+                canonical_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key_hint) if peer_key_hint else ""
+            if not canonical_id:
+                return None
+            state = _audio_links_by_id.get(canonical_id)
+            if state is None:
+                return None
+            link_id = canonical_id
         _ensure_audio_link_lifecycle_fields(state)
         if state.get("closing") is True:
             return None
-        peer_key = str(state.get("peerPresenceHash") or "").strip().lower()
+        peer_key = str(state.get("peerPresenceHash") or peer_key_hint).strip().lower()
         canonical_id = _active_audio_link_id_by_peer_hash.get(peer_key) if peer_key else ""
         if canonical_id and canonical_id != link_id:
             canonical_state = _audio_links_by_id.get(canonical_id)
@@ -5946,6 +5907,50 @@ def _has_viable_audio_link_for_peer(peer_key: str, excluding_link_id: str = "") 
     return False
 
 
+def _best_viable_audio_link_id_for_peer(peer_key: str) -> str:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return ""
+    best_link_id = ""
+    best_state: Optional[Dict[str, Any]] = None
+    now = time.time()
+    with _state_lock:
+        for candidate_link_id, state in list(_audio_links_by_id.items()):
+            if str(state.get("peerPresenceHash") or "").strip().lower() != peer_key:
+                continue
+            if state.get("closing") is True or state.get("link") is None:
+                continue
+            established = state.get("established") is True
+            created_at = state.get("created_at")
+            pending_recent = isinstance(created_at, (int, float)) and (
+                now - float(created_at)
+            ) < _AUDIO_LINK_ESTABLISH_TIMEOUT_SECONDS
+            if not established and not pending_recent:
+                continue
+            if not best_link_id:
+                best_link_id = candidate_link_id
+                best_state = state
+                continue
+            if best_state is None:
+                best_link_id = candidate_link_id
+                best_state = state
+                continue
+            keep_id, _lose_id = _audio_link_pick_keep(
+                peer_key,
+                best_link_id,
+                best_state,
+                candidate_link_id,
+                state,
+            )
+            if keep_id == candidate_link_id:
+                best_link_id = candidate_link_id
+                best_state = state
+        if best_link_id:
+            _active_audio_link_id_by_peer_hash[peer_key] = best_link_id
+            _outgoing_audio_link_id_by_peer_hash[peer_key] = best_link_id
+    return best_link_id
+
+
 def _schedule_audio_link_retry(peer_key: str, reason: str, immediate: bool = False) -> None:
     peer_key = str(peer_key or "").strip().lower()
     if not peer_key:
@@ -6075,6 +6080,13 @@ def _open_group_audio_link_for_peer(
         with _state_lock:
             _outgoing_audio_link_id_by_peer_hash.pop(peer_key, None)
             _active_audio_link_id_by_peer_hash.pop(peer_key, None)
+    viable_link_id = _best_viable_audio_link_id_for_peer(peer_key)
+    if viable_link_id:
+        existing = get_audio_link_state(viable_link_id)
+        return True, {
+            "linkId": viable_link_id,
+            "established": existing.get("established") is True if existing is not None else False,
+        }, ""
     peer_identity = _get_group_audio_peer_identity(peer_key)
     if peer_identity is None:
         return False, {"code": "unknown_peer_presence_hash"}, "Unknown peer presence hash"
@@ -6140,6 +6152,10 @@ def _open_group_audio_link_for_peer(
         )
         return True, {"linkId": link_id, "established": False}, ""
     except Exception as exc:
+        log(
+            "[presence_bridge] target=reticulum-audio-link audio_link_open_exception "
+            f"peer={peer_key} reason={retry_reason} err={exc}\n{traceback.format_exc()}"
+        )
         desired["retry_delay"] = min(
             _AUDIO_LINK_RETRY_MAX_SECONDS,
             max(
@@ -7556,6 +7572,7 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
 
 def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
     link_id = str(payload.get("linkId") or "")
+    close_reason = str(payload.get("reason") or "local_close")
     if not link_id:
         emit_resp(req_id, False, error="Missing linkId")
         return
@@ -7573,6 +7590,21 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         is_current_outgoing = bool(
             peer_key and _outgoing_audio_link_id_by_peer_hash.get(peer_key) == link_id
         )
+        is_current_active = bool(
+            peer_key and _active_audio_link_id_by_peer_hash.get(peer_key) == link_id
+        )
+    is_duplicate_cleanup = (
+        close_reason.startswith("duplicate-")
+        or close_reason.startswith("superseded-")
+        or close_reason.startswith("open-result-")
+    )
+    if is_duplicate_cleanup and is_current_active:
+        emit_resp(req_id, True, payload={"suppressed": True, "reason": "canonical_link"})
+        log(
+            "[presence_bridge] target=reticulum-audio-link audio_link_close_suppressed "
+            f"peer={peer_key} link={link_id} reason={close_reason} active=true"
+        )
+        return
     if is_current_outgoing:
         _set_audio_link_desired(peer_key, False)
     link = state.get("link")
@@ -7583,7 +7615,7 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
             except Exception:
                 pass
             link.teardown()
-        emit_audio_link_closed(link_id, "local_close")
+        emit_audio_link_closed(link_id, close_reason or "local_close")
         emit_resp(req_id, True)
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))

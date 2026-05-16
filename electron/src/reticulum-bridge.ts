@@ -1171,8 +1171,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     }
   }
 
-  async closeGroupAudioLink(linkId: string): Promise<ReticulumSendResult> {
-    return this.sendDetailed('close_group_audio_link', { linkId });
+  async closeGroupAudioLink(
+    linkId: string,
+    reason?: string
+  ): Promise<ReticulumSendResult> {
+    return this.sendDetailed('close_group_audio_link', {
+      linkId,
+      ...(reason ? { reason } : {}),
+    });
   }
 
   async resetGroupAudioPeerState(

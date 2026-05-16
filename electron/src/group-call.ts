@@ -5052,7 +5052,7 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(
       `[GCall] Closing Reticulum audio link linkId=${linkId} reason=${reason}`
     );
-    void this.reticulumBridge?.closeGroupAudioLink(linkId).catch(() => {});
+    void this.reticulumBridge?.closeGroupAudioLink(linkId, reason).catch(() => {});
   }
 
   private closeDuplicateReticulumAudioLink(
