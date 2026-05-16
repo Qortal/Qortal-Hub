@@ -212,6 +212,20 @@ export type ReticulumAudioMediaRouteDiagnostic = {
   receiveGapOver320Count: number;
   receiveGapOver640Count: number;
   receiveGapOver1000Count: number;
+  linkReceiveGapMsMax?: number;
+  linkReceiveGapOver80Count?: number;
+  linkReceiveGapOver160Count?: number;
+  linkReceiveGapOver320Count?: number;
+  linkReceiveGapOver640Count?: number;
+  linkReceiveGapOver1000Count?: number;
+  linkReceiveToCallbackDispatchMsMax?: number;
+  linkCallbackDispatchToStartMsMax?: number;
+  linkReceiveToCallbackStartMsMax?: number;
+  linkCallbackDispatchToStartOver80Count?: number;
+  linkCallbackDispatchToStartOver160Count?: number;
+  linkCallbackDispatchToStartOver320Count?: number;
+  linkCallbackDispatchToStartOver640Count?: number;
+  linkCallbackDispatchToStartOver1000Count?: number;
   preRnsSendAgeMsMax: number;
   rnsSendDurationMsMax: number;
   receiveToFd4EnqueueMsMax: number;
@@ -1346,6 +1360,36 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       receiveGapOver320Count: num('receiveGapOver320Count'),
       receiveGapOver640Count: num('receiveGapOver640Count'),
       receiveGapOver1000Count: num('receiveGapOver1000Count'),
+      linkReceiveGapMsMax: num('linkReceiveGapMsMax'),
+      linkReceiveGapOver80Count: num('linkReceiveGapOver80Count'),
+      linkReceiveGapOver160Count: num('linkReceiveGapOver160Count'),
+      linkReceiveGapOver320Count: num('linkReceiveGapOver320Count'),
+      linkReceiveGapOver640Count: num('linkReceiveGapOver640Count'),
+      linkReceiveGapOver1000Count: num('linkReceiveGapOver1000Count'),
+      linkReceiveToCallbackDispatchMsMax: num(
+        'linkReceiveToCallbackDispatchMsMax'
+      ),
+      linkCallbackDispatchToStartMsMax: num(
+        'linkCallbackDispatchToStartMsMax'
+      ),
+      linkReceiveToCallbackStartMsMax: num(
+        'linkReceiveToCallbackStartMsMax'
+      ),
+      linkCallbackDispatchToStartOver80Count: num(
+        'linkCallbackDispatchToStartOver80Count'
+      ),
+      linkCallbackDispatchToStartOver160Count: num(
+        'linkCallbackDispatchToStartOver160Count'
+      ),
+      linkCallbackDispatchToStartOver320Count: num(
+        'linkCallbackDispatchToStartOver320Count'
+      ),
+      linkCallbackDispatchToStartOver640Count: num(
+        'linkCallbackDispatchToStartOver640Count'
+      ),
+      linkCallbackDispatchToStartOver1000Count: num(
+        'linkCallbackDispatchToStartOver1000Count'
+      ),
       preRnsSendAgeMsMax: num('preRnsSendAgeMsMax'),
       rnsSendDurationMsMax: num('rnsSendDurationMsMax'),
       receiveToFd4EnqueueMsMax: num('receiveToFd4EnqueueMsMax'),

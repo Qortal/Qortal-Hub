@@ -258,7 +258,11 @@ _audio_rns_callback_scheduler_gap_over_250_count = 0
 _audio_rns_callback_scheduler_gap_over_500_count = 0
 _audio_rns_callback_scheduler_gap_over_1000_count = 0
 _audio_media_route_stats: Dict[str, Dict[str, Any]] = {}
+_audio_link_receive_probe_by_packet_id: Dict[int, Dict[str, Any]] = {}
+_rns_link_receive_probe_installed = False
+_rns_link_receive_probe_context = threading.local()
 _AUDIO_MEDIA_ROUTE_STATS_MAX = 64
+_AUDIO_LINK_RECEIVE_PROBE_MAX = 2048
 _AUDIO_ROUTE_GAP_BUCKETS_MS = (80, 160, 320, 640, 1000)
 _AUDIO_RNS_CALLBACK_SCHEDULER_MONITOR_INTERVAL_SECONDS = 0.05
 _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
@@ -362,6 +366,8 @@ def _audio_route_stats_key(
     peer_presence_hash: str = "",
     peer_destination_hash: str = "",
 ) -> str:
+    if str(transport or "").strip().lower() == "link":
+        return f"{transport}:{route_key}"
     peer_key = str(peer_presence_hash or peer_destination_hash or "").strip().lower()
     return f"{transport}:{route_key}:{peer_key}"
 
@@ -416,6 +422,20 @@ def _get_audio_route_stats(
             "receiveGapOver320Count": 0,
             "receiveGapOver640Count": 0,
             "receiveGapOver1000Count": 0,
+            "linkReceiveGapMsMax": 0,
+            "linkReceiveGapOver80Count": 0,
+            "linkReceiveGapOver160Count": 0,
+            "linkReceiveGapOver320Count": 0,
+            "linkReceiveGapOver640Count": 0,
+            "linkReceiveGapOver1000Count": 0,
+            "linkReceiveToCallbackDispatchMsMax": 0,
+            "linkCallbackDispatchToStartMsMax": 0,
+            "linkReceiveToCallbackStartMsMax": 0,
+            "linkCallbackDispatchToStartOver80Count": 0,
+            "linkCallbackDispatchToStartOver160Count": 0,
+            "linkCallbackDispatchToStartOver320Count": 0,
+            "linkCallbackDispatchToStartOver640Count": 0,
+            "linkCallbackDispatchToStartOver1000Count": 0,
             "preRnsSendAgeMsMax": 0,
             "rnsSendDurationMsMax": 0,
             "receiveToFd4EnqueueMsMax": 0,
@@ -448,6 +468,219 @@ def _note_audio_route_gap(
         if gap_ms >= bucket_ms:
             key = f"{bucket_prefix}GapOver{bucket_ms}Count"
             stats[key] = int(stats.get(key) or 0) + 1
+
+
+def _note_audio_route_bucketed_duration(
+    stats: Dict[str, Any],
+    *,
+    duration_ms: float,
+    max_key: str,
+    bucket_prefix: Optional[str] = None,
+) -> None:
+    duration = max(0.0, float(duration_ms or 0.0))
+    if duration > float(stats.get(max_key) or 0):
+        stats[max_key] = duration
+    if not bucket_prefix:
+        return
+    for bucket_ms in _AUDIO_ROUTE_GAP_BUCKETS_MS:
+        if duration >= bucket_ms:
+            key = f"{bucket_prefix}Over{bucket_ms}Count"
+            stats[key] = int(stats.get(key) or 0) + 1
+
+
+def _get_audio_route_stats_for_link_id(
+    link_id: str,
+    *,
+    incoming: Optional[bool] = None,
+) -> Optional[Dict[str, Any]]:
+    if not link_id:
+        return None
+    state = get_audio_link_state(link_id)
+    if state is None:
+        return None
+    return _get_audio_route_stats(
+        "link",
+        link_id,
+        str(state.get("peerPresenceHash") or ""),
+        str(state.get("peerDestinationHash") or ""),
+        state.get("incoming") is True if incoming is None else incoming,
+    )
+
+
+def _prune_audio_link_receive_probe_cache() -> None:
+    if len(_audio_link_receive_probe_by_packet_id) <= _AUDIO_LINK_RECEIVE_PROBE_MAX:
+        return
+    overflow = len(_audio_link_receive_probe_by_packet_id) - _AUDIO_LINK_RECEIVE_PROBE_MAX
+    for packet_id in list(_audio_link_receive_probe_by_packet_id.keys())[: max(1, overflow)]:
+        _audio_link_receive_probe_by_packet_id.pop(packet_id, None)
+
+
+def _qortal_link_receive_probe(
+    stage: str,
+    link: Any,
+    packet: Any,
+    monotonic_at: float,
+    wall_at: float,
+) -> None:
+    """Runtime RNS.Link.receive probe to split delivery vs callback dispatch."""
+    if link is None or packet is None:
+        return
+    link_id = get_audio_link_id(link)
+    if not link_id:
+        return
+    packet_id = id(packet)
+    now_wall_ms = int(max(0.0, float(wall_at or time.time())) * 1000.0)
+    now_mono = float(monotonic_at or time.monotonic())
+    stats = _get_audio_route_stats_for_link_id(link_id)
+    if stats is None:
+        return
+    if stage == "receive_enter":
+        _note_audio_route_gap(
+            stats,
+            previous_key="lastLinkReceiveEnterAtMs",
+            max_key="linkReceiveGapMsMax",
+            bucket_prefix="linkReceive",
+            now_ms=now_wall_ms,
+        )
+        stats["lastLinkReceiveEnterAtMs"] = now_wall_ms
+        stats["lastActivityAtMs"] = max(int(stats.get("lastActivityAtMs") or 0), now_wall_ms)
+        _audio_link_receive_probe_by_packet_id[packet_id] = {
+            "linkId": link_id,
+            "receiveEnterMonotonic": now_mono,
+            "receiveEnterAtMs": now_wall_ms,
+            "callbackDispatchMonotonic": 0.0,
+            "callbackDispatchAtMs": 0,
+        }
+        _prune_audio_link_receive_probe_cache()
+        _mark_audio_queue_state_dirty()
+        return
+    if stage == "callback_dispatch":
+        probe = _audio_link_receive_probe_by_packet_id.get(packet_id)
+        if probe is None:
+            probe = {
+                "linkId": link_id,
+                "receiveEnterMonotonic": 0.0,
+                "receiveEnterAtMs": 0,
+            }
+            _audio_link_receive_probe_by_packet_id[packet_id] = probe
+            _prune_audio_link_receive_probe_cache()
+        enter_mono = float(probe.get("receiveEnterMonotonic") or 0.0)
+        if enter_mono > 0:
+            _note_audio_route_bucketed_duration(
+                stats,
+                duration_ms=(now_mono - enter_mono) * 1000.0,
+                max_key="linkReceiveToCallbackDispatchMsMax",
+            )
+        probe["callbackDispatchMonotonic"] = now_mono
+        probe["callbackDispatchAtMs"] = now_wall_ms
+        _mark_audio_queue_state_dirty()
+        return
+    if stage == "callback_start":
+        probe = _audio_link_receive_probe_by_packet_id.pop(packet_id, None)
+        if probe is None:
+            return
+        dispatch_mono = float(probe.get("callbackDispatchMonotonic") or 0.0)
+        enter_mono = float(probe.get("receiveEnterMonotonic") or 0.0)
+        if dispatch_mono > 0:
+            _note_audio_route_bucketed_duration(
+                stats,
+                duration_ms=(now_mono - dispatch_mono) * 1000.0,
+                max_key="linkCallbackDispatchToStartMsMax",
+                bucket_prefix="linkCallbackDispatchToStart",
+            )
+        if enter_mono > 0:
+            _note_audio_route_bucketed_duration(
+                stats,
+                duration_ms=(now_mono - enter_mono) * 1000.0,
+                max_key="linkReceiveToCallbackStartMsMax",
+            )
+        _mark_audio_queue_state_dirty()
+
+
+setattr(RNS, "_qortal_link_receive_probe", _qortal_link_receive_probe)
+
+
+def install_rns_link_receive_probe() -> None:
+    """Track RNS.Link.receive -> packet-callback scheduling without editing vendored RNS files."""
+    global _rns_link_receive_probe_installed
+    if _rns_link_receive_probe_installed:
+        return
+    original_receive = getattr(RNS.Link, "receive", None)
+    original_thread = threading.Thread
+    if not callable(original_receive):
+        return
+
+    def probed_receive(self, packet):
+        probe_context = None
+        try:
+            if (
+                getattr(packet, "packet_type", None) == getattr(RNS.Packet, "DATA", object())
+                and getattr(packet, "context", None) == getattr(RNS.Packet, "NONE", object())
+            ):
+                probe_context = {"link": self, "packet": packet}
+                _qortal_link_receive_probe(
+                    "receive_enter",
+                    self,
+                    packet,
+                    time.monotonic(),
+                    time.time(),
+                )
+        except Exception:
+            probe_context = None
+        previous_context = getattr(_rns_link_receive_probe_context, "current", None)
+        _rns_link_receive_probe_context.current = probe_context
+        try:
+            return original_receive(self, packet)
+        finally:
+            _rns_link_receive_probe_context.current = previous_context
+
+    class QortalProbeThread(original_thread):
+        def __init__(self, *args, **kwargs):
+            context = getattr(_rns_link_receive_probe_context, "current", None)
+            if context is not None:
+                args_list = list(args)
+                target = kwargs.get("target")
+                target_index: Optional[int] = None
+                if target is None and len(args_list) >= 2:
+                    target = args_list[1]
+                    target_index = 1
+                if callable(target):
+                    link = context.get("link")
+                    packet = context.get("packet")
+                    try:
+                        _qortal_link_receive_probe(
+                            "callback_dispatch",
+                            link,
+                            packet,
+                            time.monotonic(),
+                            time.time(),
+                        )
+                    except Exception:
+                        pass
+
+                    def wrapped_target(*target_args, **target_kwargs):
+                        try:
+                            _qortal_link_receive_probe(
+                                "callback_start",
+                                link,
+                                packet,
+                                time.monotonic(),
+                                time.time(),
+                            )
+                        except Exception:
+                            pass
+                        return target(*target_args, **target_kwargs)
+
+                    if target_index is not None:
+                        args_list[target_index] = wrapped_target
+                        args = tuple(args_list)
+                    else:
+                        kwargs["target"] = wrapped_target
+            super().__init__(*args, **kwargs)
+
+    setattr(RNS.Link, "receive", probed_receive)
+    threading.Thread = QortalProbeThread
+    _rns_link_receive_probe_installed = True
 
 
 def _now_wall_ms() -> int:
@@ -5442,6 +5675,7 @@ def on_audio_link_remote_identified(link, identity) -> None:
 
 def on_audio_link_packet(message, packet) -> None:
     received_at_wall_ms = _now_wall_ms()
+    callback_started_monotonic = time.monotonic()
     link = getattr(packet, "link", None)
     link_id = get_audio_link_id(link) if link is not None else None
     if link_id is None:
@@ -5449,6 +5683,29 @@ def on_audio_link_packet(message, packet) -> None:
     state = get_audio_link_state(link_id)
     if state is None:
         return
+    probe = _audio_link_receive_probe_by_packet_id.pop(id(packet), None)
+    if isinstance(probe, dict):
+        stats = _get_audio_route_stats_for_link_id(
+            link_id,
+            incoming=state.get("incoming") is True,
+        )
+        if stats is not None:
+            dispatch_mono = float(probe.get("callbackDispatchMonotonic") or 0.0)
+            enter_mono = float(probe.get("receiveEnterMonotonic") or 0.0)
+            if dispatch_mono > 0:
+                _note_audio_route_bucketed_duration(
+                    stats,
+                    duration_ms=(callback_started_monotonic - dispatch_mono) * 1000.0,
+                    max_key="linkCallbackDispatchToStartMsMax",
+                    bucket_prefix="linkCallbackDispatchToStart",
+                )
+            if enter_mono > 0:
+                _note_audio_route_bucketed_duration(
+                    stats,
+                    duration_ms=(callback_started_monotonic - enter_mono) * 1000.0,
+                    max_key="linkReceiveToCallbackStartMsMax",
+                )
+            _mark_audio_queue_state_dirty()
     decoded_audio = _decode_group_audio_wire(message)
     if decoded_audio is not None:
         room_id, sender_call_hash, raw_audio = decoded_audio
@@ -5803,6 +6060,7 @@ def ensure_started(config_dir: str):
         RNS.Transport.register_announce_handler(_announce_handler)
         ensure_transport_monitor_started()
         ensure_rns_callback_scheduler_monitor_started()
+        install_rns_link_receive_probe()
         return _destination
 
 
