@@ -333,6 +333,8 @@ const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_MAX = 8192;
 const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_SWEEP_MIN_MS = 30_000;
 /** Retry retained GC_JOIN identity replay across topology heartbeats; first direct send can be lost. */
 const GC_RETAINED_JOIN_IDENTITY_REPLAY_MAX_ATTEMPTS = 6;
+/** Retry verified GC_JOIN identity relay toward the current root; caps harmless duplicate convergence traffic. */
+const GC_JOIN_IDENTITY_ROOT_RELAY_MAX_ATTEMPTS = 6;
 
 type GcReticulumRetryKind =
   | 'join'
@@ -1703,6 +1705,8 @@ export class GroupCallManager extends EventEmitter {
     string,
     number
   >();
+  /** roomId:root:joiner:joinTs → verified GC_JOIN relay attempts toward the current root. */
+  private joinIdentityRootRelayAttempts = new Map<string, number>();
   /** roomId → verified key/rotate still needs renderer session reconciliation. */
   private pendingVerifiedSessionUpdateByRoom = new Map<
     string,
@@ -2334,6 +2338,7 @@ export class GroupCallManager extends EventEmitter {
     this.retainedVerifiedJoinRkByRoomAndAddress.clear();
     this.leftParticipantTimestampByRoomAndAddress.clear();
     this.retainedJoinIdentityReplayAttemptsByTopology.clear();
+    this.joinIdentityRootRelayAttempts.clear();
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
     this.transportHealthByRoom.clear();
@@ -2749,6 +2754,11 @@ export class GroupCallManager extends EventEmitter {
         this.retainedJoinIdentityReplayAttemptsByTopology.delete(key);
       }
     }
+    for (const key of this.joinIdentityRootRelayAttempts.keys()) {
+      if (key.startsWith(`${roomId}:`)) {
+        this.joinIdentityRootRelayAttempts.delete(key);
+      }
+    }
     for (const key of this.leftParticipantTimestampByRoomAndAddress.keys()) {
       if (key.startsWith(`${roomId}:`)) {
         this.leftParticipantTimestampByRoomAndAddress.delete(key);
@@ -2889,6 +2899,55 @@ export class GroupCallManager extends EventEmitter {
     return room.participants.size > 1;
   }
 
+  private buildRetainedJoinIdentityFramesForAddress(
+    roomId: string,
+    address: string,
+    targetAddress = address
+  ): Record<string, unknown>[] {
+    const key = this.retainedJoinStateKey(roomId, address);
+    const joinEnv = this.retainedVerifiedJoinByRoomAndAddress.get(key);
+    if (!joinEnv) return [];
+    const rejectReason = gcJoinTimestampRejectReason(
+      joinEnv.timestamp,
+      Date.now()
+    );
+    if (rejectReason) {
+      this.logGcJoinDropThrottled(
+        joinEnv.fromAddress,
+        `retained_replay_${rejectReason}`,
+        `[GCall] Skipping retained GC_JOIN replay (${rejectReason}) room=${roomId} from=${joinEnv.fromAddress} target=${targetAddress}`
+      );
+      return [];
+    }
+    const frames: Record<string, unknown>[] = [
+      encodeJoinWire({
+        ...joinEnv,
+        reticulumIdentityPublicKeyBase64: undefined,
+      }),
+    ];
+    const joinRk = this.retainedVerifiedJoinRkByRoomAndAddress.get(key);
+    if (
+      joinRk?.reticulumIdentityPublicKeyBase64 &&
+      isRnsIdentityPublicKeyBase64(joinRk.reticulumIdentityPublicKeyBase64)
+    ) {
+      frames.push(
+        encodeJoinIdentityWire({
+          fromAddress: joinRk.fromAddress,
+          signature: joinRk.signature,
+          timestamp: joinRk.timestamp,
+          reticulumDestinationHash: joinRk.reticulumDestinationHash,
+          ...(typeof joinRk.joinGeneration === 'number' &&
+          Number.isFinite(joinRk.joinGeneration)
+            ? { joinGeneration: joinRk.joinGeneration }
+            : {}),
+          reticulumIdentityPublicKeyBase64:
+            joinRk.reticulumIdentityPublicKeyBase64,
+        })
+      );
+    }
+    return frames;
+  }
+
   private replayRetainedJoinIdentityToAddress(
     roomId: string,
     targetAddress: string,
@@ -2899,47 +2958,80 @@ export class GroupCallManager extends EventEmitter {
     for (const [key, joinEnv] of this.retainedVerifiedJoinByRoomAndAddress) {
       if (!key.startsWith(`${roomId}:`)) continue;
       if (joinEnv.fromAddress === excludeAddress) continue;
-      const rejectReason = gcJoinTimestampRejectReason(
-        joinEnv.timestamp,
-        Date.now()
-      );
-      if (rejectReason) {
-        this.logGcJoinDropThrottled(
-          joinEnv.fromAddress,
-          `retained_replay_${rejectReason}`,
-          `[GCall] Skipping retained GC_JOIN replay (${rejectReason}) room=${roomId} from=${joinEnv.fromAddress} target=${targetAddress}`
-        );
-        continue;
-      }
       frames.push(
-        encodeJoinWire({
-          ...joinEnv,
-          reticulumIdentityPublicKeyBase64: undefined,
-        })
+        ...this.buildRetainedJoinIdentityFramesForAddress(
+          roomId,
+          joinEnv.fromAddress,
+          targetAddress
+        )
       );
-      const joinRk = this.retainedVerifiedJoinRkByRoomAndAddress.get(key);
-      if (
-        joinRk?.reticulumIdentityPublicKeyBase64 &&
-        isRnsIdentityPublicKeyBase64(joinRk.reticulumIdentityPublicKeyBase64)
-      ) {
-        frames.push(
-          encodeJoinIdentityWire({
-            fromAddress: joinRk.fromAddress,
-            signature: joinRk.signature,
-            timestamp: joinRk.timestamp,
-            reticulumDestinationHash: joinRk.reticulumDestinationHash,
-            ...(typeof joinRk.joinGeneration === 'number' &&
-            Number.isFinite(joinRk.joinGeneration)
-              ? { joinGeneration: joinRk.joinGeneration }
-              : {}),
-            reticulumIdentityPublicKeyBase64:
-              joinRk.reticulumIdentityPublicKeyBase64,
-          })
-        );
-      }
     }
     if (frames.length === 0) return;
     this.sendReticulumToAddress(targetAddress, frames, 'join_replay');
+  }
+
+  private relayRetainedJoinIdentityToCurrentRoot(
+    roomId: string,
+    joinerAddress: string,
+    reason: 'verified-join' | 'verified-join-rk' | 'topology'
+  ): void {
+    const room = this.rooms.get(roomId);
+    const rootForwarder = room?.lastTopology?.rootForwarder?.trim() ?? '';
+    if (
+      !room ||
+      !rootForwarder ||
+      !joinerAddress ||
+      rootForwarder === joinerAddress ||
+      this.localAddresses.has(rootForwarder)
+    ) {
+      return;
+    }
+    const retainedJoin = this.retainedVerifiedJoinByRoomAndAddress.get(
+      this.retainedJoinStateKey(roomId, joinerAddress)
+    );
+    if (!retainedJoin) return;
+    const relayKey = `${roomId}:${rootForwarder}:${joinerAddress}:${retainedJoin.timestamp}`;
+    const attempts = this.joinIdentityRootRelayAttempts.get(relayKey) ?? 0;
+    if (attempts >= GC_JOIN_IDENTITY_ROOT_RELAY_MAX_ATTEMPTS) return;
+    const frames = this.buildRetainedJoinIdentityFramesForAddress(
+      roomId,
+      joinerAddress,
+      rootForwarder
+    );
+    if (frames.length === 0) return;
+    this.joinIdentityRootRelayAttempts.set(relayKey, attempts + 1);
+    this.sendReticulumToAddress(rootForwarder, frames, 'join_replay');
+    loggerLog(
+      `[GCall] Relayed verified GC_JOIN identity to current root room=${roomId} joiner=${joinerAddress} root=${rootForwarder} reason=${reason} attempt=${attempts + 1}`
+    );
+  }
+
+  private relayRetainedJoinIdentitiesToCurrentRootForRoom(
+    roomId: string
+  ): void {
+    const room = this.rooms.get(roomId);
+    const rootForwarder = room?.lastTopology?.rootForwarder?.trim() ?? '';
+    if (!room || !rootForwarder || this.localAddresses.has(rootForwarder)) {
+      return;
+    }
+    const topologyAddresses = new Set(
+      [
+        room.lastTopology?.rootForwarder,
+        room.lastTopology?.standbyForwarder,
+        ...(room.lastTopology?.clusters ?? []).flatMap((cluster) => [
+          cluster.forwarder,
+          cluster.standby,
+          cluster.standby2,
+          ...cluster.members,
+        ]),
+      ]
+        .map((address) => address?.trim() ?? '')
+        .filter(Boolean)
+    );
+    for (const address of room.participants.keys()) {
+      if (!address || topologyAddresses.has(address)) continue;
+      this.relayRetainedJoinIdentityToCurrentRoot(roomId, address, 'topology');
+    }
   }
 
   private replayRetainedJoinIdentitiesForPublishedTopology(
@@ -5105,7 +5197,9 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(
       `[GCall] Closing Reticulum audio link linkId=${linkId} reason=${reason}`
     );
-    void this.reticulumBridge?.closeGroupAudioLink(linkId, reason).catch(() => {});
+    void this.reticulumBridge
+      ?.closeGroupAudioLink(linkId, reason)
+      .catch(() => {});
   }
 
   private closeDuplicateReticulumAudioLink(
@@ -8105,6 +8199,11 @@ export class GroupCallManager extends EventEmitter {
     };
     this.rememberRetainedVerifiedJoinRk(env);
     this.registerPeerIdentityFromJoinWire(joinForRegister);
+    this.relayRetainedJoinIdentityToCurrentRoot(
+      env.roomId,
+      env.fromAddress,
+      'verified-join-rk'
+    );
     this.syncReticulumAudioLinks();
   }
 
@@ -8215,6 +8314,11 @@ export class GroupCallManager extends EventEmitter {
 
     this.rememberRetainedVerifiedJoin(env);
     this.registerPeerIdentityFromJoinWire(env);
+    this.relayRetainedJoinIdentityToCurrentRoot(
+      env.roomId,
+      env.fromAddress,
+      'verified-join'
+    );
     if (this.shouldDeferInitialAudioOpenForVerifiedJoin(room, env)) {
       this.deferReticulumAudioOpenForAddress(
         env.fromAddress,
@@ -8465,6 +8569,7 @@ export class GroupCallManager extends EventEmitter {
       }
     }
 
+    this.relayRetainedJoinIdentitiesToCurrentRootForRoom(env.roomId);
     if (room && emitFullTopology) {
       this.emit('gcall:topology', {
         roomId: env.roomId,

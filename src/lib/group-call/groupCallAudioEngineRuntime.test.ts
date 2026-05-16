@@ -5314,6 +5314,144 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect((runtime as any).topology.rootForwarder).toBe('Qpeer');
   });
 
+  it('blocks occupied-room roster refresh from making a rejoining old root local root before authority timeout', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+      { address: 'Qother', publicKey: 'pub-other' },
+    ]);
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const applyTopologySpy = vi.spyOn(runtime as any, 'applyTopology');
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qlocal',
+      'Qpeer',
+      'Qother',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+
+    (runtime as any).topologyElectionDelayUntilMs = 0;
+    applyTopologySpy.mockClear();
+    broadcastTopology.mockClear();
+
+    await (runtime as any).runTopologyElection(
+      (runtime as any).topologyAsyncGeneration,
+      'authoritative-roster-refresh'
+    );
+
+    expect(applyTopologySpy).not.toHaveBeenCalled();
+    expect(broadcastTopology).not.toHaveBeenCalled();
+    expect((runtime as any).topology?.rootForwarder ?? '').toBe('');
+    expect((runtime as any).topologyElectionDelayUntilMs).toBeGreaterThan(
+      nowMs
+    );
+    expect(
+      (
+        (runtime as any).diagEvents as Array<{
+          tag: string;
+          payload?: { reason?: string };
+        }>
+      ).some(
+        (event) =>
+          event.tag === 'local-root-election-suppressed-occupied-rejoin' &&
+          event.payload?.reason === 'authoritative-roster-refresh'
+      )
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('rejects newer topology from a rejoining old root while the current root is healthy', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    (runtime as any).snapshot = {
+      ...(runtime as any).snapshot,
+      roomState: 'connected',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qroot', publicKey: 'pub-root', joinedAt: 2 },
+        { address: 'Qoldroot', publicKey: 'pub-oldroot', joinedAt: 3 },
+      ],
+    };
+    (runtime as any).topology = {
+      roomId: 'room-1',
+      topologyEpoch: 7,
+      rootForwarder: 'Qroot',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qroot', 'Qoldroot'],
+          forwarder: 'Qroot',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs,
+    };
+    (runtime as any).noteRootHeartbeat('Qroot', nowMs);
+    (runtime as any).noteRootVerifiedControl('Qroot', nowMs);
+
+    const applied = await (runtime as any).applyTopology(
+      {
+        roomId: 'room-1',
+        topologyEpoch: 8,
+        rootForwarder: 'Qoldroot',
+        standbyForwarder: 'Qroot',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qroot', 'Qoldroot'],
+            forwarder: 'Qoldroot',
+            standby: 'Qroot',
+          },
+        ],
+        fromAddress: 'Qoldroot',
+        lastSeen: nowMs + 500,
+      },
+      'remote-event'
+    );
+
+    expect(applied).toBe(false);
+    expect((runtime as any).topology.rootForwarder).toBe('Qroot');
+    expect(
+      (
+        (runtime as any).diagEvents as Array<{
+          tag: string;
+          payload?: { currentRoot?: string; incomingRoot?: string };
+        }>
+      ).some(
+        (event) =>
+          event.tag === 'remote-topology-rejected-healthy-root-protected' &&
+          event.payload?.currentRoot === 'Qroot' &&
+          event.payload?.incomingRoot === 'Qoldroot'
+      )
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('clears stale authority-settle delay when the conflicting root is resolved by departure', async () => {
     vi.useFakeTimers();
     const nowMs = Date.now();

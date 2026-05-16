@@ -560,7 +560,7 @@ const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const STARTUP_MEDIA_TARGET_SETTLE_MS = 15_000;
 const STARTUP_EMPTY_TARGET_SETTLE_MS = 60_000;
-const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
+const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 1_500;
 const ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS =
   ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS * 2;
 const ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS =
@@ -2052,6 +2052,94 @@ export class GroupCallAudioEngineRuntime {
       ),
     });
     this.scheduleTopologyElection(`provisional-local-root-${reason}`);
+    return true;
+  }
+
+  private getRecentRemoteActivityAtMs(nowMs: number): number {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    let latest = 0;
+    const visit = (addressValue: string, seenAtMs: number): void => {
+      const address = addressValue.trim();
+      if (
+        !address ||
+        address === myAddress ||
+        seenAtMs <= 0 ||
+        !Number.isFinite(seenAtMs)
+      ) {
+        return;
+      }
+      if (nowMs - seenAtMs <= ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS) {
+        latest = Math.max(latest, seenAtMs);
+      }
+    };
+    for (const [address, seenAtMs] of this.participantLiveEvidenceLastSeenAt) {
+      visit(address, seenAtMs);
+    }
+    for (const [address, seenAtMs] of this.participantDecodedMediaLastSeenAt) {
+      visit(address, seenAtMs);
+    }
+    for (const [address, seenAtMs] of this.activeSpeakerLastSeenAt) {
+      visit(address, seenAtMs);
+    }
+    return latest;
+  }
+
+  private getOccupiedRejoinLocalRootSuppressionUntilMs(nowMs: number): number {
+    const remoteParticipantCount = Math.max(
+      this.countRemoteParticipants(),
+      this.startupHydratedRemoteCount
+    );
+    if (
+      remoteParticipantCount <= 0 ||
+      (!this.startupOccupiedRoomEvidence &&
+        this.startupHydratedRemoteCount <= 0)
+    ) {
+      return 0;
+    }
+    const joinGuardUntil =
+      this.lastJoinSuccessAtMs > 0
+        ? this.lastJoinSuccessAtMs + ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS
+        : 0;
+    const recentRemoteActivityAtMs = this.getRecentRemoteActivityAtMs(nowMs);
+    const activityGuardUntil =
+      recentRemoteActivityAtMs > 0
+        ? recentRemoteActivityAtMs + ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS
+        : 0;
+    return Math.max(joinGuardUntil, activityGuardUntil);
+  }
+
+  private shouldSuppressOccupiedRejoinLocalRootElection(
+    topology: GroupCallTopology,
+    reason: string,
+    nowMs: number
+  ): boolean {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!myAddress || topology.rootForwarder?.trim() !== myAddress) {
+      return false;
+    }
+    if (reason !== 'authoritative-roster-refresh') return false;
+    if ((this.topology?.rootForwarder?.trim() ?? '') === myAddress) {
+      return false;
+    }
+    const suppressUntilMs =
+      this.getOccupiedRejoinLocalRootSuppressionUntilMs(nowMs);
+    if (suppressUntilMs <= nowMs) return false;
+    this.topologyElectionDelayUntilMs = Math.max(
+      this.topologyElectionDelayUntilMs,
+      suppressUntilMs
+    );
+    this.recordDiagEvent('local-root-election-suppressed-occupied-rejoin', {
+      roomId: this.snapshot.roomId,
+      reason,
+      proposedRoot: myAddress,
+      participantCount: topology.clusters.flatMap((cluster) => cluster.members)
+        .length,
+      startupOccupiedRoomEvidence: this.startupOccupiedRoomEvidence,
+      startupHydratedRemoteCount: this.startupHydratedRemoteCount,
+      suppressRemainingMs: Math.max(0, suppressUntilMs - nowMs),
+    });
+    this.requestRetainedKeyReplay('occupied-rejoin-root-election-suppressed');
+    this.scheduleTopologyElection('authority-conflict');
     return true;
   }
 
@@ -5536,6 +5624,15 @@ export class GroupCallAudioEngineRuntime {
       standbyForwarder: topology.standbyForwarder,
     });
     if (
+      this.shouldSuppressOccupiedRejoinLocalRootElection(
+        topology,
+        reason,
+        nowMs
+      )
+    ) {
+      return;
+    }
+    if (
       this.isSameTopologyStructureIgnoringEpoch(this.topology, topology) &&
       this.isTopologyRepresentedInSnapshotRoster(this.topology)
     ) {
@@ -6345,6 +6442,65 @@ export class GroupCallAudioEngineRuntime {
       : Date.now();
   }
 
+  private isCurrentRootProtectedFromRemoteTakeover(
+    current: GroupCallTopology,
+    nowMs: number
+  ): boolean {
+    const currentRoot = current.rootForwarder?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!currentRoot) return false;
+    const rootStillInRoom =
+      this.isAddressInCurrentRoster(currentRoot) ||
+      this.collectTopologyAddresses(current).includes(currentRoot);
+    if (!rootStillInRoom) return false;
+    if (currentRoot === myAddress) {
+      return this.ownsRoomKey && !this.isProvisionalLocalRootActive(nowMs);
+    }
+    const liveness = this.getRootPeerLivenessSnapshot(nowMs);
+    return (
+      liveness.currentRoot === currentRoot &&
+      liveness.state !== 'unknown' &&
+      !liveness.rootPeerRequiresReconnect
+    );
+  }
+
+  private shouldRejectRemoteTopologyDemotingHealthyRoot(opts: {
+    current: GroupCallTopology | null;
+    incoming: GroupCallTopology;
+    source: 'remote-event' | 'local-election';
+    incomingAuthor: string;
+    acceptProvisionalIncumbentTopology: boolean;
+    nowMs: number;
+  }): boolean {
+    if (opts.source !== 'remote-event' || !opts.current) return false;
+    if (opts.acceptProvisionalIncumbentTopology) return false;
+    const currentRoot = opts.current.rootForwarder?.trim() ?? '';
+    const incomingRoot = opts.incoming.rootForwarder?.trim() ?? '';
+    if (!currentRoot || !incomingRoot || currentRoot === incomingRoot) {
+      return false;
+    }
+    if (opts.incoming.topologyEpoch <= opts.current.topologyEpoch) {
+      return false;
+    }
+    if (!opts.incomingAuthor || opts.incomingAuthor === currentRoot) {
+      return false;
+    }
+    if (
+      !this.isCurrentRootProtectedFromRemoteTakeover(opts.current, opts.nowMs)
+    ) {
+      return false;
+    }
+    this.recordDiagEvent('remote-topology-rejected-healthy-root-protected', {
+      roomId: opts.incoming.roomId ?? this.snapshot.roomId,
+      currentRoot,
+      incomingRoot,
+      incomingAuthor: opts.incomingAuthor || null,
+      currentEpoch: opts.current.topologyEpoch,
+      incomingEpoch: opts.incoming.topologyEpoch,
+    });
+    return true;
+  }
+
   private scheduleRootFailoverWatch(): void {
     this.clearRootFailoverTimer();
     const topology = this.topology;
@@ -6713,6 +6869,9 @@ export class GroupCallAudioEngineRuntime {
     const current = this.topology;
     const nowMs = Date.now();
     const incomingRoot = normalized.rootForwarder?.trim() ?? '';
+    const incomingAuthor =
+      (topology as unknown as { fromAddress?: string }).fromAddress?.trim() ??
+      '';
     const myAddress = this.userInfo?.address ?? '';
     const acceptProvisionalIncumbentTopology =
       source === 'remote-event' &&
@@ -6726,6 +6885,18 @@ export class GroupCallAudioEngineRuntime {
       incomingRoot !== myAddress.trim() &&
       this.countRemoteParticipants() >= 2 &&
       this.isAddressInCurrentRoster(incomingRoot);
+    if (
+      this.shouldRejectRemoteTopologyDemotingHealthyRoot({
+        current,
+        incoming: normalized,
+        source,
+        incomingAuthor,
+        acceptProvisionalIncumbentTopology,
+        nowMs,
+      })
+    ) {
+      return false;
+    }
     if (
       current &&
       normalized.topologyEpoch < current.topologyEpoch &&

@@ -5124,9 +5124,9 @@ describe('Reticulum group audio transport', () => {
       lastSeen: Date.now(),
     };
 
-    expect([...(manager as any).computeReticulumAudioTargetsForRoom(room)]).toEqual([
-      'Q-root',
-    ]);
+    expect([
+      ...(manager as any).computeReticulumAudioTargetsForRoom(room),
+    ]).toEqual(['Q-root']);
     manager.stop();
   });
 
@@ -5197,6 +5197,193 @@ describe('Reticulum group audio transport', () => {
         .filter((entry) => entry.hash === 'd:q-new')
         .map((entry) => entry.msg.t)
     ).toEqual(['GJ']);
+    manager.stop();
+  });
+
+  it('relays a verified new join identity to the current remote root if this peer received it first', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const now = Date.now();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub(sent) as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-peer']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-peer',
+      'sig-peer',
+      'pk-peer',
+      now,
+      TEST_D32
+    );
+
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-root', {
+      publicKey: 'pk-root',
+      joinedAt: now - 1,
+      reticulumDestinationHash: 'd:q-root',
+    });
+    room.lastTopology = {
+      topologyEpoch: 3,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-peer',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-peer'],
+          forwarder: 'Q-root',
+          standby: 'Q-peer',
+          standby2: '',
+        },
+      ],
+      lastSeen: now,
+    };
+    sent.length = 0;
+
+    (manager as any).applyVerifiedJoin({
+      type: 'GC_JOIN',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      fromAddress: 'Q-new',
+      fromPublicKey: 'pk-new',
+      signature: 'sig-new',
+      timestamp: now + 1,
+      reticulumDestinationHash: 'd:q-new',
+    });
+
+    const relayed = sent.filter((entry) => entry.hash === 'd:q-root');
+    expect(relayed.map((entry) => entry.msg.t)).toEqual(['GJ']);
+    expect(relayed[0]?.msg.a).toBe('Q-new');
+    manager.stop();
+  });
+
+  it('caps repeated verified join identity relay attempts to the current root', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const now = Date.now();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub(sent) as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-peer']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-peer',
+      'sig-peer',
+      'pk-peer',
+      now,
+      TEST_D32
+    );
+
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-root', {
+      publicKey: 'pk-root',
+      joinedAt: now - 1,
+      reticulumDestinationHash: 'd:q-root',
+    });
+    room.participants.set('Q-new', {
+      publicKey: 'pk-new',
+      joinedAt: now + 1,
+      reticulumDestinationHash: 'd:q-new',
+    });
+    room.lastTopology = {
+      topologyEpoch: 3,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-peer',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-peer', 'Q-new'],
+          forwarder: 'Q-root',
+          standby: 'Q-peer',
+          standby2: '',
+        },
+      ],
+      lastSeen: now,
+    };
+    (manager as any).rememberRetainedVerifiedJoin({
+      type: 'GC_JOIN',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      fromAddress: 'Q-new',
+      fromPublicKey: 'pk-new',
+      signature: 'sig-new',
+      timestamp: now + 1,
+      reticulumDestinationHash: 'd:q-new',
+    });
+    sent.length = 0;
+
+    for (let i = 0; i < 8; i += 1) {
+      (manager as any).relayRetainedJoinIdentityToCurrentRoot(
+        'room-1',
+        'Q-new',
+        'topology'
+      );
+    }
+
+    expect(
+      sent.filter((entry) => entry.hash === 'd:q-root' && entry.msg.t === 'GJ')
+    ).toHaveLength(6);
+    manager.stop();
+  });
+
+  it('relays the local join identity to a remote root when root topology omits the local participant', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const now = Date.now();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub(sent) as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-new']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-new',
+      'sig-new',
+      'pk-new',
+      now,
+      TEST_D32
+    );
+
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-root', {
+      publicKey: 'pk-root',
+      joinedAt: now - 1,
+      reticulumDestinationHash: 'd:q-root',
+    });
+    sent.length = 0;
+
+    (manager as any).applyVerifiedTopology({
+      type: 'GC_TOPOLOGY',
+      roomId: 'room-1',
+      fromAddress: 'Q-root',
+      fromPublicKey: 'pk-root',
+      signature: 'sig-topology',
+      timestamp: now + 1,
+      topologyEpoch: 4,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-other',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-other'],
+          forwarder: 'Q-root',
+          standby: 'Q-other',
+          standby2: '',
+        },
+      ],
+      lastSeen: now + 1,
+    });
+
+    const relayed = sent.filter(
+      (entry) => entry.hash === 'd:q-root' && entry.msg.t === 'GJ'
+    );
+    expect(relayed).toHaveLength(1);
+    expect(relayed[0]?.msg.a).toBe('Q-new');
     manager.stop();
   });
 
@@ -6759,7 +6946,11 @@ describe('getReticulumOverlayLogicalDedupeKey', () => {
     const handleWire = (manager as any).handleReticulumGroupCallWire.bind(
       manager
     );
-    handleWire({ ...join, X: 'same-overlay-id', L: 2 }, 'peer-dest', 'peer-hash');
+    handleWire(
+      { ...join, X: 'same-overlay-id', L: 2 },
+      'peer-dest',
+      'peer-hash'
+    );
     handleWire(
       { ...joinIdentity, X: 'same-overlay-id', L: 2 },
       'peer-dest',
