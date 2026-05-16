@@ -166,6 +166,11 @@ function makeAudioQueueSnapshot(
     executorCommandMsMax: 0,
     executorCommandWhileQueuedMsMax: 0,
     executorCommandSlowCount: 0,
+    rnsCallbackSchedulerGapMsMax: 0,
+    rnsCallbackSchedulerGapOver100Count: 0,
+    rnsCallbackSchedulerGapOver250Count: 0,
+    rnsCallbackSchedulerGapOver500Count: 0,
+    rnsCallbackSchedulerGapOver1000Count: 0,
     ...overrides,
   };
 }

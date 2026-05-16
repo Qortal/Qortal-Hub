@@ -539,6 +539,16 @@ export interface GroupCallMetricsSnapshot {
   reticulumAudioExecutorCommandWhileQueuedMsMax: number;
   /** Count of slow non-audio commands handled by the Python RNS executor. */
   reticulumAudioExecutorCommandSlowCount: number;
+  /** Max scheduling gap observed by the Python/RNS callback heartbeat thread. */
+  reticulumAudioRnsCallbackSchedulerGapMsMax: number;
+  /** Count of Python/RNS callback heartbeat gaps over 100ms. */
+  reticulumAudioRnsCallbackSchedulerGapOver100Count: number;
+  /** Count of Python/RNS callback heartbeat gaps over 250ms. */
+  reticulumAudioRnsCallbackSchedulerGapOver250Count: number;
+  /** Count of Python/RNS callback heartbeat gaps over 500ms. */
+  reticulumAudioRnsCallbackSchedulerGapOver500Count: number;
+  /** Count of Python/RNS callback heartbeat gaps over 1000ms. */
+  reticulumAudioRnsCallbackSchedulerGapOver1000Count: number;
   /**
    * Outbound group-audio send path observed from main-process diagnostics (`transport` field).
    * Incremented once per send IPC completion that reported a `link` transport.
@@ -1280,6 +1290,11 @@ function emptyWindowCounters(): WindowCounterSet {
     reticulumAudioExecutorCommandMsMax: 0,
     reticulumAudioExecutorCommandWhileQueuedMsMax: 0,
     reticulumAudioExecutorCommandSlowCount: 0,
+    reticulumAudioRnsCallbackSchedulerGapMsMax: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver100Count: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver250Count: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver500Count: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver1000Count: 0,
     reticulumAudioOutboundLinkSamples: 0,
     reticulumAudioOutboundPacketSamples: 0,
     reticulumAudioInboundLinkSamples: 0,
@@ -1392,6 +1407,11 @@ export class GroupCallPerformanceTracker {
     reticulumAudioExecutorCommandMsMax: 0,
     reticulumAudioExecutorCommandWhileQueuedMsMax: 0,
     reticulumAudioExecutorCommandSlowCount: 0,
+    reticulumAudioRnsCallbackSchedulerGapMsMax: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver100Count: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver250Count: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver500Count: 0,
+    reticulumAudioRnsCallbackSchedulerGapOver1000Count: 0,
     reticulumAudioOutboundLinkSamples: 0,
     reticulumAudioOutboundPacketSamples: 0,
     reticulumAudioOutboundTransportLast: null,
@@ -1979,6 +1999,11 @@ export class GroupCallPerformanceTracker {
     executorCommandMsMax?: number;
     executorCommandWhileQueuedMsMax?: number;
     executorCommandSlowCount?: number;
+    rnsCallbackSchedulerGapMsMax?: number;
+    rnsCallbackSchedulerGapOver100Count?: number;
+    rnsCallbackSchedulerGapOver250Count?: number;
+    rnsCallbackSchedulerGapOver500Count?: number;
+    rnsCallbackSchedulerGapOver1000Count?: number;
   }): void {
     if (typeof depths.pendingFrames === 'number') {
       const pendingFrames = Math.max(0, Math.trunc(depths.pendingFrames));
@@ -2252,6 +2277,36 @@ export class GroupCallPerformanceTracker {
       this.snapshot.reticulumAudioExecutorCommandSlowCount = Math.max(
         0,
         Math.trunc(depths.executorCommandSlowCount)
+      );
+    }
+    if (typeof depths.rnsCallbackSchedulerGapMsMax === 'number') {
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioRnsCallbackSchedulerGapMsMax,
+        depths.rnsCallbackSchedulerGapMsMax
+      );
+    }
+    if (typeof depths.rnsCallbackSchedulerGapOver100Count === 'number') {
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver100Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver100Count)
+      );
+    }
+    if (typeof depths.rnsCallbackSchedulerGapOver250Count === 'number') {
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver250Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver250Count)
+      );
+    }
+    if (typeof depths.rnsCallbackSchedulerGapOver500Count === 'number') {
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver500Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver500Count)
+      );
+    }
+    if (typeof depths.rnsCallbackSchedulerGapOver1000Count === 'number') {
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver1000Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver1000Count)
       );
     }
     this.snapshot.lastUpdatedAt = Date.now();
@@ -2836,6 +2891,11 @@ export class GroupCallPerformanceTracker {
       reticulumAudioExecutorCommandMsMax: 0,
       reticulumAudioExecutorCommandWhileQueuedMsMax: 0,
       reticulumAudioExecutorCommandSlowCount: 0,
+      reticulumAudioRnsCallbackSchedulerGapMsMax: 0,
+      reticulumAudioRnsCallbackSchedulerGapOver100Count: 0,
+      reticulumAudioRnsCallbackSchedulerGapOver250Count: 0,
+      reticulumAudioRnsCallbackSchedulerGapOver500Count: 0,
+      reticulumAudioRnsCallbackSchedulerGapOver1000Count: 0,
       reticulumAudioOutboundLinkSamples: 0,
       reticulumAudioOutboundPacketSamples: 0,
       reticulumAudioOutboundTransportLast: null,

@@ -551,6 +551,11 @@ declare global {
             executorCommandMsMax: number;
             executorCommandWhileQueuedMsMax: number;
             executorCommandSlowCount: number;
+            rnsCallbackSchedulerGapMsMax: number;
+            rnsCallbackSchedulerGapOver100Count: number;
+            rnsCallbackSchedulerGapOver250Count: number;
+            rnsCallbackSchedulerGapOver500Count: number;
+            rnsCallbackSchedulerGapOver1000Count: number;
           };
         };
       }>;
@@ -626,6 +631,11 @@ declare global {
             executorCommandMsMax: number;
             executorCommandWhileQueuedMsMax: number;
             executorCommandSlowCount: number;
+            rnsCallbackSchedulerGapMsMax: number;
+            rnsCallbackSchedulerGapOver100Count: number;
+            rnsCallbackSchedulerGapOver250Count: number;
+            rnsCallbackSchedulerGapOver500Count: number;
+            rnsCallbackSchedulerGapOver1000Count: number;
           };
         };
       }>;

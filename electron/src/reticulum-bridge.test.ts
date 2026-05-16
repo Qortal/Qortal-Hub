@@ -487,6 +487,11 @@ describe('ReticulumBridge group audio support', () => {
         executorCommandMsMax: 91,
         executorCommandWhileQueuedMsMax: 92,
         executorCommandSlowCount: 4,
+        rnsCallbackSchedulerGapMsMax: 501,
+        rnsCallbackSchedulerGapOver100Count: 6,
+        rnsCallbackSchedulerGapOver250Count: 3,
+        rnsCallbackSchedulerGapOver500Count: 1,
+        rnsCallbackSchedulerGapOver1000Count: 0,
         mediaRouteDiagnostics: [
           {
             transport: 'link',
@@ -532,6 +537,11 @@ describe('ReticulumBridge group audio support', () => {
       executorCommandMsMax: 91,
       executorCommandWhileQueuedMsMax: 92,
       executorCommandSlowCount: 4,
+      rnsCallbackSchedulerGapMsMax: 501,
+      rnsCallbackSchedulerGapOver100Count: 6,
+      rnsCallbackSchedulerGapOver250Count: 3,
+      rnsCallbackSchedulerGapOver500Count: 1,
+      rnsCallbackSchedulerGapOver1000Count: 0,
       mediaRouteDiagnostics: [
         {
           transport: 'link',

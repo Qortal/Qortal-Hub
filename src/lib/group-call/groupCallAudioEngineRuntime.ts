@@ -387,6 +387,11 @@ type GcallSendAudioDiagnostics = {
     executorCommandMsMax?: number;
     executorCommandWhileQueuedMsMax?: number;
     executorCommandSlowCount?: number;
+    rnsCallbackSchedulerGapMsMax?: number;
+    rnsCallbackSchedulerGapOver100Count?: number;
+    rnsCallbackSchedulerGapOver250Count?: number;
+    rnsCallbackSchedulerGapOver500Count?: number;
+    rnsCallbackSchedulerGapOver1000Count?: number;
     mediaRouteDiagnostics?: Array<{
       transport?: string;
       routeKey?: string;
@@ -1892,6 +1897,16 @@ export class GroupCallAudioEngineRuntime {
       executorCommandWhileQueuedMsMax:
         diagnostics.bridge?.executorCommandWhileQueuedMsMax,
       executorCommandSlowCount: diagnostics.bridge?.executorCommandSlowCount,
+      rnsCallbackSchedulerGapMsMax:
+        diagnostics.bridge?.rnsCallbackSchedulerGapMsMax,
+      rnsCallbackSchedulerGapOver100Count:
+        diagnostics.bridge?.rnsCallbackSchedulerGapOver100Count,
+      rnsCallbackSchedulerGapOver250Count:
+        diagnostics.bridge?.rnsCallbackSchedulerGapOver250Count,
+      rnsCallbackSchedulerGapOver500Count:
+        diagnostics.bridge?.rnsCallbackSchedulerGapOver500Count,
+      rnsCallbackSchedulerGapOver1000Count:
+        diagnostics.bridge?.rnsCallbackSchedulerGapOver1000Count,
     });
     this.noteCpuDegradedBridgePressure(diagnostics);
     this.maybeResyncTwoPartyTopologyFromLinkDiagnostics(diagnostics);

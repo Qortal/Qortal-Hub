@@ -248,6 +248,7 @@ const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS = 8_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_STALE_MS = 45_000;
 const GC_RETICULUM_AUDIO_LINK_STICKY_MS = 15_000;
+const GC_RETICULUM_AUDIO_DUPLICATE_LINK_CLOSE_GRACE_MS = 7_500;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
@@ -1435,6 +1436,10 @@ export class GroupCallManager extends EventEmitter {
     string,
     { reason: string; atMs: number }
   >();
+  private reticulumAudioDeferredCloseTimersByLinkId = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private reticulumAudioOpenDeferUntilByAddress = new Map<string, number>();
   private reticulumAudioOpenDeferTimersByAddress = new Map<
     string,
@@ -2201,6 +2206,10 @@ export class GroupCallManager extends EventEmitter {
     this.reticulumAudioPeersByAddress.clear();
     this.reticulumAudioAddressByLinkId.clear();
     this.reticulumAudioClosingLinkReasonsById.clear();
+    for (const timer of this.reticulumAudioDeferredCloseTimersByLinkId.values()) {
+      clearTimeout(timer);
+    }
+    this.reticulumAudioDeferredCloseTimersByLinkId.clear();
     this.reticulumAudioFlushScheduled = false;
     if (this.reticulumAudioFlushTimer) {
       clearTimeout(this.reticulumAudioFlushTimer);
@@ -4932,6 +4941,12 @@ export class GroupCallManager extends EventEmitter {
 
   private closeReticulumAudioLinkQuietly(linkId: string, reason: string): void {
     if (!linkId) return;
+    const deferredTimer =
+      this.reticulumAudioDeferredCloseTimersByLinkId.get(linkId);
+    if (deferredTimer) {
+      clearTimeout(deferredTimer);
+      this.reticulumAudioDeferredCloseTimersByLinkId.delete(linkId);
+    }
     this.noteReticulumAudioLinkClosing(linkId, reason);
     const address = this.reticulumAudioAddressByLinkId.get(linkId);
     const state =
@@ -4950,6 +4965,52 @@ export class GroupCallManager extends EventEmitter {
       `[GCall] Closing Reticulum audio link linkId=${linkId} reason=${reason}`
     );
     void this.reticulumBridge?.closeGroupAudioLink(linkId).catch(() => {});
+  }
+
+  private closeDuplicateReticulumAudioLink(
+    address: string,
+    state: ReticulumAudioPeerState,
+    duplicateLinkId: string,
+    reason: string,
+    now = Date.now()
+  ): void {
+    if (!duplicateLinkId) return;
+    if (duplicateLinkId === state.linkId) return;
+    const activeIsHealthy =
+      state.established &&
+      Boolean(state.linkId) &&
+      this.hasRecentReticulumAudioLinkActivity(state, now);
+    const existingTimer =
+      this.reticulumAudioDeferredCloseTimersByLinkId.get(duplicateLinkId);
+    if (!activeIsHealthy) {
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        this.reticulumAudioDeferredCloseTimersByLinkId.delete(duplicateLinkId);
+      }
+      this.closeReticulumAudioLinkQuietly(duplicateLinkId, reason);
+      return;
+    }
+    if (existingTimer) return;
+    loggerLog(
+      `[GCall] Deferring Reticulum duplicate audio link close address=${address} linkId=${duplicateLinkId} activeLinkId=${state.linkId ?? 'n/a'} reason=${reason} graceMs=${GC_RETICULUM_AUDIO_DUPLICATE_LINK_CLOSE_GRACE_MS}`
+    );
+    const timer = setTimeout(() => {
+      this.reticulumAudioDeferredCloseTimersByLinkId.delete(duplicateLinkId);
+      const latest = this.reticulumAudioPeersByAddress.get(address);
+      if (!latest) {
+        this.closeReticulumAudioLinkQuietly(
+          duplicateLinkId,
+          `${reason}:deferred-no-state`
+        );
+        return;
+      }
+      if (latest.linkId === duplicateLinkId) return;
+      this.closeReticulumAudioLinkQuietly(
+        duplicateLinkId,
+        `${reason}:deferred`
+      );
+    }, GC_RETICULUM_AUDIO_DUPLICATE_LINK_CLOSE_GRACE_MS);
+    this.reticulumAudioDeferredCloseTimersByLinkId.set(duplicateLinkId, timer);
   }
 
   private pruneReticulumAudioClosingLinks(now = Date.now()): void {
@@ -5352,7 +5413,9 @@ export class GroupCallManager extends EventEmitter {
         state.established = false;
       } else {
         this.reticulumAudioAddressByLinkId.delete(linkId);
-        this.closeReticulumAudioLinkQuietly(
+        this.closeDuplicateReticulumAudioLink(
+          address,
+          state,
           linkId,
           `duplicate-established:${reason}`
         );
@@ -5362,7 +5425,9 @@ export class GroupCallManager extends EventEmitter {
 
     if (state.established && state.linkId && state.linkId !== linkId) {
       this.reticulumAudioAddressByLinkId.delete(linkId);
-      this.closeReticulumAudioLinkQuietly(
+      this.closeDuplicateReticulumAudioLink(
+        address,
+        state,
         linkId,
         `duplicate-established:${reason}`
       );
@@ -5915,7 +5980,9 @@ export class GroupCallManager extends EventEmitter {
         latest.linkId &&
         latest.linkId !== result.linkId
       ) {
-        this.closeReticulumAudioLinkQuietly(
+        this.closeDuplicateReticulumAudioLink(
+          address,
+          latest,
           result.linkId,
           'open-result-duplicate-pending'
         );
@@ -5937,7 +6004,9 @@ export class GroupCallManager extends EventEmitter {
           latest.linkOpenedByOwner = true;
           this.reticulumAudioAddressByLinkId.set(result.linkId, address);
         } else {
-          this.closeReticulumAudioLinkQuietly(
+          this.closeDuplicateReticulumAudioLink(
+            address,
+            latest,
             result.linkId,
             'open-result-extra-pending'
           );
@@ -8255,7 +8324,13 @@ export class GroupCallManager extends EventEmitter {
     this.noteReticulumAudioLinkActivity(state, now);
     if (linkId) {
       if (state.established && state.linkId && state.linkId !== linkId) {
-        this.closeReticulumAudioLinkQuietly(linkId, 'duplicate-heartbeat');
+        this.closeDuplicateReticulumAudioLink(
+          address,
+          state,
+          linkId,
+          'duplicate-heartbeat',
+          now
+        );
         return;
       }
       if (!state.established) {
@@ -8602,15 +8677,19 @@ export class GroupCallManager extends EventEmitter {
       this.noteBootstrapParticipantActivity(payload.roomId, fromAddress);
       const state = this.reticulumAudioPeersByAddress.get(fromAddress);
       if (state) {
+        const now = Date.now();
         if (isLinkPacket && payload.linkId) {
           if (
             state.established &&
             state.linkId &&
             state.linkId !== payload.linkId
           ) {
-            this.closeReticulumAudioLinkQuietly(
+            this.closeDuplicateReticulumAudioLink(
+              fromAddress,
+              state,
               payload.linkId,
-              'duplicate-audio'
+              'duplicate-audio',
+              now
             );
             return;
           }
@@ -8627,7 +8706,6 @@ export class GroupCallManager extends EventEmitter {
         }
         state.peerDestinationHash =
           payload.peerDestinationHash || state.peerDestinationHash;
-        const now = Date.now();
         state.lastInboundAtMs = now;
         if (
           (payload.transport ?? 'link') === 'link' &&

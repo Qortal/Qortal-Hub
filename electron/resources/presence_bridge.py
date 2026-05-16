@@ -40,6 +40,7 @@ _recent_presence_senders: "deque[str]" = deque(maxlen=128)
 _last_presence_wire: Optional[bytes] = None
 _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
+_rns_callback_scheduler_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
 PRESENCE_BRIDGE_BUILD = "wire394-reticulum-binary-audio-v1"
@@ -251,9 +252,15 @@ _audio_executor_stall_count = 0
 _audio_executor_command_ms_max = 0.0
 _audio_executor_command_while_queued_ms_max = 0.0
 _audio_executor_command_slow_count = 0
+_audio_rns_callback_scheduler_gap_ms_max = 0.0
+_audio_rns_callback_scheduler_gap_over_100_count = 0
+_audio_rns_callback_scheduler_gap_over_250_count = 0
+_audio_rns_callback_scheduler_gap_over_500_count = 0
+_audio_rns_callback_scheduler_gap_over_1000_count = 0
 _audio_media_route_stats: Dict[str, Dict[str, Any]] = {}
 _AUDIO_MEDIA_ROUTE_STATS_MAX = 64
 _AUDIO_ROUTE_GAP_BUCKETS_MS = (80, 160, 320, 640, 1000)
+_AUDIO_RNS_CALLBACK_SCHEDULER_MONITOR_INTERVAL_SECONDS = 0.05
 _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
 _AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS = 120.0
 _AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS = 80.0
@@ -642,6 +649,11 @@ def _emit_audio_queue_state(force: bool = False) -> None:
             "executorCommandMsMax": _audio_executor_command_ms_max,
             "executorCommandWhileQueuedMsMax": _audio_executor_command_while_queued_ms_max,
             "executorCommandSlowCount": _audio_executor_command_slow_count,
+            "rnsCallbackSchedulerGapMsMax": _audio_rns_callback_scheduler_gap_ms_max,
+            "rnsCallbackSchedulerGapOver100Count": _audio_rns_callback_scheduler_gap_over_100_count,
+            "rnsCallbackSchedulerGapOver250Count": _audio_rns_callback_scheduler_gap_over_250_count,
+            "rnsCallbackSchedulerGapOver500Count": _audio_rns_callback_scheduler_gap_over_500_count,
+            "rnsCallbackSchedulerGapOver1000Count": _audio_rns_callback_scheduler_gap_over_1000_count,
             "mediaRouteDiagnostics": _audio_media_route_diagnostics(),
         },
     )
@@ -1824,6 +1836,47 @@ def ensure_transport_monitor_started() -> None:
         name="reticulum-transport-monitor",
     )
     _transport_monitor_thread.start()
+
+
+def rns_callback_scheduler_monitor_loop() -> None:
+    global _audio_rns_callback_scheduler_gap_ms_max
+    global _audio_rns_callback_scheduler_gap_over_100_count
+    global _audio_rns_callback_scheduler_gap_over_250_count
+    global _audio_rns_callback_scheduler_gap_over_500_count
+    global _audio_rns_callback_scheduler_gap_over_1000_count
+    interval = _AUDIO_RNS_CALLBACK_SCHEDULER_MONITOR_INTERVAL_SECONDS
+    last_at = time.monotonic()
+    while True:
+        time.sleep(interval)
+        now = time.monotonic()
+        elapsed_ms = max(0.0, (now - last_at) * 1000.0)
+        last_at = now
+        if elapsed_ms > _audio_rns_callback_scheduler_gap_ms_max:
+            _audio_rns_callback_scheduler_gap_ms_max = elapsed_ms
+        if elapsed_ms >= 100.0:
+            _audio_rns_callback_scheduler_gap_over_100_count += 1
+            if elapsed_ms >= 250.0:
+                _audio_rns_callback_scheduler_gap_over_250_count += 1
+            if elapsed_ms >= 500.0:
+                _audio_rns_callback_scheduler_gap_over_500_count += 1
+            if elapsed_ms >= 1000.0:
+                _audio_rns_callback_scheduler_gap_over_1000_count += 1
+            _mark_audio_queue_state_dirty()
+
+
+def ensure_rns_callback_scheduler_monitor_started() -> None:
+    global _rns_callback_scheduler_monitor_thread
+    if (
+        _rns_callback_scheduler_monitor_thread is not None
+        and _rns_callback_scheduler_monitor_thread.is_alive()
+    ):
+        return
+    _rns_callback_scheduler_monitor_thread = threading.Thread(
+        target=rns_callback_scheduler_monitor_loop,
+        daemon=True,
+        name="reticulum-rns-callback-scheduler-monitor",
+    )
+    _rns_callback_scheduler_monitor_thread.start()
 
 
 def destination_hash_hex(destination_hash: bytes) -> str:
@@ -5125,12 +5178,36 @@ def _set_audio_link_desired(peer_key: str, desired: bool) -> Dict[str, Any]:
     return state
 
 
+def _has_viable_audio_link_for_peer(peer_key: str, excluding_link_id: str = "") -> bool:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return False
+    for candidate_link_id, state in list(_audio_links_by_id.items()):
+        if excluding_link_id and candidate_link_id == excluding_link_id:
+            continue
+        if str(state.get("peerPresenceHash") or "").strip().lower() != peer_key:
+            continue
+        link = state.get("link")
+        if link is None:
+            continue
+        if state.get("established") is True:
+            return True
+        created_at = state.get("created_at")
+        if isinstance(created_at, (int, float)) and (
+            time.time() - float(created_at)
+        ) < _AUDIO_LINK_ESTABLISH_TIMEOUT_SECONDS:
+            return True
+    return False
+
+
 def _schedule_audio_link_retry(peer_key: str, reason: str, immediate: bool = False) -> None:
     peer_key = str(peer_key or "").strip().lower()
     if not peer_key:
         return
     desired = _audio_link_desired_by_peer_hash.get(peer_key)
     if desired is None or desired.get("desired") is not True:
+        return
+    if _has_viable_audio_link_for_peer(peer_key):
         return
     if desired.get("retry_timer") is not None:
         return
@@ -5145,6 +5222,8 @@ def _schedule_audio_link_retry(peer_key: str, reason: str, immediate: bool = Fal
             return
         desired_state["retry_timer"] = None
         if desired_state.get("desired") is not True:
+            return
+        if _has_viable_audio_link_for_peer(peer_key):
             return
         _open_group_audio_link_for_peer(peer_key, retry_reason=reason)
 
@@ -5339,7 +5418,11 @@ def on_audio_link_closed(link) -> None:
     teardown_reason = getattr(link, "teardown_reason", None)
     reason = str(teardown_reason) if teardown_reason is not None else "closed"
     emit_audio_link_closed(link_id, reason)
-    if not incoming and reason not in ("local_close", "peer_state_reset"):
+    if (
+        not incoming
+        and reason not in ("local_close", "peer_state_reset")
+        and not _has_viable_audio_link_for_peer(peer_key)
+    ):
         _schedule_audio_link_retry(peer_key, f"closed:{reason}")
 
 
@@ -5719,6 +5802,7 @@ def ensure_started(config_dir: str):
         _announce_handler = PresenceAnnounceHandler(_destination.hash)
         RNS.Transport.register_announce_handler(_announce_handler)
         ensure_transport_monitor_started()
+        ensure_rns_callback_scheduler_monitor_started()
         return _destination
 
 

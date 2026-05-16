@@ -172,6 +172,11 @@ export type ReticulumAudioQueueSnapshot = {
   executorCommandMsMax: number;
   executorCommandWhileQueuedMsMax: number;
   executorCommandSlowCount: number;
+  rnsCallbackSchedulerGapMsMax: number;
+  rnsCallbackSchedulerGapOver100Count: number;
+  rnsCallbackSchedulerGapOver250Count: number;
+  rnsCallbackSchedulerGapOver500Count: number;
+  rnsCallbackSchedulerGapOver1000Count: number;
   mediaRouteDiagnostics?: ReticulumAudioMediaRouteDiagnostic[];
 };
 
@@ -402,6 +407,11 @@ type BridgeEventFrame =
         executorCommandMsMax?: number;
         executorCommandWhileQueuedMsMax?: number;
         executorCommandSlowCount?: number;
+        rnsCallbackSchedulerGapMsMax?: number;
+        rnsCallbackSchedulerGapOver100Count?: number;
+        rnsCallbackSchedulerGapOver250Count?: number;
+        rnsCallbackSchedulerGapOver500Count?: number;
+        rnsCallbackSchedulerGapOver1000Count?: number;
         mediaRouteDiagnostics?: Array<Record<string, unknown>>;
       };
     }
@@ -705,6 +715,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     executorCommandMsMax: 0,
     executorCommandWhileQueuedMsMax: 0,
     executorCommandSlowCount: 0,
+    rnsCallbackSchedulerGapMsMax: 0,
+    rnsCallbackSchedulerGapOver100Count: 0,
+    rnsCallbackSchedulerGapOver250Count: 0,
+    rnsCallbackSchedulerGapOver500Count: 0,
+    rnsCallbackSchedulerGapOver1000Count: 0,
     mediaRouteDiagnostics: [],
   };
   /** One-shot diagnostics: confirm binary egress/ingress actually ran. */
@@ -2568,6 +2583,31 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             typeof frame.payload?.executorCommandSlowCount === 'number'
               ? frame.payload.executorCommandSlowCount
               : this.lastAudioQueueSnapshot.executorCommandSlowCount,
+          rnsCallbackSchedulerGapMsMax:
+            typeof frame.payload?.rnsCallbackSchedulerGapMsMax === 'number'
+              ? frame.payload.rnsCallbackSchedulerGapMsMax
+              : this.lastAudioQueueSnapshot.rnsCallbackSchedulerGapMsMax,
+          rnsCallbackSchedulerGapOver100Count:
+            typeof frame.payload?.rnsCallbackSchedulerGapOver100Count ===
+            'number'
+              ? frame.payload.rnsCallbackSchedulerGapOver100Count
+              : this.lastAudioQueueSnapshot.rnsCallbackSchedulerGapOver100Count,
+          rnsCallbackSchedulerGapOver250Count:
+            typeof frame.payload?.rnsCallbackSchedulerGapOver250Count ===
+            'number'
+              ? frame.payload.rnsCallbackSchedulerGapOver250Count
+              : this.lastAudioQueueSnapshot.rnsCallbackSchedulerGapOver250Count,
+          rnsCallbackSchedulerGapOver500Count:
+            typeof frame.payload?.rnsCallbackSchedulerGapOver500Count ===
+            'number'
+              ? frame.payload.rnsCallbackSchedulerGapOver500Count
+              : this.lastAudioQueueSnapshot.rnsCallbackSchedulerGapOver500Count,
+          rnsCallbackSchedulerGapOver1000Count:
+            typeof frame.payload?.rnsCallbackSchedulerGapOver1000Count ===
+            'number'
+              ? frame.payload.rnsCallbackSchedulerGapOver1000Count
+              : this.lastAudioQueueSnapshot
+                  .rnsCallbackSchedulerGapOver1000Count,
           mediaRouteDiagnostics: Array.isArray(
             frame.payload?.mediaRouteDiagnostics
           )

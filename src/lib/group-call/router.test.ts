@@ -570,6 +570,11 @@ describe('group-call router helpers', () => {
       executorCommandMsMax: 99.9994,
       executorCommandWhileQueuedMsMax: 111.1114,
       executorCommandSlowCount: 4,
+      rnsCallbackSchedulerGapMsMax: 501.2224,
+      rnsCallbackSchedulerGapOver100Count: 6,
+      rnsCallbackSchedulerGapOver250Count: 3,
+      rnsCallbackSchedulerGapOver500Count: 1,
+      rnsCallbackSchedulerGapOver1000Count: 0,
     });
     tracker.recordIncomingPacketDuration(4);
     tracker.recordJitterTickDuration(2);
@@ -623,6 +628,11 @@ describe('group-call router helpers', () => {
       reticulumAudioExecutorCommandMsMax: 99.999,
       reticulumAudioExecutorCommandWhileQueuedMsMax: 111.111,
       reticulumAudioExecutorCommandSlowCount: 4,
+      reticulumAudioRnsCallbackSchedulerGapMsMax: 501.222,
+      reticulumAudioRnsCallbackSchedulerGapOver100Count: 6,
+      reticulumAudioRnsCallbackSchedulerGapOver250Count: 3,
+      reticulumAudioRnsCallbackSchedulerGapOver500Count: 1,
+      reticulumAudioRnsCallbackSchedulerGapOver1000Count: 0,
       lastRelayActivityAtMs: expect.any(Number),
       jitterUnderruns: 2,
       missingFrames: 2,
