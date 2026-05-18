@@ -4144,7 +4144,12 @@ export class GroupCallManager extends EventEmitter {
     this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'leave');
     const room = this.rooms.get(roomId);
     let shouldDelayReticulumAudioTeardown = false;
-    let leaveDrainLinks: Array<{ address: string; linkId: string }> = [];
+    let leaveDrainLinks: Array<{
+      address: string;
+      linkId: string;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+    }> = [];
     if (signature) {
       const env: GcLeaveEnvelope = {
         type: 'GC_LEAVE',
@@ -4226,22 +4231,59 @@ export class GroupCallManager extends EventEmitter {
     this.scheduleQortalGroupCallActivityEmit(true);
   }
 
-  private collectReticulumAudioLeaveDrainLinksForRoom(
-    roomId: string
-  ): Array<{ address: string; linkId: string }> {
-    const links: Array<{ address: string; linkId: string }> = [];
+  private collectReticulumAudioLeaveDrainLinksForRoom(roomId: string): Array<{
+    address: string;
+    linkId: string;
+    callSessionId: string;
+    mediaSessionGeneration: number;
+  }> {
+    const room = this.rooms.get(roomId);
+    const callSessionId = room?.callSessionId ?? '';
+    const mediaSessionGeneration = room?.mediaSessionGeneration ?? 0;
+    const links: Array<{
+      address: string;
+      linkId: string;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+    }> = [];
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
       if (!state.rooms.has(roomId) || !state.linkId) continue;
-      links.push({ address, linkId: state.linkId });
+      links.push({
+        address,
+        linkId: state.linkId,
+        callSessionId,
+        mediaSessionGeneration,
+      });
     }
     return links;
   }
 
   private closeReticulumAudioLeaveDrainLinks(
     roomId: string,
-    links: Array<{ address: string; linkId: string }>
+    links: Array<{
+      address: string;
+      linkId: string;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+    }>
   ): void {
-    for (const { address, linkId } of links) {
+    for (const {
+      address,
+      linkId,
+      callSessionId,
+      mediaSessionGeneration,
+    } of links) {
+      const activeRoom = this.rooms.get(roomId);
+      if (
+        activeRoom &&
+        (activeRoom.callSessionId !== callSessionId ||
+          activeRoom.mediaSessionGeneration !== mediaSessionGeneration)
+      ) {
+        loggerLog(
+          `[GCall] Skipped stale Reticulum leave-drain cleanup room=${roomId} address=${address} link=${linkId} leftSession=${callSessionId || 'n/a'}:${mediaSessionGeneration} activeSession=${activeRoom.callSessionId}:${activeRoom.mediaSessionGeneration}`
+        );
+        continue;
+      }
       const state = this.reticulumAudioPeersByAddress.get(address);
       if (state?.linkId === linkId && state.rooms.has(roomId)) {
         this.resetReticulumAudioPeerStateForRoomAddress(
@@ -4258,7 +4300,12 @@ export class GroupCallManager extends EventEmitter {
 
   private scheduleReticulumAudioLinkTeardownAfterLeave(
     roomId: string,
-    links: Array<{ address: string; linkId: string }>
+    links: Array<{
+      address: string;
+      linkId: string;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+    }>
   ): void {
     const timer = setTimeout(() => {
       this.reticulumLeaveLinkDrainTimers.delete(timer);
@@ -8241,6 +8288,10 @@ export class GroupCallManager extends EventEmitter {
     }
 
     const existing = room.participants.get(env.fromAddress);
+    const lastLeaveTimestamp = this.getParticipantLeftTimestamp(
+      env.roomId,
+      env.fromAddress
+    );
     const incomingReticulumDestinationHash = env.reticulumDestinationHash
       .trim()
       .toLowerCase();
@@ -8248,10 +8299,7 @@ export class GroupCallManager extends EventEmitter {
       shouldRefreshParticipantFromVerifiedJoin({
         currentJoinedAt: existing?.joinedAt,
         incomingJoinTimestamp: env.timestamp,
-        lastLeaveTimestamp: this.getParticipantLeftTimestamp(
-          env.roomId,
-          env.fromAddress
-        ),
+        lastLeaveTimestamp,
       })
     ) {
       const existingReticulumDestinationHash =
@@ -8260,6 +8308,10 @@ export class GroupCallManager extends EventEmitter {
         typeof existing?.joinedAt === 'number' &&
         Number.isFinite(existing.joinedAt) &&
         env.timestamp > existing.joinedAt;
+      const rejoinsAfterLeave =
+        typeof lastLeaveTimestamp === 'number' &&
+        Number.isFinite(lastLeaveTimestamp) &&
+        env.timestamp > lastLeaveTimestamp;
       const reticulumIdentityChanged =
         Boolean(existingReticulumDestinationHash) &&
         incomingReticulumDestinationHash !== existingReticulumDestinationHash;
@@ -8271,10 +8323,10 @@ export class GroupCallManager extends EventEmitter {
       let audioStateResetReason = '';
       if (staleAudioStateForAbsentParticipant) {
         audioStateResetReason = 'fresh-verified-join-absent-participant';
-      } else if (refreshedExistingJoin) {
-        audioStateResetReason = 'fresh-verified-join';
       } else if (reticulumIdentityChanged) {
         audioStateResetReason = 'join-identity-changed';
+      } else if (refreshedExistingJoin && rejoinsAfterLeave) {
+        audioStateResetReason = 'fresh-verified-rejoin-after-leave';
       }
       if (audioStateResetReason) {
         this.resetReticulumAudioPeerStateForRoomAddress(
@@ -8423,6 +8475,11 @@ export class GroupCallManager extends EventEmitter {
     const hadLocalInterest = Boolean(room);
     if (room) {
       room.participants.delete(address);
+      this.resetReticulumAudioPeerStateForRoomAddress(
+        roomId,
+        address,
+        isAbrupt ? 'abrupt-participant-left' : 'verified-participant-left'
+      );
       if (!isAbrupt) {
         this.noteParticipantLeft(roomId, address, leaveTimestamp);
         this.dropRetainedVerifiedJoinState(roomId, address);
