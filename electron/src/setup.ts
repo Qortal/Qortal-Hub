@@ -125,6 +125,7 @@ const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
   'qortal.gcallAudioRendererSendAtMs'
 );
 const GCALL_AUDIO_MAIN_IPC_AT_MS = Symbol.for('qortal.gcallAudioMainIpcAtMs');
+const OPEN_DEVTOOLS_IN_DEVELOPMENT = false;
 
 function attachGroupAudioIpcTiming(
   buf: Buffer,
@@ -448,7 +449,7 @@ export class ElectronCapacitorApp {
         });
     });
     await window.loadURL(targetUrl);
-    if (electronIsDev) {
+    if (electronIsDev && OPEN_DEVTOOLS_IN_DEVELOPMENT) {
       try {
         window.webContents.openDevTools({ mode: 'detach' });
         loggerLog(
@@ -700,7 +701,7 @@ export class ElectronCapacitorApp {
         this.MainWindow.show();
       }
       setTimeout(() => {
-        if (electronIsDev) {
+        if (electronIsDev && OPEN_DEVTOOLS_IN_DEVELOPMENT) {
           this.MainWindow.webContents.openDevTools();
         }
         CapElectronEventEmitter.emit(
