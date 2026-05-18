@@ -4448,15 +4448,6 @@ export class GroupCallManager extends EventEmitter {
     const targets = new Set<string>();
     const topology = room.lastTopology;
     if (!topology) {
-      for (const peer of room.participants.keys()) {
-        if (!peer || this.localAddresses.has(peer)) continue;
-        targets.add(peer);
-      }
-      for (const address of [...targets]) {
-        if (!address || this.localAddresses.has(address)) {
-          targets.delete(address);
-        }
-      }
       return targets;
     }
 
@@ -4498,13 +4489,6 @@ export class GroupCallManager extends EventEmitter {
       }
       if (assignedForwarder && assignedForwarder !== localAddress) {
         targets.add(assignedForwarder);
-      }
-    }
-
-    if (targets.size === 0) {
-      for (const peer of room.participants.keys()) {
-        if (!peer || this.localAddresses.has(peer)) continue;
-        targets.add(peer);
       }
     }
 
