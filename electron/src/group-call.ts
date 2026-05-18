@@ -4448,6 +4448,12 @@ export class GroupCallManager extends EventEmitter {
     const targets = new Set<string>();
     const topology = room.lastTopology;
     if (!topology) {
+      if (room.roomId.startsWith('dmv:')) {
+        const directPeer = this.resolveDmVoicePeerFromRoomId(room.roomId);
+        if (directPeer && !this.localAddresses.has(directPeer)) {
+          targets.add(directPeer);
+        }
+      }
       return targets;
     }
 
