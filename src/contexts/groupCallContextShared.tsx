@@ -32,8 +32,14 @@ export function GroupCallJoinErrorNotifier() {
 
   useEffect(() => {
     if (!gcallJoinError) return;
+    const groupCallFullMatch = /^group_call_full:(\d+)$/.exec(gcallJoinError);
     const message =
-      gcallJoinError === 'members_fetch_failed'
+      groupCallFullMatch
+        ? t('core:group_call_full', {
+            max: groupCallFullMatch[1],
+            postProcess: 'capitalizeFirstChar',
+          })
+        : gcallJoinError === 'members_fetch_failed'
         ? t('core:group_call_members_fetch_failed', {
             postProcess: 'capitalizeFirstChar',
           })
@@ -50,10 +56,15 @@ export function GroupCallJoinErrorNotifier() {
                   postProcess: 'capitalizeFirstChar',
                 })
               : gcallJoinError === 'not_group_member' ||
-                  gcallJoinError === 'member_gate_failed'
+                  gcallJoinError === 'member_gate_failed' ||
+                  gcallJoinError === 'qortal_group_membership_required'
                 ? t('core:group_call_not_member', {
                     postProcess: 'capitalizeFirstChar',
                   })
+                : gcallJoinError === 'qortal_group_membership_check_failed'
+                  ? t('core:group_call_members_fetch_failed', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
                 : gcallJoinError === 'join_sign_failed' ||
                     gcallJoinError === 'groupcall_api_missing' ||
                     gcallJoinError === 'missing-user'

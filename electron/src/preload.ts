@@ -1534,6 +1534,7 @@ try {
         error?: string;
         activeByGroupId?: Record<string, boolean>;
         participantCountByGroupId?: Record<string, number>;
+        maxParticipantsByGroupId?: Record<string, number>;
       }>,
 
     /**
@@ -1543,6 +1544,7 @@ try {
       cb: (payload: {
         activeByGroupId: Record<string, boolean>;
         participantCountByGroupId?: Record<string, number>;
+        maxParticipantsByGroupId?: Record<string, number>;
       }) => void
     ) => {
       const channel = 'gcall:qortal-group-call-activity';
@@ -1550,6 +1552,7 @@ try {
         const p = payload as {
           activeByGroupId?: Record<string, boolean>;
           participantCountByGroupId?: Record<string, number>;
+          maxParticipantsByGroupId?: Record<string, number>;
         };
         if (p?.activeByGroupId && typeof p.activeByGroupId === 'object') {
           cb({
@@ -1558,6 +1561,11 @@ try {
               p.participantCountByGroupId &&
               typeof p.participantCountByGroupId === 'object'
                 ? p.participantCountByGroupId
+                : undefined,
+            maxParticipantsByGroupId:
+              p.maxParticipantsByGroupId &&
+              typeof p.maxParticipantsByGroupId === 'object'
+                ? p.maxParticipantsByGroupId
                 : undefined,
           });
         }

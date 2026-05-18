@@ -32,6 +32,7 @@ import {
   isRunningPublicNodeAtom,
   memberGroupsAtom,
   qortalGroupMeshCallActiveAtom,
+  qortalGroupMeshCallMaxParticipantsAtom,
   qortalGroupMeshCallParticipantCountAtom,
   qortalGroupSelfGcallRoomIdAtom,
   timestampEnterDataSelector,
@@ -43,6 +44,7 @@ import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 import {
   meshCallActiveForMemberGroup,
+  meshCallMaxParticipantsForMemberGroup,
   meshCallParticipantCountForMemberGroup,
 } from '../../lib/group-call/qortalGroupIdKey';
 
@@ -384,6 +386,9 @@ const GroupItem = memo(
     const meshCallParticipantCountByGroup = useAtomValue(
       qortalGroupMeshCallParticipantCountAtom
     );
+    const meshCallMaxParticipantsByGroup = useAtomValue(
+      qortalGroupMeshCallMaxParticipantsAtom
+    );
     const selfGcallRoomId = useAtomValue(qortalGroupSelfGcallRoomIdAtom);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewSrc, setPreviewSrc] = useState(null);
@@ -437,6 +442,10 @@ const GroupItem = memo(
     );
     const meshCallParticipantCount = meshCallParticipantCountForMemberGroup(
       meshCallParticipantCountByGroup,
+      group?.groupId
+    );
+    const meshCallMaxParticipants = meshCallMaxParticipantsForMemberGroup(
+      meshCallMaxParticipantsByGroup,
       group?.groupId
     );
     const showGroupCallIndicator = Boolean(gcallRoomIdForRow) && (imInThisGroupGcall || meshShowsCall);
@@ -641,6 +650,9 @@ const GroupItem = memo(
                       }}
                     >
                       {meshCallParticipantCount}
+                      {meshCallMaxParticipants !== null
+                        ? `/${meshCallMaxParticipants}`
+                        : ''}
                     </Typography>
                   )}
                 </Box>

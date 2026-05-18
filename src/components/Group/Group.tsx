@@ -369,9 +369,41 @@ export const Group = ({
       return;
     }
     setQcallMinimized(false);
+    let memberGateAddresses: string[] = [];
+    try {
+      const data = await getGroupMembers(gcallGroupNumericId);
+      const addressSet = new Set<string>();
+      if (Array.isArray(data?.members)) {
+        for (const member of data.members) {
+          const address =
+            typeof member?.member === 'string' ? member.member.trim() : '';
+          if (address) addressSet.add(address);
+        }
+      }
+      memberGateAddresses = [...addressSet];
+      traceGcallAudioSurface('ui.Group: synced group call member gate', {
+        groupId: gcallGroupNumericId,
+        memberCount: memberGateAddresses.length,
+        localIncluded: Boolean(userInfo?.address && addressSet.has(userInfo.address)),
+      });
+    } catch (error) {
+      traceGcallAudioSurface('ui.Group: failed group call member gate fetch', {
+        groupId: gcallGroupNumericId,
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+      setInfoSnack({
+        type: 'error',
+        message: t('core:group_call_members_fetch_failed', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      setOpenSnack(true);
+      return;
+    }
     await joinGroupCall(gcallRoomIdForGroup, `group:${gcallGroupNumericId}`, {
       memberGateGroupId: gcallGroupNumericId,
       memberGateGroupName: selectedGroup?.groupName,
+      memberGateAddresses,
     });
   }, [
     desktopViewMode,
@@ -382,6 +414,8 @@ export const Group = ({
     leaveGroupCall,
     selectedGroup?.groupName,
     setQcallMinimized,
+    t,
+    userInfo?.address,
   ]);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);

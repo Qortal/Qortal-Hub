@@ -813,11 +813,13 @@ declare global {
         error?: string;
         activeByGroupId?: Record<string, boolean>;
         participantCountByGroupId?: Record<string, number>;
+        maxParticipantsByGroupId?: Record<string, number>;
       }>;
       onQortalGroupCallActivity?: (
         cb: (payload: {
           activeByGroupId: Record<string, boolean>;
           participantCountByGroupId?: Record<string, number>;
+          maxParticipantsByGroupId?: Record<string, number>;
         }) => void
       ) => () => void;
       getPendingKeyMetrics?: () => Promise<{

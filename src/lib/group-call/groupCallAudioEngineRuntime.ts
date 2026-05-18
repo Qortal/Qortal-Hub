@@ -92,7 +92,6 @@ import AudioDecryptWorker from '../../workers/audio-decrypt.worker?worker';
 import nacl from '../../encryption/nacl-fast';
 import ed2curve from '../../encryption/ed2curve';
 import Base58 from '../../encryption/Base58.js';
-import { getGroupMembers } from '../../components/Group/groupApi';
 
 type EventListener = (event: AudioSurfaceEvent) => void;
 
@@ -649,7 +648,6 @@ const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const GCALL_CONNECTION_HINT_BAD_MS = 2_800;
 const GCALL_CONNECTION_HINT_SEVERE_MS = 1_200;
 const GCALL_CONNECTION_HINT_GOOD_MS = 4_500;
-const MEMBER_GATE_REFRESH_INTERVAL_MS = 90_000;
 const ZERO_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES = 100;
 const ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS = 3_000;
 const LOW_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES = 300;
@@ -3945,8 +3943,25 @@ export class GroupCallAudioEngineRuntime {
       'engine.joinGroupCall: step after setLocalAddresses',
       {}
     );
-    await this.syncQortalGroupReticulumTargets(roomId, options);
-    this.startMemberGateRefresh(roomId);
+    try {
+      await this.syncQortalGroupReticulumTargets(roomId, options);
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : 'qortal_group_membership_check_failed';
+      traceGcallAudioSurface(
+        'engine.joinGroupCall: fail qortal member gate sync',
+        {
+          roomId,
+          msg,
+        }
+      );
+      this.snapshot = buildJoinFailureSnapshot(this.snapshot, msg);
+      this.emitSnapshot();
+      return { ok: false, error: msg };
+    }
+    this.clearMemberGateRefreshTimer();
     this.startParticipantRosterRefresh(roomId);
     const joinGeneration =
       (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) >>> 0;
@@ -7346,37 +7361,27 @@ export class GroupCallAudioEngineRuntime {
     const groupId = options?.memberGateGroupId;
     if (groupId == null || !Number.isFinite(groupId)) return;
     try {
-      const data = await getGroupMembers(Math.floor(Number(groupId)));
-      const names: Record<string, string> = {};
-      const addresses = Array.isArray(data?.members)
-        ? data.members
-            .map((member) => {
-              const address =
-                typeof member?.member === 'string' ? member.member.trim() : '';
-              const primaryName =
-                typeof member?.primaryName === 'string'
-                  ? member.primaryName.trim()
-                  : '';
-              if (address && primaryName) {
-                names[address] = primaryName;
-              }
-              return address;
-            })
-            .filter((address) => address.length > 0)
+      const addresses = Array.isArray(options?.memberGateAddresses)
+        ? [
+            ...new Set(
+              options.memberGateAddresses
+                .map((address) =>
+                  typeof address === 'string' ? address.trim() : ''
+                )
+                .filter((address) => address.length > 0)
+            ),
+          ]
         : [];
-      if (!this.areStringMapsEqual(this.snapshot.memberPrimaryNames, names)) {
-        this.snapshot = {
-          ...this.snapshot,
-          memberPrimaryNames: names,
-        };
-        this.emitSnapshot();
-      }
+      const localAddress = this.userInfo?.address?.trim() ?? '';
       await window.groupCall.setQortalGroupReticulumTargets(roomId, addresses);
       traceGcallAudioSurface('pipeline: synced qortal reticulum targets', {
         roomId,
         groupId,
         targetCount: addresses.length,
       });
+      if (localAddress && !addresses.includes(localAddress)) {
+        throw new Error('qortal_group_membership_required');
+      }
     } catch (error) {
       traceGcallAudioSurface(
         'pipeline: failed to sync qortal reticulum targets',
@@ -7386,19 +7391,8 @@ export class GroupCallAudioEngineRuntime {
           message: error instanceof Error ? error.message : 'unknown',
         }
       );
+      throw error;
     }
-  }
-
-  private startMemberGateRefresh(roomId: string): void {
-    this.clearMemberGateRefreshTimer();
-    if (this.memberGateGroupId === null) return;
-    this.memberGateRefreshTimer = setInterval(() => {
-      if (this.snapshot.roomId !== roomId) return;
-      void this.syncQortalGroupReticulumTargets(roomId, {
-        memberGateGroupId: this.memberGateGroupId!,
-        memberGateGroupName: this.snapshot.memberGateGroupName,
-      });
-    }, MEMBER_GATE_REFRESH_INTERVAL_MS);
   }
 
   private clearMemberGateRefreshTimer(): void {

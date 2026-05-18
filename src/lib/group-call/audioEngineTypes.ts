@@ -28,6 +28,7 @@ export interface AudioEngineParticipant {
 export interface AudioEngineJoinOptions {
   memberGateGroupId?: number;
   memberGateGroupName?: string;
+  memberGateAddresses?: string[];
 }
 
 export type GroupCallStartupStage =

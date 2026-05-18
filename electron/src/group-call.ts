@@ -189,6 +189,7 @@ export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
  */
 export const GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE = true;
 
+export const MAX_QORTAL_GROUP_CALL_PARTICIPANTS = 7;
 const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 5_000;
 /** Must exceed heartbeat interval so peers do not drop `GA` as stale between beats. */
 const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 7_000;
@@ -565,6 +566,7 @@ export interface GcReticulumActivityWire {
   g: number;
   m: number;
   p?: number;
+  x?: number;
 }
 
 interface GcReticulumAudioLinkHeartbeatWire {
@@ -580,7 +582,12 @@ interface GcReticulumAudioLinkHeartbeatWire {
 export function decodeGcReticulumActivityWire(
   wire: Record<string, unknown>,
   now: number = Date.now()
-): { groupId: number; timestamp: number; participantCount?: number } | null {
+): {
+  groupId: number;
+  timestamp: number;
+  participantCount?: number;
+  maxParticipants?: number;
+} | null {
   if (wire.t !== 'GA') return null;
   if (
     typeof wire.g !== 'number' ||
@@ -598,12 +605,20 @@ export function decodeGcReticulumActivityWire(
       participantCount = count;
     }
   }
+  let maxParticipants: number | undefined;
+  if (typeof wire.x === 'number' && Number.isFinite(wire.x)) {
+    const max = Math.trunc(wire.x);
+    if (max > 0 && max <= 10_000) {
+      maxParticipants = max;
+    }
+  }
   if (wire.m - now > GC_RETICULUM_ACTIVITY_MAX_FUTURE_SKEW_MS) return null;
   if (now - wire.m > GC_RETICULUM_ACTIVITY_MAX_AGE_MS) return null;
   return {
     groupId: wire.g,
     timestamp: wire.m,
     participantCount,
+    maxParticipants,
   };
 }
 
@@ -953,7 +968,10 @@ type GcReticulumAudioSendResult =
   | { success: true; diagnostics: GcReticulumAudioSendDiagnostics }
   | {
       success: false;
-      error: 'invalid-or-oversize-payload' | 'no-reticulum-route';
+      error:
+        | 'invalid-or-oversize-payload'
+        | 'no-reticulum-route'
+        | 'qortal-non-member-target';
       diagnostics?: GcReticulumAudioSendDiagnostics;
     };
 
@@ -1737,6 +1755,10 @@ export class GroupCallManager extends EventEmitter {
   private spectatorReticulumLivenessAt = new Map<string, number>();
   /** Watched rooms not locally joined: participant count from latest Reticulum activity hint. */
   private spectatorReticulumParticipantCount = new Map<string, number>();
+  /** Watched rooms not locally joined: advertised max participant cap from latest Reticulum activity hint. */
+  private spectatorReticulumMaxParticipants = new Map<string, number>();
+  /** Qortal roomId → authoritative group member addresses for hard group-call admission. */
+  private qortalGroupMemberAddressesByRoomId = new Map<string, Set<string>>();
   /** Qortal roomId → authoritative group member addresses to target with Reticulum activity hints. */
   private qortalReticulumTargetsByRoomId = new Map<string, Set<string>>();
   private qortalActivityEmitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2379,6 +2401,7 @@ export class GroupCallManager extends EventEmitter {
       this.reticulumAudioLinkHeartbeatTimer = null;
     }
     this.spectatorReticulumLivenessAt.clear();
+    this.qortalGroupMemberAddressesByRoomId.clear();
     this.qortalReticulumTargetsByRoomId.clear();
     this.watchedQortalGroupNumericIds.clear();
     this.reticulumTopoReasm.clear();
@@ -2418,24 +2441,98 @@ export class GroupCallManager extends EventEmitter {
 
   setQortalGroupReticulumTargets(roomId: string, addresses: string[]): void {
     if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) {
+      this.qortalGroupMemberAddressesByRoomId.delete(roomId);
       this.qortalReticulumTargetsByRoomId.delete(roomId);
       return;
     }
+    const allMembers = new Set<string>();
     const next = new Set<string>();
     if (Array.isArray(addresses)) {
       for (const raw of addresses) {
         if (typeof raw !== 'string') continue;
         const address = raw.trim();
-        if (!address || this.localAddresses.has(address)) continue;
+        if (!address) continue;
+        allMembers.add(address);
+        if (this.localAddresses.has(address)) continue;
         next.add(address);
       }
+    }
+    if (allMembers.size > 0) {
+      this.qortalGroupMemberAddressesByRoomId.set(roomId, allMembers);
+    } else {
+      this.qortalGroupMemberAddressesByRoomId.delete(roomId);
     }
     if (next.size > 0) {
       this.qortalReticulumTargetsByRoomId.set(roomId, next);
     } else {
       this.qortalReticulumTargetsByRoomId.delete(roomId);
     }
+    this.pruneQortalGroupRoomNonMembers(roomId);
     this.flushReticulumGroupActivityHeartbeats(roomId);
+  }
+
+  private getQortalGroupMemberAllowlist(roomId: string): Set<string> | null {
+    if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) {
+      return null;
+    }
+    return this.qortalGroupMemberAddressesByRoomId.get(roomId) ?? null;
+  }
+
+  private isAllowedQortalGroupCallMember(
+    roomId: string,
+    address: string
+  ): boolean {
+    const normalized = address.trim();
+    if (!normalized) return false;
+    const members = this.getQortalGroupMemberAllowlist(roomId);
+    if (!members) {
+      return GroupCallManager.parseQortalGroupNumericId(roomId) === null;
+    }
+    return members.has(normalized);
+  }
+
+  private shouldRejectQortalGroupCallAddress(
+    roomId: string,
+    address: string
+  ): boolean {
+    return (
+      GroupCallManager.parseQortalGroupNumericId(roomId) !== null &&
+      !this.isAllowedQortalGroupCallMember(roomId, address)
+    );
+  }
+
+  private pruneQortalGroupRoomNonMembers(roomId: string): void {
+    if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) return;
+    const room = this.rooms.get(roomId);
+    const members = this.getQortalGroupMemberAllowlist(roomId);
+    if (!room || !members || members.size === 0) return;
+    const removed: string[] = [];
+    for (const address of [...room.participants.keys()]) {
+      if (members.has(address)) continue;
+      room.participants.delete(address);
+      this.participantNodeIds.delete(address);
+      this.forgetReticulumPeerPresenceHash(address);
+      this.clearAwaitingRouteReticulumAudio(address);
+      this.resetReticulumAudioPeerStateForRoomAddress(
+        roomId,
+        address,
+        'qortal-non-member-prune'
+      );
+      removed.push(address);
+    }
+    if (removed.length === 0) return;
+    loggerLog(
+      `[GCall] Pruned non-member participant(s) from Qortal group call room=${roomId} addresses=${removed.join(',')}`
+    );
+    for (const address of removed) {
+      this.emit('gcall:participant-left', {
+        roomId,
+        address,
+        isAbrupt: true,
+      });
+    }
+    this.scheduleQortalGroupCallActivityEmit(false);
+    this.syncReticulumAudioLinks();
   }
 
   reportTransportHealth(roomId: string, healthyPeerAddresses: string[]): void {
@@ -3523,6 +3620,56 @@ export class GroupCallManager extends EventEmitter {
     return n !== null && this.watchedQortalGroupNumericIds.has(n);
   }
 
+  private isQortalGroupCallRoom(roomId: string): boolean {
+    return GroupCallManager.parseQortalGroupNumericId(roomId) !== null;
+  }
+
+  private hasRoomAtParticipantCap(room: GroupRoom): boolean {
+    return (
+      this.isQortalGroupCallRoom(room.roomId) &&
+      room.participants.size >= MAX_QORTAL_GROUP_CALL_PARTICIPANTS
+    );
+  }
+
+  private getSpectatorParticipantCount(roomId: string): number {
+    const at = this.spectatorReticulumLivenessAt.get(roomId);
+    if (
+      at === undefined ||
+      Date.now() - at > GC_RETICULUM_ACTIVITY_MAX_AGE_MS
+    ) {
+      return 0;
+    }
+    const count = this.spectatorReticulumParticipantCount.get(roomId) ?? 0;
+    return Number.isFinite(count) && count > 0 ? Math.trunc(count) : 0;
+  }
+
+  private shouldRejectLocalJoinAtParticipantCap(
+    roomId: string,
+    localAddress: string
+  ): boolean {
+    if (!this.isQortalGroupCallRoom(roomId)) return false;
+    const room = this.rooms.get(roomId);
+    if (room) {
+      return (
+        !room.participants.has(localAddress) &&
+        room.participants.size >= MAX_QORTAL_GROUP_CALL_PARTICIPANTS
+      );
+    }
+    return (
+      this.getSpectatorParticipantCount(roomId) >=
+      MAX_QORTAL_GROUP_CALL_PARTICIPANTS
+    );
+  }
+
+  private shouldRejectRemoteJoinAtParticipantCap(
+    room: GroupRoom,
+    address: string
+  ): boolean {
+    return (
+      this.hasRoomAtParticipantCap(room) && !room.participants.has(address)
+    );
+  }
+
   /**
    * Renderer passes member-group numeric ids; main tracks relayed joins/leaves only for those rooms.
    */
@@ -3555,13 +3702,15 @@ export class GroupCallManager extends EventEmitter {
   getQortalGroupCallActivitySnapshotForSidebar(): {
     activeByGroupId: Record<string, boolean>;
     participantCountByGroupId: Record<string, number>;
+    maxParticipantsByGroupId: Record<string, number>;
   } {
     return this.getQortalGroupCallActivitySnapshot();
   }
 
   private noteSpectatorReticulumLiveness(
     roomId: string,
-    participantCount?: number
+    participantCount?: number,
+    maxParticipants?: number
   ): void {
     if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) return;
     this.spectatorReticulumLivenessAt.set(roomId, Date.now());
@@ -3573,6 +3722,16 @@ export class GroupCallManager extends EventEmitter {
       this.spectatorReticulumParticipantCount.set(
         roomId,
         Math.trunc(participantCount)
+      );
+    }
+    if (
+      typeof maxParticipants === 'number' &&
+      Number.isFinite(maxParticipants) &&
+      maxParticipants > 0
+    ) {
+      this.spectatorReticulumMaxParticipants.set(
+        roomId,
+        Math.trunc(maxParticipants)
       );
     }
     this.scheduleNextQortalReticulumExpiry();
@@ -3588,6 +3747,7 @@ export class GroupCallManager extends EventEmitter {
       if (now - at > GC_RETICULUM_ACTIVITY_MAX_AGE_MS) {
         this.spectatorReticulumLivenessAt.delete(roomId);
         this.spectatorReticulumParticipantCount.delete(roomId);
+        this.spectatorReticulumMaxParticipants.delete(roomId);
       }
     }
     this.scheduleNextQortalReticulumExpiry();
@@ -3639,11 +3799,13 @@ export class GroupCallManager extends EventEmitter {
   private getQortalGroupCallActivitySnapshot(): {
     activeByGroupId: Record<string, boolean>;
     participantCountByGroupId: Record<string, number>;
+    maxParticipantsByGroupId: Record<string, number>;
   } {
     const now = Date.now();
     this.sweepSpectatorReticulumLiveness(now);
     const activeByGroupId: Record<string, boolean> = {};
     const participantCountByGroupId: Record<string, number> = {};
+    const maxParticipantsByGroupId: Record<string, number> = {};
     for (const id of this.watchedQortalGroupNumericIds) {
       const roomId = `gcall-qortal-${id}`;
       const gid = String(id);
@@ -3651,6 +3813,7 @@ export class GroupCallManager extends EventEmitter {
       if (local && local.participants.size > 0) {
         activeByGroupId[gid] = true;
         participantCountByGroupId[gid] = local.participants.size;
+        maxParticipantsByGroupId[gid] = MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
         continue;
       }
       const reticulumAt = this.spectatorReticulumLivenessAt.get(roomId);
@@ -3663,9 +3826,19 @@ export class GroupCallManager extends EventEmitter {
         if (count && count > 0) {
           participantCountByGroupId[gid] = count;
         }
+        const max =
+          this.spectatorReticulumMaxParticipants.get(roomId) ??
+          MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
+        if (max > 0) {
+          maxParticipantsByGroupId[gid] = max;
+        }
       }
     }
-    return { activeByGroupId, participantCountByGroupId };
+    return {
+      activeByGroupId,
+      participantCountByGroupId,
+      maxParticipantsByGroupId,
+    };
   }
 
   private flushReticulumGroupActivityHeartbeats(roomId?: string): void {
@@ -3694,6 +3867,7 @@ export class GroupCallManager extends EventEmitter {
       g: groupId,
       m: Date.now(),
       p: room.participants.size,
+      x: MAX_QORTAL_GROUP_CALL_PARTICIPANTS,
     };
     const overlayWire = this.attachReticulumOverlayMeta(
       wire as unknown as Record<string, unknown>
@@ -3780,7 +3954,8 @@ export class GroupCallManager extends EventEmitter {
       const roomId = `gcall-qortal-${decoded.groupId}`;
       this.noteSpectatorReticulumLiveness(
         roomId,
-        decoded.participantCount
+        decoded.participantCount,
+        decoded.maxParticipants
       );
       return;
     }
@@ -4013,6 +4188,14 @@ export class GroupCallManager extends EventEmitter {
     joinRkSignature?: string
   ): { callSessionId: string; mediaSessionGeneration: number } {
     this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'join');
+    if (this.shouldRejectLocalJoinAtParticipantCap(roomId, localAddress)) {
+      throw new Error(
+        `group_call_full:${MAX_QORTAL_GROUP_CALL_PARTICIPANTS}`
+      );
+    }
+    if (this.shouldRejectQortalGroupCallAddress(roomId, localAddress)) {
+      throw new Error('qortal_group_membership_required');
+    }
     if (!this.rooms.has(roomId)) {
       this.resetReticulumAudioPeerStatesForRoom(roomId, 'local-join');
     }
@@ -4250,6 +4433,7 @@ export class GroupCallManager extends EventEmitter {
     this.clearRecentCallActivityForRoom(roomId);
     this.clearBootstrapParticipantActivityForRoom(roomId);
     this.rooms.delete(roomId);
+    this.qortalGroupMemberAddressesByRoomId.delete(roomId);
     this.qortalReticulumTargetsByRoomId.delete(roomId);
     this.transportHealthByRoom.delete(roomId);
     void this.reticulumBridge
@@ -7672,6 +7856,12 @@ export class GroupCallManager extends EventEmitter {
       loggerWarn('[GCall] sendAudio dropped: invalid or oversize payload');
       return { success: false, error: 'invalid-or-oversize-payload' };
     }
+    if (this.shouldRejectQortalGroupCallAddress(roomId, toAddress)) {
+      loggerLog(
+        `[GCall] sendAudio dropped: non-member target room=${roomId} to=${toAddress}`
+      );
+      return { success: false, error: 'qortal-non-member-target' };
+    }
     if (this.localAddresses.has(toAddress)) {
       this.emit('gcall:audio', {
         roomId,
@@ -7911,6 +8101,15 @@ export class GroupCallManager extends EventEmitter {
     sentLinks?: number;
     skippedLinks?: number;
   } {
+    if (
+      this.shouldRejectQortalGroupCallAddress(roomId, fromAddress) ||
+      this.shouldRejectQortalGroupCallAddress(roomId, toAddress)
+    ) {
+      loggerLog(
+        `[GCall] Skipping GC_KEY for non-member room=${roomId} from=${fromAddress} to=${toAddress}`
+      );
+      return { success: false, error: 'qortal-non-member-target' };
+    }
     const env: GcKeyEnvelope = {
       type: 'GC_KEY',
       roomId,
@@ -7953,6 +8152,15 @@ export class GroupCallManager extends EventEmitter {
     callSessionId: string,
     mediaSessionGeneration: number
   ): void {
+    if (
+      this.shouldRejectQortalGroupCallAddress(roomId, fromAddress) ||
+      this.shouldRejectQortalGroupCallAddress(roomId, toAddress)
+    ) {
+      loggerLog(
+        `[GCall] Skipping GC_KEY_REQUEST for non-member room=${roomId} from=${fromAddress} to=${toAddress}`
+      );
+      return;
+    }
     const env: GcKeyRequestEnvelope = {
       type: 'GC_KEY_REQUEST',
       roomId,
@@ -8245,6 +8453,12 @@ export class GroupCallManager extends EventEmitter {
     if (!room) {
       return;
     }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped GC_JOIN_RK from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
     if (fromNodeId) {
       this.participantNodeIds.set(env.fromAddress, fromNodeId);
     }
@@ -8317,6 +8531,17 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped GC_JOIN from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      this.resetReticulumAudioPeerStateForRoomAddress(
+        env.roomId,
+        env.fromAddress,
+        'qortal-non-member-join'
+      );
+      return;
+    }
 
     // Cache the address → nodeId mapping for targeted audio delivery.
     if (fromNodeId) {
@@ -8324,6 +8549,20 @@ export class GroupCallManager extends EventEmitter {
     }
 
     const existing = room.participants.get(env.fromAddress);
+    if (this.shouldRejectRemoteJoinAtParticipantCap(room, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Rejected GC_JOIN at participant cap room=${env.roomId} from=${env.fromAddress} count=${room.participants.size} max=${MAX_QORTAL_GROUP_CALL_PARTICIPANTS}`
+      );
+      if (this.isWatchedQortalRoom(env.roomId)) {
+        this.noteSpectatorReticulumLiveness(
+          env.roomId,
+          room.participants.size,
+          MAX_QORTAL_GROUP_CALL_PARTICIPANTS
+        );
+      }
+      this.scheduleQortalGroupCallActivityEmit(false);
+      return;
+    }
     const lastLeaveTimestamp = this.getParticipantLeftTimestamp(
       env.roomId,
       env.fromAddress
@@ -8566,6 +8805,12 @@ export class GroupCallManager extends EventEmitter {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
     }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped GC_TOPOLOGY from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
 
     this.enqueueVerify(
       {
@@ -8586,6 +8831,12 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private applyVerifiedTopology(env: GcTopologyEnvelope): void {
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped verified GC_TOPOLOGY from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
     this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
     this.noteRecentCallActivityForTopology(env.roomId, env, env.timestamp);
     // Update local epoch tracking
@@ -8692,6 +8943,12 @@ export class GroupCallManager extends EventEmitter {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
     }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped GC_CLUSTER_HEARTBEAT from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
 
     let fromPublicKey = env.fromPublicKey;
     if (!fromPublicKey) {
@@ -8718,6 +8975,12 @@ export class GroupCallManager extends EventEmitter {
 
   private applyVerifiedClusterHeartbeat(env: GcClusterHeartbeatEnvelope): void {
     if (env.clusterForwarder !== env.fromAddress) return;
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped verified GC_CLUSTER_HEARTBEAT from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
     this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
 
     const room = this.rooms.get(env.roomId);
@@ -8773,6 +9036,16 @@ export class GroupCallManager extends EventEmitter {
       this.closeReticulumAudioLinkQuietly(
         linkId,
         'heartbeat-unresolved-address'
+      );
+      return;
+    }
+    if (this.shouldRejectQortalGroupCallAddress(wire.R, address)) {
+      this.closeReticulumAudioLinkQuietly(
+        linkId,
+        'heartbeat-qortal-non-member'
+      );
+      loggerLog(
+        `[GCall] Dropped Reticulum audio heartbeat from non-member room=${wire.R} from=${address}`
       );
       return;
     }
@@ -8908,6 +9181,16 @@ export class GroupCallManager extends EventEmitter {
       this.closeReticulumAudioLinkQuietly(payload.linkId, 'link-auth-self');
       return true;
     }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      this.closeReticulumAudioLinkQuietly(
+        payload.linkId,
+        'link-auth-qortal-non-member'
+      );
+      loggerLog(
+        `[GCall] Dropped link-auth GC_JOIN from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return true;
+    }
     const preRej = gcJoinTimestampRejectReason(env.timestamp, Date.now());
     if (
       preRej === 'future' ||
@@ -8959,6 +9242,21 @@ export class GroupCallManager extends EventEmitter {
       this.closeReticulumAudioLinkQuietly(
         job.linkId,
         'link-auth-no-participant'
+      );
+      return;
+    }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      this.closeReticulumAudioLinkQuietly(
+        job.linkId,
+        'link-auth-qortal-non-member'
+      );
+      this.resetReticulumAudioPeerStateForRoomAddress(
+        env.roomId,
+        env.fromAddress,
+        'qortal-non-member-link-auth'
+      );
+      loggerLog(
+        `[GCall] Rejected verified link-auth from non-member room=${env.roomId} from=${env.fromAddress}`
       );
       return;
     }
@@ -9143,6 +9441,18 @@ export class GroupCallManager extends EventEmitter {
       void this.ensureReticulumAudioPeerState(payload.roomId, fromAddress);
     }
     if (fromAddress) {
+      if (this.shouldRejectQortalGroupCallAddress(payload.roomId, fromAddress)) {
+        if ((payload.transport ?? 'link') === 'link' && payload.linkId) {
+          this.closeReticulumAudioLinkQuietly(
+            payload.linkId,
+            'audio-qortal-non-member'
+          );
+        }
+        loggerLog(
+          `[GCall] Dropped Reticulum audio from non-member room=${payload.roomId} from=${fromAddress}`
+        );
+        return;
+      }
       const isLinkPacket = (payload.transport ?? 'link') === 'link';
       if (
         isLinkPacket &&
@@ -9449,6 +9759,12 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped GC_KEY from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
     // Session identity is adopted only after GC_KEY signature verification in
     // applyVerifiedKey(), and only from the current topology root. Doing it here
     // lets stale or non-authoritative retained keys flip callSessionId before the
@@ -9487,6 +9803,12 @@ export class GroupCallManager extends EventEmitter {
     }
     const room = this.rooms.get(env.roomId);
     if (!room) return;
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped GC_KEY_REQUEST from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
     // Key requesters haven't adopted the root's callSessionId yet — that's exactly
     // why they are requesting the key. Only reject requests from a genuinely stale
     // generation (indicates a leftover request from before a session-break).
@@ -9533,6 +9855,12 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private applyVerifiedKey(env: GcKeyEnvelope): void {
+    if (this.shouldRejectQortalGroupCallAddress(env.roomId, env.fromAddress)) {
+      loggerLog(
+        `[GCall] Dropped verified GC_KEY from non-member room=${env.roomId} from=${env.fromAddress}`
+      );
+      return;
+    }
     this.noteRecentCallActivity(env.roomId, env.fromAddress, env.timestamp);
     this.noteBootstrapParticipantActivity(
       env.roomId,

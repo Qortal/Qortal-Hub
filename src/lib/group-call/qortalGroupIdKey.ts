@@ -44,3 +44,6 @@ export function meshCallParticipantCountForMemberGroup(
   }
   return null;
 }
+
+export const meshCallMaxParticipantsForMemberGroup =
+  meshCallParticipantCountForMemberGroup;

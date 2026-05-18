@@ -741,5 +741,10 @@ export const qortalGroupMeshCallParticipantCountAtom = atom<
   Record<string, number>
 >({});
 
+/** P2P mesh hint: groupId (string) → advertised max participant count for a group call. */
+export const qortalGroupMeshCallMaxParticipantsAtom = atom<
+  Record<string, number>
+>({});
+
 /** Local user's active Qortal group call room id (`gcall-qortal-<n>`), or null. */
 export const qortalGroupSelfGcallRoomIdAtom = atom<string | null>(null);

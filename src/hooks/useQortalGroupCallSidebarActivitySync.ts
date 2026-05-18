@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import {
   memberGroupsAtom,
   qortalGroupMeshCallActiveAtom,
+  qortalGroupMeshCallMaxParticipantsAtom,
   qortalGroupMeshCallParticipantCountAtom,
 } from '../atoms/global';
 
@@ -16,6 +17,9 @@ export function useQortalGroupCallSidebarActivitySync(): void {
   const setMeshCallActive = useSetAtom(qortalGroupMeshCallActiveAtom);
   const setMeshCallParticipantCount = useSetAtom(
     qortalGroupMeshCallParticipantCountAtom
+  );
+  const setMeshCallMaxParticipants = useSetAtom(
+    qortalGroupMeshCallMaxParticipantsAtom
   );
 
   const watchedQortalGroupNumericIds = useMemo(() => {
@@ -38,9 +42,11 @@ export function useQortalGroupCallSidebarActivitySync(): void {
     const unsub = api.onQortalGroupCallActivity(({
       activeByGroupId,
       participantCountByGroupId,
+      maxParticipantsByGroupId,
     }) => {
       setMeshCallActive(activeByGroupId);
       setMeshCallParticipantCount(participantCountByGroupId ?? {});
+      setMeshCallMaxParticipants(maxParticipantsByGroupId ?? {});
     });
     return () => {
       unsub();
@@ -48,8 +54,13 @@ export function useQortalGroupCallSidebarActivitySync(): void {
       // with an empty watch set until the next setWatchedQortalGroupIds, hiding sidebar call icons.
       setMeshCallActive({});
       setMeshCallParticipantCount({});
+      setMeshCallMaxParticipants({});
     };
-  }, [setMeshCallActive, setMeshCallParticipantCount]);
+  }, [
+    setMeshCallActive,
+    setMeshCallMaxParticipants,
+    setMeshCallParticipantCount,
+  ]);
 
   useEffect(() => {
     const api = window.groupCall;
@@ -63,6 +74,7 @@ export function useQortalGroupCallSidebarActivitySync(): void {
         if (cancelled || !result?.success) return;
         setMeshCallActive(result.activeByGroupId ?? {});
         setMeshCallParticipantCount(result.participantCountByGroupId ?? {});
+        setMeshCallMaxParticipants(result.maxParticipantsByGroupId ?? {});
       })
       .catch(() => {});
     return () => {
@@ -70,6 +82,7 @@ export function useQortalGroupCallSidebarActivitySync(): void {
     };
   }, [
     setMeshCallActive,
+    setMeshCallMaxParticipants,
     setMeshCallParticipantCount,
     watchedQortalGroupNumericIds,
   ]);
