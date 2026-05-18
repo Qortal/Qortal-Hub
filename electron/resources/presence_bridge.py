@@ -156,6 +156,7 @@ _QCHAT_FILE_PROGRESS_MIN_INTERVAL_SECONDS = 0.5
 _QCHAT_FILE_PROGRESS_MIN_DELTA = 0.005
 _QCHAT_FILE_CHUNK_SIZE = (1024 * 1024) - 1
 _QCHAT_FILE_PARALLEL_LINKS = 8
+_QCHAT_FILE_SUCCESS_LINK_CLOSE_GRACE_SECONDS = 15.0
 _TRANSPORT_MONITOR_INTERVAL_SECONDS = 5.0
 _OVERLAY_PENDING_PACKET_LIMIT = 24
 
@@ -4916,6 +4917,8 @@ def on_qchat_file_link_closed(link) -> None:
                 pass
         if state.get("completed") is True:
             return
+        if state.get("qchat_file_chunk_completed") is True:
+            return
         if state.get("incoming") is not True and int(state.get("open_attempts") or 0) < _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS:
             transfer_id_retry = str(state.get("transferId") or "")
             peer_hash_retry = str(state.get("peerPresenceHash") or "")
@@ -5194,7 +5197,7 @@ def _qchat_file_update_sent_progress(state: Dict[str, Any]) -> None:
     )
 
 
-def _qchat_file_mark_chunk_sent(state: Dict[str, Any], chunk_index: int, chunk_size: int) -> None:
+def _qchat_file_mark_chunk_sent(state: Dict[str, Any], chunk_index: int, chunk_size: int) -> bool:
     active = state.setdefault("active_chunks", {})
     if isinstance(active, dict):
         active.pop(chunk_index, None)
@@ -5205,7 +5208,7 @@ def _qchat_file_mark_chunk_sent(state: Dict[str, Any], chunk_index: int, chunk_s
     _qchat_file_update_sent_progress(state)
     if int(state.get("sent_bytes") or 0) >= int(state.get("size") or 0):
         if state.get("completed") is True:
-            return
+            return True
         state["completed"] = True
         transfer_id = str(state.get("transferId") or "")
         if transfer_id:
@@ -5220,6 +5223,8 @@ def _qchat_file_mark_chunk_sent(state: Dict[str, Any], chunk_index: int, chunk_s
                 "size": int(state.get("size") or 0),
             },
         )
+        return True
+    return False
 
 
 def _qchat_file_receiver_transfer_done(peer_hash: str, transfer_id: str) -> None:
@@ -5244,6 +5249,24 @@ def _qchat_file_read_chunk(file_path: str, offset: int, chunk_size: int) -> byte
         return f.read(chunk_size)
 
 
+def _qchat_file_close_success_link_after_grace(link, state: Dict[str, Any]) -> None:
+    state["completed"] = True
+    link_id_done = get_qchat_file_link_id(link)
+    if link_id_done:
+        remove_qchat_file_link(link_id_done)
+
+    def close_link() -> None:
+        try:
+            if link is not None:
+                link.teardown()
+        except Exception:
+            pass
+
+    timer = threading.Timer(_QCHAT_FILE_SUCCESS_LINK_CLOSE_GRACE_SECONDS, close_link)
+    timer.daemon = True
+    timer.start()
+
+
 def _start_qchat_file_resource_for_state(state: Dict[str, Any]) -> bool:
     link = state.get("link")
     file_path = str(state.get("filePath") or "")
@@ -5263,11 +5286,7 @@ def _start_qchat_file_resource_for_state(state: Dict[str, Any]) -> bool:
     with _state_lock:
         next_chunk = int(root.get("next_chunk_index") or 0)
         if next_chunk >= chunk_count:
-            try:
-                if link is not None:
-                    link.teardown()
-            except Exception:
-                pass
+            _qchat_file_close_success_link_after_grace(link, state)
             return False
         chunk_index = next_chunk
         chunk_offset, chunk_size = _qchat_file_chunk_bounds(size, chunk_index)
@@ -5295,8 +5314,9 @@ def _start_qchat_file_resource_for_state(state: Dict[str, Any]) -> bool:
 
     def on_done(resource) -> None:
         status = "sent" if getattr(resource, "status", None) == RNS.Resource.COMPLETE else "failed"
+        transfer_complete = False
         if status == "sent":
-            _qchat_file_mark_chunk_sent(root, chunk_index, chunk_size)
+            transfer_complete = _qchat_file_mark_chunk_sent(root, chunk_index, chunk_size)
         else:
             _qchat_file_emit(
                 "failed",
@@ -5309,13 +5329,28 @@ def _start_qchat_file_resource_for_state(state: Dict[str, Any]) -> bool:
                     "chunkIndex": chunk_index,
                 },
             )
-        link_id_done = get_qchat_file_link_id(link)
-        if link_id_done:
-            remove_qchat_file_link(link_id_done)
-        try:
-            link.teardown()
-        except Exception:
-            pass
+            link_id_done = get_qchat_file_link_id(link)
+            if link_id_done:
+                remove_qchat_file_link(link_id_done)
+            try:
+                link.teardown()
+            except Exception:
+                pass
+            return
+        if transfer_complete:
+            active_chunks = root.get("active_chunks")
+            if isinstance(active_chunks, dict) and len(active_chunks) > 0:
+                _qchat_file_close_success_link_after_grace(link, state)
+                return
+            _qchat_file_close_success_link_after_grace(link, state)
+            return
+        state["resource_started"] = False
+        _enqueue_scheduler_task(
+            "file-transfer",
+            "qchat-file-next-chunk",
+            _start_qchat_file_resource_for_state,
+            state,
+        )
 
     def on_progress(resource) -> None:
         try:
@@ -5521,6 +5556,7 @@ def on_qchat_file_resource_started(resource) -> None:
             except Exception:
                 pass
         state["resource_started"] = True
+        state["qchat_file_chunk_completed"] = False
     if not pending:
         return
     transfer_id = str(pending.get("transferId") or "")
@@ -5672,29 +5708,15 @@ def on_qchat_file_resource_concluded(resource) -> None:
                     )
                 done = chunk_count > 0 and len(completed_chunks) >= chunk_count
             if state is not None:
-                state["completed"] = True
+                state["resource_started"] = False
+                state["qchat_file_chunk_completed"] = True
             if not done:
-                peer_identity = pending.get("peerIdentity")
-                if peer_identity is not None:
-                    next_state = {
-                        "peerPresenceHash": peer_hash,
-                        "peerDestinationHash": "",
-                        "incoming": False,
-                        "established": False,
-                        "transferId": transfer_id,
-                        "fileName": pending.get("fileName") or "",
-                        "size": int(pending.get("size") or 0),
-                        "sha256": pending.get("sha256") or "",
-                        "peerIdentity": peer_identity,
-                        "authMessage": pending.get("authMessage"),
-                        "created_at": time.time(),
-                    }
-                    if isinstance(next_state.get("authMessage"), dict):
-                        _open_qchat_file_link_async(next_state)
                 return
             part_path = save_path + ".part"
             actual_hash = _sha256_file_hex(part_path)
             if expected_hash and actual_hash.lower() != expected_hash:
+                if state is not None:
+                    state["completed"] = True
                 _qchat_file_emit(
                     "failed",
                     {
@@ -5707,6 +5729,8 @@ def on_qchat_file_resource_concluded(resource) -> None:
                 )
                 return
             os.replace(part_path, save_path)
+            if state is not None:
+                state["completed"] = True
             with _state_lock:
                 _qchat_file_accepts_by_peer.pop(peer_hash, None)
             _qchat_file_emit(
