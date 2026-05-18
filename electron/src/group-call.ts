@@ -8279,6 +8279,7 @@ export class GroupCallManager extends EventEmitter {
     const incomingReticulumDestinationHash = env.reticulumDestinationHash
       .trim()
       .toLowerCase();
+    let shouldEmitParticipantJoined = false;
     if (
       shouldRefreshParticipantFromVerifiedJoin({
         currentJoinedAt: existing?.joinedAt,
@@ -8299,6 +8300,8 @@ export class GroupCallManager extends EventEmitter {
       const reticulumIdentityChanged =
         Boolean(existingReticulumDestinationHash) &&
         incomingReticulumDestinationHash !== existingReticulumDestinationHash;
+      shouldEmitParticipantJoined =
+        !existing || refreshedExistingJoin || reticulumIdentityChanged;
       const staleAudioStateForAbsentParticipant =
         !existing &&
         this.reticulumAudioPeersByAddress
@@ -8380,7 +8383,7 @@ export class GroupCallManager extends EventEmitter {
     }
 
     // Only notify the renderer when the local client is actively in this room.
-    if (this.hasLocalRoomInterest(env.roomId)) {
+    if (shouldEmitParticipantJoined && this.hasLocalRoomInterest(env.roomId)) {
       const roomRow = this.rooms.get(env.roomId);
       const chatIdForEmit = roomRow?.chatId?.startsWith('direct:')
         ? roomRow.chatId

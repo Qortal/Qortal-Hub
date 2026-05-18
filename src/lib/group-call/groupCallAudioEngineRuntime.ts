@@ -910,6 +910,10 @@ export class GroupCallAudioEngineRuntime {
   private startupMediaTargetWaitLastDiagAt = 0;
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
   private readonly participantJoinIdentityByAddress = new Map<string, string>();
+  private readonly occupiedRoomElectionWaitJoinIdentityByAddress = new Map<
+    string,
+    string
+  >();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
   private readonly throttledDiagEvents = new Map<
@@ -3794,6 +3798,7 @@ export class GroupCallAudioEngineRuntime {
     this.startupMediaTargetWaitLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantJoinIdentityByAddress.clear();
+    this.occupiedRoomElectionWaitJoinIdentityByAddress.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
@@ -4078,6 +4083,7 @@ export class GroupCallAudioEngineRuntime {
     this.startupMediaTargetWaitLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantJoinIdentityByAddress.clear();
+    this.occupiedRoomElectionWaitJoinIdentityByAddress.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
@@ -4260,6 +4266,9 @@ export class GroupCallAudioEngineRuntime {
           )?.address;
           if (leavingAddress) {
             this.participantJoinIdentityByAddress.delete(leavingAddress.trim());
+            this.occupiedRoomElectionWaitJoinIdentityByAddress.delete(
+              leavingAddress.trim()
+            );
             this.clearTargetedRoomKeyReplayRetriesForAddress(leavingAddress);
             await this.resetReceiveStateForParticipant(
               leavingAddress,
@@ -4311,7 +4320,8 @@ export class GroupCallAudioEngineRuntime {
           ) {
             this.armOccupiedRoomElectionWaitFromParticipantJoin(
               joiningAddress,
-              joining?.joinGeneration
+              joining?.joinGeneration,
+              joining?.timestamp
             );
           }
         }
@@ -5431,12 +5441,37 @@ export class GroupCallAudioEngineRuntime {
 
   private armOccupiedRoomElectionWaitFromParticipantJoin(
     address: string,
-    joinGeneration?: number
+    joinGeneration?: number,
+    timestamp?: number
   ): void {
     const myAddress = this.userInfo?.address?.trim() ?? '';
     const remoteAddress = address.trim();
     if (!myAddress || !remoteAddress || remoteAddress === myAddress) return;
     if ((this.topology?.rootForwarder?.trim() ?? '') !== '') return;
+    const joinIdentity = this.getParticipantJoinIdentity(
+      joinGeneration,
+      timestamp
+    );
+    if (joinIdentity) {
+      const previousJoinIdentity =
+        this.occupiedRoomElectionWaitJoinIdentityByAddress.get(remoteAddress);
+      if (previousJoinIdentity === joinIdentity) {
+        this.recordDiagEvent(
+          'occupied-room-election-wait-duplicate-join-ignored',
+          {
+            roomId: this.snapshot.roomId,
+            peer: truncateGcallDiagAddress(remoteAddress),
+            joinGeneration: joinGeneration ?? null,
+            timestamp: timestamp ?? null,
+          }
+        );
+        return;
+      }
+      this.occupiedRoomElectionWaitJoinIdentityByAddress.set(
+        remoteAddress,
+        joinIdentity
+      );
+    }
     const participantAddresses = this.snapshot.participants
       .map((participant) => participant.address?.trim() ?? '')
       .filter(Boolean);
@@ -5467,6 +5502,7 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       peer: truncateGcallDiagAddress(remoteAddress),
       joinGeneration: joinGeneration ?? null,
+      timestamp: timestamp ?? null,
       remoteParticipantCount,
       topologyElectionDelayRemainingMs: Math.max(
         0,
@@ -7358,6 +7394,7 @@ export class GroupCallAudioEngineRuntime {
     for (const address of removedAddresses) {
       this.bootstrapOnlyParticipantAddresses.delete(address);
       this.participantJoinIdentityByAddress.delete(address);
+      this.occupiedRoomElectionWaitJoinIdentityByAddress.delete(address);
       await this.resetReceiveStateForParticipant(
         address,
         'authoritative-roster-remove'
