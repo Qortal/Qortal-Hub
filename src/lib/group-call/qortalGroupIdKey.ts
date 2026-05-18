@@ -23,3 +23,24 @@ export function meshCallActiveForMemberGroup(
   }
   return false;
 }
+
+export function meshCallParticipantCountForMemberGroup(
+  participantCountByGroupId: Record<string, number>,
+  groupId: unknown
+): number | null {
+  const canonical = qortalMemberGroupIdKey(groupId);
+  if (
+    canonical &&
+    Number.isFinite(participantCountByGroupId[canonical]) &&
+    participantCountByGroupId[canonical] > 0
+  ) {
+    return Math.trunc(participantCountByGroupId[canonical]);
+  }
+  if (groupId !== undefined && groupId !== null && groupId !== '') {
+    const count = participantCountByGroupId[String(groupId)];
+    if (Number.isFinite(count) && count > 0) {
+      return Math.trunc(count);
+    }
+  }
+  return null;
+}

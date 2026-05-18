@@ -812,9 +812,13 @@ declare global {
         success: boolean;
         error?: string;
         activeByGroupId?: Record<string, boolean>;
+        participantCountByGroupId?: Record<string, number>;
       }>;
       onQortalGroupCallActivity?: (
-        cb: (payload: { activeByGroupId: Record<string, boolean> }) => void
+        cb: (payload: {
+          activeByGroupId: Record<string, boolean>;
+          participantCountByGroupId?: Record<string, number>;
+        }) => void
       ) => () => void;
       getPendingKeyMetrics?: () => Promise<{
         pending_key_flush_success: number;

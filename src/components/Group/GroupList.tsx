@@ -32,6 +32,7 @@ import {
   isRunningPublicNodeAtom,
   memberGroupsAtom,
   qortalGroupMeshCallActiveAtom,
+  qortalGroupMeshCallParticipantCountAtom,
   qortalGroupSelfGcallRoomIdAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
@@ -40,7 +41,10 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
-import { meshCallActiveForMemberGroup } from '../../lib/group-call/qortalGroupIdKey';
+import {
+  meshCallActiveForMemberGroup,
+  meshCallParticipantCountForMemberGroup,
+} from '../../lib/group-call/qortalGroupIdKey';
 
 const GroupListInner = ({
   selectGroupFunc,
@@ -377,6 +381,9 @@ const GroupItem = memo(
       timestampEnterDataSelector(group?.groupId)
     );
     const meshCallActiveByGroup = useAtomValue(qortalGroupMeshCallActiveAtom);
+    const meshCallParticipantCountByGroup = useAtomValue(
+      qortalGroupMeshCallParticipantCountAtom
+    );
     const selfGcallRoomId = useAtomValue(qortalGroupSelfGcallRoomIdAtom);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewSrc, setPreviewSrc] = useState(null);
@@ -426,6 +433,10 @@ const GroupItem = memo(
       Boolean(gcallRoomIdForRow) && selfGcallRoomId === gcallRoomIdForRow;
     const meshShowsCall = meshCallActiveForMemberGroup(
       meshCallActiveByGroup,
+      group?.groupId
+    );
+    const meshCallParticipantCount = meshCallParticipantCountForMemberGroup(
+      meshCallParticipantCountByGroup,
       group?.groupId
     );
     const showGroupCallIndicator = Boolean(gcallRoomIdForRow) && (imInThisGroupGcall || meshShowsCall);
@@ -590,8 +601,17 @@ const GroupItem = memo(
               )}
 
               {showGroupCallIndicator && (
-                <PhoneInTalkIcon
-                  titleAccess={
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    color: imInThisGroupGcall
+                      ? theme.palette.primary.main
+                      : theme.palette.info.main,
+                    display: 'flex',
+                    gap: '3px',
+                    flexShrink: 0,
+                  }}
+                  title={
                     imInThisGroupGcall
                       ? t('core:group_list_call_youre_in', {
                           postProcess: 'capitalizeFirstChar',
@@ -600,14 +620,30 @@ const GroupItem = memo(
                           postProcess: 'capitalizeFirstChar',
                         })
                   }
-                  sx={{
-                    color: imInThisGroupGcall
-                      ? theme.palette.primary.main
-                      : theme.palette.info.main,
-                    fontSize: '18px',
-                    flexShrink: 0,
-                  }}
-                />
+                >
+                  <PhoneInTalkIcon
+                    sx={{
+                      color: 'inherit',
+                      fontSize: '18px',
+                      flexShrink: 0,
+                    }}
+                  />
+                  {meshCallParticipantCount !== null && (
+                    <Typography
+                      component="span"
+                      sx={{
+                        color: 'inherit',
+                        fontFamily: 'Inter',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        minWidth: '7px',
+                      }}
+                    >
+                      {meshCallParticipantCount}
+                    </Typography>
+                  )}
+                </Box>
               )}
             </Box>
           </Box>

@@ -564,6 +564,7 @@ export interface GcReticulumActivityWire {
   t: 'GA';
   g: number;
   m: number;
+  p?: number;
 }
 
 interface GcReticulumAudioLinkHeartbeatWire {
@@ -579,7 +580,7 @@ interface GcReticulumAudioLinkHeartbeatWire {
 export function decodeGcReticulumActivityWire(
   wire: Record<string, unknown>,
   now: number = Date.now()
-): { groupId: number; timestamp: number } | null {
+): { groupId: number; timestamp: number; participantCount?: number } | null {
   if (wire.t !== 'GA') return null;
   if (
     typeof wire.g !== 'number' ||
@@ -590,11 +591,19 @@ export function decodeGcReticulumActivityWire(
   ) {
     return null;
   }
+  let participantCount: number | undefined;
+  if (typeof wire.p === 'number' && Number.isFinite(wire.p)) {
+    const count = Math.trunc(wire.p);
+    if (count > 0 && count <= 10_000) {
+      participantCount = count;
+    }
+  }
   if (wire.m - now > GC_RETICULUM_ACTIVITY_MAX_FUTURE_SKEW_MS) return null;
   if (now - wire.m > GC_RETICULUM_ACTIVITY_MAX_AGE_MS) return null;
   return {
     groupId: wire.g,
     timestamp: wire.m,
+    participantCount,
   };
 }
 
@@ -1726,6 +1735,8 @@ export class GroupCallManager extends EventEmitter {
   private watchedQortalGroupNumericIds = new Set<number>();
   /** Watched rooms not locally joined: last wall time we received a Reticulum activity hint. */
   private spectatorReticulumLivenessAt = new Map<string, number>();
+  /** Watched rooms not locally joined: participant count from latest Reticulum activity hint. */
+  private spectatorReticulumParticipantCount = new Map<string, number>();
   /** Qortal roomId → authoritative group member addresses to target with Reticulum activity hints. */
   private qortalReticulumTargetsByRoomId = new Map<string, Set<string>>();
   private qortalActivityEmitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3515,7 +3526,10 @@ export class GroupCallManager extends EventEmitter {
   /**
    * Renderer passes member-group numeric ids; main tracks relayed joins/leaves only for those rooms.
    */
-  setWatchedQortalGroupIds(ids: number[]): Record<string, boolean> {
+  setWatchedQortalGroupIds(ids: number[]): {
+    activeByGroupId: Record<string, boolean>;
+    participantCountByGroupId: Record<string, number>;
+  } {
     const next = new Set<number>();
     if (Array.isArray(ids)) {
       for (const raw of ids) {
@@ -3538,13 +3552,29 @@ export class GroupCallManager extends EventEmitter {
    * Full map for the groups list (watched ids only). Used when the renderer subscribes to
    * `gcall:qortal-group-call-activity` so it does not miss state emitted before subscribe.
    */
-  getQortalGroupCallActivitySnapshotForSidebar(): Record<string, boolean> {
+  getQortalGroupCallActivitySnapshotForSidebar(): {
+    activeByGroupId: Record<string, boolean>;
+    participantCountByGroupId: Record<string, number>;
+  } {
     return this.getQortalGroupCallActivitySnapshot();
   }
 
-  private noteSpectatorReticulumLiveness(roomId: string): void {
+  private noteSpectatorReticulumLiveness(
+    roomId: string,
+    participantCount?: number
+  ): void {
     if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) return;
     this.spectatorReticulumLivenessAt.set(roomId, Date.now());
+    if (
+      typeof participantCount === 'number' &&
+      Number.isFinite(participantCount) &&
+      participantCount > 0
+    ) {
+      this.spectatorReticulumParticipantCount.set(
+        roomId,
+        Math.trunc(participantCount)
+      );
+    }
     this.scheduleNextQortalReticulumExpiry();
     if (this.watchedQortalGroupNumericIds.size > 0) {
       this.scheduleQortalGroupCallActivityEmit(false);
@@ -3557,6 +3587,7 @@ export class GroupCallManager extends EventEmitter {
     ]) {
       if (now - at > GC_RETICULUM_ACTIVITY_MAX_AGE_MS) {
         this.spectatorReticulumLivenessAt.delete(roomId);
+        this.spectatorReticulumParticipantCount.delete(roomId);
       }
     }
     this.scheduleNextQortalReticulumExpiry();
@@ -3605,16 +3636,21 @@ export class GroupCallManager extends EventEmitter {
     this.qortalActivityEmitTimer.unref?.();
   }
 
-  private getQortalGroupCallActivitySnapshot(): Record<string, boolean> {
+  private getQortalGroupCallActivitySnapshot(): {
+    activeByGroupId: Record<string, boolean>;
+    participantCountByGroupId: Record<string, number>;
+  } {
     const now = Date.now();
     this.sweepSpectatorReticulumLiveness(now);
     const activeByGroupId: Record<string, boolean> = {};
+    const participantCountByGroupId: Record<string, number> = {};
     for (const id of this.watchedQortalGroupNumericIds) {
       const roomId = `gcall-qortal-${id}`;
       const gid = String(id);
       const local = this.rooms.get(roomId);
       if (local && local.participants.size > 0) {
         activeByGroupId[gid] = true;
+        participantCountByGroupId[gid] = local.participants.size;
         continue;
       }
       const reticulumAt = this.spectatorReticulumLivenessAt.get(roomId);
@@ -3623,9 +3659,13 @@ export class GroupCallManager extends EventEmitter {
         now - reticulumAt <= GC_RETICULUM_ACTIVITY_MAX_AGE_MS
       ) {
         activeByGroupId[gid] = true;
+        const count = this.spectatorReticulumParticipantCount.get(roomId);
+        if (count && count > 0) {
+          participantCountByGroupId[gid] = count;
+        }
       }
     }
-    return activeByGroupId;
+    return { activeByGroupId, participantCountByGroupId };
   }
 
   private flushReticulumGroupActivityHeartbeats(roomId?: string): void {
@@ -3653,6 +3693,7 @@ export class GroupCallManager extends EventEmitter {
       t: 'GA',
       g: groupId,
       m: Date.now(),
+      p: room.participants.size,
     };
     const overlayWire = this.attachReticulumOverlayMeta(
       wire as unknown as Record<string, unknown>
@@ -3737,7 +3778,10 @@ export class GroupCallManager extends EventEmitter {
       const decoded = decodeGcReticulumActivityWire(wire, now);
       if (!decoded) return;
       const roomId = `gcall-qortal-${decoded.groupId}`;
-      this.noteSpectatorReticulumLiveness(roomId);
+      this.noteSpectatorReticulumLiveness(
+        roomId,
+        decoded.participantCount
+      );
       return;
     }
 
@@ -3944,8 +3988,10 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private flushQortalGroupCallActivity(): void {
-    const activeByGroupId = this.getQortalGroupCallActivitySnapshot();
-    this.emit('gcall:qortal-group-call-activity', { activeByGroupId });
+    this.emit(
+      'gcall:qortal-group-call-activity',
+      this.getQortalGroupCallActivitySnapshot()
+    );
   }
 
   // ── Outbound ──────────────────────────────────────────────────────────────

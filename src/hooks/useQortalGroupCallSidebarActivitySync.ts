@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import {
   memberGroupsAtom,
   qortalGroupMeshCallActiveAtom,
+  qortalGroupMeshCallParticipantCountAtom,
 } from '../atoms/global';
 
 /**
@@ -13,6 +14,9 @@ import {
 export function useQortalGroupCallSidebarActivitySync(): void {
   const groups = useAtomValue(memberGroupsAtom);
   const setMeshCallActive = useSetAtom(qortalGroupMeshCallActiveAtom);
+  const setMeshCallParticipantCount = useSetAtom(
+    qortalGroupMeshCallParticipantCountAtom
+  );
 
   const watchedQortalGroupNumericIds = useMemo(() => {
     const out: number[] = [];
@@ -31,16 +35,21 @@ export function useQortalGroupCallSidebarActivitySync(): void {
     if (!api?.onQortalGroupCallActivity || !api.setWatchedQortalGroupIds) {
       return;
     }
-    const unsub = api.onQortalGroupCallActivity(({ activeByGroupId }) => {
+    const unsub = api.onQortalGroupCallActivity(({
+      activeByGroupId,
+      participantCountByGroupId,
+    }) => {
       setMeshCallActive(activeByGroupId);
+      setMeshCallParticipantCount(participantCountByGroupId ?? {});
     });
     return () => {
       unsub();
       // Do not clear watched ids here: it races with React Strict remounts and leaves main
       // with an empty watch set until the next setWatchedQortalGroupIds, hiding sidebar call icons.
       setMeshCallActive({});
+      setMeshCallParticipantCount({});
     };
-  }, [setMeshCallActive]);
+  }, [setMeshCallActive, setMeshCallParticipantCount]);
 
   useEffect(() => {
     const api = window.groupCall;
@@ -53,10 +62,15 @@ export function useQortalGroupCallSidebarActivitySync(): void {
       .then((result) => {
         if (cancelled || !result?.success) return;
         setMeshCallActive(result.activeByGroupId ?? {});
+        setMeshCallParticipantCount(result.participantCountByGroupId ?? {});
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [setMeshCallActive, watchedQortalGroupNumericIds]);
+  }, [
+    setMeshCallActive,
+    setMeshCallParticipantCount,
+    watchedQortalGroupNumericIds,
+  ]);
 }

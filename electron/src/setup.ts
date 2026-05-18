@@ -3342,7 +3342,7 @@ ipcMain.on('gcall:subscribe-activity', (event) => {
   const mgr = getGroupCallManager();
   if (!mgr || event.sender.isDestroyed()) return;
   const activeByGroupId = mgr.getQortalGroupCallActivitySnapshotForSidebar();
-  event.sender.send('gcall:qortal-group-call-activity', { activeByGroupId });
+  event.sender.send('gcall:qortal-group-call-activity', activeByGroupId);
 });
 ipcMain.on('gcall:unsubscribe-activity', (event) => {
   gcallActivitySubscribers.delete(event.sender);
@@ -3354,7 +3354,7 @@ ipcMain.handle(
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     const list = Array.isArray(ids) ? (ids as number[]) : [];
-    const activeByGroupId = mgr.setWatchedQortalGroupIds(list);
-    return { success: true, activeByGroupId };
+    const activity = mgr.setWatchedQortalGroupIds(list);
+    return { success: true, ...activity };
   }
 );

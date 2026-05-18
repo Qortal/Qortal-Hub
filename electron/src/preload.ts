@@ -1533,19 +1533,33 @@ try {
         success: boolean;
         error?: string;
         activeByGroupId?: Record<string, boolean>;
+        participantCountByGroupId?: Record<string, number>;
       }>,
 
     /**
      * Subscribe only to coalesced group-call activity for the groups list (not full GC_* IPC).
      */
     onQortalGroupCallActivity: (
-      cb: (payload: { activeByGroupId: Record<string, boolean> }) => void
+      cb: (payload: {
+        activeByGroupId: Record<string, boolean>;
+        participantCountByGroupId?: Record<string, number>;
+      }) => void
     ) => {
       const channel = 'gcall:qortal-group-call-activity';
       const handler = (_e: unknown, payload: unknown) => {
-        const p = payload as { activeByGroupId?: Record<string, boolean> };
+        const p = payload as {
+          activeByGroupId?: Record<string, boolean>;
+          participantCountByGroupId?: Record<string, number>;
+        };
         if (p?.activeByGroupId && typeof p.activeByGroupId === 'object') {
-          cb({ activeByGroupId: p.activeByGroupId });
+          cb({
+            activeByGroupId: p.activeByGroupId,
+            participantCountByGroupId:
+              p.participantCountByGroupId &&
+              typeof p.participantCountByGroupId === 'object'
+                ? p.participantCountByGroupId
+                : undefined,
+          });
         }
       };
       ipcRenderer.on(channel, handler);
