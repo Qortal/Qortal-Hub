@@ -2321,18 +2321,23 @@ def _audio_fd3_reader_loop() -> None:
     if audio_fd is None:
         return
 
-    selector = selectors.DefaultSelector()
+    selector = None
     selector_enabled = False
-    try:
-        selector.register(audio_fd, selectors.EVENT_READ, "audio")
-        selector_enabled = True
-    except Exception as exc:
-        log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-reader-selector-setup-failed err={exc}")
+    if os.name == "nt":
+        log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-reader-selector-skipped platform=windows")
+    else:
+        selector = selectors.DefaultSelector()
         try:
-            selector.close()
-        except Exception:
-            pass
-        selector_enabled = False
+            selector.register(audio_fd, selectors.EVENT_READ, "audio")
+            selector_enabled = True
+        except Exception as exc:
+            log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-reader-selector-setup-failed err={exc}")
+            try:
+                selector.close()
+            except Exception:
+                pass
+            selector = None
+            selector_enabled = False
 
     log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-reader-thread-started")
     try:
@@ -2343,9 +2348,17 @@ def _audio_fd3_reader_loop() -> None:
 
             if selector_enabled:
                 try:
+                    assert selector is not None
                     events = selector.select(timeout=0.05)
                 except Exception as exc:
                     log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage=fd3-reader-selector-error err={exc}")
+                    selector_enabled = False
+                    try:
+                        if selector is not None:
+                            selector.close()
+                    except Exception:
+                        pass
+                    selector = None
                     events = []
                 for _key, _mask in events:
                     if not _read_audio_input_available(audio_fd, audio_input_buffer):
@@ -2363,10 +2376,11 @@ def _audio_fd3_reader_loop() -> None:
             else:
                 _emit_audio_queue_state()
     finally:
-        try:
-            selector.close()
-        except Exception:
-            pass
+        if selector is not None:
+            try:
+                selector.close()
+            except Exception:
+                pass
 
 
 def _audio_frame_route_key(frame: Any) -> str:
