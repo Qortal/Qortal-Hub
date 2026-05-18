@@ -17,6 +17,7 @@ import {
  * uiActive follows the group support panel so metrics flush while that panel is open.
  */
 export function GroupCallProvider({ children }: { children: React.ReactNode }) {
+  useQortalGroupCallSidebarActivitySync();
   const hasAudioSurface =
     typeof window !== 'undefined' &&
     Boolean((window as Window & { audioSurface?: unknown }).audioSurface);
@@ -63,7 +64,6 @@ function AudioSurfaceGroupCallProvider({
     );
   }, []);
   const groupChatOpen = useAtomValue(groupChatOpenAtom);
-  useQortalGroupCallSidebarActivitySync();
   const value = useAudioSurfaceGroupCallController(groupChatOpen);
   return (
     <GroupCallContext.Provider value={value}>

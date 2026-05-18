@@ -2093,14 +2093,30 @@ export class GroupCallManager extends EventEmitter {
   setReticulumBridge(reticulumBridge?: ReticulumBridge | null): void {
     const nextBridge = reticulumBridge ?? null;
     if (this.reticulumBridge === nextBridge) {
-      if (this.started) this.attachReticulumBridgeListeners();
+      if (this.started) {
+        this.attachReticulumBridgeListeners();
+        this.flushQortalGroupCallActivityAfterReticulumReady(
+          'bridge-reattach-same'
+        );
+      }
       return;
     }
     this.detachReticulumBridgeListeners();
     this.reticulumBridge = nextBridge;
     if (this.started) {
       this.attachReticulumBridgeListeners();
+      this.flushQortalGroupCallActivityAfterReticulumReady('bridge-reattach');
     }
+  }
+
+  private flushQortalGroupCallActivityAfterReticulumReady(reason: string): void {
+    const bridge = this.reticulumBridge;
+    if (!bridge || bridge.getState() !== 'ready') return;
+    loggerLog(
+      `[GCall] Reticulum ready; refreshing Qortal group call activity reason=${reason} watched=${this.watchedQortalGroupNumericIds.size}`
+    );
+    this.flushReticulumGroupActivityHeartbeats();
+    this.scheduleQortalGroupCallActivityEmit(true);
   }
 
   private logVerifyFailure(job: GcVerifyPending): void {
@@ -3676,6 +3692,7 @@ export class GroupCallManager extends EventEmitter {
   setWatchedQortalGroupIds(ids: number[]): {
     activeByGroupId: Record<string, boolean>;
     participantCountByGroupId: Record<string, number>;
+    maxParticipantsByGroupId: Record<string, number>;
   } {
     const next = new Set<number>();
     if (Array.isArray(ids)) {
@@ -3688,6 +3705,11 @@ export class GroupCallManager extends EventEmitter {
       }
     }
     this.watchedQortalGroupNumericIds = next;
+    loggerLog(
+      `[GCall] Updated watched Qortal group ids count=${next.size} ids=${Array.from(
+        next
+      ).join(',')}`
+    );
     // Do not prune Reticulum liveness by watch list: hints may arrive before groups load
     // or while watch is briefly []; TTL sweep in flush drops stale entries.
     this.scheduleQortalGroupCallActivityEmit(true);
@@ -3810,25 +3832,34 @@ export class GroupCallManager extends EventEmitter {
       const roomId = `gcall-qortal-${id}`;
       const gid = String(id);
       const local = this.rooms.get(roomId);
+      const reticulumAt = this.spectatorReticulumLivenessAt.get(roomId);
+      const hasFreshReticulumActivity =
+        reticulumAt !== undefined &&
+        now - reticulumAt <= GC_RETICULUM_ACTIVITY_MAX_AGE_MS;
+      const reticulumCount = hasFreshReticulumActivity
+        ? this.spectatorReticulumParticipantCount.get(roomId)
+        : undefined;
+      const reticulumMax = hasFreshReticulumActivity
+        ? this.spectatorReticulumMaxParticipants.get(roomId)
+        : undefined;
       if (local && local.participants.size > 0) {
         activeByGroupId[gid] = true;
-        participantCountByGroupId[gid] = local.participants.size;
-        maxParticipantsByGroupId[gid] = MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
+        participantCountByGroupId[gid] = Math.max(
+          local.participants.size,
+          reticulumCount && reticulumCount > 0 ? reticulumCount : 0
+        );
+        maxParticipantsByGroupId[gid] =
+          reticulumMax && reticulumMax > 0
+            ? reticulumMax
+            : MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
         continue;
       }
-      const reticulumAt = this.spectatorReticulumLivenessAt.get(roomId);
-      if (
-        reticulumAt !== undefined &&
-        now - reticulumAt <= GC_RETICULUM_ACTIVITY_MAX_AGE_MS
-      ) {
+      if (hasFreshReticulumActivity) {
         activeByGroupId[gid] = true;
-        const count = this.spectatorReticulumParticipantCount.get(roomId);
-        if (count && count > 0) {
-          participantCountByGroupId[gid] = count;
+        if (reticulumCount && reticulumCount > 0) {
+          participantCountByGroupId[gid] = reticulumCount;
         }
-        const max =
-          this.spectatorReticulumMaxParticipants.get(roomId) ??
-          MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
+        const max = reticulumMax ?? MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
         if (max > 0) {
           maxParticipantsByGroupId[gid] = max;
         }

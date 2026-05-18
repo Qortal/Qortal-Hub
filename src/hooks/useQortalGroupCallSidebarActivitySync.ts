@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   memberGroupsAtom,
@@ -14,6 +14,8 @@ import {
  */
 export function useQortalGroupCallSidebarActivitySync(): void {
   const groups = useAtomValue(memberGroupsAtom);
+  const [presenceTransportReadyTick, setPresenceTransportReadyTick] =
+    useState(0);
   const setMeshCallActive = useSetAtom(qortalGroupMeshCallActiveAtom);
   const setMeshCallParticipantCount = useSetAtom(
     qortalGroupMeshCallParticipantCountAtom
@@ -33,6 +35,15 @@ export function useQortalGroupCallSidebarActivitySync(): void {
     out.sort((a, b) => a - b);
     return out;
   }, [groups]);
+
+  useEffect(() => {
+    const unsub = window.presence?.onStarted?.(() => {
+      setPresenceTransportReadyTick((tick) => tick + 1);
+    });
+    return () => {
+      unsub?.();
+    };
+  }, []);
 
   useEffect(() => {
     const api = window.groupCall;
@@ -81,6 +92,7 @@ export function useQortalGroupCallSidebarActivitySync(): void {
       cancelled = true;
     };
   }, [
+    presenceTransportReadyTick,
     setMeshCallActive,
     setMeshCallMaxParticipants,
     setMeshCallParticipantCount,
