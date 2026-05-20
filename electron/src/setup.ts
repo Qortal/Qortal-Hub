@@ -1220,7 +1220,7 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
       });
     }
 
-    if (isInstalled) return;
+    if (isInstalled) return true;
     const wc = event.sender;
 
     const sendProgress = (p) => {
@@ -1228,7 +1228,16 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
     };
     const running = await installCore(sendProgress);
     return running;
-  } catch (error) {}
+  } catch (error) {
+    console.error('Failed to install Qortal Core:', error);
+    broadcastProgress({
+      step: 'downloadedCore',
+      status: 'error',
+      progress: 0,
+      message: '010',
+    });
+    return false;
+  }
 });
 
 ipcMain.handle('coreSetup:startCore', async () => {

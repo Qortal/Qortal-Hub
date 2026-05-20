@@ -595,15 +595,37 @@ export const CoreSetup = () => {
           setOpen(false);
           setStartCoreSetupAtIntro(false);
         }}
-        onAction={() => {
+        onAction={async () => {
           if (!window?.coreSetup) return;
-          if (isCoreRunningState) {
-            setOpen(false);
-            setStartCoreSetupAtIntro(false);
-          } else if (isCoreInstalledState) {
-            window.coreSetup.startCore();
-          } else {
-            window.coreSetup.installCore();
+          try {
+            if (isCoreRunningState) {
+              setOpen(false);
+              setStartCoreSetupAtIntro(false);
+            } else if (isCoreInstalledState) {
+              await window.coreSetup.startCore();
+            } else {
+              const started = await window.coreSetup.installCore();
+              if (started === false) {
+                setStatuses((prev) => ({
+                  ...prev,
+                  downloadedCore: {
+                    status: 'error',
+                    progress: 0,
+                    message: '010',
+                  },
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Core setup action failed:', error);
+            setStatuses((prev) => ({
+              ...prev,
+              downloadedCore: {
+                status: 'error',
+                progress: 0,
+                message: '010',
+              },
+            }));
           }
         }}
         steps={statuses}

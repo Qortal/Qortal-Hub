@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import syncedImg from '../assets/syncStatus/synced.webp';
 import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
 import syncingImg from '../assets/syncStatus/syncing.webp';
-import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
-import { useAtom } from 'jotai';
-import { nodeInfosAtom } from '../atoms/global';
+import { useAtomValue } from 'jotai';
+import { nodeInfosAtom, selectedNodeInfoAtom } from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
-import { isLocalNodeUrl } from '../constants/constants';
+import {
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
+} from '../constants/constants';
 
 export const CoreSyncStatus = ({
   renderIcon,
@@ -19,10 +21,11 @@ export const CoreSyncStatus = ({
   renderIcon?: React.ReactNode;
   useExternalTooltip?: boolean;
 }) => {
-  const [nodeInfos] = useAtom(nodeInfosAtom);
+  const nodeInfos = useAtomValue(nodeInfosAtom);
+  const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const [coreInfos, setCoreInfos] = useState({});
 
-  const [nodeBase, setNodeBase] = useState(getBaseApiReact());
+  const nodeBase = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
   const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
   const { t } = useTranslation([
     'auth',
@@ -34,9 +37,10 @@ export const CoreSyncStatus = ({
   const theme = useTheme();
 
   useEffect(() => {
+    let canceled = false;
     const getCoreInfos = async () => {
       try {
-        const url = `${getBaseApiReact()}/admin/info`;
+        const url = `${nodeBase}/admin/info`;
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -44,20 +48,29 @@ export const CoreSyncStatus = ({
           },
         });
         const data = await response.json();
-        setCoreInfos(data);
+        if (!canceled) {
+          setCoreInfos(data);
+        }
       } catch (error) {
         console.error('Request failed', error);
+        if (!canceled) {
+          setCoreInfos({});
+        }
       }
     };
 
+    setCoreInfos({});
     getCoreInfos();
 
     const interval = setInterval(() => {
       getCoreInfos();
     }, 30000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      canceled = true;
+      clearInterval(interval);
+    };
+  }, [nodeBase]);
 
   const renderSyncStatusIcon = () => {
     const {

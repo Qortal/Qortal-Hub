@@ -1825,13 +1825,12 @@ export async function downloadCoreWindows() {
 
 export async function installCore(executeProgress) {
   executeProgress();
-  return new Promise(async (res, rej) => {
-    if (process.platform === 'win32') {
-      await downloadCoreWindows();
-    } else {
-      await javaversion();
-    }
-  });
+  if (process.platform === 'win32') {
+    await downloadCoreWindows();
+  } else {
+    await javaversion();
+  }
+  return true;
 }
 
 export async function startCore() {

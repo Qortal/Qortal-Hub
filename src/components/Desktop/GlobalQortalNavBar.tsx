@@ -3,15 +3,18 @@ import { Box, ButtonBase, IconButton, InputBase, Tooltip, useTheme } from '@mui/
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { extractComponents } from '../Chat/MessageDisplay';
 import {
+  infoSnackGlobalAtom,
   navigationControllerAtom,
+  openSnackGlobalAtom,
   txListAtom,
   userInfoAtom,
 } from '../../atoms/global';
@@ -88,7 +91,9 @@ export function GlobalQortalNavBar({
   const navigationController = useAtomValue(navigationControllerAtom);
   const txList = useAtomValue(txListAtom);
   const userInfo = useAtomValue(userInfoAtom);
-  const { t } = useTranslation(['core']);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
+  const { t } = useTranslation(['core', 'question']);
   const [selectedTab, setSelectedTab] = useState<SelectedTab>(null);
   const [inputValue, setInputValue] = useState('');
   const [isInputHovered, setIsInputHovered] = useState(false);
@@ -220,6 +225,50 @@ export function GlobalQortalNavBar({
     });
     executeEvent('open-apps-mode', {});
   }, [inputValue]);
+
+  const canCopyCurrentLink = Boolean(currentLink);
+  const handleCopyCurrentLink = useCallback(() => {
+    if (!currentLink) return;
+    if (!navigator.clipboard?.writeText) {
+      setInfoSnackGlobal({
+        compact: true,
+        duration: 3200,
+        message: t('question:message.error.copy_clipboard', {
+          defaultValue: 'Failed to copy to clipboard',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        type: 'error',
+      });
+      setOpenSnackGlobal(true);
+      return;
+    }
+    navigator.clipboard
+      .writeText(currentLink)
+      .then(() => {
+        setInfoSnackGlobal({
+          compact: true,
+          duration: 3000,
+          message: t('core:message.generic.link_copied', {
+            defaultValue: 'Link copied to clipboard.',
+          }),
+          type: 'success',
+        });
+        setOpenSnackGlobal(true);
+      })
+      .catch((error) => {
+        console.error('Failed to copy link:', error);
+        setInfoSnackGlobal({
+          compact: true,
+          duration: 3200,
+          message: t('question:message.error.copy_clipboard', {
+            defaultValue: 'Failed to copy to clipboard',
+            postProcess: 'capitalizeFirstChar',
+          }),
+          type: 'error',
+        });
+        setOpenSnackGlobal(true);
+      });
+  }, [currentLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
 
   const isInternalTabSelected = selectedTab?.service === INTERNAL_TAB_SERVICE;
   const canGoBack =
@@ -745,14 +794,72 @@ export function GlobalQortalNavBar({
             sx={{
               alignItems: 'center',
               display: 'flex',
-              flex: '0 0 26px',
+              flex: '0 0 58px',
+              gap: 0.75,
               height: 26,
-              justifyContent: 'center',
-              maxWidth: 26,
-              minWidth: 26,
-              width: 26,
+              justifyContent: 'flex-end',
+              maxWidth: 58,
+              minWidth: 58,
+              width: 58,
             }}
           >
+            <Tooltip
+              title={tooltipTitle(t('core:action.copy_link'))}
+              placement="bottom"
+              arrow
+              slotProps={tooltipSlotProps}
+            >
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  visibility: canCopyCurrentLink ? 'visible' : 'hidden',
+                }}
+              >
+                <ButtonBase
+                  disableRipple
+                  aria-label={t('core:action.copy_link')}
+                  onClick={handleCopyCurrentLink}
+                  tabIndex={canCopyCurrentLink ? 0 : -1}
+                  sx={{
+                    alignItems: 'center',
+                    borderRadius: '8px',
+                    color: theme.palette.text.secondary,
+                    display: 'flex',
+                    flexShrink: 0,
+                    height: 26,
+                    justifyContent: 'center',
+                    minWidth: 26,
+                    transition:
+                      'background-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                    width: 26,
+                    '&:hover': {
+                      backgroundColor: buttonHoverBackground,
+                      color: theme.palette.text.primary,
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                      boxShadow: 'none',
+                    },
+                    '&:focus-visible': {
+                      outline: `1px solid ${theme.palette.primary.main}`,
+                      outlineOffset: '2px',
+                    },
+                  }}
+                >
+                  <ContentCopyRoundedIcon
+                    sx={{
+                      display: 'block',
+                      flexShrink: 0,
+                      fontSize: 15,
+                    }}
+                  />
+                </ButtonBase>
+              </Box>
+            </Tooltip>
+
             <ButtonBase
               disableRipple
               onClick={handleOpenInput}

@@ -20,6 +20,7 @@ import {
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
   isOpenSettingUpLocalCoreAtom,
+  isOpenSyncingDialogAtom,
   isOpenUrlInvalidAtom,
   isPublicNodeUnavailableAtom,
   isRunningPublicNodeAtom,
@@ -62,6 +63,7 @@ export const useAuth = () => {
   const actions = useModalGlobal({ setGlobalOpen: setIsOpenSettingUpCore });
 
   const setIsOpenCoreSetup = useSetAtom(isOpenCoreSetup);
+  const setIsOpenSyncingDialog = useSetAtom(isOpenSyncingDialogAtom);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
   const setWalletToBeDecryptedError = useSetAtom(walletToBeDecryptedErrorAtom);
@@ -298,7 +300,10 @@ export const useAuth = () => {
 
   const isNodeValid = useCallback(async (): Promise<boolean> => {
     try {
-      if (useLocalNode) {
+      const currentSelectedNode = store.get(selectedNodeInfoAtom);
+      const isCurrentLocalNode = isLocalNodeUrl(currentSelectedNode?.url);
+
+      if (isCurrentLocalNode) {
         const payload = {
           apikey: '',
           url: getDefaultLocalNodeUrl(),
@@ -312,7 +317,7 @@ export const useAuth = () => {
           return false;
         }
       } else {
-        const payload = selectedNode;
+        const payload = currentSelectedNode;
         if (!payload) return false;
         const { isValid, validatedNodeInfo } = await validateApiKey(payload);
 
@@ -326,7 +331,7 @@ export const useAuth = () => {
     } catch (error) {
       return false;
     }
-  }, [useLocalNode, validateApiKey, selectedNode, handleSaveNodeInfo]);
+  }, [store, validateApiKey, handleSaveNodeInfo]);
 
   const balanceSetInterval = useCallback(() => {
     try {
@@ -386,7 +391,8 @@ export const useAuth = () => {
 
   const isSyncedLocal = useCallback(async () => {
     try {
-      if (!useLocalNode) return true;
+      const currentSelectedNode = store.get(selectedNodeInfoAtom);
+      if (!isLocalNodeUrl(currentSelectedNode?.url)) return true;
       const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
@@ -394,14 +400,14 @@ export const useAuth = () => {
         if (enableAuthWhenSyncing) {
           return true;
         }
-        setIsOpenCoreSetup(true);
+        setIsOpenSyncingDialog(true);
         return false;
       }
       return true;
     } catch (error) {
       return false;
     }
-  }, [useLocalNode, setIsOpenCoreSetup, enableAuthWhenSyncing]);
+  }, [store, setIsOpenSyncingDialog, enableAuthWhenSyncing]);
 
   const authenticate = useCallback(
     async (skipToPublic?: boolean, skipLocalCheck?: boolean) => {

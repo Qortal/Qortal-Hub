@@ -163,7 +163,10 @@ export const NotPartAdminListBox = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.spacing(0.5),
+  maxHeight: 'min(420px, calc(100vh - 340px))',
   maxWidth: 420,
-  overflow: 'hidden',
+  minHeight: 0,
+  overflowX: 'hidden',
+  overflowY: 'auto',
   width: '100%',
 }));

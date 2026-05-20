@@ -175,7 +175,7 @@ const TabComponent = ({
         color: isVisuallySelected
           ? selectedTabTextColor
           : theme.palette.text.secondary,
-        cursor: interactionLockRef.current || isDragging ? 'grabbing' : 'grab',
+        cursor: 'default',
         opacity: isEntering ? 0 : 1,
         ...dndStyle,
         transform: `${dndStyle.transform || ''}${isEntering ? ' scale(0.96)' : ''}`.trim(),

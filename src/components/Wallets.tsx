@@ -36,7 +36,7 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
 import { getWallets, storeWallets, walletVersion } from '../background/background.ts';
-import { getPrimaryNameForAvatar } from './Group/groupApi';
+import { getPrimaryNamesForAddresses } from './Group/groupApi';
 import { getBaseApiReactForAvatar } from '../App';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
 import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
@@ -103,8 +103,6 @@ export const Wallets = ({
   >({});
   const [walletEntrySearchOpen, setWalletEntrySearchOpen] = useState(false);
   const [walletEntryFilterQuery, setWalletEntryFilterQuery] = useState('');
-  const fetchingAddressesRef = useRef<Set<string>>(new Set());
-  const observerRef = useRef<IntersectionObserver | null>(null);
   const accountsScrollRef = useRef<HTMLDivElement | null>(null);
   /** True while reordering wallets; dragover hits header/footer/etc. unless we listen on document */
   const walletReorderDragActiveRef = useRef(false);
@@ -202,47 +200,46 @@ export const Wallets = ({
     [onImportViewChange]
   );
 
-  useEffect(() => {
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          const el = entry.target as HTMLElement;
-          const address = el.getAttribute('data-address');
-          if (!address || fetchingAddressesRef.current.has(address)) return;
-          fetchingAddressesRef.current.add(address);
-
-          getPrimaryNameForAvatar(address)
-            .then((name) => {
-              if (name) {
-                setPrimaryNamesByAddress((prev) =>
-                  prev[address] === undefined ? { ...prev, [address]: name } : prev
-                );
-              }
-            })
-            .catch(() => {})
-            .finally(() => {
-              fetchingAddressesRef.current.delete(address);
-              observerRef.current?.unobserve(el);
-            });
-        });
-      },
-      { rootMargin: '100px', threshold: 0.01 }
-    );
-
-    return () => {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-    };
-  }, []);
+  const walletAddressKey = useMemo(() => {
+    return wallets
+      .map((wallet) => wallet?.address0)
+      .filter(Boolean)
+      .join('|');
+  }, [wallets]);
+  const walletAddresses = useMemo(
+    () => (walletAddressKey ? walletAddressKey.split('|') : []),
+    [walletAddressKey]
+  );
 
   const registerCardRef = useCallback((address: string) => {
     return (el: HTMLElement | null) => {
       if (!el) return;
       el.setAttribute('data-address', address);
-      observerRef.current?.observe(el);
     };
   }, []);
+
+  useEffect(() => {
+    if (walletAddresses.length === 0) {
+      setPrimaryNamesByAddress({});
+      return;
+    }
+
+    let canceled = false;
+
+    getPrimaryNamesForAddresses(walletAddresses)
+      .then((namesByAddress) => {
+        if (!canceled) {
+          setPrimaryNamesByAddress(namesByAddress);
+        }
+      })
+      .catch((error) => {
+        console.error('Unable to fetch wallet primary names:', error);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [walletAddresses]);
 
   const persistWallets = useCallback(async (nextWallets: any[]) => {
     setWallets(nextWallets);
