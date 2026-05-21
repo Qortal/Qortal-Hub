@@ -28,6 +28,7 @@ import {
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
+  bootstrapOrClearChainAndStart,
   customQortalInstalledDir,
   dbExists,
   deleteDB,
@@ -179,6 +180,80 @@ const defaultDomains = [
 const domainHolder = {
   allowedDomains: [...defaultDomains],
 };
+
+/** Same path layout as `getSharedSettingsFilePath('wallet-storage.json')` (preload `walletStorage`). */
+function getWalletStorageJsonPathSync(): string {
+  return path.join(app.getPath('appData'), 'qortal-hub', 'wallet-storage.json');
+}
+
+function readCustomNodeUrlsFromWalletStorageFile(): string[] {
+  try {
+    const filePath = getWalletStorageJsonPathSync();
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw) as { customNodes?: unknown };
+    const nodes = data?.customNodes;
+    if (!Array.isArray(nodes)) return [];
+    return nodes
+      .map((n: { url?: unknown }) =>
+        typeof n?.url === 'string' ? n.url.trim() : ''
+      )
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function mergeUserDomainsIntoAllowlist(domains: string[]): string[] {
+  const validatedUserDomains = domains
+    .flatMap((domain) => {
+      try {
+        const url = new URL(domain);
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        return [url.origin, socketUrl];
+      } catch {
+        return [];
+      }
+    })
+    .filter(Boolean) as string[];
+
+  return [...new Set([...defaultDomains, ...validatedUserDomains])];
+}
+
+function applyAllowedDomainsFromUserUrls(
+  domains: string[],
+  options: { reloadWindow: boolean }
+): void {
+  if (!Array.isArray(domains)) {
+    return;
+  }
+  const newAllowedDomains = mergeUserDomainsIntoAllowlist(domains);
+  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
+  const sortedNewDomains = [...newAllowedDomains].sort();
+  const hasChanged =
+    sortedCurrentDomains.length !== sortedNewDomains.length ||
+    sortedCurrentDomains.some(
+      (domain, index) => domain !== sortedNewDomains[index]
+    );
+
+  if (hasChanged) {
+    domainHolder.allowedDomains = newAllowedDomains;
+
+    if (options.reloadWindow) {
+      const mainWindow = myCapacitorApp.getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.reload();
+      }
+    }
+  }
+}
+
+/** Apply custom node URLs from wallet storage before the web app loads (no window reload). */
+export function loadPersistedAllowedDomainsAtStartup(): void {
+  const urls = readCustomNodeUrlsFromWalletStorageFile();
+  applyAllowedDomainsFromUserUrls(urls, { reloadWindow: false });
+}
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
   debouncer: null,
@@ -514,6 +589,12 @@ export class ElectronCapacitorApp {
       },
     });
     this.mainWindowState.manage(this.MainWindow);
+    this.MainWindow.on('maximize', () => {
+      this.MainWindow?.webContents.send('window:state-changed', true);
+    });
+    this.MainWindow.on('unmaximize', () => {
+      this.MainWindow?.webContents.send('window:state-changed', false);
+    });
 
     // Allow microphone access for voice calls.
     const summarizeMediaPermissionDetails = (
@@ -740,6 +821,7 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         customScheme,
         ...new Set(expandedDomains),
       ];
+
       const frameSources = [
         "'self'",
         'http://localhost:*',
@@ -836,45 +918,7 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   if (!Array.isArray(domains)) {
     return;
   }
-  // Validate and transform user-provided domains
-  const validatedUserDomains = domains
-    .flatMap((domain) => {
-      try {
-        const url = new URL(domain);
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-        return [url.origin, socketUrl];
-      } catch {
-        return [];
-      }
-    })
-    .filter(Boolean) as string[];
-
-  // Combine default and validated user domains
-  const newAllowedDomains = [
-    ...new Set([...defaultDomains, ...validatedUserDomains]),
-  ];
-
-  // Sort both current allowed domains and new domains for comparison
-  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
-  const sortedNewDomains = [...newAllowedDomains].sort();
-
-  // Check if the lists are different
-  const hasChanged =
-    sortedCurrentDomains.length !== sortedNewDomains.length ||
-    sortedCurrentDomains.some(
-      (domain, index) => domain !== sortedNewDomains[index]
-    );
-
-  // If there's a change, update allowedDomains and reload the window
-  if (hasChanged) {
-    domainHolder.allowedDomains = newAllowedDomains;
-
-    const mainWindow = myCapacitorApp.getMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.reload();
-    }
-  }
+  applyAllowedDomainsFromUserUrls(domains, { reloadWindow: true });
 });
 
 // Custom title bar: window controls (minimize, maximize, close)
@@ -1005,6 +1049,168 @@ export async function getSharedSettingsFilePath(
   return path.join(dir, fileName);
 }
 
+// Persistent store: shared across instances via atomic writes to appData/qortal-hub/
+// Uses write-file-atomic to prevent partial writes corrupting the file.
+// On set/delete: read-from-disk → merge → atomic write, so concurrent instances
+// never overwrite each other's keys (only a simultaneous write of the *same* key
+// by two instances at the exact same moment could still race, which is acceptable).
+const PERSISTENT_STORE_FILENAME = 'qortal-persistent-store.json';
+const MISC_PERSISTENT_STORE_FILENAME = 'misc-persist.json';
+
+function parsePersistentStoreRaw(raw: string): Record<string, unknown> {
+  const trimmed = raw?.trim() ?? '';
+  if (trimmed === '') return {};
+  try {
+    return (JSON.parse(trimmed) as Record<string, unknown>) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function createPersistentJsonStore(fileName: string, label: string) {
+  let cache: Record<string, unknown> | null = null;
+  let loadedFromDisk = false;
+
+  const getFilePath = (): string => {
+    const dir = path.join(app.getPath('appData'), 'qortal-hub');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, fileName);
+  };
+
+  const readFromDisk = async (): Promise<Record<string, unknown>> => {
+    try {
+      const filePath = getFilePath();
+      const stats = await fs.promises.stat(filePath).catch(() => null);
+      if (!stats?.isFile()) return {};
+      const raw = await fs.promises.readFile(filePath, 'utf-8');
+      return parsePersistentStoreRaw(raw);
+    } catch (err) {
+      loggerError(`Error reading ${label} from disk`, err);
+      return {};
+    }
+  };
+
+  const load = async (): Promise<Record<string, unknown>> => {
+    if (cache !== null) return cache;
+    const data = await readFromDisk();
+    const hadData = Object.keys(data).length > 0;
+    cache = data;
+    if (hadData) loadedFromDisk = true;
+    return cache;
+  };
+
+  const flush = (): void => {
+    if (cache === null) return;
+    if (!loadedFromDisk && Object.keys(cache).length === 0) {
+      return;
+    }
+    try {
+      const filePath = getFilePath();
+      let onDisk: Record<string, unknown> = {};
+      if (fs.existsSync(filePath)) {
+        try {
+          onDisk = parsePersistentStoreRaw(fs.readFileSync(filePath, 'utf-8'));
+        } catch (_) {
+          onDisk = {};
+        }
+      }
+      const merged = { ...onDisk, ...cache };
+      writeFileAtomic.sync(filePath, JSON.stringify(merged, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error flushing ${label}`, err);
+    }
+  };
+
+  const get = async (key: string): Promise<unknown> => {
+    const store = await load();
+    return store[key];
+  };
+
+  const set = async (key: string, value: unknown): Promise<void> => {
+    // Read-merge-write: fetch fresh disk state, merge the new key, write atomically.
+    // This ensures concurrent instances don't clobber each other's unrelated keys.
+    const onDisk = await readFromDisk();
+    onDisk[key] = value;
+    try {
+      const filePath = getFilePath();
+      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error writing ${label} (set)`, err);
+    }
+    if (cache === null) cache = {};
+    cache[key] = value;
+    loadedFromDisk = true;
+  };
+
+  const deleteKey = async (key: string): Promise<void> => {
+    // Read-merge-write: fetch fresh disk state, remove the key, write atomically.
+    const onDisk = await readFromDisk();
+    delete onDisk[key];
+    try {
+      const filePath = getFilePath();
+      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error writing ${label} (delete)`, err);
+    }
+    if (cache !== null) delete cache[key];
+  };
+
+  return { deleteKey, flush, get, set };
+}
+
+const persistentStore = createPersistentJsonStore(
+  PERSISTENT_STORE_FILENAME,
+  'persistent store'
+);
+const miscPersistentStore = createPersistentJsonStore(
+  MISC_PERSISTENT_STORE_FILENAME,
+  'misc persistent store'
+);
+
+export function flushPersistentStore(): void {
+  persistentStore.flush();
+}
+
+export function flushMiscPersistentStore(): void {
+  miscPersistentStore.flush();
+}
+
+ipcMain.handle('persistentStore:get', async (_event, key: string) =>
+  persistentStore.get(key)
+);
+
+ipcMain.handle(
+  'persistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    await persistentStore.set(key, value);
+  }
+);
+
+ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
+  await persistentStore.deleteKey(key);
+});
+
+ipcMain.handle('miscPersistentStore:get', async (_event, key: string) =>
+  miscPersistentStore.get(key)
+);
+
+ipcMain.handle(
+  'miscPersistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    await miscPersistentStore.set(key, value);
+  }
+);
+
+ipcMain.handle('miscPersistentStore:delete', async (_event, key: string) => {
+  await miscPersistentStore.deleteKey(key);
+});
+
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray preference
 const APP_SETTINGS_FILENAME = 'app-settings.json';
 
@@ -1104,7 +1310,6 @@ ipcMain.handle(
 // On set/delete: read-from-disk → merge → atomic write, so concurrent instances
 // never overwrite each other's keys (only a simultaneous write of the *same* key
 // by two instances at the exact same moment could still race, which is acceptable).
-const PERSISTENT_STORE_FILENAME = 'qortal-persistent-store.json';
 
 let persistentStoreCache: Record<string, unknown> | null = null;
 let persistentStoreLoadedFromDisk = false;
@@ -1113,16 +1318,6 @@ function getPersistentStoreFilePath(): string {
   const dir = path.join(app.getPath('appData'), 'qortal-hub');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, PERSISTENT_STORE_FILENAME);
-}
-
-function parsePersistentStoreRaw(raw: string): Record<string, unknown> {
-  const trimmed = raw?.trim() ?? '';
-  if (trimmed === '') return {};
-  try {
-    return (JSON.parse(trimmed) as Record<string, unknown>) || {};
-  } catch (_) {
-    return {};
-  }
 }
 
 async function readPersistentStoreFromDisk(): Promise<Record<string, unknown>> {
@@ -1146,77 +1341,6 @@ async function loadPersistentStore(): Promise<Record<string, unknown>> {
   if (hadData) persistentStoreLoadedFromDisk = true;
   return persistentStoreCache;
 }
-
-export function flushPersistentStore(): void {
-  if (persistentStoreCache === null) return;
-  if (
-    !persistentStoreLoadedFromDisk &&
-    Object.keys(persistentStoreCache).length === 0
-  ) {
-    return;
-  }
-  try {
-    const filePath = getPersistentStoreFilePath();
-    // Read current on-disk state, merge our cache on top, write atomically (sync).
-    let onDisk: Record<string, unknown> = {};
-    if (fs.existsSync(filePath)) {
-      try {
-        onDisk = parsePersistentStoreRaw(fs.readFileSync(filePath, 'utf-8'));
-      } catch (_) {
-        onDisk = {};
-      }
-    }
-    const merged = { ...onDisk, ...persistentStoreCache };
-    writeFileAtomic.sync(filePath, JSON.stringify(merged, null, 2), {
-      encoding: 'utf8',
-    });
-  } catch (err) {
-    loggerError('Error flushing persistent store', err);
-  }
-}
-
-ipcMain.handle('persistentStore:get', async (_event, key: string) => {
-  const store = await loadPersistentStore();
-  return store[key];
-});
-
-ipcMain.handle(
-  'persistentStore:set',
-  async (_event, key: string, value: unknown) => {
-    // Read-merge-write: fetch fresh disk state, merge the new key, write atomically.
-    // This ensures concurrent instances don't clobber each other's unrelated keys.
-    const onDisk = await readPersistentStoreFromDisk();
-    onDisk[key] = value;
-    try {
-      const filePath = getPersistentStoreFilePath();
-      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
-        encoding: 'utf8',
-      });
-    } catch (err) {
-      loggerError('Error writing persistent store (set)', err);
-    }
-    // Keep local cache in sync.
-    if (persistentStoreCache === null) persistentStoreCache = {};
-    persistentStoreCache[key] = value;
-    persistentStoreLoadedFromDisk = true;
-  }
-);
-
-ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
-  // Read-merge-write: fetch fresh disk state, remove the key, write atomically.
-  const onDisk = await readPersistentStoreFromDisk();
-  delete onDisk[key];
-  try {
-    const filePath = getPersistentStoreFilePath();
-    await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
-      encoding: 'utf8',
-    });
-  } catch (err) {
-    loggerError('Error writing persistent store (delete)', err);
-  }
-  // Keep local cache in sync.
-  if (persistentStoreCache !== null) delete persistentStoreCache[key];
-});
 
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray
 ipcMain.handle('appSettings:get', async () => {
@@ -1594,7 +1718,7 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
       });
     }
 
-    if (isInstalled) return;
+    if (isInstalled) return true;
     const wc = event.sender;
 
     const sendProgress = (p) => {
@@ -1602,7 +1726,16 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
     };
     const running = await installCore(sendProgress);
     return running;
-  } catch (error) {}
+  } catch (error) {
+    console.error('Failed to install Qortal Core:', error);
+    broadcastProgress({
+      step: 'downloadedCore',
+      status: 'error',
+      progress: 0,
+      message: '010',
+    });
+    return false;
+  }
 });
 
 ipcMain.handle('coreSetup:startCore', async () => {
@@ -1679,6 +1812,14 @@ ipcMain.handle('coreSetup:bootstrap', async () => {
   }
 });
 
+ipcMain.handle('coreSetup:bootstrapOrClearChainAndStart', async () => {
+  try {
+    return await bootstrapOrClearChainAndStart();
+  } catch (error) {
+    loggerError('error', error);
+  }
+});
+
 ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
   try {
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -1690,11 +1831,9 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
     if (isInstalled) {
       const filePath = await getSharedSettingsFilePath('wallet-storage.json');
 
-      const stats = await fs.promises.stat(filePath).catch(() => null);
-      if (!stats || !stats.isFile()) return null;
-
-      const raw = await fs.promises.readFile(filePath, 'utf-8');
-
+      const raw = await fs.promises
+        .readFile(filePath, 'utf-8')
+        .catch(() => null);
       const data = raw ? JSON.parse(raw) : {};
       data['qortalDirectory'] = dir;
       await fs.promises.writeFile(
@@ -1705,7 +1844,7 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
       broadcastProgress({
         type: 'hasCustomPath',
         hasCustomPath: true,
-        customPath: filePath,
+        customPath: dir,
       });
     } else return false;
   } catch (error) {

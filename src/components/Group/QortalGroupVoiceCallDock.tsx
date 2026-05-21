@@ -31,6 +31,7 @@ import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { useTranslation } from 'react-i18next';
 import {
   qortalGroupVoiceCallMinimizedAtom,
+  qortalGroupCallPrimaryNamesAtom,
   userInfoAtom,
 } from '../../atoms/global';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
@@ -52,6 +53,7 @@ export function QortalGroupVoiceCallDock() {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const userInfo = useAtomValue(userInfoAtom);
+  const qcallPrimaryNames = useAtomValue(qortalGroupCallPrimaryNamesAtom);
   const [minimized, setMinimized] = useAtom(qortalGroupVoiceCallMinimizedAtom);
   const {
     roomState,
@@ -138,22 +140,6 @@ export function QortalGroupVoiceCallDock() {
     setMuted(!muted);
   }, [muted, setMuted]);
 
-  const participantDisplayLabel = useCallback(
-    (address: string, isSelf: boolean) => {
-      const fromList = memberPrimaryNames[address]?.trim();
-      if (fromList) return fromList;
-      if (isSelf) {
-        const un = userInfo?.name?.trim?.();
-        if (un) return un;
-        return t('core:group_call_you', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      }
-      return shortAddr(address);
-    },
-    [memberPrimaryNames, userInfo?.name, t]
-  );
-
   const sortedTiles = useMemo(() => {
     const my = userInfo?.address ?? '';
     const list = [...participants];
@@ -164,6 +150,29 @@ export function QortalGroupVoiceCallDock() {
     });
     return list;
   }, [participants, userInfo?.address]);
+  const displayPrimaryNames = useMemo(
+    () => ({
+      ...memberPrimaryNames,
+      ...qcallPrimaryNames,
+    }),
+    [memberPrimaryNames, qcallPrimaryNames]
+  );
+
+  const participantDisplayLabel = useCallback(
+    (address: string, isSelf: boolean) => {
+      const fromList = displayPrimaryNames[address]?.trim();
+      if (fromList) return fromList;
+      if (isSelf) {
+        const un = userInfo?.name?.trim?.();
+        if (un) return un;
+        return t('core:group_call_you', {
+          postProcess: 'capitalizeFirstChar',
+        });
+      }
+      return shortAddr(address);
+    },
+    [displayPrimaryNames, userInfo?.name, t]
+  );
 
   if (!minimized || !active) return null;
 
@@ -310,12 +319,12 @@ export function QortalGroupVoiceCallDock() {
           const regName = registeredNameForAvatar(
             p.address,
             self,
-            memberPrimaryNames,
+            displayPrimaryNames,
             userInfo?.name
           );
           const rowAvatarSrc = qortalAvatarThumbnailSrc(regName);
           const hasFriendlyDisplayName =
-            Boolean(memberPrimaryNames[p.address]?.trim()) ||
+            Boolean(displayPrimaryNames[p.address]?.trim()) ||
             (self && Boolean(userInfo?.name?.trim()));
           const rowInitials = hasFriendlyDisplayName
             ? initialsFromDisplayLabel(displayName, p.address)

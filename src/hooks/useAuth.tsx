@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   getDefaultLocalNodeUrl,
+  EXT_NODE_QORTAL_LINK,
+  HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
-import { isLocalPrivateHttpsUrl } from '../utils/helpers';
+import { isLocalPrivateHttpsUrl, ensureElectronCertIfLocalPrivateHttps } from '../utils/helpers';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
   authenticatePasswordAtom,
@@ -14,12 +17,13 @@ import {
   extStateAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
-  isOpenDialogCoreRecommendationAtom,
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
   isOpenSettingUpLocalCoreAtom,
   isOpenSyncingDialogAtom,
   isOpenUrlInvalidAtom,
+  isPublicNodeUnavailableAtom,
+  isRunningPublicNodeAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -33,26 +37,39 @@ import {
 } from '../background/background-cases';
 import { ApiKey } from '../types/auth';
 import { useModalGlobal } from './useModalGlobal';
+import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
+const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
+const ADMIN_STATUS_FETCH_TIMEOUT_MS = 5000;
+
+function isLocalCoreStatusSynced(status: any) {
+  const syncPercent = Number(status?.syncPercent);
+  return (
+    Number.isFinite(syncPercent) && syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
+  );
+}
+
+function isGatewayNode(nodeInfo?: ApiKey | null) {
+  return !nodeInfo?.url || nodeInfo.url.includes(EXT_NODE_QORTAL_LINK);
+}
 
 export const useAuth = () => {
   const setIsOpenResetApikey = useSetAtom(isOpenDialogResetApikey);
   const setIsOpenCustomApikeyDialog = useSetAtom(isOpenDialogCustomApikey);
   const setBalance = useSetAtom(balanceAtom);
   const setQortBalanceLoading = useSetAtom(qortBalanceLoadingAtom);
-  const setIsOpenRecommendation = useSetAtom(
-    isOpenDialogCoreRecommendationAtom
-  );
   const setIsOpenSettingUpCore = useSetAtom(isOpenSettingUpLocalCoreAtom);
   const actions = useModalGlobal({ setGlobalOpen: setIsOpenSettingUpCore });
-  const setIsOpenSyncingDialog = useSetAtom(isOpenSyncingDialogAtom);
 
   const setIsOpenCoreSetup = useSetAtom(isOpenCoreSetup);
+  const setIsOpenSyncingDialog = useSetAtom(isOpenSyncingDialogAtom);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
   const setWalletToBeDecryptedError = useSetAtom(walletToBeDecryptedErrorAtom);
   const setIsUrlInvalid = useSetAtom(isOpenUrlInvalidAtom);
+  const setPublicNodeUnavailable = useSetAtom(isPublicNodeUnavailableAtom);
+  const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
@@ -121,8 +138,7 @@ export const useAuth = () => {
             ? await window.coreSetup.isCoreRunning()
             : await checkIfLocalIsRunning(baseUrl);
           if (!runningRes && !disablePopup) {
-            setIsOpenCoreSetup(false);
-            setIsOpenRecommendation(true);
+            setIsOpenCoreSetup(true);
             return { isValid: false, validatedNodeInfo };
           }
           if (isLocal && isElectron && !disablePopup) {
@@ -145,7 +161,18 @@ export const useAuth = () => {
         if (!isLocal) {
           let isUrlGood = true;
           try {
-            const resUrlCheck = await fetch(`${baseUrl}/admin/status`);
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => {
+              controller.abort();
+            }, ADMIN_STATUS_FETCH_TIMEOUT_MS);
+            let resUrlCheck: Response;
+            try {
+              resUrlCheck = await fetch(`${baseUrl}/admin/status`, {
+                signal: controller.signal,
+              });
+            } finally {
+              window.clearTimeout(timeoutId);
+            }
             if (!resUrlCheck.ok) {
               isUrlGood = false;
             }
@@ -155,9 +182,18 @@ export const useAuth = () => {
 
           if (!isUrlGood) {
             if (!disablePopup) {
-              setIsUrlInvalid(true);
+              if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
+                setPublicNodeUnavailable(true);
+                setIsOpenCoreSetup(true);
+              } else {
+                setIsUrlInvalid(true);
+              }
             }
             return { isValid: false, validatedNodeInfo };
+          }
+
+          if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
+            setPublicNodeUnavailable(false);
           }
         }
 
@@ -198,17 +234,13 @@ export const useAuth = () => {
           setLocalApiKeyNotElectronCase(validatedNodeInfo.apikey);
         }
 
-        if (isValid && isElectron && isLocalPrivateHttps) {
-          try {
-            const result = await window.electronAPI?.ensureCertForBase?.(
-              validatedNodeInfo?.url,
-              validatedNodeInfo?.apikey ?? ''
-            );
-            if (!result?.success) {
-              throw new Error('Failed to ensure cert for base');
-            }
-          } catch (err) {
-            throw new Error('Failed to ensure cert for base');
+        if (isValid && isElectron) {
+          const cert = await ensureElectronCertIfLocalPrivateHttps(
+            validatedNodeInfo?.url,
+            validatedNodeInfo?.apikey ?? ''
+          );
+          if (!cert.success) {
+            throw new Error(cert.error || 'Failed to ensure cert for base');
           }
         }
 
@@ -219,12 +251,12 @@ export const useAuth = () => {
     },
     [
       setIsOpenCustomApikeyDialog,
-      setIsOpenRecommendation,
       setIsOpenResetApikey,
       checkIfLocalIsRunning,
       generateApiKey,
       setIsOpenCoreSetup,
       setIsUrlInvalid,
+      setPublicNodeUnavailable,
     ]
   );
 
@@ -248,18 +280,30 @@ export const useAuth = () => {
 
   const handleSaveNodeInfo = useCallback(
     async (nodeInfo) => {
-      await window.sendMessage('setApiKey', nodeInfo);
-      if (nodeInfo) {
-        setSelectedNode(nodeInfo);
+      const nextNodeInfo =
+        nodeInfo || {
+          url: HTTPS_EXT_NODE_QORTAL_LINK,
+          apikey: '',
+        };
+
+      await window.sendMessage('setApiKey', nextNodeInfo);
+      setSelectedNode(nextNodeInfo);
+      handleSetGlobalApikey(nextNodeInfo);
+      try {
+        setIsRunningPublicNode(isGatewayNode(nextNodeInfo));
+      } catch (error) {
+        console.error(error);
       }
-      handleSetGlobalApikey(nodeInfo);
     },
-    [setSelectedNode]
+    [setIsRunningPublicNode, setSelectedNode]
   );
 
   const isNodeValid = useCallback(async (): Promise<boolean> => {
     try {
-      if (useLocalNode) {
+      const currentSelectedNode = store.get(selectedNodeInfoAtom);
+      const isCurrentLocalNode = isLocalNodeUrl(currentSelectedNode?.url);
+
+      if (isCurrentLocalNode) {
         const payload = {
           apikey: '',
           url: getDefaultLocalNodeUrl(),
@@ -273,7 +317,7 @@ export const useAuth = () => {
           return false;
         }
       } else {
-        const payload = selectedNode;
+        const payload = currentSelectedNode;
         if (!payload) return false;
         const { isValid, validatedNodeInfo } = await validateApiKey(payload);
 
@@ -287,7 +331,7 @@ export const useAuth = () => {
     } catch (error) {
       return false;
     }
-  }, [useLocalNode, validateApiKey, selectedNode, handleSaveNodeInfo]);
+  }, [store, validateApiKey, handleSaveNodeInfo]);
 
   const balanceSetInterval = useCallback(() => {
     try {
@@ -347,11 +391,15 @@ export const useAuth = () => {
 
   const isSyncedLocal = useCallback(async () => {
     try {
-      if (!useLocalNode) return true;
-      const res = await fetch(getDefaultLocalNodeUrl() + '/admin/status');
+      const currentSelectedNode = store.get(selectedNodeInfoAtom);
+      if (!isLocalNodeUrl(currentSelectedNode?.url)) return true;
+      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
-      if (data?.syncPercent !== 100) {
+      if (!isLocalCoreStatusSynced(data)) {
+        if (enableAuthWhenSyncing) {
+          return true;
+        }
         setIsOpenSyncingDialog(true);
         return false;
       }
@@ -359,7 +407,7 @@ export const useAuth = () => {
     } catch (error) {
       return false;
     }
-  }, [useLocalNode, setIsOpenSyncingDialog, enableAuthWhenSyncing]);
+  }, [store, setIsOpenSyncingDialog, enableAuthWhenSyncing]);
 
   const authenticate = useCallback(
     async (skipToPublic?: boolean, skipLocalCheck?: boolean) => {
@@ -420,11 +468,12 @@ export const useAuth = () => {
               });
           } else if (response?.error) {
             setIsLoading(false);
-            setWalletToBeDecryptedError(response.error);
+            setWalletToBeDecryptedError(getWalletErrorMessage(response.error));
           }
         })
         .catch((error) => {
           setIsLoading(false);
+          setWalletToBeDecryptedError(getWalletErrorMessage(error));
           console.error('Failed to decrypt wallet:', error);
         });
     },

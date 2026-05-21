@@ -5,7 +5,7 @@ import {
   atomWithStorage,
   useAtomCallback,
 } from 'jotai/utils';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { HTTPS_EXT_NODE_QORTAL_LINK } from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
@@ -13,6 +13,7 @@ import { LOCALHOST } from '../constants/constants';
 import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
+import type { QuitterDashboardFeedCache } from '../components/Widgets/quitter/quitterFeedTypes';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 
@@ -47,6 +48,7 @@ export const isUsingImportExportSettingsAtom = atomWithReset(null);
 export const memberGroupsAtom = atomWithReset([]);
 export const mutedGroupsAtom = atomWithReset([]);
 export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
+
 export const navigationControllerAtom = atomWithReset({});
 export const oldPinnedAppsAtom = atomWithReset([]);
 export const promotionsAtom = atomWithReset([]);
@@ -74,6 +76,11 @@ export type JoinRequestsCache = {
 export const joinRequestsCacheAtom = atom<JoinRequestsCache>(
   null
 ) as PrimitiveAtom<JoinRequestsCache>;
+
+/** Quitter home-dashboard widget feed. Reset on logout. Prefer useAtom only in QuitterFeedWidget. */
+export const quitterDashboardFeedCacheAtom =
+  atomWithReset<QuitterDashboardFeedCache | null>(null);
+
 export const qMailLastEnteredTimestampAtom = atomWithReset(null);
 export const resourceDownloadControllerAtom = atomWithReset({});
 export const globalDownloadsAtom = atomWithReset<
@@ -83,6 +90,9 @@ export const selectedGroupIdAtom = atomWithReset(null);
 export const settingsLocalLastUpdatedAtom = atomWithReset(0);
 export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
+
+// When in Electron, use appStorage-backed persistence; otherwise Jotai uses localStorage (undefined = default).
+const electronStorage = getElectronPersistentStorage();
 
 /** Persisted: true = chat widget is closed (hidden). Reopen via right sidebar. */
 export const chatWidgetClosedAtom = atomWithStorage<boolean>(
@@ -96,6 +106,30 @@ export const globalChatWidgetBoundsAtom = atomWithStorage<{
   width: number;
   height: number;
 } | null>('qortal_chat_widget_bounds', null, undefined, { getOnInit: true });
+
+/** Persisted: default microphone / speaker for 1v1 and group voice calls (`null` = OS default). */
+export const CALL_AUDIO_DEVICES_STORAGE_KEY = 'qortal_call_audio_devices';
+export type CallAudioDevicePrefs = {
+  inputDeviceId: string | null;
+  inputDeviceLabel?: string | null;
+  inputDeviceGroupId?: string | null;
+  outputDeviceId: string | null;
+  outputDeviceLabel?: string | null;
+  outputDeviceGroupId?: string | null;
+};
+export const callAudioDevicesAtom = atomWithStorage<CallAudioDevicePrefs>(
+  CALL_AUDIO_DEVICES_STORAGE_KEY,
+  { inputDeviceId: null, outputDeviceId: null },
+  electronStorage as any
+);
+
+/** Persisted: DM friends (see dmFriendsByAccountAtom / dmFriendsByAddressAtom). */
+export const DM_FRIENDS_STORAGE_KEY = 'qortal_dm_friends';
+export type DmFriendStored = {
+  publicKey: string;
+  name?: string;
+  addedAt: number;
+};
 
 /** Persisted: custom websocket notification subscriptions. Sent as a second subscribe action when the notifications socket connects. */
 export type CustomWebsocketSubscription = {
@@ -116,46 +150,21 @@ export type CustomWebsocketSubscription = {
   message?: Record<string, string>;
   [key: string]: unknown;
 };
-// When in Electron, use appStorage-backed persistence; otherwise Jotai uses localStorage (undefined = default).
-const electronStorage = getElectronPersistentStorage();
 
 /** Persisted: custom WS subscriptions per user address (key: qortal_custom_ws_subscriptions). */
-export const CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY = 'qortal_custom_ws_subscriptions';
+export const CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY =
+  'qortal_custom_ws_subscriptions';
 export const customWebsocketSubscriptionsByAddressAtom = atomWithStorage<
   Record<string, CustomWebsocketSubscription[]>
->(
-  CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY,
-  {},
-  electronStorage as any
-);
-
-/** Persisted: default microphone / speaker for 1v1 and group voice calls (`null` = OS default). */
-export const CALL_AUDIO_DEVICES_STORAGE_KEY = 'qortal_call_audio_devices';
-export type CallAudioDevicePrefs = {
-  inputDeviceId: string | null;
-  outputDeviceId: string | null;
-};
-export const callAudioDevicesAtom = atomWithStorage<CallAudioDevicePrefs>(
-  CALL_AUDIO_DEVICES_STORAGE_KEY,
-  { inputDeviceId: null, outputDeviceId: null },
-  electronStorage as any
-);
-
-/** Persisted: DM friends (see dmFriendsByAccountAtom / dmFriendsByAddressAtom). */
-export const DM_FRIENDS_STORAGE_KEY = 'qortal_dm_friends';
-export type DmFriendStored = {
-  publicKey: string;
-  name?: string;
-  addedAt: number;
-};
+>(CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY, {}, electronStorage as any);
 
 /** Persisted: keys of notifications already "seen in app" (excluded from unread count), by address then notification key. Keys older than this are pruned. */
 export const NOTIFICATION_SEEN_IN_APP_STORAGE_KEY =
   'qortal_notification_seen_in_app';
 const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
-/** Internal: per-address record of notificationKey -> addedAt (ms). Pruned to last 3 days when read/set. */
-type SeenInAppKeyRecord = Record<string, number>;
+/** Per-address record of notificationKey -> mark time (ms). Pruned to last 3 days when read/set. */
+export type SeenInAppKeyRecord = Record<string, number>;
 /** Stored shape: address -> notificationKey -> timestamp. */
 export type SeenInAppRecordByAddress = Record<string, SeenInAppKeyRecord>;
 
@@ -192,7 +201,9 @@ function filterSeenInAppKeyRecordByAge(
 ): SeenInAppKeyRecord {
   const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
   return Object.fromEntries(
-    Object.entries(record).filter(([, t]) => typeof t === 'number' && t > cutoff)
+    Object.entries(record).filter(
+      ([, t]) => typeof t === 'number' && t > cutoff
+    )
   );
 }
 
@@ -231,10 +242,7 @@ const seenInAppStorage = {
     const record = parseSeenInAppStored(raw);
     return filterSeenInAppRecordByAge(record);
   },
-  setItem: (
-    key: string,
-    value: string | SeenInAppRecordByAddress
-  ): void => {
+  setItem: (key: string, value: string | SeenInAppRecordByAddress): void => {
     const record =
       typeof value === 'string' ? parseSeenInAppStored(value) : value;
     const pruned = filterSeenInAppRecordByAge(record);
@@ -268,8 +276,9 @@ export const notificationSeenInAppKeysAtom = atom(
       get(userInfoAtom)?.address
     ),
   (get, set, update: string[] | { address: string; keys: string[] }) => {
-    const full =
-      get(notificationSeenInAppKeysRecordAtom) as SeenInAppRecordByAddress;
+    const full = get(
+      notificationSeenInAppKeysRecordAtom
+    ) as SeenInAppRecordByAddress;
     const address =
       typeof update === 'object' && update !== null && 'address' in update
         ? (update as { address: string; keys: string[] }).address
@@ -288,6 +297,60 @@ export const notificationSeenInAppKeysAtom = atom(
   }
 );
 
+/** Current user: seen-in-app key → mark time (ms). Same ageing as notificationSeenInAppKeysAtom. */
+export const notificationSeenInAppKeyTimesAtom = atom((get) => {
+  const byAddress = get(
+    notificationSeenInAppKeysRecordAtom
+  ) as SeenInAppRecordByAddress;
+  const address = get(userInfoAtom)?.address;
+  if (!address) return {} as SeenInAppKeyRecord;
+  return filterSeenInAppKeyRecordByAge(byAddress[address] ?? {});
+});
+
+/** Same field order as GeneralNotifications getNotificationTimestamp (for prefix cutoff). */
+export function getNotificationSeenComparableTimeMs(notification: {
+  data?: { created?: unknown; timestamp?: unknown };
+  timestamp?: unknown;
+}): number | null {
+  const raw =
+    notification?.data?.created ??
+    notification?.data?.timestamp ??
+    notification?.timestamp;
+  if (raw == null || typeof raw !== 'number') return null;
+  return raw < 1e12 ? raw * 1000 : raw;
+}
+
+/**
+ * Full key: that exact notification is seen. Prefix key: seen only if resource time ≤ persisted mark time
+ * (so new items after mark stay unread).
+ */
+export function isNotificationSeenInAppFromKeyTimes(
+  notification: {
+    event?: string;
+    data?: {
+      signature?: string;
+      identifier?: string;
+      created?: unknown;
+      timestamp?: unknown;
+    };
+    appName?: string;
+    appService?: string;
+    notificationId?: string;
+    timestamp?: unknown;
+  },
+  seenInAppByKey: SeenInAppKeyRecord | null | undefined
+): boolean {
+  if (!seenInAppByKey || Object.keys(seenInAppByKey).length === 0) return false;
+  const fullKey = getNotificationSeenKey(notification);
+  if (typeof seenInAppByKey[fullKey] === 'number') return true;
+  const prefixKey = getNotificationSeenPrefixKey(notification);
+  const markedAt = seenInAppByKey[prefixKey];
+  if (typeof markedAt !== 'number') return false;
+  const notifTs = getNotificationSeenComparableTimeMs(notification);
+  if (notifTs == null) return false;
+  return notifTs <= markedAt;
+}
+
 /** Stable key for a notification (for "seen in app" matching). */
 export function getNotificationSeenKey(notification: {
   event?: string;
@@ -304,9 +367,7 @@ export function getNotificationSeenKey(notification: {
     const appService = notification?.appService ?? 'APP';
     const notificationId = notification?.notificationId ?? '';
     const id =
-      notification?.data?.identifier ??
-      notification?.data?.created ??
-      '';
+      notification?.data?.identifier ?? notification?.data?.created ?? '';
     return `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}-${id}`;
   }
   return `other-${notification?.event ?? ''}-${Date.now()}`;
@@ -358,15 +419,16 @@ export function filterSeenInAppKeysByRules(
 export const txListAtom = atomWithReset([]);
 
 /** Notifications per user address (in-memory only; repopulated from WebSocket). */
-export const notificationsByAddressAtom = atomWithReset<Record<string, any[]>>({});
+export const notificationsByAddressAtom = atomWithReset<Record<string, any[]>>(
+  {}
+);
 
 /** Persisted: timestamp when user last "saw all" notifications, per address (Electron: appStorage). */
-export const SEEN_ALL_NOTIFICATIONS_STORAGE_KEY = 'qortal_seen_all_notifications';
-export const seenAllNotificationsByAddressAtom = atomWithStorage<Record<string, number | null>>(
-  SEEN_ALL_NOTIFICATIONS_STORAGE_KEY,
-  {},
-  electronStorage as any
-);
+export const SEEN_ALL_NOTIFICATIONS_STORAGE_KEY =
+  'qortal_seen_all_notifications';
+export const seenAllNotificationsByAddressAtom = atomWithStorage<
+  Record<string, number | null>
+>(SEEN_ALL_NOTIFICATIONS_STORAGE_KEY, {}, electronStorage as any);
 
 /** Groups the current user is a member of – refreshed every 5 minutes. */
 export const myMemberGroupsAtom = atomWithReset<any[]>([]);
@@ -381,7 +443,8 @@ export const managedSubscriptionsAtom = atomWithReset<any[]>([]);
 export const subscriptionsLoadingAtom = atomWithReset<boolean>(false);
 /** Whether the global managed subscription fetch is currently in progress. */
 export const managedSubscriptionsLoadingAtom = atomWithReset<boolean>(false);
-export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
+
+export const isPublicNodeUnavailableAtom = atomWithReset(false);
 export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');
 export const extStateAtom = atomWithReset<extStates>('not-authenticated');
@@ -514,13 +577,22 @@ export const customWebsocketSubscriptionsAtom = atom(
     if (!address) return [];
     return (byAddress[address] ?? []) as CustomWebsocketSubscription[];
   },
-  (get, set, update: CustomWebsocketSubscription[] | ((prev: CustomWebsocketSubscription[]) => CustomWebsocketSubscription[])) => {
+  (
+    get,
+    set,
+    update:
+      | CustomWebsocketSubscription[]
+      | ((prev: CustomWebsocketSubscription[]) => CustomWebsocketSubscription[])
+  ) => {
     const byAddress = get(customWebsocketSubscriptionsByAddressAtom);
     const address = get(userInfoAtom)?.address;
     if (!address) return;
     const prev = (byAddress[address] ?? []) as CustomWebsocketSubscription[];
     const next = typeof update === 'function' ? update(prev) : update;
-    set(customWebsocketSubscriptionsByAddressAtom, { ...byAddress, [address]: next });
+    set(customWebsocketSubscriptionsByAddressAtom, {
+      ...byAddress,
+      [address]: next,
+    });
   }
 );
 
@@ -558,6 +630,10 @@ export const lastPaymentSeenTimestampAtom = atom(
   }
 );
 
+export const notificationSeenInAppKeysByAddressAtom = atomWithStorage<
+  Record<string, Record<string, number>>
+>('qortal_notification_seen_in_app_by_address', {});
+
 export const rawWalletAtom = atomWithReset<any>(null);
 export const walletToBeDecryptedErrorAtom = atomWithReset<string>('');
 export const balanceAtom = atomWithReset<any>(null);
@@ -575,7 +651,7 @@ export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
 export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>({
-  url: HTTP_LOCALHOST_12391,
+  url: HTTPS_EXT_NODE_QORTAL_LINK,
   apikey: '',
 });
 export const statusesAtom = atomWithReset<Steps>({
@@ -604,6 +680,9 @@ export const infoSnackGlobalAtom = atomWithReset<{
   message?: string;
   type?: string;
   duration?: number | null;
+  compact?: boolean;
+  dismissible?: boolean;
+  sourceId?: string;
 } | null>(null);
 
 // Tutorial state (reduces context re-renders for tutorial UI)
@@ -748,3 +827,6 @@ export const qortalGroupMeshCallMaxParticipantsAtom = atom<
 
 /** Local user's active Qortal group call room id (`gcall-qortal-<n>`), or null. */
 export const qortalGroupSelfGcallRoomIdAtom = atom<string | null>(null);
+
+/** UI-only address → primaryName cache for active Qortal group call participants. */
+export const qortalGroupCallPrimaryNamesAtom = atom<Record<string, string>>({});

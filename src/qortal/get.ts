@@ -122,6 +122,7 @@ import i18n from 'i18next';
 import aesjs from 'aes-js';
 import { roundUpToDecimals } from '../utils/numberFunctions.ts';
 import { normalizeFilename } from '../utils/downloadFromLocation.ts';
+import { getElectronPersistentStorage } from '../utils/electronPersistentStorage.ts';
 
 const uid = new ShortUniqueId({ length: 6 });
 
@@ -444,8 +445,6 @@ function getFileFromContentScript(fileId) {
 }
 
 const responseResolvers = new Map();
-
-/** Resolvers for the custom notification-permission slide-down UI (key: requestId) */
 const notificationPermissionResolvers = new Map();
 
 const handleMessage = (event) => {
@@ -459,9 +458,7 @@ const handleMessage = (event) => {
     // Resolve the stored promise with the result
     responseResolvers.get(requestId)(result || false);
     responseResolvers.delete(requestId); // Clean up after resolving
-  }
-
-  if (
+  } else if (
     action === 'NOTIFICATION_PERMISSION_RESPONSE' &&
     notificationPermissionResolvers.has(requestId)
   ) {
@@ -591,18 +588,14 @@ export const getUserAccount = async ({
   }
 };
 
-export const getNotificationPermission = async ({
-  isFromExtension,
-  appInfo,
-  skipAuth,
-}) => {
+export const getNotificationPermission = async ({ appInfo, skipAuth }) => {
   try {
-    const value =
-      (await getPermission(getNotificationPermissionKey(appInfo?.name))) || false;
-    let skip = false;
-    if (value) skip = true;
-    if (skipAuth) skip = true;
+    const stored =
+      (await getPermission(getNotificationPermissionKey(appInfo?.name))) ||
+      false;
+    let skip = !!stored || !!skipAuth;
     let hadSessionPermissions = false;
+
     if (
       appInfo?.tabId &&
       appInfo?.name &&
@@ -621,18 +614,17 @@ export const getNotificationPermission = async ({
       resPermission = await new Promise((resolve) => {
         const requestId = `notificationPermission_${Date.now()}`;
         notificationPermissionResolvers.set(requestId, resolve);
-        const payload = {
-          text1: i18n.t('question:permission.notification', {
-            defaultValue: 'Allow this app to send you Hub notifications?',
-            postProcess: 'capitalizeFirstChar',
-          }),
-        };
         window.postMessage(
           {
             action: 'NOTIFICATION_PERMISSION_REQUEST',
             requestId,
             appInfo,
-            payload,
+            payload: {
+              text1: i18n.t('question:permission.notification', {
+                defaultValue: 'Allow this app to send you Hub notifications?',
+                postProcess: 'capitalizeFirstChar',
+              }),
+            },
           },
           window.location.origin
         );
@@ -656,13 +648,12 @@ export const getNotificationPermission = async ({
         ]);
       }
       return true;
-    } else {
-      throw new Error(
-        i18n.t('question:message.generic.user_declined_request', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
     }
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   } catch (error) {
     throw new Error(
       error?.message ||
@@ -673,11 +664,6 @@ export const getNotificationPermission = async ({
   }
 };
 
-/**
- * Read-only: whether the app has Hub notification permission (stored grant and/or
- * current session), without showing a permission prompt. Matches what NOTIFICATION_ADD
- * requires (session) plus persistent grant from a prior NOTIFICATION_PERMISSION accept.
- */
 export const notificationHasPermission = async ({
   appInfo,
   skipAuth,
@@ -5422,8 +5408,7 @@ function getStoredSeenInAppRecord(): Record<string, Record<string, number>> {
   }
   if (raw == null) return {};
   try {
-    const parsed: unknown =
-      typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {};
     }

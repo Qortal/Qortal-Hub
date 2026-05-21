@@ -29,10 +29,12 @@ import {
   myMemberGroupsLastFetchedAtom,
   mySubscriptionsAtom,
   navigationControllerAtom,
+  notificationsByAddressAtom,
   oldPinnedAppsAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
   qMailLastEnteredTimestampAtom,
+  quitterDashboardFeedCacheAtom,
   resourceDownloadControllerAtom,
   selectedGroupIdAtom,
   settingsLocalLastUpdatedAtom,
@@ -43,6 +45,7 @@ import {
   txListAtom,
   isUsingImportExportSettingsAtom,
 } from '../atoms/global';
+import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   appCategoryFilterAtom,
   appSearchQueryAtom,
@@ -113,6 +116,7 @@ export function useAppReset() {
   const resetAddressInfoControllerAtom = useResetAtom(addressInfoControllerAtom);
   const resetBlobControllerAtom = useResetAtom(blobControllerAtom);
   const resetNavigationControllerAtom = useResetAtom(navigationControllerAtom);
+  const resetNotificationsByAddressAtom = useResetAtom(notificationsByAddressAtom);
   const resetEnabledDevModeAtom = useResetAtom(enabledDevModeAtom);
   const resetFullScreenAtom = useResetAtom(fullScreenAtom);
   const resetHasSettingsChangedAtom = useResetAtom(hasSettingsChangedAtom);
@@ -123,6 +127,9 @@ export function useAppReset() {
   const resetPromotionsAtom = useResetAtom(promotionsAtom);
   const resetPromotionTimeIntervalAtom = useResetAtom(
     promotionTimeIntervalAtom
+  );
+  const resetQuitterDashboardFeedCacheAtom = useResetAtom(
+    quitterDashboardFeedCacheAtom
   );
 
   const resetAppSortAtom = useResetAtom(appSortAtom);
@@ -171,6 +178,7 @@ export function useAppReset() {
     resetAddressInfoControllerAtom();
     resetBlobControllerAtom();
     resetNavigationControllerAtom();
+    resetNotificationsByAddressAtom();
     resetEnabledDevModeAtom();
     resetFullScreenAtom();
     resetHasSettingsChangedAtom();
@@ -180,6 +188,7 @@ export function useAppReset() {
     resetSelectedGroupIdAtom();
     resetPromotionsAtom();
     resetPromotionTimeIntervalAtom();
+    resetQuitterDashboardFeedCacheAtom();
     resetAppSortAtom();
     resetAppCategoryFilterAtom();
     resetAppStatusFilterAtom();
@@ -218,6 +227,7 @@ export function useAppReset() {
     resetAddressInfoControllerAtom,
     resetBlobControllerAtom,
     resetNavigationControllerAtom,
+    resetNotificationsByAddressAtom,
     resetEnabledDevModeAtom,
     resetFullScreenAtom,
     resetHasSettingsChangedAtom,
@@ -227,6 +237,7 @@ export function useAppReset() {
     resetSelectedGroupIdAtom,
     resetPromotionsAtom,
     resetPromotionTimeIntervalAtom,
+    resetQuitterDashboardFeedCacheAtom,
     resetAppSortAtom,
     resetAppCategoryFilterAtom,
     resetAppStatusFilterAtom,

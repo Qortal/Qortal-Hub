@@ -1,4 +1,8 @@
 import { Theme } from '@mui/material/styles';
+import {
+  APP_BLUE_SURFACE_TEXT,
+  getBlueTier1ButtonSx,
+} from './blueMaterial';
 
 /**
  * Returns the common MuiCssBaseline global styles shared by both themes.
@@ -10,50 +14,66 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   html: {
+    backgroundColor: theme.palette.background.default,
     padding: 0,
     margin: 0,
   },
 
   body: {
+    backgroundColor: theme.palette.background.default,
+    color: theme.palette.text.primary,
+    fontSynthesis: 'none',
     padding: 0,
     margin: 0,
+    textRendering: 'geometricPrecision',
+    WebkitFontSmoothing: 'antialiased',
+    MozOsxFontSmoothing: 'grayscale',
     wordBreak: 'break-word',
   },
 
   '::-webkit-scrollbar-track': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+    backgroundColor: 'transparent',
   },
 
   '::-webkit-scrollbar-track:hover': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'transparent',
   },
 
   '::-webkit-scrollbar': {
-    width: '10px',
-    height: '10px',
+    width: '8px',
+    height: '8px',
   },
 
   '::-webkit-scrollbar-thumb': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.2)',
-    borderRadius: '5px',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.14)',
+    borderRadius: '999px',
     border: '2px solid transparent',
     backgroundClip: 'content-box',
     transition: 'background-color 0.2s ease',
   },
 
   '::-webkit-scrollbar-thumb:hover': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.3)',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.18)'
+        : 'rgba(0, 0, 0, 0.2)',
   },
 
   '::-webkit-scrollbar-thumb:active': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.4)',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.24)'
+        : 'rgba(0, 0, 0, 0.26)',
   },
 });
 
 // Extend the Theme interface
 const commonThemeOptions = {
   typography: {
-    fontFamily: ['Inter'].join(','),
+    fontFamily: ['Inter', 'Segoe UI', 'ui-sans-serif', 'system-ui', 'sans-serif'].join(','),
     h1: {
       fontSize: '2rem',
       fontWeight: 600,
@@ -113,10 +133,15 @@ const commonThemeOptions = {
     MuiButton: {
       styleOverrides: {
         root: {
-          transition: 'filter 0.3s ease-in-out',
+          transition:
+            'background 180ms ease, box-shadow 180ms ease, border-color 180ms ease, color 180ms ease, filter 180ms ease, transform 180ms ease',
           '&:hover': {
-            filter: 'brightness(1.1)',
+            filter: 'none',
           },
+        },
+        containedPrimary: {
+          ...getBlueTier1ButtonSx(),
+          color: APP_BLUE_SURFACE_TEXT,
         },
       },
       defaultProps: {

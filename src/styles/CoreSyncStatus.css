@@ -24,6 +24,7 @@
   transition: opacity 0.2s;
   visibility: hidden;
   z-index: 99999999;
+  pointer-events: none;
 }
 
 .tooltip[data-theme='light'] .core-panel {

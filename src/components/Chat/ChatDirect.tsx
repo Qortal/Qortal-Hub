@@ -72,7 +72,6 @@ import {
   MIN_REQUIRED_QORTS,
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import { useVoiceCallContext } from '../../context/VoiceCallContext';
 import { buildDirectVoiceCallChatId } from '../../lib/call/directVoiceCallChatId';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
@@ -96,8 +95,12 @@ const loadQchatCompletedTransfers = (address?: string) => {
       .filter(([, value]: any) => {
         const expiresAt = Number(value?.expiresAt || 0);
         const completedAt = Number(value?.completedAt || 0);
-        if (expiresAt) return expiresAt + QCHAT_FILE_COMPLETED_CACHE_GRACE_MS > now;
-        return !completedAt || completedAt + QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS > now;
+        if (expiresAt)
+          return expiresAt + QCHAT_FILE_COMPLETED_CACHE_GRACE_MS > now;
+        return (
+          !completedAt ||
+          completedAt + QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS > now
+        );
       })
       .slice(-5000);
     return Object.fromEntries(entries);
@@ -106,7 +109,10 @@ const loadQchatCompletedTransfers = (address?: string) => {
   }
 };
 
-const saveQchatCompletedTransfers = (address: string, records: Record<string, any>) => {
+const saveQchatCompletedTransfers = (
+  address: string,
+  records: Record<string, any>
+) => {
   if (!address || typeof window === 'undefined') return;
   try {
     const parsed = JSON.parse(
@@ -124,7 +130,10 @@ const saveQchatCompletedTransfers = (address: string, records: Record<string, an
 
 const getQchatFileTransferData = (message: any) => {
   if (message?.decryptedData?.type === 'qchat-dm-file-transfer') {
-    return { ...(message.decryptedData || {}), ...(message.decryptedData.data || {}) };
+    return {
+      ...(message.decryptedData || {}),
+      ...(message.decryptedData.data || {}),
+    };
   }
   if (message?.decryptedData?.data?.type === 'qchat-dm-file-transfer') {
     return {
@@ -199,8 +208,8 @@ export const ChatDirect = ({
 
   const callMatchesThisDirect = Boolean(
     directVoiceChatId &&
-      ((callState === 'calling' && activeCallChatId === directVoiceChatId) ||
-        (callState === 'connected' && activeCallChatId === directVoiceChatId))
+    ((callState === 'calling' && activeCallChatId === directVoiceChatId) ||
+      (callState === 'connected' && activeCallChatId === directVoiceChatId))
   );
 
   const signCallRequest = useCallback(
@@ -237,11 +246,7 @@ export const ChatDirect = ({
   );
 
   const handleStartDirectVoiceCall = useCallback(() => {
-    if (
-      !directVoiceChatId ||
-      !selectedDirect?.address ||
-      callState !== 'idle'
-    )
+    if (!directVoiceChatId || !selectedDirect?.address || callState !== 'idle')
       return;
     if (!peerOnline) return;
     initiateVoiceCall(
@@ -258,11 +263,16 @@ export const ChatDirect = ({
     signCallRequest,
   ]);
 
-  const fmtCallDuration = useCallback((secs: number): string => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  }, [myAddress]);
+  const fmtCallDuration = useCallback(
+    (secs: number): string => {
+      const m = Math.floor(secs / 60)
+        .toString()
+        .padStart(2, '0');
+      const s = (secs % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    },
+    [myAddress]
+  );
   const { t } = useTranslation([
     'auth',
     'core',
@@ -1047,7 +1057,8 @@ export const ChatDirect = ({
 
   const handleConfirmQchatFileOffer = useCallback(async () => {
     try {
-      if (isNewChat || !selectedDirect?.address || !pendingQchatFileOffer) return;
+      if (isNewChat || !selectedDirect?.address || !pendingQchatFileOffer)
+        return;
       if (isSending) return;
       const api = (window as any).electronAPI;
       if (!api?.qchatFileSend) {
@@ -1058,7 +1069,10 @@ export const ChatDirect = ({
       const transferId = `qft-${Date.now()}-${uid.rnd()}`;
       const expiryHours = Math.max(
         0.05,
-        Math.min(168, Number(qchatFileExpiryHours) || QCHAT_FILE_DEFAULT_EXPIRY_HOURS)
+        Math.min(
+          168,
+          Number(qchatFileExpiryHours) || QCHAT_FILE_DEFAULT_EXPIRY_HOURS
+        )
       );
       const expiresAt = Date.now() + expiryHours * 60 * 60 * 1000;
       outgoingQchatFileTransfersRef.current.set(transferId, {
@@ -1162,7 +1176,10 @@ export const ChatDirect = ({
         if (qchatCompletedTransfers[data.transferId]) {
           throw new Error('This file has already been downloaded');
         }
-        if (Number(data.expiresAt || 0) > 0 && Number(data.expiresAt) <= Date.now()) {
+        if (
+          Number(data.expiresAt || 0) > 0 &&
+          Number(data.expiresAt) <= Date.now()
+        ) {
           throw new Error('This file transfer offer has expired');
         }
         const senderAddress = data.senderAddress || message.sender;
@@ -1317,7 +1334,10 @@ export const ChatDirect = ({
                 : `Received ${payload.fileName || 'file'}`,
           });
           setOpenSnack(true);
-        } else if (payload.status === 'failed' || payload.status === 'rejected') {
+        } else if (
+          payload.status === 'failed' ||
+          payload.status === 'rejected'
+        ) {
           setInfoSnack({
             type: 'error',
             message: `File transfer failed: ${payload.reason || 'unknown error'}`,
@@ -1461,9 +1481,13 @@ export const ChatDirect = ({
     <Box
       style={{
         background: theme.palette.background.default,
+        boxSizing: 'border-box',
         display: 'flex',
+        flex: 1,
         flexDirection: 'column',
-        height: `calc(100vh - ${appHeighOffsetPx})`,
+        height: '100%',
+        minHeight: 0,
+        padding: '10px',
         width: '100%',
       }}
     >
@@ -1621,7 +1645,9 @@ export const ChatDirect = ({
                     )
                   }
                   onClick={
-                    callState === 'connected' ? hangUp : handleStartDirectVoiceCall
+                    callState === 'connected'
+                      ? hangUp
+                      : handleStartDirectVoiceCall
                   }
                   sx={{
                     color:
@@ -1999,7 +2025,9 @@ export const ChatDirect = ({
                 ? t('core:group_call_unmute', {
                     postProcess: 'capitalizeFirstChar',
                   })
-                : t('core:group_call_mute', { postProcess: 'capitalizeFirstChar' })
+                : t('core:group_call_mute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
             }
           >
             <IconButton
@@ -2061,20 +2089,31 @@ export const ChatDirect = ({
         </Box>
       )}
 
-      <ChatList
-        chatReferences={chatReferences}
-        handleReaction={handleReaction}
-        onEdit={onEdit}
-        onReply={onReply}
-        chatId={selectedDirect?.address}
-        initialMessages={messages}
-        myAddress={myAddress}
-        tempMessages={tempMessages}
-        tempChatReferences={tempChatReferences}
-        onAcceptQchatFileTransfer={handleAcceptQchatFileTransfer}
-        qchatFileTransferStates={qchatFileTransferStates}
-        qchatCompletedTransfers={qchatCompletedTransfers}
-      />
+      <Box
+        sx={{
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          minHeight: 0,
+          overflow: 'hidden',
+          width: '100%',
+        }}
+      >
+        <ChatList
+          chatReferences={chatReferences}
+          handleReaction={handleReaction}
+          onEdit={onEdit}
+          onReply={onReply}
+          chatId={selectedDirect?.address}
+          initialMessages={messages}
+          myAddress={myAddress}
+          tempMessages={tempMessages}
+          tempChatReferences={tempChatReferences}
+          onAcceptQchatFileTransfer={handleAcceptQchatFileTransfer}
+          qchatFileTransferStates={qchatFileTransferStates}
+          qchatCompletedTransfers={qchatCompletedTransfers}
+        />
+      </Box>
 
       <Dialog
         open={!!pendingQchatFileOffer}
@@ -2088,7 +2127,9 @@ export const ChatDirect = ({
             <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
               {pendingQchatFileOffer?.name || 'Selected file'}
             </Typography>
-            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+            >
               {Math.max(
                 1,
                 Math.ceil((pendingQchatFileOffer?.size || 0) / 1024)
@@ -2122,8 +2163,8 @@ export const ChatDirect = ({
         sx={{
           alignItems: 'flex-end',
           backgroundColor: theme.palette.background.default,
-          borderTop: '1px solid',
-          borderColor: 'divider',
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: '8px',
           bottom: isFocusedParent ? '0px' : 'unset',
           boxSizing: 'border-box',
           display: 'flex',

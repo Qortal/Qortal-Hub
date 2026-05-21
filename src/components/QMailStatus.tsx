@@ -1,134 +1,108 @@
+import { Mail } from '@mui/icons-material';
+import { ButtonBase, Tooltip, useTheme } from '@mui/material';
+import { useAtom, useAtomValue } from 'jotai';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  getNotificationSeenKey,
-  getNotificationSeenPrefixKey,
-  notificationSeenInAppKeysRecordAtom,
+  isNotificationSeenInAppFromKeyTimes,
+  notificationSeenInAppKeyTimesAtom,
   paymentNotificationsAtom,
   qMailLastEnteredTimestampAtom,
-  userInfoAtom,
 } from '../atoms/global';
-import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
-import { Mail } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
-import { useAtom, useAtomValue } from 'jotai';
 
-export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
-  const { t } = useTranslation([
-    'auth',
-    'core',
-    'group',
-    'question',
-    'tutorial',
-  ]);
+function toTimestampMs(value) {
+  if (value == null || typeof value !== 'number') return null;
+  return value < 1e12 ? value * 1000 : value;
+}
+
+export const QMailStatus = ({
+  compact = false,
+  buttonSx = undefined,
+  iconSx = undefined,
+  tooltipPlacement = undefined,
+}: {
+  compact?: boolean;
+  buttonSx?: any;
+  iconSx?: any;
+  tooltipPlacement?: 'bottom' | 'left' | 'right' | 'top';
+}) => {
+  const { t } = useTranslation(['core']);
   const theme = useTheme();
-
-  const [lastEnteredTimestamp, setLastEnteredTimestamp] = useAtom(
-    qMailLastEnteredTimestampAtom
-  );
+  const [, setLastEnteredTimestamp] = useAtom(qMailLastEnteredTimestampAtom);
   const notifications = useAtomValue(paymentNotificationsAtom);
-  const seenInAppRecord = useAtomValue(notificationSeenInAppKeysRecordAtom);
-
-  const address = useAtomValue(userInfoAtom)?.address;
-
-  const qMailNotifications = useMemo(
-    () =>
-      (notifications ?? []).filter(
-        (n) =>
-          n?.event === 'RESOURCE_PUBLISHED' &&
-          (n?.notificationId === 'q-mail-notification' ||
-            n?.appName === 'Q-Mail')
-      ),
-    [notifications]
-  );
+  const seenInAppKeyTimes = useAtomValue(notificationSeenInAppKeyTimesAtom);
 
   const hasNewMail = useMemo(() => {
-    const getNotificationTimestamp = (n) => {
-      const raw = n?.data?.created ?? n?.data?.timestamp ?? n?.timestamp;
-      const v = raw != null && typeof raw === 'number' ? raw : null;
-      if (v == null) return null;
-      return v < 1e12 ? v * 1000 : v;
-    };
-    const record: Record<
-      string,
-      Record<string, number>
-    > = typeof seenInAppRecord === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(seenInAppRecord);
-          } catch {
-            return {};
-          }
-        })()
-      : (seenInAppRecord ?? {});
-    const byAddress = (address && record[address]) ?? {};
-    const isUnseen = (n) => {
-      if (
-        n?.notificationId !== 'q-mail-notification' &&
-        n?.appName?.toLowerCase() !== 'q-mail'
-      ) {
-        return false;
-      }
-      const createdTs = getNotificationTimestamp(n);
-
-      if (createdTs == null) return false;
-      const key = getNotificationSeenKey(n);
-      const prefixKey = getNotificationSeenPrefixKey(n);
-      const seenTs = Math.max(
-        (byAddress[key] as number) ?? 0,
-        (byAddress[prefixKey] as number) ?? 0
+    return (notifications ?? []).some((notification) => {
+      const isQMail =
+        notification?.event === 'RESOURCE_PUBLISHED' &&
+        (notification?.notificationId === 'q-mail-notification' ||
+          notification?.appName === 'Q-Mail');
+      if (!isQMail) return false;
+      const timestamp = toTimestampMs(
+        notification?.data?.created ??
+          notification?.data?.timestamp ??
+          notification?.timestamp
       );
+      if (timestamp == null) return false;
+      return !isNotificationSeenInAppFromKeyTimes(
+        notification,
+        seenInAppKeyTimes
+      );
+    });
+  }, [notifications, seenInAppKeyTimes]);
 
-      return createdTs > seenTs;
-    };
-    return qMailNotifications.filter(isUnseen).length > 0;
-  }, [qMailNotifications, seenInAppRecord, address]);
-
-  const button = (
+  return (
     <ButtonBase
       onClick={() => {
         executeEvent('addTab', {
           data: {
-            service: 'APP',
             name: 'Q-Mail',
             navigateIfAlreadyOpen: true,
+            service: 'APP',
           },
         });
         executeEvent('open-apps-mode', {});
         setLastEnteredTimestamp(Date.now());
       }}
-      style={{
+      sx={{
         position: 'relative',
         ...(compact && {
-          width: 32,
-          height: 32,
-          display: 'flex',
           alignItems: 'center',
+          borderRadius: 1,
+          display: 'flex',
+          height: 32,
           justifyContent: 'center',
+          width: 32,
         }),
+        ...(buttonSx || {}),
       }}
     >
       {hasNewMail && (
-        <div
+        <span
           style={{
             backgroundColor: theme.palette.other.unread,
             borderRadius: '50%',
             height: compact ? '10px' : '15px',
             outline: '1px solid white',
             position: 'absolute',
-            ...(compact ? { right: 4, top: 4 } : { right: -7, top: -7 }),
+            right: compact ? 4 : -7,
+            top: compact ? 4 : -7,
             width: compact ? '10px' : '15px',
             zIndex: 1,
           }}
         />
       )}
       <Tooltip
+        arrow
+        placement={tooltipPlacement || (compact ? 'bottom' : 'left')}
         title={
           <span
             style={{
               color: theme.palette.text.primary,
               fontSize: '14px',
-              fontWeight: 700,
+              fontWeight: 600,
               textTransform: 'uppercase',
             }}
           >
@@ -137,18 +111,11 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
             })}
           </span>
         }
-        placement={compact ? 'bottom' : 'left'}
-        arrow
-        sx={{ fontSize: compact ? '20' : '24' }}
         slotProps={{
+          arrow: { sx: { color: theme.palette.background.paper } },
           tooltip: {
             sx: {
-              color: theme.palette.text.primary,
               backgroundColor: theme.palette.background.paper,
-            },
-          },
-          arrow: {
-            sx: {
               color: theme.palette.text.primary,
             },
           },
@@ -158,27 +125,10 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
           sx={{
             color: theme.palette.text.secondary,
             fontSize: compact ? 20 : undefined,
+            ...(iconSx || {}),
           }}
         />
       </Tooltip>
     </ButtonBase>
   );
-
-  if (compact) {
-    return (
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        {button}
-      </div>
-    );
-  }
-  return button;
 };

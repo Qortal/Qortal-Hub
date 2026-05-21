@@ -1,5 +1,6 @@
 export { AuthenticatedShell } from './AuthenticatedShell';
 export { SendQortOverlay } from './SendQortOverlay';
+export { ReceiveQortOverlay } from './ReceiveQortOverlay';
 export { SuccessOverlay } from './SuccessOverlay';
 export { SuccessScreen } from './SuccessScreen';
 export { WalletsView } from './WalletsView';

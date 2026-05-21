@@ -37,8 +37,8 @@ const ListOfMembers = ({
   setOpenSnack,
   isAdmin,
   isOwner,
-  ownerAddress,
   show,
+  ownerAddress,
 }) => {
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
@@ -403,7 +403,9 @@ const ListOfMembers = ({
                     invisible={!onlineAddresses.has(member?.member)}
                     sx={{
                       '& .MuiBadge-dot': {
-                        backgroundColor: statusDotColor(statusMap.get(member?.member) ?? null),
+                        backgroundColor: statusDotColor(
+                          statusMap.get(member?.member) ?? null
+                        ),
                         border: `2px solid ${theme.palette.background.paper}`,
                         borderRadius: '50%',
                         height: 10,

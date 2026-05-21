@@ -17,6 +17,7 @@ import { signChat } from '../transactions/signChat';
 import { createTransaction } from '../transactions/transactions';
 import { decryptChatMessage } from '../utils/decryptChatMessage';
 import { decryptStoredWallet } from '../utils/decryptWallet';
+import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
@@ -31,7 +32,6 @@ import {
   LOCALHOST_12391,
   MIN_REQUIRED_QORTS,
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
-  TIME_MINUTES_3_IN_MILLISECONDS,
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_WEEKS_1_IN_MILLISECONDS,
   TIME_MINUTES_6_IN_MILLISECONDS,
@@ -86,6 +86,7 @@ import {
   listActionsCase,
   ltcBalanceCase,
   makeAdminCase,
+  markAllMemberGroupsReadCase,
   nameCase,
   notifyAdminRegenerateSecretKeyCase,
   pauseAllQueuesCase,
@@ -104,6 +105,7 @@ import {
   setGroupDataCase,
   setupGroupWebsocketCase,
   updateThreadActivityCase,
+  updateNameCase,
   userInfoCase,
   validApiCase,
   versionCase,
@@ -143,15 +145,12 @@ export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 
-/** Payload for general-notification OS clicks (open q-app or wallets). Cleared after use or after 10s. */
 const generalNotificationPayloadById = new Map();
 
 function handleNotificationClick(notificationId) {
-  // Focus the app window when on Electron (e.g. after clicking an OS notification)
   if (typeof window?.electronAPI?.focusWindow === 'function') {
     window.electronAPI.focusWindow();
   }
-
   // Decode the notificationId if it was encoded
   const decodedNotificationId = decodeURIComponent(notificationId);
 
@@ -302,9 +301,9 @@ export const getCustomNodesFromStorage = async (): Promise<any | null> => {
 const getArbitraryEndpoint = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
   if (apiKey) {
-    return `/arbitrary/resources/searchsimple`;
+    return `/arbitrary/resources/search`;
   } else {
-    return `/arbitrary/resources/searchsimple`;
+    return `/arbitrary/resources/search`;
   }
 };
 
@@ -1403,7 +1402,7 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
 
     return true;
   } catch (error) {
-    throw new Error(error.message);
+    throw new Error(getWalletErrorMessage(error));
   }
 }
 
@@ -3110,6 +3109,45 @@ export async function addTimestampEnterChat({ groupId, timestamp }) {
   });
 }
 
+/** Marks every listed member group chat read (single read/write per store — avoids parallel races). */
+export async function markAllMemberGroupsRead(groupIds) {
+  if (!Array.isArray(groupIds) || groupIds.length === 0) {
+    return true;
+  }
+  const now = Date.now();
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const enterData = (await getTimestampEnterChat()) || {};
+  const announcementData = (await getTimestampGroupAnnouncement()) || {};
+
+  for (const groupId of groupIds) {
+    if (groupId == null || groupId === '') continue;
+    enterData[groupId] = now;
+    announcementData[groupId] = {
+      notification: now,
+      seentimestamp: true,
+    };
+  }
+
+  await new Promise((resolve, reject) => {
+    storeData(`enter-chat-timestamp-${address}`, enterData)
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || 'Error saving data'));
+      });
+  });
+
+  await new Promise((resolve, reject) => {
+    storeData(`group-announcement-${address}`, announcementData)
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || 'Error saving data'));
+      });
+  });
+
+  return true;
+}
+
 export async function addTimestampMention({ groupId, timestamp }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -3255,6 +3293,9 @@ function setupMessageListener() {
       case 'registerName':
         registerNameCase(request, event);
         break;
+      case 'updateName':
+        updateNameCase(request, event);
+        break;
       case 'createPoll':
         createPollCase(request, event);
         break;
@@ -3269,6 +3310,9 @@ function setupMessageListener() {
         break;
       case 'addTimestampEnterChat':
         addTimestampEnterChatCase(request, event);
+        break;
+      case 'markAllMemberGroupsRead':
+        markAllMemberGroupsReadCase(request, event);
         break;
       case 'setApiKey':
         setApiKeyCase(request, event);
@@ -3414,7 +3458,6 @@ function setupMessageListener() {
                 clearInterval(notificationCheckInterval);
                 notificationCheckInterval = null;
               }
-
               groupSecretkeys = {};
               const wallet = await getSaveWallet();
               const address = wallet.address0;
@@ -3639,22 +3682,20 @@ export const fireOsNotificationPayment = async (
       qortalLink ? { link: qortalLink } : { openWallets: true }
     );
 
-    const body = messageBody;
-
-    const osNotification = new window.Notification(title, {
-      body,
+    const notification = new window.Notification(title, {
+      body: messageBody,
       icon,
       data: { id: notificationId },
     });
 
-    osNotification.onclick = () => {
+    notification.onclick = () => {
       handleNotificationClick(notificationId);
-      osNotification.close();
+      notification.close();
     };
 
     setTimeout(() => {
       generalNotificationPayloadById.delete(notificationId);
-      osNotification.close();
+      notification.close();
     }, 10000);
   } catch (error) {
     console.error(error);

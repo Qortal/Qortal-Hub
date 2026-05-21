@@ -2,21 +2,30 @@ import { useEffect, useState } from 'react';
 import syncedImg from '../assets/syncStatus/synced.webp';
 import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
 import syncingImg from '../assets/syncStatus/syncing.webp';
-import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
-import { useAtom } from 'jotai';
-import { nodeInfosAtom } from '../atoms/global';
+import { useAtomValue } from 'jotai';
+import { nodeInfosAtom, selectedNodeInfoAtom } from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
-import { isLocalNodeUrl } from '../constants/constants';
 import { computeP2pHealth, type P2pHealthLevel } from '../lib/p2pHealth';
 
 export type { P2pHealthLevel };
+import {
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
+} from '../constants/constants';
 
-export const CoreSyncStatus = () => {
-  const [nodeInfos] = useAtom(nodeInfosAtom);
+export const CoreSyncStatus = ({
+  renderIcon,
+  useExternalTooltip = false,
+}: {
+  renderIcon?: React.ReactNode;
+  useExternalTooltip?: boolean;
+}) => {
+  const nodeInfos = useAtomValue(nodeInfosAtom);
+  const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const [coreInfos, setCoreInfos] = useState({});
   const [p2pActiveOverlayPeers, setP2pActiveOverlayPeers] = useState<
     number | null
@@ -26,7 +35,7 @@ export const CoreSyncStatus = () => {
   >(null);
   const [p2pHealth, setP2pHealth] = useState<P2pHealthLevel | null>(null);
 
-  const [nodeBase, setNodeBase] = useState(getBaseApiReact());
+  const nodeBase = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
   const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
   const { t } = useTranslation([
     'auth',
@@ -38,9 +47,10 @@ export const CoreSyncStatus = () => {
   const theme = useTheme();
 
   useEffect(() => {
+    let canceled = false;
     const getCoreInfos = async () => {
       try {
-        const url = `${getBaseApiReact()}/admin/info`;
+        const url = `${nodeBase}/admin/info`;
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -48,9 +58,14 @@ export const CoreSyncStatus = () => {
           },
         });
         const data = await response.json();
-        setCoreInfos(data);
+        if (!canceled) {
+          setCoreInfos(data);
+        }
       } catch (error) {
         console.error('Request failed', error);
+        if (!canceled) {
+          setCoreInfos({});
+        }
       }
     };
 
@@ -87,6 +102,8 @@ export const CoreSyncStatus = () => {
         setP2pHealth(null);
       }
     };
+    setCoreInfos({});
+    getCoreInfos();
 
     const tick = () => {
       void getCoreInfos();
@@ -97,8 +114,11 @@ export const CoreSyncStatus = () => {
 
     const interval = setInterval(tick, 30000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      canceled = true;
+      clearInterval(interval);
+    };
+  }, [nodeBase]);
 
   const renderSyncStatusIcon = () => {
     const {
@@ -142,126 +162,137 @@ export const CoreSyncStatus = () => {
       }
     }
 
+    const iconNode = renderIcon || (
+      <img
+        src={imagePath}
+        style={{ height: 'auto', width: '35px' }}
+        alt="sync status"
+      />
+    );
+
+    const panelNode = (
+      <Box
+        className="core-panel"
+        style={{
+          right: 'unset',
+          left: 'calc(100% + 16px)',
+          top: '0px',
+        }}
+      >
+        <h3>
+          {t('core:core.information', { postProcess: 'capitalizeFirstChar' })}
+        </h3>
+
+        <h4 className="lineHeight">
+          {t('core:core.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
+        </h4>
+
+        <h4 className="lineHeight">{message}</h4>
+
+        <h4 className="lineHeight">
+          {t('core:core.block_height', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          : <span style={{ color: '#03a9f4' }}>{height || ''}</span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>{numberOfConnections || ''}</span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('core:core.data_peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>
+            {numberOfDataConnections || ''}
+          </span>
+        </h4>
+
+        {connectedRemoteInterfaces !== null && (
+          <h4 className="lineHeight">
+            {t('core:core.connected_remote_interfaces', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            :{' '}
+            <span style={{ color: '#03a9f4' }}>
+              {connectedRemoteInterfaces}
+            </span>
+          </h4>
+        )}
+
+        {p2pActiveOverlayPeers !== null && (
+          <h4 className="lineHeight">
+            {t('core:core.p2p_active_overlay_peers', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            : <span style={{ color: '#03a9f4' }}>{p2pActiveOverlayPeers}</span>
+          </h4>
+        )}
+
+        {p2pHealth !== null && (
+          <h4 className="lineHeight">
+            {t('core:core.p2p_health', { postProcess: 'capitalizeFirstChar' })}:{' '}
+            <span
+              style={{
+                color:
+                  p2pHealth === 'bad'
+                    ? theme.palette.error.main
+                    : p2pHealth === 'low'
+                      ? theme.palette.warning.main
+                      : theme.palette.success.main,
+                fontWeight: 600,
+              }}
+            >
+              {t(`core:core.p2p_health_${p2pHealth}`, {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </span>
+          </h4>
+        )}
+
+        <h4 className="lineHeight">
+          {t('auth:node.using', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          :{' '}
+          <span
+            style={{
+              color: '#03a9f4',
+              ...(isLocalNodeUrl(nodeBase) && {
+                fontWeight: 'bold',
+                color: theme.palette.other.positive,
+              }),
+            }}
+          >
+            {nodeDisplay(nodeBase)}
+          </span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('core:ui.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
+        </h4>
+      </Box>
+    );
+
+    if (useExternalTooltip) {
+      return (
+        <>
+          <span>{iconNode}</span>
+          {panelNode}
+        </>
+      );
+    }
+
     return (
       <Box
         className="tooltip"
         data-theme={theme.palette.mode}
         style={{ display: 'inline' }}
       >
-        <span>
-          <img
-            src={imagePath}
-            style={{ height: 'auto', width: '35px' }}
-            alt="sync status"
-          />
-        </span>
-
-        <Box
-          className="core-panel"
-          style={{
-            right: 'unset',
-            left: '55px',
-            top: '10px',
-          }}
-        >
-          <h3>
-            {t('core:core.information', { postProcess: 'capitalizeFirstChar' })}
-          </h3>
-
-          <h4 className="lineHeight">
-            {t('core:core.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
-          </h4>
-
-          <h4 className="lineHeight">{message}</h4>
-
-          <h4 className="lineHeight">
-            {t('core:core.block_height', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            : <span style={{ color: '#03a9f4' }}>{height || ''}</span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {numberOfConnections || ''}
-            </span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('core:core.data_peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {numberOfDataConnections || ''}
-            </span>
-          </h4>
-
-          {connectedRemoteInterfaces !== null && (
-            <h4 className="lineHeight">
-              {t('core:core.connected_remote_interfaces', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              :{' '}
-              <span style={{ color: '#03a9f4' }}>
-                {connectedRemoteInterfaces}
-              </span>
-            </h4>
-          )}
-
-          {p2pActiveOverlayPeers !== null && (
-            <h4 className="lineHeight">
-              {t('core:core.p2p_active_overlay_peers', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              :{' '}
-              <span style={{ color: '#03a9f4' }}>{p2pActiveOverlayPeers}</span>
-            </h4>
-          )}
-
-          {p2pHealth !== null && (
-            <h4 className="lineHeight">
-              {t('core:core.p2p_health', { postProcess: 'capitalizeFirstChar' })}:{' '}
-              <span
-                style={{
-                  color:
-                    p2pHealth === 'bad'
-                      ? theme.palette.error.main
-                      : p2pHealth === 'low'
-                        ? theme.palette.warning.main
-                        : theme.palette.success.main,
-                  fontWeight: 600,
-                }}
-              >
-                {t(`core:core.p2p_health_${p2pHealth}`, {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </span>
-            </h4>
-          )}
-
-          <h4 className="lineHeight">
-            {t('auth:node.using', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            :{' '}
-            <span
-              style={{
-                color: '#03a9f4',
-                ...(isLocalNodeUrl(nodeBase) && {
-                  fontWeight: 'bold',
-                  color: theme.palette.other.positive,
-                }),
-              }}
-            >
-              {nodeDisplay(nodeBase)}
-            </span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('core:ui.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
-          </h4>
-        </Box>
+        <span>{iconNode}</span>
+        {panelNode}
       </Box>
     );
   };

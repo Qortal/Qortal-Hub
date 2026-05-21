@@ -33,6 +33,46 @@ export async function getPrimaryNameForAvatar(address: string): Promise<string> 
   return '';
 }
 
+export async function getPrimaryNamesForAddresses(
+  addresses: string[]
+): Promise<Record<string, string>> {
+  const uniqueAddresses = Array.from(
+    new Set(addresses.filter((address) => Boolean(address)))
+  );
+  if (uniqueAddresses.length === 0) return {};
+
+  const response = await fetch(`${getBaseApiReactForPrimaryName()}/names/list`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(uniqueAddresses),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  const names = await response.json();
+  const primaryNamesByAddress: Record<string, string> = {};
+
+  if (Array.isArray(names)) {
+    names.forEach((item) => {
+      if (typeof item?.owner !== 'string') return;
+      primaryNamesByAddress[item.owner] =
+        typeof item?.name === 'string' ? item.name : '';
+    });
+  }
+
+  uniqueAddresses.forEach((address) => {
+    if (primaryNamesByAddress[address] === undefined) {
+      primaryNamesByAddress[address] = '';
+    }
+  });
+
+  return primaryNamesByAddress;
+}
+
 export const getPublishesFromAdmins = async (
   admins: string[],
   groupId: string

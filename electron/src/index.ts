@@ -4,7 +4,14 @@ import {
   setupElectronDeepLinking,
 } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem, dialog, powerMonitor, protocol, session } from 'electron';
+import {
+  app,
+  MenuItem,
+  dialog,
+  powerMonitor,
+  protocol,
+  session,
+} from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
@@ -18,7 +25,9 @@ import {
 import { log as loggerLog, error as loggerError } from './logger';
 import {
   ElectronCapacitorApp,
+  flushMiscPersistentStore,
   flushPersistentStore,
+  loadPersistedAllowedDomainsAtStartup,
   setupContentSecurityPolicy,
   setupReloadWatcher,
   attachP2PListeners,
@@ -51,10 +60,7 @@ import {
 } from './reticulum-mesh';
 import { startReticulumForAppLaunch } from './reticulum-launch';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
-import {
-  getReticulumBridge,
-  stopReticulumBridge,
-} from './reticulum-bridge';
+import { getReticulumBridge, stopReticulumBridge } from './reticulum-bridge';
 import { getPresenceManager } from './presence';
 import { isDisabledLegacy } from './feature-flags';
 import { buildAudioSurfaceScheme } from './audio-window-policy';
@@ -119,16 +125,12 @@ async function recoverReticulumAfterWake(source: string): Promise<void> {
     !reticulumWakeRecovery &&
     now - lastReticulumWakeRecoveryAt < RETICULUM_WAKE_RECOVERY_DEBOUNCE_MS
   ) {
-    loggerLog(
-      `[Reticulum] Skipping duplicate wake recovery source=${source}`
-    );
+    loggerLog(`[Reticulum] Skipping duplicate wake recovery source=${source}`);
     return;
   }
 
   if (reticulumWakeRecovery) {
-    loggerLog(
-      `[Reticulum] Wake recovery already in progress source=${source}`
-    );
+    loggerLog(`[Reticulum] Wake recovery already in progress source=${source}`);
     return reticulumWakeRecovery;
   }
 
@@ -224,8 +226,9 @@ const capacitorFileConfig: CapacitorElectronConfig =
   getCapacitorElectronConfig();
 const capacitorRendererScheme =
   capacitorFileConfig.electron?.customUrlScheme ?? 'capacitor-electron';
-const audioSurfaceRendererScheme =
-  buildAudioSurfaceScheme(capacitorRendererScheme);
+const audioSurfaceRendererScheme = buildAudioSurfaceScheme(
+  capacitorRendererScheme
+);
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -339,7 +342,7 @@ async function setupMultiInstanceUserData(
   registerReticulumAppInstance(instanceIndex);
 
   await app.whenReady();
-
+  loadPersistedAllowedDomainsAtStartup();
   const reticulumDevEnsureOk = await runDevReticulumEnsureIfNeeded();
   if (!reticulumDevEnsureOk) {
     return;
@@ -429,7 +432,9 @@ async function setupMultiInstanceUserData(
       loggerLog('[P2P] Disabled by user setting — skipping auto-start.');
     }
   } else {
-    loggerLog('[Legacy] Legacy P2P, chat, and STUN startup are disabled by feature flag.');
+    loggerLog(
+      '[Legacy] Legacy P2P, chat, and STUN startup are disabled by feature flag.'
+    );
   }
 
   // Also set on main window session (same as default when no partition; ensures activate/recreate path is covered)
@@ -451,6 +456,8 @@ async function setupMultiInstanceUserData(
 app.on('before-quit', () => {
   setIsQuitting(true);
   performAppShutdown('before-quit');
+  flushPersistentStore();
+  flushMiscPersistentStore();
 });
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

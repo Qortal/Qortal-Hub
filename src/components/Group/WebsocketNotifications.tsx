@@ -58,10 +58,15 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null);
   const pingTimeoutRef = useRef(null);
+  const historyRequestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const listOfMyNamesRef = useRef<string[]>([]);
   const initWebsocketRef = useRef<(() => Promise<void>) | null>(null);
 
   const forceCloseWebSocket = () => {
+    clearTimeout(historyRequestTimeoutRef.current);
+    historyRequestTimeoutRef.current = null;
     if (socketRef.current) {
       clearTimeout(timeoutIdRef.current);
       clearTimeout(pingTimeoutRef.current);
@@ -254,9 +259,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               ],
             })
           );
-          setTimeout(() => {
+          historyRequestTimeoutRef.current = setTimeout(() => {
+            historyRequestTimeoutRef.current = null;
+            const ws = socketRef.current;
+            if (ws?.readyState !== WebSocket.OPEN) return;
             const after = Date.now() - 3 * 24 * 60 * 60 * 1000; // 3 days ago (ms)
-            socketRef.current.send(
+            ws.send(
               JSON.stringify({
                 action: 'notification-history',
                 paymentReceivedLimit: 5,
@@ -339,6 +347,8 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
 
         socketRef.current.onclose = (event) => {
           setSocketOpen(false);
+          clearTimeout(historyRequestTimeoutRef.current);
+          historyRequestTimeoutRef.current = null;
           clearTimeout(pingTimeoutRef.current);
           clearTimeout(timeoutIdRef.current);
           console.warn(

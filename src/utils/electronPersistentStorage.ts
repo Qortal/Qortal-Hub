@@ -19,7 +19,9 @@ function getAppStorage(): Window['appStorage'] {
   return (window as Window & { appStorage?: Window['appStorage'] }).appStorage;
 }
 
-export function getElectronPersistentStorage(): ElectronPersistentStorage | undefined {
+export function getElectronPersistentStorage():
+  | ElectronPersistentStorage
+  | undefined {
   if (!getAppStorage()) return undefined;
   if (storageInstance) return storageInstance;
   const appStorage = getAppStorage()!;
@@ -29,15 +31,19 @@ export function getElectronPersistentStorage(): ElectronPersistentStorage | unde
     },
     setItem(key: string, value: unknown): void {
       cache[key] = value;
-      appStorage.set(key, value).catch((err) =>
-        console.error('[electronPersistentStorage] setItem failed:', err)
-      );
+      appStorage
+        .set(key, value)
+        .catch((err) =>
+          console.error('[electronPersistentStorage] setItem failed:', err)
+        );
     },
     removeItem(key: string): void {
       delete cache[key];
-      appStorage.delete(key).catch((err) =>
-        console.error('[electronPersistentStorage] removeItem failed:', err)
-      );
+      appStorage
+        .delete(key)
+        .catch((err) =>
+          console.error('[electronPersistentStorage] removeItem failed:', err)
+        );
     },
   };
   return storageInstance;
@@ -64,4 +70,19 @@ export async function hydrateElectronPersistentCache(): Promise<void> {
     const value = results[i];
     if (value !== undefined && value !== null) cache[key] = value;
   });
+}
+
+/**
+ * After appStorage.get (fresh from main), align the sync cache used by atomWithStorage getItem.
+ * Use when another window/session may have persisted updates (e.g. account switch).
+ */
+export function primeElectronPersistentCacheKey(
+  key: string,
+  value: unknown | null | undefined
+): void {
+  if (value !== undefined && value !== null) {
+    cache[key] = value;
+    return;
+  }
+  delete cache[key];
 }

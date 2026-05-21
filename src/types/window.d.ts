@@ -20,7 +20,30 @@ declare global {
       set: (key: string, value: unknown) => Promise<void>;
       delete: (key: string) => Promise<void>;
     };
-    coreSetup?: unknown;
+    miscStorage?: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<void>;
+    };
+    coreSetup?: {
+      isCoreRunning?: () => Promise<boolean>;
+      isCoreRunningOnSystem?: () => Promise<boolean>;
+      isCoreInstalledOnSystem?: () => Promise<boolean>;
+      isCoreInstalled?: () => Promise<boolean>;
+      verifySteps?: () => Promise<void>;
+      deleteDB?: () => Promise<boolean>;
+      dbExists?: () => Promise<boolean>;
+      installCore?: () => Promise<unknown>;
+      startCore?: () => Promise<unknown>;
+      getApiKey?: () => Promise<string>;
+      resetApikey?: () => Promise<boolean>;
+      pickQortalDirectory?: () => Promise<unknown>;
+      removeCustomPath?: () => Promise<void>;
+      stopCore?: () => Promise<boolean>;
+      bootstrap?: () => Promise<boolean>;
+      bootstrapOrClearChainAndStart?: () => Promise<boolean>;
+      onProgress?: (cb: (p: unknown) => void) => () => void;
+    };
     electronAPI?: {
       openExternal?: (url: string) => void;
       setAllowedDomains?: (domains: string[]) => void;
@@ -33,6 +56,9 @@ declare global {
       windowClose?: () => void;
       focusWindow?: () => Promise<void>;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
+      onWindowStateChange?: (
+        callback: (state: { isMaximized: boolean }) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
       getSystemCallReadiness?: () => Promise<{
         status: 'good' | 'warning' | 'blocked' | 'unknown';

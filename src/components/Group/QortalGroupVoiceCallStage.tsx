@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   IconButton,
   Typography,
@@ -30,14 +31,14 @@ import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import PictureInPictureAltRoundedIcon from '@mui/icons-material/PictureInPictureAltRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
-import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import {
   userInfoAtom,
   qortalGroupVoiceCallMinimizedAtom,
+  qortalGroupCallPrimaryNamesAtom,
 } from '../../atoms/global';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
 import {
@@ -50,15 +51,18 @@ import {
 import { CallAudioSettingsButton } from '../Chat/CallAudioDeviceSelectors';
 import { GroupCallStartupBanner } from '../Chat/GroupCallStartupBanner';
 
-const BG_MAIN = '#313338';
-const BG_HEADER = '#2b2d31';
-const BG_TILE = '#111214';
-const BORDER_SUB = '#1e1f22';
-const TEXT_MUTED = '#949ba4';
+const BG_MAIN = '#0d1016';
+const BG_HEADER = '#1b2028';
+const BG_TILE = '#151922';
+const BORDER_SUB = '#2a313d';
+const TEXT_MUTED = '#9aa4b2';
+const TEXT_MAIN = '#e5e9f0';
+const SURFACE_SOFT = '#202632';
 /** In call, mic idle (not VAD-speaking). Distinct from TEXT_MUTED so dots don’t read as “offline”. */
 const VOICE_CONNECTED = '#3d9142';
 const SPEAKING = '#23a559';
 const DANGER = '#f23f42';
+const MAX_QORTAL_GROUP_CALL_PARTICIPANTS = 7;
 
 type SidebarMode = 'none' | 'participants';
 
@@ -70,6 +74,8 @@ type GroupCallLinkStats = {
 export function QortalGroupVoiceCallStage() {
   const { t } = useTranslation(['core']);
   const userInfo = useAtomValue(userInfoAtom);
+  const qcallPrimaryNames = useAtomValue(qortalGroupCallPrimaryNamesAtom);
+  const setQcallPrimaryNames = useSetAtom(qortalGroupCallPrimaryNamesAtom);
   const {
     roomState,
     mediaViable,
@@ -103,17 +109,6 @@ export function QortalGroupVoiceCallStage() {
     }
   }, [exportGroupCallDiagnostics]);
 
-  const handleDiagClipboard = useCallback(async () => {
-    setDiagExporting(true);
-    try {
-      await exportGroupCallDiagnostics?.({ download: false, clipboard: true });
-    } catch (e) {
-      console.error('[GCall] diagnostics clipboard failed', e);
-    } finally {
-      setDiagExporting(false);
-    }
-  }, [exportGroupCallDiagnostics]);
-
   const [qcallMinimized, setQcallMinimized] = useAtom(
     qortalGroupVoiceCallMinimizedAtom
   );
@@ -126,8 +121,11 @@ export function QortalGroupVoiceCallStage() {
     isQortalGroupRoom && (roomState === 'connected' || roomState === 'joining');
 
   useEffect(() => {
-    if (!visible) setQcallMinimized(false);
-  }, [visible, setQcallMinimized]);
+    if (!visible) {
+      setQcallMinimized(false);
+      setQcallPrimaryNames({});
+    }
+  }, [visible, setQcallMinimized, setQcallPrimaryNames]);
 
   const [transportTick, bumpTransport] = useReducer((n: number) => n + 1, 0);
   useEffect(() => {
@@ -207,10 +205,22 @@ export function QortalGroupVoiceCallStage() {
     });
     return list;
   }, [participants, userInfo?.address]);
+  const displayPrimaryNames = useMemo(
+    () => ({
+      ...memberPrimaryNames,
+      ...qcallPrimaryNames,
+    }),
+    [memberPrimaryNames, qcallPrimaryNames]
+  );
 
   const toggleParticipantsSidebar = useCallback(() => {
     setSidebar((prev) => (prev === 'participants' ? 'none' : 'participants'));
   }, []);
+
+  const callOccupancy = Math.min(
+    sortedTiles.length,
+    MAX_QORTAL_GROUP_CALL_PARTICIPANTS
+  );
 
   const handleLeave = useCallback(() => {
     void leaveGroupCall();
@@ -222,7 +232,7 @@ export function QortalGroupVoiceCallStage() {
 
   const participantDisplayLabel = useCallback(
     (address: string, isSelf: boolean) => {
-      const fromList = memberPrimaryNames[address]?.trim();
+      const fromList = displayPrimaryNames[address]?.trim();
       if (fromList) return fromList;
       if (isSelf) {
         const un = userInfo?.name?.trim?.();
@@ -233,7 +243,7 @@ export function QortalGroupVoiceCallStage() {
       }
       return shortAddr(address);
     },
-    [memberPrimaryNames, userInfo?.name, t]
+    [displayPrimaryNames, userInfo?.name, t]
   );
 
   if (!visible) return null;
@@ -266,8 +276,9 @@ export function QortalGroupVoiceCallStage() {
         zIndex: 1590,
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: BG_MAIN,
-        color: '#dbdee1',
+        background:
+          'radial-gradient(circle at 50% 18%, rgba(43, 54, 70, 0.62) 0%, rgba(19, 23, 31, 0.95) 42%, #0b0d12 100%)',
+        color: TEXT_MAIN,
         fontFamily: 'Inter, system-ui, sans-serif',
         overflow: 'hidden',
       }}
@@ -275,16 +286,17 @@ export function QortalGroupVoiceCallStage() {
       {/* Top bar */}
       <Box
         sx={{
-          height: 48,
+          height: 52,
           flexShrink: 0,
           display: 'flex',
           flexWrap: 'nowrap',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 1,
-          px: 2,
-          bgcolor: BG_HEADER,
+          px: 2.5,
+          bgcolor: alpha(BG_HEADER, 0.96),
           borderBottom: `1px solid ${BORDER_SUB}`,
+          boxShadow: '0 1px 0 rgba(255,255,255,0.025)',
           minWidth: 0,
         }}
       >
@@ -315,15 +327,18 @@ export function QortalGroupVoiceCallStage() {
           >
             <Box
               sx={{
-                bgcolor: '#4e5058',
-                borderRadius: 1,
-                p: 0.5,
+                bgcolor: alpha('#6aa8ff', 0.13),
+                border: `1px solid ${alpha('#6aa8ff', 0.18)}`,
+                borderRadius: '8px',
+                height: 30,
+                width: 30,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 flexShrink: 0,
               }}
             >
-              <Groups2RoundedIcon sx={{ fontSize: 18 }} />
+              <Groups2RoundedIcon sx={{ color: '#9cc7ff', fontSize: 18 }} />
             </Box>
             <Typography
               component="span"
@@ -331,7 +346,7 @@ export function QortalGroupVoiceCallStage() {
               sx={{
                 fontWeight: 600,
                 fontSize: 14,
-                color: TEXT_MUTED,
+                color: TEXT_MAIN,
                 whiteSpace: 'nowrap',
                 lineHeight: 1.2,
               }}
@@ -342,8 +357,8 @@ export function QortalGroupVoiceCallStage() {
           <Box
             sx={{
               width: '1px',
-              height: 16,
-              bgcolor: '#4e5058',
+              height: 20,
+              bgcolor: alpha('#ffffff', 0.08),
               flexShrink: 0,
             }}
           />
@@ -360,37 +375,48 @@ export function QortalGroupVoiceCallStage() {
                 ml: 0.5,
                 bgcolor:
                   transport.mode === 'connecting'
-                    ? alpha('#94a3b8', 0.35)
-                    : alpha('#22c55e', 0.35),
-                color: '#dbdee1',
+                    ? alpha('#94a3b8', 0.16)
+                    : alpha('#22c55e', 0.18),
+                color:
+                  transport.mode === 'connecting' ? '#cbd5e1' : '#9ee6b4',
+                border: `1px solid ${
+                  transport.mode === 'connecting'
+                    ? alpha('#94a3b8', 0.2)
+                    : alpha('#22c55e', 0.28)
+                }`,
                 '& .MuiChip-label': { px: 0.75 },
               }}
             />
           </Tooltip>
-          {linkStats ? (
-            <Tooltip title="Reticulum links / participants" placement="bottom">
-              <Chip
-                icon={<LinkRoundedIcon sx={{ fontSize: '14px !important' }} />}
-                label={`${linkStats.establishedLinks}/${linkStats.participants}`}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: 10,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                  bgcolor: alpha('#60a5fa', 0.22),
-                  color: '#dbeafe',
-                  border: `1px solid ${alpha('#60a5fa', 0.35)}`,
-                  '& .MuiChip-icon': {
-                    color: '#93c5fd',
-                    ml: 0.6,
-                    mr: -0.25,
-                  },
-                  '& .MuiChip-label': { px: 0.75 },
-                }}
-              />
-            </Tooltip>
-          ) : null}
+          <Tooltip
+            title={t('core:group_call_participants', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            placement="bottom"
+          >
+            <Chip
+              icon={
+                <Groups2RoundedIcon sx={{ fontSize: '14px !important' }} />
+              }
+              label={`${callOccupancy}/${MAX_QORTAL_GROUP_CALL_PARTICIPANTS}`}
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: 10,
+                fontWeight: 700,
+                flexShrink: 0,
+                bgcolor: alpha('#60a5fa', 0.22),
+                color: '#dbeafe',
+                border: `1px solid ${alpha('#60a5fa', 0.35)}`,
+                '& .MuiChip-icon': {
+                  color: '#93c5fd',
+                  ml: 0.6,
+                  mr: -0.25,
+                },
+                '& .MuiChip-label': { px: 0.75 },
+              }}
+            />
+          </Tooltip>
           {hintText ? (
             <Typography
               variant="caption"
@@ -417,40 +443,45 @@ export function QortalGroupVoiceCallStage() {
             flexShrink: 0,
           }}
         >
-          <Tooltip
-            title={t('core:group_call_export_diagnostics', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            placement="bottom"
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: { xs: 'none', sm: 'inline-flex' },
+              gap: 0.75,
+              mr: 1.25,
+            }}
           >
-            <span>
-              <IconButton
-                size="small"
-                disabled={diagExporting}
-                onClick={() => void handleDiagDownload()}
-                sx={{ color: '#93c5fd' }}
-              >
-                <FileDownloadRoundedIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip
-            title={t('core:group_call_copy_diagnostics', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            placement="bottom"
-          >
-            <span>
-              <IconButton
-                size="small"
-                disabled={diagExporting}
-                onClick={() => void handleDiagClipboard()}
-                sx={{ color: '#c4b5fd' }}
-              >
-                <ContentCopyRoundedIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
+            <Typography
+              component="span"
+              sx={{
+                color: TEXT_MAIN,
+                fontSize: 12,
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                lineHeight: 1,
+              }}
+            >
+              Q-CALL
+            </Typography>
+            <Box
+              component="span"
+              sx={{
+                bgcolor: alpha('#60a5fa', 0.16),
+                border: `1px solid ${alpha('#60a5fa', 0.28)}`,
+                borderRadius: '999px',
+                color: '#b8d8ff',
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '0.055em',
+                lineHeight: 1,
+                px: 0.75,
+                py: 0.35,
+                textTransform: 'uppercase',
+              }}
+            >
+              Beta
+            </Box>
+          </Box>
           <Tooltip
             title={t('core:group_call_minimize', {
               postProcess: 'capitalizeFirstChar',
@@ -460,7 +491,10 @@ export function QortalGroupVoiceCallStage() {
             <IconButton
               size="small"
               onClick={() => setQcallMinimized(true)}
-              sx={{ color: '#b5bac1' }}
+              sx={{
+                color: '#c7ced8',
+                '&:hover': { bgcolor: alpha('#ffffff', 0.07) },
+              }}
             >
               <PictureInPictureAltRoundedIcon fontSize="small" />
             </IconButton>
@@ -473,7 +507,10 @@ export function QortalGroupVoiceCallStage() {
             <IconButton
               size="small"
               onClick={toggleParticipantsSidebar}
-              sx={{ color: '#b5bac1' }}
+              sx={{
+                color: '#c7ced8',
+                '&:hover': { bgcolor: alpha('#ffffff', 0.07) },
+              }}
             >
               <Groups2RoundedIcon />
             </IconButton>
@@ -486,7 +523,7 @@ export function QortalGroupVoiceCallStage() {
         <Box
           sx={{
             flex: 1,
-            p: 2,
+            p: { xs: 2, md: 4 },
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -517,10 +554,10 @@ export function QortalGroupVoiceCallStage() {
               sx={{
                 display: 'grid',
                 gridTemplateColumns: gridCols,
-                gap: 2,
-                width: '100%',
-                height: '100%',
-                maxWidth: 1200,
+                gap: { xs: 1.5, md: 2.5 },
+                width: sortedTiles.length <= 1 ? 'min(760px, 100%)' : '100%',
+                height: sortedTiles.length <= 1 ? 'auto' : '100%',
+                maxWidth: sortedTiles.length <= 1 ? 760 : 1240,
                 maxHeight: '100%',
                 alignContent: 'center',
               }}
@@ -533,12 +570,12 @@ export function QortalGroupVoiceCallStage() {
                 const regName = registeredNameForAvatar(
                   p.address,
                   self,
-                  memberPrimaryNames,
+                  displayPrimaryNames,
                   userInfo?.name
                 );
                 const avatarSrc = qortalAvatarThumbnailSrc(regName);
                 const hasFriendlyDisplayName =
-                  Boolean(memberPrimaryNames[p.address]?.trim()) ||
+                  Boolean(displayPrimaryNames[p.address]?.trim()) ||
                   (self && Boolean(userInfo?.name?.trim()));
                 const avatarInitials = hasFriendlyDisplayName
                   ? initialsFromDisplayLabel(displayName, p.address)
@@ -548,32 +585,48 @@ export function QortalGroupVoiceCallStage() {
                     key={p.address}
                     sx={{
                       position: 'relative',
-                      borderRadius: 2,
-                      bgcolor: BG_TILE,
-                      minHeight: 160,
+                      borderRadius: '8px',
+                      background: `linear-gradient(145deg, ${alpha(
+                        '#2a3342',
+                        0.72
+                      )} 0%, ${BG_TILE} 54%, ${alpha('#0d1016', 0.96)} 100%)`,
+                      minHeight: sortedTiles.length <= 1 ? 360 : 220,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      border: '2px solid',
-                      borderColor: speaking ? SPEAKING : 'transparent',
+                      border: `1px solid ${
+                        speaking ? alpha(SPEAKING, 0.75) : BORDER_SUB
+                      }`,
                       boxShadow: speaking
-                        ? `0 0 16px ${alpha(SPEAKING, 0.35)}`
-                        : 'none',
+                        ? `0 0 0 1px ${alpha(SPEAKING, 0.22)}, 0 22px 60px ${alpha(
+                            SPEAKING,
+                            0.12
+                          )}`
+                        : `0 18px 44px ${alpha('#000', 0.24)}`,
+                      overflow: 'hidden',
                       transition:
-                        'border-color 0.25s ease, box-shadow 0.25s ease',
+                        'border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease',
                     }}
                   >
                     <Avatar
                       alt={displayName}
                       src={avatarSrc}
                       sx={{
-                        width: { xs: 96, sm: 128 },
-                        height: { xs: 96, sm: 128 },
+                        width:
+                          sortedTiles.length <= 1
+                            ? { xs: 112, sm: 140 }
+                            : { xs: 96, sm: 124 },
+                        height:
+                          sortedTiles.length <= 1
+                            ? { xs: 112, sm: 140 }
+                            : { xs: 96, sm: 124 },
                         bgcolor: addrHue(p.address),
                         color: '#fff',
                         fontSize: { xs: 28, sm: 36 },
                         fontWeight: 700,
                         userSelect: 'none',
+                        border: `4px solid ${alpha('#ffffff', 0.08)}`,
+                        boxShadow: `0 16px 36px ${alpha('#000', 0.28)}`,
                       }}
                     >
                       {avatarInitials}
@@ -586,13 +639,14 @@ export function QortalGroupVoiceCallStage() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: 0.75,
-                        bgcolor: alpha('#000', 0.55),
+                        bgcolor: alpha('#090b10', 0.72),
+                        border: `1px solid ${alpha('#ffffff', 0.07)}`,
                         px: 1,
                         py: 0.5,
-                        borderRadius: 1,
+                        borderRadius: '8px',
                         fontSize: 12,
                         fontWeight: 600,
-                        backdropFilter: 'blur(6px)',
+                        backdropFilter: 'blur(10px)',
                         maxWidth: 'calc(100% - 24px)',
                         overflow: 'hidden',
                       }}
@@ -643,7 +697,7 @@ export function QortalGroupVoiceCallStage() {
             sx={{
               width: 320,
               flexShrink: 0,
-              bgcolor: BG_HEADER,
+              bgcolor: alpha(BG_HEADER, 0.98),
               borderLeft: `1px solid ${BORDER_SUB}`,
               display: 'flex',
               flexDirection: 'column',
@@ -658,6 +712,7 @@ export function QortalGroupVoiceCallStage() {
                 justifyContent: 'space-between',
                 px: 2,
                 borderBottom: `1px solid ${BORDER_SUB}`,
+                color: TEXT_MAIN,
               }}
             >
               <Typography
@@ -689,12 +744,12 @@ export function QortalGroupVoiceCallStage() {
                 const regName = registeredNameForAvatar(
                   p.address,
                   self,
-                  memberPrimaryNames,
+                  displayPrimaryNames,
                   userInfo?.name
                 );
                 const rowAvatarSrc = qortalAvatarThumbnailSrc(regName);
                 const hasFriendlyDisplayName =
-                  Boolean(memberPrimaryNames[p.address]?.trim()) ||
+                  Boolean(displayPrimaryNames[p.address]?.trim()) ||
                   (self && Boolean(userInfo?.name?.trim()));
                 const rowInitials = hasFriendlyDisplayName
                   ? initialsFromDisplayLabel(displayName, p.address)
@@ -714,8 +769,8 @@ export function QortalGroupVoiceCallStage() {
                       gap: 1.5,
                       py: 1,
                       px: 1,
-                      borderRadius: 1,
-                      '&:hover': { bgcolor: alpha('#fff', 0.04) },
+                      borderRadius: '8px',
+                      '&:hover': { bgcolor: alpha('#fff', 0.045) },
                     }}
                   >
                     <Box sx={{ position: 'relative' }}>
@@ -770,9 +825,13 @@ export function QortalGroupVoiceCallStage() {
       {/* Control bar */}
       <Box
         sx={{
-          height: 96,
+          minHeight: 108,
           flexShrink: 0,
-          bgcolor: BORDER_SUB,
+          background: `linear-gradient(180deg, ${alpha(
+            BG_MAIN,
+            0.42
+          )} 0%, ${alpha('#07090d', 0.92)} 100%)`,
+          borderTop: `1px solid ${alpha('#ffffff', 0.055)}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -780,16 +839,28 @@ export function QortalGroupVoiceCallStage() {
           position: 'relative',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box
+          sx={{
+            alignItems: 'center',
+            bgcolor: alpha('#171c24', 0.94),
+            border: `1px solid ${alpha('#ffffff', 0.08)}`,
+            borderRadius: '999px',
+            boxShadow: `0 18px 48px ${alpha('#000', 0.36)}`,
+            display: 'flex',
+            gap: 1,
+            px: 1.25,
+            py: 1,
+          }}
+        >
           <IconButton
             onClick={toggleMute}
             sx={{
-              width: 56,
-              height: 56,
-              bgcolor: muted ? DANGER : '#313338',
+              width: 52,
+              height: 52,
+              bgcolor: muted ? DANGER : SURFACE_SOFT,
               color: '#fff',
               '&:hover': {
-                bgcolor: muted ? alpha(DANGER, 0.85) : '#4e5058',
+                bgcolor: muted ? alpha(DANGER, 0.85) : alpha('#ffffff', 0.12),
               },
             }}
           >
@@ -814,12 +885,12 @@ export function QortalGroupVoiceCallStage() {
             <IconButton
               onClick={toggleHearCall}
               sx={{
-                width: 56,
-                height: 56,
-                bgcolor: hearCall ? '#313338' : DANGER,
+                width: 52,
+                height: 52,
+                bgcolor: hearCall ? SURFACE_SOFT : DANGER,
                 color: '#fff',
                 '&:hover': {
-                  bgcolor: hearCall ? '#4e5058' : alpha(DANGER, 0.85),
+                  bgcolor: hearCall ? alpha('#ffffff', 0.12) : alpha(DANGER, 0.85),
                 },
               }}
             >
@@ -835,7 +906,7 @@ export function QortalGroupVoiceCallStage() {
             sx={{
               width: '1px',
               height: 32,
-              bgcolor: '#4e5058',
+              bgcolor: alpha('#ffffff', 0.11),
               flexShrink: 0,
               mx: 1,
             }}
@@ -844,8 +915,8 @@ export function QortalGroupVoiceCallStage() {
           <IconButton
             onClick={handleLeave}
             sx={{
-              width: 56,
-              height: 56,
+              width: 52,
+              height: 52,
               bgcolor: DANGER,
               color: '#fff',
               '&:hover': { bgcolor: alpha(DANGER, 0.85) },
@@ -862,11 +933,78 @@ export function QortalGroupVoiceCallStage() {
             display: 'flex',
             alignItems: 'center',
             gap: 1,
+            bgcolor: alpha('#171c24', 0.88),
+            border: `1px solid ${alpha('#ffffff', 0.07)}`,
+            borderRadius: '999px',
+            p: 0.75,
           }}
         >
           <CallAudioSettingsButton
             iconButtonSize="medium"
             IconComponent={SettingsIcon}
+            advancedContent={
+              linkStats ? (
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    bgcolor: alpha('#60a5fa', 0.08),
+                    border: `1px solid ${alpha('#60a5fa', 0.18)}`,
+                    borderRadius: 1.5,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    px: 1.5,
+                    py: 1,
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: 'text.secondary',
+                        display: 'block',
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Reticulum links
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Established encrypted audio routes
+                    </Typography>
+                  </Box>
+                  <Chip
+                    icon={
+                      <LinkRoundedIcon sx={{ fontSize: '14px !important' }} />
+                    }
+                    label={`${linkStats.establishedLinks}/${linkStats.participants}`}
+                    size="small"
+                    sx={{
+                      bgcolor: alpha('#60a5fa', 0.16),
+                      border: `1px solid ${alpha('#60a5fa', 0.28)}`,
+                      color: 'primary.light',
+                      flexShrink: 0,
+                      fontWeight: 700,
+                      '& .MuiChip-icon': {
+                        color: 'primary.light',
+                      },
+                    }}
+                  />
+                </Box>
+              ) : null
+            }
+            advancedActions={
+              <Button
+                size="small"
+                startIcon={<FileDownloadRoundedIcon fontSize="small" />}
+                disabled={diagExporting}
+                onClick={() => void handleDiagDownload()}
+              >
+                {t('core:group_call_export_diagnostics', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            }
           />
         </Box>
       </Box>

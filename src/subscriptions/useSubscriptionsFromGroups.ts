@@ -1,30 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sha256 } from 'asmcrypto.js';
+import { useEffect, useRef, useState } from 'react';
 import { getBaseApiReact } from '../App';
-import { Buffer } from 'buffer';
 
 export const publicSaltSubscriptionApp =
   'gnRp+Pao85XZlExcqynLS0+GaKCL3ia9E1sEm9XPaOA=';
 
-// ─── inline types ────────────────────────────────────────────────────────────
-
 type BillingInterval = 'monthly';
-
 type GroupAccessType = 'private';
 
-type GroupApiItem = {
+export type SubscriptionGroupItem = {
   groupId: number;
   owner: string;
   groupName: string;
-  description: string;
-  created: number;
-  isOpen: boolean;
-  approvalThreshold: string;
-  minimumBlockDelay: number;
-  maximumBlockDelay: number;
-  memberCount: number;
-  ownerPrimaryName: string;
-  type?: number;
+  description?: string;
+  created?: number;
+  isOpen?: boolean;
+  memberCount?: number;
+  ownerPrimaryName?: string;
+  isAdmin?: boolean;
+  [key: string]: unknown;
 };
 
 type SubscriptionFullDetails = {
@@ -48,11 +42,11 @@ type SubscriptionFullDetails = {
   disabledReason?: string;
 };
 
-type MySubscription = {
+export type MySubscription = {
   id: string;
   title: string;
   ownerName: string;
-  groupInfo: unknown;
+  groupInfo: SubscriptionGroupItem;
   priceQort: number;
   billingInterval: BillingInterval;
   status: 'active' | 'payment-needed' | 'disabled';
@@ -60,14 +54,18 @@ type MySubscription = {
   link: string;
 };
 
-// ─── inline helpers ──────────────────────────────────────────────────────────
-
 const AMOUNT_TOLERANCE = 0.00001;
 
-function getPaidIntervalsFromAmount(
-  paidAmount: number,
-  unitPrice: number
-): number {
+function bytesToBase64(bytes: Uint8Array | number[]) {
+  let binary = '';
+  const byteArray = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (let index = 0; index < byteArray.length; index += 1) {
+    binary += String.fromCharCode(byteArray[index]);
+  }
+  return btoa(binary);
+}
+
+function getPaidIntervalsFromAmount(paidAmount: number, unitPrice: number) {
   if (
     !Number.isFinite(paidAmount) ||
     !Number.isFinite(unitPrice) ||
@@ -80,45 +78,46 @@ function getPaidIntervalsFromAmount(
   return Math.floor(raw + AMOUNT_TOLERANCE);
 }
 
-function isMultipleOfUnitPrice(paidAmount: number, unitPrice: number): boolean {
+function isMultipleOfUnitPrice(paidAmount: number, unitPrice: number) {
   const intervals = getPaidIntervalsFromAmount(paidAmount, unitPrice);
   if (intervals < 1) return false;
   return Math.abs(paidAmount - unitPrice * intervals) <= AMOUNT_TOLERANCE;
 }
 
-export function getSubscriptionIdForGroup(groupId: number): string {
+export function getSubscriptionIdForGroup(groupId: number) {
   return `subscription-${groupId}`;
 }
 
-const safeBase64 = (base64: string): string =>
+const safeBase64 = (base64: string) =>
   base64
-    .replace(/\+/g, '.') // Replace '+' with '.' (URL-safe)
-    .replace(/\//g, '~') // Replace '/' with '~' (URL-safe)
-    .replace(/_/g, '!') // Replace '_' with '!' if needed (optional)
-    .replace(/=+$/, ''); // Remove padding
+    .replace(/\+/g, '.')
+    .replace(/\//g, '~')
+    .replace(/_/g, '!')
+    .replace(/=+$/, '');
 
 export async function hashWord(
   word: string,
   collisionStrength: number,
   publicSalt: string
-): Promise<string> {
+) {
   const saltedWord = publicSalt + word;
 
   try {
-    if (!crypto?.subtle?.digest) throw new Error('Web Crypto not available');
-
+    if (!crypto?.subtle?.digest) throw new Error('Web Crypto unavailable');
     const encoded = new TextEncoder().encode(saltedWord);
     const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
-    const base64 = Buffer.from(hashBuffer).toString('base64');
-
-    return safeBase64(base64).slice(0, collisionStrength);
+    return safeBase64(bytesToBase64(new Uint8Array(hashBuffer))).slice(
+      0,
+      collisionStrength
+    );
   } catch {
     const hash = new Sha256()
       .process(new TextEncoder().encode(saltedWord))
-      .finish().result!;
-    const base64 = Buffer.from(hash).toString('base64');
-
-    return safeBase64(base64).slice(0, collisionStrength);
+      .finish().result;
+    return safeBase64(bytesToBase64(hash as number[])).slice(
+      0,
+      collisionStrength
+    );
   }
 }
 
@@ -128,13 +127,11 @@ export async function buildSubscriptionIdentifiers(subscriptionId: string) {
     14,
     publicSaltSubscriptionApp
   );
-
   const typeIndex = await hashWord(
     'subscription_index',
     14,
     publicSaltSubscriptionApp
   );
-
   const idHash = await hashWord(subscriptionId, 14, publicSaltSubscriptionApp);
 
   if (!typeDetails || !typeIndex || !idHash) {
@@ -143,7 +140,7 @@ export async function buildSubscriptionIdentifiers(subscriptionId: string) {
 
   return {
     detailsIdentifier: typeDetails + idHash,
-    indexIdentifier: typeIndex + idHash + '-v1',
+    indexIdentifier: `${typeIndex}${idHash}-v1`,
     idHash,
   };
 }
@@ -152,9 +149,7 @@ function intervalDaysToBillingInterval(_intervalDays: number): BillingInterval {
   return 'monthly';
 }
 
-function parseOnChainIndexData(
-  data: string
-): { priceQort: number; intervalDays: number } | null {
+function parseOnChainIndexData(data: string) {
   if (!data || typeof data !== 'string') return null;
   const decoded =
     data.length > 0 && !data.includes('|')
@@ -168,28 +163,26 @@ function parseOnChainIndexData(
       : data;
   const parts = decoded.trim().split('|');
   if (parts.length < 5 || parts[0] !== 'qsub1') return null;
-  const amt = parseFloat(parts[2]);
-  if (Number.isNaN(amt)) return null;
-  return { priceQort: amt, intervalDays: 30 };
+  const priceQort = parseFloat(parts[2]);
+  if (Number.isNaN(priceQort)) return null;
+  return { priceQort, intervalDays: 30 };
 }
 
 async function fetchSubscriptionIndexPrice(
   ownerName: string,
   indexIdentifier: string
-): Promise<{ priceQort: number; intervalDays: number } | null> {
-  const res = await fetch(
+) {
+  const response = await fetch(
     `${getBaseApiReact()}/arbitrary/DOCUMENT/${encodeURIComponent(ownerName)}/${encodeURIComponent(indexIdentifier)}`
   );
-  if (!res.ok) return null;
-  let dataStr = await res.text();
+  if (!response.ok) return null;
+  let dataStr = await response.text();
   try {
     const parsed = JSON.parse(dataStr);
-    if (parsed && typeof parsed === 'object') {
-      const raw = parsed.resource?.data ?? parsed.data;
-      if (raw != null) dataStr = typeof raw === 'string' ? raw : String(raw);
-    }
+    const raw = parsed?.resource?.data ?? parsed?.data;
+    if (raw != null) dataStr = typeof raw === 'string' ? raw : String(raw);
   } catch {
-    // not JSON
+    // Plain text response.
   }
   if (!dataStr.includes('|')) {
     try {
@@ -201,12 +194,12 @@ async function fetchSubscriptionIndexPrice(
   return parseOnChainIndexData(dataStr);
 }
 
-/** Parse the subscriber's latest PRODUCT record to get { si, tx }. */
 function parseProductRecordData(raw: any): { si?: string; tx: string } | null {
   if (!raw) return null;
   if (typeof raw.tx === 'string') {
     return { si: typeof raw.si === 'string' ? raw.si : undefined, tx: raw.tx };
   }
+
   const b64 = raw.data ?? raw.resource?.data;
   if (typeof b64 === 'string') {
     try {
@@ -218,123 +211,96 @@ function parseProductRecordData(raw: any): { si?: string; tx: string } | null {
         };
       }
     } catch {
-      // ignore
+      // Ignore malformed product data.
     }
   }
   return null;
 }
 
-// ─── hook ────────────────────────────────────────────────────────────────────
-
 export function useSubscriptionsFromGroups(
-  address: string,
-  name: string,
-  groups: GroupApiItem[]
+  address: string | undefined,
+  name: string | undefined,
+  groups: SubscriptionGroupItem[]
 ) {
   const [mySubscriptions, setMySubscriptions] = useState<MySubscription[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const disableLoading = useRef(false);
+  const hasLoadedOnce = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
-      if (!address) return;
-      if (!name) return;
-      if (!groups || groups.length === 0) return;
-      if (!disableLoading.current) {
-        setLoading(true);
+      if (!address || !name || !Array.isArray(groups) || groups.length === 0) {
+        setMySubscriptions([]);
+        setLoading(false);
+        return;
       }
 
+      if (!hasLoadedOnce.current) setLoading(true);
       setError(null);
 
       try {
-        disableLoading.current = true;
         const results = await Promise.all(
           groups
-            .filter((g) => g.owner !== address && !g.isOpen)
-            .map(async (g) => {
-              const ownerPrimaryName = g.ownerPrimaryName;
-
+            .filter((group) => group.owner !== address && !group.isOpen)
+            .map(async (group) => {
+              const ownerPrimaryName = group.ownerPrimaryName;
               if (!ownerPrimaryName) return null;
 
-              const subscriptionId = getSubscriptionIdForGroup(g.groupId);
-              try {
-                await buildSubscriptionIdentifiers(subscriptionId);
-              } catch (error) {
-                console.log('error', error);
-                return null;
-              }
-
-              const { indexIdentifier, detailsIdentifier } =
+              const subscriptionId = getSubscriptionIdForGroup(group.groupId);
+              const { detailsIdentifier, indexIdentifier } =
                 await buildSubscriptionIdentifiers(subscriptionId);
 
               const matches = await fetch(
-                `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT&identifier=${indexIdentifier}&name=${ownerPrimaryName}&limit=1&exactmatchnames=true&prefix=true`
+                `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${indexIdentifier}&name=${ownerPrimaryName}&limit=1&exactmatchnames=true&prefix=true`
               );
               if (!matches.ok) return null;
               const matchesData = await matches.json();
-              if (!matchesData || matchesData.length === 0) return null;
+              if (!matchesData?.length) return null;
 
-              const detailsRes = await fetch(
+              const detailsResponse = await fetch(
                 `${getBaseApiReact()}/arbitrary/DOCUMENT/${encodeURIComponent(ownerPrimaryName)}/${encodeURIComponent(detailsIdentifier)}`
               );
-              if (!detailsRes.ok) return null;
-              const dataStr = await detailsRes.json();
+              if (!detailsResponse.ok) return null;
 
-              const details = dataStr as SubscriptionFullDetails | undefined;
+              const details = (await detailsResponse.json()) as
+                | SubscriptionFullDetails
+                | undefined;
+              if ((details as any)?.status === 'disabled') return null;
 
-              const anyDetails = details as any;
-              if (anyDetails?.status === 'disabled') return null;
               const title =
-                details && typeof anyDetails?.title === 'string'
-                  ? anyDetails.title
+                details && typeof (details as any)?.title === 'string'
+                  ? (details as any).title
                   : null;
-              const detailsAmountQort =
-                details && anyDetails?.amountQort != null
-                  ? Number(anyDetails.amountQort)
+              let priceQort =
+                details && (details as any)?.amountQort != null
+                  ? Number((details as any).amountQort)
                   : null;
-              const detailsIntervalDays = 30;
-              if (!title || !detailsAmountQort || !detailsIntervalDays)
-                return null;
-              // Resolve locked-in price/interval/expiry from subscriber's PRODUCT record.
-              let priceQort = Number.isFinite(detailsAmountQort)
-                ? detailsAmountQort
-                : null;
-              if (!priceQort) return null;
-              let resolvedIntervalDays = detailsIntervalDays;
-              let nextPaymentDue: number | null = null;
+              if (!title || !priceQort) return null;
 
-              const userName = name;
-              if (!userName) return null;
+              let resolvedIntervalDays = 30;
+              let nextPaymentDue: number | null = null;
 
               try {
                 const paymentRecords = await fetch(
-                  `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&name=${userName}&limit=1&exactmatchnames=true&reverse=true`
+                  `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&name=${name}&limit=1&exactmatchnames=true&reverse=true`
                 );
-                if (!paymentRecords.ok) return null;
-                const paymentRecordsData = await paymentRecords.json();
-
-                if (paymentRecordsData && paymentRecordsData.length > 0) {
-                  const record = paymentRecordsData[0];
+                if (paymentRecords.ok) {
+                  const paymentRecordsData = await paymentRecords.json();
+                  const record = paymentRecordsData?.[0];
                   let recordData: any = null;
-                  try {
-                    if ((record as any).data) {
-                      recordData = (record as any).data;
-                    } else if ((record as any).identifier) {
-                      const dataResponse = await fetch(
-                        `${getBaseApiReact()}/arbitrary/PRODUCT/${userName}/${(record as any).identifier}`
-                      );
-                      if (dataResponse.ok)
-                        recordData = await dataResponse.json();
-                    }
-                  } catch {
-                    // ignore fetch error
+
+                  if (record?.data) {
+                    recordData = record.data;
+                  } else if (record?.identifier) {
+                    const dataResponse = await fetch(
+                      `${getBaseApiReact()}/arbitrary/PRODUCT/${name}/${record.identifier}`
+                    );
+                    if (dataResponse.ok) recordData = await dataResponse.json();
                   }
 
                   const parsed = parseProductRecordData(recordData);
-                  if (parsed) recordData = parsed;
-
                   if (parsed?.si && parsed?.tx) {
                     const indexData = await fetchSubscriptionIndexPrice(
                       ownerPrimaryName,
@@ -342,76 +308,74 @@ export function useSubscriptionsFromGroups(
                     );
                     if (indexData) {
                       priceQort = indexData.priceQort;
-                      resolvedIntervalDays = 30;
+                      resolvedIntervalDays = indexData.intervalDays;
                     }
 
-                    try {
-                      const txResponse = await fetch(
-                        `${getBaseApiReact()}/transactions/signature/${parsed.tx}`
-                      );
-                      if (txResponse.ok) {
-                        const txData = await txResponse.json();
-                        const paymentTs = txData?.timestamp;
-                        const amountPaid = parseFloat(txData?.amount || '0');
-                        if (
-                          paymentTs != null &&
-                          amountPaid > 0 &&
-                          isMultipleOfUnitPrice(amountPaid, priceQort)
-                        ) {
-                          const paidIntervals = getPaidIntervalsFromAmount(
-                            amountPaid,
-                            priceQort
-                          );
-                          const expiresAt =
-                            paymentTs +
-                            paidIntervals *
-                              resolvedIntervalDays *
-                              24 *
-                              60 *
-                              60 *
-                              1000;
-                          nextPaymentDue = expiresAt;
-                        }
+                    const txResponse = await fetch(
+                      `${getBaseApiReact()}/transactions/signature/${parsed.tx}`
+                    );
+                    if (txResponse.ok) {
+                      const txData = await txResponse.json();
+                      const paymentTs = txData?.timestamp;
+                      const amountPaid = parseFloat(txData?.amount || '0');
+                      if (
+                        paymentTs != null &&
+                        amountPaid > 0 &&
+                        isMultipleOfUnitPrice(amountPaid, priceQort)
+                      ) {
+                        const paidIntervals = getPaidIntervalsFromAmount(
+                          amountPaid,
+                          priceQort
+                        );
+                        nextPaymentDue =
+                          paymentTs +
+                          paidIntervals *
+                            resolvedIntervalDays *
+                            24 *
+                            60 *
+                            60 *
+                            1000;
                       }
-                    } catch {
-                      // ignore tx fetch error — keep details-based fallback
                     }
                   }
                 }
               } catch {
-                // ignore PRODUCT fetch error — keep details-based fallback
+                // Missing payment metadata just means the subscription needs payment.
               }
 
-              const sub: MySubscription = {
+              return {
                 id: subscriptionId,
                 title,
                 ownerName: ownerPrimaryName,
-                groupInfo: g,
+                groupInfo: group,
                 priceQort,
                 billingInterval:
                   intervalDaysToBillingInterval(resolvedIntervalDays),
                 nextPaymentDue,
-                link: ``,
+                link: '',
                 status:
                   nextPaymentDue == null || Date.now() > nextPaymentDue
                     ? 'payment-needed'
                     : 'active',
-              };
-
-              return sub;
+              } satisfies MySubscription;
             })
         );
 
-        const mySubs = results.filter(Boolean) as MySubscription[];
-        if (!cancelled) setMySubscriptions(mySubs);
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Failed to load subscriptions');
+        if (!cancelled) {
+          setMySubscriptions(results.filter(Boolean) as MySubscription[]);
+          hasLoadedOnce.current = true;
+        }
+      } catch (event: any) {
+        if (!cancelled) {
+          setError(event?.message ?? 'Failed to load subscriptions');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    run();
+    void run();
+
     return () => {
       cancelled = true;
     };

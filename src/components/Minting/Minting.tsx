@@ -1,7 +1,5 @@
 import {
-  Alert,
   alpha,
-  AppBar,
   Box,
   Button,
   Dialog,
@@ -9,22 +7,12 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Snackbar,
-  Tab,
-  Tabs,
-  Toolbar,
   Typography,
   useTheme,
 } from '@mui/material';
-import {
-  SyntheticEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
+import mintingWatermark from '../../assets/minting/blue-grey-menu-button2-1.png';
 import { getBaseApiReact } from '../../App';
 import {
   executeEvent,
@@ -37,7 +25,6 @@ import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { Trans, useTranslation } from 'react-i18next';
-import { TransitionUp } from '../../common/Transitions.tsx';
 import {
   nextLevel,
   averageBlockDay,
@@ -45,13 +32,13 @@ import {
   dayReward,
   levelUpBlocks,
   levelUpDays,
-  mintingStatus,
   countMintersInLevel,
   currentTier,
   tierPercent,
   countReward,
   countRewardDay,
 } from './MintingStats.tsx';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 
 export type AddressLevelEntry = {
   level: number;
@@ -61,20 +48,6 @@ export type AddressLevelEntry = {
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
   const [groups] = useAtom(memberGroupsAtom);
-
-  const [mintingAccounts, setMintingAccounts] = useState([]);
-  const [accountInfo, setAccountInfo] = useState(null);
-  const [mintingKey, setMintingKey] = useState('');
-  const [rewardShares, setRewardShares] = useState([]);
-  const [adminInfo, setAdminInfo] = useState({});
-  const [nodeStatus, setNodeStatus] = useState({});
-  const [addressLevel, setAddressLevel] = useState<AddressLevelEntry[]>([]);
-  const [tier4Online, setTier4Online] = useState(0);
-  const [openSnack, setOpenSnack] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [nodeHeightBlock, setNodeHeightBlock] = useState({});
-  const [valueMintingTab, setValueMintingTab] = useState(0);
-  const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -83,9 +56,25 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     'question',
     'tutorial',
   ]);
+
+  const [mintingAccounts, setMintingAccounts] = useState([]);
+  const [accountInfo, setAccountInfo] = useState(null);
+  const [rewardShares, setRewardShares] = useState([]);
+  const [adminInfo, setAdminInfo] = useState({});
+  const [nodeStatus, setNodeStatus] = useState({});
+  const [addressLevel, setAddressLevel] = useState<AddressLevelEntry[]>([]);
+  const [tier4Online, setTier4Online] = useState(0);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [nodeHeightBlock, setNodeHeightBlock] = useState({});
+  const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
-  const [accountInfos, setAccountInfos] = useState({});
+  const [statsAccountInfo, setStatsAccountInfo] = useState(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [selectedMintingAccountKey, setSelectedMintingAccountKey] = useState(
+    null
+  );
   const [showWaitDialog, setShowWaitDialog] = useState(false);
   const timeoutNodeStatusRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -93,6 +82,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const timeoutAdminInfoRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+
   const isPartOfMintingGroup = useMemo(() => {
     if (groups?.length === 0) return false;
     return !!groups?.find((item) => item?.groupId?.toString() === '694');
@@ -124,68 +114,55 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       const response = await fetch(url);
       const nameData = await response.json();
       if (nameData?.name) {
-        setNames((prev) => {
-          return {
-            ...prev,
-            [address]: nameData?.name,
-          };
-        });
+        setNames((prev) => ({
+          ...prev,
+          [address]: nameData?.name,
+        }));
       } else {
-        setNames((prev) => {
-          return {
-            ...prev,
-            [address]: null,
-          };
-        });
+        setNames((prev) => ({
+          ...prev,
+          [address]: null,
+        }));
       }
     } catch (error) {
       console.log(error);
     }
   };
 
-  function a11yProps(index: number) {
-    return {
-      id: `simple-tab-${index}`,
-      'aria-controls': `simple-tabpanel-${index}`,
-    };
-  }
-
-  const getAccountInfo = async (address: string, others?: boolean) => {
+  const getAccountInfo = async (address: string) => {
     try {
-      if (!others) {
-        setIsLoading(true);
-      }
+      setIsLoading(true);
       const url = `${getBaseApiReact()}/addresses/${address}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('network error');
       }
       const data = await response.json();
-      if (others) {
-        setAccountInfos((prev) => {
-          return {
-            ...prev,
-            [address]: data,
-          };
-        });
-      } else {
-        setAccountInfo(data);
-      }
+      setAccountInfo(data);
     } catch (error) {
       console.log(error);
     } finally {
-      if (!others) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   };
 
-  const daysToNextLevel = levelUpDays(
-    accountInfo,
-    adminInfo,
-    nodeHeightBlock,
-    nodeStatus
-  );
+  const getStatsAccountInfo = useCallback(async (address: string) => {
+    if (!address) return;
+    try {
+      setIsStatsLoading(true);
+      const url = `${getBaseApiReact()}/addresses/${address}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('network error');
+      }
+      const data = await response.json();
+      setStatsAccountInfo(data);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
 
   const refreshRewardShare = () => {
     if (!myAddress) return;
@@ -217,7 +194,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     } catch (error) {
       console.log(error);
     } finally {
-      timeoutAdminInfoRef.current = setTimeout(getAccountInfo, 30000);
+      timeoutAdminInfoRef.current = setTimeout(getAdminInfo, 30000);
     }
   }, []);
 
@@ -261,9 +238,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         setAddressLevel(data);
         const level7 = data.find((entry) => entry.level === 7)?.count || 0;
         const level8 = data.find((entry) => entry.level === 8)?.count || 0;
-        const tier4Count =
-          parseFloat(level7.toString()) + parseFloat(level8.toString());
-        setTier4Online(tier4Count);
+        setTier4Online(level7 + level8);
       }
     } catch (error) {
       console.error('Request failed', error);
@@ -272,7 +247,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const getRewardShares = useCallback(async (address) => {
     try {
-      const url = `${getBaseApiReact()}/addresses/rewardshares?involving=${address}`; // TODO check API (still useful?)
+      const url = `${getBaseApiReact()}/addresses/rewardshares?involving=${address}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('network error');
@@ -285,180 +260,190 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     }
   }, []);
 
-  const addMintingAccount = useCallback(async (val) => {
-    try {
-      setIsLoading(true);
-      return await new Promise((res, rej) => {
-        window
-          .sendMessage(
-            'ADMIN_ACTION',
-            {
-              type: 'addmintingaccount',
-              value: val,
-            },
-            180000,
-            true
-          )
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              setMintingKey('');
-              setTimeout(() => {
-                getMintingAccounts();
-              }, 300);
-              return;
-            }
-            rej({ message: response.error });
-          })
-          .catch((error) => {
-            rej({
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-          });
-      });
-    } catch (error) {
-      setInfo({
-        type: 'error',
-        message:
-          error?.message ||
-          t('core:message.error.minting_account_add', {
-            postProcess: 'capitalizeFirstChar',
-          }),
-      });
-      setOpenSnack(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const removeMintingAccount = useCallback(async (val, acct) => {
-    try {
-      setIsLoading(true);
-      return await new Promise((res, rej) => {
-        window
-          .sendMessage(
-            'ADMIN_ACTION',
-            {
-              type: 'removemintingaccount',
-              value: val,
-            },
-            180000,
-            true
-          )
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-
-              setTimeout(() => {
-                getMintingAccounts();
-              }, 300);
-              return;
-            }
-            rej({ message: response.error });
-          })
-          .catch((error) => {
-            rej({
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-          });
-      });
-    } catch (error) {
-      setInfo({
-        type: 'error',
-        message:
-          error?.message ||
-          t('core:message.error.minting_account_remove', {
-            postProcess: 'capitalizeFirstChar',
-          }),
-      });
-      setOpenSnack(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const createRewardShare = useCallback(async (publicKey, recipient) => {
-    const fee = await getFee('REWARD_SHARE');
-
-    await show({
-      message: t('core:message.question.perform_transaction', {
-        action: 'REWARD_SHARE',
-        postProcess: 'capitalizeFirstChar',
-      }),
-      publishFee: fee.fee + ' QORT',
-    });
-
-    return await new Promise((res, rej) => {
-      window
-        .sendMessage('createRewardShare', {
-          recipientPublicKey: publicKey,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            setTxList((prev) => [
+  const addMintingAccount = useCallback(
+    async (val) => {
+      try {
+        setIsLoading(true);
+        return await new Promise((res, rej) => {
+          window
+            .sendMessage(
+              'ADMIN_ACTION',
               {
-                recipient,
-                ...response,
-                type: 'add-rewardShare',
-                label: t('group:message.success.rewardshare_add', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-                labelDone: t('group:message.success.rewardshare_add_label', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-                done: false,
+                type: 'addmintingaccount',
+                value: val,
               },
-              ...prev,
-            ]);
-            res(response);
-            return;
-          }
-          rej({ message: response.error });
-        })
-        .catch((error) => {
-          rej({
-            message:
-              error.message ||
-              t('core:message.error.generic', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          });
+              180000,
+              true
+            )
+            .then((response) => {
+              if (!response?.error) {
+                res(response);
+                setTimeout(() => {
+                  getMintingAccounts();
+                }, 300);
+                return;
+              }
+              rej({ message: response.error });
+            })
+            .catch((error) => {
+              rej({
+                message:
+                  error.message ||
+                  t('core:message.error.generic', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+              });
+            });
         });
-    });
-  }, []);
+      } catch (error) {
+        setInfo({
+          type: 'error',
+          message:
+            error?.message ||
+            t('core:message.error.minting_account_add', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+        });
+        setOpenSnack(true);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [getMintingAccounts, t]
+  );
 
-  const getRewardSharePrivateKey = useCallback(async (publicKey) => {
-    return await new Promise((res, rej) => {
-      window
-        .sendMessage('getRewardSharePrivateKey', {
-          recipientPublicKey: publicKey,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          rej({ message: response.error });
-        })
-        .catch((error) => {
-          rej({
-            message:
-              error.message ||
-              t('core:message.error.generic', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          });
+  const removeMintingAccount = useCallback(
+    async (val, acct) => {
+      try {
+        setIsLoading(true);
+        return await new Promise((res, rej) => {
+          window
+            .sendMessage(
+              'ADMIN_ACTION',
+              {
+                type: 'removemintingaccount',
+                value: val,
+              },
+              180000,
+              true
+            )
+            .then((response) => {
+              if (!response?.error) {
+                res(response);
+                setTimeout(() => {
+                  getMintingAccounts();
+                }, 300);
+                return;
+              }
+              rej({ message: response.error });
+            })
+            .catch((error) => {
+              rej({
+                message:
+                  error.message ||
+                  t('core:message.error.generic', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+              });
+            });
         });
-    });
-  }, []);
+      } catch (error) {
+        setInfo({
+          type: 'error',
+          message:
+            error?.message ||
+            t('core:message.error.minting_account_remove', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+        });
+        setOpenSnack(true);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [getMintingAccounts, t]
+  );
+
+  const createRewardShare = useCallback(
+    async (publicKey, recipient) => {
+      const fee = await getFee('REWARD_SHARE');
+
+      await show({
+        message: t('core:message.question.perform_transaction', {
+          action: 'REWARD_SHARE',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
+      });
+
+      return await new Promise((res, rej) => {
+        window
+          .sendMessage('createRewardShare', {
+            recipientPublicKey: publicKey,
+          })
+          .then((response) => {
+            if (!response?.error) {
+              setTxList((prev) => [
+                {
+                  recipient,
+                  ...response,
+                  type: 'add-rewardShare',
+                  label: t('group:message.success.rewardshare_add', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                  labelDone: t('group:message.success.rewardshare_add_label', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                  done: false,
+                },
+                ...prev,
+              ]);
+              res(response);
+              return;
+            }
+            rej({ message: response.error });
+          })
+          .catch((error) => {
+            rej({
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
+            });
+          });
+      });
+    },
+    [setTxList, show, t]
+  );
+
+  const getRewardSharePrivateKey = useCallback(
+    async (publicKey) => {
+      return await new Promise((res, rej) => {
+        window
+          .sendMessage('getRewardSharePrivateKey', {
+            recipientPublicKey: publicKey,
+          })
+          .then((response) => {
+            if (!response?.error) {
+              res(response);
+              return;
+            }
+            rej({ message: response.error });
+          })
+          .catch((error) => {
+            rej({
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
+            });
+          });
+      });
+    },
+    [t]
+  );
 
   const waitUntilRewardShareIsConfirmed = async (timeoutMs = 600000) => {
     const pollingInterval = 30000;
@@ -466,16 +451,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
     while (Date.now() - startTime < timeoutMs) {
-      const rewardShares = await getRewardShares(myAddress);
-      const findRewardShare = rewardShares?.find(
+      const rewardSharesResult = await getRewardShares(myAddress);
+      const findRewardShare = rewardSharesResult?.find(
         (item) =>
           item?.recipient === myAddress && item?.mintingAccount === myAddress
       );
 
       if (findRewardShare) {
-        return true; // Exit early if found
+        return true;
       }
-      await sleep(pollingInterval); // Wait before the next poll
+      await sleep(pollingInterval);
     }
 
     throw new Error(
@@ -501,9 +486,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         await createRewardShare(accountInfo?.publicKey, myAddress);
         setShowWaitDialog(true);
         await waitUntilRewardShareIsConfirmed();
-        await showNext({
-          message: '',
-        });
+        await showNext({ message: '' });
 
         const privateRewardShare = await getRewardSharePrivateKey(
           accountInfo?.publicKey
@@ -544,420 +527,1001 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         timeoutAdminInfoRef.current = null;
       }
     };
-  }, []);
+  }, [getAdminInfo, getMintingAccounts, getNodeStatus]);
 
   useEffect(() => {
     if (!myAddress) return;
     getRewardShares(myAddress);
     getAccountInfo(myAddress);
-  }, [myAddress]);
+  }, [myAddress, getRewardShares]);
 
-  const handleClose = () => {
+  const effectiveSelectedMintingKey = useMemo(() => {
+    if (!mintingAccounts?.length) return null;
+    if (
+      selectedMintingAccountKey &&
+      mintingAccounts.some((a) => a?.mintingAccount === selectedMintingAccountKey)
+    ) {
+      return selectedMintingAccountKey;
+    }
+    const mine = mintingAccounts.find(
+      (a) =>
+        a?.recipientAccount === myAddress || a?.mintingAccount === myAddress
+    );
+    return mine?.mintingAccount ?? mintingAccounts[0]?.mintingAccount ?? null;
+  }, [mintingAccounts, selectedMintingAccountKey, myAddress]);
+
+  const statsAddress = useMemo(() => {
+    if (mintingAccounts?.length > 0 && effectiveSelectedMintingKey) {
+      return effectiveSelectedMintingKey;
+    }
+    return myAddress || '';
+  }, [mintingAccounts, effectiveSelectedMintingKey, myAddress]);
+
+  useEffect(() => {
+    if (!statsAddress) {
+      setStatsAccountInfo(null);
+      return;
+    }
+    if (statsAddress === myAddress) {
+      if (accountInfo?.address === statsAddress) {
+        setStatsAccountInfo(accountInfo);
+        return;
+      }
+      getStatsAccountInfo(statsAddress);
+      return;
+    }
+    getStatsAccountInfo(statsAddress);
+  }, [statsAddress, myAddress, accountInfo, getStatsAccountInfo]);
+
+  const handleCloseSnack = () => {
     setOpenSnack(false);
     setTimeout(() => {
       setInfo(null);
     }, 250);
   };
 
-  const handleChange = (event: SyntheticEvent, newValue: number) => {
-    setValueMintingTab(newValue);
+  const closeMinting = () => {
+    setIsOpenMinting(false);
   };
 
+  const openQMintership = useCallback(() => {
+    setIsOpenMinting(false);
+    window.setTimeout(() => {
+      executeEvent('addTab', {
+        data: { service: 'APP', name: 'q-mintership', path: '' },
+      });
+      executeEvent('open-apps-mode', {});
+    }, 0);
+  }, [setIsOpenMinting]);
+
+  const formatMetric = (
+    value: number | string | null | undefined,
+    digits = 2,
+    suffix = ''
+  ) => {
+    const numericValue =
+      typeof value === 'number' ? value : Number.parseFloat(String(value));
+    return Number.isFinite(numericValue)
+      ? `${numericValue.toFixed(digits)}${suffix}`
+      : '-';
+  };
+
+  const isNodeSynchronizing = nodeStatus?.isSynchronizing === true;
+  const daysToNextLevel = levelUpDays(
+    statsAccountInfo,
+    adminInfo,
+    nodeHeightBlock,
+    nodeStatus
+  );
+  const progressLevel = nextLevel(statsAccountInfo?.level);
+  const progressBlocks = formatMetric(
+    levelUpBlocks(statsAccountInfo, nodeStatus),
+    0
+  );
+  const progressDays =
+    typeof daysToNextLevel === 'number' && Number.isFinite(daysToNextLevel)
+      ? Math.max(0, Math.round(daysToNextLevel))
+      : null;
+  const walletDisplayName =
+    handleNames(accountInfo?.address) || myAddress || '-';
+  const statsDisplayName =
+    handleNames(statsAccountInfo?.address) || statsAddress || '-';
+  const showAddressLine =
+    !!statsAccountInfo?.address && statsDisplayName !== statsAccountInfo?.address;
+  const showWalletAddressLine =
+    !!accountInfo?.address && walletDisplayName !== accountInfo?.address;
+  const viewingNodeMintingSelection =
+    !!effectiveSelectedMintingKey &&
+    !!mintingAccounts?.some(
+      (a) => a?.mintingAccount === effectiveSelectedMintingKey
+    );
+
+  const userMintingState = useMemo(() => {
+    if (isNodeSynchronizing) {
+      return {
+        tone: 'syncing',
+        title: t('core:minting.panel.state_syncing_title'),
+        description: t('core:minting.panel.state_syncing_body'),
+      };
+    }
+    if (viewingNodeMintingSelection) {
+      return {
+        tone: 'active',
+        title: t('core:minting.panel.state_active_title'),
+        description: t(
+          'core:minting.panel.state_active_body_node_selection'
+        ),
+      };
+    }
+    if (accountIsMinting) {
+      return {
+        tone: 'active',
+        title: t('core:minting.panel.state_active_title'),
+        description: t('core:minting.panel.state_active_body_account'),
+      };
+    }
+    if (!isPartOfMintingGroup) {
+      return {
+        tone: 'inactive',
+        title: t('core:minting.panel.state_inactive_title'),
+        description: t('core:minting.panel.state_inactive_body_not_in_group'),
+      };
+    }
+    if (mintingAccounts?.length > 1) {
+      return {
+        tone: 'inactive',
+        title: t('core:minting.panel.state_inactive_title'),
+        description: t('core:minting.panel.state_inactive_body_multi_key'),
+      };
+    }
+    return {
+      tone: 'inactive',
+      title: t('core:minting.panel.state_inactive_title'),
+      description: t('core:minting.panel.state_inactive_body_ready'),
+    };
+  }, [
+    accountIsMinting,
+    isNodeSynchronizing,
+    isPartOfMintingGroup,
+    mintingAccounts?.length,
+    t,
+    viewingNodeMintingSelection,
+  ]);
+
+  const statusToneStyles = {
+    active: {
+      background: alpha('#74d28f', theme.palette.mode === 'dark' ? 0.085 : 0.11),
+      borderColor: alpha('#74d28f', 0.11),
+      accent: '#86d89d',
+    },
+    syncing: {
+      background: alpha('#9eb8df', theme.palette.mode === 'dark' ? 0.08 : 0.1),
+      borderColor: alpha('#9eb8df', 0.1),
+      accent: '#a8c2ea',
+    },
+    inactive: {
+      background: alpha('#e59aa7', theme.palette.mode === 'dark' ? 0.07 : 0.095),
+      borderColor: alpha('#e59aa7', 0.09),
+      accent: '#f0a6b2',
+    },
+  } as const;
+
+  const currentStatusTone = statusToneStyles[userMintingState.tone];
+
+  const nextStepDescription = useMemo(() => {
+    if (!isPartOfMintingGroup) {
+      return t('core:minting.panel.next_step_visit_q_mintership');
+    }
+    if (accountIsMinting) {
+      return t('core:minting.panel.next_step_already_active');
+    }
+    if (isNodeSynchronizing) {
+      return t('core:minting.panel.next_step_wait_sync');
+    }
+    if (mintingAccounts?.length > 1) {
+      return t('group:message.generic.minting_keys_per_node', {
+        postProcess: 'capitalizeFirstChar',
+      });
+    }
+    return t('core:minting.panel.next_step_start_when_ready');
+  }, [
+    accountIsMinting,
+    isNodeSynchronizing,
+    isPartOfMintingGroup,
+    mintingAccounts?.length,
+    t,
+  ]);
+
+  const sectionLabelSx = {
+    color: alpha(theme.palette.text.secondary, 0.64),
+    display: 'block',
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    letterSpacing: '0.11em',
+    mb: 0.9,
+    textTransform: 'uppercase',
+  } as const;
+
+  const surfaceCardSx = {
+    background:
+      theme.palette.mode === 'dark'
+        ? 'linear-gradient(180deg, rgba(22,25,32,0.68) 0%, rgba(18,21,28,0.76) 100%)'
+        : 'linear-gradient(180deg, rgba(249,251,254,0.84) 0%, rgba(243,247,251,0.92) 100%)',
+    border: `1px solid ${alpha(theme.palette.divider, 0.18)}`,
+    borderRadius: '12px',
+    boxShadow: 'none',
+  } as const;
+
+  const sectionDividerSx = {
+    mt: 2.15,
+    pt: 2.05,
+    borderTop: `1px solid ${alpha(theme.palette.divider, 0.16)}`,
+  } as const;
+
+  const metricListRowSx = {
+    alignItems: 'center',
+    display: 'grid',
+    gap: 1.5,
+    gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+    py: 1.05,
+    '&:not(:last-of-type)': {
+      borderBottom: `1px solid ${alpha(theme.palette.divider, 0.14)}`,
+    },
+  } as const;
+
+  const metricLabelSx = {
+    color: alpha(theme.palette.text.secondary, 0.6),
+    fontSize: '0.88rem',
+  } as const;
+
+  const metricValueSx = {
+    fontSize: '0.93rem',
+    fontWeight: 700,
+    textAlign: 'right',
+  } as const;
+
+  const silkyPrimaryButtonSx = {
+    background:
+      'linear-gradient(180deg, rgba(151,189,246,0.98) 0%, rgba(120,163,228,0.98) 100%)',
+    border: '1px solid rgba(201,223,255,0.42)',
+    borderRadius: '10px',
+    boxShadow:
+      'inset 0 1px 0 rgba(255,255,255,0.34), 0 10px 24px rgba(44,88,152,0.24)',
+    color: '#0E1827',
+    fontWeight: 800,
+    letterSpacing: '0.01em',
+    px: 2.1,
+    py: 1.1,
+    textTransform: 'none',
+    '&:hover': {
+      background:
+        'linear-gradient(180deg, rgba(160,196,250,1) 0%, rgba(128,171,233,1) 100%)',
+      boxShadow:
+        'inset 0 1px 0 rgba(255,255,255,0.36), 0 12px 26px rgba(44,88,152,0.28)',
+    },
+    '&.Mui-disabled': {
+      background: alpha(theme.palette.action.disabledBackground, 0.9),
+      borderColor: alpha(theme.palette.divider, 0.36),
+      boxShadow: 'none',
+      color: theme.palette.text.disabled,
+    },
+  } as const;
+
+  const silkyDangerButtonSx = {
+    background:
+      'linear-gradient(180deg, rgba(248,150,160,0.96) 0%, rgba(226,101,118,0.98) 100%)',
+    border: '1px solid rgba(255,214,219,0.4)',
+    borderRadius: '10px',
+    boxShadow:
+      'inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 24px rgba(126,29,44,0.22)',
+    color: '#2A0C12',
+    fontWeight: 800,
+    letterSpacing: '0.01em',
+    px: 1.8,
+    py: 0.95,
+    textTransform: 'none',
+    '&:hover': {
+      background:
+        'linear-gradient(180deg, rgba(250,158,168,1) 0%, rgba(230,110,127,1) 100%)',
+      boxShadow:
+        'inset 0 1px 0 rgba(255,255,255,0.34), 0 12px 26px rgba(126,29,44,0.26)',
+    },
+  } as const;
+
+  const summaryMetricRows = [
+    {
+      label: t('core:minting.reward_per_day', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value:
+        formatMetric(
+          countRewardDay(
+            statsAccountInfo,
+            addressLevel,
+            adminInfo,
+            nodeHeightBlock,
+            nodeStatus,
+            tier4Online
+          ),
+          4
+        ) + ' QORT',
+    },
+  ];
+
+  const blockchainRows = [
+    {
+      label: t('core:minting.average_blocktime', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value: t('core:time.second', {
+        count: parseFloat(formatMetric(averageBlockTime(adminInfo, nodeHeightBlock))),
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+    },
+    {
+      label: t('core:minting.average_blocks_per_day', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value: formatMetric(averageBlockDay(adminInfo, nodeHeightBlock)),
+    },
+    {
+      label: t('core:minting.average_created_qorts_per_day', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value: formatMetric(dayReward(adminInfo, nodeHeightBlock, nodeStatus)) + ' QORT',
+    },
+  ];
+
+  const directRewardRows = [
+    {
+      label: t('core:minting.current_tier', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value: t('core:minting.current_tier_content', {
+        tier: currentTier(statsAccountInfo?.level)
+          ? currentTier(statsAccountInfo?.level)[0]
+          : '',
+        levels: currentTier(statsAccountInfo?.level)
+          ? currentTier(statsAccountInfo?.level)[1]
+          : '',
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+    },
+    {
+      label: t('core:minting.tier_share_per_block', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value:
+        formatMetric(tierPercent(statsAccountInfo, tier4Online), 0) + ' %',
+    },
+    {
+      label: t('core:minting.reward_per_block', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value:
+        formatMetric(
+          countReward(
+            statsAccountInfo,
+            addressLevel,
+            nodeStatus,
+            tier4Online
+          ),
+          8
+        ) + ' QORT',
+    },
+  ];
+
+  const networkContextRows = [
+    {
+      label: t('core:minting.total_minter_in_tier', {
+        postProcess: 'capitalizeEachFirstChar',
+      }),
+      value: formatMetric(
+        countMintersInLevel(
+          statsAccountInfo?.level,
+          addressLevel,
+          tier4Online
+        ),
+        0
+      ),
+    },
+  ];
+
   return (
-    <Dialog
-      open={true}
-      maxWidth="lg"
-      fullWidth
-      fullScreen
-      slots={{
-        transition: TransitionUp,
-      }}
-    >
-      <AppBar sx={{ position: 'relative' }}>
-        <Toolbar>
-          <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
-            {t('group:message.generic.manage_minting', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
+    <>
+      <Dialog
+        open={true}
+        onClose={closeMinting}
+        maxWidth={false}
+        fullWidth
+        BackdropProps={{
+          sx: {
+            backdropFilter: 'blur(12px)',
+            backgroundColor: alpha('#07090D', 0.66),
+          },
+        }}
+        PaperProps={{
+          sx: {
+            background:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+                : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.42)}`,
+            borderRadius: '14px',
+            boxShadow:
+              theme.palette.mode === 'dark'
+                ? '0 34px 120px rgba(0,0,0,0.46)'
+                : '0 28px 88px rgba(18,28,45,0.16)',
+            height: { xs: 'calc(100vh - 32px)', md: 'min(86vh, 920px)' },
+            margin: { xs: 2, md: 3 },
+            maxHeight: 'calc(100vh - 24px)',
+            maxWidth: 'none',
+            overflow: 'hidden',
+            width: 'min(1180px, calc(100vw - 48px))',
+          },
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: 'center',
+            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.42)}`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            minHeight: 60,
+            px: { xs: 2, md: 2.75 },
+            py: 1.1,
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: '1.12rem',
+                fontWeight: 800,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.1,
+              }}
+            >
+              {t('group:message.generic.manage_minting', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '0.84rem',
+                mt: 0.45,
+              }}
+            >
+              {t('core:minting.panel.dialog_subtitle')}
+            </Typography>
+          </Box>
 
           <IconButton
-            color="inherit"
-            edge="start"
-            onClick={() => setIsOpenMinting(false)}
+            onClick={closeMinting}
             aria-label={t('core:action.close', {
               postProcess: 'capitalizeFirstChar',
             })}
             sx={{
-              bgcolor: theme.palette.background.default,
-              color: theme.palette.text.primary,
+              borderRadius: '8px',
+              color: theme.palette.text.secondary,
+              height: 34,
+              width: 34,
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
             <CloseIcon />
           </IconButton>
-        </Toolbar>
-      </AppBar>
-
-      <Box
-        sx={{
-          bgcolor: theme.palette.background.default,
-          color: theme.palette.text.primary,
-          display: 'flex',
-          flexDirection: 'column',
-          flexGrow: 1,
-          overflowY: 'auto',
-        }}
-      >
-        <Box
-          sx={{ borderBottom: 1, borderColor: theme.palette.text.secondary }}
-        >
-          <Tabs
-            value={valueMintingTab}
-            onChange={handleChange}
-            variant={'fullWidth'}
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            sx={{
-              '&.MuiTabs-indicator': {
-                backgroundColor: theme.palette.background.default,
-              },
-            }}
-          >
-            <Tab
-              label={t('core:minting.details', {
-                postProcess: 'capitalizeAll',
-              })}
-              sx={{
-                '&.Mui-selected': {
-                  color: theme.palette.text.primary,
-                },
-                fontSize: '1rem',
-              }}
-              {...a11yProps(0)}
-            />
-            <Tab
-              label={t('core:minting.actions', {
-                postProcess: 'capitalizeAll',
-              })}
-              sx={{
-                '&.Mui-selected': {
-                  color: theme.palette.text.primary,
-                },
-                fontSize: '1rem',
-              }}
-              {...a11yProps(1)}
-            />
-          </Tabs>
         </Box>
 
-        {valueMintingTab === 0 && (
-          <DialogContent sx={{ position: 'relative' }}>
-            <Box sx={{ maxWidth: 560, mx: 'auto', py: 3, px: 1 }}>
+        <Box
+          sx={{
+            color: theme.palette.text.primary,
+            display: 'flex',
+            flex: '1 1 auto',
+            minHeight: 0,
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          {isLoading && (
+            <Box
+              sx={{
+                alignItems: 'center',
+                backgroundColor: alpha(theme.palette.background.default, 0.42),
+                bottom: 0,
+                display: 'flex',
+                justifyContent: 'center',
+                left: 0,
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                zIndex: 2,
+              }}
+            >
+              <FidgetSpinner
+                ariaLabel={t('core:minting.panel.loading_spinner_aria')}
+                height="80"
+                visible={true}
+                width="80"
+                wrapperClass="fidget-spinner-wrapper"
+                wrapperStyle={{}}
+              />
+            </Box>
+          )}
 
-              {/* Blockchain Statistics */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: theme.palette.text.secondary,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 600,
-                  mb: 1,
-                }}
-              >
-                {t('core:minting.blockchain_statistics', {
-                  postProcess: 'capitalizeEachFirstChar',
-                })}
-              </Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              flex: '1 1 auto',
+              gap: 2.75,
+              gridTemplateColumns: { xs: '1fr', lg: '360px minmax(0, 1fr)' },
+              minHeight: 0,
+              overflowY: 'auto',
+              px: { xs: 2, md: 2.75 },
+              py: { xs: 2.25, md: 2.75 },
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.75, minHeight: 0 }}>
               <Box
                 sx={{
-                  borderRadius: 2,
+                  ...surfaceCardSx,
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'linear-gradient(180deg, rgba(18,21,28,0.42) 0%, rgba(15,18,24,0.52) 100%)'
+                      : 'linear-gradient(180deg, rgba(249,251,254,0.72) 0%, rgba(243,247,251,0.82) 100%)',
+                  borderColor: alpha(theme.palette.divider, 0.14),
+                  flex: '1 1 auto',
+                  minHeight: 0,
                   overflow: 'hidden',
-                  border: 1,
-                  borderColor: alpha(theme.palette.divider, 0.4),
-                  bgcolor: alpha(theme.palette.background.default, 0.5),
-                  mb: 3,
+                  p: { xs: 2, md: 2.25 },
+                  position: 'relative',
                 }}
               >
-                {[
-                  {
-                    label: t('core:minting.average_blocktime', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value: t('core:time.second', {
-                      count: parseFloat(
-                        averageBlockTime(adminInfo, nodeHeightBlock).toFixed(2)
-                      ),
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                  },
-                  {
-                    label: t('core:minting.average_blocks_per_day', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value: averageBlockDay(adminInfo, nodeHeightBlock).toFixed(2),
-                  },
-                  {
-                    label: t('core:minting.average_created_qorts_per_day', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value: dayReward(adminInfo, nodeHeightBlock, nodeStatus).toFixed(2),
-                  },
-                ].map((row, i, arr) => (
-                  <Box
-                    key={row.label}
+                <Box
+                  component="img"
+                  src={mintingWatermark}
+                  alt=""
+                  aria-hidden
+                  sx={{
+                    bottom: { xs: -88, md: -78 },
+                    filter: 'saturate(0.92) brightness(0.88)',
+                    left: { xs: -48, md: -58 },
+                    maxWidth: { xs: 320, md: 390 },
+                    opacity: 0.04,
+                    pointerEvents: 'none',
+                    position: 'absolute',
+                    userSelect: 'none',
+                    width: { xs: '82%', md: '94%' },
+                    zIndex: 0,
+                  }}
+                />
+
+                <Box sx={{ position: 'relative', zIndex: 1 }}>
+                {mintingAccounts?.length > 0 ? (
+                  <Box sx={{ mb: 2.25 }}>
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:minting.panel.section_your_wallet')}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '1.05rem',
+                        fontWeight: 700,
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.15,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {walletDisplayName}
+                    </Typography>
+                    {showWalletAddressLine ? (
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.84),
+                          fontSize: '0.82rem',
+                          mt: 0.35,
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {accountInfo?.address}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                ) : null}
+
+                <Box>
+                  <Typography sx={sectionLabelSx}>
+                    {mintingAccounts?.length > 0
+                      ? t('core:minting.panel.section_minter_profile_stats')
+                      : t('core:minting.panel.section_account_identity')}
+                  </Typography>
+                  <Typography
                     sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      px: 2,
-                      py: 1.25,
-                      ...(i < arr.length - 1 && {
-                        borderBottom: 1,
-                        borderColor: 'divider',
-                      }),
+                      fontSize: '1.35rem',
+                      fontWeight: 800,
+                      letterSpacing: '-0.03em',
+                      lineHeight: 1.12,
+                      wordBreak: 'break-word',
                     }}
                   >
-                    <Typography variant="body2" color="text.secondary">
-                      {row.label}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {row.value}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-
-              {/* Account Details */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: theme.palette.text.secondary,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 600,
-                  mb: 1,
-                }}
-              >
-                {t('core:minting.account_details', {
-                  postProcess: 'capitalizeEachFirstChar',
-                })}
-              </Typography>
-              <Box
-                sx={{
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  border: 1,
-                  borderColor: alpha(theme.palette.divider, 0.4),
-                  bgcolor: alpha(theme.palette.background.default, 0.5),
-                  mb: 3,
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    {t('core:minting.current_status', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    })}
+                    {statsDisplayName}
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {mintingStatus(nodeStatus)}
-                  </Typography>
+                  {showAddressLine ? (
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.84),
+                        fontSize: '0.86rem',
+                        mt: 0.38,
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {statsAccountInfo?.address}
+                    </Typography>
+                  ) : null}
                 </Box>
+
                 <Box
                   sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: 1,
-                    borderColor: 'divider',
+                    ...sectionDividerSx,
                   }}
                 >
-                  <Typography variant="body2" color="text.secondary">
-                    {t('core:minting.current_level', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    })}
+                  <Typography sx={sectionLabelSx}>
+                    {t('core:minting.panel.section_progress_next_level')}
                   </Typography>
                   <Box
                     sx={{
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.primary.main, 0.12),
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}`,
+                      borderRadius: '999px',
+                      mb: 0.85,
+                      px: 1,
+                      py: 0.42,
                     }}
                   >
                     <Typography
-                      variant="subtitle2"
                       sx={{
-                        fontWeight: 600,
                         color: theme.palette.primary.main,
+                        fontSize: '0.79rem',
+                        fontWeight: 700,
                       }}
                     >
-                      {accountInfo?.level ?? '—'}
+                      {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
+                      {statsAccountInfo?.level ?? '-'}
                     </Typography>
                   </Box>
-                </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    {t('core:minting.blocks_next_level', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    })}
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {levelUpBlocks(accountInfo, nodeStatus).toFixed(0) || '—'}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    px: 2,
-                    py: 1.5,
-                    bgcolor: alpha(theme.palette.action.hover, 0.04),
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    <Trans
-                      i18nKey="minting.next_level"
-                      ns="core"
-                      components={{ strong: <strong /> }}
-                      values={{
-                        level: nextLevel(accountInfo?.level),
-                        count: daysToNextLevel?.toFixed(2),
-                      }}
-                      tOptions={{ postProcess: ['capitalizeFirstChar'] }}
-                    />
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Rewards Info */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: theme.palette.text.secondary,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 600,
-                  mb: 1,
-                }}
-              >
-                {t('core:minting.rewards_info', {
-                  postProcess: 'capitalizeEachFirstChar',
-                })}
-              </Typography>
-              <Box
-                sx={{
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  border: 1,
-                  borderColor: alpha(theme.palette.divider, 0.4),
-                  bgcolor: alpha(theme.palette.background.default, 0.5),
-                  mb: 3,
-                }}
-              >
-                {[
-                  {
-                    label: t('core:minting.current_tier', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value: t('core:minting.current_tier_content', {
-                      tier: currentTier(accountInfo?.level)
-                        ? currentTier(accountInfo?.level)[0]
-                        : '',
-                      levels: currentTier(accountInfo?.level)
-                        ? currentTier(accountInfo?.level)[1]
-                        : '',
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                  },
-                  {
-                    label: t('core:minting.total_minter_in_tier', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value:
-                      countMintersInLevel(
-                        accountInfo?.level,
-                        addressLevel,
-                        tier4Online
-                      )?.toFixed(0) || '—',
-                  },
-                  {
-                    label: t('core:minting.tier_share_per_block', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value:
-                      tierPercent(accountInfo, tier4Online)?.toFixed(0) + ' %',
-                  },
-                  {
-                    label: t('core:minting.reward_per_block', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value:
-                      countReward(
-                        accountInfo,
-                        addressLevel,
-                        nodeStatus,
-                        tier4Online
-                      ).toFixed(8) + ' QORT',
-                  },
-                  {
-                    label: t('core:minting.reward_per_day', {
-                      postProcess: 'capitalizeEachFirstChar',
-                    }),
-                    value:
-                      countRewardDay(
-                        accountInfo,
-                        addressLevel,
-                        adminInfo,
-                        nodeHeightBlock,
-                        nodeStatus,
-                        tier4Online
-                      ).toFixed(8) + ' QORT',
-                  },
-                ].map((row, i, arr) => (
-                  <Box
-                    key={row.label}
+                  <Typography
                     sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      px: 2,
-                      py: 1.25,
-                      ...(i < arr.length - 1 && {
-                        borderBottom: 1,
-                        borderColor: 'divider',
-                      }),
+                      fontSize: '1.9rem',
+                      fontWeight: 800,
+                      letterSpacing: '-0.04em',
+                      lineHeight: 1.05,
                     }}
                   >
-                    <Typography variant="body2" color="text.secondary">
-                      {row.label}
+                    {progressBlocks}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.9rem',
+                      mt: 0.55,
+                    }}
+                  >
+                    {t('core:minting.panel.blocks_to_level', {
+                      level: progressLevel ?? '-',
+                    })}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.9rem',
+                      mt: 1.2,
+                    }}
+                  >
+                    {t('core:minting.panel.minting_for_approx_days', {
+                      days: progressDays ?? '-',
+                    })}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    ...sectionDividerSx,
+                  }}
+                >
+                  <Typography sx={sectionLabelSx}>
+                    {t('core:minting.panel.section_next_step')}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.86),
+                      fontSize: '0.92rem',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {nextStepDescription}
+                  </Typography>
+
+                  {isPartOfMintingGroup && !accountIsMinting ? (
+                    <Box sx={{ mt: 1.6, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Button
+                        size="small"
+                        onClick={startMinting}
+                        disabled={mintingAccounts?.length > 1 || isNodeSynchronizing}
+                        variant="contained"
+                        sx={silkyPrimaryButtonSx}
+                      >
+                        {t('core:action.start_minting', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Button>
+                      {mintingAccounts?.length > 1 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {t('group:message.generic.minting_keys_per_node', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  ) : null}
+
+                  {!isPartOfMintingGroup ? (
+                    <Box sx={{ mt: 1.6, display: 'flex', flexDirection: 'column', gap: 1.1 }}>
+                      <Button
+                        size="small"
+                        onClick={openQMintership}
+                        variant="contained"
+                        sx={silkyPrimaryButtonSx}
+                      >
+                        {t('group:action.visit_q_mintership', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Button>
+                    </Box>
+                  ) : null}
+                </Box>
+
+                {mintingAccounts?.length > 0 ? (
+                  <Box
+                    sx={{
+                      ...sectionDividerSx,
+                    }}
+                  >
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:minting.panel.section_node_minting_accounts')}
                     </Typography>
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 600, textAlign: 'right' }}
+                      color="text.secondary"
+                      sx={{ mb: 1.1, lineHeight: 1.45 }}
+                    >
+                      {t('core:minting.panel.select_account_for_stats_hint')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {mintingAccounts?.map((acct) => {
+                        const isSelected =
+                          acct?.mintingAccount === effectiveSelectedMintingKey;
+                        return (
+                          <Box
+                            key={acct?.mintingAccount}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() =>
+                              setSelectedMintingAccountKey(acct?.mintingAccount)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedMintingAccountKey(acct?.mintingAccount);
+                              }
+                            }}
+                            sx={{
+                              backgroundColor: alpha(
+                                theme.palette.background.default,
+                                theme.palette.mode === 'dark' ? 0.14 : 0.34
+                              ),
+                              border: `1px solid ${
+                                isSelected
+                                  ? alpha(theme.palette.primary.main, 0.55)
+                                  : alpha(theme.palette.divider, 0.14)
+                              }`,
+                              borderRadius: '10px',
+                              boxShadow: isSelected
+                                ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.35)}`
+                                : 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 1,
+                              outline: 'none',
+                              p: 1.15,
+                              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                alignItems: 'center',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 0.75,
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: theme.palette.text.primary,
+                                  fontWeight: 700,
+                                  wordBreak: 'break-word',
+                                }}
+                              >
+                                {handleNames(acct?.mintingAccount)}
+                              </Typography>
+                              {isSelected ? (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: theme.palette.primary.main,
+                                    fontWeight: 700,
+                                    letterSpacing: '0.06em',
+                                    textTransform: 'uppercase',
+                                  }}
+                                >
+                                  {t('core:minting.panel.badge_viewing_stats')}
+                                </Typography>
+                              ) : null}
+                            </Box>
+                            <Button
+                              size="small"
+                              sx={silkyDangerButtonSx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeMintingAccount(acct.publicKey, acct);
+                              }}
+                              variant="contained"
+                            >
+                              {t('group:action.remove_minting_account', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </Button>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                    {mintingAccounts?.length > 1 ? (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 1.2 }}
+                      >
+                        {t('group:message.generic.minting_keys_per_node_different', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                ) : null}
+                </Box>
+              </Box>
+            </Box>
+
+            <Box
+              aria-busy={isStatsLoading}
+              sx={{
+                borderLeft: {
+                  xs: 'none',
+                  lg: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.06)}`,
+                },
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2.4,
+                minWidth: 0,
+                opacity: isStatsLoading ? 0.62 : 1,
+                pl: { xs: 0, lg: 3 },
+                transition: 'opacity 0.2s ease',
+              }}
+            >
+              <Box
+                sx={{
+                  ...surfaceCardSx,
+                  background: currentStatusTone.background,
+                  borderColor: currentStatusTone.borderColor,
+                  position: 'relative',
+                  p: { xs: 2, md: 2.2 },
+                  '&::before': {
+                    backgroundColor: alpha(currentStatusTone.accent, 0.62),
+                    borderRadius: '999px',
+                    bottom: 16,
+                    content: '""',
+                    left: 0,
+                    position: 'absolute',
+                    top: 16,
+                    width: '1px',
+                  },
+                }}
+              >
+                <Typography sx={sectionLabelSx}>
+                  {t('core:minting.current_status')}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: currentStatusTone.accent,
+                    fontSize: '1.9rem',
+                    fontWeight: 800,
+                    letterSpacing: '-0.04em',
+                    lineHeight: 1.05,
+                  }}
+                >
+                  {userMintingState.title}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: '0.92rem',
+                    mt: 0.85,
+                    maxWidth: 520,
+                  }}
+                >
+                  {userMintingState.description}
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: 1.1,
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'minmax(260px, 320px)',
+                  },
+                }}
+              >
+                {summaryMetricRows.map((row) => (
+                  <Box
+                    key={row.label}
+                    sx={{
+                      ...surfaceCardSx,
+                      background:
+                        theme.palette.mode === 'dark'
+                          ? 'linear-gradient(180deg, rgba(18,21,28,0.4) 0%, rgba(15,18,24,0.48) 100%)'
+                          : 'linear-gradient(180deg, rgba(249,251,254,0.7) 0%, rgba(243,247,251,0.8) 100%)',
+                      borderColor: alpha(theme.palette.divider, 0.12),
+                      minHeight: 88,
+                      p: 1.55,
+                    }}
+                  >
+                    <Typography sx={sectionLabelSx}>{row.label}</Typography>
+                    <Typography
+                      sx={{
+                        color: row.accent
+                          ? theme.palette.primary.main
+                          : theme.palette.text.primary,
+                        fontSize: row.label ===
+                        t('core:minting.reward_per_day', {
+                          postProcess: 'capitalizeEachFirstChar',
+                        })
+                          ? '1.05rem'
+                          : '1.18rem',
+                        fontWeight:
+                          row.label ===
+                          t('core:minting.reward_per_day', {
+                            postProcess: 'capitalizeEachFirstChar',
+                          })
+                            ? 650
+                            : 800,
+                        letterSpacing: '-0.03em',
+                        lineHeight: 1.12,
+                        opacity:
+                          row.label ===
+                          t('core:minting.reward_per_day', {
+                            postProcess: 'capitalizeEachFirstChar',
+                          })
+                            ? 0.88
+                            : 1,
+                      }}
                     >
                       {row.value}
                     </Typography>
@@ -965,419 +1529,185 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 ))}
               </Box>
 
-            </Box>
-          </DialogContent>
-        )}
-
-        {valueMintingTab === 1 && (
-          <DialogContent sx={{ position: 'relative' }}>
-            {isLoading && (
               <Box
                 sx={{
-                  alignItems: 'center',
-                  bottom: 0,
-                  display: 'flex',
-                  justifyContent: 'center',
-                  left: 0,
-                  position: 'absolute',
-                  right: 0,
-                  top: 0,
-                  zIndex: 1,
+                  ...surfaceCardSx,
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'linear-gradient(180deg, rgba(18,21,27,0.46) 0%, rgba(15,18,24,0.52) 100%)'
+                      : 'linear-gradient(180deg, rgba(248,250,253,0.74) 0%, rgba(242,246,251,0.8) 100%)',
+                  borderColor: alpha(theme.palette.divider, 0.16),
+                  p: { xs: 2, md: 2.15 },
                 }}
               >
-                <FidgetSpinner
-                  ariaLabel="fidget-spinner-loading"
-                  height="80"
-                  visible={true}
-                  width="80"
-                  wrapperClass="fidget-spinner-wrapper"
-                  wrapperStyle={{}}
-                />
-              </Box>
-            )}
-
-            <Box sx={{ maxWidth: 560, mx: 'auto', py: 3, px: 1 }}>
-
-              {/* Account info */}
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  color: theme.palette.text.secondary,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 600,
-                  mb: 1,
-                }}
-              >
-                {t('auth:account.account_one', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-              <Box
-                sx={{
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  border: 1,
-                  borderColor: alpha(theme.palette.divider, 0.4),
-                  bgcolor: alpha(theme.palette.background.default, 0.5),
-                  mb: 3,
-                }}
-              >
-                <Box
+                <Typography sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}>
+                  {t('core:minting.blockchain_statistics')}
+                </Typography>
+                <Typography
                   sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    px: 2,
-                    py: 1.25,
-                    borderBottom: 1,
-                    borderColor: 'divider',
+                    color: alpha(theme.palette.text.secondary, 0.48),
+                    fontSize: '0.84rem',
+                    mb: 1.45,
                   }}
                 >
-                  <Typography variant="body2" color="text.secondary">
-                    {t('auth:address', { postProcess: 'capitalizeFirstChar' })}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ fontWeight: 600, fontFamily: 'monospace' }}
-                  >
-                    {handleNames(accountInfo?.address)}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    px: 2,
-                    py: 1.25,
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    {t('core:level', { postProcess: 'capitalizeFirstChar' })}
-                  </Typography>
-                  <Box
-                    sx={{
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.primary.main, 0.12),
-                    }}
-                  >
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        fontWeight: 600,
-                        color: theme.palette.primary.main,
-                      }}
-                    >
-                      {accountInfo?.level ?? '—'}
-                    </Typography>
-                  </Box>
+                  {t('core:minting.panel.reference_only')}
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  {blockchainRows.map((row) => (
+                    <Box key={row.label} sx={metricListRowSx}>
+                      <Typography
+                        variant="body2"
+                        sx={{ ...metricLabelSx, color: alpha(theme.palette.text.secondary, 0.62) }}
+                      >
+                        {row.label}
+                      </Typography>
+                      <Typography variant="body2" sx={metricValueSx}>
+                        {row.value}
+                      </Typography>
+                    </Box>
+                  ))}
                 </Box>
               </Box>
 
-              {/* Start minting */}
-              {isPartOfMintingGroup && !accountIsMinting && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: 1,
-                    mb: 3,
-                  }}
-                >
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      startMinting();
-                    }}
-                    disabled={mintingAccounts?.length > 1}
-                    sx={{
-                      backgroundColor: theme.palette.other.positive,
-                      color: 'black',
-                      fontWeight: 'bold',
-                      opacity: 0.7,
-                      width: '200px',
-                      '&:hover': {
-                        backgroundColor: theme.palette.other.positive,
-                        color: 'black',
-                        opacity: 1,
-                      },
-                    }}
-                    variant="contained"
-                  >
-                    {t('core:action.start_minting', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                  {mintingAccounts?.length > 1 && (
-                    <Typography variant="body2" color="text.secondary">
-                      {t('group:message.generic.minting_keys_per_node', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                  )}
-                </Box>
-              )}
+              <Box
+                sx={{
+                  ...surfaceCardSx,
+                  p: { xs: 2, md: 2.15 },
+                }}
+              >
+                <Typography sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}>
+                  {t('core:minting.rewards_info')}
+                </Typography>
 
-              {/* Minting accounts list */}
-              {mintingAccounts?.length > 0 && (
-                <>
+                <Box>
                   <Typography
-                    variant="caption"
                     sx={{
-                      display: 'block',
-                      color: theme.palette.text.secondary,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      fontWeight: 600,
+                      color: alpha(theme.palette.text.secondary, 0.48),
+                      fontSize: '0.9rem',
+                      fontWeight: 400,
                       mb: 1,
                     }}
                   >
-                    {t('group:message.generic.node_minting_account', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
+                    {statsAddress === myAddress
+                      ? t('core:minting.panel.rewards_info_subtitle_own')
+                      : t('core:minting.panel.rewards_info_subtitle_selected')}
                   </Typography>
-                  <Box
-                    sx={{
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      border: 1,
-                      borderColor: alpha(theme.palette.divider, 0.4),
-                      bgcolor: alpha(theme.palette.background.default, 0.5),
-                      mb: 3,
-                    }}
-                  >
-                    {accountIsMinting && (
-                      <Box
-                        sx={{
-                          px: 2,
-                          py: 1.25,
-                          borderBottom: 1,
-                          borderColor: 'divider',
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          {t('group:message.generic.node_minting_key', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    {directRewardRows.map((row) => (
+                      <Box key={row.label} sx={metricListRowSx}>
+                        <Typography variant="body2" sx={metricLabelSx}>
+                          {row.label}
                         </Typography>
-                      </Box>
-                    )}
-                    {mintingAccounts?.map((acct, i) => (
-                      <Box
-                        key={acct?.mintingAccount}
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: 2,
-                          px: 2,
-                          py: 1.25,
-                          ...(i < mintingAccounts.length - 1 && {
-                            borderBottom: 1,
-                            borderColor: 'divider',
-                          }),
-                        }}
-                      >
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
-                        >
-                          {t('group:message.generic.minting_account', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}{' '}
-                          {handleNames(acct?.mintingAccount)}
+                        <Typography variant="body2" sx={metricValueSx}>
+                          {row.value}
                         </Typography>
-                        <Button
-                          size="small"
-                          sx={{
-                            backgroundColor: theme.palette.other.danger,
-                            color: theme.palette.text.primary,
-                            fontWeight: 'bold',
-                            flexShrink: 0,
-                            opacity: 0.7,
-                            '&:hover': {
-                              backgroundColor: theme.palette.other.danger,
-                              color: theme.palette.text.primary,
-                              opacity: 1,
-                            },
-                          }}
-                          onClick={() => {
-                            removeMintingAccount(acct.publicKey, acct);
-                          }}
-                          variant="contained"
-                        >
-                          {t('group:action.remove_minting_account', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </Button>
                       </Box>
                     ))}
-                    {mintingAccounts?.length > 1 && (
-                      <Box
-                        sx={{
-                          px: 2,
-                          py: 1.25,
-                          borderTop: 1,
-                          borderColor: 'divider',
-                          bgcolor: alpha(theme.palette.action.hover, 0.04),
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          {t(
-                            'group:message.generic.minting_keys_per_node_different',
-                            { postProcess: 'capitalizeFirstChar' }
-                          )}
-                        </Typography>
-                      </Box>
-                    )}
                   </Box>
-                </>
-              )}
+                </Box>
 
-              {/* Not part of minting group */}
-              {!isPartOfMintingGroup && (
                 <Box
                   sx={{
-                    borderRadius: 2,
-                    border: 1,
-                    borderColor: alpha(theme.palette.divider, 0.4),
-                    bgcolor: alpha(theme.palette.background.default, 0.5),
-                    p: 3,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 2,
+                    mt: 3.35,
+                    pt: 2.9,
+                    borderTop: `1px solid ${alpha(theme.palette.divider, 0.18)}`,
                   }}
                 >
                   <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    textAlign="center"
-                  >
-                    {t('group:message.generic.minter_group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    textAlign="center"
-                  >
-                    {t('group:message.generic.mintership_app', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  <Button
-                    size="small"
                     sx={{
-                      backgroundColor: theme.palette.other.positive,
+                      ...sectionLabelSx,
                       color: theme.palette.text.primary,
-                      fontWeight: 'bold',
-                      opacity: 0.7,
-                      '&:hover': {
-                        backgroundColor: theme.palette.other.positive,
-                        color: 'black',
-                        opacity: 1,
-                      },
+                      mb: 1,
                     }}
-                    onClick={() => {
-                      executeEvent('addTab', {
-                        data: { service: 'APP', name: 'q-mintership' },
-                      });
-                      executeEvent('open-apps-mode', {});
-                      setIsOpenMinting(false);
-                    }}
-                    variant="contained"
                   >
-                    {t('group:action.visit_q_mintership', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
+                    {t('core:minting.panel.network_details')}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    {networkContextRows.map((row) => (
+                      <Box key={row.label} sx={metricListRowSx}>
+                        <Typography
+                          variant="body2"
+                          sx={{ ...metricLabelSx, color: alpha(theme.palette.text.secondary, 0.64) }}
+                        >
+                          {row.label}
+                        </Typography>
+                        <Typography variant="body2" sx={{ ...metricValueSx, opacity: 0.92 }}>
+                          {row.value}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
                 </Box>
-              )}
-
-              {showWaitDialog && (
-                <Dialog
-                  open={showWaitDialog}
-                  aria-labelledby="alert-dialog-title"
-                  aria-describedby="alert-dialog-description"
-                >
-                  <DialogTitle
-                    id="alert-dialog-title"
-                    sx={{
-                      textAlign: 'center',
-                      color: theme.palette.text.primary,
-                      fontWeight: 'bold',
-                      opacity: 1,
-                    }}
-                  >
-                    {isShowNext
-                      ? t('core:message.generic.confirmed', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
-                      : t('core:message.generic.wait', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                  </DialogTitle>
-
-                  <DialogContent>
-                    {!isShowNext && (
-                      <Typography>
-                        {t('group:message.success.rewardshare_creation', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
-                    )}
-
-                    {isShowNext && (
-                      <Typography>
-                        {t('group:message.success.rewardshare_confirmed', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
-                    )}
-                  </DialogContent>
-
-                  <DialogActions>
-                    <Button
-                      disabled={!isShowNext}
-                      variant="contained"
-                      onClick={onOk}
-                      autoFocus
-                    >
-                      {t('core:pagination.next', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Button>
-                  </DialogActions>
-                </Dialog>
-              )}
+              </Box>
             </Box>
-          </DialogContent>
-        )}
-      </Box>
+          </Box>
+        </Box>
+      </Dialog>
 
-      <Snackbar
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        open={openSnack}
-        autoHideDuration={6000}
-        onClose={handleClose}
-      >
-        <Alert
-          onClose={handleClose}
-          severity={info?.type}
-          variant="filled"
-          sx={{ width: '100%' }}
+      {showWaitDialog && (
+        <Dialog
+          open={showWaitDialog}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
         >
-          {info?.message}
-        </Alert>
-      </Snackbar>
-    </Dialog>
+          <DialogTitle
+            id="alert-dialog-title"
+            sx={{
+              textAlign: 'center',
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 1,
+            }}
+          >
+            {isShowNext
+              ? t('core:message.generic.confirmed', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+              : t('core:message.generic.wait', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+          </DialogTitle>
+
+          <DialogContent>
+            {!isShowNext && (
+              <Typography>
+                {t('group:message.success.rewardshare_creation', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            )}
+
+            {isShowNext && (
+              <Typography>
+                {t('group:message.success.rewardshare_confirmed', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            )}
+          </DialogContent>
+
+          <DialogActions>
+            <Button
+              disabled={!isShowNext}
+              variant="contained"
+              onClick={onOk}
+              autoFocus
+              sx={silkyPrimaryButtonSx}
+            >
+              {t('core:pagination.next', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      <CustomizedSnackbars
+        open={openSnack}
+        setOpen={setOpenSnack}
+        info={info}
+        setInfo={setInfo}
+      />
+    </>
   );
 };

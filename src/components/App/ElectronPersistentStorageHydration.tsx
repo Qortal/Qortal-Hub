@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
-  customWebsocketSubscriptionsByAddressAtom,
   DM_FRIENDS_LEGACY_BUCKET_KEY,
   dmFriendsByAccountAtom,
+  parseDmFriendsPersisted,
+  customWebsocketSubscriptionsByAddressAtom,
   filterSeenInAppRecordByAge,
   notificationSeenInAppKeysRecordAtom,
-  parseDmFriendsPersisted,
   parseSeenInAppStored,
   seenAllNotificationsByAddressAtom,
   userInfoAtom,
@@ -14,6 +14,7 @@ import {
 import {
   hydrateElectronPersistentCache,
   ELECTRON_PERSISTENT_ATOM_KEYS,
+  primeElectronPersistentCacheKey,
 } from '../../utils/electronPersistentStorage';
 
 /**
@@ -21,9 +22,13 @@ import {
  * the atoms so the UI shows the correct state. Renders nothing.
  */
 export function ElectronPersistentStorageHydration() {
-  const setCustomSubscriptionsByAddress = useSetAtom(customWebsocketSubscriptionsByAddressAtom);
+  const setCustomSubscriptionsByAddress = useSetAtom(
+    customWebsocketSubscriptionsByAddressAtom
+  );
   const setSeenInAppRecord = useSetAtom(notificationSeenInAppKeysRecordAtom);
-  const setSeenAllNotificationsByAddress = useSetAtom(seenAllNotificationsByAddressAtom);
+  const setSeenAllNotificationsByAddress = useSetAtom(
+    seenAllNotificationsByAddressAtom
+  );
   const setDmFriendsByAccount = useSetAtom(dmFriendsByAccountAtom);
   const userAddress = useAtomValue(userInfoAtom)?.address;
   const dmFriendsByAccount = useAtomValue(dmFriendsByAccountAtom);
@@ -47,33 +52,60 @@ export function ElectronPersistentStorageHydration() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const appStorage = (window as Window & { appStorage?: { get: (k: string) => Promise<unknown> } }).appStorage;
+    const appStorage = (
+      window as Window & {
+        appStorage?: { get: (k: string) => Promise<unknown> };
+      }
+    ).appStorage;
     if (!appStorage || hydratedRef.current) return;
     hydratedRef.current = true;
 
     (async () => {
       await hydrateElectronPersistentCache();
-      const [subsPayload, seen, seenAllPayload, dmFriendsPayload] = await Promise.all([
-        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.customWsSubscriptionsByAddress),
-        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.notificationSeenInApp),
-        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.seenAllNotificationsByAddress),
-        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.dmFriends),
-      ]);
+      const [subsPayload, seen, seenAllPayload, dmFriendsPayload] =
+        await Promise.all([
+          appStorage.get(
+            ELECTRON_PERSISTENT_ATOM_KEYS.customWsSubscriptionsByAddress
+          ),
+          appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.notificationSeenInApp),
+          appStorage.get(
+            ELECTRON_PERSISTENT_ATOM_KEYS.seenAllNotificationsByAddress
+          ),
+          appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.dmFriends),
+        ]);
       if (subsPayload != null) {
         if (Array.isArray(subsPayload)) {
           setCustomSubscriptionsByAddress({ __legacy: subsPayload });
-        } else if (typeof subsPayload === 'object' && !Array.isArray(subsPayload)) {
-          setCustomSubscriptionsByAddress(subsPayload as Record<string, import('../../atoms/global').CustomWebsocketSubscription[]>);
+        } else if (
+          typeof subsPayload === 'object' &&
+          !Array.isArray(subsPayload)
+        ) {
+          setCustomSubscriptionsByAddress(
+            subsPayload as Record<
+              string,
+              import('../../atoms/global').CustomWebsocketSubscription[]
+            >
+          );
         }
       }
       if (seen != null && typeof seen === 'object' && !Array.isArray(seen)) {
         const record = filterSeenInAppRecordByAge(parseSeenInAppStored(seen));
         if (Object.keys(record).length > 0) setSeenInAppRecord(record);
       }
-      if (seenAllPayload != null && typeof seenAllPayload === 'object' && !Array.isArray(seenAllPayload)) {
-        setSeenAllNotificationsByAddress(seenAllPayload as Record<string, number | null>);
+      if (
+        seenAllPayload != null &&
+        typeof seenAllPayload === 'object' &&
+        !Array.isArray(seenAllPayload)
+      ) {
+        setSeenAllNotificationsByAddress(
+          seenAllPayload as Record<string, number | null>
+        );
       }
-      if (dmFriendsPayload != null && typeof dmFriendsPayload === 'object' && !Array.isArray(dmFriendsPayload)) {
+      if (
+        dmFriendsPayload != null &&
+        typeof dmFriendsPayload === 'object' &&
+        !Array.isArray(dmFriendsPayload)
+      ) {
         setDmFriendsByAccount(parseDmFriendsPersisted(dmFriendsPayload));
       }
     })();
@@ -83,6 +115,43 @@ export function ElectronPersistentStorageHydration() {
     setSeenAllNotificationsByAddress,
     setDmFriendsByAccount,
   ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const appStorage = (
+      window as Window & {
+        appStorage?: { get: (k: string) => Promise<unknown> };
+      }
+    ).appStorage;
+    if (!appStorage) return;
+
+    let cancelled = false;
+    const key = ELECTRON_PERSISTENT_ATOM_KEYS.seenAllNotificationsByAddress;
+    void (async () => {
+      try {
+        const seenAllPayload = await appStorage.get(key);
+        if (cancelled) return;
+        if (
+          seenAllPayload != null &&
+          typeof seenAllPayload === 'object' &&
+          !Array.isArray(seenAllPayload)
+        ) {
+          primeElectronPersistentCacheKey(key, seenAllPayload);
+          setSeenAllNotificationsByAddress(
+            seenAllPayload as Record<string, number | null>
+          );
+        }
+      } catch (err) {
+        console.error(
+          '[ElectronPersistentStorageHydration] reload seen-all on address change:',
+          err
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userAddress, setSeenAllNotificationsByAddress]);
 
   return null;
 }

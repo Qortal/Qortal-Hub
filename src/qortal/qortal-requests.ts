@@ -79,13 +79,14 @@ import {
   addNotificationSubscriptions,
   getNotificationPermission,
   getNotificationSubscriptions,
-  notificationHasPermission,
   markNotificationSeenInApp,
+  notificationHasPermission,
   removeNotificationSubscriptions,
 } from './get.ts';
 import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
+import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
@@ -118,12 +119,21 @@ export const isRunningGateway = async () => {
 
 const getAppStorage = () =>
   typeof window !== 'undefined' &&
-  (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
+  (
+    window as {
+      appStorage?: {
+        get: (k: string) => Promise<unknown>;
+        set: (k: string, v: unknown) => Promise<void>;
+      };
+    }
+  ).appStorage;
 
 const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
 
 function normalizeNotificationPermissionAppName(appName: unknown): string {
-  return String(appName ?? '').trim().toLowerCase();
+  return String(appName ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 export function getNotificationPermissionKey(appName: unknown): string {
@@ -131,7 +141,9 @@ export function getNotificationPermissionKey(appName: unknown): string {
 }
 
 function isNotificationPermissionKey(key: unknown): key is string {
-  return typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX);
+  return (
+    typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX)
+  );
 }
 
 function normalizePermissionKey(key: unknown): string {
@@ -533,8 +545,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error:
-                error?.message ?? 'Unable to read notification permission',
+              error: error?.message ?? 'Unable to read notification permission',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1844,7 +1855,10 @@ function setupMessageListenerQortalRequest() {
 
       case 'NOTIFICATION_ADD': {
         try {
-          const res = await addNotificationSubscriptions(request.payload, appInfo);
+          const res = await addNotificationSubscriptions(
+            request.payload,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -1870,7 +1884,10 @@ function setupMessageListenerQortalRequest() {
 
       case 'NOTIFICATION_GET': {
         try {
-          const res = await getNotificationSubscriptions(request.payload, appInfo);
+          const res = await getNotificationSubscriptions(
+            request.payload,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -1896,7 +1913,7 @@ function setupMessageListenerQortalRequest() {
 
       case 'NOTIFICATION_MARK_SEEN': {
         try {
-          const res = markNotificationSeenInApp(request.payload, appInfo);
+          const res = await markNotificationSeenInApp(request.payload, appInfo);
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -1922,7 +1939,10 @@ function setupMessageListenerQortalRequest() {
 
       case 'NOTIFICATION_REMOVE': {
         try {
-          const res = await removeNotificationSubscriptions(request.payload, appInfo);
+          const res = await removeNotificationSubscriptions(
+            request.payload,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -2320,7 +2340,9 @@ function setupMessageListenerQortalRequest() {
       case 'UPDATE_SUBSCRIPTIONS': {
         try {
           if (appInfo?.name?.toLowerCase() !== 'subscriptions') {
-            throw new Error('UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app');
+            throw new Error(
+              'UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app'
+            );
           }
           triggerMemberGroupsFetch();
           event.source!.postMessage(

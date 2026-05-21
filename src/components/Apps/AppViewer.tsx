@@ -143,9 +143,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         }
         navigator.clipboard
           .writeText(link)
-          .then(() => {
-            console.log('Path copied to clipboard:', path);
-          })
+          .then(() => undefined)
           .catch((error) => {
             console.error('Failed to copy path:', error);
           });
@@ -289,8 +287,6 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           );
           // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
         }
-      } else {
-        console.log('Iframe not accessible or does not have a content window.');
       }
     };
 
@@ -312,8 +308,8 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
     const navigateToPathFunc = useCallback(
       async (e) => {
-        const { path: targetPath } = e.detail;
-        if (!targetPath || !iframeRef.current?.contentWindow) return;
+        const { path: targetPath = '' } = e.detail;
+        if (!iframeRef.current?.contentWindow) return;
 
         const targetOrigin = iframeRef.current
           ? new URL(iframeRef.current.src).origin
@@ -388,8 +384,6 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           { action: 'NAVIGATE_FORWARD' },
           targetOrigin
         );
-      } else {
-        console.log('Iframe not accessible or does not have a content window.');
       }
     };
 

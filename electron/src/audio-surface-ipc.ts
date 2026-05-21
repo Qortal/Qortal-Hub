@@ -8,8 +8,13 @@ export type AudioSurfaceCommand =
   | {
       type: 'set-device-preferences';
       inputDeviceId: string | null;
+      inputDeviceLabel?: string | null;
+      inputDeviceGroupId?: string | null;
       outputDeviceId: string | null;
+      outputDeviceLabel?: string | null;
+      outputDeviceGroupId?: string | null;
     }
+  | { type: 'list-audio-devices' }
   | {
       type: 'join-group-call';
       roomId: string;

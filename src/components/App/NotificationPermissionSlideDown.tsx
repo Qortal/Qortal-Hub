@@ -1,34 +1,25 @@
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import { Box, Button, Paper, Typography, alpha, useTheme } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Button, Paper, Typography, useTheme } from '@mui/material';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 
 const TIMEOUT_MS = 60_000;
 const TIMEOUT_S = TIMEOUT_MS / 1000;
 
-type Payload = { text1?: string };
-
-type AppInfo = { name?: string; tabId?: string };
-
 type PendingRequest = {
   requestId: string;
-  appInfo: AppInfo;
-  payload: Payload;
-  /** Wall-clock time when get.ts will auto-deny this request. */
+  appInfo: { name?: string };
+  payload?: { text1?: string };
   expiresAt: number;
 };
 
-const defaultPayload: Payload = {
-  text1: 'Allow this app to send you Hub notifications?',
-};
-
-function sendResponse(requestId: string, result: { accepted: boolean }) {
+function sendResponse(requestId: string, accepted: boolean) {
   window.postMessage(
     {
       action: 'NOTIFICATION_PERMISSION_RESPONSE',
       requestId,
-      result,
+      result: { accepted },
     },
     window.location.origin
   );
@@ -37,23 +28,23 @@ function sendResponse(requestId: string, result: { accepted: boolean }) {
 export function NotificationPermissionSlideDown() {
   const { t } = useTranslation('question');
   const theme = useTheme();
-  // Queue: index 0 is the currently displayed request.
   const [queue, setQueue] = useState<PendingRequest[]>([]);
   const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_S);
   const autoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Listen for new requests and append to queue.
   useEffect(() => {
-    const listener = (e: CustomEvent<Omit<PendingRequest, 'expiresAt'>>) => {
-      const { requestId, appInfo, payload } = e.detail || {};
+    const listener = (
+      event: CustomEvent<Omit<PendingRequest, 'expiresAt'>>
+    ) => {
+      const { requestId, appInfo, payload } = event.detail || {};
       if (!requestId || !appInfo) return;
       setQueue((prev) => [
         ...prev,
         {
           requestId,
           appInfo,
-          payload: payload || defaultPayload,
+          payload,
           expiresAt: Date.now() + TIMEOUT_MS,
         },
       ]);
@@ -63,8 +54,6 @@ export function NotificationPermissionSlideDown() {
       unsubscribeFromEvent('show-notification-permission', listener as any);
   }, []);
 
-  // Whenever the front of the queue changes, start its own countdown using
-  // the remaining time from its original expiresAt.
   useEffect(() => {
     if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -73,193 +62,141 @@ export function NotificationPermissionSlideDown() {
     if (!current) return;
 
     const remaining = Math.max(0, current.expiresAt - Date.now());
-    const remainingS = Math.ceil(remaining / 1000);
-    setSecondsLeft(remainingS);
-
-    // Auto-deny when its time runs out.
+    setSecondsLeft(Math.ceil(remaining / 1000));
     autoTimeoutRef.current = setTimeout(() => {
-      sendResponse(current.requestId, { accepted: false });
+      sendResponse(current.requestId, false);
       setQueue((prev) => prev.slice(1));
     }, remaining);
-
-    // Tick the countdown display.
     intervalRef.current = setInterval(() => {
-      setSecondsLeft(Math.max(0, Math.ceil((current.expiresAt - Date.now()) / 1000)));
+      setSecondsLeft(
+        Math.max(0, Math.ceil((current.expiresAt - Date.now()) / 1000))
+      );
     }, 500);
 
     return () => {
       if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [queue[0]?.requestId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const dismissCurrent = (accepted: boolean) => {
-    const current = queue[0];
-    if (!current) return;
-    sendResponse(current.requestId, { accepted });
-    setQueue((prev) => prev.slice(1));
-  };
+  }, [queue]);
 
   const current = queue[0];
   if (!current) return null;
 
-  const { appInfo, payload } = current;
-  const text1 = payload?.text1 ?? defaultPayload.text1;
-
-  const isDark = theme.palette.mode === 'dark';
-  const iconBg = isDark
-    ? 'rgba(255, 255, 255, 0.08)'
-    : 'rgba(0, 0, 0, 0.04)';
+  const dismissCurrent = (accepted: boolean) => {
+    sendResponse(current.requestId, accepted);
+    setQueue((prev) => prev.slice(1));
+  };
 
   const progress = secondsLeft / TIMEOUT_S;
 
   return (
     <Paper
-      elevation={8}
+      elevation={0}
       sx={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: theme.zIndex.modal + 10,
-        borderRadius: 0,
+        bgcolor: '#111820',
+        border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
         borderBottomLeftRadius: 16,
         borderBottomRightRadius: 16,
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        borderLeft: `1px solid ${theme.palette.divider}`,
-        borderRight: `1px solid ${theme.palette.divider}`,
+        borderRadius: 0,
+        boxShadow: `0 18px 44px ${alpha('#000', 0.42)}`,
+        left: '50%',
+        maxWidth: 520,
         overflow: 'hidden',
-        animation: 'slideDown 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
-        '@keyframes slideDown': {
-          from: { transform: 'translateY(-100%)', opacity: 0 },
-          to: { transform: 'translateY(0)', opacity: 1 },
-        },
+        position: 'fixed',
+        top: 0,
+        transform: 'translateX(-50%)',
+        width: 'min(calc(100vw - 32px), 520px)',
+        zIndex: theme.zIndex.modal + 10,
       }}
     >
-      {/* Countdown progress bar */}
       <Box
         sx={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          height: 3,
-          width: `${progress * 100}%`,
           bgcolor: theme.palette.primary.main,
-          opacity: 0.5,
+          bottom: 0,
+          height: 3,
+          left: 0,
+          opacity: 0.72,
+          position: 'absolute',
           transition: 'width 0.5s linear',
+          width: `${Math.max(0, Math.min(1, progress)) * 100}%`,
         }}
       />
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-          p: 2.5,
-          maxWidth: 400,
-          mx: 'auto',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, p: 2.25 }}>
+        <Box
+          sx={{
+            alignItems: 'center',
+            bgcolor: alpha(theme.palette.primary.main, 0.16),
+            borderRadius: '12px',
+            color: theme.palette.primary.light,
+            display: 'flex',
+            flexShrink: 0,
+            height: 42,
+            justifyContent: 'center',
+            width: 42,
+          }}
+        >
+          <NotificationsActiveIcon sx={{ fontSize: 24 }} />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: '0.98rem', fontWeight: 650, mb: 0.5 }}>
+            {t('permission.notification_title', {
+              appName: current.appInfo?.name || 'App',
+              defaultValue: '{{appName}} notifications',
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+          <Typography
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.9),
+              fontSize: '0.84rem',
+              lineHeight: 1.45,
+            }}
+          >
+            {current.payload?.text1 ||
+              t('permission.notification', {
+                defaultValue: 'Allow this app to send you Hub notifications?',
+                postProcess: 'capitalizeFirstChar',
+              })}
+          </Typography>
           <Box
             sx={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 44,
-              height: 44,
-              borderRadius: '12px',
-              bgcolor: iconBg,
-              flexShrink: 0,
+              gap: 1,
+              justifyContent: 'flex-end',
+              mt: 1.7,
             }}
           >
-            <NotificationsActiveIcon
-              sx={{
-                color: theme.palette.primary.main,
-                fontSize: 26,
-              }}
-            />
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              variant="subtitle1"
-              fontWeight={700}
-              sx={{ lineHeight: 1.3, mb: 0.5 }}
+            <Button
+              onClick={() => dismissCurrent(false)}
+              sx={{ color: 'text.secondary', fontWeight: 600 }}
             >
-              {t('permission.notification_title', {
-                appName: appInfo?.name || 'App',
+              {t('permission.notification_dont_allow', {
+                defaultValue: "Don't allow",
                 postProcess: 'capitalizeFirstChar',
               })}
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ lineHeight: 1.5 }}
+            </Button>
+            <Button
+              onClick={() => dismissCurrent(true)}
+              sx={{ fontWeight: 600 }}
+              variant="contained"
             >
-              {text1}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5, flexShrink: 0 }}>
-            <Typography
-              variant="caption"
-              color="text.disabled"
-              sx={{ alignSelf: 'flex-start', pt: 0.25 }}
-            >
-              {secondsLeft}s
-            </Typography>
-            {queue.length > 1 && (
-              <Typography variant="caption" color="text.disabled">
-                +{queue.length - 1} more
-              </Typography>
-            )}
+              {t('permission.notification_allow', {
+                defaultValue: 'Allow',
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Button>
           </Box>
         </Box>
-        <Box
+        <Typography
           sx={{
-            display: 'flex',
-            gap: 1.5,
-            justifyContent: 'flex-end',
-            flexWrap: 'wrap',
+            color: alpha(theme.palette.text.secondary, 0.62),
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            pt: 0.25,
           }}
         >
-          <Button
-            size="medium"
-            variant="text"
-            onClick={() => dismissCurrent(false)}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              color: 'text.secondary',
-              '&:hover': {
-                bgcolor: isDark
-                  ? 'rgba(255, 255, 255, 0.06)'
-                  : 'rgba(0, 0, 0, 0.04)',
-              },
-            }}
-          >
-            {t('permission.notification_dont_allow', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Button>
-          <Button
-            size="medium"
-            variant="contained"
-            onClick={() => dismissCurrent(true)}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 2.5,
-              borderRadius: 2,
-              boxShadow: 1,
-              '&:hover': {
-                boxShadow: 2,
-              },
-            }}
-          >
-            {t('permission.notification_allow', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Button>
-        </Box>
+          {secondsLeft}s
+        </Typography>
       </Box>
     </Paper>
   );

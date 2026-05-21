@@ -1,324 +1,219 @@
-import { useEffect, useMemo, useState } from 'react';
+import AppsIcon from '@mui/icons-material/Apps';
+import CloseIcon from '@mui/icons-material/Close';
+import MailOutlineIcon from '@mui/icons-material/MailOutline';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
+import SettingsIcon from '@mui/icons-material/Settings';
 import {
-  alpha,
   Avatar,
   Box,
   ButtonBase,
   Card,
-  Collapse,
   Dialog,
   DialogContent,
   DialogTitle,
   IconButton,
   List,
-  ListItemButton,
   MenuItem,
   Popover,
   Switch,
   Tooltip,
   Typography,
+  alpha,
   useTheme,
 } from '@mui/material';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import SettingsIcon from '@mui/icons-material/Settings';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
-import MailOutlineIcon from '@mui/icons-material/MailOutline';
-import AppsIcon from '@mui/icons-material/Apps';
-import CloseIcon from '@mui/icons-material/Close';
-import { formatDate } from '../utils/time';
-import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotification';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { getBaseApiReact } from '../App';
+import {
+  customWebsocketSubscriptionsAtom,
+  isNotificationSeenInAppFromKeyTimes,
+  lastPaymentSeenTimestampAtom,
+  notificationSeenInAppKeyTimesAtom,
+  notificationSeenInAppKeysAtom,
+  paymentNotificationsAtom,
+} from '../atoms/global';
+import LogoSelected from '../assets/svgs/LogoSelected.svg';
+import {
+  getAppsWithNotificationPermission,
+  getNotificationOsPushDisabledMap,
+  getNotificationPermissionKey,
+  setNotificationOsPushDisabled,
+  setPermission,
+} from '../qortal/qortal-requests';
+import { extractComponents } from './Chat/MessageDisplay';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../utils/events';
-import { useTranslation } from 'react-i18next';
-import { useAtomValue, useSetAtom } from 'jotai';
-import {
-  paymentNotificationsAtom,
-  lastPaymentSeenTimestampAtom,
-  notificationSeenInAppKeysAtom,
-  customWebsocketSubscriptionsAtom,
-  getNotificationSeenKey,
-  getNotificationSeenPrefixKey,
-} from '../atoms/global';
-import {
-  getAppsWithNotificationPermission,
-  getNotificationPermissionKey,
-  getNotificationOsPushDisabledMap,
-  setNotificationOsPushDisabled,
-  setPermission,
-} from '../qortal/qortal-requests';
-import { checkDifference } from '../background/background';
-import { getBaseApiReact } from '../App';
-import LogoSelected from '../assets/svgs/LogoSelected.svg';
-import { extractComponents } from './Chat/MessageDisplay';
-import { Spacer } from '../common/Spacer';
+import { formatDate } from '../utils/time';
 
-const PAYMENT_EVENT = 'PAYMENT_RECEIVED';
 const RESOURCE_EVENT = 'RESOURCE_PUBLISHED';
 
-function getGroupKey(notification) {
-  if (notification?.event === PAYMENT_EVENT) return PAYMENT_EVENT;
-  if (notification?.event === RESOURCE_EVENT) {
-    const appName = notification?.appName ?? 'Publishes';
-    const appService = notification?.appService ?? 'APP';
-    return `${RESOURCE_EVENT}-${appName}-${appService}`;
-  }
-  return notification?.event || 'other';
-}
-
-function getGroupLabel(notification) {
-  if (notification?.event === PAYMENT_EVENT) return 'Payments';
-  if (
-    notification?.event === RESOURCE_EVENT &&
-    notification?.notificationId === 'q-mail-notification'
-  ) {
-    return notification?.appName || 'Q-Mail';
-  }
-  if (notification?.event === RESOURCE_EVENT)
-    return notification?.appName || 'Publishes';
-  return notification?.event || 'Other';
-}
-
-/** Normalize to ms (server may send seconds). */
-function toTimestampMs(v) {
-  if (v == null || typeof v !== 'number') return v ?? null;
-  return v < 1e12 ? v * 1000 : v;
+function toTimestampMs(value) {
+  if (value == null || typeof value !== 'number') return null;
+  return value < 1e12 ? value * 1000 : value;
 }
 
 function getNotificationTimestamp(notification) {
-  const raw =
+  return toTimestampMs(
     notification?.data?.created ??
-    notification?.data?.timestamp ??
-    notification?.timestamp;
-  return toTimestampMs(raw);
+      notification?.data?.timestamp ??
+      notification?.timestamp
+  );
 }
 
-function isNotificationUnseen(notification, lastEnteredTimestampPayment) {
-  const ts = getNotificationTimestamp(notification);
-  if (ts == null || !checkDifference(ts)) return false;
-  if (!lastEnteredTimestampPayment) return true;
-  return ts > lastEnteredTimestampPayment;
-}
-
-function isNotificationSeenInApp(notification, seenInAppKeysSet) {
-  if (!seenInAppKeysSet || !seenInAppKeysSet.size) return false;
-  const key = getNotificationSeenKey(notification);
-  const prefixKey = getNotificationSeenPrefixKey(notification);
-  return seenInAppKeysSet.has(key) || seenInAppKeysSet.has(prefixKey);
-}
-
-/** Pick message in current language, else en, else first available. Reactive when lang/fallback change. */
-function getNotificationMessageReactive(
-  messageObj: Record<string, string> | undefined,
-  currentLang: string,
-  fallback: string
-): string {
+function getNotificationMessage(messageObj, currentLang, fallback) {
   if (!messageObj || typeof messageObj !== 'object') return fallback;
   const lang = (currentLang || 'en').split('-')[0];
-  const current = messageObj[lang];
-  if (typeof current === 'string' && current.trim()) return current.trim();
-  const en = messageObj.en;
-  if (typeof en === 'string' && en.trim()) return en.trim();
-  const first = Object.values(messageObj).find(
-    (v) => typeof v === 'string' && (v as string).trim()
+  return (
+    messageObj[lang]?.trim() ||
+    messageObj.en?.trim() ||
+    Object.values(messageObj).find((value: any) => value?.trim()) ||
+    fallback
   );
-  return typeof first === 'string' ? (first as string).trim() : fallback;
 }
 
 export const GeneralNotifications = ({
-  address,
   tooltipPlacement = 'left',
-}: {
-  address: string;
-  tooltipPlacement?:
-    | 'left'
-    | 'right'
-    | 'top'
-    | 'bottom'
-    | 'top-start'
-    | 'top-end'
-    | 'bottom-start'
-    | 'bottom-end'
-    | 'left-start'
-    | 'left-end'
-    | 'right-start'
-    | 'right-end';
+  compact = false,
+  buttonSx = undefined,
+  iconSx = undefined,
 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
-
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsApps, setSettingsApps] = useState<string[]>([]);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [osPushDisabledMap, setOsPushDisabledMap] = useState<
+    Record<string, boolean>
+  >({});
   const notifications = useAtomValue(paymentNotificationsAtom);
-  const lastEnteredTimestampPayment = useAtomValue(
-    lastPaymentSeenTimestampAtom
-  );
-  const seenInAppKeys = useAtomValue(notificationSeenInAppKeysAtom);
-  const setSeenInAppKeys = useSetAtom(notificationSeenInAppKeysAtom);
   const customSubscriptions = useAtomValue(customWebsocketSubscriptionsAtom);
   const setCustomSubscriptions = useSetAtom(customWebsocketSubscriptionsAtom);
-  const [notificationSettingsModalOpen, setNotificationSettingsModalOpen] =
-    useState(false);
-  const [notificationSettingsApps, setNotificationSettingsApps] = useState<
-    string[]
-  >([]);
-  const [notificationOsPushDisabledMap, setNotificationOsPushDisabledMap] =
-    useState<Record<string, boolean>>({});
-  const [notificationSettingsLoading, setNotificationSettingsLoading] =
-    useState(false);
-
-  const seenInAppKeysSet = useMemo(
-    () => (Array.isArray(seenInAppKeys) ? new Set(seenInAppKeys) : new Set()),
-    [seenInAppKeys]
-  );
+  const lastSeenTimestamp = useAtomValue(lastPaymentSeenTimestampAtom);
+  const setLastSeenTimestamp = useSetAtom(lastPaymentSeenTimestampAtom);
+  const seenInAppKeyTimes = useAtomValue(notificationSeenInAppKeyTimesAtom);
+  const setSeenKeys = useSetAtom(notificationSeenInAppKeysAtom);
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
+  const { t, i18n } = useTranslation(['core']);
 
   useEffect(() => {
-    const handler = (e) => {
-      const detail = e.detail;
-      if (
-        detail &&
-        typeof detail === 'object' &&
-        'address' in detail &&
-        'keys' in detail
-      ) {
-        setSeenInAppKeys({ address: detail.address, keys: detail.keys });
-      } else if (Array.isArray(detail)) {
-        setSeenInAppKeys(detail);
+    const handler = (event) => {
+      const detail = event.detail;
+      if (detail?.address && Array.isArray(detail?.keys)) {
+        setSeenKeys({ address: detail.address, keys: detail.keys });
       }
     };
     subscribeToEvent('notification-seen-in-app-updated', handler);
     return () =>
       unsubscribeFromEvent('notification-seen-in-app-updated', handler);
-  }, [setSeenInAppKeys]);
+  }, [setSeenKeys]);
 
-  const {
-    getNameOrAddressOfSenderMiddle,
-    setLastEnteredTimestampPayment,
-    nameAddressOfSender,
-  } = useHandlePaymentNotification(address);
-
-  const latestTimestamp = useMemo(() => {
-    if (!notifications.length) return null;
-    return getNotificationTimestamp(notifications[0]);
-  }, [notifications]);
-
+  const resourceNotifications = useMemo(
+    () =>
+      (notifications ?? []).filter((item) => item?.event === RESOURCE_EVENT),
+    [notifications]
+  );
   const unseenCount = useMemo(() => {
-    const isUnseen = (n) => {
-      const ts = getNotificationTimestamp(n);
-      const unseenByTimestamp = !lastEnteredTimestampPayment
-        ? ts != null && checkDifference(ts)
-        : ts != null && checkDifference(ts) && ts > lastEnteredTimestampPayment;
-      if (!unseenByTimestamp) return false;
-      return !isNotificationSeenInApp(n, seenInAppKeysSet);
-    };
-
-    return notifications.filter(isUnseen).length;
-  }, [notifications, lastEnteredTimestampPayment, seenInAppKeysSet]);
+    return resourceNotifications.filter((notification) => {
+      const timestamp = getNotificationTimestamp(notification);
+      if (timestamp == null) return false;
+      if (isNotificationSeenInAppFromKeyTimes(notification, seenInAppKeyTimes))
+        return false;
+      return !lastSeenTimestamp || timestamp > lastSeenTimestamp;
+    }).length;
+  }, [resourceNotifications, seenInAppKeyTimes, lastSeenTimestamp]);
 
   const hasNewNotifications = unseenCount > 0;
+  const NotificationIcon = hasNewNotifications
+    ? NotificationsActiveRoundedIcon
+    : NotificationsRoundedIcon;
 
-  const groups = useMemo(() => {
-    const map = new Map();
-    for (const n of notifications) {
-      const key = getGroupKey(n);
-      if (!map.has(key)) {
-        map.set(key, { key, label: getGroupLabel(n), items: [] });
-      }
-      map.get(key).items.push(n);
-    }
-    return Array.from(map.values());
-  }, [notifications]);
-
-  const [expandedGroup, setExpandedGroup] = useState(null);
-
-  const handlePopupClick = (event) => {
-    event.stopPropagation();
-    setAnchorEl(event.currentTarget);
-    setExpandedGroup(null);
+  const openSettings = () => {
+    setSettingsOpen(true);
+    setSettingsLoading(true);
+    Promise.all([
+      getAppsWithNotificationPermission(),
+      getNotificationOsPushDisabledMap(),
+    ])
+      .then(([apps, disabledMap]) => {
+        setSettingsApps(apps);
+        setOsPushDisabledMap(disabledMap || {});
+      })
+      .finally(() => setSettingsLoading(false));
   };
-
-  const { t, i18n } = useTranslation([
-    'auth',
-    'core',
-    'group',
-    'question',
-    'tutorial',
-  ]);
-
-  const theme = useTheme();
 
   return (
     <>
       <ButtonBase
-        onClick={(e) => {
-          handlePopupClick(e);
+        aria-label="Notifications"
+        onClick={(event) => {
+          event.stopPropagation();
+          setAnchorEl(event.currentTarget);
         }}
         sx={{
           position: 'relative',
-          minWidth: 32,
-          minHeight: 32,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          ...(buttonSx || {}),
         }}
       >
         <Tooltip
+          arrow
+          placement={tooltipPlacement}
           title={
             <span
               style={{
                 color: theme.palette.text.primary,
                 fontSize: '14px',
-                fontWeight: 700,
+                fontWeight: 600,
                 textTransform: 'uppercase',
               }}
             >
-              {t('core:message.generic.notifications')}
+              {t('message.generic.notifications', {
+                defaultValue: 'Notifications',
+              })}
             </span>
           }
-          placement={tooltipPlacement}
-          arrow
-          sx={{ fontSize: '24' }}
           slotProps={{
+            arrow: { sx: { color: theme.palette.background.paper } },
             tooltip: {
               sx: {
-                color: theme.palette.text.primary,
                 backgroundColor: theme.palette.background.paper,
-              },
-            },
-            arrow: {
-              sx: {
                 color: theme.palette.text.primary,
               },
             },
           }}
         >
-          <NotificationsIcon
+          <NotificationIcon
             sx={{
               color: hasNewNotifications
                 ? theme.palette.other.unread
                 : theme.palette.text.secondary,
+              fontSize: compact ? 20 : undefined,
+              ...(iconSx || {}),
             }}
           />
         </Tooltip>
-        {hasNewNotifications && unseenCount > 0 && (
+        {hasNewNotifications && (
           <Box
             component="span"
             sx={{
-              position: 'absolute',
-              top: 1,
-              right: 1,
-              minWidth: 14,
-              height: 14,
-              borderRadius: '7px',
               bgcolor: theme.palette.other.unread,
+              borderRadius: '7px',
               color: '#fff',
               fontSize: '0.6rem',
               fontWeight: 700,
+              height: 14,
               lineHeight: '14px',
-              px: '3px',
-              textAlign: 'center',
+              minWidth: 14,
               pointerEvents: 'none',
+              position: 'absolute',
+              px: '3px',
+              right: compact ? 0 : -5,
+              textAlign: 'center',
+              top: compact ? 0 : -5,
             }}
           >
             {unseenCount > 99 ? '99+' : unseenCount}
@@ -327,507 +222,462 @@ export const GeneralNotifications = ({
       </ButtonBase>
 
       <Popover
-        open={!!anchorEl}
         anchorEl={anchorEl}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         onClose={() => {
-          if (hasNewNotifications) {
-            setLastEnteredTimestampPayment(Date.now());
-          }
+          if (hasNewNotifications) setLastSeenTimestamp(Date.now());
           setAnchorEl(null);
         }}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-        PaperProps={{
-          sx: {
-            left: '70px !important',
+        open={!!anchorEl}
+        slotProps={{
+          paper: {
+            sx: isDarkMode
+              ? {
+                  background: '#111820',
+                  backgroundImage: 'none',
+                  border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                }
+              : {
+                  background: theme.palette.background.paper,
+                  backgroundImage: 'none',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 16px 40px ${alpha('#1E3248', 0.1)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                },
           },
         }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
       >
         <Box
           sx={{
-            alignItems: notifications.length > 0 ? 'flex-start' : 'center',
+            alignItems: resourceNotifications.length ? 'stretch' : 'center',
             display: 'flex',
             flexDirection: 'column',
+            gap: resourceNotifications.length ? 1 : 1.2,
             maxHeight: '60vh',
-            maxWidth: '100%',
             overflow: 'auto',
-            padding: 2,
+            ...(resourceNotifications.length
+              ? { pb: 1, pl: 1, pr: 1, pt: 5.5 }
+              : { p: '18px 20px' }),
             position: 'relative',
-            width: 420,
+            width: 360,
           }}
         >
-          <Box
+          <IconButton
+            aria-label="Notification settings"
+            onClick={(event) => {
+              event.stopPropagation();
+              openSettings();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
+            size="small"
             sx={{
-              display: 'flex',
-              justifyContent: 'flex-end',
+              color: theme.palette.text.secondary,
+              pointerEvents: 'auto',
               position: 'absolute',
-              top: 8,
-              right: 8,
+              right: 4,
+              top: 4,
+              zIndex: 2,
             }}
           >
-            <IconButton
-              size="small"
-              onClick={() => {
-                setNotificationSettingsModalOpen(true);
-                setNotificationSettingsLoading(true);
-                Promise.all([
-                  getAppsWithNotificationPermission(),
-                  getNotificationOsPushDisabledMap(),
-                ])
-                  .then(([apps, disabledMap]) => {
-                    setNotificationSettingsApps(apps);
-                    setNotificationOsPushDisabledMap(disabledMap || {});
-                  })
-                  .finally(() => setNotificationSettingsLoading(false));
-              }}
-              sx={{ color: theme.palette.text.secondary }}
-            >
-              <SettingsIcon fontSize="small" />
-            </IconButton>
-          </Box>
-          <Spacer height="20px" />
-          {notifications.length === 0 && (
-            <Typography sx={{ userSelect: 'none' }}>
-              {t('core:message.generic.no_notifications')}
-            </Typography>
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+
+          {!resourceNotifications.length && (
+            <>
+              <NotificationIcon
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.82),
+                  fontSize: 22,
+                  mt: 2,
+                }}
+              />
+              <Typography
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '0.96rem',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                }}
+              >
+                {t('message.generic.no_app_notifications', {
+                  defaultValue: 'No app notifications yet',
+                })}
+              </Typography>
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.76),
+                  fontSize: '0.78rem',
+                  lineHeight: 1.5,
+                  maxWidth: 250,
+                  textAlign: 'center',
+                }}
+              >
+                {t('message.generic.app_notifications_hint', {
+                  defaultValue: 'Q-App notifications will appear here',
+                })}
+              </Typography>
+            </>
           )}
 
-          {groups.map((group) => {
-            const isExpanded = expandedGroup === group.key;
-            const isPayment = group.key === PAYMENT_EVENT;
-            const groupUnseenCount = group.items.filter(
-              (n) =>
-                isNotificationUnseen(n, lastEnteredTimestampPayment) &&
-                !isNotificationSeenInApp(n, seenInAppKeysSet)
-            ).length;
+          {resourceNotifications.map((notification, index) => {
+            const isQMail =
+              notification?.notificationId === 'q-mail-notification' ||
+              notification?.appName === 'Q-Mail';
+            const timestamp = getNotificationTimestamp(notification);
+            const unseen =
+              timestamp != null &&
+              (!lastSeenTimestamp || timestamp > lastSeenTimestamp) &&
+              !isNotificationSeenInAppFromKeyTimes(
+                notification,
+                seenInAppKeyTimes
+              );
 
             return (
-              <Box key={group.key} sx={{ width: '100%' }}>
-                <ListItemButton
-                  onClick={() =>
-                    setExpandedGroup(isExpanded ? null : group.key)
-                  }
+              <MenuItem
+                key={
+                  notification?.data?.identifier ||
+                  notification?.data?.created ||
+                  index
+                }
+                onClick={() => {
+                  if (hasNewNotifications) setLastSeenTimestamp(Date.now());
+                  setAnchorEl(null);
+                  const link = notification?.link;
+                  if (!link) return;
+                  const data = extractComponents(link);
+                  if (!data) return;
+                  executeEvent('addTab', {
+                    data: { ...data, navigateIfAlreadyOpen: true },
+                  });
+                  executeEvent('open-apps-mode', {});
+                }}
+                sx={{
+                  borderRadius: '12px',
+                  display: 'block',
+                  p: 0,
+                  whiteSpace: 'normal',
+                  '&:hover': {
+                    bgcolor: isDarkMode
+                      ? alpha('#FFFFFF', 0.045)
+                      : alpha(theme.palette.primary.main, 0.06),
+                  },
+                }}
+              >
+                <Card
+                  elevation={0}
                   sx={{
-                    borderRadius: 1.5,
-                    py: 1.25,
-                    px: 1.5,
-                    '&:hover': { backgroundColor: 'action.hover' },
+                    bgcolor: unseen
+                      ? isDarkMode
+                        ? alpha(theme.palette.other.unread, 0.11)
+                        : alpha(theme.palette.other.unread, 0.12)
+                      : isDarkMode
+                        ? alpha('#FFFFFF', 0.025)
+                        : theme.palette.action.hover,
+                    border: `1px solid ${
+                      unseen
+                        ? alpha(theme.palette.other.unread, 0.36)
+                        : isDarkMode
+                          ? alpha('#A9BCD8', 0.12)
+                          : alpha(theme.palette.divider, 0.95)
+                    }`,
+                    borderRadius: '12px',
+                    display: 'flex',
+                    gap: 1.2,
+                    p: 1.35,
                   }}
                 >
-                  <Box
+                  <Avatar
+                    alt={notification?.appName || 'App'}
+                    src={`${getBaseApiReact()}${
+                      notification?.image ||
+                      `/arbitrary/THUMBNAIL/${notification?.appName || 'Q-Mail'}/qortal_avatar?async=true`
+                    }`}
                     sx={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      gap: 1.5,
-                      width: '100%',
+                      bgcolor: isDarkMode
+                        ? alpha('#FFFFFF', 0.06)
+                        : alpha(theme.palette.primary.main, 0.08),
+                      height: 34,
+                      width: 34,
+                      '& img': { objectFit: 'contain' },
                     }}
                   >
-                    {isPayment ? (
-                      <AccountBalanceWalletIcon
-                        sx={{ color: theme.palette.text.primary, fontSize: 22 }}
-                      />
-                    ) : group?.label === 'Q-Mail' ? (
+                    {isQMail ? (
                       <MailOutlineIcon
-                        sx={{ color: theme.palette.text.primary, fontSize: 22 }}
+                        sx={{
+                          color: theme.palette.primary.main,
+                          fontSize: 18,
+                        }}
                       />
                     ) : (
-                      <AppsIcon
-                        sx={{ color: theme.palette.text.primary, fontSize: 22 }}
+                      <img
+                        alt="app-icon"
+                        src={LogoSelected}
+                        style={{ height: 'auto', width: 20 }}
                       />
                     )}
-                    <Typography
-                      sx={{ flex: 1, fontWeight: 600, fontSize: '0.9375rem' }}
-                    >
-                      {group.label}
-                    </Typography>
-                    {groupUnseenCount > 0 && (
-                      <Typography
-                        sx={{
-                          color: theme.palette.other.unread,
-                          fontSize: '0.8125rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {groupUnseenCount}
-                      </Typography>
-                    )}
-                    <Typography
+                  </Avatar>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Box
                       sx={{
-                        color: 'text.secondary',
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
-                        minWidth: 24,
-                        textAlign: 'right',
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: 1,
+                        justifyContent: 'space-between',
                       }}
                     >
-                      {group.items.length}
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.86rem',
+                          fontWeight: 650,
+                        }}
+                      >
+                        {notification?.appName || 'Q-App'}
+                      </Typography>
+                      {timestamp && (
+                        <Typography
+                          sx={{
+                            color: alpha(theme.palette.text.secondary, 0.72),
+                            fontSize: '0.72rem',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatDate(timestamp)}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.92),
+                        fontSize: '0.8rem',
+                        lineHeight: 1.45,
+                        mt: 0.35,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {getNotificationMessage(
+                        notification?.message,
+                        i18n.language,
+                        t('message.generic.new_notification', {
+                          defaultValue: 'New notification',
+                        })
+                      )}
                     </Typography>
-                    {isExpanded ? (
-                      <ExpandLess sx={{ color: 'text.secondary' }} />
-                    ) : (
-                      <ExpandMore sx={{ color: 'text.secondary' }} />
-                    )}
                   </Box>
-                </ListItemButton>
-
-                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                  <List
-                    disablePadding
-                    sx={{
-                      pl: 0.5,
-                      pr: 0.5,
-                      pb: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 1,
-                    }}
-                  >
-                    {group.items.map((data) => {
-                      const tx = data.data;
-                      const eventTypePublish = data?.event === RESOURCE_EVENT;
-                      const eventTypePayment = data?.event === PAYMENT_EVENT;
-                      const itemKey =
-                        tx?.identifier ||
-                        tx?.timestamp ||
-                        tx?.created ||
-                        `${data.event}-${group.items.indexOf(data)}`;
-                      const isItemUnseen =
-                        isNotificationUnseen(
-                          data,
-                          lastEnteredTimestampPayment
-                        ) && !isNotificationSeenInApp(data, seenInAppKeysSet);
-
-                      if (eventTypePublish) {
-                        return (
-                          <MenuItem
-                            key={itemKey}
-                            sx={{
-                              alignItems: 'stretch',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              textWrap: 'auto',
-                              width: '100%',
-                              p: 0,
-                              borderRadius: 1.5,
-                              overflow: 'hidden',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              },
-                            }}
-                            onClick={() => {
-                              if (hasNewNotifications) {
-                                setLastEnteredTimestampPayment(Date.now());
-                              }
-                              setAnchorEl(null);
-                              if (data?.link) {
-                                const res = extractComponents(data.link);
-                                if (res) {
-                                  const { service, name, identifier, path } =
-                                    res;
-                                  executeEvent('addTab', {
-                                    data: {
-                                      service,
-                                      name,
-                                      identifier,
-                                      path,
-                                      navigateIfAlreadyOpen: true,
-                                    },
-                                  });
-                                  executeEvent('open-apps-mode', {});
-                                }
-                              }
-                            }}
-                          >
-                            <Card
-                              elevation={0}
-                              sx={{
-                                backgroundColor:
-                                  theme.palette.background.default,
-                                border: `1px solid ${theme.palette.divider}`,
-                                borderLeft: isItemUnseen
-                                  ? `3px solid ${theme.palette.other.unread}`
-                                  : undefined,
-                                borderRadius: 1.5,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 1,
-                                padding: 1.5,
-                                width: '100%',
-                                transition: 'border-color 0.15s ease',
-                                ...(isItemUnseen && {
-                                  bgcolor: alpha(
-                                    theme.palette.other.unread,
-                                    0.12
-                                  ),
-                                }),
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  alignItems: 'center',
-                                  display: 'flex',
-                                  gap: 1,
-                                  justifyContent: 'space-between',
-                                }}
-                              >
-                                <Avatar
-                                  sx={{
-                                    height: 32,
-                                    width: 32,
-                                    bgcolor: theme.palette.background.paper,
-                                    '& img': { objectFit: 'contain' },
-                                  }}
-                                  alt={data?.appName}
-                                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${data?.appName || 'Q-Mail'}/qortal_avatar?async=true`}
-                                >
-                                  <img
-                                    style={{ width: 20, height: 'auto' }}
-                                    src={LogoSelected}
-                                    alt="app-icon"
-                                  />
-                                </Avatar>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: 'text.secondary',
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {formatDate(tx?.created ?? tx?.timestamp)}
-                                </Typography>
-                              </Box>
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 500,
-                                  lineHeight: 1.4,
-                                  wordBreak: 'break-word',
-                                  whiteSpace: 'normal',
-                                }}
-                              >
-                                {getNotificationMessageReactive(
-                                  data?.message,
-                                  i18n.language ?? 'en',
-                                  t('core:message.generic.new_notification')
-                                )}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: 'text.secondary',
-                                  fontSize: '0.8125rem',
-                                }}
-                              >
-                                {tx?.name ||
-                                  nameAddressOfSender.current[tx?.sender] ||
-                                  getNameOrAddressOfSenderMiddle(tx?.sender)}
-                              </Typography>
-                            </Card>
-                          </MenuItem>
-                        );
-                      }
-                      if (eventTypePayment) {
-                        return (
-                          <MenuItem
-                            key={itemKey}
-                            sx={{
-                              alignItems: 'stretch',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              textWrap: 'auto',
-                              width: '100%',
-                              p: 0,
-                              borderRadius: 1.5,
-                              overflow: 'hidden',
-                              '&:hover': {
-                                backgroundColor: 'action.hover',
-                              },
-                            }}
-                            onClick={() => {
-                              if (hasNewNotifications) {
-                                setLastEnteredTimestampPayment(Date.now());
-                              }
-                              setAnchorEl(null);
-                              executeEvent('openWalletsApp', {});
-                            }}
-                          >
-                            <Card
-                              elevation={0}
-                              sx={{
-                                backgroundColor:
-                                  theme.palette.background.default,
-                                border: `1px solid ${theme.palette.divider}`,
-                                borderLeft: isItemUnseen
-                                  ? `3px solid ${theme.palette.other.unread}`
-                                  : undefined,
-                                borderRadius: 1.5,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 1,
-                                padding: 1.5,
-                                width: '100%',
-                                transition: 'border-color 0.15s ease',
-                                ...(isItemUnseen && {
-                                  bgcolor: alpha(
-                                    theme.palette.other.unread,
-                                    0.12
-                                  ),
-                                }),
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  alignItems: 'center',
-                                  display: 'flex',
-                                  gap: 1,
-                                  justifyContent: 'space-between',
-                                }}
-                              >
-                                <AccountBalanceWalletIcon
-                                  sx={{
-                                    color: theme.palette.primary.main,
-                                    fontSize: 22,
-                                  }}
-                                />
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: 'text.secondary',
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {formatDate(tx?.created ?? tx?.timestamp)}
-                                </Typography>
-                              </Box>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontWeight: 600, lineHeight: 1.4 }}
-                              >
-                                {tx?.amount} QORT
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: 'text.secondary',
-                                  fontSize: '0.8125rem',
-                                }}
-                              >
-                                {nameAddressOfSender.current[tx?.sender] ||
-                                  getNameOrAddressOfSenderMiddle(tx?.sender)}
-                              </Typography>
-                            </Card>
-                          </MenuItem>
-                        );
-                      }
-                      return null;
-                    })}
-                  </List>
-                </Collapse>
-              </Box>
+                </Card>
+              </MenuItem>
             );
           })}
         </Box>
       </Popover>
 
       <Dialog
-        open={notificationSettingsModalOpen}
-        onClose={() => setNotificationSettingsModalOpen(false)}
-        maxWidth="sm"
         fullWidth
+        maxWidth="sm"
+        onClose={() => setSettingsOpen(false)}
+        open={settingsOpen}
+        PaperProps={{
+          sx: isDarkMode
+            ? {
+                background: '#121821',
+                backgroundImage: 'none',
+                border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+                borderRadius: '18px',
+                boxShadow: `0 26px 56px ${alpha('#000', 0.46)}`,
+                overflow: 'hidden',
+              }
+            : {
+                background: theme.palette.background.paper,
+                backgroundImage: 'none',
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: '18px',
+                boxShadow: `0 20px 48px ${alpha('#1E3248', 0.12)}`,
+                overflow: 'hidden',
+              },
+        }}
       >
         <DialogTitle
           sx={{
-            display: 'flex',
             alignItems: 'center',
+            borderBottom: `1px solid ${
+              isDarkMode ? alpha('#A9BCD8', 0.1) : theme.palette.divider
+            }`,
+            color: theme.palette.text.primary,
+            display: 'flex',
+            fontSize: '1.08rem',
+            fontWeight: 650,
             justifyContent: 'space-between',
-            pr: 1,
+            px: 3,
+            py: 2.35,
           }}
         >
-          {t('core:message.generic.notification_settings', {
+          {t('message.generic.notification_settings', {
             defaultValue: 'Notification settings',
           })}
           <IconButton
-            aria-label="close"
-            onClick={() => setNotificationSettingsModalOpen(false)}
+            onClick={() => setSettingsOpen(false)}
             size="small"
-            sx={{ ml: 1 }}
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.92),
+              '&:hover': {
+                backgroundColor: isDarkMode
+                  ? alpha('#FFFFFF', 0.05)
+                  : alpha(theme.palette.action.active, 0.06),
+                color: theme.palette.text.primary,
+              },
+            }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
-          {notificationSettingsLoading ? (
-            <Typography color="text.secondary">
-              {t('core:message.generic.loading', {
-                defaultValue: 'Loading...',
-              })}
+        <DialogContent
+          sx={{
+            display: 'grid',
+            gap: 1.9,
+            px: 3,
+            pb: 2.9,
+            '&&': {
+              pt: 3.1,
+            },
+          }}
+        >
+          <Box
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.82),
+              fontSize: '0.84rem',
+              lineHeight: 1.52,
+            }}
+          >
+            {t('message.generic.notification_settings_desc', {
+              defaultValue:
+                'Choose which apps can send desktop alerts while keeping in-Hub activity visible.',
+            })}
+          </Box>
+          {settingsLoading ? (
+            <Typography
+              sx={{ color: alpha(theme.palette.text.secondary, 0.82) }}
+            >
+              {t('message.generic.loading', { defaultValue: 'Loading...' })}
             </Typography>
-          ) : notificationSettingsApps.length === 0 ? (
-            <Typography color="text.secondary">
-              {t('core:message.generic.no_notification_apps', {
+          ) : settingsApps.length === 0 ? (
+            <Box
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.82),
+                fontSize: '0.92rem',
+                lineHeight: 1.55,
+                pt: 0.1,
+              }}
+            >
+              {t('message.generic.no_notification_apps', {
                 defaultValue: 'No apps have notification permission yet.',
               })}
-            </Typography>
+            </Box>
           ) : (
-            <List disablePadding>
-              {notificationSettingsApps.map((appName) => {
-                const osPushDisabled =
-                  notificationOsPushDisabledMap[appName] === true;
-                return (
-                  <Box
-                    key={appName}
-                    sx={{
-                      alignItems: 'center',
-                      borderBottom: 1,
-                      borderColor: 'divider',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      py: 1.5,
-                      gap: 2,
-                    }}
-                  >
-                    <Typography sx={{ fontWeight: 500 }}>{appName}</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <List disablePadding sx={{ display: 'grid', gap: 1.2 }}>
+              {settingsApps.map((appName) => (
+                <Box
+                  key={appName}
+                  sx={{
+                    alignItems: 'center',
+                    backgroundColor: isDarkMode
+                      ? alpha('#FFFFFF', 0.026)
+                      : theme.palette.action.hover,
+                    border: `1px solid ${
+                      isDarkMode
+                        ? alpha('#A9BCD8', 0.12)
+                        : theme.palette.divider
+                    }`,
+                    borderRadius: '14px',
+                    display: 'flex',
+                    gap: 2,
+                    justifyContent: 'space-between',
+                    px: 1.7,
+                    py: 1.55,
+                  }}
+                >
+                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1.2 }}>
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        backgroundColor: alpha(
+                          theme.palette.primary.main,
+                          0.12
+                        ),
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`,
+                        borderRadius: '10px',
+                        color: alpha(theme.palette.primary.light, 0.96),
+                        display: 'inline-flex',
+                        height: 34,
+                        justifyContent: 'center',
+                        width: 34,
+                      }}
+                    >
+                      <AppsIcon sx={{ fontSize: 18 }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
                       <Typography
-                        variant="body2"
-                        sx={{ color: 'text.secondary' }}
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.92rem',
+                          fontWeight: 600,
+                        }}
                       >
-                        {t('core:message.generic.disable_os_push', {
-                          defaultValue: 'Disable OS push',
+                        {appName}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.76),
+                          fontSize: '0.76rem',
+                          lineHeight: 1.45,
+                          mt: 0.3,
+                        }}
+                      >
+                        {t('message.generic.disable_os_push_desc', {
+                          defaultValue:
+                            'Mute desktop alerts for this app while keeping in-Hub activity visible.',
                         })}
                       </Typography>
-                      <Switch
-                        checked={osPushDisabled}
-                        onChange={async (_, checked) => {
-                          await setNotificationOsPushDisabled(appName, checked);
-                          setNotificationOsPushDisabledMap((prev) => ({
-                            ...prev,
-                            [appName]: checked,
-                          }));
-                        }}
-                        size="small"
-                      />
                     </Box>
-                    <ButtonBase
+                  </Box>
+                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1.2 }}>
+                    <Typography
                       sx={{
-                        color: 'error.main',
-                        fontSize: '0.8125rem',
-                        fontWeight: 600,
+                        color: alpha(theme.palette.text.secondary, 0.82),
+                        fontSize: '0.78rem',
+                        fontWeight: 500,
                       }}
+                    >
+                      {t('message.generic.disable_os_push', {
+                        defaultValue: 'Disable OS push',
+                      })}
+                    </Typography>
+                    <Switch
+                      checked={osPushDisabledMap[appName] === true}
+                      onChange={async (_, checked) => {
+                        await setNotificationOsPushDisabled(appName, checked);
+                        setOsPushDisabledMap((prev) => ({
+                          ...prev,
+                          [appName]: checked,
+                        }));
+                      }}
+                      size="small"
+                    />
+                    <ButtonBase
                       onClick={async () => {
-                        const toRemove = (customSubscriptions ?? []).filter(
-                          (s) =>
-                            s?.event === 'RESOURCE_PUBLISHED' &&
-                            s?.appName === appName
-                        );
-                        const notificationIds = toRemove
-                          .map((s) => s?.notificationId ?? '')
+                        const notificationIds = (customSubscriptions ?? [])
+                          .filter(
+                            (sub) =>
+                              sub?.event === RESOURCE_EVENT &&
+                              sub?.appName === appName
+                          )
+                          .map((sub) => sub?.notificationId)
                           .filter(Boolean);
                         await setPermission(
                           getNotificationPermissionKey(appName),
@@ -835,14 +685,14 @@ export const GeneralNotifications = ({
                         );
                         setCustomSubscriptions((prev) =>
                           (prev ?? []).filter(
-                            (s) =>
+                            (sub) =>
                               !(
-                                s?.event === 'RESOURCE_PUBLISHED' &&
-                                s?.appName === appName
+                                sub?.event === RESOURCE_EVENT &&
+                                sub?.appName === appName
                               )
                           )
                         );
-                        if (notificationIds.length > 0) {
+                        if (notificationIds.length) {
                           executeEvent(
                             'custom-ws-unsubscribe',
                             notificationIds
@@ -852,23 +702,32 @@ export const GeneralNotifications = ({
                           'notifications-websocket-reconnect',
                           undefined
                         );
-                        setNotificationSettingsApps((prev) =>
-                          prev.filter((a) => a !== appName)
+                        setSettingsApps((prev) =>
+                          prev.filter((name) => name !== appName)
                         );
-                        setNotificationOsPushDisabledMap((prev) => {
-                          const next = { ...prev };
-                          delete next[appName];
-                          return next;
-                        });
+                      }}
+                      sx={{
+                        borderRadius: '10px',
+                        color: theme.palette.error.light,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        px: 1.1,
+                        py: 0.6,
+                        '&:hover': {
+                          backgroundColor: alpha(
+                            theme.palette.error.main,
+                            0.08
+                          ),
+                        },
                       }}
                     >
-                      {t('core:message.generic.revoke_permission', {
-                        defaultValue: 'Revoke permission',
+                      {t('message.generic.revoke_permission', {
+                        defaultValue: 'Revoke',
                       })}
                     </ButtonBase>
                   </Box>
-                );
-              })}
+                </Box>
+              ))}
             </List>
           )}
         </DialogContent>

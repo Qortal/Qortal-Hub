@@ -13,7 +13,6 @@ export type AuthenticatedProfileProps = ProfileLeftProps & {
   onOpenSettings: () => void;
   onOpenDrawerLookup: () => void;
   onOpenWalletsApp: () => void;
-  onOpenDrawerProfile: () => void;
   getUserInfo: (useTimer?: boolean) => Promise<void>;
   onOpenMinting: () => void;
   showTutorial: (key: string, force?: boolean) => void;
@@ -38,7 +37,6 @@ export const AuthenticatedProfile = ({
   onOpenSettings,
   onOpenDrawerLookup,
   onOpenWalletsApp,
-  onOpenDrawerProfile,
   getUserInfo,
   onOpenMinting,
   showTutorial,

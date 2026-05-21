@@ -42,7 +42,7 @@ export const getBaseApiReactForPrimaryName = (customApi?: string): string => {
 };
 
 export const getArbitraryEndpointReact = (): string => {
-  return `/arbitrary/resources/searchsimple`;
+  return `/arbitrary/resources/search`;
 };
 
 export const getBaseApiReactSocket = (customApi?: string): string => {
@@ -50,7 +50,8 @@ export const getBaseApiReactSocket = (customApi?: string): string => {
     return customApi;
   }
   if (globalApiKey?.url) {
-    const protocol = getProtocol(globalApiKey.url) === 'http' ? 'ws://' : 'wss://';
+    const protocol =
+      getProtocol(globalApiKey.url) === 'http' ? 'ws://' : 'wss://';
     return `${protocol}${cleanUrl(globalApiKey.url)}`;
   }
   return groupApiSocket;

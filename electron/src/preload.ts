@@ -290,7 +290,23 @@ function addChatScopedSubscriber<T>(
 try {
   // Expose Electron API
   contextBridge.exposeInMainWorld('electronAPI', {
-    openExternal: (url) => shell.openExternal(url),
+    openExternal: (url: string) => {
+      if (typeof url !== 'string') {
+        return;
+      }
+      try {
+        const parsed = new URL(url.trim());
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return;
+        }
+        if (!parsed.hostname) {
+          return;
+        }
+        void shell.openExternal(parsed.toString());
+      } catch {
+        // Invalid URL
+      }
+    },
     setAllowedDomains: (domains) => {
       ipcRenderer.send('set-allowed-domains', domains);
     },
@@ -305,6 +321,17 @@ try {
       ipcRenderer
         .invoke('window:isMaximized')
         .then((isMaximized: boolean) => ({ isMaximized })),
+    onWindowStateChange: (
+      callback: (state: { isMaximized: boolean }) => void
+    ) => {
+      const handler = (_event, isMaximized: boolean) => {
+        callback({ isMaximized });
+      };
+      ipcRenderer.on('window:state-changed', handler);
+      return () => {
+        ipcRenderer.removeListener('window:state-changed', handler);
+      };
+    },
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
     getSystemCallReadiness: () =>
       ipcRenderer.invoke('systemCallReadiness:getSnapshot') as Promise<{
@@ -586,6 +613,31 @@ try {
       ipcRenderer.invoke('file:deleteFile', filePath),
   });
 
+  // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
+  contextBridge.exposeInMainWorld('appStorage', {
+    get: async (key) => {
+      return ipcRenderer.invoke('persistentStore:get', key);
+    },
+    set: async (key, value) => {
+      return ipcRenderer.invoke('persistentStore:set', key, value);
+    },
+    delete: async (key) => {
+      return ipcRenderer.invoke('persistentStore:delete', key);
+    },
+  });
+
+  contextBridge.exposeInMainWorld('miscStorage', {
+    get: async (key) => {
+      return ipcRenderer.invoke('miscPersistentStore:get', key);
+    },
+    set: async (key, value) => {
+      return ipcRenderer.invoke('miscPersistentStore:set', key, value);
+    },
+    delete: async (key) => {
+      return ipcRenderer.invoke('miscPersistentStore:delete', key);
+    },
+  });
+
   // Expose it
   contextBridge.exposeInMainWorld('walletStorage', {
     get: async (key) => {
@@ -621,19 +673,6 @@ try {
         'wallet-storage.json',
         JSON.stringify(data, null, 2)
       );
-    },
-  });
-
-  // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
-  contextBridge.exposeInMainWorld('appStorage', {
-    get: async (key) => {
-      return ipcRenderer.invoke('persistentStore:get', key);
-    },
-    set: async (key, value) => {
-      return ipcRenderer.invoke('persistentStore:set', key, value);
-    },
-    delete: async (key) => {
-      return ipcRenderer.invoke('persistentStore:delete', key);
     },
   });
 
@@ -697,6 +736,12 @@ try {
     },
     bootstrap: async () => {
       const raw = await ipcRenderer.invoke('coreSetup:bootstrap');
+      return raw;
+    },
+    bootstrapOrClearChainAndStart: async () => {
+      const raw = await ipcRenderer.invoke(
+        'coreSetup:bootstrapOrClearChainAndStart'
+      );
       return raw;
     },
     onProgress: (cb: (p: any) => void) => {

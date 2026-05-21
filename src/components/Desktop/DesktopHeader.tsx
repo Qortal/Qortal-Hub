@@ -82,7 +82,6 @@ export const DesktopHeader = ({
   chatMode,
   openDrawerGroups,
   goToHome,
-  setIsOpenDrawerProfile,
   mobileViewMode,
   setMobileViewMode,
   setMobileViewModeKeepOpen,

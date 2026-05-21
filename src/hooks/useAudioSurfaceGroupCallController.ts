@@ -108,9 +108,20 @@ export function useAudioSurfaceGroupCallController(
     void window.audioSurface.sendCommand({
       type: 'set-device-preferences',
       inputDeviceId: callAudioDevices.inputDeviceId,
+      inputDeviceLabel: callAudioDevices.inputDeviceLabel ?? null,
+      inputDeviceGroupId: callAudioDevices.inputDeviceGroupId ?? null,
       outputDeviceId: callAudioDevices.outputDeviceId,
+      outputDeviceLabel: callAudioDevices.outputDeviceLabel ?? null,
+      outputDeviceGroupId: callAudioDevices.outputDeviceGroupId ?? null,
     });
-  }, [callAudioDevices.inputDeviceId, callAudioDevices.outputDeviceId]);
+  }, [
+    callAudioDevices.inputDeviceGroupId,
+    callAudioDevices.inputDeviceId,
+    callAudioDevices.inputDeviceLabel,
+    callAudioDevices.outputDeviceGroupId,
+    callAudioDevices.outputDeviceId,
+    callAudioDevices.outputDeviceLabel,
+  ]);
 
   useEffect(() => {
     if (!window.audioSurface) return;

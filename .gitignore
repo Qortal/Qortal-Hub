@@ -32,6 +32,18 @@ release-builds/
 scripts/i18n_report*
 *wallet-storage.json
 
+# Local dev/preview console captures
+devserver*.err
+devserver*.out
+preview*.err
+preview*.out
+previewserver*.err
+previewserver*.out
+
+# Local external reference workspaces
+/external/qapp-core-inspect/
+/external/quittersource/
+
 squashfs-root/
 appimagetool-x86_64.AppImage
 *.bak

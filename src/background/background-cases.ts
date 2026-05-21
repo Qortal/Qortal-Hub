@@ -43,10 +43,12 @@ import {
   kickFromGroup,
   leaveGroup,
   makeAdmin,
+  markAllMemberGroupsRead,
   notifyAdminRegenerateSecretKey,
   pauseAllQueues,
   processTransactionVersion2,
   registerName,
+  updateName,
   removeAdmin,
   resumeAllQueues,
   saveTempPublish,
@@ -71,6 +73,7 @@ import { encryptSingle } from '../qdn/encryption/group-encryption';
 import { _createPoll, _voteOnPoll } from '../qortal/get.ts';
 import { createTransaction } from '../transactions/transactions';
 import { getData, storeData } from '../utils/chromeStorage';
+import { getWalletErrorMessage } from '../utils/walletErrorMessages.ts';
 
 export function versionCase(request, event) {
   event.source.postMessage(
@@ -262,7 +265,7 @@ export async function decryptWalletCase(request, event) {
       {
         requestId: request.requestId,
         action: 'decryptWallet',
-        error: error?.message,
+        error: getWalletErrorMessage(error),
         type: 'backgroundMessageResponse',
       },
       event.origin
@@ -811,6 +814,32 @@ export async function registerNameCase(request, event) {
     );
   }
 }
+export async function updateNameCase(request, event) {
+  try {
+    const { newName, oldName, description } = request.payload;
+    const response = await updateName({ newName, oldName, description });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateName',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateName',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
 export async function createPollCase(request, event) {
   try {
     const { pollName, pollDescription, pollOptions } = request.payload;
@@ -944,6 +973,33 @@ export async function addTimestampEnterChatCase(request, event) {
       {
         requestId: request.requestId,
         action: 'addTimestampEnterChat',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+export async function markAllMemberGroupsReadCase(request, event) {
+  try {
+    const { groupIds } = request.payload;
+    const response = await markAllMemberGroupsRead(groupIds);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'markAllMemberGroupsRead',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'markAllMemberGroupsRead',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },
@@ -1440,7 +1496,6 @@ export async function encryptAndPublishSymmetricKeyGroupChatCase(
         previousData,
         addKey: addKeyVar,
       });
-
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -1578,7 +1633,6 @@ export async function publishOnQDNCase(request, event) {
       tag5,
       uploadType,
     });
-
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -2221,9 +2275,13 @@ export async function decryptBoxWithMyKeyCase(request, event) {
     const privateKeyBytes = Base58.decode(resKeyPair.privateKey);
 
     const myCurve25519SK = ed2curve.convertSecretKey(privateKeyBytes);
-    const ephemeralPK  = Uint8Array.from(atob(ephemeralPublicKey), (c) => c.charCodeAt(0));
-    const nonceBytes   = Uint8Array.from(atob(nonce),              (c) => c.charCodeAt(0));
-    const cipherBytes  = Uint8Array.from(atob(ciphertext),         (c) => c.charCodeAt(0));
+    const ephemeralPK = Uint8Array.from(atob(ephemeralPublicKey), (c) =>
+      c.charCodeAt(0)
+    );
+    const nonceBytes = Uint8Array.from(atob(nonce), (c) => c.charCodeAt(0));
+    const cipherBytes = Uint8Array.from(atob(ciphertext), (c) =>
+      c.charCodeAt(0)
+    );
 
     const sharedKey = nacl.box.before(ephemeralPK, myCurve25519SK);
     const plaintext = nacl.box.open.after(cipherBytes, nonceBytes, sharedKey);
@@ -2268,7 +2326,8 @@ export async function decryptBoxWithMyKeyCase(request, event) {
 // SUPPORT_PRIVATE_KEY is kept out of the binary in production; see plan notes.
 
 const SUPPORT_PUBLIC_KEY = 'Ecg4aNUYHonfGjC77BnJZ5dw3s6wYGoKUT2JXfMzQgtn';
-const SUPPORT_PRIVATE_KEY = '2PJdmgbhkWu1zNuU3bk8jL3eTiAn3Fq9aPSqGHpq8uWE2SPLan1XdxMGvek9z6twwtG7iduQBNCc697pRff3emv6';
+const SUPPORT_PRIVATE_KEY =
+  '2PJdmgbhkWu1zNuU3bk8jL3eTiAn3Fq9aPSqGHpq8uWE2SPLan1XdxMGvek9z6twwtG7iduQBNCc697pRff3emv6';
 
 /**
  * Derives the 32-byte symmetric encryption key shared between the user and

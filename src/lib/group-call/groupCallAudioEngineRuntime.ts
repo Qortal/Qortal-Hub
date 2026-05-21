@@ -19,6 +19,9 @@ import {
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
 } from './gcall-diagnostics';
+import {
+  listAudioDevices,
+} from '../call/audioDevices';
 import type { GcallAudioGapAttributionRecord } from '../call/dmVoiceGcallInboundPlayout';
 import packageJson from '../../../package.json';
 import {
@@ -106,6 +109,78 @@ type IncomingRoomKeyPayload = {
   keyCommitment: string;
   verified?: boolean;
 };
+
+function normalizeAudioDeviceLabel(label?: string | null): string {
+  return (label ?? '')
+    .trim()
+    .replace(/^default\s*[-–—:]\s*/i, '')
+    .toLowerCase();
+}
+
+async function resolveAudioSurfaceDeviceId(
+  kind: 'input' | 'output',
+  preferredDeviceId: string | null,
+  preferredGroupId?: string | null,
+  preferredLabel?: string | null
+): Promise<string | null> {
+  if (!preferredDeviceId) return null;
+  try {
+    const devices = await listAudioDevices();
+    const list = kind === 'input' ? devices.inputs : devices.outputs;
+    if (list.some((device) => device.deviceId === preferredDeviceId)) {
+      traceGcallAudioSurface('engine.devices: resolved by id', {
+        kind,
+        requestedId: preferredDeviceId,
+      });
+      return preferredDeviceId;
+    }
+
+    if (preferredGroupId) {
+      const byGroup = list.find(
+        (device) =>
+          device.deviceId !== 'default' && device.groupId === preferredGroupId
+      );
+      if (byGroup) {
+        traceGcallAudioSurface('engine.devices: resolved by groupId', {
+          kind,
+          requestedId: preferredDeviceId,
+          resolvedId: byGroup.deviceId,
+        });
+        return byGroup.deviceId;
+      }
+    }
+
+    const wantedLabel = normalizeAudioDeviceLabel(preferredLabel);
+    if (wantedLabel) {
+      const byLabel = list.find(
+        (device) =>
+          device.deviceId !== 'default' &&
+          normalizeAudioDeviceLabel(device.label) === wantedLabel
+      );
+      if (byLabel) {
+        traceGcallAudioSurface('engine.devices: resolved by label', {
+          kind,
+          requestedId: preferredDeviceId,
+          resolvedId: byLabel.deviceId,
+        });
+        return byLabel.deviceId;
+      }
+    }
+    traceGcallAudioSurface('engine.devices: selected device not found', {
+      kind,
+      requestedId: preferredDeviceId,
+      hasGroupId: Boolean(preferredGroupId),
+      hasLabel: Boolean(preferredLabel),
+      availableDevices: list.length,
+    });
+  } catch {
+    traceGcallAudioSurface('engine.devices: resolve failed', {
+      kind,
+      requestedId: preferredDeviceId,
+    });
+  }
+  return null;
+}
 
 type BootstrapRoomState = {
   roomId: string;
@@ -1088,14 +1163,40 @@ export class GroupCallAudioEngineRuntime {
           this.uiActive = command.uiActive === true;
           return { ok: true };
         case 'set-device-preferences':
-          this.inputDeviceId = command.inputDeviceId ?? null;
-          this.outputDeviceId = command.outputDeviceId ?? null;
+          this.inputDeviceId = await resolveAudioSurfaceDeviceId(
+            'input',
+            command.inputDeviceId ?? null,
+            command.inputDeviceGroupId,
+            command.inputDeviceLabel
+          );
+          this.outputDeviceId = await resolveAudioSurfaceDeviceId(
+            'output',
+            command.outputDeviceId ?? null,
+            command.outputDeviceGroupId,
+            command.outputDeviceLabel
+          );
           void this.syncSenderState();
           void this.receiveEngine.configure({
             outputDeviceId: this.outputDeviceId,
             postFailoverRootHoldUntilMs: 0,
           });
           return { ok: true };
+        case 'list-audio-devices': {
+          const devices = await listAudioDevices();
+          const serialize = (device: MediaDeviceInfo) => ({
+            deviceId: device.deviceId,
+            groupId: device.groupId,
+            kind: device.kind,
+            label: device.label,
+          });
+          return {
+            ok: true,
+            payload: {
+              inputs: devices.inputs.map(serialize),
+              outputs: devices.outputs.map(serialize),
+            },
+          };
+        }
         case 'join-group-call':
           return await this.joinGroupCall(
             command.roomId,

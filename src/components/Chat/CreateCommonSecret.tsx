@@ -170,8 +170,8 @@ export const CreateCommonSecret = ({
         .sendMessage('encryptAndPublishSymmetricKeyGroupChat', {
           groupId: groupId,
           previousData: secretKeyToSend,
-          isOwner,
-          addKey: isOwner && !!secretKeyToSend ? addNewKey : undefined,
+          isOwner: true,
+          addKey: secretKeyToSend ? addNewKey : undefined,
         })
         .then((response) => {
           if (!response?.error) {
@@ -288,7 +288,7 @@ export const CreateCommonSecret = ({
         </Button>
       </Box>
 
-      {isOwner && secretKey && (
+      {secretKey && (
         <Box sx={{ width: '100%', mt: 0 }}>
           <FormControlLabel
             control={

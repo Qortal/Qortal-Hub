@@ -28,13 +28,7 @@ import IconButton from '@mui/material/IconButton';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useAtom } from 'jotai';
-import {
-  ChangeEvent,
-  Fragment,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { ChangeEvent, Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import {
@@ -173,10 +167,14 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   >([]);
   const [reticulumMeshStatus, setReticulumMeshStatus] =
     useState<ReticulumMeshSettingsStatus | null>(null);
-  const [overlayDurationNow, setOverlayDurationNow] = useState(() => Date.now());
+  const [overlayDurationNow, setOverlayDurationNow] = useState(() =>
+    Date.now()
+  );
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const [meshIdentityBusy, setMeshIdentityBusy] = useState(false);
+  const [isPrivateKeyPasswordEditable, setIsPrivateKeyPasswordEditable] =
+    useState(false);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -198,8 +196,6 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
       .then((response) => {
         if (response?.error) {
           console.error('Error adding user settings:', response.error);
-        } else {
-          console.log('User settings added successfully');
         }
       })
       .catch((error) => {
@@ -272,7 +268,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
           mode: null,
           configDir: '',
           reachability: 'unknown',
-          reason: error instanceof Error ? error.message : 'Unable to read status',
+          reason:
+            error instanceof Error ? error.message : 'Unable to read status',
         });
       }
     }
@@ -292,9 +289,12 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         setReticulumMeshStatus(null);
       }
     }
-    if (typeof window.electronAPI?.reticulumGetLocalDestinationHash === 'function') {
+    if (
+      typeof window.electronAPI?.reticulumGetLocalDestinationHash === 'function'
+    ) {
       try {
-        const result = await window.electronAPI.reticulumGetLocalDestinationHash();
+        const result =
+          await window.electronAPI.reticulumGetLocalDestinationHash();
         setReticulumLocalDestinationHash(result?.destinationHash ?? null);
       } catch {
         setReticulumLocalDestinationHash(null);
@@ -368,15 +368,12 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     };
   }, [open, reticulumOverlayPeers.length]);
 
-  const handleCloseActionChange = useCallback(
-    async (value: CloseAction) => {
-      setCloseAction(value);
-      if (typeof window.electronAPI?.setAppSettings === 'function') {
-        await window.electronAPI.setAppSettings({ closeAction: value });
-      }
-    },
-    []
-  );
+  const handleCloseActionChange = useCallback(async (value: CloseAction) => {
+    setCloseAction(value);
+    if (typeof window.electronAPI?.setAppSettings === 'function') {
+      await window.electronAPI.setAppSettings({ closeAction: value });
+    }
+  }, []);
 
   return (
     <Fragment>
@@ -424,10 +421,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             p: 2,
           }}
         >
-          <Box
-            sx={{ maxWidth: 760, mx: 'auto', py: 3, px: 1, width: '100%' }}
-          >
-
+          <Box sx={{ maxWidth: 760, mx: 'auto', py: 3, px: 1, width: '100%' }}>
             {/* Notifications */}
             <Box
               sx={{
@@ -603,8 +597,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     typeof reticulumStatus?.configuredHubInterfaces === 'number'
                       ? ` · Hubs ${reticulumStatus.onlineHubInterfaces}/${reticulumStatus.configuredHubInterfaces}`
                       : ''}
-                    {typeof reticulumStatus?.onlineRemoteHubInterfaces === 'number' &&
-                    typeof reticulumStatus?.configuredRemoteHubInterfaces === 'number'
+                    {typeof reticulumStatus?.onlineRemoteHubInterfaces ===
+                      'number' &&
+                    typeof reticulumStatus?.configuredRemoteHubInterfaces ===
+                      'number'
                       ? ` · Remote hubs ${reticulumStatus.onlineRemoteHubInterfaces}/${reticulumStatus.configuredRemoteHubInterfaces}`
                       : ''}
                     {typeof reticulumStatus?.transportEnabled === 'boolean'
@@ -613,7 +609,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     {typeof reticulumStatus?.overlayLinksConnected === 'number'
                       ? ` · Overlay links ${reticulumStatus.overlayLinksConnected}`
                       : ''}
-                    {reticulumStatus?.pid ? ` · PID ${reticulumStatus.pid}` : ''}
+                    {reticulumStatus?.pid
+                      ? ` · PID ${reticulumStatus.pid}`
+                      : ''}
                   </Typography>
                   <Typography
                     variant="caption"
@@ -629,7 +627,11 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     {reticulumLocalDestinationHash ?? 'Unavailable'}
                   </Typography>
                   <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption" component="div" color="text.disabled">
+                    <Typography
+                      variant="caption"
+                      component="div"
+                      color="text.disabled"
+                    >
                       Overlay peers
                     </Typography>
                     {reticulumOverlayPeers.length === 0 ? (
@@ -674,7 +676,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                                 </TableCell>
                                 <TableCell
                                   sx={{
-                                    fontFamily: peer.address ? 'inherit' : 'monospace',
+                                    fontFamily: peer.address
+                                      ? 'inherit'
+                                      : 'monospace',
                                     fontSize: '0.75rem',
                                     wordBreak: 'break-all',
                                   }}
@@ -690,7 +694,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                                 </TableCell>
                                 <TableCell
                                   align="right"
-                                  sx={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}
+                                  sx={{
+                                    whiteSpace: 'nowrap',
+                                    fontSize: '0.75rem',
+                                  }}
                                 >
                                   {formatElapsedDuration(
                                     peer.connectedAt,
@@ -740,9 +747,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         {reticulumMeshStatus.meshListenEnabled
                           ? ' · listen enabled'
                           : ' · listen disabled'}
-                        {reticulumMeshStatus.upnpMapped
-                          ? ' · UPnP mapped'
-                          : ''}
+                        {reticulumMeshStatus.upnpMapped ? ' · UPnP mapped' : ''}
                         {reticulumMeshStatus.meshDiscoveryClient
                           ? ' · RNS interface discovery + autoconnect (LXMF included with the Hub Reticulum runtime; see Reticulum manual)'
                           : ''}
@@ -777,8 +782,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         Bootstrap hubs use the managed TCP client entries in
                         Reticulum config. Community mesh peers are reached via
                         RNS discovery (not app-level gossip). The mesh network
-                        identity used for encrypted discovery/private gateways is
-                        installed automatically; file path:{' '}
+                        identity used for encrypted discovery/private gateways
+                        is installed automatically; file path:{' '}
                         <Box component="span" sx={{ wordBreak: 'break-all' }}>
                           {reticulumMeshStatus.networkIdentityPath}
                         </Box>
@@ -786,20 +791,23 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                       {reticulumMeshStatus.meshListenEnabled &&
                         !reticulumMeshStatus.meshPrivateGateway &&
                         typeof window.electronAPI
-                          ?.reticulumEnsureMeshNetworkIdentity === 'function' && (
-                        <Box sx={{ mt: 1 }}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={meshIdentityBusy}
-                            onClick={() => void handleEnsureMeshNetworkIdentity()}
-                          >
-                            {meshIdentityBusy
-                              ? 'Installing…'
-                              : 'Install community mesh identity'}
-                          </Button>
-                        </Box>
-                      )}
+                          ?.reticulumEnsureMeshNetworkIdentity ===
+                          'function' && (
+                          <Box sx={{ mt: 1 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={meshIdentityBusy}
+                              onClick={() =>
+                                void handleEnsureMeshNetworkIdentity()
+                              }
+                            >
+                              {meshIdentityBusy
+                                ? 'Installing…'
+                                : 'Install community mesh identity'}
+                            </Button>
+                          </Box>
+                        )}
                     </>
                   )}
                 </Box>
@@ -879,7 +887,6 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             >
               <ThemeManager />
             </Box>
-
           </Box>
         </Box>
       </Dialog>
@@ -944,11 +951,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
 
   return (
     <>
-      <Button
-        variant="contained"
-        size="small"
-        onClick={() => setIsOpen(true)}
-      >
+      <Button variant="contained" size="small" onClick={() => setIsOpen(true)}>
         {t('group:action.export_private_key', {
           postProcess: 'capitalizeFirstChar',
         })}
@@ -993,11 +996,38 @@ const ExportPrivateKey = ({ rawWallet }) => {
             autoFocus
             type="password"
             value={password}
-            autoComplete="off"
+            autoComplete="new-password"
+            name="settings-private-key-decrypt"
             size="small"
+            onFocus={() => setIsPrivateKeyPasswordEditable(true)}
+            onMouseDown={() => setIsPrivateKeyPasswordEditable(true)}
+            onBlur={() => {
+              if (!password) {
+                setIsPrivateKeyPasswordEditable(false);
+              }
+            }}
             onChange={(e) => setPassword(e.target.value)}
+            InputProps={{
+              readOnly: !isPrivateKeyPasswordEditable,
+            }}
+            inputProps={{
+              autoComplete: 'new-password',
+              'data-1p-ignore': 'true',
+              'data-lpignore': 'true',
+              spellCheck: 'false',
+            }}
             sx={{
               '& .MuiOutlinedInput-root': { borderRadius: 2 },
+              '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+                {
+                  WebkitBoxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0 0 0 100px rgb(38, 42, 50) inset'
+                      : '0 0 0 100px rgb(248, 250, 253) inset',
+                  WebkitTextFillColor: theme.palette.text.primary,
+                  caretColor: theme.palette.text.primary,
+                  transition: 'background-color 9999s ease-out 0s',
+                },
             }}
           />
 

@@ -623,6 +623,8 @@ export const ThreadSingleLastMessageSpanP = styled('span')(({ theme }) => ({
 }));
 
 export const GroupContainer = styled(Box)`
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   position: relative;
   width: 100%;
