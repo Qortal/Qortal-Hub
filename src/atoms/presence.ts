@@ -2,11 +2,10 @@ import { atom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 
 /**
- * User-selectable presence status.
- * All four values count as "online" (present in the network).
+ * Presence statuses that count as "online" in the network.
  * `'idle'` is set automatically — it is never user-selectable.
  */
-export type UserStatus = 'online' | 'away' | 'busy' | 'idle';
+export type UserStatus = 'online' | 'busy' | 'idle';
 
 /**
  * Full set of statuses the user can pick in the UI.
@@ -14,7 +13,7 @@ export type UserStatus = 'online' | 'away' | 'busy' | 'idle';
  * and stops heartbeating; their address is excluded from the online count.
  * `'idle'` is intentionally excluded here (it is automatic, not selectable).
  */
-export type SelectableStatus = 'online' | 'away' | 'busy' | 'offline';
+export type SelectableStatus = 'online' | 'busy' | 'offline';
 
 /**
  * Drives the "Idle" label on the profile card without affecting the
@@ -36,7 +35,7 @@ export const myStatusAtom = atom<SelectableStatus>('online');
 
 /**
  * Map of address → UserStatus for every currently-online peer.
- * Values include 'online', 'away', 'busy', and 'idle'.
+ * Values include 'online', 'busy', and 'idle'.
  * Entries are removed when a peer goes offline.
  */
 export const statusMapAtom = atom<Map<string, UserStatus>>(new Map<string, UserStatus>());
@@ -61,7 +60,7 @@ export const isOnlineAtomFamily = atomFamily((address: string) =>
  * when THEIR address's status actually changes.
  *
  * @example
- * const status = useAtomValue(statusAtomFamily(address)); // 'online'|'away'|'busy'|null
+ * const status = useAtomValue(statusAtomFamily(address)); // 'online'|'busy'|'idle'|null
  */
 export const statusAtomFamily = atomFamily((address: string) =>
   atom((get) => get(statusMapAtom).get(address) ?? null)

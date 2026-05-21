@@ -26,3 +26,9 @@ export const getClickableAvatarSx = (
     },
   };
 };
+
+export const getFallbackAvatarOutlineSx = (theme: Theme): SxProps<Theme> => ({
+  boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.text.primary, 0.2)}`,
+  outline: `1px solid ${alpha(theme.palette.common.white, 0.04)}`,
+  outlineOffset: '-2px',
+});

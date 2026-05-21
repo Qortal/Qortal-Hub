@@ -14,7 +14,6 @@ export type AudioEngineTopologyLabel = 'Reticulum';
 
 export type AudioEngineSelectableStatus =
   | 'online'
-  | 'away'
   | 'busy'
   | 'offline';
 

@@ -73,6 +73,7 @@ import {
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 import { useVoiceCallContext } from '../../context/VoiceCallContext';
+import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
 import { buildDirectVoiceCallChatId } from '../../lib/call/directVoiceCallChatId';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import { useIsOnline } from '../../hooks/usePresence';
@@ -198,6 +199,7 @@ export const ChatDirect = ({
     toggleMute,
     toggleHearCall,
   } = useVoiceCallContext();
+  const { confirmCallSwitch } = useCallSwitchGuard();
 
   const peerOnline = useIsOnline(selectedDirect?.address);
 
@@ -245,17 +247,23 @@ export const ChatDirect = ({
     [userInfo?.publicKey]
   );
 
-  const handleStartDirectVoiceCall = useCallback(() => {
-    if (!directVoiceChatId || !selectedDirect?.address || callState !== 'idle')
-      return;
+  const handleStartDirectVoiceCall = useCallback(async () => {
+    if (!directVoiceChatId || !selectedDirect?.address) return;
+    if (callMatchesThisDirect) return;
     if (!peerOnline) return;
+    const confirmed = await confirmCallSwitch({
+      type: 'direct',
+      chatId: directVoiceChatId,
+    });
+    if (!confirmed) return;
     initiateVoiceCall(
       selectedDirect.address,
       directVoiceChatId,
       signCallRequest
     );
   }, [
-    callState,
+    callMatchesThisDirect,
+    confirmCallSwitch,
     directVoiceChatId,
     initiateVoiceCall,
     peerOnline,
@@ -698,15 +706,18 @@ export const ChatDirect = ({
               }
               return;
             }
-            rej(response.error);
+            console.warn(
+              '[DirectChat] Unable to decrypt direct messages',
+              decryptResponse.error
+            );
+            res([]);
           })
           .catch((error) => {
-            rej(
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
+            console.warn(
+              '[DirectChat] Unable to decrypt direct messages',
+              error?.message || error
             );
+            res([]);
           });
       });
     } catch (error) {
@@ -1397,7 +1408,7 @@ export const ChatDirect = ({
         if (replyMessage?.chatReference) {
           repliedTo = replyMessage?.chatReference;
         }
-        let chatReference = onEditMessage?.signature;
+        const chatReference = onEditMessage?.signature;
 
         const otherData = {
           ...(onEditMessage?.decryptedData || {}),
@@ -1624,15 +1635,13 @@ export const ChatDirect = ({
             </Tooltip>
             <Tooltip
               title={
-                callState === 'connected'
+                callMatchesThisDirect && callState === 'connected'
                   ? 'In call'
-                  : callState === 'calling'
+                  : callMatchesThisDirect && callState === 'calling'
                     ? ''
-                    : callState !== 'idle'
-                      ? ''
-                      : !peerOnline
-                        ? t('core:presence.call_offline_tooltip')
-                        : 'Start voice call'
+                    : !peerOnline
+                      ? t('core:presence.call_offline_tooltip')
+                      : 'Start voice call'
               }
             >
               <span>
@@ -1640,28 +1649,32 @@ export const ChatDirect = ({
                   size="small"
                   disabled={
                     !(
-                      (callState === 'idle' && peerOnline) ||
-                      callState === 'connected'
+                      (peerOnline && !callMatchesThisDirect) ||
+                      (callMatchesThisDirect && callState === 'connected')
                     )
                   }
                   onClick={
-                    callState === 'connected'
+                    callMatchesThisDirect && callState === 'connected'
                       ? hangUp
                       : handleStartDirectVoiceCall
                   }
                   sx={{
                     color:
-                      callState === 'connected' ? '#ef4444' : 'text.secondary',
+                      callMatchesThisDirect && callState === 'connected'
+                        ? '#ef4444'
+                        : 'text.secondary',
                     '&:hover': {
                       color:
-                        callState === 'connected' ? '#dc2626' : 'text.primary',
+                        callMatchesThisDirect && callState === 'connected'
+                          ? '#dc2626'
+                          : 'text.primary',
                     },
                     '&.Mui-disabled': {
                       color: theme.palette.action.disabled,
                     },
                   }}
                 >
-                  {callState === 'connected' ? (
+                  {callMatchesThisDirect && callState === 'connected' ? (
                     <CallEndRoundedIcon sx={{ fontSize: 20 }} />
                   ) : (
                     <CallRoundedIcon sx={{ fontSize: 20 }} />

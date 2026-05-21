@@ -113,14 +113,20 @@ export function useAppReset() {
   );
   const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
 
-  const resetAddressInfoControllerAtom = useResetAtom(addressInfoControllerAtom);
+  const resetAddressInfoControllerAtom = useResetAtom(
+    addressInfoControllerAtom
+  );
   const resetBlobControllerAtom = useResetAtom(blobControllerAtom);
   const resetNavigationControllerAtom = useResetAtom(navigationControllerAtom);
-  const resetNotificationsByAddressAtom = useResetAtom(notificationsByAddressAtom);
+  const resetNotificationsByAddressAtom = useResetAtom(
+    notificationsByAddressAtom
+  );
   const resetEnabledDevModeAtom = useResetAtom(enabledDevModeAtom);
   const resetFullScreenAtom = useResetAtom(fullScreenAtom);
   const resetHasSettingsChangedAtom = useResetAtom(hasSettingsChangedAtom);
-  const resetIsDisabledEditorEnterAtom = useResetAtom(isDisabledEditorEnterAtom);
+  const resetIsDisabledEditorEnterAtom = useResetAtom(
+    isDisabledEditorEnterAtom
+  );
   const resetIsOpenBlockedModalAtom = useResetAtom(isOpenBlockedModalAtom);
   const resetIsRunningPublicNodeAtom = useResetAtom(isRunningPublicNodeAtom);
   const resetSelectedGroupIdAtom = useResetAtom(selectedGroupIdAtom);
@@ -142,6 +148,7 @@ export function useAppReset() {
   const resetAllRecoil = useCallback(() => {
     if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
       Object.values(globalDownloadsValue).forEach((entry: any) => {
+        if (entry?.cancel) entry.cancel();
         if (entry?.interval) clearInterval(entry.interval);
         if (entry?.timeout) clearTimeout(entry.timeout);
         if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);

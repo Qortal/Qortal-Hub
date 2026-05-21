@@ -93,6 +93,7 @@ import {
   getReticulumBridge,
   type ReticulumOverlayVerifiedPeer,
 } from './reticulum-bridge';
+import { attachReticulumStatusBridgeEvents } from './reticulum-daemon';
 import {
   startReticulumMeshCoordinator,
   stopReticulumMeshCoordinator,
@@ -1977,6 +1978,7 @@ export async function ensureReticulumManagersStarted(): Promise<void> {
   if (bridgeTransport && bridgeTransport.getState() !== 'ready') {
     registerLateReticulumBridgeRecovery();
   }
+  attachReticulumStatusBridgeEvents(bridgeTransport);
 
   let pm = getPresenceManager();
   const transports = bridgeTransport ? [bridgeTransport] : [];
@@ -2279,6 +2281,7 @@ export function registerLateReticulumBridgeRecovery(): void {
       );
       return;
     }
+    attachReticulumStatusBridgeEvents(currentBridge);
 
     loggerLog(
       '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and rebinding call/group-call managers'

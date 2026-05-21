@@ -112,9 +112,6 @@ const ACCOUNT_STATUS_DEFS: Array<{
     key: 'online',
   },
   {
-    key: 'away',
-  },
-  {
     key: 'busy',
   },
   {
@@ -293,11 +290,9 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
         label:
           def.key === 'online'
             ? td('account_status_online', 'Online')
-            : def.key === 'away'
-              ? td('account_status_away', 'Away')
-              : def.key === 'busy'
-                ? td('account_status_busy', 'Busy')
-                : td('account_status_offline', 'Offline'),
+            : def.key === 'busy'
+              ? td('account_status_busy', 'Busy')
+              : td('account_status_offline', 'Offline'),
       })),
     [isDarkMode, td, theme.palette.common.white, theme.palette.text.primary]
   );
@@ -456,13 +451,6 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
     isIdle && myStatus !== 'offline' ? 'idle' : myStatus;
   const isAccountStatusMenuOpen = Boolean(accountStatusAnchorEl);
   const accountStatusMeta = useMemo(() => {
-    if (accountStatus === 'away') {
-      return {
-        color: statusDotColor('away'),
-        label: td('account_status_away', 'Away'),
-      };
-    }
-
     if (accountStatus === 'busy') {
       return {
         color: statusDotColor('busy'),

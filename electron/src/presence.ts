@@ -47,10 +47,10 @@ export const PRESENCE_MESSAGE_TYPES = new Set<string>([
 ]);
 
 /**
- * The user-selectable status shown to the network.
- * All three values count as "online" (present in the network).
+ * The presence status shown to the network.
+ * All values count as "online" (present in the network).
  */
-export type UserStatus = 'online' | 'away' | 'busy' | 'idle';
+export type UserStatus = 'online' | 'busy' | 'idle';
 
 // ── Payload types ─────────────────────────────────────────────────────────────
 

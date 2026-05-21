@@ -91,13 +91,13 @@ function buildEnvelope(
 /**
  * Maps a UserStatus (or null) to a presence-badge dot colour.
  * Exported so all components share the same colour scheme.
- * `null` (offline) is handled at the call site (dot hidden or grey).
+ * `null` and `'offline'` render as Discord-style grey offline indicators.
  */
 export function statusDotColor(status: string | null): string {
-  if (status === 'away') return '#f59e0b';
-  if (status === 'busy') return '#ef4444';
-  if (status === 'idle') return '#78909c';
-  return '#44b700'; // online or any non-null fallback
+  if (status === null || status === 'offline') return '#80848e';
+  if (status === 'busy') return '#f23f43';
+  if (status === 'idle') return '#f0b232';
+  return '#23a55a'; // online or any non-null fallback
 }
 
 export function buildPresenceSnapshot(

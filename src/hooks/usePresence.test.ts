@@ -42,12 +42,12 @@ describe('usePresence', () => {
       {
         address: 'Q456',
         publicKey: 'pub-3',
-        sessionId: 'session-away',
+        sessionId: 'session-idle',
         lastSeen: 1_500,
         firstSeen: 1_400,
         originNodeId: 'node-c',
         viaPeerId: 'node-c',
-        status: 'away',
+        status: 'idle',
         signatureValid: true,
       },
     ]);
@@ -56,7 +56,7 @@ describe('usePresence', () => {
     expect(snapshot.statusMap).toEqual(
       new Map([
         ['Q123', 'online'],
-        ['Q456', 'away'],
+        ['Q456', 'idle'],
       ])
     );
   });

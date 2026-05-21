@@ -1,6 +1,5 @@
 import {
   Avatar,
-  Badge,
   Box,
   ListItem,
   ListItemAvatar,
@@ -21,9 +20,11 @@ import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';
-import { useOnlineAddresses, statusDotColor } from '../../hooks/usePresence';
+import { useOnlineAddresses } from '../../hooks/usePresence';
 import { useAtomValue } from 'jotai';
 import { statusMapAtom } from '../../atoms/presence';
+import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
+import { getFallbackAvatarOutlineSx } from '../Chat/clickableAvatarStyles';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -396,33 +397,24 @@ const ListOfMembers = ({
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
                 <ListItemAvatar>
-                  <Badge
-                    overlap="circular"
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    variant="dot"
-                    invisible={!onlineAddresses.has(member?.member)}
-                    sx={{
-                      '& .MuiBadge-dot': {
-                        backgroundColor: statusDotColor(
-                          statusMap.get(member?.member) ?? null
-                        ),
-                        border: `2px solid ${theme.palette.background.paper}`,
-                        borderRadius: '50%',
-                        height: 10,
-                        minWidth: 10,
-                        width: 10,
-                      },
-                    }}
+                  <PresenceStatusBadge
+                    online={onlineAddresses.has(member?.member)}
+                    status={statusMap.get(member?.member) ?? null}
                   >
                     <Avatar
                       alt={member?.primaryName || member?.member}
+                      sx={{
+                        ...(!member?.primaryName
+                          ? getFallbackAvatarOutlineSx(theme)
+                          : {}),
+                      }}
                       src={
                         member?.primaryName
                           ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.primaryName}/qortal_avatar?async=true`
                           : ''
                       }
                     />
-                  </Badge>
+                  </PresenceStatusBadge>
                 </ListItemAvatar>
 
                 <ListItemText

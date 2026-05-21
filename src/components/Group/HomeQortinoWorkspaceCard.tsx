@@ -21,6 +21,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   memo,
+  useContext,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -55,10 +56,13 @@ import {
   txListAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { getArbitraryEndpointReact, getBaseApiReact } from '../../App';
+import {
+  getArbitraryEndpointReact,
+  getBaseApiReact,
+  QORTAL_APP_CONTEXT,
+} from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import ErrorBoundary from '../../common/ErrorBoundary';
-import { useFetchResources } from '../../hooks/useFetchResources';
 import {
   executeEvent,
   subscribeToEvent,
@@ -160,6 +164,7 @@ type QortinoGratefulState = {
 const QORTINO_STATUS_REFERENCE_LABEL = 'standby';
 const HOTKEY_SLOT_VALUE_SEPARATOR = '::';
 const EARBUMP_AUDIO_SERVICE = 'AUDIO';
+const MUSIC_PLAYER_DOWNLOAD_SCOPE = 'music-player';
 type WorkspaceMode = 'empty' | 'hotkeys' | 'music';
 type StepKey = 'get_six_qorts' | 'register_name' | 'load_avatar';
 type HotkeyActionId = string;
@@ -1542,10 +1547,36 @@ export const HomeQortinoWorkspaceCard = ({
   const onboardingJustCompletedRef = useRef(false);
   const wasOnboardingVisibleRef = useRef(false);
   const avatarCompletionAfterPanelCloseRef = useRef(false);
-  const downloadResource = useFetchResources();
+  const activeEarbumpDownloadRef = useRef<Pick<
+    MusicTrack,
+    'id' | 'name'
+  > | null>(null);
+  const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
   const clearMusicStreamError = useCallback(
     () => setMusicStreamError(null),
     []
+  );
+  const cancelEarbumpTrackDownload = useCallback(
+    (track: Pick<MusicTrack, 'id' | 'name'> | null) => {
+      if (!track?.id || !track?.name) {
+        return;
+      }
+
+      downloadResource.cancelResourceDownload({
+        downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+        identifier: track.id,
+        name: track.name,
+        service: EARBUMP_AUDIO_SERVICE,
+      });
+
+      if (
+        activeEarbumpDownloadRef.current?.id === track.id &&
+        activeEarbumpDownloadRef.current?.name === track.name
+      ) {
+        activeEarbumpDownloadRef.current = null;
+      }
+    },
+    [downloadResource]
   );
 
   const runtimeReactionFingerprints = useMemo(
@@ -1661,11 +1692,12 @@ export const HomeQortinoWorkspaceCard = ({
         window.clearTimeout(qortinoGratefulTimeoutRef.current);
       }
 
+      cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
       discoveryRequestRef.current?.abort();
       searchRequestRef.current?.abort();
       selectedTrackRequestRef.current?.abort();
     };
-  }, []);
+  }, [cancelEarbumpTrackDownload]);
 
   const applyWorkspaceState = useCallback(
     (updater: (current: WorkspaceState) => WorkspaceState) => {
@@ -1676,6 +1708,7 @@ export const HomeQortinoWorkspaceCard = ({
 
   useEffect(() => {
     const handleLogout = () => {
+      cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
       stopSharedEarbumpPlayback();
       setMusicStreamError(null);
       applyWorkspaceState((current) =>
@@ -1693,19 +1726,20 @@ export const HomeQortinoWorkspaceCard = ({
     return () => {
       unsubscribeFromEvent('logout-event', handleLogout);
     };
-  }, [applyWorkspaceState]);
+  }, [applyWorkspaceState, cancelEarbumpTrackDownload]);
 
   useEffect(() => {
     if (userAddress != null) {
       return;
     }
 
+    cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
     stopSharedEarbumpPlayback();
     setIsQortinoTickled(false);
     setQortinoGratefulState(null);
     setMusicStreamError(null);
     setSelectedTrackSnapshot(null);
-  }, [userAddress]);
+  }, [cancelEarbumpTrackDownload, userAddress]);
 
   const handleQortinoPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -2673,6 +2707,8 @@ export const HomeQortinoWorkspaceCard = ({
     typeof activeTrackResource?.status?.status === 'string'
       ? activeTrackResource.status.status
       : null;
+  const wasActiveTrackCancelledByMusicPlayer =
+    activeTrackResource?.cancelledByScope === MUSIC_PLAYER_DOWNLOAD_SCOPE;
   const activeTrackPeerCount =
     typeof activeTrackResource?.status?.numberOfPeers === 'number'
       ? activeTrackResource.status.numberOfPeers
@@ -2682,7 +2718,7 @@ export const HomeQortinoWorkspaceCard = ({
     Number(activeTrackResource?.status?.percentLoaded ?? 0)
   );
   const activeTrackReadyState = getTrackReadyState(
-    activeTrackResourceStatus,
+    wasActiveTrackCancelledByMusicPlayer ? null : activeTrackResourceStatus,
     Boolean(activeTrack.id)
   );
   const activeTrackPlaybackUrl =
@@ -2846,6 +2882,34 @@ export const HomeQortinoWorkspaceCard = ({
         : earbumpDiscoveryError),
     [earbumpDiscoveryError, isEarbumpDiscoveryLoading, musicLoadingHint, qw]
   );
+
+  useEffect(() => {
+    const currentTrack =
+      workspaceState.mode === 'music' && activeTrack.id && activeTrack.name
+        ? {
+            id: activeTrack.id,
+            name: activeTrack.name,
+          }
+        : null;
+    const previousTrack = activeEarbumpDownloadRef.current;
+
+    if (
+      previousTrack &&
+      (!currentTrack ||
+        previousTrack.id !== currentTrack.id ||
+        previousTrack.name !== currentTrack.name)
+    ) {
+      cancelEarbumpTrackDownload(previousTrack);
+    }
+
+    activeEarbumpDownloadRef.current = currentTrack;
+  }, [
+    activeTrack.id,
+    activeTrack.name,
+    cancelEarbumpTrackDownload,
+    workspaceState.mode,
+  ]);
+
   useEffect(() => {
     if (workspaceState.mode !== 'music') {
       return;
@@ -2861,11 +2925,15 @@ export const HomeQortinoWorkspaceCard = ({
       return;
     }
 
-    if (activeTrackReadyState === 'error') {
+    if (
+      activeTrackReadyState === 'error' &&
+      !wasActiveTrackCancelledByMusicPlayer
+    ) {
       return;
     }
 
     void downloadResource({
+      downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
       identifier: activeTrack.id,
       name: activeTrack.name,
       service: EARBUMP_AUDIO_SERVICE,
@@ -2876,6 +2944,7 @@ export const HomeQortinoWorkspaceCard = ({
     activeTrackReadyState,
     downloadResource,
     hasTrackPlaybackMetadata,
+    wasActiveTrackCancelledByMusicPlayer,
     workspaceState.mode,
   ]);
 
@@ -3211,6 +3280,7 @@ export const HomeQortinoWorkspaceCard = ({
         qw('music_stream_stalled', 'Track stalled. Rebuilding the stream...')
       );
       void downloadResource({
+        downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
         identifier: activeTrack.id,
         name: activeTrack.name,
         service: EARBUMP_AUDIO_SERVICE,
@@ -3307,12 +3377,19 @@ export const HomeQortinoWorkspaceCard = ({
         setOpenHotkeyPickerDialog(false);
         pushReaction(qw('reaction_music_panel_ready', 'Music panel ready.'));
       } else {
+        cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(false);
         pushReaction(qw('reaction_panel_cleared', 'Panel cleared.'));
       }
     },
-    [applyWorkspaceState, dismissed, pushReaction, qw]
+    [
+      applyWorkspaceState,
+      cancelEarbumpTrackDownload,
+      dismissed,
+      pushReaction,
+      qw,
+    ]
   );
 
   const handleSetHotkey = useCallback(
@@ -3413,6 +3490,7 @@ export const HomeQortinoWorkspaceCard = ({
         setMusicStreamError(null);
         if (track) {
           void downloadResource({
+            downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
             identifier: track.id,
             name: track.name,
             service: EARBUMP_AUDIO_SERVICE,

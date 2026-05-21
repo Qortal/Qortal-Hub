@@ -19,7 +19,7 @@ import {
   type ChildProcessWithoutNullStreams,
 } from 'child_process';
 import crypto from 'crypto';
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, type WebContents } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
 import net from 'net';
@@ -27,6 +27,7 @@ import os from 'os';
 import path from 'path';
 import { log as loggerLog, error as loggerError } from './logger';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
+import type { ReticulumBridge } from './reticulum-bridge';
 import {
   getBundledMeshNetworkIdentityPath,
   getBundledMeshNetworkPassphrasePath,
@@ -1594,6 +1595,153 @@ export function getReticulumDaemonStatus(): ReticulumDaemonStatus {
   };
 }
 
+const RETICULUM_STATUS_CHANNEL = 'reticulum:status';
+const RETICULUM_STATUS_BROADCAST_DEBOUNCE_MS = 75;
+
+const reticulumStatusSubscribers = new Set<WebContents>();
+let reticulumStatusBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+let reticulumStatusAttachedBridge: ReticulumBridge | null = null;
+
+export async function collectReticulumStatusSnapshot(): Promise<ReticulumDaemonStatus> {
+  const base = getReticulumDaemonStatus();
+  if (!base.running && !lastStartMode) {
+    const plan = resolveLaunchPlan();
+    if ('error' in plan) {
+      return { ...base, running: false, reason: plan.error };
+    }
+  }
+  try {
+    const [{ getReticulumBridge }, { getPresenceManager }] =
+      (await Promise.all([
+        import('./reticulum-bridge'),
+        import('./presence'),
+      ])) as [
+        typeof import('./reticulum-bridge'),
+        typeof import('./presence'),
+      ];
+    const bridge = getReticulumBridge();
+    attachReticulumStatusBridgeEvents(bridge);
+    const bridgeStatus = bridge?.getConnectivitySnapshot();
+    if (!bridgeStatus) return base;
+    const verifiedOverlayPeerCount =
+      getPresenceManager()?.getReticulumVerifiedPeers().length ?? 0;
+    const localHash = bridge.getLocalDestinationHash()?.trim().toLowerCase() ?? '';
+    const activePeerHashes = new Set<string>();
+    for (const peer of bridge.getOverlayLinkSnapshots()) {
+      const peerKey = peer.peerPresenceHash.trim().toLowerCase();
+      if (!peerKey) continue;
+      if (localHash && peerKey === localHash) continue;
+      activePeerHashes.add(peerKey);
+    }
+    const p2pActiveOverlayPeers = activePeerHashes.size;
+    const transportFallback =
+      getReticulumInstanceIndex() > 0 &&
+      shouldFallbackToSharedTransportState({
+        bridgeState: bridgeStatus.bridgeState,
+        reachability: bridgeStatus.reachability,
+        configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
+        onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
+        overlayLinksConnected: bridgeStatus.overlayLinksConnected,
+        hubSummary: bridgeStatus.hubSummary,
+        reason: bridgeStatus.reason,
+      })
+        ? readReticulumSharedTransportState()
+        : null;
+    const resolvedReachability =
+      transportFallback?.reachability ?? bridgeStatus.reachability;
+    return {
+      ...base,
+      bridgeState: bridgeStatus.bridgeState,
+      reachability: resolvedReachability,
+      transportEnabled:
+        transportFallback?.transportEnabled ?? bridgeStatus.transportEnabled,
+      configuredHubInterfaces:
+        transportFallback?.configuredHubInterfaces ??
+        bridgeStatus.configuredHubInterfaces,
+      onlineHubInterfaces:
+        transportFallback?.onlineHubInterfaces ?? bridgeStatus.onlineHubInterfaces,
+      configuredRemoteHubInterfaces:
+        transportFallback?.configuredRemoteHubInterfaces ??
+        bridgeStatus.configuredRemoteHubInterfaces,
+      onlineRemoteHubInterfaces:
+        transportFallback?.onlineRemoteHubInterfaces ??
+        bridgeStatus.onlineRemoteHubInterfaces,
+      hubSummary: transportFallback?.hubSummary ?? bridgeStatus.hubSummary,
+      verifiedOverlayPeerCount,
+      p2pActiveOverlayPeers,
+      ...(typeof bridgeStatus.overlayLinksConnected === 'number'
+        ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }
+        : {}),
+      ...((transportFallback?.reason ?? bridgeStatus.reason)
+        ? { reason: transportFallback?.reason ?? bridgeStatus.reason }
+        : {}),
+    };
+  } catch (error) {
+    loggerError('[Reticulum] Failed to collect bridge status:', error);
+    return {
+      ...base,
+      reason: base.reason ?? 'Unable to read Reticulum bridge status',
+    };
+  }
+}
+
+async function broadcastReticulumStatusSnapshot(): Promise<void> {
+  if (reticulumStatusSubscribers.size === 0) return;
+  const status = await collectReticulumStatusSnapshot();
+  for (const wc of reticulumStatusSubscribers) {
+    if (wc.isDestroyed()) {
+      reticulumStatusSubscribers.delete(wc);
+      continue;
+    }
+    wc.send(RETICULUM_STATUS_CHANNEL, status);
+  }
+}
+
+function scheduleReticulumStatusBroadcast(): void {
+  if (reticulumStatusSubscribers.size === 0) return;
+  if (reticulumStatusBroadcastTimer) return;
+  reticulumStatusBroadcastTimer = setTimeout(() => {
+    reticulumStatusBroadcastTimer = null;
+    void broadcastReticulumStatusSnapshot().catch((error) => {
+      loggerError('[Reticulum] Failed to broadcast status snapshot:', error);
+    });
+  }, RETICULUM_STATUS_BROADCAST_DEBOUNCE_MS);
+  reticulumStatusBroadcastTimer.unref?.();
+}
+
+export function attachReticulumStatusBridgeEvents(
+  bridge: ReticulumBridge | null | undefined
+): void {
+  const nextBridge = bridge ?? null;
+  if (reticulumStatusAttachedBridge === nextBridge) return;
+  if (reticulumStatusAttachedBridge) {
+    reticulumStatusAttachedBridge.off(
+      'overlay-link-state',
+      scheduleReticulumStatusBroadcast
+    );
+    reticulumStatusAttachedBridge.off(
+      'overlay-link-closed',
+      scheduleReticulumStatusBroadcast
+    );
+    reticulumStatusAttachedBridge.off(
+      'transport-state',
+      scheduleReticulumStatusBroadcast
+    );
+    reticulumStatusAttachedBridge.off('ready', scheduleReticulumStatusBroadcast);
+    reticulumStatusAttachedBridge.off(
+      'degraded',
+      scheduleReticulumStatusBroadcast
+    );
+  }
+  reticulumStatusAttachedBridge = nextBridge;
+  if (!nextBridge) return;
+  nextBridge.on('overlay-link-state', scheduleReticulumStatusBroadcast);
+  nextBridge.on('overlay-link-closed', scheduleReticulumStatusBroadcast);
+  nextBridge.on('transport-state', scheduleReticulumStatusBroadcast);
+  nextBridge.on('ready', scheduleReticulumStatusBroadcast);
+  nextBridge.on('degraded', scheduleReticulumStatusBroadcast);
+}
+
 export function resolveReticulumDaemonStartupAction():
   | 'reuse-local'
   | 'reuse-shared'
@@ -2178,92 +2326,26 @@ export function registerReticulumIpcHandlers(): void {
   ipcMain.handle(
     'reticulum:getStatus',
     async (): Promise<ReticulumDaemonStatus> => {
-      const base = getReticulumDaemonStatus();
-      if (!base.running && !lastStartMode) {
-        const plan = resolveLaunchPlan();
-        if ('error' in plan) {
-          return { ...base, running: false, reason: plan.error };
-        }
-      }
-      try {
-        const [{ getReticulumBridge }, { getPresenceManager }] =
-          (await Promise.all([
-            import('./reticulum-bridge'),
-            import('./presence'),
-          ])) as [
-            typeof import('./reticulum-bridge'),
-            typeof import('./presence'),
-          ];
-        const bridge = getReticulumBridge();
-        const bridgeStatus = bridge?.getConnectivitySnapshot();
-        if (!bridgeStatus) return base;
-        const verifiedOverlayPeerCount =
-          getPresenceManager()?.getReticulumVerifiedPeers().length ?? 0;
-        let p2pActiveOverlayPeers = 0;
-        if (bridge) {
-          const localHash =
-            bridge.getLocalDestinationHash()?.trim().toLowerCase() ?? '';
-          const activePeerHashes = new Set<string>();
-          for (const peer of bridge.getOverlayLinkSnapshots()) {
-            const peerKey = peer.peerPresenceHash.trim().toLowerCase();
-            if (!peerKey) continue;
-            if (localHash && peerKey === localHash) continue;
-            activePeerHashes.add(peerKey);
-          }
-          p2pActiveOverlayPeers = activePeerHashes.size;
-        }
-        const transportFallback =
-          getReticulumInstanceIndex() > 0 &&
-          shouldFallbackToSharedTransportState({
-            bridgeState: bridgeStatus.bridgeState,
-            reachability: bridgeStatus.reachability,
-            configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
-            onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
-            overlayLinksConnected: bridgeStatus.overlayLinksConnected,
-            hubSummary: bridgeStatus.hubSummary,
-            reason: bridgeStatus.reason,
-          })
-            ? readReticulumSharedTransportState()
-            : null;
-        const resolvedReachability =
-          transportFallback?.reachability ?? bridgeStatus.reachability;
-        return {
-          ...base,
-          bridgeState: bridgeStatus.bridgeState,
-          reachability: resolvedReachability,
-          transportEnabled:
-            transportFallback?.transportEnabled ?? bridgeStatus.transportEnabled,
-          configuredHubInterfaces:
-            transportFallback?.configuredHubInterfaces ??
-            bridgeStatus.configuredHubInterfaces,
-          onlineHubInterfaces:
-            transportFallback?.onlineHubInterfaces ??
-            bridgeStatus.onlineHubInterfaces,
-          configuredRemoteHubInterfaces:
-            transportFallback?.configuredRemoteHubInterfaces ??
-            bridgeStatus.configuredRemoteHubInterfaces,
-          onlineRemoteHubInterfaces:
-            transportFallback?.onlineRemoteHubInterfaces ??
-            bridgeStatus.onlineRemoteHubInterfaces,
-          hubSummary: transportFallback?.hubSummary ?? bridgeStatus.hubSummary,
-          verifiedOverlayPeerCount,
-          p2pActiveOverlayPeers,
-          ...(typeof bridgeStatus.overlayLinksConnected === 'number'
-            ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }
-            : {}),
-          ...((transportFallback?.reason ?? bridgeStatus.reason)
-            ? { reason: transportFallback?.reason ?? bridgeStatus.reason }
-            : {}),
-        };
-      } catch (error) {
-        loggerError('[Reticulum] Failed to collect bridge status:', error);
-        return {
-          ...base,
-          reason: base.reason ?? 'Unable to read Reticulum bridge status',
-        };
-      }
+      return collectReticulumStatusSnapshot();
     }
   );
+
+  ipcMain.on('reticulum:status:subscribe', (event) => {
+    reticulumStatusSubscribers.add(event.sender);
+    void collectReticulumStatusSnapshot()
+      .then((status) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(RETICULUM_STATUS_CHANNEL, status);
+        }
+      })
+      .catch((error) => {
+        loggerError('[Reticulum] Failed to send initial status snapshot:', error);
+      });
+  });
+
+  ipcMain.on('reticulum:status:unsubscribe', (event) => {
+    reticulumStatusSubscribers.delete(event.sender);
+  });
 
   ipcMain.handle(
     'reticulum:getOverlayPeers',

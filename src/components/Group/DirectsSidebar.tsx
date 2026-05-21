@@ -1,6 +1,5 @@
 import {
   Avatar,
-  Badge,
   Box,
   ButtonBase,
   List,
@@ -27,10 +26,13 @@ import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './qmailUtils';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
-import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
-import { statusDotColor } from '../../hooks/usePresence';
+import {
+  getClickableAvatarSx,
+  getFallbackAvatarOutlineSx,
+} from '../Chat/clickableAvatarStyles';
 import { isOnlineAtomFamily, statusAtomFamily } from '../../atoms/presence';
 import type { DmFriendStored } from '../../atoms/global';
+import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
 
 /** Renders only the presence badge for a single DM address.
  * Subscribes to per-address atoms so a change to any other peer
@@ -44,28 +46,12 @@ const DirectsPresenceBadge = React.memo(
     address: string;
     children: React.ReactNode;
   }) => {
-    const theme = useTheme();
     const isOnline = useAtomValue(isOnlineAtomFamily(address));
     const status = useAtomValue(statusAtomFamily(address));
     return (
-      <Badge
-        overlap="circular"
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        variant="dot"
-        invisible={!isOnline}
-        sx={{
-          '& .MuiBadge-dot': {
-            backgroundColor: statusDotColor(status ?? null),
-            border: `2px solid ${theme.palette.background.paper}`,
-            borderRadius: '50%',
-            height: 10,
-            minWidth: 10,
-            width: 10,
-          },
-        }}
-      >
+      <PresenceStatusBadge online={isOnline} status={status}>
         {children}
-      </Badge>
+      </PresenceStatusBadge>
     );
   }
 );
@@ -416,6 +402,9 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                           width: 40,
                           background: theme.palette.background.surface,
                           color: theme.palette.text.primary,
+                          ...(!isAvatarLoaded
+                            ? getFallbackAvatarOutlineSx(theme)
+                            : {}),
                           ...getClickableAvatarSx(theme, isAvatarLoaded),
                         }}
                         alt={direct?.name || direct?.address}

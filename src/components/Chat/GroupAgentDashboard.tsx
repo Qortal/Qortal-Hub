@@ -31,6 +31,7 @@ import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
+import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import type { GroupCallRole } from '../../lib/group-call/groupCallTopology';
@@ -196,6 +197,7 @@ function GroupAgentDashboardPanel({
     joinGroupCall, leaveGroupCall, muted: callMuted, setMuted: setCallMuted,
     exportGroupCallDiagnostics,
   } = useGroupCallContext();
+  const { confirmCallSwitch } = useCallSwitchGuard();
 
   const [diagExporting, setDiagExporting] = useState(false);
 
@@ -231,8 +233,13 @@ function GroupAgentDashboardPanel({
   }, [handleSend]);
 
   const handleJoinCall = useCallback(async () => {
+    const confirmed = await confirmCallSwitch({
+      type: 'group',
+      roomId: GROUP_ROOM_ID,
+    });
+    if (!confirmed) return;
     await joinGroupCall(GROUP_ROOM_ID, GROUP_CHAT_ID);
-  }, [joinGroupCall]);
+  }, [confirmCallSwitch, joinGroupCall]);
   const isForwarder = myRole !== 'participant';
 
   const handleDiagDownload = useCallback(async () => {

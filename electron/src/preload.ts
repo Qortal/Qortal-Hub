@@ -64,7 +64,7 @@ let callOnEventRefCount = 0;
 type PresenceUpdatePayload = {
   address: string;
   online: boolean;
-  status: 'online' | 'away' | 'busy' | 'idle' | null;
+  status: 'online' | 'busy' | 'idle' | null;
 };
 
 type ChatEventPayload = { event: { chatId: string } };
@@ -379,11 +379,42 @@ try {
         p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
       }>,
+    onReticulumStatus: (
+      callback: (status: {
+        running: boolean;
+        pid?: number;
+        mode: 'frozen' | 'venv' | 'system' | null;
+        configDir: string;
+        reason?: string;
+        bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+        reachability: 'unknown' | 'lan-only' | 'hub-connected' | 'disconnected';
+        transportEnabled?: boolean;
+        configuredHubInterfaces?: number;
+        onlineHubInterfaces?: number;
+        configuredRemoteHubInterfaces?: number;
+        onlineRemoteHubInterfaces?: number;
+        hubSummary?: string;
+        overlayLinksConnected?: number;
+        p2pActiveOverlayPeers?: number;
+        verifiedOverlayPeerCount?: number;
+      }) => void
+    ) => {
+      const handler = (_event: unknown, status: unknown) => {
+        callback(status as any);
+      };
+      ipcRenderer.on('reticulum:status', handler);
+      ipcRenderer.send('reticulum:status:subscribe');
+      return () => {
+        ipcRenderer.removeListener('reticulum:status', handler);
+        ipcRenderer.send('reticulum:status:unsubscribe');
+      };
+    },
     reticulumGetOverlayPeers: () =>
       ipcRenderer.invoke('reticulum:getOverlayPeers') as Promise<
         Array<{
           linkId: string;
           peerPresenceHash: string;
+          incoming?: boolean;
           address?: string;
           connectedAt: number;
         }>
@@ -878,7 +909,7 @@ try {
       cb: (payload: {
         address: string;
         online: boolean;
-        status: 'online' | 'away' | 'busy' | 'idle' | null;
+        status: 'online' | 'busy' | 'idle' | null;
       }) => void
     ) => {
       ensurePresenceSubscribed();
@@ -899,7 +930,7 @@ try {
         payloads: Array<{
           address: string;
           online: boolean;
-          status: 'online' | 'away' | 'busy' | 'idle' | null;
+          status: 'online' | 'busy' | 'idle' | null;
         }>
       ) => void
     ) => {

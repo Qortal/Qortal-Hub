@@ -906,7 +906,6 @@ export const GroupsWidget = ({
         currentCache.adminGroupIds.every(
           (value, index) => value === adminGroupIds[index]
         );
-
       if (cacheIsFresh && currentCache?.data) {
         const nextRequests = currentCache.data.flatMap((entry: any) =>
           (entry?.data ?? []).map((request: any) => ({
@@ -964,7 +963,6 @@ export const GroupsWidget = ({
               ),
           }))
         );
-
         setRequests(nextRequests);
         setJoinRequestsCache({
           adminGroupIds: [...adminGroupIds],
@@ -1132,7 +1130,8 @@ export const GroupsWidget = ({
   }, [dismissedInviteStorageKey, hasLoadedInvitesOnce, invites, invitesError]);
 
   useEffect(() => {
-    if (!hasLoadedRequestsOnce || requestsError || requests.length === 0) return;
+    if (!hasLoadedRequestsOnce || requestsError || requests.length === 0)
+      return;
     const liveIds = new Set(requests.map((request) => request.id));
     setDismissedRequestIds((current) => {
       const next = current.filter((id) => liveIds.has(id));
@@ -1292,9 +1291,7 @@ export const GroupsWidget = ({
         }
 
         setRequests((current) =>
-          current.filter(
-            (currentRequest) => currentRequest.id !== request.id
-          )
+          current.filter((currentRequest) => currentRequest.id !== request.id)
         );
         setDismissedRequestIds((current) => {
           const next = current.filter((id) => id !== request.id);

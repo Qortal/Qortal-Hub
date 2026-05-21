@@ -11,7 +11,6 @@ import { useInView } from 'react-intersection-observer';
 import { MessageDisplay } from './MessageDisplay';
 import {
   Avatar,
-  Badge,
   Box,
   Button,
   ButtonBase,
@@ -61,8 +60,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
-import { useStatus, statusDotColor } from '../../hooks/usePresence';
-import { getClickableAvatarSx } from './clickableAvatarStyles';
+import { useStatus } from '../../hooks/usePresence';
+import {
+  getClickableAvatarSx,
+  getFallbackAvatarOutlineSx,
+} from './clickableAvatarStyles';
+import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
 
 const QCHAT_FILE_TRANSFER_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -511,21 +514,9 @@ export const MessageItemComponent = ({
                 address={message?.sender}
                 name={message?.senderName}
               >
-                <Badge
-                  overlap="circular"
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                  variant="dot"
-                  invisible={!senderStatus}
-                  sx={{
-                    '& .MuiBadge-dot': {
-                      backgroundColor: statusDotColor(senderStatus),
-                      border: `2px solid ${theme.palette.background.paper}`,
-                      borderRadius: '50%',
-                      height: 10,
-                      minWidth: 10,
-                      width: 10,
-                    },
-                  }}
+                <PresenceStatusBadge
+                  online={Boolean(senderStatus)}
+                  status={senderStatus}
                 >
                   <Avatar
                     sx={{
@@ -535,6 +526,9 @@ export const MessageItemComponent = ({
                       width: '38px',
                       fontSize: '15px',
                       fontWeight: 600,
+                      ...(!isAvatarLoaded
+                        ? getFallbackAvatarOutlineSx(theme)
+                        : {}),
                       ...getClickableAvatarSx(theme, isAvatarLoaded),
                     }}
                     alt={message?.senderName}
@@ -551,7 +545,7 @@ export const MessageItemComponent = ({
                   >
                     {message?.senderName?.charAt(0)}
                   </Avatar>
-                </Badge>
+                </PresenceStatusBadge>
               </WrapperUserAction>
               <UserBadge userInfo={userInfo} />
             </Box>

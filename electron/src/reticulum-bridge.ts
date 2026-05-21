@@ -629,6 +629,7 @@ const HEARTBEAT_MIN_INTERVAL_MS = 10_000;
 const ANNOUNCE_DEDUP_WINDOW_MS = 1_000;
 const RESTART_DELAY_MS = 2_000;
 const OVERLAY_LINK_RX_IDLE_TIMEOUT_MS = 95_000;
+const OVERLAY_LINK_STALE_PRUNE_INTERVAL_MS = 5_000;
 
 /** Grep main-process logs for this string when debugging binary audio IPC (fd3/fd4). */
 const RETICULUM_AUDIO_IPC_LOG = 'target=reticulum-audio-ipc';
@@ -925,6 +926,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private audioIpcSendFailedCodesLogged = new Set<string>();
   private pending = new Map<string, PendingRequest>();
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private overlayStalePruneTimer: ReturnType<typeof setInterval> | null = null;
   private statePromise: Promise<void> | null = null;
   private launchConfigDir: string | null = null;
   private lastHeartbeatSentAt = 0;
@@ -1025,6 +1027,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     loggerLog(`[ReticulumBridge] Starting bridge for config=${configDir}`);
     this.state = 'starting';
     this.launchConfigDir = configDir;
+    this.ensureOverlayStalePruneTimer();
     this.statePromise = this.spawnAndHandshake(configDir).finally(() => {
       this.statePromise = null;
     });
@@ -1039,6 +1042,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
     }
+    this.clearOverlayStalePruneTimer();
     for (const [, pending] of this.pending) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Reticulum bridge stopped'));
@@ -2056,14 +2060,39 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     return false;
   }
 
-  private pruneStaleOverlayLinkSnapshots(now = Date.now()): void {
+  private ensureOverlayStalePruneTimer(): void {
+    if (this.overlayStalePruneTimer) return;
+    this.overlayStalePruneTimer = setInterval(() => {
+      this.pruneStaleOverlayLinkSnapshots();
+    }, OVERLAY_LINK_STALE_PRUNE_INTERVAL_MS);
+    this.overlayStalePruneTimer.unref?.();
+  }
+
+  private clearOverlayStalePruneTimer(): void {
+    if (!this.overlayStalePruneTimer) return;
+    clearInterval(this.overlayStalePruneTimer);
+    this.overlayStalePruneTimer = null;
+  }
+
+  private pruneStaleOverlayLinkSnapshots(now = Date.now()): boolean {
+    let pruned = false;
     for (const [linkId, snap] of this.overlayLinkSnapshots.entries()) {
       if (now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
+      pruned = true;
       this.overlayEstablishedLinkIds.delete(linkId);
       this.overlayLinkSnapshots.delete(linkId);
       loggerLog(
         `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} rxIdleMs=${now - snap.lastRxAt}`
       );
+      this.emit('overlay-link-state', {
+        linkId,
+        peerPresenceHash: snap.peerPresenceHash,
+        incoming: snap.incoming,
+        established: false,
+        reason: 'rx_idle_timeout',
+        queuedPackets: 0,
+        closedByReticulum: false,
+      });
       if (
         snap.peerPresenceHash &&
         !this.hasEstablishedOverlaySnapshotForPeer(snap.peerPresenceHash)
@@ -2074,6 +2103,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         });
       }
     }
+    return pruned;
   }
 
   /**

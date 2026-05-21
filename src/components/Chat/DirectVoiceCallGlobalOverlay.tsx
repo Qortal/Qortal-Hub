@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import CallRoundedIcon from '@mui/icons-material/CallRounded';
+import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
 import { useVoiceCallContext } from '../../context/VoiceCallContext';
 import { isDirectVoiceCallChatId } from '../../lib/call/directVoiceCallChatId';
 import { startDirectIncomingRingtone } from '../../lib/call/directIncomingRingtone';
@@ -27,6 +28,7 @@ import { getPrimaryNameForAvatar } from '../Group/groupApi';
 export function DirectVoiceCallGlobalOverlay() {
   const { callState, incomingCall, acceptCall, rejectCall } =
     useVoiceCallContext();
+  const { confirmCallSwitch } = useCallSwitchGuard();
 
   const open =
     callState === 'ringing' &&
@@ -77,10 +79,16 @@ export function DirectVoiceCallGlobalOverlay() {
     void rejectCall();
   }, [rejectCall, stopRing]);
 
-  const onAccept = useCallback(() => {
+  const onAccept = useCallback(async () => {
+    if (!incomingCall?.chatId) return;
+    const confirmed = await confirmCallSwitch({
+      type: 'direct',
+      chatId: incomingCall.chatId,
+    });
+    if (!confirmed) return;
     stopRing();
-    void acceptCall();
-  }, [acceptCall, stopRing]);
+    await acceptCall();
+  }, [acceptCall, confirmCallSwitch, incomingCall?.chatId, stopRing]);
 
   useEffect(() => {
     if (!open) {

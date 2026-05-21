@@ -113,10 +113,35 @@ declare global {
         p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
       }>;
+      onReticulumStatus?: (
+        callback: (status: {
+          running: boolean;
+          pid?: number;
+          mode: 'frozen' | 'venv' | 'system' | null;
+          configDir: string;
+          reason?: string;
+          bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+          reachability:
+            | 'unknown'
+            | 'lan-only'
+            | 'hub-connected'
+            | 'disconnected';
+          transportEnabled?: boolean;
+          configuredHubInterfaces?: number;
+          onlineHubInterfaces?: number;
+          configuredRemoteHubInterfaces?: number;
+          onlineRemoteHubInterfaces?: number;
+          hubSummary?: string;
+          overlayLinksConnected?: number;
+          p2pActiveOverlayPeers?: number;
+          verifiedOverlayPeerCount?: number;
+        }) => void
+      ) => () => void;
       reticulumGetOverlayPeers?: () => Promise<
         Array<{
           linkId: string;
           peerPresenceHash: string;
+          incoming?: boolean;
           address?: string;
           connectedAt: number;
         }>
@@ -957,8 +982,8 @@ declare global {
 
   // ── Presence shared types ──────────────────────────────────────────────────
 
-  /** User-selectable presence status. All three values mean "present in the network". */
-  type UserStatus = 'online' | 'away' | 'busy' | 'idle';
+  /** Presence status values that mean "present in the network". */
+  type UserStatus = 'online' | 'busy' | 'idle';
 
   interface PresenceEnvelope {
     id: string;

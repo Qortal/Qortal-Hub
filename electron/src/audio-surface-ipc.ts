@@ -2,7 +2,7 @@ export type AudioSurfaceCommand =
   | {
       type: 'set-user';
       userInfo: any | null;
-      myStatus: 'online' | 'away' | 'busy' | 'offline';
+      myStatus: 'online' | 'busy' | 'offline';
     }
   | { type: 'set-ui-active'; uiActive: boolean }
   | {

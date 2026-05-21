@@ -2,10 +2,8 @@
  * useVoiceCall — direct (1:1) voice over Reticulum only.
  *
  * Signaling (CALL_REQUEST / ACCEPT / REJECT / HANGUP) uses window.call IPC → Reticulum.
- * Media uses the same path as group calls: GC_JOIN → GC_KEY → encrypted packets →
- * window.groupCall.sendAudio → Reticulum (no WebRTC, no legacy CALL_AUDIO relay).
- * Inbound: decode → `gcall-jitter-scheduler` drain → Opus decode → `group-playout-processor`
- * (same as useGroupVoiceCall), not ad-hoc BufferSource playback.
+ * Media is owned by the audio surface: GC_JOIN → GC_KEY → audio-surface capture/decode →
+ * window.groupCall.sendAudio → Reticulum. There is no renderer media fallback.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -79,6 +77,9 @@ const DM_ROOM_KEY_REPLAY_RETRY_MS = 750;
 const DM_ROOM_KEY_REPLAY_MAX_ATTEMPTS = 6;
 const DM_ROOM_KEY_REQUEST_RETRY_MS = 1_000;
 const DM_ROOM_KEY_REQUEST_MAX_ATTEMPTS = 30;
+const DM_MEDIA_READINESS_TIMEOUT_MS = 12_000;
+const DM_MEDIA_READINESS_POLL_MS = 500;
+const DM_MEDIA_READINESS_WARMUP_MS = 1_000;
 const CALL_LOCAL_ADDRESS_REASSERT_MS = 2_500;
 
 type DmDecryptWorkerDecoded = {
@@ -155,9 +156,9 @@ export interface UseVoiceCallReturn {
       fields: Record<string, unknown>
     ) => Promise<{ signature: string; publicKey: string }>
   ) => void;
-  acceptCall: () => void;
+  acceptCall: () => Promise<void>;
   rejectCall: () => void;
-  hangUp: () => void;
+  hangUp: () => Promise<void>;
   toggleMute: () => void;
   setHearCall: (hear: boolean) => void;
   toggleHearCall: () => void;
@@ -587,6 +588,106 @@ export function useVoiceCall(): UseVoiceCallReturn {
     []
   );
 
+  const waitForDmPeerMediaReadiness = useCallback(
+    async (roomId: string, peer: string, reason: string): Promise<boolean> => {
+      const gc = (window as any).groupCall;
+      if (!roomId || !peer) {
+        pushDirectVoiceUiLog('warn', 'DM media readiness skipped: bad inputs', {
+          reason,
+          hasRoom: !!roomId,
+          hasPeer: !!peer,
+        });
+        return false;
+      }
+      const deadline = Date.now() + DM_MEDIA_READINESS_TIMEOUT_MS;
+      let lastWarmupAt = 0;
+      let lastLogAt = 0;
+
+      while (Date.now() < deadline) {
+        const now = Date.now();
+        if (now - lastWarmupAt >= DM_MEDIA_READINESS_WARMUP_MS) {
+          lastWarmupAt = now;
+          if (typeof gc?.requestPeerMediaRecovery === 'function') {
+            void gc
+              .requestPeerMediaRecovery(roomId, peer, `dm-readiness:${reason}`)
+              .catch(() => {});
+          }
+        }
+
+        let peerInRoom = false;
+        let participantCount = 0;
+        if (typeof gc?.getRoomParticipants === 'function') {
+          try {
+            const participants = await gc.getRoomParticipants(roomId);
+            if (Array.isArray(participants)) {
+              participantCount = participants.length;
+              peerInRoom = participants.some(
+                (participant: { address?: string }) =>
+                  participant?.address === peer
+              );
+            }
+          } catch {
+            /* keep polling */
+          }
+        }
+
+        let establishedLinks = 0;
+        if (typeof gc?.getLinkStats === 'function') {
+          try {
+            const response = await gc.getLinkStats(roomId);
+            establishedLinks =
+              response?.success === true &&
+              typeof response.stats?.establishedLinks === 'number'
+                ? response.stats.establishedLinks
+                : 0;
+            participantCount = Math.max(
+              participantCount,
+              typeof response?.stats?.participants === 'number'
+                ? response.stats.participants
+                : 0
+            );
+          } catch {
+            /* keep polling */
+          }
+        }
+
+        const routeReady = establishedLinks > 0;
+        const peerKnown = peerInRoom || participantCount >= 2;
+        if (peerKnown && routeReady) {
+          pushDirectVoiceUiLog('log', 'DM media readiness ok', {
+            reason,
+            peerTrunc: peer.slice(0, 8),
+            participantCount,
+            establishedLinks,
+          });
+          return true;
+        }
+
+        if (now - lastLogAt >= 2_000) {
+          lastLogAt = now;
+          pushDirectVoiceUiLog('log', 'waiting for DM media readiness', {
+            reason,
+            peerTrunc: peer.slice(0, 8),
+            peerKnown,
+            participantCount,
+            establishedLinks,
+          });
+        }
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, DM_MEDIA_READINESS_POLL_MS)
+        );
+      }
+
+      pushDirectVoiceUiLog('warn', 'DM media readiness timed out', {
+        reason,
+        peerTrunc: peer.slice(0, 8),
+      });
+      return false;
+    },
+    []
+  );
+
   const clearDmRoomKeyReplayTimers = useCallback(() => {
     for (const timer of dmRoomKeyReplayTimersRef.current) {
       clearTimeout(timer);
@@ -811,7 +912,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   }, [teardownReticulumMediaInner]);
 
   const endCall = useCallback(
-    (sendHangup = false) => {
+    async (sendHangup = false) => {
       const id = callIdRef.current;
       clearDurationTimer();
 
@@ -840,21 +941,25 @@ export function useVoiceCall(): UseVoiceCallReturn {
       if (sendHangup && id) {
         const timestamp = Date.now();
         applyLocalCallEnd();
-        void signPresenceFields(
-          { type: 'CALL_HANGUP', callId: id, timestamp },
-          publicKeyRef.current
-        )
-          .then(({ signature, publicKey }) =>
-            (window as any).call?.hangup(id, signature, publicKey, timestamp)
-          )
-          .catch(() => {})
-          .finally(() => {
-            enqueueTeardownReticulumMedia();
-          });
+        try {
+          const { signature, publicKey } = await signPresenceFields(
+            { type: 'CALL_HANGUP', callId: id, timestamp },
+            publicKeyRef.current
+          );
+          await (window as any).call?.hangup(
+            id,
+            signature,
+            publicKey,
+            timestamp
+          );
+        } catch {
+          // Local teardown must still complete before switching to another call.
+        }
+        await enqueueTeardownReticulumMedia();
         return;
       }
 
-      enqueueTeardownReticulumMedia();
+      await enqueueTeardownReticulumMedia();
       applyLocalCallEnd();
     },
     [
@@ -1105,10 +1210,33 @@ export function useVoiceCall(): UseVoiceCallReturn {
       roomKeyRef.current = keyBytes;
       callSessionIdRef.current = payload.callSessionId;
       mediaGenRef.current = payload.mediaSessionGeneration >>> 0;
-      syncDecryptWorkerRoomKey(keyBytes);
+      const ready = await waitForDmPeerMediaReadiness(
+        dmRoomIdRef.current ?? '',
+        peerAddressRef.current ?? '',
+        'key-applied'
+      );
+      if (!ready) {
+        setInfoSnackGlobal({
+          type: 'info',
+          message:
+            i18n.t('core:voice_call.failed') ??
+            'Voice call failed (Reticulum route not ready)',
+        });
+        setOpenSnackGlobal(true);
+        endCall(true);
+        return;
+      }
       const mediaStarted = await startDirectVoiceMediaOnAudioSurface();
       if (!mediaStarted) {
-        await startDirectVoiceReceiveOnAudioSurface();
+        setInfoSnackGlobal({
+          type: 'info',
+          message:
+            i18n.t('core:voice_call.failed') ??
+            'Voice call failed (audio surface unavailable)',
+        });
+        setOpenSnackGlobal(true);
+        endCall(true);
+        return;
       }
       setAudioMode('reticulum');
       clearDmRoomKeyRequestTimers();
@@ -1120,10 +1248,12 @@ export function useVoiceCall(): UseVoiceCallReturn {
     },
     [
       clearDmRoomKeyRequestTimers,
+      endCall,
       resetDmVoiceMediaSession,
+      setInfoSnackGlobal,
+      setOpenSnackGlobal,
       startDirectVoiceMediaOnAudioSurface,
-      startDirectVoiceReceiveOnAudioSurface,
-      syncDecryptWorkerRoomKey,
+      waitForDmPeerMediaReadiness,
     ]
   );
   applyDecryptedRoomKeyRef.current = applyDecryptedRoomKey;
@@ -1211,33 +1341,13 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const startReticulumCapture = useCallback(async () => {
     if (!userInfo?.address || !roomKeyRef.current) return;
-    if (dmMediaOnAudioSurfaceRef.current) return;
-    const encTuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
-    opusEncoderLastConfiguredBitrateRef.current = encTuning.opusBitrate;
-    opusSendPressureStateRef.current = createOpusSendPressureControllerState();
-    opusEncoderApplyBitrateRef.current = (bps: number) => {
-      dmSenderEngineRef.current?.setOpusBitrate(bps);
-    };
-
-    await dmSenderEngineRef.current?.startOrUpdate({
-      inputDeviceId: callAudioPrefsRef.current.inputDeviceId ?? null,
-      outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
-      muted: isMutedRef.current,
-      profile: readGroupCallAudioProfile(),
-      onVadChanged: (vad) => {
-        isSpeakingRef.current = vad;
-      },
-      onEncodedFrame: sendEncodedFrame,
-    });
-
-    if (!dmReceiveOnAudioSurfaceRef.current) {
-      await dmReceiveEngineRef.current?.configure({
-        outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
-        hearCall: hearCallRef.current,
-        profile: readGroupCallAudioProfile(),
-      });
+    if (!dmMediaOnAudioSurfaceRef.current) {
+      pushDirectVoiceUiLog(
+        'warn',
+        'DM media capture blocked: audio-surface is required'
+      );
     }
-  }, [sendEncodedFrame, userInfo?.address]);
+  }, [userInfo?.address]);
   startReticulumCaptureRef.current = startReticulumCapture;
 
   /** Decrypt + apply room key (shared by live `gcall:key` and queued pending). */
@@ -1462,16 +1572,38 @@ export function useVoiceCall(): UseVoiceCallReturn {
     requestDmPeerMediaWarmup(roomId, 'dm-call-start', {
       ignoreCooldown: true,
     });
-    setupDecryptWorker();
 
     if (isOutboundCallRef.current) {
       const roomKey = new Uint8Array(32);
       crypto.getRandomValues(roomKey);
       roomKeyRef.current = roomKey;
-      syncDecryptWorkerRoomKey(roomKey);
+      const ready = await waitForDmPeerMediaReadiness(
+        roomId,
+        peer,
+        'caller-start'
+      );
+      if (!ready) {
+        setInfoSnackGlobal({
+          type: 'info',
+          message:
+            i18n.t('core:voice_call.failed') ??
+            'Voice call failed (Reticulum route not ready)',
+        });
+        setOpenSnackGlobal(true);
+        endCall(true);
+        return;
+      }
       const mediaStarted = await startDirectVoiceMediaOnAudioSurface();
       if (!mediaStarted) {
-        await startDirectVoiceReceiveOnAudioSurface();
+        setInfoSnackGlobal({
+          type: 'info',
+          message:
+            i18n.t('core:voice_call.failed') ??
+            'Voice call failed (audio surface unavailable)',
+        });
+        setOpenSnackGlobal(true);
+        endCall(true);
+        return;
       }
 
       const ok = await sendCurrentDmRoomKey('dm-call-start');
@@ -1504,10 +1636,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
     setInfoSnackGlobal,
     setOpenSnackGlobal,
     startDirectVoiceMediaOnAudioSurface,
-    startDirectVoiceReceiveOnAudioSurface,
     startReticulumCapture,
-    setupDecryptWorker,
-    syncDecryptWorkerRoomKey,
+    waitForDmPeerMediaReadiness,
     userInfo?.address,
     userInfo?.publicKey,
   ]);
@@ -1611,53 +1741,22 @@ export function useVoiceCall(): UseVoiceCallReturn {
     if (event === 'gcall:audio') {
       const p = payload as {
         roomId?: string;
-        data?: ArrayBuffer | { buffer: ArrayBuffer };
-        fromAddress?: string;
       };
-      if (!isDmVoiceRoomId(p.roomId) || p.roomId !== dmRoomIdRef.current)
-        return;
-      let buf: ArrayBuffer | null = null;
-      const raw = p.data;
-      if (raw instanceof ArrayBuffer) buf = raw;
-      else if (raw && typeof raw === 'object' && 'buffer' in raw) {
-        const b = raw as {
-          buffer: ArrayBuffer;
-          byteOffset?: number;
-          byteLength?: number;
-        };
-        buf = b.buffer.slice(
-          b.byteOffset ?? 0,
-          (b.byteOffset ?? 0) + (b.byteLength ?? 0)
-        );
-      }
-      if (!buf) return;
-
-      const fromAddr = p.fromAddress ?? '';
-      if (!fromAddr && !dmVoiceNoFromAddressLoggedRef.current) {
-        dmVoiceNoFromAddressLoggedRef.current = true;
-        pushDirectVoiceUiLog(
-          'warn',
-          'gcall:audio missing fromAddress (inbound handler may drop)'
-        );
-      }
-
+      if (!isDmVoiceRoomId(p.roomId) || p.roomId !== dmRoomIdRef.current) return;
       dmVoiceAudioPacketCountRef.current += 1;
       const now = Date.now();
       if (now - dmVoiceLastAudioUiLogAtRef.current >= 2500) {
         dmVoiceLastAudioUiLogAtRef.current = now;
         pushDirectVoiceUiLog(
           'log',
-          'gcall:audio rx (throttled)',
+          'gcall:audio rx ignored by renderer (audio-surface owns DM media)',
           {
             packets: dmVoiceAudioPacketCountRef.current,
-            bytes: buf.byteLength,
-            hasFrom: fromAddr.length > 0,
+            audioSurfaceMedia: dmMediaOnAudioSurfaceRef.current,
           },
           'debug'
         );
       }
-
-      handleIncomingAudioPacketRef.current(buf, fromAddr);
     }
   };
 
@@ -2050,18 +2149,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
     );
   }, [updateCallState, updateIncomingCall]);
 
-  const hangUp = useCallback(() => {
-    endCall(true);
+  const hangUp = useCallback(async () => {
+    await endCall(true);
   }, [endCall]);
 
   const toggleMute = useCallback(() => {
     const next = !isMutedRef.current;
     isMutedRef.current = next;
-    if (dmMediaOnAudioSurfaceRef.current) {
-      void updateDirectVoiceMediaOnAudioSurface();
-    } else {
-      dmSenderEngineRef.current?.setMuted(next);
-    }
+    void updateDirectVoiceMediaOnAudioSurface();
     setIsMuted(next);
   }, [updateDirectVoiceMediaOnAudioSurface]);
 
@@ -2069,17 +2164,9 @@ export function useVoiceCall(): UseVoiceCallReturn {
     (hear: boolean) => {
       hearCallRef.current = hear;
       setHearCallState(hear);
-      if (dmMediaOnAudioSurfaceRef.current) {
-        void updateDirectVoiceMediaOnAudioSurface();
-        return;
-      }
-      void updateDirectVoiceReceiveOnAudioSurface();
-      void dmReceiveEngineRef.current?.configure({ hearCall: hear });
+      void updateDirectVoiceMediaOnAudioSurface();
     },
-    [
-      updateDirectVoiceMediaOnAudioSurface,
-      updateDirectVoiceReceiveOnAudioSurface,
-    ]
+    [updateDirectVoiceMediaOnAudioSurface]
   );
 
   const toggleHearCall = useCallback(() => {
@@ -2090,22 +2177,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
     async (deviceId: string | null) => {
       if (callStateRef.current !== 'connected') return;
       if (!roomKeyRef.current) return;
-      if (dmMediaOnAudioSurfaceRef.current) {
-        await updateDirectVoiceMediaOnAudioSurface();
-        return;
-      }
-      await dmSenderEngineRef.current?.startOrUpdate({
-        inputDeviceId: deviceId,
-        outputDeviceId: callAudioPrefsRef.current.outputDeviceId ?? null,
-        muted: isMutedRef.current,
-        profile: readGroupCallAudioProfile(),
-        onVadChanged: (vad) => {
-          isSpeakingRef.current = vad;
-        },
-        onEncodedFrame: sendEncodedFrame,
-      });
+      void deviceId;
+      await updateDirectVoiceMediaOnAudioSurface();
     },
-    [sendEncodedFrame, updateDirectVoiceMediaOnAudioSurface]
+    [updateDirectVoiceMediaOnAudioSurface]
   );
 
   useEffect(() => {
@@ -2141,39 +2216,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
       if (r.clearPersistedOutput) {
         setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
       }
-      if (dmMediaOnAudioSurfaceRef.current) {
-        void updateDirectVoiceMediaOnAudioSurface();
-        return;
-      }
-      void updateDirectVoiceReceiveOnAudioSurface();
-      if (roomKeyRef.current) {
-        await dmSenderEngineRef.current?.startOrUpdate({
-          inputDeviceId: callAudioPrefsRef.current.inputDeviceId ?? null,
-          outputDeviceId: r.clearPersistedOutput ? null : out,
-          muted: isMutedRef.current,
-          profile: readGroupCallAudioProfile(),
-          onVadChanged: (vad) => {
-            isSpeakingRef.current = vad;
-          },
-          onEncodedFrame: sendEncodedFrame,
-        });
-      }
-      if (!dmReceiveOnAudioSurfaceRef.current) {
-        await dmReceiveEngineRef.current?.configure({
-          outputDeviceId: r.clearPersistedOutput ? null : out,
-          hearCall: hearCallRef.current,
-          profile: readGroupCallAudioProfile(),
-        });
-      }
+      void updateDirectVoiceMediaOnAudioSurface();
     })();
   }, [
     callState,
     callAudioDevices.outputDeviceId,
     callAudioWireNonce,
-    sendEncodedFrame,
     setCallAudioDevices,
     updateDirectVoiceMediaOnAudioSurface,
-    updateDirectVoiceReceiveOnAudioSurface,
   ]);
 
   useEffect(() => {

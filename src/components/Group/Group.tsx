@@ -79,6 +79,7 @@ import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
+import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
 import { traceGcallAudioSurface } from '../../lib/group-call/gcallAudioSurfaceTrace';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
@@ -331,6 +332,7 @@ export const Group = ({
     leaveGroupCall,
     roomId: gcallActiveRoomId,
   } = useGroupCallContext();
+  const { confirmCallSwitch } = useCallSwitchGuard();
   const setQcallMinimized = useSetAtom(qortalGroupVoiceCallMinimizedAtom);
   const setQcallPrimaryNames = useSetAtom(qortalGroupCallPrimaryNamesAtom);
 
@@ -371,6 +373,11 @@ export const Group = ({
       await leaveGroupCall();
       return;
     }
+    const confirmed = await confirmCallSwitch({
+      type: 'group',
+      roomId: gcallRoomIdForGroup,
+    });
+    if (!confirmed) return;
     setQcallMinimized(false);
     let memberGateAddresses: string[] = [];
     const primaryNamesByAddress: Record<string, string> = {};
@@ -428,6 +435,7 @@ export const Group = ({
     gcallGroupNumericId,
     gcallRoomIdForGroup,
     inThisGroupGcall,
+    confirmCallSwitch,
     joinGroupCall,
     leaveGroupCall,
     selectedGroup?.groupName,

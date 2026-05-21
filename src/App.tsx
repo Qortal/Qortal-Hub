@@ -60,6 +60,7 @@ import {
   GROUP_SUPPORT_ADDRESSES,
 } from './components/Chat/GroupSupportChat';
 import { GroupAgentDashboard } from './components/Chat/GroupAgentDashboard';
+import { CallSwitchGuardProvider } from './contexts/CallSwitchGuardContext';
 import { GroupCallProvider } from './contexts/GroupCallContext';
 import { QortalGroupVoiceCallNavWidget } from './components/Group/QortalGroupVoiceCallNavWidget';
 import { QortalGroupVoiceCallStage } from './components/Group/QortalGroupVoiceCallStage';
@@ -1044,6 +1045,7 @@ function App() {
     setWalletToBeDownloadedError('');
     setSendqortState(null);
     setQcallPrimaryNames({});
+    downloadResource.cancelAllResourceDownloads();
     resetAllRecoil();
   };
 
@@ -1527,55 +1529,57 @@ function App() {
             >
               <GroupCallProvider>
                 <VoiceCallProvider>
-                  <Box
-                    sx={{
-                      animation: shouldReduceAuthTransition
-                        ? 'none'
-                        : 'dashboardAfterAuthIn 720ms cubic-bezier(0.4, 0, 0.2, 1) both',
-                      height: '100%',
-                      width: '100%',
-                      '@keyframes dashboardAfterAuthIn': {
-                        from: {
-                          opacity: 0,
-                          transform: 'translateY(8px)',
+                  <CallSwitchGuardProvider>
+                    <Box
+                      sx={{
+                        animation: shouldReduceAuthTransition
+                          ? 'none'
+                          : 'dashboardAfterAuthIn 720ms cubic-bezier(0.4, 0, 0.2, 1) both',
+                        height: '100%',
+                        width: '100%',
+                        '@keyframes dashboardAfterAuthIn': {
+                          from: {
+                            opacity: 0,
+                            transform: 'translateY(8px)',
+                          },
+                          to: {
+                            opacity: 1,
+                            transform: 'translateY(0)',
+                          },
                         },
-                        to: {
-                          opacity: 1,
-                          transform: 'translateY(0)',
-                        },
-                      },
-                    }}
-                  >
-                    <LazyAuthenticatedShell
-                      balance={balance}
-                      desktopViewMode={desktopViewMode}
-                      isMain={true}
-                      logoutFunc={logoutFunc}
-                      myAddress={address}
-                      setDesktopViewMode={setDesktopViewMode}
-                      userInfo={userInfo}
-                      rawWallet={rawWallet}
-                      qortBalanceLoading={qortBalanceLoading}
-                      setOpenSnack={setOpenSnack}
-                      setInfoSnack={setInfoSnack}
-                      onRefreshBalance={getBalanceAndUserInfoFunc}
-                      onOpenSendQort={onOpenSendQort}
-                      onOpenRegisterName={onOpenRegisterName}
-                      extState={extState}
-                      isMainWindow={isMainWindow}
-                      onOpenSettings={onOpenSettings}
-                      onOpenDrawerLookup={onOpenDrawerLookup}
-                      onOpenWalletsApp={onOpenWalletsApp}
-                      getUserInfo={getUserInfo}
-                      onOpenMinting={onOpenMinting}
-                      showTutorial={showTutorial}
-                      onBackupWallet={onBackupWallet}
-                    />
-                  </Box>
-                  <QortalGroupVoiceCallNavWidget />
-                  <DirectVoiceCallNavWidget />
-                  <QortalGroupVoiceCallStage />
-                  <DirectVoiceCallGlobalOverlay />
+                      }}
+                    >
+                      <LazyAuthenticatedShell
+                        balance={balance}
+                        desktopViewMode={desktopViewMode}
+                        isMain={true}
+                        logoutFunc={logoutFunc}
+                        myAddress={address}
+                        setDesktopViewMode={setDesktopViewMode}
+                        userInfo={userInfo}
+                        rawWallet={rawWallet}
+                        qortBalanceLoading={qortBalanceLoading}
+                        setOpenSnack={setOpenSnack}
+                        setInfoSnack={setInfoSnack}
+                        onRefreshBalance={getBalanceAndUserInfoFunc}
+                        onOpenSendQort={onOpenSendQort}
+                        onOpenRegisterName={onOpenRegisterName}
+                        extState={extState}
+                        isMainWindow={isMainWindow}
+                        onOpenSettings={onOpenSettings}
+                        onOpenDrawerLookup={onOpenDrawerLookup}
+                        onOpenWalletsApp={onOpenWalletsApp}
+                        getUserInfo={getUserInfo}
+                        onOpenMinting={onOpenMinting}
+                        showTutorial={showTutorial}
+                        onBackupWallet={onBackupWallet}
+                      />
+                    </Box>
+                    <QortalGroupVoiceCallNavWidget />
+                    <DirectVoiceCallNavWidget />
+                    <QortalGroupVoiceCallStage />
+                    <DirectVoiceCallGlobalOverlay />
+                  </CallSwitchGuardProvider>
                 </VoiceCallProvider>
               </GroupCallProvider>
             </ErrorBoundary>

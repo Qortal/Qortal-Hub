@@ -1817,7 +1817,19 @@ export async function decryptSingleForPublishes({
 }
 
 export async function decryptDirectFunc({ messages, involvingAddress }) {
-  const senderPublicKey = await getPublicKey(involvingAddress);
+  let senderPublicKey;
+  try {
+    senderPublicKey = await getPublicKey(involvingAddress);
+  } catch (error) {
+    console.warn(
+      '[DirectChat] Unable to decrypt direct messages: missing sender public key',
+      {
+        involvingAddress,
+        error: error?.message || String(error),
+      }
+    );
+    return [];
+  }
   let holdMessages = [];
 
   const resKeyPair = await getKeyPair();

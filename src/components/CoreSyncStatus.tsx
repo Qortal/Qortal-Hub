@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import syncedImg from '../assets/syncStatus/synced.webp';
 import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
 import syncingImg from '../assets/syncStatus/syncing.webp';
@@ -16,6 +16,11 @@ import {
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
 } from '../constants/constants';
+
+type ReticulumStatusSnapshot = {
+  onlineRemoteHubInterfaces?: number;
+  p2pActiveOverlayPeers?: number;
+};
 
 export const CoreSyncStatus = ({
   renderIcon,
@@ -46,6 +51,33 @@ export const CoreSyncStatus = ({
   ]);
   const theme = useTheme();
 
+  const applyReticulumStatus = useCallback(
+    (status: ReticulumStatusSnapshot | null | undefined) => {
+      const active =
+        typeof status?.p2pActiveOverlayPeers === 'number'
+          ? status.p2pActiveOverlayPeers
+          : null;
+      setP2pActiveOverlayPeers(active);
+      setConnectedRemoteInterfaces(
+        typeof status?.onlineRemoteHubInterfaces === 'number'
+          ? status.onlineRemoteHubInterfaces
+          : null
+      );
+      if (!status) {
+        setP2pHealth(null);
+        return;
+      }
+      const hubs = status.onlineRemoteHubInterfaces ?? 0;
+      setP2pHealth(
+        computeP2pHealth({
+          onlineRemoteHubInterfaces: hubs,
+          p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
+        })
+      );
+    },
+    []
+  );
+
   useEffect(() => {
     let canceled = false;
     const getCoreInfos = async () => {
@@ -69,56 +101,58 @@ export const CoreSyncStatus = ({
       }
     };
 
-    const fetchP2pReticulumStatus = async () => {
-      const api = window.electronAPI;
-      if (typeof api?.reticulumGetStatus !== 'function') {
-        setP2pActiveOverlayPeers(null);
-        setConnectedRemoteInterfaces(null);
-        setP2pHealth(null);
-        return;
-      }
-      try {
-        const status = await api.reticulumGetStatus();
-        const active =
-          typeof status.p2pActiveOverlayPeers === 'number'
-            ? status.p2pActiveOverlayPeers
-            : null;
-        setP2pActiveOverlayPeers(active);
-        setConnectedRemoteInterfaces(
-          typeof status.onlineRemoteHubInterfaces === 'number'
-            ? status.onlineRemoteHubInterfaces
-            : null
-        );
-        const hubs = status.onlineRemoteHubInterfaces ?? 0;
-        setP2pHealth(
-          computeP2pHealth({
-            onlineRemoteHubInterfaces: hubs,
-            p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
-          })
-        );
-      } catch {
-        setP2pActiveOverlayPeers(null);
-        setConnectedRemoteInterfaces(null);
-        setP2pHealth(null);
-      }
-    };
     setCoreInfos({});
     getCoreInfos();
 
-    const tick = () => {
-      void getCoreInfos();
-      void fetchP2pReticulumStatus();
-    };
-
-    tick();
-
-    const interval = setInterval(tick, 30000);
+    const interval = setInterval(getCoreInfos, 30000);
 
     return () => {
       canceled = true;
       clearInterval(interval);
     };
   }, [nodeBase]);
+
+  useEffect(() => {
+    let canceled = false;
+    const api = window.electronAPI;
+    if (typeof api?.reticulumGetStatus !== 'function') {
+      applyReticulumStatus(null);
+      return;
+    }
+
+    void api
+      .reticulumGetStatus()
+      .then((status) => {
+        if (!canceled) applyReticulumStatus(status);
+      })
+      .catch(() => {
+        if (!canceled) applyReticulumStatus(null);
+      });
+
+    const unsubscribe =
+      typeof api.onReticulumStatus === 'function'
+        ? api.onReticulumStatus((status) => {
+            if (!canceled) applyReticulumStatus(status);
+          })
+        : undefined;
+
+    const reconciliationInterval = window.setInterval(() => {
+      void api
+        .reticulumGetStatus?.()
+        .then((status) => {
+          if (!canceled) applyReticulumStatus(status);
+        })
+        .catch(() => {
+          if (!canceled) applyReticulumStatus(null);
+        });
+    }, 120000);
+
+    return () => {
+      canceled = true;
+      unsubscribe?.();
+      window.clearInterval(reconciliationInterval);
+    };
+  }, [applyReticulumStatus]);
 
   const renderSyncStatusIcon = () => {
     const {

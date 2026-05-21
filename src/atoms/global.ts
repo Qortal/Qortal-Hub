@@ -94,6 +94,12 @@ export const timestampEnterDataAtom = atomWithReset({});
 // When in Electron, use appStorage-backed persistence; otherwise Jotai uses localStorage (undefined = default).
 const electronStorage = getElectronPersistentStorage();
 
+/** Persisted: true = Q-Wallets embedded workspace opens edge-to-edge. */
+export const qWalletsWorkspaceFullScreenAtom = atomWithStorage<boolean>(
+  'qortal_q_wallets_workspace_full_screen',
+  false
+);
+
 /** Persisted: true = chat widget is closed (hidden). Reopen via right sidebar. */
 export const chatWidgetClosedAtom = atomWithStorage<boolean>(
   'qortal_chat_widget_closed',
