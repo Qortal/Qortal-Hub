@@ -1692,12 +1692,11 @@ export const HomeQortinoWorkspaceCard = ({
         window.clearTimeout(qortinoGratefulTimeoutRef.current);
       }
 
-      cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
       discoveryRequestRef.current?.abort();
       searchRequestRef.current?.abort();
       selectedTrackRequestRef.current?.abort();
     };
-  }, [cancelEarbumpTrackDownload]);
+  }, []);
 
   const applyWorkspaceState = useCallback(
     (updater: (current: WorkspaceState) => WorkspaceState) => {
