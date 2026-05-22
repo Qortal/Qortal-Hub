@@ -320,11 +320,15 @@ _AUDIO_RNS_SHARED_FRAME_PROBE_MAX = 4096
 _AUDIO_ROUTE_GAP_BUCKETS_MS = (80, 160, 320, 640, 1000)
 _AUDIO_RNS_CALLBACK_SCHEDULER_MONITOR_INTERVAL_SECONDS = 0.05
 _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
+_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80.0
+_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320.0
+_AUDIO_TIMING_LOG_THROTTLE_SECONDS = 2.0
 _AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS = 120.0
 _AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS = 80.0
 _AUDIO_EXECUTOR_COMMAND_LOG_THRESHOLD_MS = 80.0
 _audio_queue_state_last_emit = 0.0
 _audio_queue_state_dirty = False
+_audio_timing_anomaly_log_last_by_key: Dict[str, float] = {}
 # One-shot narrowing logs (grep target=reticulum-audio-ipc stage=…)
 _audio_ipc_fd3_first_batch_ok_logged = False
 _audio_ipc_rns_first_send_ok_logged = False
@@ -771,6 +775,25 @@ def _interface_label(interface: Any) -> str:
         return ""
 
 
+def _short_route(value: Any, limit: int = 16) -> str:
+    text = str(value or "").strip()
+    return text[:limit] if text else "n/a"
+
+
+def _log_audio_timing_anomaly(stage: str, route_key: str, detail: str) -> None:
+    """Throttled timeline logs for narrowing Reticulum audio gaps."""
+    key = f"{stage}:{route_key}"
+    now = time.monotonic()
+    last = float(_audio_timing_anomaly_log_last_by_key.get(key) or 0.0)
+    if now - last < _AUDIO_TIMING_LOG_THROTTLE_SECONDS:
+        return
+    _audio_timing_anomaly_log_last_by_key[key] = now
+    if len(_audio_timing_anomaly_log_last_by_key) > 512:
+        for old_key in list(_audio_timing_anomaly_log_last_by_key.keys())[:128]:
+            _audio_timing_anomaly_log_last_by_key.pop(old_key, None)
+    log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage={stage} {detail}")
+
+
 def _increment_raw_gap_buckets(gap_ms: float) -> None:
     global _audio_rns_raw_inbound_gap_over_80_count
     global _audio_rns_raw_inbound_gap_over_160_count
@@ -892,6 +915,13 @@ def _record_rns_shared_frame_probe(raw: Any, interface: Any) -> None:
                     _audio_rns_shared_frame_gap_ms_max = float(frame_gap_ms)
                     _audio_rns_shared_frame_interface_worst = interface_name
                 _increment_shared_frame_gap_buckets(float(frame_gap_ms))
+                if frame_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-shared-frame-gap",
+                        destination_hex,
+                        f"destination={_short_route(destination_hex)} gap_ms={frame_gap_ms} "
+                        f"interface={interface_name or 'n/a'} packet={_short_route(bytes(packet_hash).hex())}",
+                    )
             _audio_rns_shared_frame_last_wall_ms_by_destination_hash[destination_hex] = now_wall_ms
             _audio_rns_shared_frame_interface_last = interface_name
             _audio_rns_shared_frame_probe_by_packet_hash[bytes(packet_hash)] = {
@@ -955,6 +985,16 @@ def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
                     _audio_rns_shared_frame_to_transport_inbound_ms_max = shared_to_transport_ms
                     _audio_rns_shared_frame_interface_worst = shared_interface_name
                 _increment_shared_to_transport_buckets(shared_to_transport_ms)
+                if shared_to_transport_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-shared-to-transport-delay",
+                        destination_hex,
+                        f"destination={_short_route(destination_hex)} "
+                        f"delay_ms={shared_to_transport_ms:.3f} "
+                        f"shared_gap_ms={shared_frame_gap_ms:.3f} "
+                        f"interface={shared_interface_name or interface_name or 'n/a'} "
+                        f"packet={_short_route(bytes(packet_hash).hex())}",
+                    )
             previous_ms = int(_audio_rns_raw_inbound_last_wall_ms_by_destination_hash.get(destination_hex) or 0)
             raw_gap_ms = 0
             if previous_ms > 0:
@@ -963,6 +1003,13 @@ def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
                     _audio_rns_raw_inbound_gap_ms_max = float(raw_gap_ms)
                     _audio_rns_raw_inbound_interface_worst = interface_name
                 _increment_raw_gap_buckets(float(raw_gap_ms))
+                if raw_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-raw-inbound-gap",
+                        destination_hex,
+                        f"destination={_short_route(destination_hex)} gap_ms={raw_gap_ms} "
+                        f"interface={interface_name or 'n/a'} packet={_short_route(bytes(packet_hash).hex())}",
+                    )
             _audio_rns_raw_inbound_last_wall_ms_by_destination_hash[destination_hex] = now_wall_ms
             _audio_rns_raw_inbound_interface_last = interface_name
             _audio_rns_raw_inbound_probe_by_packet_hash[bytes(packet_hash)] = {
@@ -1050,6 +1097,15 @@ def _qortal_link_receive_probe(
                 stats["rnsRawInboundToLinkReceiveMsMax"] = raw_to_link_ms
                 stats["rnsRawInboundInterfaceWorst"] = interface_name
             stats["rnsRawInboundInterfaceLast"] = interface_name
+            if raw_to_link_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                _log_audio_timing_anomaly(
+                    "rns-raw-to-link-delay",
+                    link_id,
+                    f"link={_short_route(link_id)} delay_ms={raw_to_link_ms:.3f} "
+                    f"raw_gap_ms={raw_gap_ms:.3f} shared_gap_ms={shared_frame_gap_ms:.3f} "
+                    f"shared_to_transport_ms={shared_to_transport_ms:.3f} "
+                    f"interface={interface_name or 'n/a'}",
+                )
             _note_audio_route_bucketed_duration(
                 stats,
                 duration_ms=raw_to_link_ms,
@@ -1086,6 +1142,17 @@ def _qortal_link_receive_probe(
                     _audio_rns_raw_inbound_to_link_receive_ms_max = raw_to_link_ms
                     _audio_rns_raw_inbound_interface_worst = interface_name
                 _increment_raw_to_link_buckets(raw_to_link_ms)
+        previous_link_receive_ms = int(stats.get("lastLinkReceiveEnterAtMs") or 0)
+        if previous_link_receive_ms > 0:
+            link_receive_gap_ms = max(0, now_wall_ms - previous_link_receive_ms)
+            if link_receive_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                _log_audio_timing_anomaly(
+                    "rns-link-receive-gap",
+                    link_id,
+                    f"link={_short_route(link_id)} gap_ms={link_receive_gap_ms} "
+                    f"peer={_short_route(stats.get('peerPresenceHash'))} "
+                    f"dest={_short_route(stats.get('peerDestinationHash'))}",
+                )
         _note_audio_route_gap(
             stats,
             previous_key="lastLinkReceiveEnterAtMs",
@@ -1117,9 +1184,18 @@ def _qortal_link_receive_probe(
             _prune_audio_link_receive_probe_cache()
         enter_mono = float(probe.get("receiveEnterMonotonic") or 0.0)
         if enter_mono > 0:
+            dispatch_delay_ms = (now_mono - enter_mono) * 1000.0
+            if dispatch_delay_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                _log_audio_timing_anomaly(
+                    "rns-link-callback-dispatch-delay",
+                    link_id,
+                    f"link={_short_route(link_id)} delay_ms={dispatch_delay_ms:.3f} "
+                    f"peer={_short_route(stats.get('peerPresenceHash'))} "
+                    f"dest={_short_route(stats.get('peerDestinationHash'))}",
+                )
             _note_audio_route_bucketed_duration(
                 stats,
-                duration_ms=(now_mono - enter_mono) * 1000.0,
+                duration_ms=dispatch_delay_ms,
                 max_key="linkReceiveToCallbackDispatchMsMax",
             )
         probe["callbackDispatchMonotonic"] = now_mono
@@ -1250,6 +1326,17 @@ def _note_audio_route_send(
         stats["lastRoomId"] = str(room_id or "")
         stats["lastActivityAtMs"] = now_ms
         if ok:
+            previous_send_ms = int(stats.get("lastSendAtMs") or 0)
+            if previous_send_ms > 0:
+                send_gap_ms = max(0, now_ms - previous_send_ms)
+                if send_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-audio-send-gap",
+                        f"{transport}:{route_key}",
+                        f"transport={transport} route={_short_route(route_key)} "
+                        f"room={room_id or 'n/a'} gap_ms={send_gap_ms} "
+                        f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+                    )
             _note_audio_route_gap(
                 stats,
                 previous_key="lastSendAtMs",
@@ -1264,10 +1351,28 @@ def _note_audio_route_send(
                 age_ms = max(0, now_ms - source_received_at_wall_ms)
                 if age_ms > int(stats.get("preRnsSendAgeMsMax") or 0):
                     stats["preRnsSendAgeMsMax"] = age_ms
+                if age_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-audio-pre-send-age",
+                        f"{transport}:{route_key}",
+                        f"transport={transport} route={_short_route(route_key)} "
+                        f"room={room_id or 'n/a'} age_ms={age_ms} "
+                        f"bytes={max(0, int(byte_count or 0))} "
+                        f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+                    )
             if isinstance(send_duration_ms, (int, float)):
                 duration_ms = max(0.0, float(send_duration_ms))
                 if duration_ms > float(stats.get("rnsSendDurationMsMax") or 0):
                     stats["rnsSendDurationMsMax"] = duration_ms
+                if duration_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-audio-send-duration",
+                        f"{transport}:{route_key}",
+                        f"transport={transport} route={_short_route(route_key)} "
+                        f"room={room_id or 'n/a'} duration_ms={duration_ms:.3f} "
+                        f"bytes={max(0, int(byte_count or 0))} "
+                        f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+                    )
         else:
             stats["sendFailures"] = int(stats.get("sendFailures") or 0) + 1
             stats["lastSendFailureAtMs"] = now_ms
@@ -1295,6 +1400,18 @@ def _note_audio_route_receive(
             if isinstance(received_at_wall_ms, int) and received_at_wall_ms > 0
             else _now_wall_ms()
         )
+        previous_receive_ms = int(stats.get("lastReceiveAtMs") or 0)
+        if previous_receive_ms > 0:
+            receive_gap_ms = max(0, now_ms - previous_receive_ms)
+            if receive_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                _log_audio_timing_anomaly(
+                    "rns-audio-callback-gap",
+                    f"{transport}:{route_key}",
+                    f"transport={transport} route={_short_route(route_key)} "
+                    f"room={room_id or 'n/a'} gap_ms={receive_gap_ms} "
+                    f"bytes={max(0, int(byte_count or 0))} "
+                    f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+                )
         _note_audio_route_gap(
             stats,
             previous_key="lastReceiveAtMs",
@@ -1318,6 +1435,15 @@ def _note_audio_route_receive(
             enqueue_delay_ms = max(0, fd4_ms - now_ms)
             if enqueue_delay_ms > int(stats.get("receiveToFd4EnqueueMsMax") or 0):
                 stats["receiveToFd4EnqueueMsMax"] = enqueue_delay_ms
+            if enqueue_delay_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                _log_audio_timing_anomaly(
+                    "rns-audio-fd4-enqueue-delay",
+                    f"{transport}:{route_key}",
+                    f"transport={transport} route={_short_route(route_key)} "
+                    f"room={room_id or 'n/a'} delay_ms={enqueue_delay_ms} "
+                    f"bytes={max(0, int(byte_count or 0))} "
+                    f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+                )
         elif fd4_enqueued is False:
             stats["fd4EnqueueFailures"] = int(stats.get("fd4EnqueueFailures") or 0) + 1
         _mark_audio_queue_state_dirty()
@@ -6841,16 +6967,34 @@ def on_audio_link_packet(message, packet) -> None:
             dispatch_mono = float(probe.get("callbackDispatchMonotonic") or 0.0)
             enter_mono = float(probe.get("receiveEnterMonotonic") or 0.0)
             if dispatch_mono > 0:
+                dispatch_to_start_ms = (callback_started_monotonic - dispatch_mono) * 1000.0
+                if dispatch_to_start_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-link-callback-start-delay",
+                        link_id,
+                        f"link={_short_route(link_id)} delay_ms={dispatch_to_start_ms:.3f} "
+                        f"peer={_short_route(state.get('peerPresenceHash'))} "
+                        f"dest={_short_route(state.get('peerDestinationHash'))}",
+                    )
                 _note_audio_route_bucketed_duration(
                     stats,
-                    duration_ms=(callback_started_monotonic - dispatch_mono) * 1000.0,
+                    duration_ms=dispatch_to_start_ms,
                     max_key="linkCallbackDispatchToStartMsMax",
                     bucket_prefix="linkCallbackDispatchToStart",
                 )
             if enter_mono > 0:
+                receive_to_start_ms = (callback_started_monotonic - enter_mono) * 1000.0
+                if receive_to_start_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+                    _log_audio_timing_anomaly(
+                        "rns-link-receive-to-callback-start-delay",
+                        link_id,
+                        f"link={_short_route(link_id)} delay_ms={receive_to_start_ms:.3f} "
+                        f"peer={_short_route(state.get('peerPresenceHash'))} "
+                        f"dest={_short_route(state.get('peerDestinationHash'))}",
+                    )
                 _note_audio_route_bucketed_duration(
                     stats,
-                    duration_ms=(callback_started_monotonic - enter_mono) * 1000.0,
+                    duration_ms=receive_to_start_ms,
                     max_key="linkReceiveToCallbackStartMsMax",
                 )
             _mark_audio_queue_state_dirty()

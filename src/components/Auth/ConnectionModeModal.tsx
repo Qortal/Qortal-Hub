@@ -264,14 +264,14 @@ export function ConnectionModeModal({
       name: manualNodeName.trim(),
     };
 
-    const certOk = await ensureElectronCertIfLocalPrivateHttps(
-      payload.url,
-      payload.apikey || ''
-    );
-    if (!certOk.success) {
-      console.error(certOk.error || 'HTTPS certificate preparation failed');
-      return;
-    }
+    // const certOk = await ensureElectronCertIfLocalPrivateHttps(
+    //   payload.url,
+    //   payload.apikey || ''
+    // );
+    // if (!certOk.success) {
+    //   console.error(certOk.error || 'HTTPS certificate preparation failed');
+    //   return;
+    // }
 
     await handleSaveNodeInfo(payload);
 

@@ -62,6 +62,8 @@ const SURFACE_SOFT = '#202632';
 const VOICE_CONNECTED = '#3d9142';
 const SPEAKING = '#23a559';
 const DANGER = '#f23f42';
+const QCALL_STAGE_Z_INDEX = 1590;
+const QCALL_TOOLTIP_Z_INDEX = QCALL_STAGE_Z_INDEX + 20;
 const MAX_QORTAL_GROUP_CALL_PARTICIPANTS = 7;
 
 type SidebarMode = 'none' | 'participants';
@@ -267,13 +269,35 @@ export function QortalGroupVoiceCallStage() {
     startupStatus.headline && startupStatus.stage !== 'connected'
       ? startupStatus.headline
       : (localConnectionHint?.message?.trim?.() ?? '');
+  const topBarTooltipSlotProps = {
+    popper: {
+      sx: {
+        zIndex: QCALL_TOOLTIP_Z_INDEX,
+      },
+    },
+    tooltip: {
+      sx: {
+        bgcolor: '#f8fafc',
+        border: `1px solid ${alpha('#0f172a', 0.12)}`,
+        boxShadow: '0 10px 30px rgba(0,0,0,0.32)',
+        color: '#111827',
+        fontSize: 12,
+        fontWeight: 700,
+      },
+    },
+    arrow: {
+      sx: {
+        color: '#f8fafc',
+      },
+    },
+  } as const;
 
   const node = (
     <Box
       sx={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1590,
+        zIndex: QCALL_STAGE_Z_INDEX,
         display: 'flex',
         flexDirection: 'column',
         background:
@@ -487,6 +511,8 @@ export function QortalGroupVoiceCallStage() {
               postProcess: 'capitalizeFirstChar',
             })}
             placement="bottom"
+            arrow
+            slotProps={topBarTooltipSlotProps}
           >
             <IconButton
               size="small"
@@ -503,6 +529,9 @@ export function QortalGroupVoiceCallStage() {
             title={t('core:group_call_participants', {
               postProcess: 'capitalizeFirstChar',
             })}
+            placement="bottom"
+            arrow
+            slotProps={topBarTooltipSlotProps}
           >
             <IconButton
               size="small"
