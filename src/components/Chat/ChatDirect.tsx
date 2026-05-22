@@ -4,6 +4,7 @@ import {
   userInfoAtom,
   balanceAtom,
   dmFriendsByAddressAtom,
+  p2pHealthAtom,
 } from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
@@ -235,6 +236,7 @@ export const ChatDirect = ({
   );
   const myName = userInfo?.name;
   const theme = useTheme();
+  const p2pHealth = useAtomValue(p2pHealthAtom);
 
   const {
     callState,
@@ -262,6 +264,8 @@ export const ChatDirect = ({
     ((callState === 'calling' && activeCallChatId === directVoiceChatId) ||
       (callState === 'connected' && activeCallChatId === directVoiceChatId))
   );
+  const p2pHealthGood = p2pHealth === 'good';
+  const directVoiceBlockedByP2p = !callMatchesThisDirect && !p2pHealthGood;
 
   const signCallRequest = useCallback(
     async (fields: Record<string, unknown>) => {
@@ -300,6 +304,7 @@ export const ChatDirect = ({
     if (!directVoiceChatId || !selectedDirect?.address) return;
     if (callMatchesThisDirect) return;
     if (!peerOnline) return;
+    if (directVoiceBlockedByP2p) return;
     const confirmed = await confirmCallSwitch({
       type: 'direct',
       chatId: directVoiceChatId,
@@ -314,6 +319,7 @@ export const ChatDirect = ({
     callMatchesThisDirect,
     confirmCallSwitch,
     directVoiceChatId,
+    directVoiceBlockedByP2p,
     initiateVoiceCall,
     peerOnline,
     selectedDirect?.address,
@@ -337,6 +343,7 @@ export const ChatDirect = ({
     'question',
     'tutorial',
   ]);
+  const p2pHealthBadTooltip = t('core:p2p_health_bad_call_tooltip');
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [onEditMessage, setOnEditMessage] = useState(null);
@@ -1708,7 +1715,9 @@ export const ChatDirect = ({
                     ? ''
                     : !peerOnline
                       ? t('core:presence.call_offline_tooltip')
-                      : 'Start voice call'
+                      : directVoiceBlockedByP2p
+                        ? p2pHealthBadTooltip
+                        : 'Start voice call'
               }
             >
               <span>
@@ -1716,7 +1725,9 @@ export const ChatDirect = ({
                   size="small"
                   disabled={
                     !(
-                      (peerOnline && !callMatchesThisDirect) ||
+                      (peerOnline &&
+                        !callMatchesThisDirect &&
+                        !directVoiceBlockedByP2p) ||
                       (callMatchesThisDirect && callState === 'connected')
                     )
                   }
@@ -2238,10 +2249,14 @@ export const ChatDirect = ({
             <ReticulumFileTransferIcon sx={{ fontSize: 22 }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}>
+            <Typography
+              sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}
+            >
               Send file
             </Typography>
-            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+            >
               Reticulum direct transfer offer
             </Typography>
           </Box>
@@ -2277,7 +2292,9 @@ export const ChatDirect = ({
               >
                 {pendingQchatFileOffer?.name || 'Selected file'}
               </Typography>
-              <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+              <Typography
+                sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+              >
                 {formatQchatFileSize(pendingQchatFileOffer?.size)}
               </Typography>
             </Box>
@@ -2285,12 +2302,16 @@ export const ChatDirect = ({
               label="Expires in hours"
               type="number"
               value={qchatFileExpiryHours}
-              onChange={(event) => setQchatFileExpiryHours(event.target.value)}
+              onChange={(event) =>
+                setQchatFileExpiryHours(Number(event.target.value))
+              }
               inputProps={{ min: 0.05, max: 168, step: 0.25 }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+                    <Typography
+                      sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+                    >
                       hours
                     </Typography>
                   </InputAdornment>

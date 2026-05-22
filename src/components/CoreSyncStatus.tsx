@@ -6,8 +6,12 @@ import '../styles/CoreSyncStatus.css';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
-import { useAtomValue } from 'jotai';
-import { nodeInfosAtom, selectedNodeInfoAtom } from '../atoms/global';
+import { useAtomValue, useSetAtom } from 'jotai';
+import {
+  nodeInfosAtom,
+  p2pHealthAtom,
+  selectedNodeInfoAtom,
+} from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
 import { computeP2pHealth, type P2pHealthLevel } from '../lib/p2pHealth';
 
@@ -31,6 +35,7 @@ export const CoreSyncStatus = ({
 }) => {
   const nodeInfos = useAtomValue(nodeInfosAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
+  const setSharedP2pHealth = useSetAtom(p2pHealthAtom);
   const [coreInfos, setCoreInfos] = useState({});
   const [p2pActiveOverlayPeers, setP2pActiveOverlayPeers] = useState<
     number | null
@@ -65,17 +70,18 @@ export const CoreSyncStatus = ({
       );
       if (!status) {
         setP2pHealth(null);
+        setSharedP2pHealth('unknown');
         return;
       }
       const hubs = status.onlineRemoteHubInterfaces ?? 0;
-      setP2pHealth(
-        computeP2pHealth({
-          onlineRemoteHubInterfaces: hubs,
-          p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
-        })
-      );
+      const nextP2pHealth = computeP2pHealth({
+        onlineRemoteHubInterfaces: hubs,
+        p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
+      });
+      setP2pHealth(nextP2pHealth);
+      setSharedP2pHealth(nextP2pHealth);
     },
-    []
+    [setSharedP2pHealth]
   );
 
   useEffect(() => {
@@ -114,7 +120,7 @@ export const CoreSyncStatus = ({
 
   useEffect(() => {
     let canceled = false;
-    const api = window.electronAPI;
+    const api = window.electronAPI as any;
     if (typeof api?.reticulumGetStatus !== 'function') {
       applyReticulumStatus(null);
       return;

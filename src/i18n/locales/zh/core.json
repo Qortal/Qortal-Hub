@@ -698,6 +698,7 @@
     "runtime_qortino_body": "The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.",
     "hotkey_slot_number": "插槽 {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "P2P 健康状况较差。请先连接更多 Reticulum 对等节点。",
   "bookmarks": {
     "title": "书签",
     "bookmarked": "已加入书签",

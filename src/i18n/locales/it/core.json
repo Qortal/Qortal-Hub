@@ -697,6 +697,7 @@
     "runtime_qortino_body": "L’area sopra è ancora sicura. Aggiorna l’Hub; se persiste, tracciamo il crash da qui.",
     "hotkey_slot_number": "Slot {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "La salute P2P è scarsa. Connetti prima più peer Reticulum.",
   "bookmarks": {
     "title": "Segnalibri",
     "bookmarked": "Salvato",

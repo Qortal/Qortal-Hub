@@ -700,6 +700,7 @@
     "runtime_qortino_body": "A área acima permanece segura. Atualize o Hub; se persistir, rastreamos aqui.",
     "hotkey_slot_number": "Slot {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "A saúde P2P está má. Liga primeiro mais pares Reticulum.",
   "bookmarks": {
     "title": "Marcadores",
     "bookmarked": "Marcado",

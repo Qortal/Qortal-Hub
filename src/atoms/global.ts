@@ -14,6 +14,7 @@ import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
 import type { QuitterDashboardFeedCache } from '../components/Widgets/quitter/quitterFeedTypes';
+import type { P2pHealthLevel } from '../lib/p2pHealth';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 
@@ -36,6 +37,7 @@ export const blobControllerAtom = atomWithReset({});
 export const canSaveSettingToQdnAtom = atomWithReset(false);
 export const enabledDevModeAtom = atomWithReset(false);
 export const fullScreenAtom = atomWithReset(false);
+export const p2pHealthAtom = atom<P2pHealthLevel | 'unknown'>('unknown');
 export const groupAnnouncementsAtom = atomWithReset({});
 export const groupChatTimestampsAtom = atomWithReset({});
 export const groupsOwnerNamesAtom = atomWithReset({});

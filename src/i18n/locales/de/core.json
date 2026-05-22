@@ -697,6 +697,7 @@
     "runtime_qortino_body": "Der Workspace-Bereich darüber ist weiterhin sicher. Hub neu laden; wenn es bleibt, verfolgen wir den Absturz von hier.",
     "hotkey_slot_number": "Steckplatz {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "P2P-Gesundheit ist schlecht. Verbinde zuerst mehr Reticulum-Peers.",
   "bookmarks": {
     "title": "Lesezeichen",
     "bookmarked": "Gespeichert",

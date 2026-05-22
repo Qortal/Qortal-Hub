@@ -640,6 +640,7 @@
     "runtime_qortino_body": "Yläpuolen työalue on turvassa. Päivitä Hub ja jäljitätään kaatumista tästä.",
     "hotkey_slot_number": "Slotti {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "P2P-yhteyden tila on huono. Yhdistä ensin useampiin Reticulum-vertaisiin.",
   "bookmarks": {
     "title": "Kirjanmerkit",
     "bookmarked": "Kirjanmerkki lisätty",

@@ -698,6 +698,7 @@
     "runtime_qortino_body": "The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.",
     "hotkey_slot_number": "スロット {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "P2P の状態が悪いです。先に Reticulum ピアを増やしてください。",
   "bookmarks": {
     "title": "ブックマーク",
     "bookmarked": "ブックマーク済み",

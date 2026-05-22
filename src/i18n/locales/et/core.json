@@ -700,6 +700,7 @@
     "runtime_qortino_body": "The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.",
     "hotkey_slot_number": "Pesa {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "P2P tervis on halb. Ühenda esmalt rohkem Reticulumi peere.",
   "bookmarks": {
     "title": "Järjehoidjad",
     "bookmarked": "Järjehoidjates",

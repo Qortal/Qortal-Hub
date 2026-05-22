@@ -698,6 +698,7 @@
     "runtime_qortino_body": "La zone workspace au-dessus est toujours sûre. Rafraîchissez le Hub ; si ça persiste, nous tracerons le plantage depuis ici.",
     "hotkey_slot_number": "Emplacement {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "La santé P2P est mauvaise. Connectez d'abord plus de pairs Reticulum.",
   "bookmarks": {
     "title": "Favoris",
     "bookmarked": "En favori",

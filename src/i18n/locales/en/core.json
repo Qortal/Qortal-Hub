@@ -757,6 +757,7 @@
     "rejected_declined": "The other person declined the call.",
     "rejected_media": "The call ended — their microphone may be unavailable."
   },
+  "p2p_health_bad_call_tooltip": "P2P health is bad. Connect more Reticulum peers first.",
   "bookmarks": {
     "title": "Bookmarks",
     "bookmarked": "Bookmarked",

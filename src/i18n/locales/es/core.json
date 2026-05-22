@@ -698,6 +698,7 @@
     "runtime_qortino_body": "El área de trabajo de arriba sigue a salvo. Actualiza el Hub; si persiste, rastrearemos el fallo desde aquí.",
     "hotkey_slot_number": "Ranura {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "La salud P2P es mala. Conecta más pares de Reticulum primero.",
   "bookmarks": {
     "title": "Marcadores",
     "bookmarked": "Marcado",

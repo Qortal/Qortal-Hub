@@ -700,6 +700,7 @@
     "runtime_qortino_body": "The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.",
     "hotkey_slot_number": "Слот {{n}}"
   },
+  "p2p_health_bad_call_tooltip": "Состояние P2P плохое. Сначала подключите больше пиров Reticulum.",
   "bookmarks": {
     "title": "Закладки",
     "bookmarked": "В закладках",

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useAtomValue } from 'jotai';
 import {
   ButtonBase,
@@ -14,6 +14,7 @@ import {
   groupsAnnHasUnreadAtom,
   hasUnreadGroupsAtom,
   isUnreadChatAtomFamily,
+  p2pHealthAtom,
 } from '../../atoms/global';
 import Box from '@mui/material/Box';
 import { NotificationIcon2 } from '../../assets/Icons/NotificationIcon2';
@@ -32,6 +33,13 @@ const IconWrapper = ({
   selected,
   selectColor,
   customHeight,
+}: {
+  children: ReactNode;
+  label: string;
+  color: string;
+  selected: boolean;
+  selectColor?: string;
+  customHeight?: string;
 }) => {
   return (
     <Box
@@ -103,6 +111,7 @@ export const DesktopHeader = ({
   groupCallTooltip = '',
 }) => {
   const [value, setValue] = useState(0);
+  const p2pHealth = useAtomValue(p2pHealthAtom);
   const theme = useTheme();
   const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
   const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
@@ -118,6 +127,16 @@ export const DesktopHeader = ({
     'question',
     'tutorial',
   ]);
+  const p2pHealthBadTooltip = t('core:p2p_health_bad_call_tooltip');
+  const p2pBlocked =
+    typeof onGroupCallClick === 'function' &&
+    !groupCallInCall &&
+    !groupCallJoining &&
+    p2pHealth !== 'good';
+  const effectiveGroupCallDisabled =
+    groupCallDisabled || groupCallJoining || p2pBlocked;
+  const effectiveGroupCallTooltip =
+    groupCallTooltip || (p2pBlocked ? p2pHealthBadTooltip : '');
 
   return (
     <Box
@@ -181,12 +200,12 @@ export const DesktopHeader = ({
       >
         {typeof onGroupCallClick === 'function' && (
           <Tooltip
-            title={groupCallTooltip}
-            disableHoverListener={!groupCallTooltip}
+            title={effectiveGroupCallTooltip}
+            disableHoverListener={!effectiveGroupCallTooltip}
           >
             <span style={{ display: 'inline-flex' }}>
               <ButtonBase
-                disabled={groupCallDisabled || groupCallJoining}
+                disabled={effectiveGroupCallDisabled}
                 onClick={onGroupCallClick}
                 sx={{
                   borderRadius: '12px',
