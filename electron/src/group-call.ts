@@ -98,6 +98,9 @@ const GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS = Symbol.for(
 const GCALL_AUDIO_MANAGER_FLUSH_AT_MS = Symbol.for(
   'qortal.gcallAudioManagerFlushAtMs'
 );
+const GCALL_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
+const GCALL_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320;
+const GCALL_AUDIO_TIMING_LOG_THROTTLE_MS = 2_000;
 
 type ReticulumAudioTimingMetadata = {
   rendererSendAtMs?: number;
@@ -1576,6 +1579,12 @@ export class GroupCallManager extends EventEmitter {
   >();
   private reticulumAudioFlushScheduled = false;
   private reticulumAudioFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private reticulumAudioTimingLogLastByKey = new Map<string, number>();
+  private reticulumAudioLastManagerEnqueueAtMsByRoute = new Map<
+    string,
+    number
+  >();
+  private reticulumAudioLastManagerFlushAtMsByRoute = new Map<string, number>();
   private reticulumLeaveLinkDrainTimers = new Set<
     ReturnType<typeof setTimeout>
   >();
@@ -2109,7 +2118,9 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
-  private flushQortalGroupCallActivityAfterReticulumReady(reason: string): void {
+  private flushQortalGroupCallActivityAfterReticulumReady(
+    reason: string
+  ): void {
     const bridge = this.reticulumBridge;
     if (!bridge || bridge.getState() !== 'ready') return;
     loggerLog(
@@ -4220,9 +4231,7 @@ export class GroupCallManager extends EventEmitter {
   ): { callSessionId: string; mediaSessionGeneration: number } {
     this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'join');
     if (this.shouldRejectLocalJoinAtParticipantCap(roomId, localAddress)) {
-      throw new Error(
-        `group_call_full:${MAX_QORTAL_GROUP_CALL_PARTICIPANTS}`
-      );
+      throw new Error(`group_call_full:${MAX_QORTAL_GROUP_CALL_PARTICIPANTS}`);
     }
     if (this.shouldRejectQortalGroupCallAddress(roomId, localAddress)) {
       throw new Error('qortal_group_membership_required');
@@ -5335,6 +5344,23 @@ export class GroupCallManager extends EventEmitter {
   ): number {
     if (pending.length === 0) return 0;
     return Math.max(0, now - pending[0]!.enqueuedAtMs);
+  }
+
+  private shortReticulumAudioRoute(routeKey: string): string {
+    return routeKey.length > 16 ? routeKey.slice(0, 16) : routeKey;
+  }
+
+  private logReticulumAudioTimingAnomaly(
+    stage: string,
+    routeKey: string,
+    detail: string
+  ): void {
+    const key = `${stage}:${routeKey}`;
+    const nowMs = Date.now();
+    const lastMs = this.reticulumAudioTimingLogLastByKey.get(key) ?? 0;
+    if (nowMs - lastMs < GCALL_AUDIO_TIMING_LOG_THROTTLE_MS) return;
+    this.reticulumAudioTimingLogLastByKey.set(key, nowMs);
+    loggerLog(`[GCall] target=reticulum-audio-ipc stage=${stage} ${detail}`);
   }
 
   private getReticulumAudioHeartbeatRoomId(
@@ -7157,17 +7183,49 @@ export class GroupCallManager extends EventEmitter {
     const now = Date.now();
     const timing = readReticulumAudioTiming(data);
     if (timing.rendererSendAtMs && timing.mainIpcAtMs) {
+      const rendererToMainMs = Math.max(
+        0,
+        timing.mainIpcAtMs - timing.rendererSendAtMs
+      );
       state.rendererToMainIpcMsMax = Math.max(
         state.rendererToMainIpcMsMax,
-        Math.max(0, timing.mainIpcAtMs - timing.rendererSendAtMs)
+        rendererToMainMs
       );
+      if (rendererToMainMs >= GCALL_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS) {
+        this.logReticulumAudioTimingAnomaly(
+          'gcall-audio-renderer-to-main-delay',
+          state.routeKey,
+          `route=${this.shortReticulumAudioRoute(state.routeKey)} room=${roomId} delay_ms=${rendererToMainMs} target=${state.address}`
+        );
+      }
     }
     if (timing.mainIpcAtMs) {
+      const mainToManagerMs = Math.max(0, now - timing.mainIpcAtMs);
       state.mainIpcToManagerEnqueueMsMax = Math.max(
         state.mainIpcToManagerEnqueueMsMax,
-        Math.max(0, now - timing.mainIpcAtMs)
+        mainToManagerMs
       );
+      if (mainToManagerMs >= GCALL_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS) {
+        this.logReticulumAudioTimingAnomaly(
+          'gcall-audio-main-to-manager-enqueue-delay',
+          state.routeKey,
+          `route=${this.shortReticulumAudioRoute(state.routeKey)} room=${roomId} delay_ms=${mainToManagerMs} target=${state.address}`
+        );
+      }
     }
+    const previousManagerEnqueueAtMs =
+      this.reticulumAudioLastManagerEnqueueAtMsByRoute.get(state.routeKey) ?? 0;
+    if (previousManagerEnqueueAtMs > 0) {
+      const managerEnqueueGapMs = Math.max(0, now - previousManagerEnqueueAtMs);
+      if (managerEnqueueGapMs >= GCALL_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS) {
+        this.logReticulumAudioTimingAnomaly(
+          'gcall-audio-manager-enqueue-gap',
+          state.routeKey,
+          `route=${this.shortReticulumAudioRoute(state.routeKey)} room=${roomId} gap_ms=${managerEnqueueGapMs} target=${state.address}`
+        );
+      }
+    }
+    this.reticulumAudioLastManagerEnqueueAtMsByRoute.set(state.routeKey, now);
     let staleDrops = 0;
     const maxAgeMs = this.getReticulumAudioPendingMaxAgeMs(state);
     while (
@@ -7409,10 +7467,37 @@ export class GroupCallManager extends EventEmitter {
       }
       const next = state.pending.shift()!;
       const flushAtMs = Date.now();
+      const previousManagerFlushAtMs =
+        this.reticulumAudioLastManagerFlushAtMsByRoute.get(state.routeKey) ?? 0;
+      if (previousManagerFlushAtMs > 0) {
+        const managerFlushGapMs = Math.max(
+          0,
+          flushAtMs - previousManagerFlushAtMs
+        );
+        if (managerFlushGapMs >= GCALL_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS) {
+          this.logReticulumAudioTimingAnomaly(
+            'gcall-audio-manager-flush-gap',
+            state.routeKey,
+            `route=${this.shortReticulumAudioRoute(state.routeKey)} room=${next.roomId} gap_ms=${managerFlushGapMs} target=${address}`
+          );
+        }
+      }
+      this.reticulumAudioLastManagerFlushAtMsByRoute.set(
+        state.routeKey,
+        flushAtMs
+      );
+      const managerPendingDwellMs = Math.max(0, flushAtMs - next.enqueuedAtMs);
       state.managerPendingDwellMsMax = Math.max(
         state.managerPendingDwellMsMax,
-        Math.max(0, flushAtMs - next.enqueuedAtMs)
+        managerPendingDwellMs
       );
+      if (managerPendingDwellMs >= GCALL_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS) {
+        this.logReticulumAudioTimingAnomaly(
+          'gcall-audio-manager-pending-dwell-delay',
+          state.routeKey,
+          `route=${this.shortReticulumAudioRoute(state.routeKey)} room=${next.roomId} delay_ms=${managerPendingDwellMs} target=${address}`
+        );
+      }
       const bridgeData = withReticulumAudioQueuedAt(
         next.data,
         next.enqueuedAtMs
@@ -9472,7 +9557,9 @@ export class GroupCallManager extends EventEmitter {
       void this.ensureReticulumAudioPeerState(payload.roomId, fromAddress);
     }
     if (fromAddress) {
-      if (this.shouldRejectQortalGroupCallAddress(payload.roomId, fromAddress)) {
+      if (
+        this.shouldRejectQortalGroupCallAddress(payload.roomId, fromAddress)
+      ) {
         if ((payload.transport ?? 'link') === 'link' && payload.linkId) {
           this.closeReticulumAudioLinkQuietly(
             payload.linkId,
