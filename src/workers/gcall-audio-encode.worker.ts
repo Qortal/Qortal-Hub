@@ -15,6 +15,9 @@ const GCALL_SENDER_ENCODER_RESET_STALE_WINDOW_MS = 2_000;
 const GCALL_SENDER_ENCODER_RESET_MAX_OUTPUT_AGE_MS = 400;
 const GCALL_SENDER_ENCODER_RESET_COOLDOWN_MS = 7_500;
 const GCALL_SENDER_WORKER_CONFIG_SUPPORT_TIMEOUT_MS = 1_500;
+const GCALL_SENDER_TIMING_GAP_LOG_THRESHOLD_MS = 320;
+const GCALL_SENDER_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
+const GCALL_SENDER_TIMING_LOG_THROTTLE_MS = 2_000;
 
 type ConfigureMessage = {
   type: 'configure';
@@ -31,6 +34,7 @@ type EncodeFrameMessage = {
   byteLength?: number;
   vad: boolean;
   capturePerfMs?: number;
+  workletPostAudioClockMs?: number;
   inputSampleRate?: number;
   outputSampleRate?: number;
   inputFrameSamples?: number;
@@ -116,16 +120,20 @@ function float32ToInt16(frame: Float32Array): Int16Array {
   return out;
 }
 
-const AudioEncoderCtor = (globalThis as unknown as {
-  AudioEncoder?: typeof AudioEncoder & {
-    isConfigSupported?: (
-      config: AudioEncoderConfig
-    ) => Promise<{ supported: boolean; config?: AudioEncoderConfig }>;
-  };
-}).AudioEncoder;
-const AudioDataCtor = (globalThis as unknown as {
-  AudioData?: typeof AudioData;
-}).AudioData;
+const AudioEncoderCtor = (
+  globalThis as unknown as {
+    AudioEncoder?: typeof AudioEncoder & {
+      isConfigSupported?: (
+        config: AudioEncoderConfig
+      ) => Promise<{ supported: boolean; config?: AudioEncoderConfig }>;
+    };
+  }
+).AudioEncoder;
+const AudioDataCtor = (
+  globalThis as unknown as {
+    AudioData?: typeof AudioData;
+  }
+).AudioData;
 
 let generation = 0;
 let encoder: AudioEncoder | null = null;
@@ -145,6 +153,7 @@ let lastEncoderError: string | null = null;
 let lastEncoderInputPerfMs = 0;
 let capturedFrameCount = 0;
 let lastCapturePerfMs = 0;
+let lastWorkletPostAudioClockMs = 0;
 let captureInputSampleRate: number | null = null;
 let captureOutputSampleRate: number | null = null;
 let captureInputFrameSamples: number | null = null;
@@ -158,6 +167,7 @@ let latestVad = false;
 const staleEncodedDropPerfMs: number[] = [];
 const encodeTimingByTimestampUs = new Map<number, EncodeTiming>();
 const encodeTimingQueue: EncodeTiming[] = [];
+const timingAnomalyLastByStage = new Map<string, number>();
 
 function getStats(): WorkerStats {
   return {
@@ -202,6 +212,22 @@ function postStats(): void {
   workerPost({ type: 'stats', generation, stats: getStats() });
 }
 
+function postTimingAnomaly(
+  stage: string,
+  detail: Record<string, unknown>
+): void {
+  const now = Date.now();
+  const last = timingAnomalyLastByStage.get(stage) ?? 0;
+  if (now - last < GCALL_SENDER_TIMING_LOG_THROTTLE_MS) return;
+  timingAnomalyLastByStage.set(stage, now);
+  workerPost({
+    type: 'timingAnomaly',
+    generation,
+    stage,
+    detail,
+  });
+}
+
 function closeEncoder(): void {
   const current = encoder;
   encoder = null;
@@ -218,8 +244,7 @@ function closeEncoder(): void {
 
 function noteStaleEncodedDrop(nowPerfMs: number): void {
   staleEncodedDropPerfMs.push(nowPerfMs);
-  const oldestAllowed =
-    nowPerfMs - GCALL_SENDER_ENCODER_RESET_STALE_WINDOW_MS;
+  const oldestAllowed = nowPerfMs - GCALL_SENDER_ENCODER_RESET_STALE_WINDOW_MS;
   while (
     staleEncodedDropPerfMs.length > 0 &&
     staleEncodedDropPerfMs[0]! < oldestAllowed
@@ -264,7 +289,21 @@ function createEncoder(): AudioEncoder {
       const encoderInputPerfMs =
         timing?.encoderInputPerfMs ?? lastEncoderInputPerfMs;
       const outputAgeMs = encodeOutPerfMs - capturePerfMs;
+      const encoderPipelineMs = encodeOutPerfMs - encoderInputPerfMs;
+      if (encoderPipelineMs >= GCALL_SENDER_TIMING_DELAY_LOG_THRESHOLD_MS) {
+        postTimingAnomaly('gcall-audio-encode-worker-output-delay', {
+          delay_ms: Math.round(encoderPipelineMs),
+          encoderQueueSize:
+            typeof next.encodeQueueSize === 'number'
+              ? next.encodeQueueSize
+              : null,
+        });
+      }
       if (outputAgeMs > GCALL_SENDER_MAX_REALTIME_FRAME_AGE_MS) {
+        postTimingAnomaly('gcall-audio-encode-worker-stale-output-drop', {
+          age_ms: Math.round(outputAgeMs),
+          droppedStaleEncodedFrames: droppedStaleEncodedFrames + 1,
+        });
         droppedStaleEncodedFrames++;
         noteStaleEncodedDrop(encodeOutPerfMs);
         if (outputAgeMs > GCALL_SENDER_ENCODER_RESET_MAX_OUTPUT_AGE_MS) {
@@ -305,8 +344,8 @@ function createEncoder(): AudioEncoder {
         message: lastEncoderError,
         stats: getStats(),
       });
-      },
-    });
+    },
+  });
   postProbeStage('encoder-configure-start');
   next.configure(encoderConfig);
   postProbeStage('encoder-configure-done');
@@ -323,7 +362,10 @@ function resetEncoderIfAllowed(reason: string, nowPerfMs: number): boolean {
   return replaceEncoder(reason, nowPerfMs);
 }
 
-function replaceEncoder(reason: string, nowPerfMs = performance.now()): boolean {
+function replaceEncoder(
+  reason: string,
+  nowPerfMs = performance.now()
+): boolean {
   if (!encoderConfig || !AudioEncoderCtor) return false;
   lastEncoderResetPerfMs = nowPerfMs;
   encoderResetCount++;
@@ -350,9 +392,7 @@ function replaceEncoder(reason: string, nowPerfMs = performance.now()): boolean 
   }
 }
 
-async function checkConfigSupport(
-  config: AudioEncoderConfig
-): Promise<{
+async function checkConfigSupport(config: AudioEncoderConfig): Promise<{
   audioEncoderDefined: boolean;
   audioDataDefined: boolean;
   configSupported: boolean | null;
@@ -485,6 +525,25 @@ function handleEncodeFrame(message: EncodeFrameMessage): void {
   capturedFrameCount++;
   lastCapturePerfMs = capturedAtPerfMs;
   if (
+    typeof message.workletPostAudioClockMs === 'number' &&
+    Number.isFinite(message.workletPostAudioClockMs)
+  ) {
+    if (lastWorkletPostAudioClockMs > 0) {
+      const workletFrameGapMs = Math.max(
+        0,
+        message.workletPostAudioClockMs - lastWorkletPostAudioClockMs
+      );
+      if (workletFrameGapMs >= GCALL_SENDER_TIMING_GAP_LOG_THRESHOLD_MS) {
+        postTimingAnomaly('gcall-audio-worklet-to-worker-frame-gap', {
+          gap_ms: Math.round(workletFrameGapMs),
+          capturedFrameCount,
+          sharedRingEnabled: sharedSamples !== null && sharedState !== null,
+        });
+      }
+    }
+    lastWorkletPostAudioClockMs = message.workletPostAudioClockMs;
+  }
+  if (
     typeof message.inputSampleRate === 'number' &&
     Number.isFinite(message.inputSampleRate)
   ) {
@@ -520,9 +579,7 @@ function handleEncodeFrame(message: EncodeFrameMessage): void {
     }
     encoderPressureActiveMs =
       capturedAtPerfMs - encoderQueuePressureStartedPerfMs;
-    if (
-      encoderPressureActiveMs >= GCALL_SENDER_ENCODER_RESET_QUEUE_PINNED_MS
-    ) {
+    if (encoderPressureActiveMs >= GCALL_SENDER_ENCODER_RESET_QUEUE_PINNED_MS) {
       resetEncoderIfAllowed('queue-pinned', capturedAtPerfMs);
     } else {
       postStats();
@@ -619,8 +676,9 @@ function handleSetInputPort(message: {
   });
 }
 
-(self as unknown as { onmessage: ((event: MessageEvent) => void) | null })
-  .onmessage = (event: MessageEvent) => {
+(
+  self as unknown as { onmessage: ((event: MessageEvent) => void) | null }
+).onmessage = (event: MessageEvent) => {
   const message = event.data as InboundMessage;
   if (message?.type) {
     postProbeStage(`message-received:${message.type}`);
@@ -643,6 +701,8 @@ function handleSetInputPort(message: {
     sharedSamples = null;
     sharedState = null;
     sharedSlotCount = 0;
+    lastWorkletPostAudioClockMs = 0;
+    timingAnomalyLastByStage.clear();
     closeEncoder();
   }
 };

@@ -53,6 +53,9 @@ const GCALL_SENDER_ENCODER_RESET_COOLDOWN_MS = 7_500;
 const GCALL_SENDER_CPU_DEGRADED_OPUS_BITRATE = 16_000;
 const GCALL_SENDER_ENCODE_WORKER_PROBE_TIMEOUT_MS = 2_500;
 const GCALL_SENDER_SHARED_FRAME_SLOTS = 8;
+const GCALL_SENDER_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
+const GCALL_SENDER_TIMING_GAP_LOG_THRESHOLD_MS = 320;
+const GCALL_SENDER_TIMING_LOG_THROTTLE_MS = 2_000;
 
 async function ensureAudioContextRunning(ctx: AudioContext): Promise<void> {
   const resumable = ctx as AudioContext & { resume?: () => Promise<void> };
@@ -71,6 +74,7 @@ export interface GroupCallAudioSenderFrame {
 type CaptureWorkletMessage = {
   frame?: Float32Array;
   vad?: boolean;
+  workletPostAudioClockMs?: number;
   inputSampleRate?: number;
   outputSampleRate?: number;
   inputFrameSamples?: number;
@@ -132,6 +136,7 @@ export interface GroupCallAudioSenderEngineConfig {
   cpuDegraded?: boolean;
   onEncodedFrame: (frame: GroupCallAudioSenderFrame) => void;
   onVadChanged?: (vad: boolean) => void;
+  onTimingAnomaly?: (stage: string, detail: Record<string, unknown>) => void;
 }
 
 function getSenderAudioTuning(
@@ -170,8 +175,12 @@ export class GroupCallAudioSenderEngine {
   private onEncodedFrame: ((frame: GroupCallAudioSenderFrame) => void) | null =
     null;
   private onVadChanged: ((vad: boolean) => void) | null = null;
+  private onTimingAnomaly:
+    | ((stage: string, detail: Record<string, unknown>) => void)
+    | null = null;
   private lastReportedVad = false;
   private lastCapturePerfMs = 0;
+  private lastWorkletPostAudioClockMs = 0;
   private lastEncoderInputPerfMs = 0;
   private capturedFrameCount = 0;
   private encodedFrameCount = 0;
@@ -208,6 +217,7 @@ export class GroupCallAudioSenderEngine {
     number,
     { capturePerfMs: number; encoderInputPerfMs: number; vad: boolean }
   >();
+  private readonly timingAnomalyLastByStage = new Map<string, number>();
 
   private enqueueLifecycleOperation(
     operation: () => Promise<void>
@@ -219,6 +229,7 @@ export class GroupCallAudioSenderEngine {
 
   private resetDiagnosticsCounters(): void {
     this.lastCapturePerfMs = 0;
+    this.lastWorkletPostAudioClockMs = 0;
     this.lastEncoderInputPerfMs = 0;
     this.capturedFrameCount = 0;
     this.encodedFrameCount = 0;
@@ -253,6 +264,18 @@ export class GroupCallAudioSenderEngine {
     this.captureOutputSampleRate = null;
     this.captureInputFrameSamples = null;
     this.encodeTimingByTimestampUs.clear();
+    this.timingAnomalyLastByStage.clear();
+  }
+
+  private recordTimingAnomaly(
+    stage: string,
+    detail: Record<string, unknown>
+  ): void {
+    const now = Date.now();
+    const last = this.timingAnomalyLastByStage.get(stage) ?? 0;
+    if (now - last < GCALL_SENDER_TIMING_LOG_THROTTLE_MS) return;
+    this.timingAnomalyLastByStage.set(stage, now);
+    this.onTimingAnomaly?.(stage, detail);
   }
 
   async startOrUpdate(config: GroupCallAudioSenderEngineConfig): Promise<void> {
@@ -289,6 +312,7 @@ export class GroupCallAudioSenderEngine {
       this.activeConfig = nextShape;
       this.onEncodedFrame = config.onEncodedFrame;
       this.onVadChanged = config.onVadChanged ?? null;
+      this.onTimingAnomaly = config.onTimingAnomaly ?? null;
       await ensureAudioContextRunning(this.audioContext);
       this.captureNode.port.postMessage({
         type: 'mute',
@@ -322,6 +346,7 @@ export class GroupCallAudioSenderEngine {
     this.unsupportedReason = null;
     this.onEncodedFrame = config.onEncodedFrame;
     this.onVadChanged = config.onVadChanged ?? null;
+    this.onTimingAnomaly = config.onTimingAnomaly ?? null;
     this.resetDiagnosticsCounters();
     this.lastStartAtMs = Date.now();
     const token = ++this.startToken;
@@ -360,6 +385,7 @@ export class GroupCallAudioSenderEngine {
         const {
           frame,
           vad,
+          workletPostAudioClockMs,
           inputSampleRate,
           outputSampleRate,
           inputFrameSamples,
@@ -374,6 +400,43 @@ export class GroupCallAudioSenderEngine {
         }
         this.capturedFrameCount++;
         this.lastCapturePerfMs = capturedAtPerfMs;
+        if (
+          typeof workletPostAudioClockMs === 'number' &&
+          Number.isFinite(workletPostAudioClockMs)
+        ) {
+          if (this.lastWorkletPostAudioClockMs > 0) {
+            const workletFrameGapMs = Math.max(
+              0,
+              workletPostAudioClockMs - this.lastWorkletPostAudioClockMs
+            );
+            if (workletFrameGapMs >= GCALL_SENDER_TIMING_GAP_LOG_THRESHOLD_MS) {
+              this.recordTimingAnomaly('gcall-audio-worklet-frame-gap', {
+                gap_ms: Math.round(workletFrameGapMs),
+                mode: this.senderEncodeMode,
+                capturedFrameCount: this.capturedFrameCount,
+              });
+            }
+          }
+          this.lastWorkletPostAudioClockMs = workletPostAudioClockMs;
+          const workletToRendererMainMs = Math.max(
+            0,
+            (this.audioContext?.currentTime ?? 0) * 1000 -
+              workletPostAudioClockMs
+          );
+          if (
+            workletToRendererMainMs >=
+            GCALL_SENDER_TIMING_DELAY_LOG_THRESHOLD_MS
+          ) {
+            this.recordTimingAnomaly(
+              'gcall-audio-worklet-to-renderer-main-delay',
+              {
+                delay_ms: Math.round(workletToRendererMainMs),
+                mode: this.senderEncodeMode,
+                capturedFrameCount: this.capturedFrameCount,
+              }
+            );
+          }
+        }
         this.lastVad = typeof vad === 'boolean' ? vad : false;
         this.updateVad(this.lastVad);
         if (this.senderEncodeMode === 'worker-relay' && this.encodeWorker) {
@@ -494,8 +557,7 @@ export class GroupCallAudioSenderEngine {
       vad,
     });
     while (
-      this.encodeTimingByTimestampUs.size >
-      GCALL_SENDER_ENCODE_TIMING_CACHE_MAX
+      this.encodeTimingByTimestampUs.size > GCALL_SENDER_ENCODE_TIMING_CACHE_MAX
     ) {
       const oldest = this.encodeTimingByTimestampUs.keys().next().value;
       if (typeof oldest !== 'number') break;
@@ -562,7 +624,23 @@ export class GroupCallAudioSenderEngine {
         const encoderInputPerfMs =
           timing?.encoderInputPerfMs ?? this.lastEncoderInputPerfMs;
         const outputAgeMs = encodeOutPerfMs - capturePerfMs;
+        const encoderPipelineMs = encodeOutPerfMs - encoderInputPerfMs;
+        if (encoderPipelineMs >= GCALL_SENDER_TIMING_DELAY_LOG_THRESHOLD_MS) {
+          this.recordTimingAnomaly('gcall-audio-encoder-output-delay', {
+            delay_ms: Math.round(encoderPipelineMs),
+            mode: this.senderEncodeMode,
+            queueSize:
+              typeof encoder.encodeQueueSize === 'number'
+                ? encoder.encodeQueueSize
+                : null,
+          });
+        }
         if (outputAgeMs > GCALL_SENDER_MAX_REALTIME_FRAME_AGE_MS) {
+          this.recordTimingAnomaly('gcall-audio-stale-encoder-output-drop', {
+            age_ms: Math.round(outputAgeMs),
+            mode: this.senderEncodeMode,
+            droppedStaleEncodedFrames: this.droppedStaleEncodedFrames + 1,
+          });
           this.droppedStaleEncodedFrames++;
           this.noteStaleEncodedDrop(encodeOutPerfMs);
           if (outputAgeMs > GCALL_SENDER_ENCODER_RESET_MAX_OUTPUT_AGE_MS) {
@@ -715,6 +793,13 @@ export class GroupCallAudioSenderEngine {
       this.noteEncodeWorkerProbeStage(data.stage, data.atMs, data.detail);
       return;
     }
+    if (data.type === 'timingAnomaly') {
+      this.recordTimingAnomaly(data.stage ?? 'gcall-audio-worker-anomaly', {
+        ...(data.detail ?? {}),
+        mode: this.senderEncodeMode,
+      });
+      return;
+    }
     if (data.type === 'configured') {
       if (this.encodeWorkerProbeTimeout !== null) {
         clearTimeout(this.encodeWorkerProbeTimeout);
@@ -790,7 +875,8 @@ export class GroupCallAudioSenderEngine {
     if (!stage) return;
     this.encodeWorkerProbeStages.push({
       stage,
-      atMs: typeof atMs === 'number' && Number.isFinite(atMs) ? atMs : Date.now(),
+      atMs:
+        typeof atMs === 'number' && Number.isFinite(atMs) ? atMs : Date.now(),
       ...(detail ? { detail } : {}),
     });
     while (this.encodeWorkerProbeStages.length > 24) {
@@ -799,9 +885,10 @@ export class GroupCallAudioSenderEngine {
   }
 
   private latestEncodeWorkerProbeStage(): EncodeWorkerProbeStage | null {
-    return this.encodeWorkerProbeStages[
-      this.encodeWorkerProbeStages.length - 1
-    ] ?? null;
+    return (
+      this.encodeWorkerProbeStages[this.encodeWorkerProbeStages.length - 1] ??
+      null
+    );
   }
 
   private applyEncodeWorkerStats(stats: EncodeWorkerStats | undefined): void {
@@ -851,11 +938,7 @@ export class GroupCallAudioSenderEngine {
   private installDirectEncodePort(generation: number): boolean {
     const worker = this.encodeWorker;
     const captureNode = this.captureNode;
-    if (
-      !worker ||
-      !captureNode ||
-      typeof MessageChannel === 'undefined'
-    ) {
+    if (!worker || !captureNode || typeof MessageChannel === 'undefined') {
       return false;
     }
     try {
@@ -1190,8 +1273,8 @@ export class GroupCallAudioSenderEngine {
         typeof this.encodeWorkerStats?.encoderQueueSize === 'number'
           ? this.encodeWorkerStats.encoderQueueSize
           : typeof this.encoder?.encodeQueueSize === 'number'
-          ? this.encoder.encodeQueueSize
-          : null,
+            ? this.encoder.encodeQueueSize
+            : null,
       lastCapturePerfMs: this.lastCapturePerfMs,
       lastEncoderInputPerfMs: this.lastEncoderInputPerfMs,
       encoderErrorCount: this.encoderErrorCount,
@@ -1251,6 +1334,7 @@ export class GroupCallAudioSenderEngine {
     this.updateVad(false);
     this.onEncodedFrame = null;
     this.onVadChanged = null;
+    this.onTimingAnomaly = null;
     this.encoderQueuePressureStartedPerfMs = null;
     this.encoderPressureActiveMs = 0;
     this.staleEncodedDropPerfMs.length = 0;

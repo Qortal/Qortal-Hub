@@ -19,9 +19,7 @@ import {
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
 } from './gcall-diagnostics';
-import {
-  listAudioDevices,
-} from '../call/audioDevices';
+import { listAudioDevices } from '../call/audioDevices';
 import type { GcallAudioGapAttributionRecord } from '../call/dmVoiceGcallInboundPlayout';
 import packageJson from '../../../package.json';
 import {
@@ -861,6 +859,9 @@ const TWO_PARTY_LINK_RESYNC_COOLDOWN_MS = 5_000;
 const DEMOTED_ROOT_KEY_TRANSFER_GRACE_MS =
   ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS;
 const FRESH_LOCAL_KEY_AUTHORITY_GRACE_MS = 10_000;
+const GCALL_RUNTIME_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
+const GCALL_RUNTIME_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320;
+const GCALL_RUNTIME_AUDIO_TIMING_LOG_THROTTLE_MS = 2_000;
 
 export class GroupCallAudioEngineRuntime {
   private bootstrapRevisionApplied = 0;
@@ -996,6 +997,8 @@ export class GroupCallAudioEngineRuntime {
     string,
     { firstAtMs: number; lastEmitAtMs: number; suppressedSinceEmit: number }
   >();
+  private readonly senderTimingLogLastByStage = new Map<string, number>();
+  private lastRendererOutboundAudioSendAtMs = 0;
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
   private readonly audioStageGapStats = new Map<
     AudioStageName,
@@ -1366,6 +1369,13 @@ export class GroupCallAudioEngineRuntime {
       outputDeviceId: this.directVoiceOutputDeviceId,
       muted: this.directVoiceMuted,
       profile: this.directVoiceProfile,
+      onTimingAnomaly: (stage, detail) => {
+        this.logSenderTimingAnomaly(stage, {
+          callKind: 'dm',
+          peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
+          ...detail,
+        });
+      },
       onEncodedFrame: (frame) => {
         void this.dispatchDirectVoiceEncodedFrame(frame);
       },
@@ -1424,6 +1434,13 @@ export class GroupCallAudioEngineRuntime {
       outputDeviceId: this.directVoiceOutputDeviceId,
       muted: this.directVoiceMuted,
       profile: this.directVoiceProfile,
+      onTimingAnomaly: (stage, detail) => {
+        this.logSenderTimingAnomaly(stage, {
+          callKind: 'dm',
+          peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
+          ...detail,
+        });
+      },
       onEncodedFrame: (frame) => {
         void this.dispatchDirectVoiceEncodedFrame(frame);
       },
@@ -1732,6 +1749,23 @@ export class GroupCallAudioEngineRuntime {
     if (this.audioStageRecentWorst.length > AUDIO_STAGE_RECENT_WORST_LIMIT) {
       this.audioStageRecentWorst.splice(AUDIO_STAGE_RECENT_WORST_LIMIT);
     }
+  }
+
+  private logSenderTimingAnomaly(
+    stage: string,
+    payload?: Record<string, unknown>
+  ): void {
+    const nowMs = Date.now();
+    const lastMs = this.senderTimingLogLastByStage.get(stage) ?? 0;
+    if (nowMs - lastMs < GCALL_RUNTIME_AUDIO_TIMING_LOG_THROTTLE_MS) return;
+    this.senderTimingLogLastByStage.set(stage, nowMs);
+    const detail = {
+      roomId: this.snapshot.roomId,
+      mode: 'audio-surface',
+      ...(payload ?? {}),
+    };
+    console.warn(`[GCall] target=reticulum-audio-ipc stage=${stage}`, detail);
+    this.recordDiagEvent(stage, detail);
   }
 
   private recordAudioStageGap(
@@ -2250,9 +2284,7 @@ export class GroupCallAudioEngineRuntime {
       proposedRoot: myAddress,
       participantCount: topology.clusters.flatMap((cluster) => cluster.members)
         .length,
-      currentRoot: truncateGcallDiagAddress(
-        this.topology?.rootForwarder ?? ''
-      ),
+      currentRoot: truncateGcallDiagAddress(this.topology?.rootForwarder ?? ''),
       startupOccupiedRoomEvidence: this.startupOccupiedRoomEvidence,
       startupPreexistingOccupiedRoomEvidence:
         this.startupPreexistingOccupiedRoomEvidence,
@@ -5808,12 +5840,11 @@ export class GroupCallAudioEngineRuntime {
       Boolean(conflictingRoot) &&
       conflictingRoot !== myAddress;
     const trustedElectionRoot = getTrustedRootForRejoinElection({
-      currentRoot:
-        shouldPreserveIncumbentRoot
-          ? currentRoot
-          : shouldPreferConflictingRootForThreePlus ||
-              this.isProvisionalLocalRootActive(nowMs) ||
-              shouldReconsiderSelfMintedRootFromLiveEvidence
+      currentRoot: shouldPreserveIncumbentRoot
+        ? currentRoot
+        : shouldPreferConflictingRootForThreePlus ||
+            this.isProvisionalLocalRootActive(nowMs) ||
+            shouldReconsiderSelfMintedRootFromLiveEvidence
           ? null
           : this.topology?.rootForwarder,
       trustedRemoteRoot: shouldPreferConflictingRootForThreePlus
@@ -8461,6 +8492,13 @@ export class GroupCallAudioEngineRuntime {
         muted: this.snapshot.muted,
         profile: this.snapshot.audioQualityProfile,
         cpuDegraded: this.cpuDegradedActive,
+        onTimingAnomaly: (stage, detail) => {
+          this.logSenderTimingAnomaly(stage, {
+            callKind: 'group',
+            role: this.snapshot.myRole,
+            ...detail,
+          });
+        },
         onVadChanged: (vad) => {
           this.noteLocalVadActivity(vad);
         },
@@ -8490,6 +8528,26 @@ export class GroupCallAudioEngineRuntime {
             mainThreadToEncoderOutputMs,
             workletToEncoderOutputMs,
           });
+          if (
+            workletToMainThreadMs >=
+              GCALL_RUNTIME_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS ||
+            mainThreadToEncoderOutputMs >=
+              GCALL_RUNTIME_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS ||
+            workletToEncoderOutputMs >=
+              GCALL_RUNTIME_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS
+          ) {
+            this.logSenderTimingAnomaly('gcall-audio-pre-encode-delay', {
+              callKind: 'group',
+              role: this.snapshot.myRole,
+              worklet_to_main_ms: Math.round(workletToMainThreadMs),
+              main_to_encoder_output_ms: Math.round(
+                mainThreadToEncoderOutputMs
+              ),
+              worklet_to_encoder_output_ms: Math.round(
+                workletToEncoderOutputMs
+              ),
+            });
+          }
           this.noteSenderEncodePressure({
             workletToEncoderOutputMs,
             mainThreadToEncoderOutputMs,
@@ -8743,6 +8801,23 @@ export class GroupCallAudioEngineRuntime {
       const diagnostics = targets.map(markAttempt);
       try {
         const rendererSendAtWallMs = Date.now();
+        if (this.lastRendererOutboundAudioSendAtMs > 0) {
+          const rendererSendGapMs = Math.max(
+            0,
+            rendererSendAtWallMs - this.lastRendererOutboundAudioSendAtMs
+          );
+          if (
+            rendererSendGapMs >= GCALL_RUNTIME_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS
+          ) {
+            this.logSenderTimingAnomaly('gcall-audio-renderer-send-gap', {
+              callKind: 'group',
+              role: this.snapshot.myRole,
+              gap_ms: rendererSendGapMs,
+              targetCount: targets.length,
+            });
+          }
+        }
+        this.lastRendererOutboundAudioSendAtMs = rendererSendAtWallMs;
         const result = (await window.groupCall.sendAudioBatch(
           this.snapshot.roomId,
           targets,
@@ -8772,6 +8847,24 @@ export class GroupCallAudioEngineRuntime {
             throw new Error('window.groupCall.sendAudio unavailable');
           }
           const rendererSendAtWallMs = Date.now();
+          if (this.lastRendererOutboundAudioSendAtMs > 0) {
+            const rendererSendGapMs = Math.max(
+              0,
+              rendererSendAtWallMs - this.lastRendererOutboundAudioSendAtMs
+            );
+            if (
+              rendererSendGapMs >=
+              GCALL_RUNTIME_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS
+            ) {
+              this.logSenderTimingAnomaly('gcall-audio-renderer-send-gap', {
+                callKind: 'group',
+                role: this.snapshot.myRole,
+                gap_ms: rendererSendGapMs,
+                targetCount: 1,
+              });
+            }
+          }
+          this.lastRendererOutboundAudioSendAtMs = rendererSendAtWallMs;
           const result = (await window.groupCall.sendAudio(
             this.snapshot.roomId,
             address,
