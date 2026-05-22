@@ -69,6 +69,17 @@ import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
 
 const QCHAT_FILE_TRANSFER_TTL_MS = 2 * 60 * 60 * 1000;
 
+const formatQchatFileSize = (bytes?: number) => {
+  const size = Number(bytes || 0);
+  if (!Number.isFinite(size) || size <= 0) return '0 bytes';
+  if (size < 1024) return `${size} ${size === 1 ? 'byte' : 'bytes'}`;
+  if (size < 1024 * 1024) return `${Math.max(1, Math.ceil(size / 1024))} KB`;
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
+
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
     case '0':
@@ -307,12 +318,6 @@ export const MessageItemComponent = ({
   const qchatDownloaded =
     !!qchatFileData?.transferId &&
     !!qchatCompletedTransfers?.[qchatFileData.transferId];
-  const qchatDestinationHash =
-    qchatFileData?.senderReticulumDestinationHash ||
-    qchatFileData?.recipientReticulumDestinationHash ||
-    qchatTransferState?.peerPresenceHash ||
-    qchatTransferState?.peerDestinationHash ||
-    '';
   const qchatDisplayStatus = qchatDownloaded
     ? 'received'
     : qchatTransferState?.status || qchatFileData?.status || 'offer';
@@ -927,27 +932,8 @@ export const MessageItemComponent = ({
                       fontSize: 12,
                     }}
                   >
-                    {Math.max(
-                      1,
-                      Math.ceil((qchatFileData?.size || 0) / 1024)
-                    )}{' '}
-                    KB · {qchatStatusText}
+                    {formatQchatFileSize(qchatFileData?.size)} · {qchatStatusText}
                   </Typography>
-                  {qchatDestinationHash && (
-                    <Typography
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        fontFamily:
-                          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                        fontSize: 11,
-                        lineHeight: 1.35,
-                        mt: 0.25,
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      destinationHash: {qchatDestinationHash}
-                    </Typography>
-                  )}
                   {qchatExpiryText && (
                     <Typography
                       sx={{

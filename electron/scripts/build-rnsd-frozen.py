@@ -91,12 +91,17 @@ def ensure_pip(pyexe: str) -> None:
         sys.exit("Failed to bootstrap pip for the current Python.")
 
 
-def pip_install(pyexe: str, packages: list[str]) -> None:
+def pip_install(pyexe: str, packages: list[str], *, upgrade: bool = False, force_reinstall: bool = False) -> None:
+    flags = []
+    if upgrade:
+        flags.append("--upgrade")
+    if force_reinstall:
+        flags.append("--force-reinstall")
     attempts = (
-        [["-m", "pip", "install", "--user", "--break-system-packages", *packages],
-         ["-m", "pip", "install", "--user", *packages]]
+        [["-m", "pip", "install", "--user", "--break-system-packages", *flags, *packages],
+         ["-m", "pip", "install", "--user", *flags, *packages]]
         if os.name != "nt"
-        else [["-m", "pip", "install", "--user", *packages]]
+        else [["-m", "pip", "install", "--user", *flags, *packages]]
     )
     for args in attempts:
         try:
@@ -225,7 +230,7 @@ def main() -> None:
 
     pyexe = sys.executable
     ensure_pip(pyexe)
-    pip_install(pyexe, [RETICULUM_PIP_PACKAGE])
+    pip_install(pyexe, [RETICULUM_PIP_PACKAGE], upgrade=True, force_reinstall=True)
     if not has_module(pyexe, "LXMF"):
         pip_install(pyexe, ["lxmf"])
     if not has_module(pyexe, "PyInstaller"):

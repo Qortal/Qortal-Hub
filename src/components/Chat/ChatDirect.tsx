@@ -27,6 +27,7 @@ import {
   ListItemButton,
   ListItemText,
   Paper,
+  SvgIcon,
   TextField,
   Tooltip,
   Typography,
@@ -42,7 +43,6 @@ import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
 import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SendIcon from '@mui/icons-material/Send';
-import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { getNameInfo } from '../Group/Group';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
@@ -83,6 +83,55 @@ const QCHAT_FILE_DEFAULT_EXPIRY_HOURS = 2;
 const QCHAT_FILE_COMPLETED_CACHE_KEY = 'qchat-dm-file-transfer-completed-v1';
 const QCHAT_FILE_COMPLETED_CACHE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 const QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+const formatQchatFileSize = (bytes?: number) => {
+  const size = Number(bytes || 0);
+  if (!Number.isFinite(size) || size <= 0) return '0 KB';
+  if (size < 1024 * 1024) return `${Math.max(1, Math.ceil(size / 1024))} KB`;
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
+
+const ReticulumFileTransferIcon = (props) => (
+  <SvgIcon viewBox="0 0 24 24" {...props}>
+    <circle cx="5" cy="12" r="2" fill="currentColor" />
+    <circle cx="19" cy="6" r="2" fill="currentColor" />
+    <circle cx="19" cy="18" r="2" fill="currentColor" />
+    <path
+      d="M7 12C12 12 12 6 17 6"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      opacity="0.45"
+      fill="none"
+    />
+    <path
+      d="M7 12C12 12 12 18 17 18"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      opacity="0.45"
+      fill="none"
+    />
+    <path
+      d="M8 12H15"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <path
+      d="M13 9L16 12L13 15"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </SvgIcon>
+);
 
 const loadQchatCompletedTransfers = (address?: string) => {
   if (!address || typeof window === 'undefined') return {};
@@ -1049,6 +1098,14 @@ export const ChatDirect = ({
     try {
       if (isNewChat || !selectedDirect?.address) return;
       if (isSending) return;
+      if (+balance < MIN_REQUIRED_QORTS) {
+        throw new Error(
+          t('group:message.error.qortals_required', {
+            quantity: MIN_REQUIRED_QORTS,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
       const api = (window as any).electronAPI;
       if (!api?.qchatFileSelect) {
         throw new Error('Reticulum file transfer is unavailable');
@@ -1064,13 +1121,21 @@ export const ChatDirect = ({
       });
       setOpenSnack(true);
     }
-  }, [isNewChat, isSending, selectedDirect?.address]);
+  }, [balance, isNewChat, isSending, selectedDirect?.address, t]);
 
   const handleConfirmQchatFileOffer = useCallback(async () => {
     try {
       if (isNewChat || !selectedDirect?.address || !pendingQchatFileOffer)
         return;
       if (isSending) return;
+      if (+balance < MIN_REQUIRED_QORTS) {
+        throw new Error(
+          t('group:message.error.qortals_required', {
+            quantity: MIN_REQUIRED_QORTS,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
       const api = (window as any).electronAPI;
       if (!api?.qchatFileSend) {
         throw new Error('Reticulum file transfer is unavailable');
@@ -1168,6 +1233,7 @@ export const ChatDirect = ({
     }
   }, [
     addToQueue,
+    balance,
     getLocalReticulumIdentityForQchatFile,
     isNewChat,
     isSending,
@@ -1177,6 +1243,7 @@ export const ChatDirect = ({
     publicKeyOfRecipient,
     qchatFileExpiryHours,
     selectedDirect?.address,
+    t,
   ]);
 
   const handleAcceptQchatFileTransfer = useCallback(
@@ -2133,39 +2200,124 @@ export const ChatDirect = ({
         onClose={() => setPendingQchatFileOffer(null)}
         maxWidth="xs"
         fullWidth
+        PaperProps={{
+          sx: {
+            backgroundImage: 'none',
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '8px',
+            boxShadow:
+              theme.palette.mode === 'dark'
+                ? '0 18px 48px rgba(0,0,0,0.48)'
+                : '0 18px 48px rgba(15,23,42,0.18)',
+            overflow: 'hidden',
+          },
+        }}
       >
-        <DialogTitle>Send file</DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: 'grid', gap: 1.5, pt: 0.5 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-              {pendingQchatFileOffer?.name || 'Selected file'}
+        <DialogTitle
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 1.25,
+            px: 3,
+            py: 2,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'center',
+              border: '1px solid',
+              borderColor: theme.palette.divider,
+              borderRadius: '8px',
+              color: theme.palette.primary.main,
+              display: 'flex',
+              height: 36,
+              justifyContent: 'center',
+              width: 36,
+            }}
+          >
+            <ReticulumFileTransferIcon sx={{ fontSize: 22 }} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}>
+              Send file
             </Typography>
-            <Typography
-              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+              Reticulum direct transfer offer
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent
+          dividers
+          sx={{
+            borderColor: theme.palette.divider,
+            px: 3,
+            py: 2.25,
+          }}
+        >
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: theme.palette.divider,
+                borderRadius: '8px',
+                display: 'grid',
+                gap: 0.5,
+                p: 1.5,
+              }}
             >
-              {Math.max(
-                1,
-                Math.ceil((pendingQchatFileOffer?.size || 0) / 1024)
-              )}{' '}
-              KB
-            </Typography>
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={pendingQchatFileOffer?.name || 'Selected file'}
+              >
+                {pendingQchatFileOffer?.name || 'Selected file'}
+              </Typography>
+              <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+                {formatQchatFileSize(pendingQchatFileOffer?.size)}
+              </Typography>
+            </Box>
             <TextField
               label="Expires in hours"
               type="number"
               value={qchatFileExpiryHours}
               onChange={(event) => setQchatFileExpiryHours(event.target.value)}
               inputProps={{ min: 0.05, max: 168, step: 0.25 }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+                      hours
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
               size="small"
               fullWidth
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                },
+              }}
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setPendingQchatFileOffer(null)}>Cancel</Button>
+        <DialogActions sx={{ gap: 1, px: 3, py: 2 }}>
+          <Button
+            onClick={() => setPendingQchatFileOffer(null)}
+            sx={{ borderRadius: '8px', px: 2, textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
             onClick={handleConfirmQchatFileOffer}
             disabled={isSending}
+            sx={{ borderRadius: '8px', px: 2.25, textTransform: 'none' }}
           >
             Send offer
           </Button>
@@ -2307,7 +2459,7 @@ export const ChatDirect = ({
                   width: 44,
                 }}
               >
-                <AttachFileRoundedIcon sx={{ fontSize: 20 }} />
+                <ReticulumFileTransferIcon sx={{ fontSize: 22 }} />
               </IconButton>
             </span>
           </Tooltip>
