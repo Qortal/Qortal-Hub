@@ -602,6 +602,16 @@ type GcallSendAudioResult = {
   diagnostics?: GcallSendAudioDiagnostics;
 };
 
+type GcallAudioDataPlaneSession =
+  | {
+      ok: true;
+      endpoint: string;
+      token: string;
+      version: 2;
+      routeCount: number;
+    }
+  | { ok: false; reason?: string; error?: string };
+
 type OutboundMediaDiagnostics = {
   encodedFrameCallbacks: number;
   packetBuildAttempts: number;
@@ -999,6 +1009,15 @@ export class GroupCallAudioEngineRuntime {
   >();
   private readonly senderTimingLogLastByStage = new Map<string, number>();
   private lastRendererOutboundAudioSendAtMs = 0;
+  private audioDataPlaneSocket: WebSocket | null = null;
+  private audioDataPlaneEndpoint = '';
+  private audioDataPlaneToken = '';
+  private audioDataPlaneLastRouteRefreshAtMs = 0;
+  private audioDataPlaneLastRouteKey = '';
+  private audioDataPlaneSessionPromise: Promise<boolean> | null = null;
+  private audioDataPlaneLastFailureAtMs = 0;
+  private audioDataPlaneFailureReason = '';
+  private audioDataPlaneSeq = 0;
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
   private readonly audioStageGapStats = new Map<
     AudioStageName,
@@ -1114,6 +1133,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearMemberGateRefreshTimer();
     this.clearParticipantRosterRefreshTimer();
     this.stopRendererThreadMonitor();
+    this.closeAudioDataPlane('runtime-dispose');
     void this.senderEngine.stop();
     void this.directVoiceSenderEngine.stop();
     void this.receiveEngine.dispose();
@@ -1503,6 +1523,17 @@ export class GroupCallAudioEngineRuntime {
     this.directVoiceOutboundSendAttempts++;
     this.directVoiceOutboundLastSendAtMs = Date.now();
     try {
+      const sentViaDataPlane = await this.sendAudioViaDataPlane(
+        this.directVoiceRoomId,
+        [this.directVoicePeerAddress],
+        packet,
+        this.directVoiceOutboundLastSendAtMs,
+        { callKind: 'dm' }
+      );
+      if (sentViaDataPlane) {
+        this.directVoiceOutboundSendSuccesses++;
+        return;
+      }
       const result = (await window.groupCall.sendAudio(
         this.directVoiceRoomId,
         this.directVoicePeerAddress,
@@ -1706,6 +1737,254 @@ export class GroupCallAudioEngineRuntime {
       firstSuppressedAtMs: existing.firstAtMs,
       suppressedSinceLast,
     });
+  }
+
+  private closeAudioDataPlane(reason: string): void {
+    if (this.audioDataPlaneSocket) {
+      try {
+        this.audioDataPlaneSocket.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    this.audioDataPlaneSocket = null;
+    this.audioDataPlaneEndpoint = '';
+    this.audioDataPlaneToken = '';
+    this.audioDataPlaneLastRouteRefreshAtMs = 0;
+    this.audioDataPlaneLastRouteKey = '';
+    this.audioDataPlaneSessionPromise = null;
+    if (reason) {
+      this.recordThrottledDiagEvent('audio-data-plane-closed', reason, {
+        reason,
+      });
+    }
+  }
+
+  private bytesToBase64(data: Uint8Array): string {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let offset = 0; offset < data.length; offset += chunkSize) {
+      const chunk = data.subarray(offset, offset + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  private async ensureAudioDataPlaneSession(
+    roomId: string,
+    targets: string[]
+  ): Promise<boolean> {
+    if (this.audioDataPlaneSessionPromise) {
+      return this.audioDataPlaneSessionPromise;
+    }
+    this.audioDataPlaneSessionPromise = this.ensureAudioDataPlaneSessionInner(
+      roomId,
+      targets
+    ).finally(() => {
+      this.audioDataPlaneSessionPromise = null;
+    });
+    return this.audioDataPlaneSessionPromise;
+  }
+
+  private async ensureAudioDataPlaneSessionInner(
+    roomId: string,
+    targets: string[]
+  ): Promise<boolean> {
+    if (typeof window.groupCall?.getAudioDataPlaneSession !== 'function') {
+      this.audioDataPlaneFailureReason = 'api-unavailable';
+      return false;
+    }
+    const now = Date.now();
+    const routeKey = `${roomId}:${[...targets].sort().join('|')}`;
+    const socketOpen =
+      this.audioDataPlaneSocket?.readyState === WebSocket.OPEN &&
+      Boolean(this.audioDataPlaneEndpoint);
+    const routesFresh =
+      routeKey === this.audioDataPlaneLastRouteKey &&
+      now - this.audioDataPlaneLastRouteRefreshAtMs < 5_000;
+    if (socketOpen && routesFresh) {
+      return true;
+    }
+    if (!socketOpen && now - this.audioDataPlaneLastFailureAtMs < 2_000) {
+      return false;
+    }
+    let session: GcallAudioDataPlaneSession | undefined;
+    try {
+      session = (await window.groupCall.getAudioDataPlaneSession(
+        roomId,
+        targets
+      )) as GcallAudioDataPlaneSession;
+    } catch (error) {
+      this.audioDataPlaneLastFailureAtMs = now;
+      this.audioDataPlaneFailureReason =
+        error instanceof Error ? error.message : String(error);
+      this.recordThrottledDiagEvent(
+        'audio-data-plane-session-failed',
+        this.audioDataPlaneFailureReason,
+        { roomId, reason: this.audioDataPlaneFailureReason }
+      );
+      return socketOpen;
+    }
+    if (!session?.ok) {
+      const failedSession = session as
+        | Extract<GcallAudioDataPlaneSession, { ok: false }>
+        | null
+        | undefined;
+      this.audioDataPlaneLastFailureAtMs = now;
+      this.audioDataPlaneFailureReason =
+        failedSession?.reason || failedSession?.error || 'session-rejected';
+      if (this.audioDataPlaneFailureReason !== 'audio-data-plane-disabled') {
+        this.recordThrottledDiagEvent(
+          'audio-data-plane-session-failed',
+          this.audioDataPlaneFailureReason,
+          { roomId, reason: this.audioDataPlaneFailureReason }
+        );
+      }
+      return socketOpen;
+    }
+    if (
+      socketOpen &&
+      this.audioDataPlaneEndpoint === session.endpoint &&
+      this.audioDataPlaneToken === session.token
+    ) {
+      this.audioDataPlaneLastRouteRefreshAtMs = now;
+      this.audioDataPlaneLastRouteKey = routeKey;
+      return true;
+    }
+    const endpointWithToken = `${session.endpoint}${
+      session.endpoint.includes('?') ? '&' : '?'
+    }token=${encodeURIComponent(session.token)}`;
+    if (this.audioDataPlaneSocket) {
+      this.closeAudioDataPlane('endpoint-refresh');
+    }
+    this.audioDataPlaneEndpoint = session.endpoint;
+    this.audioDataPlaneToken = session.token;
+    this.audioDataPlaneLastRouteRefreshAtMs = now;
+    this.audioDataPlaneLastRouteKey = routeKey;
+    try {
+      const socket = new WebSocket(endpointWithToken);
+      this.audioDataPlaneSocket = socket;
+      await new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(
+          () => reject(new Error('audio-data-plane-open-timeout')),
+          2_000
+        );
+        socket.onopen = () => {
+          window.clearTimeout(timeout);
+          resolve();
+        };
+        socket.onerror = () => {
+          window.clearTimeout(timeout);
+          reject(new Error('audio-data-plane-open-error'));
+        };
+      });
+      socket.onclose = () => {
+        if (this.audioDataPlaneSocket === socket) {
+          this.audioDataPlaneSocket = null;
+        }
+      };
+      socket.onerror = () => {
+        this.audioDataPlaneLastFailureAtMs = Date.now();
+        this.audioDataPlaneFailureReason = 'socket-error';
+      };
+      socket.onmessage = (event) => {
+        if (typeof event.data !== 'string') return;
+        try {
+          const parsed = JSON.parse(event.data) as {
+            type?: string;
+            ok?: boolean;
+            reason?: string;
+            failures?: Array<{ reason?: string }>;
+          };
+          if (parsed.type === 'audio-result' && parsed.ok === false) {
+            const reason =
+              parsed.reason ||
+              parsed.failures?.find((f) => f?.reason)?.reason ||
+              'send-rejected';
+            this.audioDataPlaneFailureReason = reason;
+            this.recordThrottledDiagEvent(
+              'audio-data-plane-send-rejected',
+              reason,
+              { roomId, reason }
+            );
+          }
+        } catch {
+          /* ignore malformed diagnostic replies */
+        }
+      };
+      socket.send(JSON.stringify({ type: 'hello', roomId }));
+      this.recordDiagEvent('audio-data-plane-session-opened', {
+        roomId,
+        routeCount: session.routeCount,
+      });
+      return true;
+    } catch (error) {
+      this.audioDataPlaneLastFailureAtMs = Date.now();
+      this.audioDataPlaneFailureReason =
+        error instanceof Error ? error.message : String(error);
+      this.closeAudioDataPlane('open-failed');
+      return false;
+    }
+  }
+
+  private async sendAudioViaDataPlane(
+    roomId: string,
+    targets: string[],
+    packet: Uint8Array,
+    rendererSendAtWallMs: number,
+    detail: Record<string, unknown>
+  ): Promise<boolean> {
+    const ready = await this.ensureAudioDataPlaneSession(roomId, targets);
+    const socket = this.audioDataPlaneSocket;
+    if (!ready || !socket || socket.readyState !== WebSocket.OPEN) {
+      if (this.audioDataPlaneFailureReason !== 'audio-data-plane-disabled') {
+        this.recordThrottledDiagEvent(
+          'audio-data-plane-fallback',
+          this.audioDataPlaneFailureReason || 'not-ready',
+          {
+            roomId,
+            reason: this.audioDataPlaneFailureReason || 'not-ready',
+            ...detail,
+          }
+        );
+      }
+      return false;
+    }
+    const ageMs = Math.max(0, Date.now() - rendererSendAtWallMs);
+    if (ageMs > 160) {
+      this.recordThrottledDiagEvent('audio-data-plane-stale-drop', roomId, {
+        roomId,
+        ageMs,
+        targetCount: targets.length,
+      });
+      return true;
+    }
+    try {
+      socket.send(
+        JSON.stringify({
+          type: 'audio',
+          roomId,
+          targets,
+          seq: ++this.audioDataPlaneSeq,
+          rendererSendAtWallMs,
+          frameTimestampMs: rendererSendAtWallMs,
+          data: this.bytesToBase64(packet),
+        })
+      );
+      this.recordThrottledDiagEvent('audio-data-plane-send-attempt', roomId, {
+        roomId,
+        targetCount: targets.length,
+        ageMs,
+        ...detail,
+      });
+      return true;
+    } catch (error) {
+      this.audioDataPlaneLastFailureAtMs = Date.now();
+      this.audioDataPlaneFailureReason =
+        error instanceof Error ? error.message : String(error);
+      this.closeAudioDataPlane('send-failed');
+      return false;
+    }
   }
 
   private getAudioStageAggregate<K extends string>(
@@ -8818,6 +9097,17 @@ export class GroupCallAudioEngineRuntime {
           }
         }
         this.lastRendererOutboundAudioSendAtMs = rendererSendAtWallMs;
+        const sentViaDataPlane = await this.sendAudioViaDataPlane(
+          this.snapshot.roomId,
+          targets,
+          packet,
+          rendererSendAtWallMs,
+          { callKind: 'group', role: this.snapshot.myRole }
+        );
+        if (sentViaDataPlane) {
+          diagnostics.forEach(markSuccess);
+          return;
+        }
         const result = (await window.groupCall.sendAudioBatch(
           this.snapshot.roomId,
           targets,
@@ -8865,6 +9155,17 @@ export class GroupCallAudioEngineRuntime {
             }
           }
           this.lastRendererOutboundAudioSendAtMs = rendererSendAtWallMs;
+          const sentViaDataPlane = await this.sendAudioViaDataPlane(
+            this.snapshot.roomId,
+            [address],
+            packet,
+            rendererSendAtWallMs,
+            { callKind: 'group', role: this.snapshot.myRole }
+          );
+          if (sentViaDataPlane) {
+            markSuccess(diag);
+            return;
+          }
           const result = (await window.groupCall.sendAudio(
             this.snapshot.roomId,
             address,

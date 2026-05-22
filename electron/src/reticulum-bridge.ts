@@ -113,6 +113,8 @@ type BridgeCmdFrame = {
     | 'reset_group_audio_peer_state'
     | 'warm_group_audio_path'
     | 'clear_group_audio_diagnostics'
+    | 'get_group_audio_data_plane_session'
+    | 'configure_group_audio_data_plane_routes'
     | 'get_local_identity_public_key'
     | 'register_peer_identity';
   id: string;
@@ -340,6 +342,28 @@ export type ReticulumEnqueueGroupAudioResult =
       snapshot: ReticulumAudioQueueSnapshot;
     }
   | { ok: false; reason: ReticulumSendFailureReason };
+
+export type ReticulumAudioDataPlaneRoute = {
+  address: string;
+  transport: 'link' | 'packet';
+  linkId?: string;
+  peerPresenceHash?: string;
+  peerDestinationHash?: string;
+};
+
+export type ReticulumAudioDataPlaneSessionResult =
+  | {
+      ok: true;
+      endpoint: string;
+      token: string;
+      version: 2;
+      routeCount: number;
+    }
+  | {
+      ok: false;
+      reason: ReticulumSendFailureReason | 'audio-data-plane-disabled';
+      error?: string;
+    };
 
 export type ReticulumSendResult =
   | { ok: true }
@@ -1370,6 +1394,77 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         reason: this.mapSendFailureReason(resp),
         ...(resp.error ? { error: resp.error } : {}),
       };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        reason: message.includes('timed out')
+          ? 'bridge-timeout'
+          : 'bridge-exception',
+        error: message,
+      };
+    }
+  }
+
+  async getGroupAudioDataPlaneSession(
+    routes: ReticulumAudioDataPlaneRoute[]
+  ): Promise<ReticulumAudioDataPlaneSessionResult> {
+    try {
+      await this.start();
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'bridge-exception',
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    if (this.state !== 'ready') {
+      return { ok: false, reason: 'bridge-not-ready' };
+    }
+    try {
+      const session = await this.sendCommand(
+        'get_group_audio_data_plane_session',
+        {}
+      );
+      if (!session.ok) {
+        return {
+          ok: false,
+          reason: this.mapSendFailureReason(session),
+          ...(session.error ? { error: session.error } : {}),
+        };
+      }
+      const endpoint =
+        typeof session.payload?.endpoint === 'string'
+          ? session.payload.endpoint
+          : '';
+      const token =
+        typeof session.payload?.token === 'string' ? session.payload.token : '';
+      if (!endpoint || !token) {
+        return {
+          ok: false,
+          reason: 'send-command-failed',
+          error: 'Bridge data-plane response missing endpoint/token',
+        };
+      }
+      const configured = await this.sendCommand(
+        'configure_group_audio_data_plane_routes',
+        { routes }
+      );
+      if (!configured.ok) {
+        return {
+          ok: false,
+          reason: this.mapSendFailureReason(configured),
+          ...(configured.error ? { error: configured.error } : {}),
+        };
+      }
+      const routeCount =
+        typeof configured.payload?.routeCount === 'number'
+          ? configured.payload.routeCount
+          : routes.length;
+      loggerLog(
+        `[ReticulumBridge] target=gcall-audio-data-plane stage=session-ready routes=${routeCount}`
+      );
+      return { ok: true, endpoint, token, version: 2, routeCount };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return {

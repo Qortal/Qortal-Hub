@@ -30,6 +30,8 @@ import type { PresenceManager } from './presence';
 import type {
   ReticulumBridge,
   ReticulumAudioLinkHeartbeatCommand,
+  ReticulumAudioDataPlaneRoute,
+  ReticulumAudioDataPlaneSessionResult,
   ReticulumAudioQueueSnapshot,
   ReticulumEnqueueGroupAudioResult,
   ReticulumOpenAudioLinkResult,
@@ -101,6 +103,7 @@ const GCALL_AUDIO_MANAGER_FLUSH_AT_MS = Symbol.for(
 const GCALL_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
 const GCALL_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320;
 const GCALL_AUDIO_TIMING_LOG_THROTTLE_MS = 2_000;
+const GCALL_AUDIO_DATA_PLANE_V2_ENABLED = true;
 
 type ReticulumAudioTimingMetadata = {
   rendererSendAtMs?: number;
@@ -8051,6 +8054,65 @@ export class GroupCallManager extends EventEmitter {
         enqueueStats
       ),
     };
+  }
+
+  async getAudioDataPlaneSession(
+    roomId: string,
+    toAddresses: string[]
+  ): Promise<ReticulumAudioDataPlaneSessionResult> {
+    if (!GCALL_AUDIO_DATA_PLANE_V2_ENABLED) {
+      return { ok: false, reason: 'audio-data-plane-disabled' };
+    }
+    const bridge = this.reticulumBridge;
+    if (!bridge) {
+      return { ok: false, reason: 'bridge-unavailable' };
+    }
+    const routes: ReticulumAudioDataPlaneRoute[] = [];
+    for (const rawAddress of toAddresses) {
+      const address = rawAddress.trim();
+      if (!address || this.localAddresses.has(address)) continue;
+      const state = this.ensureReticulumAudioPeerState(roomId, address);
+      if (!state) {
+        loggerLog(
+          `[GCall] target=gcall-audio-data-plane stage=route-missing room=${roomId} target=${address}`
+        );
+        continue;
+      }
+      if (state.transport === 'link' && (!state.linkId || !state.established)) {
+        loggerLog(
+          `[GCall] target=gcall-audio-data-plane stage=route-unready room=${roomId} target=${address} reason=link-not-established`
+        );
+        continue;
+      }
+      routes.push({
+        address,
+        transport: state.transport,
+        ...(state.linkId ? { linkId: state.linkId } : {}),
+        peerPresenceHash: state.peerPresenceHash,
+        peerDestinationHash: state.peerDestinationHash,
+      });
+    }
+    if (routes.length === 0) {
+      loggerLog(
+        `[GCall] target=gcall-audio-data-plane stage=session-fallback room=${roomId} reason=no-routes targets=${toAddresses.length}`
+      );
+      return { ok: false, reason: 'no-route' };
+    }
+    const session = await bridge.getGroupAudioDataPlaneSession(routes);
+    const sessionDetail = session.ok
+      ? ` configured=${session.routeCount}`
+      : ` reason=${
+          (
+            session as Extract<
+              ReticulumAudioDataPlaneSessionResult,
+              { ok: false }
+            >
+          ).reason
+        }`;
+    loggerLog(
+      `[GCall] target=gcall-audio-data-plane stage=session-result room=${roomId} ok=${session.ok} routes=${routes.length}${sessionDetail}`
+    );
+    return session;
   }
 
   /**

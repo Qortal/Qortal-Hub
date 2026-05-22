@@ -3155,6 +3155,19 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
+  'gcall:getAudioDataPlaneSession',
+  async (_event, roomId: string, toAddresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { ok: false, reason: 'manager-unavailable' };
+    if (!Array.isArray(toAddresses) || toAddresses.length === 0) {
+      return { ok: false, reason: 'no-targets' };
+    }
+    const result = await mgr.getAudioDataPlaneSession(roomId, toAddresses);
+    return result;
+  }
+);
+
+ipcMain.handle(
   'gcall:requestPeerMediaRecovery',
   async (_event, roomId: string, address: string, reason: string) => {
     const mgr = getGroupCallManager();

@@ -777,6 +777,19 @@ declare global {
         address: string,
         reason: string
       ) => Promise<{ success: boolean; error?: string }>;
+      getAudioDataPlaneSession?: (
+        roomId: string,
+        toAddresses: string[]
+      ) => Promise<
+        | {
+            ok: true;
+            endpoint: string;
+            token: string;
+            version: 2;
+            routeCount: number;
+          }
+        | { ok: false; reason?: string; error?: string }
+      >;
       sendKey: (
         roomId: string,
         toAddress: string,

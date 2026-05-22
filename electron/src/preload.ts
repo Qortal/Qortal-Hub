@@ -1578,6 +1578,9 @@ try {
     setLocalAddresses: async (addresses: string[], source?: string) =>
       ipcRenderer.invoke('gcall:setLocalAddresses', addresses, source),
 
+    getAudioDataPlaneSession: async (roomId: string, toAddresses: string[]) =>
+      ipcRenderer.invoke('gcall:getAudioDataPlaneSession', roomId, toAddresses),
+
     /** Sync authoritative Qortal group member addresses for Reticulum call-activity fanout. */
     setQortalGroupReticulumTargets: async (
       roomId: string,

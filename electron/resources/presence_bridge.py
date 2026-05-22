@@ -9,11 +9,14 @@ import os
 import selectors
 from collections import deque
 import queue
+import secrets
 import shutil
+import socket
 import sys
 import threading
 import time
 import traceback
+import urllib.parse
 import uuid
 from typing import IO, Any, Callable, Dict, Optional, Set, Tuple
 
@@ -181,6 +184,8 @@ _JSON_EVENT_OUT_QUEUE_MAX = 2048
 _AUDIO_BINARY_OUT_QUEUE_MAX = 128
 _AUDIO_BATCH_STALE_SECONDS = 0.75
 _AUDIO_OUTBOUND_DEADLINE_SECONDS = 0.32
+_AUDIO_DATA_PLANE_STALE_MS = 160
+_AUDIO_DATA_PLANE_MAX_ROUTES = 128
 _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS = 2
 _AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS = 16
 _AUDIO_BACKLOG_BATCH_STEP = 2
@@ -334,6 +339,13 @@ _audio_fd3_parse_last_wall_ms_by_route: Dict[str, int] = {}
 _audio_ipc_fd3_first_batch_ok_logged = False
 _audio_ipc_rns_first_send_ok_logged = False
 _audio_ipc_fd4_first_chunk_logged = False
+_audio_data_plane_lock = threading.RLock()
+_audio_data_plane_server_thread: Optional[threading.Thread] = None
+_audio_data_plane_socket: Optional[socket.socket] = None
+_audio_data_plane_endpoint = ""
+_audio_data_plane_token = ""
+_audio_data_plane_routes_by_address: Dict[str, Dict[str, Any]] = {}
+_audio_data_plane_clients: Dict[int, socket.socket] = {}
 _call_media_path_state: Dict[str, Dict[str, Any]] = {}
 
 # Compact group-call control on call aspect (see electron/src/group-call-wire-reticulum.ts).
@@ -793,6 +805,323 @@ def _log_audio_timing_anomaly(stage: str, route_key: str, detail: str) -> None:
         for old_key in list(_audio_timing_anomaly_log_last_by_key.keys())[:128]:
             _audio_timing_anomaly_log_last_by_key.pop(old_key, None)
     log(f"[presence_bridge] {_AUDIO_IPC_LOG} stage={stage} {detail}")
+
+
+def _log_audio_data_plane(stage: str, detail: str = "") -> None:
+    suffix = f" {detail}" if detail else ""
+    log(f"[presence_bridge] target=gcall-audio-data-plane stage={stage}{suffix}")
+
+
+def _ws_accept_key(key: str) -> str:
+    digest = hashlib.sha1(
+        (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
+    ).digest()
+    return base64.b64encode(digest).decode("ascii")
+
+
+def _ws_send_json(conn: socket.socket, payload: Dict[str, Any]) -> bool:
+    try:
+        data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        header = bytearray([0x81])
+        if len(data) < 126:
+            header.append(len(data))
+        elif len(data) < 65536:
+            header.extend([126, (len(data) >> 8) & 0xFF, len(data) & 0xFF])
+        else:
+            header.extend([127])
+            header.extend(len(data).to_bytes(8, "big"))
+        conn.sendall(bytes(header) + data)
+        return True
+    except Exception as exc:
+        _log_audio_data_plane("ws-send-failed", f"err={str(exc)[:160]}")
+        return False
+
+
+def _ws_read_frame(conn: socket.socket) -> Optional[Tuple[int, bytes]]:
+    header = conn.recv(2)
+    if len(header) < 2:
+        return None
+    opcode = header[0] & 0x0F
+    masked = (header[1] & 0x80) != 0
+    length = header[1] & 0x7F
+    if length == 126:
+        ext = conn.recv(2)
+        if len(ext) < 2:
+            return None
+        length = int.from_bytes(ext, "big")
+    elif length == 127:
+        ext = conn.recv(8)
+        if len(ext) < 8:
+            return None
+        length = int.from_bytes(ext, "big")
+    if length > 262144:
+        raise ValueError("websocket frame too large")
+    mask = b""
+    if masked:
+        mask = conn.recv(4)
+        if len(mask) < 4:
+            return None
+    data = b""
+    while len(data) < length:
+        chunk = conn.recv(length - len(data))
+        if not chunk:
+            return None
+        data += chunk
+    if masked:
+        data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+    return opcode, data
+
+
+def _audio_data_plane_route_for_address(address: str) -> Optional[Dict[str, Any]]:
+    key = str(address or "").strip()
+    if not key:
+        return None
+    with _audio_data_plane_lock:
+        route = _audio_data_plane_routes_by_address.get(key)
+        if isinstance(route, dict):
+            return dict(route)
+    return None
+
+
+def _audio_data_plane_enqueue_frame(message: Dict[str, Any]) -> Tuple[bool, str]:
+    if _destination is None:
+        return False, "bridge_not_started"
+    room_id = str(message.get("roomId") or "").strip()
+    if not room_id:
+        return False, "missing_room"
+    target = str(message.get("targetAddress") or "").strip()
+    route = _audio_data_plane_route_for_address(target)
+    if route is None:
+        return False, "route_missing"
+    encoded = message.get("data")
+    if not isinstance(encoded, str) or not encoded:
+        return False, "missing_payload"
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception:
+        return False, "bad_payload_base64"
+    if len(raw) <= 0 or len(raw) > AUDIO_MAX_PAYLOAD:
+        return False, "bad_payload_size"
+    now_ms = _now_wall_ms()
+    source_ms = message.get("rendererSendAtWallMs")
+    if isinstance(source_ms, (int, float)) and source_ms > 0:
+        age_ms = max(0, now_ms - int(source_ms))
+        if age_ms > _AUDIO_DATA_PLANE_STALE_MS:
+            return False, f"stale:{age_ms}"
+    transport = "packet" if route.get("transport") == "packet" else "link"
+    link_id = str(route.get("linkId") or "")
+    peer_presence_hash = str(route.get("peerPresenceHash") or "").strip().lower()
+    peer_destination_hash = str(route.get("peerDestinationHash") or "").strip().lower()
+    if transport == "link" and not link_id:
+        return False, "route_link_missing"
+    if transport == "packet" and not peer_presence_hash:
+        return False, "route_peer_missing"
+    ok = _put_audio_decoded_batch_keep_newest(
+        [
+            (
+                link_id if transport == "link" else "",
+                room_id,
+                peer_presence_hash,
+                peer_destination_hash,
+                int(source_ms) if isinstance(source_ms, (int, float)) and source_ms > 0 else now_ms,
+                raw,
+            )
+        ]
+    )
+    if not ok:
+        return False, "decoded_queue_full"
+    return True, "queued"
+
+
+def _handle_audio_data_plane_message(conn: socket.socket, message: Dict[str, Any]) -> None:
+    kind = message.get("type")
+    if kind == "hello":
+        _ws_send_json(conn, {"type": "hello-ok", "atMs": _now_wall_ms()})
+        return
+    if kind != "audio":
+        _ws_send_json(conn, {"type": "error", "reason": "unknown_type"})
+        return
+    targets = message.get("targets")
+    if not isinstance(targets, list) or not targets:
+        _ws_send_json(conn, {"type": "audio-result", "ok": False, "reason": "missing_targets"})
+        return
+    queued = 0
+    failures: list = []
+    for target in targets[:_AUDIO_DATA_PLANE_MAX_ROUTES]:
+        if not isinstance(target, str) or not target.strip():
+            continue
+        per_target = dict(message)
+        per_target["targetAddress"] = target
+        ok, reason = _audio_data_plane_enqueue_frame(per_target)
+        if ok:
+            queued += 1
+        else:
+            failures.append({"targetAddress": target, "reason": reason})
+            if reason.startswith("stale:"):
+                _log_audio_data_plane(
+                    "stale-outbound-drop",
+                    f"room={str(message.get('roomId') or '')[:80]} target={target[:16]} reason={reason}",
+                )
+    _ws_send_json(
+        conn,
+        {
+            "type": "audio-result",
+            "ok": queued > 0,
+            "queued": queued,
+            "failures": failures[:8],
+            "atMs": _now_wall_ms(),
+        },
+    )
+
+
+def _audio_data_plane_client_loop(conn: socket.socket, addr: Any) -> None:
+    client_id = id(conn)
+    try:
+        request = b""
+        while b"\r\n\r\n" not in request and len(request) < 8192:
+            chunk = conn.recv(1024)
+            if not chunk:
+                return
+            request += chunk
+        header_text = request.decode("iso-8859-1", errors="replace")
+        first_line = header_text.split("\r\n", 1)[0]
+        parts = first_line.split(" ")
+        path = parts[1] if len(parts) >= 2 else "/"
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+        token = (query.get("token") or [""])[0]
+        with _audio_data_plane_lock:
+            expected = _audio_data_plane_token
+        if not expected or not secrets.compare_digest(str(token), expected):
+            conn.sendall(b"HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n")
+            _log_audio_data_plane("auth-rejected", f"addr={addr}")
+            return
+        headers: Dict[str, str] = {}
+        for line in header_text.split("\r\n")[1:]:
+            if ":" in line:
+                k, v = line.split(":", 1)
+                headers[k.strip().lower()] = v.strip()
+        sec_key = headers.get("sec-websocket-key", "")
+        if not sec_key:
+            conn.sendall(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
+            return
+        response = (
+            "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Accept: {_ws_accept_key(sec_key)}\r\n\r\n"
+        )
+        conn.sendall(response.encode("ascii"))
+        with _audio_data_plane_lock:
+            _audio_data_plane_clients[client_id] = conn
+        _log_audio_data_plane("connection-open", f"addr={addr}")
+        _ws_send_json(conn, {"type": "ready", "atMs": _now_wall_ms()})
+        while not _shutdown.is_set():
+            frame = _ws_read_frame(conn)
+            if frame is None:
+                break
+            opcode, data = frame
+            if opcode == 0x8:
+                break
+            if opcode == 0x9:
+                conn.sendall(b"\x8a\x00")
+                continue
+            if opcode != 0x1:
+                continue
+            try:
+                parsed = json.loads(data.decode("utf-8"))
+            except Exception:
+                _ws_send_json(conn, {"type": "error", "reason": "bad_json"})
+                continue
+            if isinstance(parsed, dict):
+                _handle_audio_data_plane_message(conn, parsed)
+    except Exception as exc:
+        _log_audio_data_plane("connection-error", f"addr={addr} err={str(exc)[:160]}")
+    finally:
+        with _audio_data_plane_lock:
+            _audio_data_plane_clients.pop(client_id, None)
+        try:
+            conn.close()
+        except Exception:
+            pass
+        _log_audio_data_plane("connection-closed", f"addr={addr}")
+
+
+def _audio_data_plane_accept_loop(sock: socket.socket) -> None:
+    while not _shutdown.is_set():
+        try:
+            conn, addr = sock.accept()
+            conn.settimeout(5.0)
+            threading.Thread(
+                target=_audio_data_plane_client_loop,
+                args=(conn, addr),
+                name="gcall-audio-data-plane-client",
+                daemon=True,
+            ).start()
+        except OSError:
+            break
+        except Exception as exc:
+            _log_audio_data_plane("accept-failed", f"err={str(exc)[:160]}")
+
+
+def _ensure_audio_data_plane_server() -> Tuple[bool, Dict[str, Any], str]:
+    global _audio_data_plane_server_thread, _audio_data_plane_socket
+    global _audio_data_plane_endpoint, _audio_data_plane_token
+    with _audio_data_plane_lock:
+        if _audio_data_plane_endpoint and _audio_data_plane_token:
+            return True, {
+                "endpoint": _audio_data_plane_endpoint,
+                "token": _audio_data_plane_token,
+                "version": 2,
+            }, ""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 0))
+            sock.listen(16)
+            host, port = sock.getsockname()
+            _audio_data_plane_socket = sock
+            _audio_data_plane_token = secrets.token_urlsafe(32)
+            _audio_data_plane_endpoint = f"ws://{host}:{port}/gcall-audio"
+            _audio_data_plane_server_thread = threading.Thread(
+                target=_audio_data_plane_accept_loop,
+                args=(sock,),
+                name="gcall-audio-data-plane",
+                daemon=True,
+            )
+            _audio_data_plane_server_thread.start()
+            _log_audio_data_plane("listen-ok", f"endpoint={_audio_data_plane_endpoint}")
+            return True, {
+                "endpoint": _audio_data_plane_endpoint,
+                "token": _audio_data_plane_token,
+                "version": 2,
+            }, ""
+        except Exception as exc:
+            _log_audio_data_plane("listen-failed", f"err={str(exc)[:160]}")
+            return False, {}, str(exc)
+
+
+def _configure_audio_data_plane_routes(routes: Any) -> int:
+    next_routes: Dict[str, Dict[str, Any]] = {}
+    if isinstance(routes, list):
+        for raw in routes[:_AUDIO_DATA_PLANE_MAX_ROUTES]:
+            if not isinstance(raw, dict):
+                continue
+            address = str(raw.get("address") or "").strip()
+            if not address:
+                continue
+            transport = "packet" if raw.get("transport") == "packet" else "link"
+            next_routes[address] = {
+                "address": address,
+                "transport": transport,
+                "linkId": str(raw.get("linkId") or ""),
+                "peerPresenceHash": str(raw.get("peerPresenceHash") or "").strip().lower(),
+                "peerDestinationHash": str(raw.get("peerDestinationHash") or "").strip().lower(),
+            }
+    with _audio_data_plane_lock:
+        _audio_data_plane_routes_by_address.clear()
+        _audio_data_plane_routes_by_address.update(next_routes)
+    _log_audio_data_plane("routes-configured", f"routes={len(next_routes)}")
+    return len(next_routes)
 
 
 def _increment_raw_gap_buckets(gap_ms: float) -> None:
@@ -8722,6 +9051,15 @@ def handle_command(message: Dict[str, Any]) -> None:
                 "roomId": room_id,
             },
         )
+    elif action == "get_group_audio_data_plane_session":
+        ok, session_payload, error = _ensure_audio_data_plane_server()
+        if ok:
+            emit_resp(req_id, True, payload=session_payload)
+        else:
+            emit_resp(req_id, False, payload={"code": "audio_data_plane_listen_failed"}, error=error)
+    elif action == "configure_group_audio_data_plane_routes":
+        route_count = _configure_audio_data_plane_routes(payload.get("routes"))
+        emit_resp(req_id, True, payload={"routeCount": route_count})
     elif action == "get_local_identity_public_key":
         handle_get_local_identity_public_key(req_id, payload)
     elif action == "register_peer_identity":

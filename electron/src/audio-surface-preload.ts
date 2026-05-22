@@ -151,6 +151,8 @@ contextBridge.exposeInMainWorld('groupCall', {
       data,
       timing
     ),
+  getAudioDataPlaneSession: async (roomId: string, toAddresses: string[]) =>
+    ipcRenderer.invoke('gcall:getAudioDataPlaneSession', roomId, toAddresses),
   requestPeerMediaRecovery: async (
     roomId: string,
     address: string,
