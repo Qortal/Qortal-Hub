@@ -24,6 +24,7 @@ export type AudioSurfaceCommand =
         memberGateGroupName?: string;
       };
     }
+  | { type: 'logout-cleanup' }
   | { type: 'leave-group-call' }
   | { type: 'set-muted'; muted: boolean }
   | { type: 'set-hear-call'; hearCall: boolean }

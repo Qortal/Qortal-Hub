@@ -1035,6 +1035,7 @@ def _audio_data_plane_client_loop(conn: socket.socket, addr: Any) -> None:
         with _audio_data_plane_lock:
             _audio_data_plane_clients[client_id] = conn
         _log_audio_data_plane("connection-open", f"addr={addr}")
+        conn.settimeout(None)
         _ws_send_json(conn, {"type": "ready", "atMs": _now_wall_ms()})
         while not _shutdown.is_set():
             frame = _ws_read_frame(conn)
@@ -1054,6 +1055,16 @@ def _audio_data_plane_client_loop(conn: socket.socket, addr: Any) -> None:
                 _ws_send_json(conn, {"type": "error", "reason": "bad_json"})
                 continue
             if isinstance(parsed, dict):
+                if parsed.get("type") == "ping":
+                    _ws_send_json(
+                        conn,
+                        {
+                            "type": "pong",
+                            "atMs": _now_wall_ms(),
+                            "echoAtMs": parsed.get("atMs"),
+                        },
+                    )
+                    continue
                 _handle_audio_data_plane_message(conn, parsed)
     except Exception as exc:
         _log_audio_data_plane("connection-error", f"addr={addr} err={str(exc)[:160]}")

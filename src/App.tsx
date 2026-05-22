@@ -969,6 +969,20 @@ function App() {
     }
   };
 
+  const cleanupAudioSurfaceBeforeLogout = useCallback(async () => {
+    if (typeof window.audioSurface?.sendCommand !== 'function') return;
+    try {
+      await Promise.race([
+        window.audioSurface.sendCommand({ type: 'logout-cleanup' }),
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 2_000);
+        }),
+      ]);
+    } catch (error) {
+      console.warn('[GCall] Audio surface logout cleanup failed:', error);
+    }
+  }, []);
+
   const logoutFunc = useCallback(async () => {
     try {
       if (extState === 'authenticated') {
@@ -981,6 +995,7 @@ function App() {
       // Send the offline presence notice while the key is still in secure
       // storage. The background clears keyPair as part of logout, so signing
       // must happen here — before sendMessage('logout') is called.
+      await cleanupAudioSurfaceBeforeLogout();
       await sendOfflineBeforeLogout();
       window
         .sendMessage('logout', {})
@@ -1000,7 +1015,12 @@ function App() {
     } catch (error) {
       console.log(error);
     }
-  }, [hasSettingsChanged, extState, sendOfflineBeforeLogout]);
+  }, [
+    hasSettingsChanged,
+    extState,
+    cleanupAudioSurfaceBeforeLogout,
+    sendOfflineBeforeLogout,
+  ]);
 
   const returnToMain = useCallback(() => {
     suppressWalletInfoRestoreRef.current = true;

@@ -1018,6 +1018,9 @@ export class GroupCallAudioEngineRuntime {
   private audioDataPlaneLastFailureAtMs = 0;
   private audioDataPlaneFailureReason = '';
   private audioDataPlaneSeq = 0;
+  private audioDataPlaneKeepAliveTimer: number | null = null;
+  private audioDataPlaneLastPongAtMs = 0;
+  private audioDataPlaneClosingReason = '';
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
   private readonly audioStageGapStats = new Map<
     AudioStageName,
@@ -1226,6 +1229,8 @@ export class GroupCallAudioEngineRuntime {
             command.chatId,
             command.options
           );
+        case 'logout-cleanup':
+          return await this.cleanupForLogout();
         case 'leave-group-call':
           return await this.leaveGroupCall();
         case 'set-muted':
@@ -1470,6 +1475,9 @@ export class GroupCallAudioEngineRuntime {
 
   private async stopDirectVoiceMedia(): Promise<void> {
     if (!this.directVoiceRoomId && !this.directVoiceRoomKey) return;
+    if (!this.snapshot.roomId) {
+      this.closeAudioDataPlane('direct-voice-media-stopped');
+    }
     this.recordDiagEvent('direct-voice-media-stopped', {
       roomId: this.directVoiceRoomId,
       peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
@@ -1571,6 +1579,9 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     if (!this.directVoiceRoomId && !this.directVoiceRoomKey) return;
+    if (!this.snapshot.roomId) {
+      this.closeAudioDataPlane('direct-voice-receive-stopped');
+    }
     this.recordDiagEvent('direct-voice-receive-stopped', {
       roomId: this.directVoiceRoomId,
       peerAddress: truncateGcallDiagAddress(this.directVoicePeerAddress),
@@ -1740,6 +1751,8 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private closeAudioDataPlane(reason: string): void {
+    this.stopAudioDataPlaneKeepAlive();
+    this.audioDataPlaneClosingReason = reason;
     if (this.audioDataPlaneSocket) {
       try {
         this.audioDataPlaneSocket.close();
@@ -1753,11 +1766,55 @@ export class GroupCallAudioEngineRuntime {
     this.audioDataPlaneLastRouteRefreshAtMs = 0;
     this.audioDataPlaneLastRouteKey = '';
     this.audioDataPlaneSessionPromise = null;
+    this.audioDataPlaneLastPongAtMs = 0;
+    this.audioDataPlaneClosingReason = '';
     if (reason) {
       this.recordThrottledDiagEvent('audio-data-plane-closed', reason, {
         reason,
       });
     }
+  }
+
+  private stopAudioDataPlaneKeepAlive(): void {
+    if (this.audioDataPlaneKeepAliveTimer !== null) {
+      window.clearInterval(this.audioDataPlaneKeepAliveTimer);
+      this.audioDataPlaneKeepAliveTimer = null;
+    }
+  }
+
+  private startAudioDataPlaneKeepAlive(
+    socket: WebSocket,
+    roomId: string
+  ): void {
+    this.stopAudioDataPlaneKeepAlive();
+    this.audioDataPlaneLastPongAtMs = Date.now();
+    this.audioDataPlaneKeepAliveTimer = window.setInterval(() => {
+      if (this.audioDataPlaneSocket !== socket) {
+        this.stopAudioDataPlaneKeepAlive();
+        return;
+      }
+      if (socket.readyState !== WebSocket.OPEN) {
+        this.audioDataPlaneLastFailureAtMs = Date.now();
+        this.audioDataPlaneFailureReason = 'socket-not-open';
+        this.closeAudioDataPlane('keepalive-socket-not-open');
+        return;
+      }
+      const now = Date.now();
+      if (now - this.audioDataPlaneLastPongAtMs > 45_000) {
+        this.audioDataPlaneLastFailureAtMs = now;
+        this.audioDataPlaneFailureReason = 'keepalive-timeout';
+        this.closeAudioDataPlane('keepalive-timeout');
+        return;
+      }
+      try {
+        socket.send(JSON.stringify({ type: 'ping', roomId, atMs: now }));
+      } catch (error) {
+        this.audioDataPlaneLastFailureAtMs = now;
+        this.audioDataPlaneFailureReason =
+          error instanceof Error ? error.message : String(error);
+        this.closeAudioDataPlane('keepalive-send-failed');
+      }
+    }, 15_000);
   }
 
   private bytesToBase64(data: Uint8Array): string {
@@ -1877,10 +1934,25 @@ export class GroupCallAudioEngineRuntime {
           window.clearTimeout(timeout);
           reject(new Error('audio-data-plane-open-error'));
         };
+        socket.onclose = () => {
+          window.clearTimeout(timeout);
+          reject(new Error('audio-data-plane-open-closed'));
+        };
       });
       socket.onclose = () => {
         if (this.audioDataPlaneSocket === socket) {
           this.audioDataPlaneSocket = null;
+          this.stopAudioDataPlaneKeepAlive();
+          const reason = this.audioDataPlaneClosingReason || 'socket-closed';
+          this.audioDataPlaneClosingReason = '';
+          if (reason === 'socket-closed') {
+            this.audioDataPlaneLastFailureAtMs = Date.now();
+            this.audioDataPlaneFailureReason = reason;
+            this.recordThrottledDiagEvent('audio-data-plane-closed', reason, {
+              roomId,
+              reason,
+            });
+          }
         }
       };
       socket.onerror = () => {
@@ -1896,6 +1968,10 @@ export class GroupCallAudioEngineRuntime {
             reason?: string;
             failures?: Array<{ reason?: string }>;
           };
+          if (parsed.type === 'pong') {
+            this.audioDataPlaneLastPongAtMs = Date.now();
+            return;
+          }
           if (parsed.type === 'audio-result' && parsed.ok === false) {
             const reason =
               parsed.reason ||
@@ -1913,6 +1989,7 @@ export class GroupCallAudioEngineRuntime {
         }
       };
       socket.send(JSON.stringify({ type: 'hello', roomId }));
+      this.startAudioDataPlaneKeepAlive(socket, roomId);
       this.recordDiagEvent('audio-data-plane-session-opened', {
         roomId,
         routeCount: session.routeCount,
@@ -1960,6 +2037,12 @@ export class GroupCallAudioEngineRuntime {
       return true;
     }
     try {
+      if (socket.bufferedAmount > 1_000_000) {
+        this.audioDataPlaneLastFailureAtMs = Date.now();
+        this.audioDataPlaneFailureReason = 'socket-backpressure';
+        this.closeAudioDataPlane('send-backpressure');
+        return false;
+      }
       socket.send(
         JSON.stringify({
           type: 'audio',
@@ -4594,6 +4677,9 @@ export class GroupCallAudioEngineRuntime {
     this.snapshot = buildPostLeaveSnapshot(this.snapshot);
     this.emitSnapshot();
     resetGcallAudioPipelineSessionStats();
+    if (!this.directVoiceRoomId) {
+      this.closeAudioDataPlane('group-call-left');
+    }
     this.recordDiagEvent('local-leave-applied', { roomId });
 
     const signature = await signGroupCallFields({
@@ -4612,6 +4698,31 @@ export class GroupCallAudioEngineRuntime {
     );
     void this.cleanupMediaAfterLeave(cleanupGeneration, roomId);
 
+    return { ok: true };
+  }
+
+  private async cleanupForLogout(): Promise<AudioSurfaceResponse> {
+    const groupRoomId = this.snapshot.roomId;
+    const directRoomId = this.directVoiceRoomId;
+    this.recordDiagEvent('logout-cleanup-started', {
+      groupRoomId,
+      directRoomId,
+    });
+    if (groupRoomId) {
+      await this.leaveGroupCall();
+    }
+    if (this.directVoiceRoomId || this.directVoiceRoomKey) {
+      if (this.directVoiceLocalAddress) {
+        await this.stopDirectVoiceMedia();
+      } else {
+        await this.stopDirectVoiceReceive();
+      }
+    }
+    this.closeAudioDataPlane('logout');
+    this.recordDiagEvent('logout-cleanup-complete', {
+      groupRoomId,
+      directRoomId,
+    });
     return { ok: true };
   }
 
