@@ -128,12 +128,97 @@ const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
 );
 const GCALL_AUDIO_MAIN_IPC_AT_MS = Symbol.for('qortal.gcallAudioMainIpcAtMs');
 const OPEN_DEVTOOLS_IN_DEVELOPMENT = false;
+const GCALL_AUDIO_IPC_DELAY_LOG_THRESHOLD_MS = 80;
+const GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS = 50;
+const GCALL_MAIN_LOOP_STALL_LOG_THRESHOLD_MS = 80;
+const GCALL_MAIN_LOOP_STALL_RECENT_LIMIT = 16;
+const GCALL_MAIN_LOOP_STALL_LOG_THROTTLE_MS = 1000;
+
+type MainLoopStallSample = {
+  atMs: number;
+  delayMs: number;
+};
+
+let mainLoopExpectedAtMs = Date.now() + GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS;
+let mainLoopStallCount = 0;
+let mainLoopStallMaxDelayMs = 0;
+let mainLoopLastStallAtMs = 0;
+let mainLoopLastStallDelayMs = 0;
+let mainLoopLastLogAtMs = 0;
+const mainLoopRecentStalls: MainLoopStallSample[] = [];
+
+function recordMainLoopStall(delayMs: number, nowMs = Date.now()): void {
+  mainLoopStallCount++;
+  mainLoopStallMaxDelayMs = Math.max(mainLoopStallMaxDelayMs, delayMs);
+  mainLoopLastStallAtMs = nowMs;
+  mainLoopLastStallDelayMs = delayMs;
+  mainLoopRecentStalls.push({ atMs: nowMs, delayMs });
+  while (mainLoopRecentStalls.length > GCALL_MAIN_LOOP_STALL_RECENT_LIMIT) {
+    mainLoopRecentStalls.shift();
+  }
+
+  if (nowMs - mainLoopLastLogAtMs < GCALL_MAIN_LOOP_STALL_LOG_THROTTLE_MS) {
+    return;
+  }
+  mainLoopLastLogAtMs = nowMs;
+  loggerWarn(
+    `[GCall] target=reticulum-audio-ipc stage=main-event-loop-stall delay_ms=${Math.round(
+      delayMs
+    )} stall_count=${mainLoopStallCount} max_delay_ms=${Math.round(
+      mainLoopStallMaxDelayMs
+    )}`
+  );
+}
+
+const mainLoopMonitorTimer = setInterval(() => {
+  const nowMs = Date.now();
+  const delayMs = Math.max(0, nowMs - mainLoopExpectedAtMs);
+  mainLoopExpectedAtMs = nowMs + GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS;
+  if (delayMs >= GCALL_MAIN_LOOP_STALL_LOG_THRESHOLD_MS) {
+    recordMainLoopStall(delayMs, nowMs);
+  }
+}, GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS);
+mainLoopMonitorTimer.unref?.();
+
+function getMainLoopIpcTimingDetail(rendererSendAtMs: number, nowMs: number) {
+  const lastStallAgeMs =
+    mainLoopLastStallAtMs > 0 ? Math.max(0, nowMs - mainLoopLastStallAtMs) : -1;
+  const currentLagMs = Math.max(0, nowMs - mainLoopExpectedAtMs);
+  let recentStallMaxMs = 0;
+  let stallSinceRendererMaxMs = 0;
+  for (const sample of mainLoopRecentStalls) {
+    if (nowMs - sample.atMs <= 5000) {
+      recentStallMaxMs = Math.max(recentStallMaxMs, sample.delayMs);
+    }
+    if (sample.atMs >= rendererSendAtMs) {
+      stallSinceRendererMaxMs = Math.max(
+        stallSinceRendererMaxMs,
+        sample.delayMs
+      );
+    }
+  }
+  return {
+    currentLagMs,
+    lastStallAgeMs,
+    lastStallDelayMs: mainLoopLastStallDelayMs,
+    recentStallMaxMs,
+    stallSinceRendererMaxMs,
+    stallCount: mainLoopStallCount,
+    stallMaxDelayMs: mainLoopStallMaxDelayMs,
+  };
+}
 
 function attachGroupAudioIpcTiming(
   buf: Buffer,
-  timing?: { rendererSendAtWallMs?: number }
+  timing?: { rendererSendAtWallMs?: number },
+  context?: {
+    channel: 'sendAudio' | 'sendAudioBatch';
+    roomId?: string;
+    targetCount?: number;
+  }
 ): void {
   const rendererSendAtMs = timing?.rendererSendAtWallMs;
+  const mainIpcAtMs = Date.now();
   if (
     typeof rendererSendAtMs === 'number' &&
     Number.isFinite(rendererSendAtMs) &&
@@ -144,9 +229,37 @@ function attachGroupAudioIpcTiming(
       enumerable: false,
       configurable: true,
     });
+    const rendererToMainMs = Math.max(0, mainIpcAtMs - rendererSendAtMs);
+    if (rendererToMainMs >= GCALL_AUDIO_IPC_DELAY_LOG_THRESHOLD_MS) {
+      const mainLoopTiming = getMainLoopIpcTimingDetail(
+        rendererSendAtMs,
+        mainIpcAtMs
+      );
+      loggerWarn(
+        `[GCall] target=reticulum-audio-ipc stage=gcall-audio-ipc-handler-entry-delay channel=${
+          context?.channel ?? 'unknown'
+        } room=${context?.roomId ?? 'n/a'} target_count=${
+          context?.targetCount ?? 0
+        } delay_ms=${Math.round(
+          rendererToMainMs
+        )} main_loop_current_lag_ms=${Math.round(
+          mainLoopTiming.currentLagMs
+        )} main_loop_last_stall_ms=${Math.round(
+          mainLoopTiming.lastStallDelayMs
+        )} main_loop_last_stall_age_ms=${Math.round(
+          mainLoopTiming.lastStallAgeMs
+        )} main_loop_recent_stall_max_ms=${Math.round(
+          mainLoopTiming.recentStallMaxMs
+        )} main_loop_stall_since_renderer_max_ms=${Math.round(
+          mainLoopTiming.stallSinceRendererMaxMs
+        )} main_loop_stall_count=${mainLoopTiming.stallCount} main_loop_stall_max_ms=${Math.round(
+          mainLoopTiming.stallMaxDelayMs
+        )}`
+      );
+    }
   }
   Object.defineProperty(buf, GCALL_AUDIO_MAIN_IPC_AT_MS, {
-    value: Date.now(),
+    value: mainIpcAtMs,
     enumerable: false,
     configurable: true,
   });
@@ -2984,7 +3097,11 @@ ipcMain.handle(
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    attachGroupAudioIpcTiming(buf, timing);
+    attachGroupAudioIpcTiming(buf, timing, {
+      channel: 'sendAudio',
+      roomId,
+      targetCount: 1,
+    });
     const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
     if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
       return { success: false, error: 'payload-too-large' };
@@ -3013,7 +3130,11 @@ ipcMain.handle(
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    attachGroupAudioIpcTiming(buf, timing);
+    attachGroupAudioIpcTiming(buf, timing, {
+      channel: 'sendAudioBatch',
+      roomId,
+      targetCount: Array.isArray(toAddresses) ? toAddresses.length : 0,
+    });
     const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
     if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
       return { success: false, error: 'payload-too-large' };
