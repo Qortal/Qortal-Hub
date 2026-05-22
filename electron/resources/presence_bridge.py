@@ -329,6 +329,7 @@ _AUDIO_EXECUTOR_COMMAND_LOG_THRESHOLD_MS = 80.0
 _audio_queue_state_last_emit = 0.0
 _audio_queue_state_dirty = False
 _audio_timing_anomaly_log_last_by_key: Dict[str, float] = {}
+_audio_fd3_parse_last_wall_ms_by_route: Dict[str, int] = {}
 # One-shot narrowing logs (grep target=reticulum-audio-ipc stage=…)
 _audio_ipc_fd3_first_batch_ok_logged = False
 _audio_ipc_rns_first_send_ok_logged = False
@@ -1800,16 +1801,40 @@ def _note_fd3_decoded_age(frames: list) -> None:
         return
     now_ms = int(time.time() * 1000)
     max_age = 0.0
+    max_frame: Optional[tuple] = None
     for frame in frames:
         try:
             received_at_wall_ms = int(frame[4])
         except Exception:
             received_at_wall_ms = 0
         if received_at_wall_ms > 0:
-            max_age = max(max_age, float(max(0, now_ms - received_at_wall_ms)))
+            age_ms = float(max(0, now_ms - received_at_wall_ms))
+            if age_ms > max_age:
+                max_age = age_ms
+                max_frame = frame
     if max_age > _audio_fd3_decoded_age_ms_max:
         _audio_fd3_decoded_age_ms_max = max_age
         _mark_audio_queue_state_dirty()
+    if max_age >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS and max_frame is not None:
+        try:
+            route_key = str(max_frame[0] or max_frame[2] or "")
+            room_id = str(max_frame[1] or "")
+            peer_presence_hash = str(max_frame[2] or "")
+            peer_destination_hash = str(max_frame[3] or "")
+            byte_count = len(max_frame[5]) if len(max_frame) > 5 else 0
+        except Exception:
+            route_key = "unknown"
+            room_id = ""
+            peer_presence_hash = ""
+            peer_destination_hash = ""
+            byte_count = 0
+        _log_audio_timing_anomaly(
+            "rns-audio-fd3-decoded-age",
+            f"fd3:{route_key}",
+            f"route={_short_route(route_key)} room={room_id or 'n/a'} "
+            f"age_ms={max_age:.0f} bytes={max(0, int(byte_count or 0))} "
+            f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+        )
 
 
 def _note_decoded_queue_dwell_ms(dwell_ms: float) -> None:
@@ -1817,6 +1842,12 @@ def _note_decoded_queue_dwell_ms(dwell_ms: float) -> None:
     if dwell_ms > _audio_decoded_queue_dwell_ms_max:
         _audio_decoded_queue_dwell_ms_max = dwell_ms
         _mark_audio_queue_state_dirty()
+    if dwell_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
+        _log_audio_timing_anomaly(
+            "rns-audio-decoded-queue-dwell",
+            "decoded-queue",
+            f"dwell_ms={dwell_ms:.0f}",
+        )
 
 
 def _note_rns_send_duration(start_monotonic: float) -> float:
@@ -2380,7 +2411,34 @@ def _read_audio_input_available(fd: int, buffer: bytearray) -> bool:
 
 def _process_audio_input_frames(frames: list, queued_at: float) -> bool:
     global _audio_stale_drops, _audio_deadline_drops, _audio_ipc_fd3_first_batch_ok_logged
+    global _audio_fd3_parse_last_wall_ms_by_route
     batch_age = max(0.0, time.monotonic() - queued_at)
+    now_wall_ms = int(time.time() * 1000)
+    for frame in frames:
+        try:
+            route_key = str(frame[0] or frame[2] or "")
+            room_id = str(frame[1] or "")
+            peer_presence_hash = str(frame[2] or "")
+            peer_destination_hash = str(frame[3] or "")
+            byte_count = len(frame[5]) if len(frame) > 5 else 0
+        except Exception:
+            route_key = "unknown"
+            room_id = ""
+            peer_presence_hash = ""
+            peer_destination_hash = ""
+            byte_count = 0
+        previous_parse_ms = int(_audio_fd3_parse_last_wall_ms_by_route.get(route_key) or 0)
+        if previous_parse_ms > 0:
+            parse_gap_ms = max(0, now_wall_ms - previous_parse_ms)
+            if parse_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                _log_audio_timing_anomaly(
+                    "rns-audio-fd3-parse-gap",
+                    f"fd3:{route_key}",
+                    f"route={_short_route(route_key)} room={room_id or 'n/a'} "
+                    f"gap_ms={parse_gap_ms} bytes={max(0, int(byte_count or 0))} "
+                    f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
+                )
+        _audio_fd3_parse_last_wall_ms_by_route[route_key] = now_wall_ms
     _note_fd3_decoded_age(frames)
     frames, deadline_drops = _filter_outbound_audio_deadline(frames)
     if deadline_drops > 0:
