@@ -793,6 +793,27 @@ def _short_route(value: Any, limit: int = 16) -> str:
     return text[:limit] if text else "n/a"
 
 
+_GC_LINK_CONTROL_MAGIC = b"QGCCTL1\x00"
+
+
+def _inspect_gcall_audio_payload(payload: Any) -> tuple[str, str]:
+    if not isinstance(payload, (bytes, bytearray)):
+        return "media", ""
+    data = bytes(payload)
+    if len(data) <= len(_GC_LINK_CONTROL_MAGIC) or not data.startswith(
+        _GC_LINK_CONTROL_MAGIC
+    ):
+        return "media", ""
+    try:
+        parsed = json.loads(data[len(_GC_LINK_CONTROL_MAGIC) :].decode("utf-8"))
+        control_type = (
+            str(parsed.get("type") or "") if isinstance(parsed, dict) else ""
+        )
+    except Exception:
+        control_type = ""
+    return "control", control_type
+
+
 def _log_audio_timing_anomaly(stage: str, route_key: str, detail: str) -> None:
     """Throttled timeline logs for narrowing Reticulum audio gaps."""
     key = f"{stage}:{route_key}"
@@ -2749,22 +2770,37 @@ def _process_audio_input_frames(frames: list, queued_at: float) -> bool:
             room_id = str(frame[1] or "")
             peer_presence_hash = str(frame[2] or "")
             peer_destination_hash = str(frame[3] or "")
-            byte_count = len(frame[5]) if len(frame) > 5 else 0
+            payload = frame[5] if len(frame) > 5 else b""
+            byte_count = (
+                len(payload) if isinstance(payload, (bytes, bytearray)) else 0
+            )
+            frame_kind, control_type = _inspect_gcall_audio_payload(payload)
         except Exception:
             route_key = "unknown"
             room_id = ""
             peer_presence_hash = ""
             peer_destination_hash = ""
             byte_count = 0
-        previous_parse_ms = int(_audio_fd3_parse_last_wall_ms_by_route.get(route_key) or 0)
+            frame_kind = "media"
+            control_type = ""
+        previous_parse_ms = int(
+            _audio_fd3_parse_last_wall_ms_by_route.get(route_key) or 0
+        )
         if previous_parse_ms > 0:
             parse_gap_ms = max(0, now_wall_ms - previous_parse_ms)
             if parse_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
+                stage = (
+                    "rns-control-fd3-parse-gap"
+                    if frame_kind == "control"
+                    else "rns-audio-fd3-parse-gap"
+                )
                 _log_audio_timing_anomaly(
-                    "rns-audio-fd3-parse-gap",
+                    stage,
                     f"fd3:{route_key}",
                     f"route={_short_route(route_key)} room={room_id or 'n/a'} "
                     f"gap_ms={parse_gap_ms} bytes={max(0, int(byte_count or 0))} "
+                    f"frame_kind={frame_kind}"
+                    f"{(' control_type=' + control_type) if control_type else ''} "
                     f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)}",
                 )
         _audio_fd3_parse_last_wall_ms_by_route[route_key] = now_wall_ms

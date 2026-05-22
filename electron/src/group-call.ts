@@ -100,6 +100,8 @@ const GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS = Symbol.for(
 const GCALL_AUDIO_MANAGER_FLUSH_AT_MS = Symbol.for(
   'qortal.gcallAudioManagerFlushAtMs'
 );
+const GCALL_AUDIO_FRAME_KIND = Symbol.for('qortal.gcallAudioFrameKind');
+const GCALL_AUDIO_CONTROL_TYPE = Symbol.for('qortal.gcallAudioControlType');
 const GCALL_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
 const GCALL_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320;
 const GCALL_AUDIO_TIMING_LOG_THROTTLE_MS = 2_000;
@@ -110,6 +112,8 @@ type ReticulumAudioTimingMetadata = {
   mainIpcAtMs?: number;
   managerEnqueuedAtMs?: number;
   managerFlushAtMs?: number;
+  frameKind?: string;
+  controlType?: string;
 };
 
 function readNumberSymbol(data: Buffer, symbol: symbol): number | undefined {
@@ -128,7 +132,14 @@ function readReticulumAudioTiming(data: Buffer): ReticulumAudioTimingMetadata {
       GCALL_AUDIO_MANAGER_ENQUEUED_AT_MS
     ),
     managerFlushAtMs: readNumberSymbol(data, GCALL_AUDIO_MANAGER_FLUSH_AT_MS),
+    frameKind: readStringSymbol(data, GCALL_AUDIO_FRAME_KIND),
+    controlType: readStringSymbol(data, GCALL_AUDIO_CONTROL_TYPE),
   };
+}
+
+function readStringSymbol(data: Buffer, symbol: symbol): string | undefined {
+  const value = Reflect.get(data, symbol);
+  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 function defineNumberSymbol(
@@ -139,6 +150,19 @@ function defineNumberSymbol(
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return;
   }
+  Object.defineProperty(data, symbol, {
+    value,
+    enumerable: false,
+    configurable: true,
+  });
+}
+
+function defineStringSymbol(
+  data: Buffer,
+  symbol: symbol,
+  value: string | undefined
+): void {
+  if (typeof value !== 'string' || !value.trim()) return;
   Object.defineProperty(data, symbol, {
     value,
     enumerable: false,
@@ -166,6 +190,8 @@ function withReticulumAudioQueuedAt(data: Buffer, queuedAtMs: number): Buffer {
     GCALL_AUDIO_MANAGER_FLUSH_AT_MS,
     timing.managerFlushAtMs
   );
+  defineStringSymbol(out, GCALL_AUDIO_FRAME_KIND, timing.frameKind);
+  defineStringSymbol(out, GCALL_AUDIO_CONTROL_TYPE, timing.controlType);
   return out;
 }
 
@@ -520,6 +546,9 @@ function encodeGcLinkControlWire(wire: Record<string, unknown>): Buffer | null {
   try {
     const body = Buffer.from(JSON.stringify(wire), 'utf8');
     const out = Buffer.concat([GC_LINK_CONTROL_MAGIC, body]);
+    defineStringSymbol(out, GCALL_AUDIO_FRAME_KIND, 'control');
+    const type = typeof wire.type === 'string' ? wire.type : undefined;
+    defineStringSymbol(out, GCALL_AUDIO_CONTROL_TYPE, type);
     return isValidGcAudioBuffer(out) ? out : null;
   } catch {
     return null;

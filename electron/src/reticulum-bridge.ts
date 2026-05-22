@@ -44,12 +44,68 @@ const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
 const GCALL_AUDIO_MANAGER_FLUSH_AT_MS = Symbol.for(
   'qortal.gcallAudioManagerFlushAtMs'
 );
+const GCALL_AUDIO_FRAME_KIND = Symbol.for('qortal.gcallAudioFrameKind');
+const GCALL_AUDIO_CONTROL_TYPE = Symbol.for('qortal.gcallAudioControlType');
+const GC_LINK_CONTROL_MAGIC = Buffer.from('QGCCTL1\0', 'ascii');
 
 function readNumberSymbol(data: Buffer, symbol: symbol): number | undefined {
   const value = Reflect.get(data, symbol);
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? value
     : undefined;
+}
+
+function readStringSymbol(data: Buffer, symbol: symbol): string | undefined {
+  const value = Reflect.get(data, symbol);
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+type ReticulumAudioFrameKind = 'media' | 'control';
+
+function inspectReticulumAudioFrame(data: Buffer): {
+  frameKind: ReticulumAudioFrameKind;
+  controlType?: string;
+} {
+  const symbolKind = readStringSymbol(data, GCALL_AUDIO_FRAME_KIND);
+  const symbolControlType = readStringSymbol(data, GCALL_AUDIO_CONTROL_TYPE);
+  if (symbolKind === 'control' || symbolKind === 'media') {
+    return {
+      frameKind: symbolKind,
+      controlType: symbolControlType,
+    };
+  }
+  if (
+    data.length > GC_LINK_CONTROL_MAGIC.length &&
+    data.subarray(0, GC_LINK_CONTROL_MAGIC.length).equals(GC_LINK_CONTROL_MAGIC)
+  ) {
+    try {
+      const parsed = JSON.parse(
+        data.subarray(GC_LINK_CONTROL_MAGIC.length).toString('utf8')
+      ) as unknown;
+      const controlType =
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        typeof (parsed as { type?: unknown }).type === 'string'
+          ? (parsed as { type: string }).type
+          : undefined;
+      return { frameKind: 'control', controlType };
+    } catch {
+      return { frameKind: 'control' };
+    }
+  }
+  return { frameKind: 'media' };
+}
+
+function audioFrameLogPrefix(frameKind: ReticulumAudioFrameKind): string {
+  return frameKind === 'control' ? 'gcall-control' : 'gcall-audio';
+}
+
+function audioFrameLogDetail(
+  frameKind: ReticulumAudioFrameKind,
+  controlType?: string
+): string {
+  return `frame_kind=${frameKind}${controlType ? ` control_type=${controlType}` : ''}`;
 }
 
 /**
@@ -794,6 +850,8 @@ type QueuedAudioFrame = {
   managerFlushAtMs?: number;
   bridgeEnqueuedAtMs: number;
   sizeBytes: number;
+  frameKind: ReticulumAudioFrameKind;
+  controlType?: string;
 };
 
 type AudioBinaryWriteQueueItem = {
@@ -803,6 +861,8 @@ type AudioBinaryWriteQueueItem = {
     routeKey: string;
     rendererSendAtMs?: number;
     bridgeEnqueuedAtMs: number;
+    frameKind: ReticulumAudioFrameKind;
+    controlType?: string;
   }>;
 };
 
@@ -1575,6 +1635,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       | 'managerFlushAtMs'
       | 'bridgeEnqueuedAtMs'
       | 'sizeBytes'
+      | 'frameKind'
+      | 'controlType'
     >
   ): ReticulumEnqueueGroupAudioResult {
     if (!Buffer.isBuffer(frameInput.data)) {
@@ -1614,6 +1676,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       frameInput.data,
       GCALL_AUDIO_MANAGER_FLUSH_AT_MS
     );
+    const { frameKind, controlType } = inspectReticulumAudioFrame(
+      frameInput.data
+    );
+    const logPrefix = audioFrameLogPrefix(frameKind);
+    const frameDetail = audioFrameLogDetail(frameKind, controlType);
     const bridgeEnqueuedAtMs = Date.now();
     if (rendererSendAtMs) {
       this.lastAudioQueueSnapshot.rendererToBridgeEnqueueMsMax = Math.max(
@@ -1634,9 +1701,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         managerFlushToBridgeMs >= RETICULUM_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS
       ) {
         this.logReticulumAudioTimingAnomaly(
-          'gcall-audio-manager-flush-to-bridge-enqueue-delay',
+          `${logPrefix}-manager-flush-to-bridge-enqueue-delay`,
           frameInput.routeKey,
-          `route=${this.shortAudioRoute(frameInput.routeKey)} delay_ms=${managerFlushToBridgeMs}`
+          `route=${this.shortAudioRoute(frameInput.routeKey)} delay_ms=${managerFlushToBridgeMs} ${frameDetail}`
         );
       }
     }
@@ -1649,9 +1716,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       );
       if (bridgeEnqueueGapMs >= RETICULUM_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS) {
         this.logReticulumAudioTimingAnomaly(
-          'gcall-audio-bridge-enqueue-gap',
+          `${logPrefix}-bridge-enqueue-gap`,
           frameInput.routeKey,
-          `route=${this.shortAudioRoute(frameInput.routeKey)} gap_ms=${bridgeEnqueueGapMs}`
+          `route=${this.shortAudioRoute(frameInput.routeKey)} gap_ms=${bridgeEnqueueGapMs} ${frameDetail}`
         );
       }
     }
@@ -1667,6 +1734,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       managerFlushAtMs,
       bridgeEnqueuedAtMs,
       sizeBytes: frameInput.data.length,
+      frameKind,
+      controlType,
     };
     queue.push(frame);
     this.audioQueuedFrames++;
@@ -2676,6 +2745,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           routeKey,
           rendererSendAtMs: next.rendererSendAtMs,
           bridgeEnqueuedAtMs: next.bridgeEnqueuedAtMs,
+          frameKind: next.frameKind,
+          controlType: next.controlType,
         });
         bodyBudget = nextBody;
         madeProgress = true;
@@ -2699,10 +2770,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           if (
             enqueueToPackMs >= RETICULUM_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS
           ) {
+            const logPrefix = audioFrameLogPrefix(frame.frameKind);
             this.logReticulumAudioTimingAnomaly(
-              'gcall-audio-bridge-enqueue-to-binary-pack-delay',
+              `${logPrefix}-bridge-enqueue-to-binary-pack-delay`,
               frame.routeKey,
-              `route=${this.shortAudioRoute(frame.routeKey)} delay_ms=${enqueueToPackMs}`
+              `route=${this.shortAudioRoute(frame.routeKey)} delay_ms=${enqueueToPackMs} ${audioFrameLogDetail(frame.frameKind, frame.controlType)}`
             );
           }
         }
@@ -2734,10 +2806,19 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           binaryQueueDwellMs >= RETICULUM_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS
         ) {
           const routeKey = item.frames[0]?.routeKey ?? 'unknown';
+          const itemFrameKinds = new Set(item.frames.map((f) => f.frameKind));
+          const itemFrameKind =
+            itemFrameKinds.size === 1
+              ? (item.frames[0]?.frameKind ?? 'media')
+              : 'media';
+          const itemLogPrefix =
+            itemFrameKinds.size === 1
+              ? audioFrameLogPrefix(itemFrameKind)
+              : 'gcall-mixed';
           this.logReticulumAudioTimingAnomaly(
-            'gcall-audio-binary-queue-to-fd3-write-delay',
+            `${itemLogPrefix}-binary-queue-to-fd3-write-delay`,
             routeKey,
-            `route=${this.shortAudioRoute(routeKey)} delay_ms=${binaryQueueDwellMs} frames=${item.frames.length}`
+            `route=${this.shortAudioRoute(routeKey)} delay_ms=${binaryQueueDwellMs} frames=${item.frames.length} frame_kind=${itemFrameKinds.size === 1 ? itemFrameKind : 'mixed'}`
           );
         }
         this.lastAudioQueueSnapshot.bridgeEnqueueToFd3WriteQueueDwellMsMax =
@@ -2751,20 +2832,22 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           if (previousWriteAtMs > 0) {
             const writeGapMs = Math.max(0, nowMs - previousWriteAtMs);
             if (writeGapMs >= RETICULUM_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS) {
+              const logPrefix = audioFrameLogPrefix(frame.frameKind);
               this.logReticulumAudioTimingAnomaly(
-                'gcall-audio-fd3-write-gap',
+                `${logPrefix}-fd3-write-gap`,
                 frame.routeKey,
-                `route=${this.shortAudioRoute(frame.routeKey)} gap_ms=${writeGapMs}`
+                `route=${this.shortAudioRoute(frame.routeKey)} gap_ms=${writeGapMs} ${audioFrameLogDetail(frame.frameKind, frame.controlType)}`
               );
             }
           }
           this.audioLastFd3WriteAtMsByRoute.set(frame.routeKey, nowMs);
           const bridgeToFd3Ms = Math.max(0, nowMs - frame.bridgeEnqueuedAtMs);
           if (bridgeToFd3Ms >= RETICULUM_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS) {
+            const logPrefix = audioFrameLogPrefix(frame.frameKind);
             this.logReticulumAudioTimingAnomaly(
-              'gcall-audio-bridge-enqueue-to-fd3-write-delay',
+              `${logPrefix}-bridge-enqueue-to-fd3-write-delay`,
               frame.routeKey,
-              `route=${this.shortAudioRoute(frame.routeKey)} delay_ms=${bridgeToFd3Ms}`
+              `route=${this.shortAudioRoute(frame.routeKey)} delay_ms=${bridgeToFd3Ms} ${audioFrameLogDetail(frame.frameKind, frame.controlType)}`
             );
           }
           this.lastAudioQueueSnapshot.bridgeEnqueueToFd3WriteMsMax = Math.max(
