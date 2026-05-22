@@ -1409,6 +1409,7 @@ export const AppsDesktop = ({
 
   const hasOpenTabs = tabs.length > 0;
   const hideAppsShellOffScreen = !show && hasOpenTabs;
+  const appsShellPosition = hideAppsShellOffScreen ? 'absolute' : 'relative';
 
   return (
     <AppsParent
@@ -1416,15 +1417,17 @@ export const AppsDesktop = ({
       sx={{
         display: hideAppsShellOffScreen || show ? 'flex' : 'none',
         flexDirection: 'row',
+        height: '100%',
+        left: hideAppsShellOffScreen ? '-200vw' : 0,
+        maxWidth: '100vw',
+        overflow: 'hidden',
+        pointerEvents: show ? 'auto' : 'none',
+        position: appsShellPosition,
+        top: 0,
+        width: '100%',
         ...(hideAppsShellOffScreen
           ? {
-              height: `calc(100vh - ${appChromeOffsetPx})`,
-              left: '-200vw',
-              maxWidth: '100vw',
-              pointerEvents: 'none',
-              position: 'fixed',
-              top: 0,
-              width: '100%',
+              zIndex: -1,
             }
           : {}),
       }}
@@ -1571,6 +1574,7 @@ export const AppsDesktop = ({
             height: appsContentHeight,
             minHeight: 0,
             overflow: 'hidden',
+            position: 'relative',
             width: '100%',
           }}
         >
@@ -1736,7 +1740,8 @@ export const AppsDesktop = ({
                     ...(!isInternalTabActive
                       ? {
                           left: '-200vw',
-                          position: 'fixed',
+                          position: 'absolute',
+                          top: 0,
                         }
                       : {}),
                   }}

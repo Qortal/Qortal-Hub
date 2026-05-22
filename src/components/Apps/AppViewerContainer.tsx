@@ -16,6 +16,8 @@ const AppViewerContainer = forwardRef<
   HTMLIFrameElement,
   AppViewerContainerProps
 >(({ app, isSelected, hide, isDevMode, customHeight, skipAuth }, ref) => {
+  const isHidden = !isSelected || hide;
+
   return (
     <Frame
       id={`browser-iframe-${app?.tabId}`}
@@ -54,10 +56,11 @@ const AppViewerContainer = forwardRef<
         border: 'none',
         display: 'block',
         height: customHeight || `calc(100vh - ${appChromeOffsetPx})`,
-        left: (!isSelected || hide) && '-200vw',
+        left: isHidden ? '-200vw' : '0',
         minHeight: 0,
         overflow: 'hidden',
-        position: (!isSelected || hide) && 'fixed',
+        position: isHidden ? 'absolute' : 'relative',
+        top: 0,
         width: '100%',
       }}
     >
