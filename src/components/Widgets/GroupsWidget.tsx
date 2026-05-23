@@ -53,6 +53,7 @@ import {
 } from '../../atoms/global';
 import { getFee } from '../../background/background';
 import { executeEvent } from '../../utils/events';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 import { formatTimestamp } from '../../utils/time';
 import {
   APP_BLUE_SURFACE_TEXT,
@@ -118,6 +119,7 @@ type GroupJoinRequestItem = {
   groupName: string;
   id: string;
   joiner: string;
+  requesterHasInvisibleCharacters: boolean;
   requesterLabel: string;
 };
 
@@ -199,6 +201,68 @@ const stripHtml = (value: string) =>
 
 const truncateAddress = (value: string) =>
   value.length > 14 ? `${value.slice(0, 7)}...${value.slice(-5)}` : value;
+
+const fetchPrimaryNamesByAddress = async (
+  addresses: string[]
+): Promise<Record<string, string>> => {
+  const uniqueAddresses = Array.from(
+    new Set(addresses.filter((address) => Boolean(address)))
+  );
+  if (uniqueAddresses.length === 0) return {};
+
+  const response = await fetch(`${getBaseApiReact()}/names/list`, {
+    body: JSON.stringify(uniqueAddresses),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Unable to load primary names (${response.status})`);
+  }
+
+  const data = await response.json();
+  const namesByAddress: Record<string, string> = {};
+
+  if (Array.isArray(data)) {
+    data.forEach((item) => {
+      if (typeof item?.owner !== 'string') return;
+      namesByAddress[item.owner] =
+        typeof item?.name === 'string' ? item.name : '';
+    });
+  }
+
+  return namesByAddress;
+};
+
+const buildJoinRequestItems = (
+  entries: Array<{ data?: any[]; group?: any }>,
+  t: (key: string, options?: any) => string,
+  namesByAddress: Record<string, string> = {}
+): GroupJoinRequestItem[] =>
+  entries.flatMap((entry: any) =>
+    (entry?.data ?? []).map((request: any) => {
+      const joiner = request?.joiner ?? '';
+      const primaryName = namesByAddress[joiner]?.trim() || '';
+      const requesterLabel =
+        primaryName ||
+        truncateAddress(String(joiner || t('groups_widget.unknown')));
+
+      return {
+        groupId: entry.group?.groupId,
+        groupName:
+          entry.group?.groupName ??
+          t('groups_widget.group_named', { id: entry.group?.groupId }),
+        id: `request:${entry.group?.groupId}:${joiner}`,
+        joiner,
+        requesterHasInvisibleCharacters: Boolean(
+          primaryName && hasInvisibleCharacters(primaryName)
+        ),
+        requesterLabel,
+      };
+    })
+  );
 
 const getGroupAvatarUrl = (
   ownerName: string | null,
@@ -907,20 +971,24 @@ export const GroupsWidget = ({
           (value, index) => value === adminGroupIds[index]
         );
       if (cacheIsFresh && currentCache?.data) {
-        const nextRequests = currentCache.data.flatMap((entry: any) =>
-          (entry?.data ?? []).map((request: any) => ({
-            groupId: entry.group?.groupId,
-            groupName:
-              entry.group?.groupName ??
-              t('groups_widget.group_named', { id: entry.group?.groupId }),
-            id: `request:${entry.group?.groupId}:${request?.joiner}`,
-            joiner: request?.joiner ?? '',
-            requesterLabel:
-              request?.name ||
-              truncateAddress(
-                String(request?.joiner ?? t('groups_widget.unknown'))
-              ),
-          }))
+        const joiners = currentCache.data.flatMap((entry: any) =>
+          (entry?.data ?? [])
+            .map((request: any) => request?.joiner)
+            .filter(Boolean)
+        );
+        let namesByAddress: Record<string, string> = {};
+        try {
+          namesByAddress = await fetchPrimaryNamesByAddress(joiners);
+        } catch (error) {
+          console.error(
+            'Failed to load group join request primary names',
+            error
+          );
+        }
+        const nextRequests = buildJoinRequestItems(
+          currentCache.data,
+          t,
+          namesByAddress
         );
         setRequests(nextRequests);
         setRequestsError(null);
@@ -948,20 +1016,24 @@ export const GroupsWidget = ({
               group: entry.group,
             }))
           : [];
-        const nextRequests = normalized.flatMap((entry: any) =>
-          (entry?.data ?? []).map((request: any) => ({
-            groupId: entry.group?.groupId,
-            groupName:
-              entry.group?.groupName ??
-              t('groups_widget.group_named', { id: entry.group?.groupId }),
-            id: `request:${entry.group?.groupId}:${request?.joiner}`,
-            joiner: request?.joiner ?? '',
-            requesterLabel:
-              request?.name ||
-              truncateAddress(
-                String(request?.joiner ?? t('groups_widget.unknown'))
-              ),
-          }))
+        const joiners = normalized.flatMap((entry: any) =>
+          (entry?.data ?? [])
+            .map((request: any) => request?.joiner)
+            .filter(Boolean)
+        );
+        let namesByAddress: Record<string, string> = {};
+        try {
+          namesByAddress = await fetchPrimaryNamesByAddress(joiners);
+        } catch (error) {
+          console.error(
+            'Failed to load group join request primary names',
+            error
+          );
+        }
+        const nextRequests = buildJoinRequestItems(
+          normalized,
+          t,
+          namesByAddress
         );
         setRequests(nextRequests);
         setJoinRequestsCache({
@@ -2450,6 +2522,13 @@ export const GroupsWidget = ({
                         fontSize: '0.7rem',
                         fontWeight: 700,
                         mt: '2px',
+                        ...(request.requesterHasInvisibleCharacters
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       }}
                     >
                       {request.requesterLabel}

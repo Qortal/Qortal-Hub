@@ -19,6 +19,7 @@ import { getFee } from '../../background/background.ts';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -29,7 +30,7 @@ export const getMemberInvites = async (groupNumber) => {
 };
 
 const getNames = async (listOfMembers, includeNoNames) => {
-  let members = [];
+  const members = [];
   if (listOfMembers && Array.isArray(listOfMembers)) {
     for (const member of listOfMembers) {
       if (member.offender) {
@@ -152,6 +153,10 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
 
   const rowRenderer = ({ index, key, parent, style }) => {
     const member = bans[index];
+    const memberLabel = member?.name || member?.offender;
+    const hasUnsafeMemberName = Boolean(
+      member?.name && hasInvisibleCharacters(member.name)
+    );
 
     return (
       <CellMeasurer
@@ -215,7 +220,20 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
                     }
                   />
                 </ListItemAvatar>
-                <ListItemText primary={member?.name || member?.offender} />
+                <ListItemText
+                  primary={memberLabel}
+                  primaryTypographyProps={{
+                    sx: {
+                      ...(hasUnsafeMemberName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: 'error.main',
+                          }
+                        : {}),
+                    },
+                  }}
+                />
               </ListItemButton>
             </ListItem>
           </div>

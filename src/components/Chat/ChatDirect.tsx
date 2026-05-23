@@ -78,6 +78,7 @@ import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
 import { buildDirectVoiceCallChatId } from '../../lib/call/directVoiceCallChatId';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import { useIsOnline } from '../../hooks/usePresence';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 const uid = new ShortUniqueId({ length: 5 });
 const QCHAT_FILE_DEFAULT_EXPIRY_HOURS = 2;
@@ -1980,6 +1981,9 @@ export const ChatDirect = ({
                         {nameOptions.map((opt) => {
                           const label =
                             typeof opt === 'string' ? opt : opt.name;
+                          const hasUnsafeName =
+                            typeof opt !== 'string' &&
+                            hasInvisibleCharacters(opt.name);
                           const key =
                             typeof opt === 'string' ? opt : opt.address;
                           const initial = (label || '?')
@@ -2021,8 +2025,18 @@ export const ChatDirect = ({
                                 <ListItemText
                                   primary={label}
                                   primaryTypographyProps={{
-                                    fontWeight: 500,
-                                    fontSize: '0.9375rem',
+                                    sx: {
+                                      fontWeight: 500,
+                                      fontSize: '0.9375rem',
+                                      ...(hasUnsafeName
+                                        ? {
+                                            textDecorationLine: 'line-through',
+                                            textDecorationThickness: '2px',
+                                            textDecorationColor:
+                                              theme.palette.error.main,
+                                          }
+                                        : {}),
+                                    },
                                   }}
                                 />
                               </ListItemButton>

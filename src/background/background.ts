@@ -21,6 +21,7 @@ import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
+import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
 import {
@@ -2599,6 +2600,10 @@ export async function sendCoin(
   skipConfirmPassword
 ) {
   try {
+    if (!validateAddress(receiver) && hasInvisibleCharacters(receiver)) {
+      throw new Error('Recipient name contains invisible characters');
+    }
+
     const confirmReceiver = await getNameOrAddress(receiver);
     if (confirmReceiver.error)
       throw new Error('Invalid receiver address or name');

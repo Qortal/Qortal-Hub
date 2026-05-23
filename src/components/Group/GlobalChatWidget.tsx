@@ -47,6 +47,7 @@ import { MiniGroupThread } from '../Chat/MiniGroupThread';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { validateAddress } from '../../utils/validateAddress';
 import { appChromeOffset, appChromeOffsetPx } from '../Desktop/CustomTitleBar';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 export type ChatWidgetTab = 'messages' | 'groups';
 
@@ -1108,6 +1109,10 @@ export function GlobalChatWidget({
                               timeDifferenceForNotificationChats) ||
                             (timestampEnterData[direct?.address] ?? 0) <
                               direct?.timestamp);
+                        const directName = direct?.name || direct?.address;
+                        const hasUnsafeName = Boolean(
+                          direct?.name && hasInvisibleCharacters(direct.name)
+                        );
 
                         return (
                           <ListItem
@@ -1190,7 +1195,7 @@ export function GlobalChatWidget({
                               </Avatar>
                             </ListItemAvatar>
                             <ListItemText
-                              primary={direct?.name || direct?.address}
+                              primary={directName}
                               secondary={
                                 !direct?.timestamp
                                   ? t('core:message.generic.no_messages', {
@@ -1219,6 +1224,14 @@ export function GlobalChatWidget({
                                   fontSize: '15px',
                                   fontWeight: 600,
                                   lineHeight: 1.3,
+                                  ...(hasUnsafeName
+                                    ? {
+                                        textDecorationLine: 'line-through',
+                                        textDecorationThickness: '2px',
+                                        textDecorationColor:
+                                          theme.palette.error.main,
+                                      }
+                                    : {}),
                                 },
                               }}
                               secondaryTypographyProps={{

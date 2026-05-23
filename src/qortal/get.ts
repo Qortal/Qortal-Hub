@@ -118,6 +118,8 @@ import {
   isValidBase64WithDecode,
   validateAesCtrIvAndKey,
 } from '../utils/decode.ts';
+import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
+import { validateAddress } from '../utils/validateAddress.ts';
 import i18n from 'i18next';
 import aesjs from 'aes-js';
 import { roundUpToDecimals } from '../utils/numberFunctions.ts';
@@ -5577,7 +5579,7 @@ export const sendCoin = async (data, isFromExtension) => {
       })
     );
   }
-  let checkCoin = data.coin;
+  const checkCoin = data.coin;
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const resKeyPair = await getKeyPair();
@@ -5643,6 +5645,9 @@ export const sendCoin = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
+    }
+    if (!validateAddress(recipient) && hasInvisibleCharacters(recipient)) {
+      throw new Error('Recipient name contains invisible characters');
     }
 
     const resPermission = await getUserPermission(

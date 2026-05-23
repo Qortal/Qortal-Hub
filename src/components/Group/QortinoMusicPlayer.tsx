@@ -79,11 +79,11 @@ const smallTransportButtonSx = (theme: Theme) => ({
 });
 
 export const MusicCoverArt = ({
-  isSpinning = false,
+  isPlaying = true,
   size,
   track,
 }: {
-  isSpinning?: boolean;
+  isPlaying?: boolean;
   size: number;
   track: QortinoMusicTrack;
 }) => (
@@ -108,10 +108,15 @@ export const MusicCoverArt = ({
       justifyContent: 'center',
       overflow: 'hidden',
       position: 'relative',
-      transformOrigin: '50% 50%',
-      transform: isSpinning ? 'rotate(12deg)' : 'rotate(0deg)',
-      transition: 'filter 180ms ease, transform 280ms ease',
+      filter: isPlaying
+        ? 'grayscale(0) saturate(1)'
+        : 'grayscale(1) saturate(0.15)',
+      opacity: 1,
+      transition: 'filter 700ms ease, opacity 700ms ease',
       width: `${size}px`,
+      '@media (prefers-reduced-motion: reduce)': {
+        transition: 'none',
+      },
       '&::before': {
         background: `linear-gradient(135deg, ${alpha('#ffffff', 0.32)} 0%, ${alpha(
           '#ffffff',
@@ -197,7 +202,10 @@ const EarbumpMusicProgressMeter = memo(function EarbumpMusicProgressMeter({
       const clampedProgress = Math.min(Math.max(rawProgress, 0), 1);
       const elapsedSecond = Math.floor(safeTime);
 
-      if (elapsedLabelRef.current && lastElapsedSecondRef.current !== elapsedSecond) {
+      if (
+        elapsedLabelRef.current &&
+        lastElapsedSecondRef.current !== elapsedSecond
+      ) {
         elapsedLabelRef.current.textContent = formatPlaybackTime(safeTime);
         lastElapsedSecondRef.current = elapsedSecond;
       }
@@ -551,7 +559,7 @@ export const QortinoMusicPlayer = memo(function QortinoMusicPlayer({
             }}
           >
             <MusicCoverArt
-              isSpinning={musicPlaying && isTrackReady && !isTrackLoadError}
+              isPlaying={musicPlaying && isTrackReady && !isTrackLoadError}
               size={110}
               track={activeTrack}
             />
@@ -727,9 +735,7 @@ export const QortinoMusicPlayer = memo(function QortinoMusicPlayer({
             sx={{
               alignItems: 'center',
               color: alpha(
-                repeatMode === 'one'
-                  ? '#9FC4FF'
-                  : theme.palette.text.secondary,
+                repeatMode === 'one' ? '#9FC4FF' : theme.palette.text.secondary,
                 repeatMode === 'one' ? 0.96 : 0.8
               ),
               display: 'inline-flex',

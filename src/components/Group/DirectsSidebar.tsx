@@ -33,6 +33,7 @@ import {
 import { isOnlineAtomFamily, statusAtomFamily } from '../../atoms/presence';
 import type { DmFriendStored } from '../../atoms/global';
 import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 /** Renders only the presence badge for a single DM address.
  * Subscribes to per-address atoms so a change to any other peer
@@ -337,6 +338,10 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
             const isDmFriend = Boolean(
               direct?.address && dmFriendsByAddress[direct.address]
             );
+            const directName = direct?.name || direct?.address;
+            const hasUnsafeName = Boolean(
+              direct?.name && hasInvisibleCharacters(direct.name)
+            );
 
             return (
               <ListItem
@@ -447,7 +452,7 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                   </ListItemAvatar>
 
                   <ListItemText
-                    primary={direct?.name || direct?.address}
+                    primary={directName}
                     secondary={
                       !direct?.timestamp
                         ? t('core:message.generic.no_messages', {
@@ -467,6 +472,13 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                         fontSize: '15px',
                         fontWeight: 600,
                         lineHeight: 1.3,
+                        ...(hasUnsafeName
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       },
                     }}
                     secondaryTypographyProps={{

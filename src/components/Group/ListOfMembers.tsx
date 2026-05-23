@@ -25,6 +25,7 @@ import { useAtomValue } from 'jotai';
 import { statusMapAtom } from '../../atoms/presence';
 import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
 import { getFallbackAvatarOutlineSx } from '../Chat/clickableAvatarStyles';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -304,6 +305,10 @@ const ListOfMembers = ({
 
   const rowRenderer = ({ index, key, parent, style }) => {
     const member = members[index];
+    const memberLabel = member?.primaryName || member?.member;
+    const hasUnsafeMemberName = Boolean(
+      member?.primaryName && hasInvisibleCharacters(member.primaryName)
+    );
 
     return (
       <CellMeasurer
@@ -418,8 +423,19 @@ const ListOfMembers = ({
                 </ListItemAvatar>
 
                 <ListItemText
-                  id={member?.primaryName || member?.member}
-                  primary={member?.primaryName || member?.member}
+                  id={memberLabel}
+                  primary={memberLabel}
+                  primaryTypographyProps={{
+                    sx: {
+                      ...(hasUnsafeMemberName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
+                    },
+                  }}
                 />
                 {(member?.isAdmin || member?.member === ownerAddress) && (
                   <Typography

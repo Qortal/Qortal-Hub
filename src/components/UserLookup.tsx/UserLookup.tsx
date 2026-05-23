@@ -61,6 +61,7 @@ import {
 import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { validateAddress } from '../../utils/validateAddress.ts';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 import {
   executeEvent,
   subscribeToEvent,
@@ -384,6 +385,9 @@ export const UserLookup = ({
     typeof currentUser?.address === 'string' ? currentUser.address : '';
   const targetUserName =
     typeof addressInfo?.name === 'string' ? addressInfo.name.trim() : '';
+  const hasUnsafeTargetUserName = Boolean(
+    targetUserName && hasInvisibleCharacters(targetUserName)
+  );
   const isCurrentUserProfile =
     !!addressInfo?.address &&
     (addressInfo.address === currentUserAddress ||
@@ -1189,6 +1193,29 @@ export const UserLookup = ({
               postProcess: 'capitalizeFirstChar',
             })}
             options={lookupOptions}
+            renderOption={(props, option) => {
+              const hasUnsafeOptionName =
+                !validateAddress(option) && hasInvisibleCharacters(option);
+
+              return (
+                <Box component="li" {...props}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.92rem',
+                      ...(hasUnsafeOptionName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
+                    }}
+                  >
+                    {option}
+                  </Typography>
+                </Box>
+              );
+            }}
             renderInput={(params) => (
               <TextField
                 {...params}
@@ -1489,6 +1516,13 @@ export const UserLookup = ({
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
+                          ...(hasUnsafeTargetUserName
+                            ? {
+                                textDecorationLine: 'line-through',
+                                textDecorationThickness: '2px',
+                                textDecorationColor: theme.palette.error.main,
+                              }
+                            : {}),
                         }}
                       >
                         {addressInfo.name ||
@@ -1930,6 +1964,20 @@ export const UserLookup = ({
                                 receiverAddress === ownerAddress
                                   ? addressInfo.name?.trim() || formatAddress(receiverAddress)
                                   : receiverEntry?.name || formatAddress(receiverAddress);
+                              const senderHasUnsafeName = Boolean(
+                                senderAddress === ownerAddress
+                                  ? targetUserName &&
+                                      hasInvisibleCharacters(targetUserName)
+                                  : senderEntry?.name &&
+                                      hasInvisibleCharacters(senderEntry.name)
+                              );
+                              const receiverHasUnsafeName = Boolean(
+                                receiverAddress === ownerAddress
+                                  ? targetUserName &&
+                                      hasInvisibleCharacters(targetUserName)
+                                  : receiverEntry?.name &&
+                                      hasInvisibleCharacters(receiverEntry.name)
+                              );
 
                               const handleLookupAddress = (address: string) => {
                                 if (!address || address === ownerAddress) {
@@ -1949,7 +1997,19 @@ export const UserLookup = ({
                                   <TableCell>
                                     {senderAddress === ownerAddress ? (
                                       <Typography
-                                        sx={{ fontSize: '0.76rem', fontWeight: 500 }}
+                                        sx={{
+                                          fontSize: '0.76rem',
+                                          fontWeight: 500,
+                                          ...(senderHasUnsafeName
+                                            ? {
+                                                textDecorationLine:
+                                                  'line-through',
+                                                textDecorationThickness: '2px',
+                                                textDecorationColor:
+                                                  theme.palette.error.main,
+                                              }
+                                            : {}),
+                                        }}
                                       >
                                         {senderLabel}
                                       </Typography>
@@ -1963,6 +2023,15 @@ export const UserLookup = ({
                                             color: theme.palette.primary.main,
                                             fontSize: '0.76rem',
                                             fontWeight: 600,
+                                            ...(senderHasUnsafeName
+                                              ? {
+                                                  textDecorationLine:
+                                                    'line-through',
+                                                  textDecorationThickness: '2px',
+                                                  textDecorationColor:
+                                                    theme.palette.error.main,
+                                                }
+                                              : {}),
                                           }}
                                         >
                                           {senderLabel}
@@ -1973,7 +2042,19 @@ export const UserLookup = ({
                                   <TableCell>
                                     {receiverAddress === ownerAddress ? (
                                       <Typography
-                                        sx={{ fontSize: '0.76rem', fontWeight: 500 }}
+                                        sx={{
+                                          fontSize: '0.76rem',
+                                          fontWeight: 500,
+                                          ...(receiverHasUnsafeName
+                                            ? {
+                                                textDecorationLine:
+                                                  'line-through',
+                                                textDecorationThickness: '2px',
+                                                textDecorationColor:
+                                                  theme.palette.error.main,
+                                              }
+                                            : {}),
+                                        }}
                                       >
                                         {receiverLabel}
                                       </Typography>
@@ -1989,6 +2070,15 @@ export const UserLookup = ({
                                             color: theme.palette.primary.main,
                                             fontSize: '0.76rem',
                                             fontWeight: 600,
+                                            ...(receiverHasUnsafeName
+                                              ? {
+                                                  textDecorationLine:
+                                                    'line-through',
+                                                  textDecorationThickness: '2px',
+                                                  textDecorationColor:
+                                                    theme.palette.error.main,
+                                                }
+                                              : {}),
                                           }}
                                         >
                                           {receiverLabel}

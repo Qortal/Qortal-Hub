@@ -66,6 +66,7 @@ import {
   getFallbackAvatarOutlineSx,
 } from './clickableAvatarStyles';
 import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 const QCHAT_FILE_TRANSFER_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -308,6 +309,16 @@ export const MessageItemComponent = ({
     'question',
     'tutorial',
   ]);
+  const hasUnsafeSenderName = Boolean(
+    message?.senderName && hasInvisibleCharacters(message.senderName)
+  );
+  const hasUnsafeReplyName = Boolean(
+    reply?.senderName && hasInvisibleCharacters(reply.senderName)
+  );
+  const hasUnsafeExpiredReplyName = Boolean(
+    replyExpiredMeta?.senderName &&
+      hasInvisibleCharacters(replyExpiredMeta.senderName)
+  );
 
   const qchatFileTransfer = getQchatFileTransfer(message);
   const qchatFileData = qchatFileTransfer?.data || {};
@@ -601,6 +612,13 @@ export const MessageItemComponent = ({
                       fontSize: '14px',
                       fontWeight: 600,
                       lineHeight: 1.3,
+                      ...(hasUnsafeSenderName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
                     }}
                   >
                     {message?.senderName || message?.sender}
@@ -780,6 +798,13 @@ export const MessageItemComponent = ({
                             : theme.palette.primary.main,
                         fontSize: '13px',
                         fontWeight: isRepliedToMe ? 600 : 500,
+                        ...(hasUnsafeReplyName
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       }}
                     >
                       {isRepliedToMe
@@ -863,6 +888,13 @@ export const MessageItemComponent = ({
                             : theme.palette.text.secondary,
                         fontSize: '13px',
                         fontWeight: 500,
+                        ...(hasUnsafeExpiredReplyName
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       }}
                     >
                       {replyExpiredMeta?.senderName || replyExpiredMeta?.sender
@@ -969,24 +1001,24 @@ export const MessageItemComponent = ({
                   )}
                 </Box>
                 {!isOwn && isQchatFileOffer && onAcceptQchatFileTransfer && (
-	                  <Button
-	                    size="small"
-	                    variant="contained"
-	                    startIcon={<DownloadRoundedIcon />}
-	                    disabled={
-	                      qchatTransferBusy ||
-	                      qchatTransferDone ||
-	                      qchatOfferExpired
-	                    }
-	                    onClick={() => onAcceptQchatFileTransfer(message)}
-	                    sx={{ flexShrink: 0, textTransform: 'none' }}
-	                  >
-	                    {qchatDownloaded
-	                      ? 'Downloaded'
-	                      : qchatOfferExpired
-	                        ? 'Expired'
-	                        : 'Accept'}
-	                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DownloadRoundedIcon />}
+                    disabled={
+                      qchatTransferBusy ||
+                      qchatTransferDone ||
+                      qchatOfferExpired
+                    }
+                    onClick={() => onAcceptQchatFileTransfer(message)}
+                    sx={{ flexShrink: 0, textTransform: 'none' }}
+                  >
+                    {qchatDownloaded
+                      ? 'Downloaded'
+                      : qchatOfferExpired
+                        ? 'Expired'
+                        : 'Accept'}
+                  </Button>
                 )}
               </Box>
             ) : message?.decryptedData?.type === 'notification' ? (
@@ -1234,31 +1266,48 @@ export const MessageItemComponent = ({
                       marginBottom: '12px',
                     }}
                   >
-                    {reactions[selectedReaction]?.map((reactionItem) => (
-                      <ListItem
-                        key={reactionItem.sender}
-                        disablePadding
-                        sx={{
-                          borderRadius: '8px',
-                          marginBottom: '2px',
-                          '&:last-of-type': { marginBottom: 0 },
-                          '&:hover': {
-                            backgroundColor: theme.palette.action.hover,
-                          },
-                        }}
-                      >
-                        <ListItemText
-                          primary={
-                            reactionItem.senderName || reactionItem.sender
-                          }
-                          primaryTypographyProps={{
-                            fontSize: '14px',
-                            fontWeight: 500,
+                    {reactions[selectedReaction]?.map((reactionItem) => {
+                      const hasUnsafeReactionName = Boolean(
+                        reactionItem.senderName &&
+                          hasInvisibleCharacters(reactionItem.senderName)
+                      );
+
+                      return (
+                        <ListItem
+                          key={reactionItem.sender}
+                          disablePadding
+                          sx={{
+                            borderRadius: '8px',
+                            marginBottom: '2px',
+                            '&:last-of-type': { marginBottom: 0 },
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                            },
                           }}
-                          sx={{ py: '8px', px: '12px' }}
-                        />
-                      </ListItem>
-                    ))}
+                        >
+                          <ListItemText
+                            primary={
+                              reactionItem.senderName || reactionItem.sender
+                            }
+                            primaryTypographyProps={{
+                              sx: {
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                ...(hasUnsafeReactionName
+                                  ? {
+                                      textDecorationLine: 'line-through',
+                                      textDecorationThickness: '2px',
+                                      textDecorationColor:
+                                        theme.palette.error.main,
+                                    }
+                                  : {}),
+                              },
+                            }}
+                            sx={{ py: '8px', px: '12px' }}
+                          />
+                        </ListItem>
+                      );
+                    })}
                   </List>
 
                   <Button

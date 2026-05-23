@@ -4,6 +4,7 @@ import { alpha } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatTimestamp } from '../../../utils/time';
+import { hasInvisibleCharacters } from '../../../utils/hasInvisibleCharacters';
 import type { WidgetDisplayMode } from '../DashboardWidgetFrame';
 import type { QuitterFeedItem } from './quitterFeedTypes';
 
@@ -21,6 +22,7 @@ export const QuitterFeedCard = ({
   const theme = useTheme();
   const { t } = useTranslation('group');
   const hasText = item.text.trim().length > 0;
+  const hasUnsafeAuthorName = hasInvisibleCharacters(item.author);
   const imageCount = item.images.length;
   const hasMedia = imageCount > 0 || item.hasVideo;
   const isCompact = displayMode === 'compact';
@@ -197,6 +199,13 @@ export const QuitterFeedCard = ({
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                ...(hasUnsafeAuthorName
+                  ? {
+                      textDecorationLine: 'line-through',
+                      textDecorationThickness: '2px',
+                      textDecorationColor: theme.palette.error.main,
+                    }
+                  : {}),
               }}
             >
               {item.author}
