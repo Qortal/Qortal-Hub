@@ -25,7 +25,7 @@ import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import { useVoiceCallContext } from '../context/VoiceCallContext';
 import { useGroupCallContext } from './GroupCallContext';
 
-type CallSwitchTarget =
+export type CallSwitchTarget =
   | { type: 'direct'; chatId: string }
   | { type: 'group'; roomId: string };
 
@@ -42,6 +42,30 @@ function isDirectActive(callState: string) {
 
 function isGroupActive(roomState: string) {
   return roomState === 'joining' || roomState === 'connected';
+}
+
+export function getCallSwitchDropPlan({
+  target,
+  directState,
+  directIncomingChatId,
+  groupState,
+}: {
+  target: CallSwitchTarget;
+  directState: string;
+  directIncomingChatId?: string | null;
+  groupState: string;
+}) {
+  const directRinging = directState === 'ringing';
+  const targetIsRingingDirect =
+    target.type === 'direct' &&
+    directRinging &&
+    directIncomingChatId === target.chatId;
+
+  return {
+    shouldDropDirect:
+      isDirectActive(directState) || (directRinging && !targetIsRingingDirect),
+    shouldDropGroup: isGroupActive(groupState),
+  };
 }
 
 function waitForCondition(
@@ -76,13 +100,19 @@ export function CallSwitchGuardProvider({
 
   const directStateRef = useRef(directCall.callState);
   const directChatIdRef = useRef(directCall.activeCallChatId);
+  const directIncomingChatIdRef = useRef(directCall.incomingCall?.chatId);
   const groupStateRef = useRef(groupCall.roomState);
   const groupRoomIdRef = useRef(groupCall.roomId);
 
   useEffect(() => {
     directStateRef.current = directCall.callState;
     directChatIdRef.current = directCall.activeCallChatId;
-  }, [directCall.activeCallChatId, directCall.callState]);
+    directIncomingChatIdRef.current = directCall.incomingCall?.chatId;
+  }, [
+    directCall.activeCallChatId,
+    directCall.callState,
+    directCall.incomingCall?.chatId,
+  ]);
 
   useEffect(() => {
     groupStateRef.current = groupCall.roomState;
@@ -98,11 +128,13 @@ export function CallSwitchGuardProvider({
   const targetLabel =
     pendingTarget?.type === 'group' ? 'group call' : 'direct message call';
 
-  const dropCurrentCalls = useCallback(async () => {
-    const shouldDropDirect =
-      isDirectActive(directStateRef.current) ||
-      directStateRef.current === 'ringing';
-    const shouldDropGroup = isGroupActive(groupStateRef.current);
+  const dropCurrentCalls = useCallback(async (target: CallSwitchTarget) => {
+    const { shouldDropDirect, shouldDropGroup } = getCallSwitchDropPlan({
+      target,
+      directState: directStateRef.current,
+      directIncomingChatId: directIncomingChatIdRef.current,
+      groupState: groupStateRef.current,
+    });
 
     const drops: Promise<unknown>[] = [];
     if (shouldDropDirect) drops.push(directCall.hangUp());
@@ -147,7 +179,7 @@ export function CallSwitchGuardProvider({
       if (!confirmed) return false;
 
       setSwitching(true);
-      await dropCurrentCalls();
+      await dropCurrentCalls(target);
       closePrompt(true);
       return true;
     },
