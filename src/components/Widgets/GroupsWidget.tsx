@@ -193,6 +193,38 @@ const saveMiscStoredIds = async (key: string, ids: string[]): Promise<void> => {
   }
 };
 
+const miscStorageQueues = new Map<string, Promise<unknown>>();
+
+const queueMiscStorageUpdate = async <T,>(
+  key: string,
+  task: () => Promise<T>
+): Promise<T> => {
+  const previous = miscStorageQueues.get(key) ?? Promise.resolve();
+  const next = previous.then(task, task);
+  const queuedRef: { current?: Promise<unknown> } = {};
+  const queued = next
+    .catch(() => undefined)
+    .finally(() => {
+      if (miscStorageQueues.get(key) === queuedRef.current) {
+        miscStorageQueues.delete(key);
+      }
+    });
+  queuedRef.current = queued;
+  miscStorageQueues.set(key, queued);
+  return next;
+};
+
+const updateMiscStoredIds = async (
+  key: string,
+  updater: (current: string[]) => string[]
+): Promise<string[]> =>
+  queueMiscStorageUpdate(key, async () => {
+    const current = await loadMiscStoredIds(key);
+    const next = normalizeStoredIds(updater(current));
+    await saveMiscStoredIds(key, next);
+    return next;
+  });
+
 const stripHtml = (value: string) =>
   value
     .replace(/<[^>]+>/g, ' ')
@@ -674,6 +706,7 @@ export const GroupsWidget = ({
   );
   const groupInvitesCacheRef = useRef(groupInvitesCache);
   const joinRequestsCacheRef = useRef(joinRequestsCache);
+  const dismissedIdsMutationVersionRef = useRef(0);
   const [activeTab, setActiveTab] = useState<GroupsWidgetTab>('notifications');
   const [actionFeedback, setActionFeedback] = useState<{
     message: string;
@@ -1166,6 +1199,7 @@ export const GroupsWidget = ({
 
   useEffect(() => {
     let cancelled = false;
+    const loadVersion = dismissedIdsMutationVersionRef.current;
     setActionFeedback(null);
     setShowIgnoredInvites(false);
     setShowIgnoredRequests(false);
@@ -1174,7 +1208,12 @@ export const GroupsWidget = ({
         loadMiscStoredIds(dismissedInviteStorageKey),
         loadMiscStoredIds(dismissedRequestStorageKey),
       ]);
-      if (cancelled) return;
+      if (
+        cancelled ||
+        dismissedIdsMutationVersionRef.current !== loadVersion
+      ) {
+        return;
+      }
       setDismissedInviteIds(storedInvites);
       setDismissedRequestIds(storedRequests);
     })();
@@ -1188,34 +1227,6 @@ export const GroupsWidget = ({
     dismissedRequestStorageKey,
     fetchInvites,
     fetchJoinRequests,
-  ]);
-
-  useEffect(() => {
-    if (!hasLoadedInvitesOnce || invitesError || invites.length === 0) return;
-    const liveIds = new Set(invites.map((invite) => invite.id));
-    setDismissedInviteIds((current) => {
-      const next = current.filter((id) => liveIds.has(id));
-      if (next.length === current.length) return current;
-      void saveMiscStoredIds(dismissedInviteStorageKey, next);
-      return next;
-    });
-  }, [dismissedInviteStorageKey, hasLoadedInvitesOnce, invites, invitesError]);
-
-  useEffect(() => {
-    if (!hasLoadedRequestsOnce || requestsError || requests.length === 0)
-      return;
-    const liveIds = new Set(requests.map((request) => request.id));
-    setDismissedRequestIds((current) => {
-      const next = current.filter((id) => liveIds.has(id));
-      if (next.length === current.length) return current;
-      void saveMiscStoredIds(dismissedRequestStorageKey, next);
-      return next;
-    });
-  }, [
-    dismissedRequestStorageKey,
-    hasLoadedRequestsOnce,
-    requests,
-    requestsError,
   ]);
 
   useEffect(() => {
@@ -1294,11 +1305,12 @@ export const GroupsWidget = ({
         setInvites((current) =>
           current.filter((currentInvite) => currentInvite.id !== invite.id)
         );
-        setDismissedInviteIds((current) => {
-          const next = current.filter((id) => id !== invite.id);
-          void saveMiscStoredIds(dismissedInviteStorageKey, next);
-          return next;
-        });
+        dismissedIdsMutationVersionRef.current += 1;
+        const nextDismissedInviteIds = await updateMiscStoredIds(
+          dismissedInviteStorageKey,
+          (current) => current.filter((id) => id !== invite.id)
+        );
+        setDismissedInviteIds(nextDismissedInviteIds);
         setGroupInvitesCache(null);
         setActionFeedback({
           message: t('groups_widget.joined_group', { name: invite.groupName }),
@@ -1319,26 +1331,31 @@ export const GroupsWidget = ({
 
   const handleIgnoreInvite = useCallback(
     async (inviteId: string) => {
-      const next = dismissedInviteIds.includes(inviteId)
-        ? dismissedInviteIds
-        : [...dismissedInviteIds, inviteId];
-      await saveMiscStoredIds(dismissedInviteStorageKey, next);
+      dismissedIdsMutationVersionRef.current += 1;
+      const next = await updateMiscStoredIds(
+        dismissedInviteStorageKey,
+        (current) =>
+          current.includes(inviteId) ? current : [...current, inviteId]
+      );
       setDismissedInviteIds(next);
       setActionFeedback({
         message: t('groups_widget.invite_hidden'),
         tone: 'success',
       });
     },
-    [dismissedInviteIds, dismissedInviteStorageKey, t]
+    [dismissedInviteStorageKey, t]
   );
 
   const handleRestoreInvite = useCallback(
     async (inviteId: string) => {
-      const next = dismissedInviteIds.filter((id) => id !== inviteId);
-      await saveMiscStoredIds(dismissedInviteStorageKey, next);
+      dismissedIdsMutationVersionRef.current += 1;
+      const next = await updateMiscStoredIds(
+        dismissedInviteStorageKey,
+        (current) => current.filter((id) => id !== inviteId)
+      );
       setDismissedInviteIds(next);
     },
-    [dismissedInviteIds, dismissedInviteStorageKey]
+    [dismissedInviteStorageKey]
   );
 
   const handleApproveRequest = useCallback(
@@ -1365,11 +1382,12 @@ export const GroupsWidget = ({
         setRequests((current) =>
           current.filter((currentRequest) => currentRequest.id !== request.id)
         );
-        setDismissedRequestIds((current) => {
-          const next = current.filter((id) => id !== request.id);
-          void saveMiscStoredIds(dismissedRequestStorageKey, next);
-          return next;
-        });
+        dismissedIdsMutationVersionRef.current += 1;
+        const nextDismissedRequestIds = await updateMiscStoredIds(
+          dismissedRequestStorageKey,
+          (current) => current.filter((id) => id !== request.id)
+        );
+        setDismissedRequestIds(nextDismissedRequestIds);
         setJoinRequestsCache(null);
         setActionFeedback({
           message: t('groups_widget.request_approved', {
@@ -1393,26 +1411,31 @@ export const GroupsWidget = ({
 
   const handleRejectRequest = useCallback(
     async (requestId: string) => {
-      const next = dismissedRequestIds.includes(requestId)
-        ? dismissedRequestIds
-        : [...dismissedRequestIds, requestId];
-      await saveMiscStoredIds(dismissedRequestStorageKey, next);
+      dismissedIdsMutationVersionRef.current += 1;
+      const next = await updateMiscStoredIds(
+        dismissedRequestStorageKey,
+        (current) =>
+          current.includes(requestId) ? current : [...current, requestId]
+      );
       setDismissedRequestIds(next);
       setActionFeedback({
         message: t('groups_widget.request_removed'),
         tone: 'success',
       });
     },
-    [dismissedRequestIds, dismissedRequestStorageKey, t]
+    [dismissedRequestStorageKey, t]
   );
 
   const handleRestoreRequest = useCallback(
     async (requestId: string) => {
-      const next = dismissedRequestIds.filter((id) => id !== requestId);
-      await saveMiscStoredIds(dismissedRequestStorageKey, next);
+      dismissedIdsMutationVersionRef.current += 1;
+      const next = await updateMiscStoredIds(
+        dismissedRequestStorageKey,
+        (current) => current.filter((id) => id !== requestId)
+      );
       setDismissedRequestIds(next);
     },
-    [dismissedRequestIds, dismissedRequestStorageKey]
+    [dismissedRequestStorageKey]
   );
 
   const handleJoinPromotedGroup = useCallback(

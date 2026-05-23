@@ -18,6 +18,8 @@ import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 
+const QORTAL_REQUEST_DIALOG_Z_INDEX = 11000;
+
 export type MessageQortalRequestExtension = {
   text1?: string;
   text2?: string;
@@ -89,6 +91,7 @@ export function QortalRequestExtensionDialog({
       open={open}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
+      sx={{ zIndex: QORTAL_REQUEST_DIALOG_Z_INDEX }}
       PaperProps={{
         sx: {
           backgroundColor: 'transparent',
