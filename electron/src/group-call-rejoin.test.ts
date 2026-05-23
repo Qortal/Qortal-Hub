@@ -1088,6 +1088,82 @@ describe('recent room bootstrap state', () => {
     expect(dedupe.size).toBe(0);
   });
 
+  it('re-applies a cached verified peer join after local leave and rejoin', async () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    (manager as any).reticulumBridge.clearGroupAudioDiagnostics = vi.fn(
+      async () => ({ ok: true as const })
+    );
+    manager.setLocalAddresses(['Q-self']);
+
+    const roomId = 'room-1';
+    const now = Date.now();
+    const peerJoin = {
+      type: 'GC_JOIN' as const,
+      roomId,
+      chatId: 'chat-812',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer',
+      signature: 'sig-peer',
+      timestamp: now + 1,
+      reticulumDestinationHash: 'b'.repeat(32),
+    };
+
+    const peerDestinationHash = 'b'.repeat(32);
+
+    manager.joinRoom(
+      roomId,
+      'chat-812',
+      'Q-self',
+      'sig-self-1',
+      'pk-self',
+      now,
+      TEST_D32
+    );
+    manager.handleIncoming(
+      peerJoin,
+      `reticulum:${peerDestinationHash}`,
+      peerDestinationHash
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(manager.getRoomParticipants(roomId).map((p) => p.address)).toEqual([
+      'Q-self',
+      'Q-peer',
+    ]);
+
+    manager.leaveRoom(roomId, 'Q-self', 'leave-sig', 'pk-self', now + 2);
+    manager.joinRoom(
+      roomId,
+      'chat-812',
+      'Q-self',
+      'sig-self-2',
+      'pk-self',
+      now + 3,
+      TEST_D32
+    );
+    expect(manager.getRoomParticipants(roomId).map((p) => p.address)).toEqual([
+      'Q-self',
+    ]);
+
+    manager.handleIncoming(
+      peerJoin,
+      `reticulum:${peerDestinationHash}`,
+      peerDestinationHash
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(manager.getRoomParticipants(roomId).map((p) => p.address)).toEqual([
+      'Q-self',
+      'Q-peer',
+    ]);
+    expect((manager as any).verifyPool.verify).toHaveBeenCalledTimes(1);
+  });
+
   it('retries first-contact Reticulum join fanout after unknown peer discovery lag', async () => {
     vi.useFakeTimers();
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];

@@ -896,6 +896,7 @@ declare global {
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };
     audioSurface?: {
+      isReady?: () => Promise<boolean>;
       ensureReady: () => Promise<{ success: boolean; error?: string }>;
       sendCommand: (command: AudioSurfaceCommand) => Promise<{
         ok: boolean;

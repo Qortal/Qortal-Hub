@@ -123,6 +123,9 @@ export type AudioSurfaceEvent =
       bootstrapRevisionApplied: number;
     }
   | {
+      type: 'engine-closed';
+    }
+  | {
       type: 'snapshot';
       snapshot: GroupCallControllerSnapshot;
     }

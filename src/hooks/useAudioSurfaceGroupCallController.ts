@@ -36,10 +36,32 @@ export function useAudioSurfaceGroupCallController(
     roomId: string;
   } | null>(null);
   const startupStageSinceRef = useRef<number>(Date.now());
+  const latestUserRef = useRef(userInfo);
+  const latestStatusRef = useRef(myStatus);
+  const latestDevicesRef = useRef(callAudioDevices);
+  const latestUiActiveRef = useRef(uiActive);
+
+  useEffect(() => {
+    latestUserRef.current = userInfo;
+  }, [userInfo]);
+
+  useEffect(() => {
+    latestStatusRef.current = myStatus;
+  }, [myStatus]);
+
+  useEffect(() => {
+    latestDevicesRef.current = callAudioDevices;
+  }, [callAudioDevices]);
+
+  useEffect(() => {
+    latestUiActiveRef.current = uiActive;
+  }, [uiActive]);
 
   useEffect(() => {
     if (!window.audioSurface) {
-      traceGcallAudioSurface('controller.setup: no window.audioSurface; ensureReady skipped');
+      traceGcallAudioSurface(
+        'controller.setup: no window.audioSurface; ensureReady skipped'
+      );
       return;
     }
     const unsubscribe = window.audioSurface.onEvent((event) => {
@@ -52,6 +74,12 @@ export function useAudioSurfaceGroupCallController(
           hostReady: true,
           bootstrapRevisionApplied: event.bootstrapRevisionApplied,
         }));
+        return;
+      }
+      if (event.type === 'engine-closed') {
+        traceGcallAudioSurface('controller.event: engine-closed');
+        lastSnapshotLogRef.current = null;
+        setBridgeState(buildDefaultAudioSurfaceBridgeState());
         return;
       }
       if (isAudioSurfaceSnapshotEvent(event)) {
@@ -81,30 +109,25 @@ export function useAudioSurfaceGroupCallController(
         return;
       }
       if (event.type === 'engine-error') {
-        traceGcallAudioSurface('controller.event: engine-error', { message: event.message });
+        traceGcallAudioSurface('controller.event: engine-error', {
+          message: event.message,
+        });
       }
     });
-    void (async () => {
-      const result = await window.audioSurface!.ensureReady();
-      traceGcallAudioSurface('controller.ensureReady: result', {
-        success: (result as { success?: boolean })?.success,
-        error: (result as { error?: string })?.error,
-      });
-    })();
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    if (!window.audioSurface) return;
+    if (!window.audioSurface || !bridgeState.hostReady) return;
     void window.audioSurface.sendCommand({
       type: 'set-user',
       userInfo,
       myStatus,
     });
-  }, [myStatus, userInfo]);
+  }, [bridgeState.hostReady, myStatus, userInfo]);
 
   useEffect(() => {
-    if (!window.audioSurface) return;
+    if (!window.audioSurface || !bridgeState.hostReady) return;
     void window.audioSurface.sendCommand({
       type: 'set-device-preferences',
       inputDeviceId: callAudioDevices.inputDeviceId,
@@ -121,15 +144,16 @@ export function useAudioSurfaceGroupCallController(
     callAudioDevices.outputDeviceGroupId,
     callAudioDevices.outputDeviceId,
     callAudioDevices.outputDeviceLabel,
+    bridgeState.hostReady,
   ]);
 
   useEffect(() => {
-    if (!window.audioSurface) return;
+    if (!window.audioSurface || !bridgeState.hostReady) return;
     void window.audioSurface.sendCommand({
       type: 'set-ui-active',
       uiActive,
     });
-  }, [uiActive]);
+  }, [bridgeState.hostReady, uiActive]);
 
   const snapshot = bridgeState.snapshot;
 
@@ -177,11 +201,45 @@ export function useAudioSurfaceGroupCallController(
       command: Parameters<NonNullable<Window['audioSurface']>['sendCommand']>[0]
     ) => {
       if (!window.audioSurface) {
-        traceGcallAudioSurface('controller.sendCommand: blocked (no window.audioSurface)', {
-          type: command.type,
-        });
+        traceGcallAudioSurface(
+          'controller.sendCommand: blocked (no window.audioSurface)',
+          {
+            type: command.type,
+          }
+        );
         return { ok: false as const, error: 'audio-surface-unavailable' };
       }
+      const ready = await window.audioSurface.ensureReady();
+      traceGcallAudioSurface('controller.ensureReady: result', {
+        type: command.type,
+        success: (ready as { success?: boolean })?.success,
+        error: (ready as { error?: string })?.error,
+      });
+      if (!ready?.success) {
+        return {
+          ok: false as const,
+          error: ready?.error ?? 'audio-surface-not-ready',
+        };
+      }
+      const devices = latestDevicesRef.current;
+      await window.audioSurface.sendCommand({
+        type: 'set-user',
+        userInfo: latestUserRef.current,
+        myStatus: latestStatusRef.current,
+      });
+      await window.audioSurface.sendCommand({
+        type: 'set-device-preferences',
+        inputDeviceId: devices.inputDeviceId,
+        inputDeviceLabel: devices.inputDeviceLabel ?? null,
+        inputDeviceGroupId: devices.inputDeviceGroupId ?? null,
+        outputDeviceId: devices.outputDeviceId,
+        outputDeviceLabel: devices.outputDeviceLabel ?? null,
+        outputDeviceGroupId: devices.outputDeviceGroupId ?? null,
+      });
+      await window.audioSurface.sendCommand({
+        type: 'set-ui-active',
+        uiActive: latestUiActiveRef.current,
+      });
       const cmdType = command.type;
       const detail =
         cmdType === 'join-group-call'
@@ -214,25 +272,35 @@ export function useAudioSurfaceGroupCallController(
   );
 
   const joinGroupCall = useCallback(
-    async (roomId: string, chatId: string, options?: AudioEngineJoinOptions) => {
-      traceGcallAudioSurface('controller.joinGroupCall: entered', { roomId, chatId });
-      const cachedReadiness =
-        await window.electronAPI?.getSystemCallReadiness?.();
+    async (
+      roomId: string,
+      chatId: string,
+      options?: AudioEngineJoinOptions
+    ) => {
+      traceGcallAudioSurface('controller.joinGroupCall: entered', {
+        roomId,
+        chatId,
+      });
+      const electronApi = window.electronAPI as any;
+      const cachedReadiness = await electronApi?.getSystemCallReadiness?.();
       const readiness =
         cachedReadiness?.status === 'good'
           ? cachedReadiness
-          : ((await window.electronAPI?.refreshSystemCallReadiness?.()) ??
+          : ((await electronApi?.refreshSystemCallReadiness?.()) ??
             cachedReadiness);
       if (!readiness || readiness.status !== 'good') {
-        traceGcallAudioSurface('controller.joinGroupCall: blocked by system readiness', {
-          status: readiness?.status ?? 'unavailable',
-          reasons: readiness?.reasons ?? [],
-          cpuLoad: readiness?.cpuLoad ?? null,
-          memoryPressure: readiness?.memoryPressure ?? null,
-          eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
-          cachedStatus: cachedReadiness?.status ?? 'unavailable',
-          cachedReasons: cachedReadiness?.reasons ?? [],
-        });
+        traceGcallAudioSurface(
+          'controller.joinGroupCall: blocked by system readiness',
+          {
+            status: readiness?.status ?? 'unavailable',
+            reasons: readiness?.reasons ?? [],
+            cpuLoad: readiness?.cpuLoad ?? null,
+            memoryPressure: readiness?.memoryPressure ?? null,
+            eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
+            cachedStatus: cachedReadiness?.status ?? 'unavailable',
+            cachedReasons: cachedReadiness?.reasons ?? [],
+          }
+        );
         setInfoSnackGlobal({
           type: 'error',
           message:

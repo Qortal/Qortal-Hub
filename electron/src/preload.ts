@@ -541,6 +541,8 @@ try {
   });
 
   contextBridge.exposeInMainWorld('audioSurface', {
+    isReady: () =>
+      ipcRenderer.invoke('audio-surface:is-ready') as Promise<boolean>,
     ensureReady: () =>
       ipcRenderer.invoke('audio-surface:ensure-ready') as Promise<{
         success: boolean;

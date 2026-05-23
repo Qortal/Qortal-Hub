@@ -101,12 +101,13 @@ function parseAudioSurfaceDevicePayload(payload: unknown): {
         if (!item || typeof item !== 'object') return null;
         const d = item as Record<string, unknown>;
         if (typeof d.deviceId !== 'string') return null;
-        return {
+        const normalized: CallAudioDeviceOption = {
           deviceId: d.deviceId,
           groupId: typeof d.groupId === 'string' ? d.groupId : undefined,
           kind: typeof d.kind === 'string' ? d.kind : undefined,
           label: typeof d.label === 'string' ? d.label : '',
         };
+        return normalized;
       })
       .filter((item): item is CallAudioDeviceOption => item !== null);
   return {
@@ -115,13 +116,34 @@ function parseAudioSurfaceDevicePayload(payload: unknown): {
   };
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<T | null> {
   return new Promise((resolve) => {
     const timeoutId = window.setTimeout(() => resolve(null), timeoutMs);
     promise
       .then((value) => resolve(value))
       .catch(() => resolve(null))
       .finally(() => window.clearTimeout(timeoutId));
+  });
+}
+
+async function sendAudioSurfaceDevicePreferencesIfReady(preferences: {
+  inputDeviceGroupId: string | null;
+  inputDeviceId: string | null;
+  inputDeviceLabel: string | null;
+  outputDeviceGroupId: string | null;
+  outputDeviceId: string | null;
+  outputDeviceLabel: string | null;
+}): Promise<void> {
+  const audioSurface = window.audioSurface;
+  if (!audioSurface) return;
+  const ready = (await audioSurface.isReady?.().catch(() => false)) === true;
+  if (!ready) return;
+  await audioSurface.sendCommand({
+    type: 'set-device-preferences',
+    ...preferences,
   });
 }
 
@@ -157,12 +179,16 @@ export function CallAudioSettingsButton({
     setRefreshing(true);
     setRefreshError(null);
     try {
-      const audioSurfaceResponse = window.audioSurface
-        ? await withTimeout(
-            window.audioSurface.sendCommand({ type: 'list-audio-devices' }),
-            AUDIO_SURFACE_DEVICE_LIST_TIMEOUT_MS
-          )
-        : null;
+      const audioSurface = window.audioSurface;
+      const audioSurfaceReady =
+        (await audioSurface?.isReady?.().catch(() => false)) === true;
+      const audioSurfaceResponse =
+        audioSurfaceReady && audioSurface
+          ? await withTimeout(
+              audioSurface.sendCommand({ type: 'list-audio-devices' }),
+              AUDIO_SURFACE_DEVICE_LIST_TIMEOUT_MS
+            )
+          : null;
       const audioSurfaceDevices =
         audioSurfaceResponse?.ok === true
           ? parseAudioSurfaceDevicePayload(audioSurfaceResponse.payload)
@@ -177,7 +203,9 @@ export function CallAudioSettingsButton({
         setOutputs(outList.map(normalizeDevice));
       }
     } catch (e) {
-      setRefreshError(e instanceof Error ? e.message : 'Could not list devices');
+      setRefreshError(
+        e instanceof Error ? e.message : 'Could not list devices'
+      );
     } finally {
       setRefreshing(false);
     }
@@ -194,7 +222,8 @@ export function CallAudioSettingsButton({
       void loadDevices();
     };
     navigator.mediaDevices?.addEventListener('devicechange', onChange);
-    return () => navigator.mediaDevices?.removeEventListener('devicechange', onChange);
+    return () =>
+      navigator.mediaDevices?.removeEventListener('devicechange', onChange);
   }, [open, loadDevices]);
 
   const inputSelectValue = useMemo(() => {
@@ -247,8 +276,7 @@ export function CallAudioSettingsButton({
       hasLabel: Boolean(inputDeviceLabel),
       inputDeviceId,
     });
-    void window.audioSurface?.sendCommand({
-      type: 'set-device-preferences',
+    void sendAudioSurfaceDevicePreferencesIfReady({
       inputDeviceGroupId,
       inputDeviceId,
       inputDeviceLabel,
@@ -275,8 +303,7 @@ export function CallAudioSettingsButton({
       hasLabel: Boolean(outputDeviceLabel),
       outputDeviceId,
     });
-    void window.audioSurface?.sendCommand({
-      type: 'set-device-preferences',
+    void sendAudioSurfaceDevicePreferencesIfReady({
       inputDeviceGroupId: prefs.inputDeviceGroupId ?? null,
       inputDeviceId: prefs.inputDeviceId,
       inputDeviceLabel: prefs.inputDeviceLabel ?? null,
@@ -295,7 +322,9 @@ export function CallAudioSettingsButton({
           aria-label="Call audio settings"
           sx={{ p: iconButtonSize === 'small' ? 0.5 : 1 }}
         >
-          <IconComponent sx={{ fontSize: iconButtonSize === 'small' ? 18 : 22 }} />
+          <IconComponent
+            sx={{ fontSize: iconButtonSize === 'small' ? 18 : 22 }}
+          />
         </IconButton>
       </Tooltip>
 
@@ -347,22 +376,31 @@ export function CallAudioSettingsButton({
             color="text.secondary"
             sx={{ lineHeight: 1.55, mb: 2.25 }}
           >
-            Choose your microphone and speaker. Lists refresh when you open this dialog.
+            Choose your microphone and speaker. Lists refresh when you open this
+            dialog.
           </Typography>
 
           {refreshing && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1, mb: 1 }}>
+            <Box
+              sx={{ display: 'flex', justifyContent: 'center', py: 1, mb: 1 }}
+            >
               <CircularProgress size={22} />
             </Box>
           )}
 
           {refreshError && (
-            <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1 }}>
+            <Typography
+              variant="caption"
+              color="error"
+              sx={{ display: 'block', mb: 1 }}
+            >
               {refreshError}
             </Typography>
           )}
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 0.5 }}>
+          <Box
+            sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 0.5 }}
+          >
             <FormControl size="small" fullWidth variant="outlined">
               <InputLabel id="qortal-call-mic-dialog">Microphone</InputLabel>
               <Select
@@ -393,8 +431,13 @@ export function CallAudioSettingsButton({
               </Select>
             </FormControl>
             {inputs.length === 0 && !refreshing && (
-              <Typography variant="caption" color="warning.main" sx={{ mt: -1 }}>
-                No microphones reported. Plug in a mic, then tap &quot;Refresh devices&quot;.
+              <Typography
+                variant="caption"
+                color="warning.main"
+                sx={{ mt: -1 }}
+              >
+                No microphones reported. Plug in a mic, then tap &quot;Refresh
+                devices&quot;.
               </Typography>
             )}
 
@@ -434,7 +477,8 @@ export function CallAudioSettingsButton({
 
             {!outputSupported && (
               <Typography variant="caption" color="text.secondary">
-                Speaker selection is not available in this browser; playback uses the system default.
+                Speaker selection is not available in this browser; playback
+                uses the system default.
               </Typography>
             )}
 
@@ -504,7 +548,11 @@ export function CallAudioSettingsButton({
           }}
         >
           <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-            <Button onClick={() => void loadDevices()} disabled={refreshing} size="small">
+            <Button
+              onClick={() => void loadDevices()}
+              disabled={refreshing}
+              size="small"
+            >
               Refresh devices
             </Button>
             <Button

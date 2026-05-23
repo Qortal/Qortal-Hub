@@ -1277,14 +1277,14 @@ export class GroupCallAudioEngineRuntime {
           return { ok: true };
         case 'stop-direct-voice-receive':
           await this.stopDirectVoiceReceive();
-          return { ok: true };
+          return { ok: true, payload: { idle: this.isRuntimeIdle() } };
         case 'start-direct-voice-media':
           return await this.startDirectVoiceMedia(command);
         case 'update-direct-voice-media':
           return await this.updateDirectVoiceMedia(command);
         case 'stop-direct-voice-media':
           await this.stopDirectVoiceMedia();
-          return { ok: true };
+          return { ok: true, payload: { idle: this.isRuntimeIdle() } };
         case 'clear-join-error':
           this.snapshot = { ...this.snapshot, gcallJoinError: null };
           this.emitSnapshot();
@@ -4617,7 +4617,7 @@ export class GroupCallAudioEngineRuntime {
     const userInfo = this.userInfo;
     const roomId = this.snapshot.roomId;
     if (!userInfo?.address || !roomId) {
-      return { ok: true };
+      return { ok: true, payload: { idle: this.isRuntimeIdle() } };
     }
     const localAddress = userInfo.address;
     const publicKey = userInfo.publicKey ?? '';
@@ -4698,7 +4698,15 @@ export class GroupCallAudioEngineRuntime {
     );
     void this.cleanupMediaAfterLeave(cleanupGeneration, roomId);
 
-    return { ok: true };
+    return { ok: true, payload: { idle: this.isRuntimeIdle() } };
+  }
+
+  private isRuntimeIdle(): boolean {
+    return (
+      !this.snapshot.roomId &&
+      !this.directVoiceRoomId &&
+      !this.directVoiceRoomKey
+    );
   }
 
   private async cleanupForLogout(): Promise<AudioSurfaceResponse> {

@@ -384,6 +384,8 @@ const pendingAudioSurfaceCommands = new Map<
     reject: (reason?: unknown) => void;
   }
 >();
+const AUDIO_SURFACE_IDLE_CLOSE_MS = 90_000;
+const AUDIO_SURFACE_READY_TIMEOUT_MS = 10_000;
 let audioSurfaceHostReady = false;
 const audioSurfaceReadyResolvers: Array<() => void> = [];
 let audioSurfaceBridgeState = buildDefaultAudioSurfaceBridgeStateLike();
@@ -410,7 +412,29 @@ function waitForAudioSurfaceHostReady(): Promise<void> {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
-    audioSurfaceReadyResolvers.push(resolve);
+    let settled = false;
+    let timeout: NodeJS.Timeout | null = null;
+    const resolveReady = () => {
+      if (settled) return;
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      resolve();
+    };
+    timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const resolverIndex = audioSurfaceReadyResolvers.indexOf(resolveReady);
+      if (resolverIndex !== -1) {
+        audioSurfaceReadyResolvers.splice(resolverIndex, 1);
+      }
+      loggerWarn('[GCall:audio-surface] host ready wait timed out', {
+        timeoutMs: AUDIO_SURFACE_READY_TIMEOUT_MS,
+      });
+      resolve();
+    }, AUDIO_SURFACE_READY_TIMEOUT_MS);
+    audioSurfaceReadyResolvers.push(resolveReady);
   });
 }
 
@@ -428,10 +452,20 @@ function markAudioSurfaceHostReady(): void {
 function markAudioSurfaceHostClosed(): void {
   audioSurfaceHostReady = false;
   audioSurfaceBridgeState = buildDefaultAudioSurfaceBridgeStateLike();
+  for (const resolve of audioSurfaceReadyResolvers.splice(0)) {
+    resolve();
+  }
   for (const [, pending] of pendingAudioSurfaceCommands) {
     pending.reject(new Error('audio-surface-window-closed'));
   }
   pendingAudioSurfaceCommands.clear();
+  for (const webContents of audioSurfaceSubscribers) {
+    if (!webContents.isDestroyed()) {
+      webContents.send('audio-surface:event', {
+        type: 'engine-closed',
+      } satisfies AudioSurfaceEvent);
+    }
+  }
 }
 
 function emitAudioSurfaceEvent(event: AudioSurfaceEvent): void {
@@ -500,6 +534,7 @@ export class ElectronCapacitorApp {
   private audioSurfaceScheme: string;
   private audioSurfaceHttpsOrigin: string | null = null;
   private audioSurfaceWindowReady: Promise<BrowserWindow> | null = null;
+  private audioSurfaceIdleCloseTimer: NodeJS.Timeout | null = null;
 
   constructor(
     capacitorFileConfig: CapacitorElectronConfig,
@@ -546,6 +581,7 @@ export class ElectronCapacitorApp {
   }
 
   async ensureAudioSurfaceWindow(): Promise<BrowserWindow> {
+    this.cancelAudioSurfaceIdleClose('ensure');
     if (this.AudioSurfaceWindow && !this.AudioSurfaceWindow.isDestroyed()) {
       return this.AudioSurfaceWindow;
     }
@@ -649,6 +685,42 @@ export class ElectronCapacitorApp {
       }
     }
     return window;
+  }
+
+  cancelAudioSurfaceIdleClose(reason: string): void {
+    if (!this.audioSurfaceIdleCloseTimer) return;
+    clearTimeout(this.audioSurfaceIdleCloseTimer);
+    this.audioSurfaceIdleCloseTimer = null;
+    loggerLog('[GCall:audio-surface] idle close canceled', { reason });
+  }
+
+  scheduleAudioSurfaceIdleClose(reason: string): void {
+    if (!this.AudioSurfaceWindow || this.AudioSurfaceWindow.isDestroyed()) {
+      return;
+    }
+    this.cancelAudioSurfaceIdleClose('reschedule');
+    loggerLog('[GCall:audio-surface] idle close scheduled', {
+      reason,
+      delayMs: AUDIO_SURFACE_IDLE_CLOSE_MS,
+    });
+    this.audioSurfaceIdleCloseTimer = setTimeout(() => {
+      this.audioSurfaceIdleCloseTimer = null;
+      this.closeAudioSurfaceWindow(`idle-timeout:${reason}`);
+    }, AUDIO_SURFACE_IDLE_CLOSE_MS);
+  }
+
+  closeAudioSurfaceWindow(reason: string): void {
+    this.cancelAudioSurfaceIdleClose('close');
+    const audioWindow = this.AudioSurfaceWindow;
+    if (!audioWindow || audioWindow.isDestroyed()) {
+      markAudioSurfaceHostClosed();
+      return;
+    }
+    loggerLog('[GCall:audio-surface] closing window', {
+      reason,
+      webContentsId: audioWindow.webContents.id,
+    });
+    audioWindow.close();
   }
 
   async init(p2pBootstrapSeeds?: string[]): Promise<void> {
@@ -3423,10 +3495,25 @@ ipcMain.handle('audio-surface:ensure-ready', async (event) => {
   }
   await myCapacitorApp.ensureAudioSurfaceWindow();
   await waitForAudioSurfaceHostReady();
+  const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
+  if (!audioWindow || audioWindow.isDestroyed() || !audioSurfaceHostReady) {
+    loggerLog('[GCall:audio-surface] ensure-ready: window unavailable');
+    return { success: false, error: 'audio-surface-window-unavailable' };
+  }
   loggerLog(
     '[GCall:audio-surface] ensure-ready: ok (audio window + host ready)'
   );
   return { success: true };
+});
+
+ipcMain.handle('audio-surface:is-ready', async (event) => {
+  if (!isMainShellSender(event.sender)) {
+    return false;
+  }
+  const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
+  return Boolean(
+    audioWindow && !audioWindow.isDestroyed() && audioSurfaceHostReady
+  );
 });
 
 ipcMain.handle(
@@ -3447,10 +3534,23 @@ ipcMain.handle(
         chatId: command.chatId,
       });
     }
+    const existingAudioWindow = myCapacitorApp.getAudioSurfaceWindow();
+    const hasUsableAudioWindow = Boolean(
+      existingAudioWindow && !existingAudioWindow.isDestroyed()
+    );
+    if (
+      !hasUsableAudioWindow &&
+      (command.type === 'logout-cleanup' ||
+        command.type === 'leave-group-call' ||
+        command.type === 'stop-direct-voice-media' ||
+        command.type === 'stop-direct-voice-receive')
+    ) {
+      return { ok: true };
+    }
     await myCapacitorApp.ensureAudioSurfaceWindow();
     await waitForAudioSurfaceHostReady();
     const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
-    if (!audioWindow || audioWindow.isDestroyed()) {
+    if (!audioWindow || audioWindow.isDestroyed() || !audioSurfaceHostReady) {
       loggerLog(
         '[GCall:audio-surface] send-command: audio window missing/destroyed'
       );
@@ -3493,6 +3593,20 @@ ipcMain.handle(
             ? (response as { error?: string }).error
             : undefined,
       });
+    }
+    const responsePayload = (response as { payload?: unknown }).payload as
+      | { idle?: unknown }
+      | undefined;
+    if (command.type === 'logout-cleanup') {
+      myCapacitorApp.closeAudioSurfaceWindow('logout-cleanup');
+    } else if (
+      (response as { ok?: boolean }).ok === true &&
+      responsePayload?.idle === true &&
+      (command.type === 'leave-group-call' ||
+        command.type === 'stop-direct-voice-media' ||
+        command.type === 'stop-direct-voice-receive')
+    ) {
+      myCapacitorApp.scheduleAudioSurfaceIdleClose(command.type);
     }
     return response;
   }

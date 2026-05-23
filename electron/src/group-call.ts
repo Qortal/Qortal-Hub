@@ -2228,7 +2228,14 @@ export class GroupCallManager extends EventEmitter {
     const env = job.env;
     const cacheKey = this.gcSignatureCacheKey(env.type, env.signature);
     if (this.verifiedGcSignatures.has(cacheKey)) {
-      if (job.kind === 'link_auth_join') {
+      if (
+        job.kind === 'join' ||
+        job.kind === 'join_rk' ||
+        job.kind === 'link_auth_join' ||
+        job.kind === 'leave' ||
+        job.kind === 'topology' ||
+        job.kind === 'cluster_heartbeat'
+      ) {
         try {
           this.applyVerifiedJobSync(job);
         } catch (err) {
