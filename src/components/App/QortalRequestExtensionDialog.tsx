@@ -77,6 +77,10 @@ export function QortalRequestExtensionDialog({
     (requestMessage.text1?.toLowerCase().includes('authenticate')
       ? 'Grant permissions for this session only'
       : requestMessage.text1);
+  const wrappingTextSx = {
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  };
 
   if (!open) return null;
 
@@ -125,7 +129,8 @@ export function QortalRequestExtensionDialog({
             display: 'flex',
             flexDirection: 'column',
             maxHeight: '90vh',
-            overflow: 'auto',
+            overflowX: 'hidden',
+            overflowY: 'auto',
             padding: '26px',
           }}
         >
@@ -166,6 +171,7 @@ export function QortalRequestExtensionDialog({
                     fontWeight: 700,
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
+                    ...wrappingTextSx,
                   }}
                 >
                   {sourceLabel
@@ -175,10 +181,11 @@ export function QortalRequestExtensionDialog({
               </Box>
               <TextP
                 sx={{
-                  fontSize: '29px',
+                  fontSize: { xs: '22px', sm: '24px' },
                   fontWeight: 700,
-                  lineHeight: 1.12,
+                  lineHeight: 1.18,
                   marginTop: '4px',
+                  ...wrappingTextSx,
                 }}
               >
                 {requestMessage.text1}
@@ -191,6 +198,7 @@ export function QortalRequestExtensionDialog({
                     lineHeight: 1.5,
                     maxWidth: '440px',
                     whiteSpace: 'pre-line',
+                    ...wrappingTextSx,
                   }}
                 >
                   {bodyLines.join('\n')}
@@ -276,6 +284,8 @@ export function QortalRequestExtensionDialog({
                   fontSize: '15px',
                   fontWeight: 600,
                   lineHeight: 1.5,
+                  minWidth: 0,
+                  ...wrappingTextSx,
                 }}
               >
                 {summaryText}
@@ -292,6 +302,8 @@ export function QortalRequestExtensionDialog({
                   fontSize: '14px',
                   lineHeight: 1.45,
                   width: '100%',
+                  ...wrappingTextSx,
+                  '& *': wrappingTextSx,
                 }}
                 dangerouslySetInnerHTML={{ __html: requestMessage.html }}
               />
@@ -346,7 +358,14 @@ export function QortalRequestExtensionDialog({
                     >
                       Fee
                     </Typography>
-                    <TextP sx={{ fontSize: '14px', fontWeight: 700 }}>
+                    <TextP
+                      sx={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        textAlign: 'right',
+                        ...wrappingTextSx,
+                      }}
+                    >
                       {requestMessage.fee} QORT
                     </TextP>
                   </Box>
@@ -368,7 +387,14 @@ export function QortalRequestExtensionDialog({
                     >
                       App fee
                     </Typography>
-                    <TextP sx={{ fontSize: '14px', fontWeight: 700 }}>
+                    <TextP
+                      sx={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        textAlign: 'right',
+                        ...wrappingTextSx,
+                      }}
+                    >
                       {requestMessage.appFee} QORT
                     </TextP>
                   </Box>
@@ -390,7 +416,14 @@ export function QortalRequestExtensionDialog({
                     >
                       Foreign fee
                     </Typography>
-                    <TextP sx={{ fontSize: '14px', fontWeight: 700 }}>
+                    <TextP
+                      sx={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        textAlign: 'right',
+                        ...wrappingTextSx,
+                      }}
+                    >
                       {requestMessage.foreignFee}
                     </TextP>
                   </Box>
@@ -450,6 +483,7 @@ export function QortalRequestExtensionDialog({
                         sx={{
                           color: theme.palette.text.primary,
                           fontSize: '14px',
+                          ...wrappingTextSx,
                         }}
                       >
                         {requestMessage.checkbox1?.label}
@@ -492,6 +526,7 @@ export function QortalRequestExtensionDialog({
                             color: theme.palette.text.primary,
                             fontSize: '14px',
                             lineHeight: 1.45,
+                            ...wrappingTextSx,
                           }}
                         >
                           {requestMessage.confirmCheckboxLabel ||

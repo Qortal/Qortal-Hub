@@ -1,5 +1,4 @@
-import { Box, ButtonBase, Tooltip, Typography, useTheme } from '@mui/material';
-import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
+import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { alpha, type SxProps, type Theme } from '@mui/material/styles';
 import {
   useCallback,
@@ -16,6 +15,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
   balanceAtom,
+  memberGroupsAtom,
   nodeInfosAtom,
   selectedNodeInfoAtom,
   userInfoAtom,
@@ -39,11 +39,9 @@ import type {
   InfoPreviewStatusTone,
 } from './infoPreviewPanelTypes';
 import {
-  DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY,
   INFO_VALUE_COLUMN_MIN_WIDTH_PX,
 } from './homeDesktopConstants';
 import type { MinterInfoView, MinterProgressSnapshot } from './types';
-import { parseMinterInfoView } from './utils';
 
 type UseDashboardInfoPreviewRowsParams = {
   nodeMenuAnchorEl: HTMLElement | null;
@@ -56,6 +54,7 @@ export function useDashboardInfoPreviewRows({
 }: UseDashboardInfoPreviewRowsParams): InfoPreviewPanelRows {
   const theme = useTheme();
   const balance = useAtomValue(balanceAtom);
+  const memberGroups = useAtomValue(memberGroupsAtom);
   const nodeInfos = useAtomValue(nodeInfosAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const userInfo = useAtomValue(userInfoAtom);
@@ -80,12 +79,6 @@ export function useDashboardInfoPreviewRows({
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
   const [minterProgress, setMinterProgress] =
     useState<MinterProgressSnapshot | null>(null);
-  const [minterDefaultView, setMinterDefaultView] = useState<MinterInfoView>(
-    () =>
-      parseMinterInfoView(
-        localStorage.getItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY)
-      )
-  );
   const [isMinterFieldHovered, setIsMinterFieldHovered] = useState(false);
 
   const getIndividualUserInfo = useHandleUserInfo();
@@ -215,11 +208,6 @@ export function useDashboardInfoPreviewRows({
     };
   }, []);
 
-  const handleSetMinterDefaultView = useCallback((nextView: MinterInfoView) => {
-    setMinterDefaultView(nextView);
-    localStorage.setItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY, nextView);
-  }, []);
-
   const balanceLabel =
     balance != null ? `${Number(balance).toFixed(2)} QORT` : '—';
 
@@ -271,7 +259,11 @@ export function useDashboardInfoPreviewRows({
         : 'issue';
 
   const resolvedCoreVersionLabel = coreVersionLabel;
-  const isMinterOn = Boolean(minterLevel && minterLevel > 0);
+  const isMinterOn = useMemo(
+    () =>
+      !!memberGroups?.find((item: any) => item?.groupId?.toString() === '694'),
+    [memberGroups]
+  );
   const minterDotsFilled = isMinterOn
     ? Math.max(1, Math.min(9, minterLevel ?? 5))
     : 0;
@@ -287,10 +279,7 @@ export function useDashboardInfoPreviewRows({
     minterProgress != null &&
     formattedMinterCurrentBlocks != null &&
     formattedMinterRequiredBlocks != null;
-  const resolvedMinterDefaultView: MinterInfoView =
-    hasMinterProgressSummary && minterDefaultView === 'progress'
-      ? 'progress'
-      : 'dots';
+  const resolvedMinterDefaultView: MinterInfoView = 'dots';
   const minterHoverView: MinterInfoView =
     resolvedMinterDefaultView === 'dots' ? 'progress' : 'dots';
   const isShowingMinterHoverView =
@@ -298,13 +287,6 @@ export function useDashboardInfoPreviewRows({
   const activeMinterInfoView: MinterInfoView = isShowingMinterHoverView
     ? minterHoverView
     : resolvedMinterDefaultView;
-  const minterPinActionLabel =
-    activeMinterInfoView === 'progress'
-      ? td(
-          'minter_pin_save_progress_default',
-          'Save level bar as default view'
-        )
-      : td('minter_pin_save_dots_default', 'Save minting dots as default view');
 
   const minterValue = useMemo(
     () => (
@@ -314,12 +296,9 @@ export function useDashboardInfoPreviewRows({
         filledBlueDotSx={filledBlueDotSx}
         formattedMinterCurrentBlocks={formattedMinterCurrentBlocks}
         formattedMinterRequiredBlocks={formattedMinterRequiredBlocks}
-        handleSetMinterDefaultView={handleSetMinterDefaultView}
         hasMinterProgressSummary={hasMinterProgressSummary}
         isMinterOn={isMinterOn}
-        isShowingMinterHoverView={isShowingMinterHoverView}
         minterDotsFilled={minterDotsFilled}
-        minterPinActionLabel={minterPinActionLabel}
         minterProgress={minterProgress}
         onHoverMinterChange={setIsMinterFieldHovered}
         td={td}
@@ -332,12 +311,9 @@ export function useDashboardInfoPreviewRows({
       filledBlueDotSx,
       formattedMinterCurrentBlocks,
       formattedMinterRequiredBlocks,
-      handleSetMinterDefaultView,
       hasMinterProgressSummary,
       isMinterOn,
-      isShowingMinterHoverView,
       minterDotsFilled,
-      minterPinActionLabel,
       minterProgress,
       td,
       theme,
@@ -440,12 +416,9 @@ function MinterInfoValue({
   filledBlueDotSx,
   formattedMinterCurrentBlocks,
   formattedMinterRequiredBlocks,
-  handleSetMinterDefaultView,
   hasMinterProgressSummary,
   isMinterOn,
-  isShowingMinterHoverView,
   minterDotsFilled,
-  minterPinActionLabel,
   minterProgress,
   onHoverMinterChange,
   td,
@@ -456,12 +429,9 @@ function MinterInfoValue({
   filledBlueDotSx: SxProps<Theme>;
   formattedMinterCurrentBlocks: string | null;
   formattedMinterRequiredBlocks: string | null;
-  handleSetMinterDefaultView: (view: MinterInfoView) => void;
   hasMinterProgressSummary: boolean;
   isMinterOn: boolean;
-  isShowingMinterHoverView: boolean;
   minterDotsFilled: number;
-  minterPinActionLabel: string;
   minterProgress: MinterProgressSnapshot | null;
   onHoverMinterChange: (hovered: boolean) => void;
   td: (
@@ -554,46 +524,6 @@ function MinterInfoValue({
                     width: '100%',
                   }}
                 >
-                  {isShowingMinterHoverView ? (
-                    <Tooltip title={minterPinActionLabel}>
-                      <ButtonBase
-                        aria-label={minterPinActionLabel}
-                        disableRipple
-                        onClick={() =>
-                          handleSetMinterDefaultView(activeMinterInfoView)
-                        }
-                        sx={{
-                          alignItems: 'center',
-                          borderRadius: '999px',
-                          color: alpha(
-                            GROUP_ACTIVITY_BLUE.primary,
-                            theme.palette.mode === 'dark' ? 0.92 : 0.82
-                          ),
-                          display: 'inline-flex',
-                          flexShrink: 0,
-                          height: '18px',
-                          justifyContent: 'center',
-                          transition:
-                            'background-color 140ms ease, color 140ms ease, transform 120ms ease',
-                          width: '18px',
-                          '&:hover': {
-                            backgroundColor: alpha(
-                              GROUP_ACTIVITY_BLUE.primary,
-                              theme.palette.mode === 'dark' ? 0.18 : 0.12
-                            ),
-                            color: GROUP_ACTIVITY_BLUE.primary,
-                            transform: 'translateY(-1px)',
-                          },
-                          '&:active': {
-                            transform: 'translateY(0)',
-                          },
-                        }}
-                      >
-                        <LockOpenRoundedIcon sx={{ fontSize: '0.92rem' }} />
-                      </ButtonBase>
-                    </Tooltip>
-                  ) : null}
-
                   {activeMinterInfoView === 'progress' &&
                   hasMinterProgressSummary ? (
                     <Box

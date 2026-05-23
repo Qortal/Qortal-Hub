@@ -1073,9 +1073,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       ? 'linear-gradient(180deg, rgba(18,21,28,0.42) 0%, rgba(15,18,24,0.52) 100%)'
                       : 'linear-gradient(180deg, rgba(249,251,254,0.72) 0%, rgba(243,247,251,0.82) 100%)',
                   borderColor: alpha(theme.palette.divider, 0.14),
-                  flex: '1 1 auto',
-                  minHeight: 0,
-                  overflow: 'hidden',
+                  flex: '0 0 auto',
+                  minHeight: 'max-content',
+                  overflow: 'visible',
                   p: { xs: 2, md: 2.25 },
                   position: 'relative',
                 }}
@@ -1259,7 +1259,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         })}
                       </Button>
                       {mintingAccounts?.length > 1 ? (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            lineHeight: 1.45,
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {t('group:message.generic.minting_keys_per_node', {
                             postProcess: 'capitalizeFirstChar',
                           })}
@@ -1395,7 +1403,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       <Typography
                         variant="body2"
                         color="text.secondary"
-                        sx={{ mt: 1.2 }}
+                        sx={{
+                          lineHeight: 1.45,
+                          mt: 1.2,
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
+                        }}
                       >
                         {t('group:message.generic.minting_keys_per_node_different', {
                           postProcess: 'capitalizeFirstChar',
