@@ -10,12 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useRef, useState } from 'react';
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  List,
-} from 'react-virtualized';
+import { AutoSizer, List } from 'react-virtualized';
 import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
@@ -27,10 +22,7 @@ import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
 import { getFallbackAvatarOutlineSx } from '../Chat/clickableAvatarStyles';
 import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
-const cache = new CellMeasurerCache({
-  fixedWidth: true,
-  defaultHeight: 50,
-});
+const MEMBER_ROW_HEIGHT = 64;
 
 const ListOfMembers = ({
   members,
@@ -303,7 +295,7 @@ const ListOfMembers = ({
     }
   };
 
-  const rowRenderer = ({ index, key, parent, style }) => {
+  const rowRenderer = ({ index, key, style }) => {
     const member = members[index];
     const memberLabel = member?.primaryName || member?.member;
     const hasUnsafeMemberName = Boolean(
@@ -311,153 +303,141 @@ const ListOfMembers = ({
     );
 
     return (
-      <CellMeasurer
-        key={key}
-        cache={cache}
-        parent={parent}
-        columnIndex={0}
-        rowIndex={index}
-      >
-        {({ measure }) => (
-          <div style={style} onLoad={measure}>
-            {isOwner && (
-              <Popover
-                open={openPopoverIndex === index}
-                anchorEl={popoverAnchor}
-                onClose={handlePopoverClose}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'center',
-                }}
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'center',
-                }}
-                style={{ marginTop: '8px' }}
-              >
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    height: '250px',
-                    padding: '10px',
-                    width: '325px',
-                  }}
-                >
-                  {isOwner && (
-                    <>
-                      <LoadingButton
-                        loading={isLoadingKick}
-                        loadingPosition="start"
-                        variant="contained"
-                        onClick={() => handleKick(member?.member)}
-                      >
-                        {t('group:action.kick_member', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </LoadingButton>
-
-                      <LoadingButton
-                        loading={isLoadingBan}
-                        loadingPosition="start"
-                        variant="contained"
-                        onClick={() => handleBan(member?.member)}
-                      >
-                        {t('group:action.ban', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </LoadingButton>
-
-                      <LoadingButton
-                        loading={isLoadingMakeAdmin}
-                        loadingPosition="start"
-                        variant="contained"
-                        onClick={() => makeAdmin(member?.member)}
-                      >
-                        {t('group:action.make_admin', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </LoadingButton>
-
-                      <LoadingButton
-                        loading={isLoadingRemoveAdmin}
-                        loadingPosition="start"
-                        variant="contained"
-                        onClick={() => removeAdmin(member?.member)}
-                      >
-                        {t('group:action.remove_admin', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </LoadingButton>
-                    </>
-                  )}
-                </Box>
-              </Popover>
-            )}
-
-            <ListItem key={member?.member} disablePadding>
-              <ListItemButton
-                onClick={(event) => handlePopoverOpen(event, index)}
-              >
-                <ListItemAvatar>
-                  <PresenceStatusBadge
-                    online={onlineAddresses.has(member?.member)}
-                    status={statusMap.get(member?.member) ?? null}
+      <div key={key} style={style}>
+        {isOwner && (
+          <Popover
+            open={openPopoverIndex === index}
+            anchorEl={popoverAnchor}
+            onClose={handlePopoverClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'center',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'center',
+            }}
+            style={{ marginTop: '8px' }}
+          >
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                height: '250px',
+                padding: '10px',
+                width: '325px',
+              }}
+            >
+              {isOwner && (
+                <>
+                  <LoadingButton
+                    loading={isLoadingKick}
+                    loadingPosition="start"
+                    variant="contained"
+                    onClick={() => handleKick(member?.member)}
                   >
-                    <Avatar
-                      alt={member?.primaryName || member?.member}
-                      sx={{
-                        ...(!member?.primaryName
-                          ? getFallbackAvatarOutlineSx(theme)
-                          : {}),
-                      }}
-                      src={
-                        member?.primaryName
-                          ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.primaryName}/qortal_avatar?async=true`
-                          : ''
-                      }
-                    />
-                  </PresenceStatusBadge>
-                </ListItemAvatar>
+                    {t('group:action.kick_member', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </LoadingButton>
 
-                <ListItemText
-                  id={memberLabel}
-                  primary={memberLabel}
-                  primaryTypographyProps={{
-                    sx: {
-                      ...(hasUnsafeMemberName
-                        ? {
-                            textDecorationLine: 'line-through',
-                            textDecorationThickness: '2px',
-                            textDecorationColor: theme.palette.error.main,
-                          }
-                        : {}),
-                    },
-                  }}
-                />
-                {(member?.isAdmin || member?.member === ownerAddress) && (
-                  <Typography
-                    sx={{
-                      color: theme.palette.text.primary,
-                      marginLeft: 'auto',
-                    }}
+                  <LoadingButton
+                    loading={isLoadingBan}
+                    loadingPosition="start"
+                    variant="contained"
+                    onClick={() => handleBan(member?.member)}
                   >
-                    {member?.member === ownerAddress
-                      ? t('group:group.owner', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
-                      : t('core:admin', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                  </Typography>
-                )}
-              </ListItemButton>
-            </ListItem>
-          </div>
+                    {t('group:action.ban', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </LoadingButton>
+
+                  <LoadingButton
+                    loading={isLoadingMakeAdmin}
+                    loadingPosition="start"
+                    variant="contained"
+                    onClick={() => makeAdmin(member?.member)}
+                  >
+                    {t('group:action.make_admin', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </LoadingButton>
+
+                  <LoadingButton
+                    loading={isLoadingRemoveAdmin}
+                    loadingPosition="start"
+                    variant="contained"
+                    onClick={() => removeAdmin(member?.member)}
+                  >
+                    {t('group:action.remove_admin', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </LoadingButton>
+                </>
+              )}
+            </Box>
+          </Popover>
         )}
-      </CellMeasurer>
+
+        <ListItem key={member?.member} disablePadding>
+          <ListItemButton onClick={(event) => handlePopoverOpen(event, index)}>
+            <ListItemAvatar>
+              <PresenceStatusBadge
+                online={onlineAddresses.has(member?.member)}
+                status={statusMap.get(member?.member) ?? null}
+              >
+                <Avatar
+                  alt={member?.primaryName || member?.member}
+                  sx={{
+                    ...(!member?.primaryName
+                      ? getFallbackAvatarOutlineSx(theme)
+                      : {}),
+                  }}
+                  src={
+                    member?.primaryName
+                      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.primaryName}/qortal_avatar?async=true`
+                      : ''
+                  }
+                />
+              </PresenceStatusBadge>
+            </ListItemAvatar>
+
+            <ListItemText
+              id={memberLabel}
+              primary={memberLabel}
+              primaryTypographyProps={{
+                sx: {
+                  ...(hasUnsafeMemberName
+                    ? {
+                        textDecorationLine: 'line-through',
+                        textDecorationThickness: '2px',
+                        textDecorationColor: theme.palette.error.main,
+                      }
+                    : {}),
+                },
+              }}
+            />
+            {(member?.isAdmin || member?.member === ownerAddress) && (
+              <Typography
+                sx={{
+                  color: theme.palette.text.primary,
+                  marginLeft: 'auto',
+                }}
+              >
+                {member?.member === ownerAddress
+                  ? t('group:group.owner', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('core:admin', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+              </Typography>
+            )}
+          </ListItemButton>
+        </ListItem>
+      </div>
     );
   };
 
@@ -481,11 +461,11 @@ const ListOfMembers = ({
         <AutoSizer>
           {({ height, width }) => (
             <List
-              deferredMeasurementCache={cache}
               height={height}
+              overscanRowCount={8}
               ref={listRef}
               rowCount={members.length}
-              rowHeight={cache.rowHeight}
+              rowHeight={MEMBER_ROW_HEIGHT}
               rowRenderer={rowRenderer}
               width={width}
             />
