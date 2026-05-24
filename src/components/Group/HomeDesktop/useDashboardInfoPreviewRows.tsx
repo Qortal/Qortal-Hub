@@ -265,7 +265,7 @@ export function useDashboardInfoPreviewRows({
     [memberGroups]
   );
   const minterDotsFilled = isMinterOn
-    ? Math.max(1, Math.min(9, minterLevel ?? 5))
+    ? Math.max(0, Math.min(9, minterLevel ?? 0))
     : 0;
   const formattedMinterCurrentBlocks =
     minterProgress?.currentBlocks != null
