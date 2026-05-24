@@ -2,6 +2,7 @@ import { useEffect, MutableRefObject } from 'react';
 import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
 import { extractComponents } from '../components/Chat/MessageDisplay';
+import { openQWalletsTab } from '../utils/openQWalletsTab';
 
 type PermissionHandler = (message: any, event: MessageEvent) => void | Promise<void>;
 
@@ -45,7 +46,7 @@ export function useAppMessageHandler(
       } else if (message.action === 'NOTIFICATION_OPEN_APP') {
         const payload = message.payload;
         if (payload?.openWallets) {
-          executeEvent('openWalletsApp', {});
+          openQWalletsTab();
         } else if (payload?.link) {
           const data = extractComponents(payload.link);
           if (data) {

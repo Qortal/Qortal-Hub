@@ -27,6 +27,7 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
+import { openQWalletsTab } from '../../utils/openQWalletsTab';
 
 /** Official Q-App listing name — kept in English everywhere. */
 const Q_WALLETS_APP_NAME = 'Q-Wallets';
@@ -75,7 +76,8 @@ export const WalletsAppWrapper = () => {
   }, [navigationController, selectedTab]);
 
   const openWalletsAppFunc = useCallback(() => {
-    setIsOpen(true);
+    setIsOpen(false);
+    openQWalletsTab();
   }, []);
 
   useEffect(() => {

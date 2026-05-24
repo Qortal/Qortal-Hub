@@ -135,6 +135,7 @@ import { isDisabledLegacy } from './constants/featureFlags';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
 import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
+import { openQWalletsTab } from './utils/openQWalletsTab';
 
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
@@ -1201,10 +1202,7 @@ function App() {
     () => setIsOpenDrawerLookup((prev) => !prev),
     []
   );
-  const onOpenWalletsApp = useCallback(
-    () => executeEvent('openWalletsApp', {}),
-    []
-  );
+  const onOpenWalletsApp = useCallback(() => openQWalletsTab(), []);
   const onOpenMinting = useCallback(async () => {
     try {
       const forceLocalMintingPreview =

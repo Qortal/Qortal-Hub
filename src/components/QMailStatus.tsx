@@ -1,5 +1,5 @@
 import { Mail } from '@mui/icons-material';
-import { ButtonBase, Tooltip, useTheme } from '@mui/material';
+import { Box, ButtonBase, Tooltip, alpha, useTheme } from '@mui/material';
 import { useAtom, useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -80,16 +80,26 @@ export const QMailStatus = ({
       }}
     >
       {hasNewMail && (
-        <span
-          style={{
+        <Box
+          component="span"
+          sx={{
             backgroundColor: theme.palette.other.unread,
+            border: `2px solid ${
+              theme.palette.mode === 'dark'
+                ? 'rgba(33, 36, 42, 0.95)'
+                : 'rgba(223, 228, 235, 0.96)'
+            }`,
             borderRadius: '50%',
-            height: compact ? '10px' : '15px',
-            outline: '1px solid white',
+            boxShadow: `0 0 0 1px ${alpha(
+              theme.palette.other.unread,
+              0.24
+            )}, 0 2px 7px ${alpha(theme.palette.other.unread, 0.34)}`,
+            height: compact ? 11 : 12,
+            pointerEvents: 'none',
             position: 'absolute',
-            right: compact ? 4 : -7,
-            top: compact ? 4 : -7,
-            width: compact ? '10px' : '15px',
+            right: compact ? 3 : -1,
+            top: compact ? 3 : -1,
+            width: compact ? 11 : 12,
             zIndex: 1,
           }}
         />
