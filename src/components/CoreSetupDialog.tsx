@@ -63,15 +63,9 @@ export function getCoreSetupStyles(theme: Theme) {
   const isLight = theme.palette.mode === 'light';
   const { palette } = theme;
 
-  const dividerSoft = isLight
-    ? palette.divider
-    : 'rgba(255,255,255,0.07)';
-  const dividerStrong = isLight
-    ? palette.divider
-    : 'rgba(255,255,255,0.08)';
-  const dividerRow = isLight
-    ? palette.divider
-    : 'rgba(255,255,255,0.06)';
+  const dividerSoft = isLight ? palette.divider : 'rgba(255,255,255,0.07)';
+  const dividerStrong = isLight ? palette.divider : 'rgba(255,255,255,0.08)';
+  const dividerRow = isLight ? palette.divider : 'rgba(255,255,255,0.06)';
 
   const dialogPaperSx = {
     background: isLight ? palette.background.paper : '#0d1117',
@@ -127,9 +121,7 @@ export function getCoreSetupStyles(theme: Theme) {
   };
 
   const advancedCopySx = {
-    color: isLight
-      ? palette.text.secondary
-      : 'rgba(214,221,233,0.64)',
+    color: isLight ? palette.text.secondary : 'rgba(214,221,233,0.64)',
     fontSize: '0.84rem',
     lineHeight: 1.55,
   };
@@ -315,9 +307,7 @@ export function getCoreSetupStyles(theme: Theme) {
   };
 
   const pathValueSx = {
-    color: isLight
-      ? palette.text.secondary
-      : 'rgba(214,221,233,0.78)',
+    color: isLight ? palette.text.secondary : 'rgba(214,221,233,0.78)',
     fontSize: '0.8rem',
     lineHeight: 1.45,
     overflowWrap: 'anywhere' as const,
@@ -348,9 +338,7 @@ export function getCoreSetupStyles(theme: Theme) {
     minWidth: 82,
     textTransform: 'none' as const,
     '&:hover': {
-      borderColor: isLight
-        ? palette.primary.main
-        : 'rgba(170,202,255,0.7)',
+      borderColor: isLight ? palette.primary.main : 'rgba(170,202,255,0.7)',
       backgroundColor: isLight
         ? alpha(palette.primary.main, 0.06)
         : 'rgba(141,180,242,0.08)',
@@ -399,9 +387,7 @@ export function getCoreSetupStyles(theme: Theme) {
   };
 
   const secondaryActionSx = {
-    color: isLight
-      ? palette.text.secondary
-      : 'rgba(214,221,233,0.72)',
+    color: isLight ? palette.text.secondary : 'rgba(214,221,233,0.72)',
     fontSize: '0.86rem',
     fontWeight: 600,
     letterSpacing: 0,
@@ -427,18 +413,14 @@ export function getCoreSetupStyles(theme: Theme) {
   };
 
   const progressPercentSx = {
-    color: isLight
-      ? palette.text.secondary
-      : 'rgba(214,221,233,0.58)',
+    color: isLight ? palette.text.secondary : 'rgba(214,221,233,0.58)',
     fontSize: '0.82rem',
     minWidth: 38,
     textAlign: 'right' as const,
   };
 
   const mutedDecorIconSx = {
-    color: isLight
-      ? palette.text.secondary
-      : 'rgba(214,221,233,0.72)',
+    color: isLight ? palette.text.secondary : 'rgba(214,221,233,0.72)',
     fontSize: 24,
   };
 
@@ -569,9 +551,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       const idleColor = isLight
         ? alpha(theme.palette.text.primary, 0.32)
         : 'rgba(214,221,233,0.32)';
-      const activeColor = isLight
-        ? theme.palette.primary.main
-        : '#83B3FF';
+      const activeColor = isLight ? theme.palette.primary.main : '#83B3FF';
       switch (status) {
         case 'done':
           return <CheckCircleIcon sx={{ color: '#62D26F', fontSize: 29 }} />;
@@ -584,9 +564,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         case 'idle':
         default:
           return (
-            <RadioButtonUncheckedIcon
-              sx={{ color: idleColor, fontSize: 29 }}
-            />
+            <RadioButtonUncheckedIcon sx={{ color: idleColor, fontSize: 29 }} />
           );
       }
     },
@@ -828,12 +806,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   };
 
   useEffect(() => {
-    if (
-      !open ||
-      !window?.coreSetup ||
-      isActive ||
-      bootstrapChainLoading
-    )
+    if (!open || !window?.coreSetup || isActive || bootstrapChainLoading)
       return; // only start when modal is open
     if (window?.coreSetup?.isCoreRunningOnSystem) {
       getIsCoreRunningOnSystem();
@@ -893,8 +866,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         }),
       });
       const response =
-        (await window?.coreSetup?.bootstrapOrClearChainAndStart?.()) ??
-        false;
+        (await window?.coreSetup?.bootstrapOrClearChainAndStart?.()) ?? false;
       if (response !== true) {
         setErrorBootstrapChain(
           t('node:error.failed_bootstrap_or_clear', {
@@ -977,7 +949,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 })}
               </li>
             </ul>
-            <Box
+            {/* <Box
               sx={{
                 alignItems: 'center',
                 borderRadius: '8px',
@@ -1003,7 +975,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
-            </Box>
+            </Box> */}
           </DialogContent>
 
           <DialogActions sx={{ p: 2 }}>
@@ -1030,11 +1002,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       {mode === 2 && (
         <>
           <Box sx={s.coreHeaderSx}>
-                <Typography id="core-setup-title" sx={s.coreTitleSx}>
-                  {t('node:coreSetupDialog.title', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
+            <Typography id="core-setup-title" sx={s.coreTitleSx}>
+              {t('node:coreSetupDialog.title', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
             {onClose && (
               <IconButton
                 onClick={onClose}
@@ -1144,9 +1116,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={s.stepTitleSx}>{label}</Typography>
                         <Typography
-                          sx={
-                            isNextStep ? s.activeStatusSx : s.advancedCopySx
-                          }
+                          sx={isNextStep ? s.activeStatusSx : s.advancedCopySx}
                         >
                           {statusLabel}
                         </Typography>
@@ -1172,9 +1142,12 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                           }
                           value={prog}
                           color={state.status === 'error' ? 'error' : 'primary'}
-                          aria-label={t('node:coreSetupDialog.progressAriaLabel', {
-                            label,
-                          })}
+                          aria-label={t(
+                            'node:coreSetupDialog.progressAriaLabel',
+                            {
+                              label,
+                            }
+                          )}
                           sx={{
                             height: 7,
                             borderRadius: 2,

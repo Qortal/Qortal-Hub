@@ -147,5 +147,41 @@
     "descNotReady": "Qortal Core wurde noch nicht vollständig gestartet. Bitte warten.",
     "titleReady": "Qortal Core ist bereit",
     "descReady": "Alles bereit zum Fortfahren"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "Lokaler Node installiert",
+      "description": "Du hast bereits einen lokalen Node installiert. Möchtest du ihn starten, während du den öffentlichen Node verwendest?"
+    },
+    "localReady": {
+      "title": "Lokaler Node bereit",
+      "description": "Qortal Core ist synchronisiert. Du kannst jetzt vom öffentlichen Node zu deinem lokalen Node wechseln."
+    },
+    "installing": {
+      "title": "Qortal Core wird installiert",
+      "description": "Qortal Core wird heruntergeladen und installiert."
+    },
+    "starting": {
+      "title": "Lokaler Core wird gestartet",
+      "description": "Qortal Core wird gestartet.",
+      "preparing": "Core startet und bereitet Blockchain-Daten vor."
+    },
+    "syncing": {
+      "title": "Blockchain wird synchronisiert",
+      "description": "Dein lokaler Node holt im Hintergrund auf.",
+      "checking": "Core läuft. Der Synchronisationsfortschritt der Blockchain wird geprüft."
+    },
+    "needsAttention": {
+      "title": "Core-Einrichtung benötigt Aufmerksamkeit",
+      "description": "Core benötigt Aufmerksamkeit. Öffne die Einrichtung, um das Problem zu prüfen."
+    },
+    "actions": {
+      "ignore": "Ignorieren",
+      "start": "Starten",
+      "starting": "Startet...",
+      "later": "Später",
+      "switchToLocal": "Zu lokal wechseln",
+      "openSetup": "Einrichtung öffnen"
+    }
   }
 }

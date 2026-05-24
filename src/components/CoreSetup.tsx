@@ -25,9 +25,11 @@ import { CoreUrlInvalid } from './CoreUrlInvalid';
 import { CoreSettingUp } from './CoreSettingUp';
 import { useAuth } from '../hooks/useAuth';
 import { ensureElectronCertIfLocalPrivateHttps } from '../utils/helpers';
+import { useTranslation } from 'react-i18next';
 
 export const CoreSetup = () => {
   const theme = useTheme();
+  const { t } = useTranslation(['node']);
   const [open, setOpen] = useAtom(isOpenCoreSetup);
   const [isReady, setIsReady] = useState(false);
   const [statuses, setStatuses] = useAtom(statusesAtom);
@@ -48,8 +50,10 @@ export const CoreSetup = () => {
   const [localReadySwitchError, setLocalReadySwitchError] = useState('');
   const [setupContextActionLoading, setSetupContextActionLoading] =
     useState(false);
+  const [showLocalStartPrompt, setShowLocalStartPrompt] = useState(false);
+  const [localStartLoading, setLocalStartLoading] = useState(false);
   const inFlight = useRef(false);
-  const autoStartAttemptedRef = useRef(false);
+  const localStartPromptAttemptedRef = useRef(false);
   const backgroundNoticeDismissedRef = useRef(false);
   const localReadyDismissedRef = useRef(false);
   const switchingToLocalRef = useRef(false);
@@ -119,39 +123,44 @@ export const CoreSetup = () => {
 
   useEffect(() => {
     if (extState !== 'authenticated' || !usingDefaultPublicNode) {
-      autoStartAttemptedRef.current = false;
+      localStartPromptAttemptedRef.current = false;
+      setShowLocalStartPrompt(false);
     }
   }, [extState, usingDefaultPublicNode]);
 
   useEffect(() => {
     if (!window?.coreSetup || !isReady) return;
     if (extState !== 'authenticated' || !usingDefaultPublicNode) return;
-    if (autoStartAttemptedRef.current) return;
+    if (localStartPromptAttemptedRef.current) return;
 
     let canceled = false;
 
-    const startInstalledCore = async () => {
-      autoStartAttemptedRef.current = true;
+    const promptForInstalledCoreStart = async () => {
+      localStartPromptAttemptedRef.current = true;
 
       try {
         const running = await window.coreSetup.isCoreRunning();
-        if (canceled || running) return;
+        if (canceled) return;
+        if (running) {
+          setShowLocalStartPrompt(false);
+          return;
+        }
 
         const installed = await window.coreSetup.isCoreInstalled();
         if (canceled) return;
 
         if (installed) {
-          window.coreSetup.startCore();
+          setShowLocalStartPrompt(true);
         } else {
           setStartCoreSetupAtIntro(true);
           setOpen(true);
         }
       } catch (error) {
-        console.error('Failed to auto-start local Core:', error);
+        console.error('Failed to prepare local Core start prompt:', error);
       }
     };
 
-    startInstalledCore();
+    promptForInstalledCoreStart();
 
     return () => {
       canceled = true;
@@ -220,6 +229,10 @@ export const CoreSetup = () => {
             setLocalNodeRuntimeStatus({ running: false });
           }
           return;
+        }
+
+        if (!canceled) {
+          setShowLocalStartPrompt(false);
         }
 
         const statusResponse = await fetch(
@@ -433,6 +446,21 @@ export const CoreSetup = () => {
     }
   }, [extState, setOpen, switchToLocalNode]);
 
+  const startLocalCoreFromPrompt = useCallback(async () => {
+    if (!window?.coreSetup || localStartLoading) return;
+
+    setLocalStartLoading(true);
+    try {
+      await window.coreSetup.startCore();
+      setShowLocalStartPrompt(false);
+      backgroundNoticeDismissedRef.current = false;
+    } catch (error) {
+      console.error('Failed to start local Core from prompt:', error);
+    } finally {
+      setLocalStartLoading(false);
+    }
+  }, [localStartLoading]);
+
   const localCoreSynced = isLocalCoreStatusSynced(
     localNodeRuntimeStatus?.syncPercent
   );
@@ -481,13 +509,31 @@ export const CoreSetup = () => {
     const translatedMessage =
       runningState?.message || downloadedState?.message || '';
 
+    if (showLocalStartPrompt) {
+      return {
+        action: 'start' as const,
+        description: t('node:coreStatusNotice.installedPrompt.description', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        progress: undefined,
+        ready: false,
+        title: t('node:coreStatusNotice.installedPrompt.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      };
+    }
+
     if (showLocalReadyNotice) {
       return {
-        description:
-          'Qortal Core is synced. You can switch from the public node to your local node now.',
+        action: 'switch' as const,
+        description: t('node:coreStatusNotice.localReady.description', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         progress: 100,
         ready: true,
-        title: 'Local node ready',
+        title: t('node:coreStatusNotice.localReady.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
@@ -497,11 +543,15 @@ export const CoreSetup = () => {
       isLocalCoreStatusSynced(syncPercent)
     ) {
       return {
-        description:
-          'Qortal Core is synced. You can switch from the public node to your local node now.',
+        action: 'switch' as const,
+        description: t('node:coreStatusNotice.localReady.description', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         progress: 100,
         ready: true,
-        title: 'Local node ready',
+        title: t('node:coreStatusNotice.localReady.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
@@ -511,10 +561,15 @@ export const CoreSetup = () => {
 
     if (downloadedState?.status === 'active') {
       return {
-        description: 'Downloading and installing Qortal Core.',
+        action: 'setup' as const,
+        description: t('node:coreStatusNotice.installing.description', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         progress: downloadedState.progress,
         ready: false,
-        title: 'Installing Qortal Core',
+        title: t('node:coreStatusNotice.installing.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
@@ -523,13 +578,20 @@ export const CoreSetup = () => {
       localNodeRuntimeStatus?.running !== false
     ) {
       return {
+        action: 'setup' as const,
         description:
           translatedMessage === '001'
-            ? 'Core is starting and preparing blockchain data.'
-            : 'Starting Qortal Core.',
+            ? t('node:coreStatusNotice.starting.preparing', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('node:coreStatusNotice.starting.description', {
+                postProcess: 'capitalizeFirstChar',
+              }),
         progress: runningState.progress,
         ready: false,
-        title: 'Starting local Core',
+        title: t('node:coreStatusNotice.starting.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
@@ -539,25 +601,37 @@ export const CoreSetup = () => {
       !isLocalCoreStatusSynced(syncPercent)
     ) {
       return {
-        description: 'Your local node is catching up in the background.',
+        action: 'setup' as const,
+        description: t('node:coreStatusNotice.syncing.description', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         progress: Math.max(0, Math.min(100, syncPercent)),
         ready: false,
-        title: 'Syncing blockchain',
+        title: t('node:coreStatusNotice.syncing.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
     if (localNodeRuntimeStatus?.running) {
       return {
+        action: 'setup' as const,
         description:
           typeof syncPercent === 'number'
-            ? 'Your local node is catching up in the background.'
-            : 'Core is running. Checking blockchain sync progress.',
+            ? t('node:coreStatusNotice.syncing.description', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('node:coreStatusNotice.syncing.checking', {
+                postProcess: 'capitalizeFirstChar',
+              }),
         progress:
           typeof syncPercent === 'number'
             ? Math.max(0, Math.min(100, syncPercent))
             : undefined,
         ready: false,
-        title: 'Syncing blockchain',
+        title: t('node:coreStatusNotice.syncing.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
@@ -566,10 +640,15 @@ export const CoreSetup = () => {
       downloadedState?.status === 'error'
     ) {
       return {
-        description: 'Core needs attention. Open setup to review the issue.',
+        action: 'setup' as const,
+        description: t('node:coreStatusNotice.needsAttention.description', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         progress: undefined,
         ready: false,
-        title: 'Core setup needs attention',
+        title: t('node:coreStatusNotice.needsAttention.title', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       };
     }
 
@@ -582,6 +661,8 @@ export const CoreSetup = () => {
     showLocalReadyNotice,
     statuses.coreRunning,
     statuses.downloadedCore,
+    showLocalStartPrompt,
+    t,
     usingDefaultPublicNode,
   ]);
 
@@ -712,6 +793,10 @@ export const CoreSetup = () => {
                   dismissLocalReadyNotice();
                   return;
                 }
+                if (coreStatusNotice.action === 'start') {
+                  setShowLocalStartPrompt(false);
+                  return;
+                }
                 dismissBackgroundNotice();
               }}
               sx={{
@@ -739,13 +824,43 @@ export const CoreSetup = () => {
                   }}
                   sx={noticeActionSx(false)}
                 >
-                  Later
+                  {t('node:coreStatusNotice.actions.later', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </ButtonBase>
                 <ButtonBase
                   onClick={switchToLocalNode}
                   sx={noticeActionSx(true)}
                 >
-                  Switch to local
+                  {t('node:coreStatusNotice.actions.switchToLocal', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </ButtonBase>
+              </>
+            ) : coreStatusNotice.action === 'start' ? (
+              <>
+                <ButtonBase
+                  onClick={() => {
+                    setShowLocalStartPrompt(false);
+                  }}
+                  sx={noticeActionSx(false)}
+                >
+                  {t('node:coreStatusNotice.actions.ignore', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </ButtonBase>
+                <ButtonBase
+                  disabled={localStartLoading}
+                  onClick={startLocalCoreFromPrompt}
+                  sx={noticeActionSx(true)}
+                >
+                  {localStartLoading
+                    ? t('node:coreStatusNotice.actions.starting', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('node:coreStatusNotice.actions.start', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                 </ButtonBase>
               </>
             ) : (
@@ -756,7 +871,9 @@ export const CoreSetup = () => {
                 }}
                 sx={noticeActionSx(true)}
               >
-                Open setup
+                {t('node:coreStatusNotice.actions.openSetup', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </ButtonBase>
             )}
           </Box>
@@ -802,5 +919,9 @@ const noticeActionSx = (primary: boolean) => ({
     borderColor: primary
       ? 'rgba(190, 216, 255, 0.38)'
       : 'rgba(255,255,255,0.11)',
+  },
+  '&.Mui-disabled': {
+    cursor: 'default',
+    opacity: 0.58,
   },
 });

@@ -147,5 +147,41 @@
     "descNotReady": "Qortal Core لم يبدأ بالكامل بعد. الرجاء الانتظار.",
     "titleReady": "Qortal Core جاهز",
     "descReady": "كل شيء جاهز للمتابعة"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "العقدة المحلية مثبتة",
+      "description": "لديك عقدة محلية مثبتة بالفعل. هل تريد تشغيلها أثناء استخدام العقدة العامة؟"
+    },
+    "localReady": {
+      "title": "العقدة المحلية جاهزة",
+      "description": "تمت مزامنة Qortal Core. يمكنك الآن التبديل من العقدة العامة إلى عقدتك المحلية."
+    },
+    "installing": {
+      "title": "تثبيت Qortal Core",
+      "description": "جارٍ تنزيل Qortal Core وتثبيته."
+    },
+    "starting": {
+      "title": "بدء تشغيل Core المحلي",
+      "description": "جارٍ بدء تشغيل Qortal Core.",
+      "preparing": "يتم بدء تشغيل Core وتجهيز بيانات البلوكشين."
+    },
+    "syncing": {
+      "title": "مزامنة البلوكشين",
+      "description": "عقدتك المحلية تلحق بالشبكة في الخلفية.",
+      "checking": "Core قيد التشغيل. يتم فحص تقدم مزامنة البلوكشين."
+    },
+    "needsAttention": {
+      "title": "إعداد Core يحتاج إلى انتباه",
+      "description": "يحتاج Core إلى انتباه. افتح الإعداد لمراجعة المشكلة."
+    },
+    "actions": {
+      "ignore": "تجاهل",
+      "start": "تشغيل",
+      "starting": "جارٍ التشغيل...",
+      "later": "لاحقًا",
+      "switchToLocal": "التبديل إلى المحلي",
+      "openSetup": "فتح الإعداد"
+    }
   }
 }

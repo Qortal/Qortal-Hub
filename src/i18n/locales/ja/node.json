@@ -147,5 +147,41 @@
     "descNotReady": "Qortal Core はまだ完全に起動していません。しばらくお待ちください。",
     "titleReady": "Qortal Core の準備ができました",
     "descReady": "続行する準備ができています"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "ローカルノードがインストール済みです",
+      "description": "ローカルノードはすでにインストールされています。パブリックノードを使用している間に起動しますか？"
+    },
+    "localReady": {
+      "title": "ローカルノードの準備完了",
+      "description": "Qortal Core は同期済みです。パブリックノードからローカルノードへ切り替えられます。"
+    },
+    "installing": {
+      "title": "Qortal Core をインストール中",
+      "description": "Qortal Core をダウンロードしてインストールしています。"
+    },
+    "starting": {
+      "title": "ローカル Core を起動中",
+      "description": "Qortal Core を起動しています。",
+      "preparing": "Core を起動し、ブロックチェーンデータを準備しています。"
+    },
+    "syncing": {
+      "title": "ブロックチェーンを同期中",
+      "description": "ローカルノードはバックグラウンドで追いついています。",
+      "checking": "Core は実行中です。ブロックチェーン同期の進行状況を確認しています。"
+    },
+    "needsAttention": {
+      "title": "Core 設定の確認が必要です",
+      "description": "Core の確認が必要です。設定を開いて問題を確認してください。"
+    },
+    "actions": {
+      "ignore": "無視",
+      "start": "起動",
+      "starting": "起動中...",
+      "later": "後で",
+      "switchToLocal": "ローカルへ切り替え",
+      "openSetup": "設定を開く"
+    }
   }
 }

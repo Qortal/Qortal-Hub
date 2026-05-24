@@ -147,5 +147,41 @@
     "descNotReady": "Qortal Core n'est pas encore complètement démarré. Veuillez patienter.",
     "titleReady": "Qortal Core est prêt",
     "descReady": "Tout est prêt pour continuer"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "Nœud local installé",
+      "description": "Un nœud local est déjà installé. Voulez-vous le démarrer pendant que vous utilisez le nœud public ?"
+    },
+    "localReady": {
+      "title": "Nœud local prêt",
+      "description": "Qortal Core est synchronisé. Vous pouvez maintenant passer du nœud public à votre nœud local."
+    },
+    "installing": {
+      "title": "Installation de Qortal Core",
+      "description": "Téléchargement et installation de Qortal Core."
+    },
+    "starting": {
+      "title": "Démarrage du Core local",
+      "description": "Démarrage de Qortal Core.",
+      "preparing": "Core démarre et prépare les données de la blockchain."
+    },
+    "syncing": {
+      "title": "Synchronisation de la blockchain",
+      "description": "Votre nœud local se met à jour en arrière-plan.",
+      "checking": "Core est en cours d’exécution. Vérification de la progression de la synchronisation de la blockchain."
+    },
+    "needsAttention": {
+      "title": "La configuration de Core nécessite votre attention",
+      "description": "Core nécessite votre attention. Ouvrez la configuration pour vérifier le problème."
+    },
+    "actions": {
+      "ignore": "Ignorer",
+      "start": "Démarrer",
+      "starting": "Démarrage...",
+      "later": "Plus tard",
+      "switchToLocal": "Passer au local",
+      "openSetup": "Ouvrir la configuration"
+    }
   }
 }

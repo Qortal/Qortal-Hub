@@ -147,5 +147,41 @@
     "descNotReady": "Qortal Core ei ole vielä täysin käynnistynyt. Odota hetki.",
     "titleReady": "Qortal Core on valmis",
     "descReady": "Kaikki valmista jatkamiseen"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "Paikallinen node on asennettu",
+      "description": "Sinulla on jo paikallinen node asennettuna. Haluatko käynnistää sen samalla kun käytät julkista nodea?"
+    },
+    "localReady": {
+      "title": "Paikallinen node valmis",
+      "description": "Qortal Core on synkronoitu. Voit nyt vaihtaa julkisesta nodesta paikalliseen nodeesi."
+    },
+    "installing": {
+      "title": "Asennetaan Qortal Corea",
+      "description": "Ladataan ja asennetaan Qortal Corea."
+    },
+    "starting": {
+      "title": "Käynnistetään paikallista Corea",
+      "description": "Käynnistetään Qortal Corea.",
+      "preparing": "Core käynnistyy ja valmistelee blockchain-dataa."
+    },
+    "syncing": {
+      "title": "Synkronoidaan blockchainia",
+      "description": "Paikallinen nodesi kirii kiinni taustalla.",
+      "checking": "Core on käynnissä. Tarkistetaan blockchainin synkronoinnin edistymistä."
+    },
+    "needsAttention": {
+      "title": "Core-asennus vaatii huomiota",
+      "description": "Core vaatii huomiota. Avaa asennusnäkymä tarkistaaksesi ongelman."
+    },
+    "actions": {
+      "ignore": "Ohita",
+      "start": "Käynnistä",
+      "starting": "Käynnistetään...",
+      "later": "Myöhemmin",
+      "switchToLocal": "Vaihda paikalliseen",
+      "openSetup": "Avaa asennus"
+    }
   }
 }

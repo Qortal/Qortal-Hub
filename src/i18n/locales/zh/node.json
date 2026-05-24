@@ -147,5 +147,41 @@
     "descNotReady": "Qortal Core 尚未完全启动。请稍候。",
     "titleReady": "Qortal Core 已就绪",
     "descReady": "一切准备就绪"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "本地节点已安装",
+      "description": "你已经安装了本地节点。是否要在使用公共节点时启动它？"
+    },
+    "localReady": {
+      "title": "本地节点已就绪",
+      "description": "Qortal Core 已同步。你现在可以从公共节点切换到本地节点。"
+    },
+    "installing": {
+      "title": "正在安装 Qortal Core",
+      "description": "正在下载并安装 Qortal Core。"
+    },
+    "starting": {
+      "title": "正在启动本地 Core",
+      "description": "正在启动 Qortal Core。",
+      "preparing": "Core 正在启动并准备区块链数据。"
+    },
+    "syncing": {
+      "title": "正在同步区块链",
+      "description": "你的本地节点正在后台追赶同步。",
+      "checking": "Core 正在运行。正在检查区块链同步进度。"
+    },
+    "needsAttention": {
+      "title": "Core 设置需要处理",
+      "description": "Core 需要处理。请打开设置查看问题。"
+    },
+    "actions": {
+      "ignore": "忽略",
+      "start": "启动",
+      "starting": "正在启动...",
+      "later": "稍后",
+      "switchToLocal": "切换到本地",
+      "openSetup": "打开设置"
+    }
   }
 }
