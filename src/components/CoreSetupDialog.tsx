@@ -706,7 +706,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       }),
     [customQortalPath, t]
   );
-  const advancedCoreToolsDisabled = isActive || isCoreSyncing;
+  const advancedCoreToolsDisabled = isActive || actionLoading;
 
   const copyCoreLocation = async () => {
     if (!customQortalPath) return;
