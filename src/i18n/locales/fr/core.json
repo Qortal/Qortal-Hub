@@ -404,7 +404,6 @@
       "section_progress_next_level": "Progression vers le niveau suivant",
       "section_next_step": "Prochaine étape",
       "section_node_minting_accounts": "Comptes de minage du nœud",
-      "select_account_for_stats_hint": "Sélectionnez un compte pour mettre à jour la progression et les stats de récompense à droite.",
       "badge_viewing_stats": "Stats affichées",
       "blocks_to_level": "blocs jusqu’au niveau {{level}}",
       "minting_for_approx_days": "Minage pendant : ~{{days}} jours",

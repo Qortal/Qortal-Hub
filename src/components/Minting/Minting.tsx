@@ -72,9 +72,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [names, setNames] = useState({});
   const [statsAccountInfo, setStatsAccountInfo] = useState(null);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
-  const [selectedMintingAccountKey, setSelectedMintingAccountKey] = useState(
-    null
-  );
+  const [selectedMintingAccountKey, setSelectedMintingAccountKey] =
+    useState(null);
   const [showWaitDialog, setShowWaitDialog] = useState(false);
   const timeoutNodeStatusRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -539,7 +538,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     if (!mintingAccounts?.length) return null;
     if (
       selectedMintingAccountKey &&
-      mintingAccounts.some((a) => a?.mintingAccount === selectedMintingAccountKey)
+      mintingAccounts.some(
+        (a) => a?.mintingAccount === selectedMintingAccountKey
+      )
     ) {
       return selectedMintingAccountKey;
     }
@@ -627,7 +628,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const statsDisplayName =
     handleNames(statsAccountInfo?.address) || statsAddress || '-';
   const showAddressLine =
-    !!statsAccountInfo?.address && statsDisplayName !== statsAccountInfo?.address;
+    !!statsAccountInfo?.address &&
+    statsDisplayName !== statsAccountInfo?.address;
   const showWalletAddressLine =
     !!accountInfo?.address && walletDisplayName !== accountInfo?.address;
   const viewingNodeMintingSelection =
@@ -648,9 +650,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       return {
         tone: 'active',
         title: t('core:minting.panel.state_active_title'),
-        description: t(
-          'core:minting.panel.state_active_body_node_selection'
-        ),
+        description: t('core:minting.panel.state_active_body_node_selection'),
       };
     }
     if (accountIsMinting) {
@@ -690,7 +690,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const statusToneStyles = {
     active: {
-      background: alpha('#74d28f', theme.palette.mode === 'dark' ? 0.085 : 0.11),
+      background: alpha(
+        '#74d28f',
+        theme.palette.mode === 'dark' ? 0.085 : 0.11
+      ),
       borderColor: alpha('#74d28f', 0.11),
       accent: '#86d89d',
     },
@@ -700,7 +703,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       accent: '#a8c2ea',
     },
     inactive: {
-      background: alpha('#e59aa7', theme.palette.mode === 'dark' ? 0.07 : 0.095),
+      background: alpha(
+        '#e59aa7',
+        theme.palette.mode === 'dark' ? 0.07 : 0.095
+      ),
       borderColor: alpha('#e59aa7', 0.09),
       accent: '#f0a6b2',
     },
@@ -854,7 +860,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         postProcess: 'capitalizeEachFirstChar',
       }),
       value: t('core:time.second', {
-        count: parseFloat(formatMetric(averageBlockTime(adminInfo, nodeHeightBlock))),
+        count: parseFloat(
+          formatMetric(averageBlockTime(adminInfo, nodeHeightBlock))
+        ),
         postProcess: 'capitalizeEachFirstChar',
       }),
     },
@@ -868,7 +876,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       label: t('core:minting.average_created_qorts_per_day', {
         postProcess: 'capitalizeEachFirstChar',
       }),
-      value: formatMetric(dayReward(adminInfo, nodeHeightBlock, nodeStatus)) + ' QORT',
+      value:
+        formatMetric(dayReward(adminInfo, nodeHeightBlock, nodeStatus)) +
+        ' QORT',
     },
   ];
 
@@ -891,8 +901,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       label: t('core:minting.tier_share_per_block', {
         postProcess: 'capitalizeEachFirstChar',
       }),
-      value:
-        formatMetric(tierPercent(statsAccountInfo, tier4Online), 0) + ' %',
+      value: formatMetric(tierPercent(statsAccountInfo, tier4Online), 0) + ' %',
     },
     {
       label: t('core:minting.reward_per_block', {
@@ -900,12 +909,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       }),
       value:
         formatMetric(
-          countReward(
-            statsAccountInfo,
-            addressLevel,
-            nodeStatus,
-            tier4Online
-          ),
+          countReward(statsAccountInfo, addressLevel, nodeStatus, tier4Online),
           8
         ) + ' QORT',
     },
@@ -917,11 +921,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         postProcess: 'capitalizeEachFirstChar',
       }),
       value: formatMetric(
-        countMintersInLevel(
-          statsAccountInfo?.level,
-          addressLevel,
-          tier4Online
-        ),
+        countMintersInLevel(statsAccountInfo?.level, addressLevel, tier4Online),
         0
       ),
     },
@@ -1064,7 +1064,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               py: { xs: 2.25, md: 2.75 },
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.75, minHeight: 0 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2.75,
+                minHeight: 0,
+              }}
+            >
               <Box
                 sx={{
                   ...surfaceCardSx,
@@ -1100,323 +1107,354 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 />
 
                 <Box sx={{ position: 'relative', zIndex: 1 }}>
-                {mintingAccounts?.length > 0 ? (
-                  <Box sx={{ mb: 2.25 }}>
-                    <Typography sx={sectionLabelSx}>
-                      {t('core:minting.panel.section_your_wallet')}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        fontSize: '1.05rem',
-                        fontWeight: 700,
-                        letterSpacing: '-0.02em',
-                        lineHeight: 1.15,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {walletDisplayName}
-                    </Typography>
-                    {showWalletAddressLine ? (
+                  {mintingAccounts?.length > 0 ? (
+                    <Box sx={{ mb: 2.25 }}>
+                      <Typography sx={sectionLabelSx}>
+                        {t('core:minting.panel.section_your_wallet')}
+                      </Typography>
                       <Typography
                         sx={{
-                          color: alpha(theme.palette.text.secondary, 0.84),
-                          fontSize: '0.82rem',
-                          mt: 0.35,
-                          wordBreak: 'break-all',
+                          fontSize: '1.05rem',
+                          fontWeight: 700,
+                          letterSpacing: '-0.02em',
+                          lineHeight: 1.15,
+                          wordBreak: 'break-word',
                         }}
                       >
-                        {accountInfo?.address}
+                        {walletDisplayName}
                       </Typography>
-                    ) : null}
-                  </Box>
-                ) : null}
-
-                <Box>
-                  <Typography sx={sectionLabelSx}>
-                    {mintingAccounts?.length > 0
-                      ? t('core:minting.panel.section_minter_profile_stats')
-                      : t('core:minting.panel.section_account_identity')}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      fontSize: '1.35rem',
-                      fontWeight: 800,
-                      letterSpacing: '-0.03em',
-                      lineHeight: 1.12,
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {statsDisplayName}
-                  </Typography>
-                  {showAddressLine ? (
-                    <Typography
-                      sx={{
-                        color: alpha(theme.palette.text.secondary, 0.84),
-                        fontSize: '0.86rem',
-                        mt: 0.38,
-                        wordBreak: 'break-all',
-                      }}
-                    >
-                      {statsAccountInfo?.address}
-                    </Typography>
-                  ) : null}
-                </Box>
-
-                <Box
-                  sx={{
-                    ...sectionDividerSx,
-                  }}
-                >
-                  <Typography sx={sectionLabelSx}>
-                    {t('core:minting.panel.section_progress_next_level')}
-                  </Typography>
-                  <Box
-                    sx={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                      border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}`,
-                      borderRadius: '999px',
-                      mb: 0.85,
-                      px: 1,
-                      py: 0.42,
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: theme.palette.primary.main,
-                        fontSize: '0.79rem',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
-                      {statsAccountInfo?.level ?? '-'}
-                    </Typography>
-                  </Box>
-                  <Typography
-                    sx={{
-                      fontSize: '1.9rem',
-                      fontWeight: 800,
-                      letterSpacing: '-0.04em',
-                      lineHeight: 1.05,
-                    }}
-                  >
-                    {progressBlocks}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: '0.9rem',
-                      mt: 0.55,
-                    }}
-                  >
-                    {t('core:minting.panel.blocks_to_level', {
-                      level: progressLevel ?? '-',
-                    })}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: '0.9rem',
-                      mt: 1.2,
-                    }}
-                  >
-                    {t('core:minting.panel.minting_for_approx_days', {
-                      days: progressDays ?? '-',
-                    })}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    ...sectionDividerSx,
-                  }}
-                >
-                  <Typography sx={sectionLabelSx}>
-                    {t('core:minting.panel.section_next_step')}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.secondary, 0.86),
-                      fontSize: '0.92rem',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {nextStepDescription}
-                  </Typography>
-
-                  {isPartOfMintingGroup && !accountIsMinting ? (
-                    <Box sx={{ mt: 1.6, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Button
-                        size="small"
-                        onClick={startMinting}
-                        disabled={mintingAccounts?.length > 1 || isNodeSynchronizing}
-                        variant="contained"
-                        sx={silkyPrimaryButtonSx}
-                      >
-                        {t('core:action.start_minting', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Button>
-                      {mintingAccounts?.length > 1 ? (
+                      {showWalletAddressLine ? (
                         <Typography
-                          variant="body2"
-                          color="text.secondary"
                           sx={{
-                            lineHeight: 1.45,
-                            overflowWrap: 'anywhere',
-                            wordBreak: 'break-word',
+                            color: alpha(theme.palette.text.secondary, 0.84),
+                            fontSize: '0.82rem',
+                            mt: 0.35,
+                            wordBreak: 'break-all',
                           }}
                         >
-                          {t('group:message.generic.minting_keys_per_node', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
+                          {accountInfo?.address}
                         </Typography>
                       ) : null}
                     </Box>
                   ) : null}
 
-                  {!isPartOfMintingGroup ? (
-                    <Box sx={{ mt: 1.6, display: 'flex', flexDirection: 'column', gap: 1.1 }}>
-                      <Button
-                        size="small"
-                        onClick={openQMintership}
-                        variant="contained"
-                        sx={silkyPrimaryButtonSx}
+                  <Box>
+                    <Typography sx={sectionLabelSx}>
+                      {mintingAccounts?.length > 0
+                        ? t('core:minting.panel.section_minter_profile_stats')
+                        : t('core:minting.panel.section_account_identity')}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '1.35rem',
+                        fontWeight: 800,
+                        letterSpacing: '-0.03em',
+                        lineHeight: 1.12,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {statsDisplayName}
+                    </Typography>
+                    {showAddressLine ? (
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.84),
+                          fontSize: '0.86rem',
+                          mt: 0.38,
+                          wordBreak: 'break-all',
+                        }}
                       >
-                        {t('group:action.visit_q_mintership', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Button>
-                    </Box>
-                  ) : null}
-                </Box>
+                        {statsAccountInfo?.address}
+                      </Typography>
+                    ) : null}
+                  </Box>
 
-                {mintingAccounts?.length > 0 ? (
                   <Box
                     sx={{
                       ...sectionDividerSx,
                     }}
                   >
                     <Typography sx={sectionLabelSx}>
-                      {t('core:minting.panel.section_node_minting_accounts')}
+                      {t('core:minting.panel.section_progress_next_level')}
                     </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 1.1, lineHeight: 1.45 }}
+                    <Box
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        backgroundColor: alpha(
+                          theme.palette.primary.main,
+                          0.08
+                        ),
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}`,
+                        borderRadius: '999px',
+                        mb: 0.85,
+                        px: 1,
+                        py: 0.42,
+                      }}
                     >
-                      {t('core:minting.panel.select_account_for_stats_hint')}
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {mintingAccounts?.map((acct) => {
-                        const isSelected =
-                          acct?.mintingAccount === effectiveSelectedMintingKey;
-                        return (
-                          <Box
-                            key={acct?.mintingAccount}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() =>
-                              setSelectedMintingAccountKey(acct?.mintingAccount)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                setSelectedMintingAccountKey(acct?.mintingAccount);
-                              }
-                            }}
-                            sx={{
-                              backgroundColor: alpha(
-                                theme.palette.background.default,
-                                theme.palette.mode === 'dark' ? 0.14 : 0.34
-                              ),
-                              border: `1px solid ${
-                                isSelected
-                                  ? alpha(theme.palette.primary.main, 0.55)
-                                  : alpha(theme.palette.divider, 0.14)
-                              }`,
-                              borderRadius: '10px',
-                              boxShadow: isSelected
-                                ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.35)}`
-                                : 'none',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 1,
-                              outline: 'none',
-                              p: 1.15,
-                              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                alignItems: 'center',
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: 0.75,
-                                justifyContent: 'space-between',
-                              }}
-                            >
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  color: theme.palette.text.primary,
-                                  fontWeight: 700,
-                                  wordBreak: 'break-word',
-                                }}
-                              >
-                                {handleNames(acct?.mintingAccount)}
-                              </Typography>
-                              {isSelected ? (
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    color: theme.palette.primary.main,
-                                    fontWeight: 700,
-                                    letterSpacing: '0.06em',
-                                    textTransform: 'uppercase',
-                                  }}
-                                >
-                                  {t('core:minting.panel.badge_viewing_stats')}
-                                </Typography>
-                              ) : null}
-                            </Box>
-                            <Button
-                              size="small"
-                              sx={silkyDangerButtonSx}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeMintingAccount(acct.publicKey, acct);
-                              }}
-                              variant="contained"
-                            >
-                              {t('group:action.remove_minting_account', {
-                                postProcess: 'capitalizeFirstChar',
-                              })}
-                            </Button>
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                    {mintingAccounts?.length > 1 ? (
                       <Typography
-                        variant="body2"
-                        color="text.secondary"
                         sx={{
-                          lineHeight: 1.45,
-                          mt: 1.2,
-                          overflowWrap: 'anywhere',
-                          wordBreak: 'break-word',
+                          color: theme.palette.primary.main,
+                          fontSize: '0.79rem',
+                          fontWeight: 700,
                         }}
                       >
-                        {t('group:message.generic.minting_keys_per_node_different', {
+                        {t('core:level', {
                           postProcess: 'capitalizeFirstChar',
-                        })}
+                        })}{' '}
+                        {statsAccountInfo?.level ?? '-'}
                       </Typography>
+                    </Box>
+                    <Typography
+                      sx={{
+                        fontSize: '1.9rem',
+                        fontWeight: 800,
+                        letterSpacing: '-0.04em',
+                        lineHeight: 1.05,
+                      }}
+                    >
+                      {progressBlocks}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.9rem',
+                        mt: 0.55,
+                      }}
+                    >
+                      {t('core:minting.panel.blocks_to_level', {
+                        level: progressLevel ?? '-',
+                      })}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.9rem',
+                        mt: 1.2,
+                      }}
+                    >
+                      {t('core:minting.panel.minting_for_approx_days', {
+                        days: progressDays ?? '-',
+                      })}
+                    </Typography>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      ...sectionDividerSx,
+                    }}
+                  >
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:minting.panel.section_next_step')}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.86),
+                        fontSize: '0.92rem',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {nextStepDescription}
+                    </Typography>
+
+                    {isPartOfMintingGroup && !accountIsMinting ? (
+                      <Box
+                        sx={{
+                          mt: 1.6,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 1,
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          onClick={startMinting}
+                          disabled={
+                            mintingAccounts?.length > 1 || isNodeSynchronizing
+                          }
+                          variant="contained"
+                          sx={silkyPrimaryButtonSx}
+                        >
+                          {t('core:action.start_minting', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Button>
+                        {mintingAccounts?.length > 1 ? (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              lineHeight: 1.45,
+                              overflowWrap: 'anywhere',
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {t('group:message.generic.minting_keys_per_node', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    ) : null}
+
+                    {!isPartOfMintingGroup ? (
+                      <Box
+                        sx={{
+                          mt: 1.6,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 1.1,
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          onClick={openQMintership}
+                          variant="contained"
+                          sx={silkyPrimaryButtonSx}
+                        >
+                          {t('group:action.visit_q_mintership', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Button>
+                      </Box>
                     ) : null}
                   </Box>
-                ) : null}
+
+                  {mintingAccounts?.length > 0 ? (
+                    <Box
+                      sx={{
+                        ...sectionDividerSx,
+                      }}
+                    >
+                      <Typography sx={sectionLabelSx}>
+                        {t('core:minting.panel.section_node_minting_accounts')}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 1,
+                        }}
+                      >
+                        {mintingAccounts?.map((acct) => {
+                          const isSelected =
+                            acct?.mintingAccount ===
+                            effectiveSelectedMintingKey;
+                          return (
+                            <Box
+                              key={acct?.mintingAccount}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() =>
+                                setSelectedMintingAccountKey(
+                                  acct?.mintingAccount
+                                )
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setSelectedMintingAccountKey(
+                                    acct?.mintingAccount
+                                  );
+                                }
+                              }}
+                              sx={{
+                                backgroundColor: alpha(
+                                  theme.palette.background.default,
+                                  theme.palette.mode === 'dark' ? 0.14 : 0.34
+                                ),
+                                border: `1px solid ${
+                                  isSelected
+                                    ? alpha(theme.palette.primary.main, 0.55)
+                                    : alpha(theme.palette.divider, 0.14)
+                                }`,
+                                borderRadius: '10px',
+                                boxShadow: isSelected
+                                  ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.35)}`
+                                  : 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 1,
+                                outline: 'none',
+                                p: 1.15,
+                                transition:
+                                  'border-color 0.15s ease, box-shadow 0.15s ease',
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  alignItems: 'center',
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  gap: 0.75,
+                                  justifyContent: 'space-between',
+                                }}
+                              >
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: theme.palette.text.primary,
+                                    fontWeight: 700,
+                                    wordBreak: 'break-word',
+                                  }}
+                                >
+                                  {handleNames(acct?.mintingAccount)}
+                                </Typography>
+                                {isSelected ? (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: theme.palette.primary.main,
+                                      fontWeight: 700,
+                                      letterSpacing: '0.06em',
+                                      textTransform: 'uppercase',
+                                    }}
+                                  >
+                                    {t(
+                                      'core:minting.panel.badge_viewing_stats'
+                                    )}
+                                  </Typography>
+                                ) : null}
+                              </Box>
+                              <Button
+                                size="small"
+                                sx={silkyDangerButtonSx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeMintingAccount(acct.publicKey, acct);
+                                }}
+                                variant="contained"
+                              >
+                                {t('group:action.remove_minting_account', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Button>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                      {mintingAccounts?.length > 1 ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            lineHeight: 1.45,
+                            mt: 1.2,
+                            overflowWrap: 'anywhere',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {t(
+                            'group:message.generic.minting_keys_per_node_different',
+                            {
+                              postProcess: 'capitalizeFirstChar',
+                            }
+                          )}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  ) : null}
                 </Box>
               </Box>
             </Box>
@@ -1512,12 +1550,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         color: row.accent
                           ? theme.palette.primary.main
                           : theme.palette.text.primary,
-                        fontSize: row.label ===
-                        t('core:minting.reward_per_day', {
-                          postProcess: 'capitalizeEachFirstChar',
-                        })
-                          ? '1.05rem'
-                          : '1.18rem',
+                        fontSize:
+                          row.label ===
+                          t('core:minting.reward_per_day', {
+                            postProcess: 'capitalizeEachFirstChar',
+                          })
+                            ? '1.05rem'
+                            : '1.18rem',
                         fontWeight:
                           row.label ===
                           t('core:minting.reward_per_day', {
@@ -1553,7 +1592,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   p: { xs: 2, md: 2.15 },
                 }}
               >
-                <Typography sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}>
+                <Typography
+                  sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}
+                >
                   {t('core:minting.blockchain_statistics')}
                 </Typography>
                 <Typography
@@ -1570,7 +1611,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     <Box key={row.label} sx={metricListRowSx}>
                       <Typography
                         variant="body2"
-                        sx={{ ...metricLabelSx, color: alpha(theme.palette.text.secondary, 0.62) }}
+                        sx={{
+                          ...metricLabelSx,
+                          color: alpha(theme.palette.text.secondary, 0.62),
+                        }}
                       >
                         {row.label}
                       </Typography>
@@ -1588,7 +1632,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   p: { xs: 2, md: 2.15 },
                 }}
               >
-                <Typography sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}>
+                <Typography
+                  sx={{ ...sectionLabelSx, color: theme.palette.text.primary }}
+                >
                   {t('core:minting.rewards_info')}
                 </Typography>
 
@@ -1640,11 +1686,17 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       <Box key={row.label} sx={metricListRowSx}>
                         <Typography
                           variant="body2"
-                          sx={{ ...metricLabelSx, color: alpha(theme.palette.text.secondary, 0.64) }}
+                          sx={{
+                            ...metricLabelSx,
+                            color: alpha(theme.palette.text.secondary, 0.64),
+                          }}
                         >
                           {row.label}
                         </Typography>
-                        <Typography variant="body2" sx={{ ...metricValueSx, opacity: 0.92 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ ...metricValueSx, opacity: 0.92 }}
+                        >
                           {row.value}
                         </Typography>
                       </Box>

@@ -404,7 +404,6 @@
       "section_progress_next_level": "次のレベルまでの進捗",
       "section_next_step": "次のステップ",
       "section_node_minting_accounts": "ノードのミンティングアカウント",
-      "select_account_for_stats_hint": "右側の進捗と報酬統計を更新するアカウントを選びます。",
       "badge_viewing_stats": "統計を表示中",
       "blocks_to_level": "レベル {{level}} までのブロック",
       "minting_for_approx_days": "ミンティング期間：約 {{days}} 日",

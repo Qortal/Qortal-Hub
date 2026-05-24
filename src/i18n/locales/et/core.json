@@ -404,7 +404,6 @@
       "section_progress_next_level": "Edenemine järgmise tasemeni",
       "section_next_step": "Järgmine samm",
       "section_node_minting_accounts": "Sõlme mintimiskontod",
-      "select_account_for_stats_hint": "Valige konto edenemise ja preemiatestatistika uuendamiseks paremal.",
       "badge_viewing_stats": "Statistikat vaadatakse",
       "blocks_to_level": "plokke tasemele {{level}}",
       "minting_for_approx_days": "Mint (~{{days}} päeva)",

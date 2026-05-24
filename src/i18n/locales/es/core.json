@@ -404,7 +404,6 @@
       "section_progress_next_level": "Progreso al siguiente nivel",
       "section_next_step": "Siguiente paso",
       "section_node_minting_accounts": "Cuentas de minting del nodo",
-      "select_account_for_stats_hint": "Seleccione una cuenta para actualizar el progreso y las estadísticas de recompensas a la derecha.",
       "badge_viewing_stats": "Viendo estadísticas",
       "blocks_to_level": "bloques hasta el nivel {{level}}",
       "minting_for_approx_days": "Minting durante: ~{{days}} días",

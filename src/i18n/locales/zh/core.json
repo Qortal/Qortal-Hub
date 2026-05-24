@@ -404,7 +404,6 @@
       "section_progress_next_level": "下一级进度",
       "section_next_step": "下一步",
       "section_node_minting_accounts": "节点铸造账户",
-      "select_account_for_stats_hint": "选择一个账户以更新右侧的进度与奖励统计。",
       "badge_viewing_stats": "正在查看统计",
       "blocks_to_level": "距离等级 {{level}} 的区块数",
       "minting_for_approx_days": "铸造时长：约 {{days}} 天",
