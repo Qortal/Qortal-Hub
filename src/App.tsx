@@ -1859,7 +1859,6 @@ function App() {
           }
         />
         <BuyQortInformation balance={balance} />
-        {isMainWindow && <NotificationPermissionSlideDown />}
       </QORTAL_APP_CONTEXT.Provider>
 
       {isOpenMinting && (
