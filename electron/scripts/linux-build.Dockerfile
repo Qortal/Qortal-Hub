@@ -1,6 +1,6 @@
 # Debian 11 (bullseye) ~glibc 2.31 — same compatibility class as Ubuntu 20.04, without PPAs.
 # Ubuntu 20.04 focal is EOL; deadsnakes often stops publishing for it, breaking apt installs.
-# Python 3.9 + libpython come from Debian main. For local `electron:make-lin-docker` only; CI stays ubuntu-22.04.
+# Python 3.9 + libpython come from Debian main. For local Linux Docker package builds only; CI stays ubuntu-22.04.
 FROM debian:bullseye-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \

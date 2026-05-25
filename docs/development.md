@@ -53,11 +53,14 @@ Or create an Executable Package for linux:
 
 - `npm run electron:make-local`
 
-Reticulum is bundled as a native binary for packaged Electron builds. Build packages on the target OS so the bundled `rnsd` matches that platform:
+Reticulum is bundled as a native binary for packaged Electron builds. For Linux release artifacts, prefer the Docker commands so the bundled native binaries are built on Debian 11 with an older glibc compatibility baseline:
 
-- Linux: `npm run electron:make-lin` or `npm run electron:make-lin-docker-appimage`
+- Linux x64: `npm run electron:make-lin-docker` or `npm run electron:make-lin-docker-appimage`
+- Linux arm64: `npm run electron:make-arm-docker` or `npm run electron:make-arm-docker-appimage`
 - macOS: `npm run electron:make-mac`
 - Windows: `npm run electron:make-win`
+
+Linux arm64 Docker builds from a non-arm64 host require QEMU/binfmt arm64 emulation on the host.
 
 ## Contribution guide
 

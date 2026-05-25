@@ -2,21 +2,32 @@
 # Run inside the linux-build container (mounted repo at /workspace).
 set -euo pipefail
 
+BUILD_ARCH="${QORTAL_LINUX_DOCKER_ARCH:-x64}"
 BUILD_PROFILE="${QORTAL_LINUX_DOCKER_PROFILE:-full}"
 
-case "${BUILD_PROFILE}" in
-  full)
+case "${BUILD_ARCH}:${BUILD_PROFILE}" in
+  x64:full)
     BUILDER_CONFIG="./electron-builder.config.lin.docker.json"
-    ARTIFACT_LABEL="AppImage + deb"
+    ARTIFACT_LABEL="Linux x64 AppImage + deb"
     BUILDER_TARGETS=(--linux AppImage deb)
     ;;
-  appimage)
+  x64:appimage)
     BUILDER_CONFIG="./electron-builder.config.lin.docker.appimage.json"
-    ARTIFACT_LABEL="AppImage only"
+    ARTIFACT_LABEL="Linux x64 AppImage only"
     BUILDER_TARGETS=(--linux AppImage)
     ;;
+  arm64:full)
+    BUILDER_CONFIG="./electron-builder.config.arm.json"
+    ARTIFACT_LABEL="Linux arm64 AppImage + deb"
+    BUILDER_TARGETS=(--linux AppImage deb --arm64)
+    ;;
+  arm64:appimage)
+    BUILDER_CONFIG="./electron-builder.config.arm.docker.appimage.json"
+    ARTIFACT_LABEL="Linux arm64 AppImage only"
+    BUILDER_TARGETS=(--linux AppImage --arm64)
+    ;;
   *)
-    echo "Unknown QORTAL_LINUX_DOCKER_PROFILE=${BUILD_PROFILE}" >&2
+    echo "Unknown Docker build target: QORTAL_LINUX_DOCKER_ARCH=${BUILD_ARCH} QORTAL_LINUX_DOCKER_PROFILE=${BUILD_PROFILE}" >&2
     exit 64
     ;;
 esac
