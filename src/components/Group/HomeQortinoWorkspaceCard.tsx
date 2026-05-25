@@ -3580,6 +3580,35 @@ export const HomeQortinoWorkspaceCard = ({
     },
     [applyWorkspaceState, dismissed]
   );
+  const handleSelectWorkspaceModule = useCallback(
+    (module: WorkspaceModuleDefinition) => {
+      if (module.appName) {
+        console.log('going through');
+        setOpenModulePickerDialog(false);
+        window.requestAnimationFrame(() => {
+          openApp(module.appName as string, module.appPath ?? '');
+        });
+        return;
+      }
+
+      if (module.mode === 'hotkeys') {
+        handleOpenHotkeyPicker(
+          firstEmptyHotkeySlot >= 0 ? firstEmptyHotkeySlot : 0
+        );
+        return;
+      }
+
+      if (module.mode) {
+        handleSelectWorkspaceMode(module.mode);
+      }
+    },
+    [
+      firstEmptyHotkeySlot,
+      handleOpenHotkeyPicker,
+      handleSelectWorkspaceMode,
+      openApp,
+    ]
+  );
 
   const workspaceLabelColor = alpha(theme.palette.text.secondary, 0.78);
   const subtleLine = getBlueAmbientLineBackground(theme, 'soft');
@@ -5373,138 +5402,128 @@ export const HomeQortinoWorkspaceCard = ({
         </ErrorBoundary>
       </Box>
       {qortinoDonationOverlay}
-      <Dialog
-        open={openModulePickerDialog}
-        onClose={() => setOpenModulePickerDialog(false)}
-        BackdropProps={{
-          sx: {
-            backdropFilter: 'blur(10px)',
-            background: alpha('#04070C', 0.42),
-          },
-        }}
-        PaperProps={{
-          sx: {
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(180deg, rgba(26,30,37,0.96) 0%, rgba(18,21,27,0.98) 100%)'
-                : 'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,248,251,0.98) 100%)',
-            border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.08 : 0.16)}`,
-            borderRadius: '18px',
-            boxShadow: `0 26px 60px ${alpha('#000', 0.34)}`,
-            maxWidth: '420px',
-            width: 'calc(100% - 32px)',
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            justifyContent: 'space-between',
-            pb: 1,
+      {openModulePickerDialog ? (
+        <Dialog
+          open
+          onClose={() => setOpenModulePickerDialog(false)}
+          BackdropProps={{
+            sx: {
+              backdropFilter: 'blur(10px)',
+              background: alpha('#04070C', 0.42),
+            },
+          }}
+          PaperProps={{
+            sx: {
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'linear-gradient(180deg, rgba(26,30,37,0.96) 0%, rgba(18,21,27,0.98) 100%)'
+                  : 'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,248,251,0.98) 100%)',
+              border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.08 : 0.16)}`,
+              borderRadius: '18px',
+              boxShadow: `0 26px 60px ${alpha('#000', 0.34)}`,
+              maxWidth: '420px',
+              width: 'calc(100% - 32px)',
+            },
           }}
         >
-          <Box>
-            <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
-              {qw('dialog_module_title', 'Choose a module')}
-            </Typography>
-            <Typography
-              sx={{
-                color: alpha(theme.palette.text.secondary, 0.78),
-                fontSize: '0.76rem',
-                mt: 0.3,
-              }}
-            >
-              {qw('dialog_module_subtitle', 'Pick what lives above QORTINO.')}
-            </Typography>
-          </Box>
-          <IconButton
-            onClick={() => setOpenModulePickerDialog(false)}
-            size="small"
+          <DialogTitle
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
+              pb: 1,
+            }}
           >
-            <CloseRoundedIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent
-          sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, pb: 2.1 }}
-        >
-          {workspaceModules.map((module) => (
-            <ButtonBase
-              key={module.key}
-              onClick={() => {
-                if (module.appName) {
-                  setOpenModulePickerDialog(false);
-                  window.setTimeout(() => {
-                    openApp(module.appName as string, module.appPath ?? '');
-                  }, 0);
-                  return;
-                }
-                if (module.mode === 'hotkeys') {
-                  handleOpenHotkeyPicker(
-                    firstEmptyHotkeySlot >= 0 ? firstEmptyHotkeySlot : 0
-                  );
-                  return;
-                }
-                if (module.mode) {
-                  handleSelectWorkspaceMode(module.mode);
-                }
-              }}
-              sx={{
-                alignItems: 'center',
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(20,24,32,0.03)',
-                border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12)}`,
-                borderRadius: '14px',
-                display: 'grid',
-                gap: '12px',
-                gridTemplateColumns: '40px minmax(0, 1fr)',
-                px: 1,
-                py: 0.95,
-                textAlign: 'left',
-                transition:
-                  'transform 120ms ease, border-color 140ms ease, box-shadow 140ms ease',
-                '&:hover': {
-                  borderColor: alpha('#8DB8FF', 0.24),
-                  boxShadow: `0 8px 20px ${alpha('#000', 0.16)}`,
-                  transform: 'translateY(-1px)',
-                },
-              }}
-            >
-              <Box
+            <Box>
+              <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
+                {qw('dialog_module_title', 'Choose a module')}
+              </Typography>
+              <Typography
                 sx={{
-                  alignItems: 'center',
-                  background: alpha('#8DB8FF', 0.12),
-                  borderRadius: '12px',
-                  color: alpha('#A8CAFF', 0.96),
-                  display: 'flex',
-                  height: '40px',
-                  justifyContent: 'center',
-                  width: '40px',
+                  color: alpha(theme.palette.text.secondary, 0.78),
+                  fontSize: '0.76rem',
+                  mt: 0.3,
                 }}
               >
-                <module.icon sx={{ fontSize: '19px' }} />
-              </Box>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: '0.82rem', fontWeight: 700 }}>
-                  {module.label}
-                </Typography>
-                <Typography
+                {qw('dialog_module_subtitle', 'Pick what lives above QORTINO.')}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={() => setOpenModulePickerDialog(false)}
+              size="small"
+            >
+              <CloseRoundedIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.8,
+              pb: 2.1,
+            }}
+          >
+            {workspaceModules.map((module) => (
+              <ButtonBase
+                key={module.key}
+                onClick={() => handleSelectWorkspaceModule(module)}
+                sx={{
+                  alignItems: 'center',
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(255,255,255,0.03)'
+                      : 'rgba(20,24,32,0.03)',
+                  border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12)}`,
+                  borderRadius: '14px',
+                  display: 'grid',
+                  gap: '12px',
+                  gridTemplateColumns: '40px minmax(0, 1fr)',
+                  px: 1,
+                  py: 0.95,
+                  textAlign: 'left',
+                  transition:
+                    'transform 120ms ease, border-color 140ms ease, box-shadow 140ms ease',
+                  '&:hover': {
+                    borderColor: alpha('#8DB8FF', 0.24),
+                    boxShadow: `0 8px 20px ${alpha('#000', 0.16)}`,
+                    transform: 'translateY(-1px)',
+                  },
+                }}
+              >
+                <Box
                   sx={{
-                    color: alpha(theme.palette.text.secondary, 0.7),
-                    fontSize: '0.68rem',
-                    lineHeight: 1.4,
-                    mt: 0.2,
+                    alignItems: 'center',
+                    background: alpha('#8DB8FF', 0.12),
+                    borderRadius: '12px',
+                    color: alpha('#A8CAFF', 0.96),
+                    display: 'flex',
+                    height: '40px',
+                    justifyContent: 'center',
+                    width: '40px',
                   }}
                 >
-                  {module.description}
-                </Typography>
-              </Box>
-            </ButtonBase>
-          ))}
-        </DialogContent>
-      </Dialog>
+                  <module.icon sx={{ fontSize: '19px' }} />
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                    {module.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.7),
+                      fontSize: '0.68rem',
+                      lineHeight: 1.4,
+                      mt: 0.2,
+                    }}
+                  >
+                    {module.description}
+                  </Typography>
+                </Box>
+              </ButtonBase>
+            ))}
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       <Dialog
         open={openHotkeyPickerDialog}
