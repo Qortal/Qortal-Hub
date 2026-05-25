@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Autocomplete,
   Avatar,
@@ -104,14 +98,13 @@ type UserSearchIllustrationConfig = {
   lensAngleOffset: number;
 };
 
-const defaultUserSearchIllustrationConfig: UserSearchIllustrationConfig =
-  {
-    magnifierX: -9,
-    magnifierY: -28,
-    lensOffsetX: 5,
-    lensOffsetY: -23,
-    lensAngleOffset: 18,
-  };
+const defaultUserSearchIllustrationConfig: UserSearchIllustrationConfig = {
+  magnifierX: -9,
+  magnifierY: -28,
+  lensOffsetX: 5,
+  lensOffsetY: -23,
+  lensAngleOffset: 18,
+};
 
 function formatAddress(value: string) {
   if (!value || value.length <= 12) return value || '';
@@ -263,7 +256,8 @@ function UserSearchIllustration({
         },
         '& .user-search-gnel__lens-glass': {
           backdropFilter: 'brightness(1.06)',
-          background: 'radial-gradient(circle at 42% 36%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 58%, rgba(255,255,255,0.01) 100%)',
+          background:
+            'radial-gradient(circle at 42% 36%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 58%, rgba(255,255,255,0.01) 100%)',
           borderRadius: '50%',
           height: 56,
           left: 28,
@@ -326,8 +320,8 @@ function UserSearchIllustration({
         <span />
         <span />
       </Box>
-      </Box>
-    );
+    </Box>
+  );
 }
 
 export const UserLookup = ({
@@ -353,7 +347,9 @@ export const UserLookup = ({
   const [inputValue, setInputValue] = useState('');
   const { results, isLoading } = useNameSearch(inputValue);
   const [errorMessage, setErrorMessage] = useState('');
-  const [addressInfo, setAddressInfo] = useState<AddressInfoResult | null>(null);
+  const [addressInfo, setAddressInfo] = useState<AddressInfoResult | null>(
+    null
+  );
   const [nodeStatus, setNodeStatus] = useState<any>(null);
   const [adminInfo, setAdminInfo] = useState<any>(null);
   const [nodeHeightBlock, setNodeHeightBlock] = useState<any>(null);
@@ -366,16 +362,16 @@ export const UserLookup = ({
   const [addressNamesMap, setAddressNamesMap] = useState<
     Record<string, AddressNameEntry>
   >({});
-    const [lookupHistory, setLookupHistory] = useState<LookupHistoryState>({
-      history: [],
-      index: -1,
-    });
-    const [isBlockActionPending, setIsBlockActionPending] = useState(false);
+  const [lookupHistory, setLookupHistory] = useState<LookupHistoryState>({
+    history: [],
+    index: -1,
+  });
+  const [isBlockActionPending, setIsBlockActionPending] = useState(false);
 
-    const tRef = useRef(t);
-    tRef.current = t;
-    const lookupInProgressRef = useRef(false);
-    const lastFetchedOwnerRef = useRef<string | null>(null);
+  const tRef = useRef(t);
+  tRef.current = t;
+  const lookupInProgressRef = useRef(false);
+  const lastFetchedOwnerRef = useRef<string | null>(null);
 
   const currentUserName =
     typeof currentUser?.name === 'string' && currentUser.name.trim().length > 0
@@ -462,7 +458,10 @@ export const UserLookup = ({
           );
         }
 
-        if (!options?.skipHistoryPush && lastFetchedOwnerRef.current === owner) {
+        if (
+          !options?.skipHistoryPush &&
+          lastFetchedOwnerRef.current === owner
+        ) {
           lookupInProgressRef.current = false;
           return;
         }
@@ -496,7 +495,9 @@ export const UserLookup = ({
           : await getNameInfo(owner);
         const baseUrl = getBaseApiReact();
 
-        const balanceResponse = await fetch(`${baseUrl}/addresses/balance/${owner}`);
+        const balanceResponse = await fetch(
+          `${baseUrl}/addresses/balance/${owner}`
+        );
         const balance = await balanceResponse.json();
 
         setAddressInfo({
@@ -556,7 +557,7 @@ export const UserLookup = ({
           error?.message ||
             tRef.current('core:account_lookup.error_lookup_failed', {
               postProcess: 'capitalizeFirstChar',
-            }),
+            })
         );
       } finally {
         lookupInProgressRef.current = false;
@@ -699,7 +700,7 @@ export const UserLookup = ({
       'success',
       t('tutorial:home.address_copied', {
         postProcess: 'capitalizeFirstChar',
-      }),
+      })
     );
   }, [addressInfo?.address, pushSnack, t]);
 
@@ -764,7 +765,8 @@ export const UserLookup = ({
   }, [addressInfo?.address, addressInfo?.name, closeLookup]);
 
   const currentBlocks =
-    (addressInfo?.blocksMinted ?? 0) + (addressInfo?.blocksMintedAdjustment ?? 0);
+    (addressInfo?.blocksMinted ?? 0) +
+    (addressInfo?.blocksMintedAdjustment ?? 0);
   const targetBlocks =
     addressInfo?.level != null
       ? accountTargetBlocks(addressInfo.level)
@@ -822,7 +824,8 @@ export const UserLookup = ({
 
   const canGoBack = lookupHistory.index > 0;
   const canGoForward =
-    lookupHistory.index >= 0 && lookupHistory.index < lookupHistory.history.length - 1;
+    lookupHistory.index >= 0 &&
+    lookupHistory.index < lookupHistory.history.length - 1;
   const isEmptyLookupState = !errorMessage && !isLoadingUser && !addressInfo;
 
   const surfaceBorder = alpha(theme.palette.divider, 0.42);
@@ -830,9 +833,10 @@ export const UserLookup = ({
     theme.palette.common.white,
     theme.palette.mode === 'dark' ? 0.04 : 0.07
   );
-  const summarySurface = theme.palette.mode === 'dark'
-    ? 'linear-gradient(180deg, rgba(23,27,35,0.98) 0%, rgba(17,20,27,0.985) 100%)'
-    : 'linear-gradient(180deg, rgba(248,250,253,0.985) 0%, rgba(241,245,250,0.99) 100%)';
+  const summarySurface =
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(23,27,35,0.98) 0%, rgba(17,20,27,0.985) 100%)'
+      : 'linear-gradient(180deg, rgba(248,250,253,0.985) 0%, rgba(241,245,250,0.99) 100%)';
   const sectionSurface = alpha(
     theme.palette.mode === 'dark'
       ? theme.palette.common.white
@@ -950,9 +954,7 @@ export const UserLookup = ({
     {
       label: t('core:total_sent', { postProcess: 'capitalizeFirstChar' }),
       value:
-        totalSent != null
-          ? `${formatStatBalance(totalSent)} QORT`
-          : '\u2014',
+        totalSent != null ? `${formatStatBalance(totalSent)} QORT` : '\u2014',
     },
     {
       label: t('core:total_blocks_minted', {
@@ -1148,14 +1150,14 @@ export const UserLookup = ({
                 postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
-            </Box>
+          </Box>
 
-            <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.5 }}>
-              <IconButton
-                onClick={closeLookup}
-                size="small"
-                sx={{
-                  color: theme.palette.text.secondary,
+          <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.5 }}>
+            <IconButton
+              onClick={closeLookup}
+              size="small"
+              sx={{
+                color: theme.palette.text.secondary,
               }}
             >
               <CloseRoundedIcon fontSize="small" />
@@ -1174,7 +1176,8 @@ export const UserLookup = ({
             freeSolo
             value={nameOrAddress}
             onChange={(_event, newValue) => {
-              const nextValue = typeof newValue === 'string' ? newValue.trim() : '';
+              const nextValue =
+                typeof newValue === 'string' ? newValue.trim() : '';
               if (!nextValue) {
                 setNameOrAddress('');
                 return;
@@ -1348,80 +1351,80 @@ export const UserLookup = ({
             </Box>
           ) : null}
 
-            {isEmptyLookupState ? (
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    backgroundColor: softSectionSurface,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.26)}`,
-                  borderRadius: '12px',
+          {isEmptyLookupState ? (
+            <Box
+              sx={{
+                alignItems: 'center',
+                backgroundColor: softSectionSurface,
+                border: `1px solid ${alpha(theme.palette.divider, 0.26)}`,
+                borderRadius: '12px',
+                display: 'flex',
+                flex: 1,
+                flexDirection: 'column',
+                gap: { xs: 1.85, md: 2.2 },
+                justifyContent: 'center',
+                overflow: 'hidden',
+                px: 3,
+                py: { xs: 5, md: 5.5 },
+                position: 'relative',
+                textAlign: 'center',
+                '&::before': {
+                  background: `radial-gradient(circle at 50% 55%, ${alpha(
+                    theme.palette.primary.main,
+                    0.12
+                  )} 0%, ${alpha(theme.palette.primary.main, 0.05)} 26%, transparent 74%)`,
+                  content: '""',
+                  inset: 0,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  zIndex: 0,
+                },
+                '& > *': {
+                  position: 'relative',
+                  zIndex: 1,
+                },
+              }}
+            >
+              <UserSearchIllustration
+                glowColor={alpha(theme.palette.primary.main, 0.92)}
+                logoSrc={qortalLogo512}
+                magnifierMarkup={magnifierSvg}
+              />
+              <Box
+                sx={{
                   display: 'flex',
-                  flex: 1,
                   flexDirection: 'column',
-                  gap: { xs: 1.85, md: 2.2 },
-                  justifyContent: 'center',
-                    overflow: 'hidden',
-                    px: 3,
-                    py: { xs: 5, md: 5.5 },
-                    position: 'relative',
-                    textAlign: 'center',
-                  '&::before': {
-                    background: `radial-gradient(circle at 50% 55%, ${alpha(
-                      theme.palette.primary.main,
-                      0.12
-                    )} 0%, ${alpha(theme.palette.primary.main, 0.05)} 26%, transparent 74%)`,
-                    content: '""',
-                    inset: 0,
-                    pointerEvents: 'none',
-                    position: 'absolute',
-                    zIndex: 0,
-                  },
-                  '& > *': {
-                    position: 'relative',
-                    zIndex: 1,
-                  },
+                  gap: { xs: 0.15, md: 0.25 },
+                  mt: '-10px',
                 }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: { xs: '1.28rem', md: '1.38rem' },
+                    fontWeight: 800,
+                    letterSpacing: '-0.014em',
+                    lineHeight: 1.14,
+                  }}
                 >
-                  <UserSearchIllustration
-                    glowColor={alpha(theme.palette.primary.main, 0.92)}
-                  logoSrc={qortalLogo512}
-                  magnifierMarkup={magnifierSvg}
-                />
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: { xs: 0.15, md: 0.25 },
-                      mt: '-10px',
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: { xs: '1.28rem', md: '1.38rem' },
-                        fontWeight: 800,
-                        letterSpacing: '-0.014em',
-                        lineHeight: 1.14,
-                      }}
-                    >
-                      {t('core:account_lookup.empty_title', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        color: alpha(theme.palette.text.primary, 0.76),
-                        fontSize: { xs: '0.96rem', md: '1rem' },
-                        maxWidth: '34ch',
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      {t('core:account_lookup.empty_subtitle', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                  </Box>
+                  {t('core:account_lookup.empty_title', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.primary, 0.76),
+                    fontSize: { xs: '0.96rem', md: '1rem' },
+                    maxWidth: '34ch',
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {t('core:account_lookup.empty_subtitle', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
               </Box>
-            ) : null}
+            </Box>
+          ) : null}
 
           {!errorMessage && !isLoadingUser && addressInfo ? (
             <Box
@@ -1494,7 +1497,10 @@ export const UserLookup = ({
                       <Box
                         sx={{
                           alignItems: 'center',
-                          backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.12
+                          ),
                           borderRadius: '50%',
                           color: theme.palette.primary.main,
                           display: 'flex',
@@ -1548,7 +1554,10 @@ export const UserLookup = ({
                         })}
                         size="small"
                         sx={{
-                          backgroundColor: alpha(theme.palette.primary.main, 0.14),
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.14
+                          ),
                           color: theme.palette.primary.light,
                           fontWeight: 700,
                         }}
@@ -1561,7 +1570,10 @@ export const UserLookup = ({
                           })}
                           size="small"
                           sx={{
-                            backgroundColor: alpha(theme.palette.error.main, 0.12),
+                            backgroundColor: alpha(
+                              theme.palette.error.main,
+                              0.12
+                            ),
                             color: theme.palette.error.light,
                             fontWeight: 700,
                           }}
@@ -1569,9 +1581,12 @@ export const UserLookup = ({
                       ) : null}
                       {!addressInfo.name ? (
                         <Chip
-                          label={t('core:account_lookup.chip_no_registered_name', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
+                          label={t(
+                            'core:account_lookup.chip_no_registered_name',
+                            {
+                              postProcess: 'capitalizeFirstChar',
+                            }
+                          )}
                           size="small"
                           sx={{
                             backgroundColor: alpha(
@@ -1603,7 +1618,10 @@ export const UserLookup = ({
                         value={progress * 100}
                         variant="determinate"
                         sx={{
-                          backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.12
+                          ),
                           borderRadius: '999px',
                           height: 10,
                           mt: 1,
@@ -1627,14 +1645,12 @@ export const UserLookup = ({
                       >
                         {nextLevelNumber != null
                           ? t('core:account_lookup.minting_blocks_to_level', {
-                              remaining:
-                                remainingBlocks.toLocaleString(),
+                              remaining: remainingBlocks.toLocaleString(),
                               level: nextLevelNumber,
                               postProcess: 'capitalizeFirstChar',
                             })
                           : t('core:account_lookup.minting_remaining', {
-                              remaining:
-                                remainingBlocks.toLocaleString(),
+                              remaining: remainingBlocks.toLocaleString(),
                               postProcess: 'capitalizeFirstChar',
                             })}
                       </Typography>
@@ -1720,9 +1736,7 @@ export const UserLookup = ({
                         p: 1.25,
                       }}
                     >
-                      <Typography sx={sectionLabelSx}>
-                        {row.label}
-                      </Typography>
+                      <Typography sx={sectionLabelSx}>{row.label}</Typography>
                       <Typography
                         sx={{
                           fontSize: '0.88rem',
@@ -1902,7 +1916,10 @@ export const UserLookup = ({
                           fontSize: '0.78rem',
                         },
                         '& .MuiTableRow-hover:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.04
+                          ),
                         },
                       }}
                     >
@@ -1933,13 +1950,18 @@ export const UserLookup = ({
                       <TableBody>
                         {isLoadingPayments ? (
                           <TableRow>
-                            <TableCell align="center" colSpan={4} sx={{ py: 4 }}>
+                            <TableCell
+                              align="center"
+                              colSpan={4}
+                              sx={{ py: 4 }}
+                            >
                               <CircularProgress size={22} />
                             </TableCell>
                           </TableRow>
                         ) : null}
 
-                        {!isLoadingPayments && paginatedPayments.length === 0 ? (
+                        {!isLoadingPayments &&
+                        paginatedPayments.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={4} sx={{ py: 3 }}>
                               {t('core:message.generic.no_payments', {
@@ -1952,18 +1974,25 @@ export const UserLookup = ({
                         {!isLoadingPayments
                           ? paginatedPayments.map((payment) => {
                               const ownerAddress = addressInfo.address;
-                              const senderAddress = payment?.creatorAddress || '';
+                              const senderAddress =
+                                payment?.creatorAddress || '';
                               const receiverAddress = payment?.recipient || '';
-                              const senderEntry = addressNamesMap[senderAddress];
-                              const receiverEntry = addressNamesMap[receiverAddress];
+                              const senderEntry =
+                                addressNamesMap[senderAddress];
+                              const receiverEntry =
+                                addressNamesMap[receiverAddress];
                               const senderLabel =
                                 senderAddress === ownerAddress
-                                  ? addressInfo.name?.trim() || formatAddress(senderAddress)
-                                  : senderEntry?.name || formatAddress(senderAddress);
+                                  ? addressInfo.name?.trim() ||
+                                    formatAddress(senderAddress)
+                                  : senderEntry?.name ||
+                                    formatAddress(senderAddress);
                               const receiverLabel =
                                 receiverAddress === ownerAddress
-                                  ? addressInfo.name?.trim() || formatAddress(receiverAddress)
-                                  : receiverEntry?.name || formatAddress(receiverAddress);
+                                  ? addressInfo.name?.trim() ||
+                                    formatAddress(receiverAddress)
+                                  : receiverEntry?.name ||
+                                    formatAddress(receiverAddress);
                               const senderHasUnsafeName = Boolean(
                                 senderAddress === ownerAddress
                                   ? targetUserName &&
@@ -2015,7 +2044,9 @@ export const UserLookup = ({
                                       </Typography>
                                     ) : (
                                       <ButtonBase
-                                        onClick={() => handleLookupAddress(senderAddress)}
+                                        onClick={() =>
+                                          handleLookupAddress(senderAddress)
+                                        }
                                         sx={{ textAlign: 'left' }}
                                       >
                                         <Typography
@@ -2027,7 +2058,8 @@ export const UserLookup = ({
                                               ? {
                                                   textDecorationLine:
                                                     'line-through',
-                                                  textDecorationThickness: '2px',
+                                                  textDecorationThickness:
+                                                    '2px',
                                                   textDecorationColor:
                                                     theme.palette.error.main,
                                                 }
@@ -2074,7 +2106,8 @@ export const UserLookup = ({
                                               ? {
                                                   textDecorationLine:
                                                     'line-through',
-                                                  textDecorationThickness: '2px',
+                                                  textDecorationThickness:
+                                                    '2px',
                                                   textDecorationColor:
                                                     theme.palette.error.main,
                                                 }
@@ -2125,7 +2158,9 @@ export const UserLookup = ({
                     page={paymentsPage}
                     rowsPerPage={paymentsRowsPerPage}
                     rowsPerPageOptions={[5, 10, 20]}
-                    labelRowsPerPage={t('core:account_lookup.pagination_rows_per_page')}
+                    labelRowsPerPage={t(
+                      'core:account_lookup.pagination_rows_per_page'
+                    )}
                     labelDisplayedRows={({ from, to, count }) =>
                       t('core:account_lookup.pagination_displayed_rows', {
                         from,
@@ -2140,12 +2175,13 @@ export const UserLookup = ({
                         minHeight: 42,
                         px: 0.5,
                       },
-                      '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
-                        color: theme.palette.text.secondary,
-                        fontSize: '0.74rem',
-                        fontWeight: 500,
-                        m: 0,
-                      },
+                      '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows':
+                        {
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.74rem',
+                          fontWeight: 500,
+                          m: 0,
+                        },
                       '& .MuiTablePagination-select': {
                         fontSize: '0.76rem',
                         fontWeight: 600,

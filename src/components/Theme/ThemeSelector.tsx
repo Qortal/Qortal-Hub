@@ -19,7 +19,10 @@ type ThemeSelectorProps = {
   footer?: boolean;
 };
 
-const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) => {
+const ThemeSelector = ({
+  sidebar = false,
+  footer = false,
+}: ThemeSelectorProps) => {
   const { t } = useTranslation([
     'auth',
     'core',
@@ -41,7 +44,8 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
     justifyContent: 'flex-start',
     minHeight: 58,
     py: 1,
-    transition: 'background-color 180ms ease, color 180ms ease, box-shadow 140ms ease',
+    transition:
+      'background-color 180ms ease, color 180ms ease, box-shadow 140ms ease',
     width: 56,
     '& .sidebarSelectorIconWrap': {
       transition: 'transform 150ms ease, color 180ms ease',
@@ -96,11 +100,7 @@ const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) 
   if (sidebar) {
     return (
       <Box ref={selectorRef}>
-        <ButtonBase
-          disableRipple
-          onClick={toggleTheme}
-          sx={sidebarButtonSx}
-        >
+        <ButtonBase disableRipple onClick={toggleTheme} sx={sidebarButtonSx}>
           <Box
             className="sidebarSelectorIconWrap"
             sx={{

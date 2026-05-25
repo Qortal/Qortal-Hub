@@ -844,7 +844,11 @@ export function GlobalQortalNavBar({
           )
         : [...prev, pinnedCandidate];
 
-      saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', updatedApps);
+      saveToLocalStorage(
+        'ext_saved_settings',
+        'sortablePinnedApps',
+        updatedApps
+      );
       return updatedApps;
     });
     setSettingsLocalLastUpdated(Date.now());

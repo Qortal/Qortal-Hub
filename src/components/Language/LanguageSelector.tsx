@@ -33,7 +33,8 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
     justifyContent: 'flex-start',
     minHeight: 58,
     py: 1,
-    transition: 'background-color 180ms ease, color 180ms ease, box-shadow 140ms ease',
+    transition:
+      'background-color 180ms ease, color 180ms ease, box-shadow 140ms ease',
     width: 56,
     '& .sidebarSelectorIconWrap': {
       transition: 'transform 150ms ease, color 180ms ease',
@@ -181,17 +182,20 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
           },
         }}
       >
-        {(Object.entries(supportedLanguages) as [string, { name: string; flag: string }][]).map(
-          ([code, langData]) => (
-            <MenuItem
-              key={code}
-              selected={currentBase === code}
-              onClick={() => handleChange(code)}
-            >
-              {langData.flag} {code.toUpperCase()} - {langData.name}
-            </MenuItem>
-          )
-        )}
+        {(
+          Object.entries(supportedLanguages) as [
+            string,
+            { name: string; flag: string },
+          ][]
+        ).map(([code, langData]) => (
+          <MenuItem
+            key={code}
+            selected={currentBase === code}
+            onClick={() => handleChange(code)}
+          >
+            {langData.flag} {code.toUpperCase()} - {langData.name}
+          </MenuItem>
+        ))}
       </Menu>
     </>
   );
