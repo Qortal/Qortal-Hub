@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai';
 import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import {
   QORTAL_APP_CONTEXT,
-  getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
 } from '../../App';
@@ -46,7 +46,7 @@ export const getPublishesFromAdminsAdminSpace = async (
   groupId
 ) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=admins-symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=admins-symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
   if (!response.ok) {

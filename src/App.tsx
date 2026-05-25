@@ -156,6 +156,7 @@ export {
   getBaseApiReactForAvatar,
   getBaseApiReactForPrimaryName,
   getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReactSocket,
 } from './utils/globalApi';
 export { isMainWindow } from './constants/app';

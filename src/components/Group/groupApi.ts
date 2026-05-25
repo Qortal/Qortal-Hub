@@ -1,5 +1,5 @@
 import {
-  getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   getBaseApiReactForPrimaryName,
 } from '../../App';
@@ -78,7 +78,7 @@ export const getPublishesFromAdmins = async (
   groupId: string
 ): Promise<Record<string, unknown> | false> => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -114,7 +114,7 @@ export const getAllPublishesFromAdmins = async (
   groupId: string
 ): Promise<Record<string, unknown>[]> => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
   if (!response.ok) {

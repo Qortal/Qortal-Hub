@@ -138,7 +138,7 @@ export function useManagedSubscriptionsFromGroups(
                       )
                       .join('&');
                     const resourcesResponse = await fetch(
-                      `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${group.groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`
+                      `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${group.groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`
                     );
 
                     if (!resourcesResponse.ok) {

@@ -45,6 +45,10 @@ export const getArbitraryEndpointReact = (): string => {
   return `/arbitrary/resources/search`;
 };
 
+export const getArbitrarySearchSimpleEndpointReact = (): string => {
+  return `/arbitrary/resources/searchsimple`;
+};
+
 export const getBaseApiReactSocket = (customApi?: string): string => {
   if (customApi) {
     return customApi;

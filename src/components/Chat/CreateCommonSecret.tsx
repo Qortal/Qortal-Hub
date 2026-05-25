@@ -11,7 +11,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
 import {
   QORTAL_APP_CONTEXT,
-  getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
 } from '../../App';
@@ -58,7 +58,7 @@ export const CreateCommonSecret = ({
 
   const getPublishesFromAdmins = async (admins: string[]) => {
     const queryString = admins.map((name) => `name=${name}`).join('&');
-    const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
+    const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
       groupId
     }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
     const response = await fetch(url);
