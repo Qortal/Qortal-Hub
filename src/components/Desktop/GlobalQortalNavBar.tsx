@@ -16,6 +16,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import PushPinRoundedIcon from '@mui/icons-material/PushPinRounded';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
@@ -31,6 +32,8 @@ import {
   navigationControllerAtom,
   openSnackGlobalAtom,
   qortBalanceLoadingAtom,
+  settingsLocalLastUpdatedAtom,
+  sortablePinnedAppsAtom,
   txListAtom,
   userInfoAtom,
 } from '../../atoms/global';
@@ -52,6 +55,7 @@ import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 import { SubscriptionsStatus } from './SubscriptionsStatus';
 import { AppBookmarksButton } from '../Apps/AppBookmarks';
+import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 
 export const QORTAL_GROUP_CALL_NAV_SLOT_ID = 'qortal-group-call-nav-slot';
 export const DIRECT_VOICE_CALL_NAV_SLOT_ID = 'direct-voice-call-nav-slot';
@@ -614,8 +618,11 @@ export function GlobalQortalNavBar({
   const qortBalanceLoading = useAtomValue(qortBalanceLoadingAtom);
   const txList = useAtomValue(txListAtom);
   const userInfo = useAtomValue(userInfoAtom);
+  const sortablePinnedApps = useAtomValue(sortablePinnedAppsAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
+  const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
   const { t } = useTranslation(['core', 'question']);
   const [selectedTab, setSelectedTab] = useState<SelectedTab>(null);
   const [inputValue, setInputValue] = useState('');
@@ -712,6 +719,30 @@ export function GlobalQortalNavBar({
       path: parsedLink.path,
     };
   }, [currentLink, selectedTab]);
+  const pinnedCandidate = useMemo(() => {
+    if (!bookmarkSelectedTab?.service || !bookmarkSelectedTab?.name) {
+      return null;
+    }
+    if (
+      bookmarkSelectedTab.internal ||
+      bookmarkSelectedTab.service === INTERNAL_TAB_SERVICE
+    ) {
+      return null;
+    }
+
+    return {
+      name: bookmarkSelectedTab.name,
+      service: bookmarkSelectedTab.service.toUpperCase(),
+    };
+  }, [bookmarkSelectedTab]);
+  const isCurrentAppPinned = useMemo(() => {
+    if (!pinnedCandidate) return false;
+    return !!sortablePinnedApps?.some(
+      (item) =>
+        item?.name?.toLowerCase() === pinnedCandidate.name.toLowerCase() &&
+        item?.service?.toUpperCase() === pinnedCandidate.service
+    );
+  }, [pinnedCandidate, sortablePinnedApps]);
 
   useEffect(() => {
     if (isInputFocusedRef.current) return;
@@ -750,6 +781,7 @@ export function GlobalQortalNavBar({
   }, [inputValue]);
 
   const canCopyCurrentLink = Boolean(currentLink);
+  const canPinCurrentApp = Boolean(pinnedCandidate);
   const handleCopyCurrentLink = useCallback(() => {
     if (!currentLink) return;
     if (!navigator.clipboard?.writeText) {
@@ -792,6 +824,31 @@ export function GlobalQortalNavBar({
         setOpenSnackGlobal(true);
       });
   }, [currentLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
+  const handleTogglePinnedApp = useCallback(() => {
+    if (!pinnedCandidate) return;
+
+    setSortablePinnedApps((prev) => {
+      const isPinned = prev?.some(
+        (item) =>
+          item?.name?.toLowerCase() === pinnedCandidate.name.toLowerCase() &&
+          item?.service?.toUpperCase() === pinnedCandidate.service
+      );
+      const updatedApps = isPinned
+        ? prev.filter(
+            (item) =>
+              !(
+                item?.name?.toLowerCase() ===
+                  pinnedCandidate.name.toLowerCase() &&
+                item?.service?.toUpperCase() === pinnedCandidate.service
+              )
+          )
+        : [...prev, pinnedCandidate];
+
+      saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', updatedApps);
+      return updatedApps;
+    });
+    setSettingsLocalLastUpdated(Date.now());
+  }, [pinnedCandidate, setSettingsLocalLastUpdated, setSortablePinnedApps]);
 
   const handleCopyAddressSuccess = useCallback(() => {
     setInfoSnackGlobal({
@@ -1340,13 +1397,13 @@ export function GlobalQortalNavBar({
               sx={{
                 alignItems: 'center',
                 display: 'flex',
-                flex: '0 0 58px',
+                flex: '0 0 90px',
                 gap: 0.75,
                 height: 26,
                 justifyContent: 'flex-end',
-                maxWidth: 58,
-                minWidth: 58,
-                width: 58,
+                maxWidth: 90,
+                minWidth: 90,
+                width: 90,
               }}
             >
               <Tooltip
@@ -1400,6 +1457,87 @@ export function GlobalQortalNavBar({
                         display: 'block',
                         flexShrink: 0,
                         fontSize: 15,
+                      }}
+                    />
+                  </ButtonBase>
+                </Box>
+              </Tooltip>
+
+              <Tooltip
+                title={tooltipTitle(
+                  isCurrentAppPinned
+                    ? t('core:action.unpin', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('core:action.pin', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                )}
+                placement="bottom"
+                arrow
+                slotProps={tooltipSlotProps}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'inline-flex',
+                    visibility: canPinCurrentApp ? 'visible' : 'hidden',
+                  }}
+                >
+                  <ButtonBase
+                    disableRipple
+                    aria-label={
+                      isCurrentAppPinned
+                        ? t('core:action.unpin', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:action.pin', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                    }
+                    onClick={handleTogglePinnedApp}
+                    tabIndex={canPinCurrentApp ? 0 : -1}
+                    sx={{
+                      alignItems: 'center',
+                      borderRadius: '8px',
+                      color: isCurrentAppPinned
+                        ? theme.palette.primary.main
+                        : theme.palette.text.secondary,
+                      display: 'flex',
+                      flexShrink: 0,
+                      height: 26,
+                      justifyContent: 'center',
+                      minWidth: 26,
+                      transition:
+                        'background-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                      width: 26,
+                      '&:hover': {
+                        backgroundColor: buttonHoverBackground,
+                        color: isCurrentAppPinned
+                          ? theme.palette.primary.main
+                          : theme.palette.text.primary,
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                      },
+                      '&:active': {
+                        transform: 'translateY(0)',
+                        boxShadow: 'none',
+                      },
+                      '&:focus-visible': {
+                        outline: `1px solid ${theme.palette.primary.main}`,
+                        outlineOffset: '2px',
+                      },
+                    }}
+                  >
+                    <PushPinRoundedIcon
+                      sx={{
+                        display: 'block',
+                        flexShrink: 0,
+                        fontSize: 16,
+                        transform: isCurrentAppPinned
+                          ? 'rotate(-18deg)'
+                          : 'rotate(0deg)',
+                        transition: 'transform 140ms ease',
                       }}
                     />
                   </ButtonBase>

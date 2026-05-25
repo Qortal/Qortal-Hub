@@ -6659,6 +6659,22 @@ export const openNewTab = async (data, isFromExtension) => {
   }
 };
 
+export const openUserLookup = async (data) => {
+  const user = typeof data?.user === 'string' ? data.user.trim() : '';
+  if (!user) {
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: 'user',
+      postProcess: 'capitalizeFirstChar',
+    });
+    throw new Error(errorMsg);
+  }
+
+  executeEvent('openUserLookupDrawer', {
+    addressOrName: user,
+  });
+  return true;
+};
+
 export const lockTab = async (data, isFromExtension, appInfo) => {
   const requiredFields = ['lockMessage'];
   const missingFields: string[] = [];

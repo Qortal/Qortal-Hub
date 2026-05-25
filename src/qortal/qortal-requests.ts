@@ -50,6 +50,7 @@ import {
   leaveGroupRequest,
   lockTab,
   openNewTab,
+  openUserLookup,
   publishMultipleQDNResources,
   publishQDNResource,
   registerNameRequest,
@@ -1610,6 +1611,32 @@ function setupMessageListenerQortalRequest() {
       case 'OPEN_NEW_TAB': {
         try {
           const res = await openNewTab(request.payload, isFromExtension);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'OPEN_USER_LOOKUP': {
+        try {
+          const res = await openUserLookup(request.payload);
           event.source.postMessage(
             {
               requestId: request.requestId,
