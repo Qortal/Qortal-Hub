@@ -174,7 +174,12 @@
     "name_availability_available": "Name ist verfuegbar.",
     "name_availability_checking": "Verfuegbarkeit wird geprueft...",
     "name_availability_same_as_current": "Waehle einen anderen Namen als den, den du bereits verwendest.",
-    "name_availability_taken": "Dieser Name ist bereits vergeben."
+    "name_availability_taken": "Dieser Name ist bereits vergeben.",
+    "online_users_count": "Online-Benutzer",
+    "online_users_count_value": "{{count}} online",
+    "account_status_offline": "Offline",
+    "blocked_settings": "Blockierte Konten",
+    "blocked_settings_description": "Verwalte blockierte Namen und Adressen für diese Wallet oder auf diesem Gerät."
   },
   "groups_widget": {
     "accept": "Annehmen",
@@ -248,7 +253,8 @@
     "view_conversation": "Unterhaltung anzeigen",
     "wants_to_join": "Möchte dieser Gruppe beitreten.",
     "you": "Du",
-    "publish": "Veröffentlichen"
+    "publish": "Veröffentlichen",
+    "recent_activity_placeholder": "Aktuelle Gruppenaktivität"
   },
   "subscription": {
     "subscriptions": "abonnements",

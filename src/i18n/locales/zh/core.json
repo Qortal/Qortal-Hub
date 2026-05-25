@@ -324,7 +324,12 @@
       "unsaved_changes": "您对固定应用程序有未保存的更改。将它们保存到QDN。",
       "updating": "更新",
       "wait": "请稍等",
-      "open_q_trade_subtitle": "打开 Q-Trade，在交易门户购买 QORT。"
+      "open_q_trade_subtitle": "打开 Q-Trade，在交易门户购买 QORT。",
+      "account_menu": "账户菜单",
+      "authenticated_account": "已认证账户",
+      "address": "地址",
+      "copy_address": "复制地址",
+      "new_notification": "新通知"
     },
     "message": "信息",
     "promotion_text": "促销文本",
@@ -619,7 +624,7 @@
     "notifications_enable": "开启通知",
     "notifications_mute": "静音通知",
     "apps": "应用",
-    "extras": "",
+    "extras": "更多",
     "hint_notifications_desktop_only": "仅静音桌面提醒，中心内的通知仍会继续。",
     "hint_minting_panel": "成为铸造者后即可使用此面板。请前往 Q-Mintership 开始。",
     "snackbar_backup_wallet": "请下载钱包文件，访问账户需要它。"

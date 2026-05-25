@@ -174,7 +174,12 @@
     "name_availability_available": "Имя свободно.",
     "name_availability_checking": "Проверка доступности имени...",
     "name_availability_same_as_current": "Выберите имя, отличное от уже используемого.",
-    "name_availability_taken": "Это имя уже занято."
+    "name_availability_taken": "Это имя уже занято.",
+    "online_users_count": "Пользователи онлайн",
+    "online_users_count_value": "{{count}} онлайн",
+    "account_status_offline": "Не в сети",
+    "blocked_settings": "Заблокированные аккаунты",
+    "blocked_settings_description": "Управляйте заблокированными именами и адресами для этого кошелька или на этом устройстве."
   },
   "groups_widget": {
     "accept": "Принять",
@@ -248,7 +253,8 @@
     "view_conversation": "Просмотр беседы",
     "wants_to_join": "Хочет вступить в эту группу.",
     "you": "Вы",
-    "publish": "Опубликовать"
+    "publish": "Опубликовать",
+    "recent_activity_placeholder": "Недавняя активность группы"
   },
   "subscription": {
     "subscriptions": "подписки",

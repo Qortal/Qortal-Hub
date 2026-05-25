@@ -174,7 +174,12 @@
     "name_availability_available": "この名前は利用できます。",
     "name_availability_checking": "名前の利用可否を確認しています…",
     "name_availability_same_as_current": "すでに使っている名前とは別の名前を選んでください。",
-    "name_availability_taken": "この名前はすでに使われています。"
+    "name_availability_taken": "この名前はすでに使われています。",
+    "online_users_count": "オンラインユーザー",
+    "online_users_count_value": "{{count}}人がオンライン",
+    "account_status_offline": "オフライン",
+    "blocked_settings": "ブロック済みアカウント",
+    "blocked_settings_description": "このウォレットまたはこのデバイス全体でブロックした名前とアドレスを管理します。"
   },
   "groups_widget": {
     "accept": "承認する",
@@ -248,7 +253,8 @@
     "view_conversation": "会話を表示",
     "wants_to_join": "このグループへの参加を希望しています。",
     "you": "あなた",
-    "publish": "公開"
+    "publish": "公開",
+    "recent_activity_placeholder": "最近のグループアクティビティ"
   },
   "subscription": {
     "subscriptions": "サブスクリプション",

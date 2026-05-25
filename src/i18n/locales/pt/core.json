@@ -324,7 +324,12 @@
       "unsaved_changes": "você tem alterações não salvas nos seus aplicativos fixados. Salve-os na QDN.",
       "updating": "atualizando",
       "wait": "por favor, aguarde",
-      "open_q_trade_subtitle": "Abre o Q-Trade e compra QORT no portal de negociação."
+      "open_q_trade_subtitle": "Abre o Q-Trade e compra QORT no portal de negociação.",
+      "account_menu": "Menu da conta",
+      "authenticated_account": "Conta autenticada",
+      "address": "Endereço",
+      "copy_address": "Copiar endereço",
+      "new_notification": "Nova notificação"
     },
     "message": "messagem",
     "promotion_text": "texto promocional",
@@ -621,7 +626,7 @@
     "notifications_enable": "Ativar notificações",
     "notifications_mute": "Silenciar notificações",
     "apps": "Aplicações",
-    "extras": "",
+    "extras": "Extras",
     "hint_notifications_desktop_only": "Só silencia alertas na área de trabalho. As notificações no hub continuam.",
     "hint_minting_panel": "Este painel desbloqueia quando fores um minter. Passa pelo Q-Mintership para começar!",
     "snackbar_backup_wallet": "Transferir o ficheiro da tua carteira. É necessário para acederes à conta."

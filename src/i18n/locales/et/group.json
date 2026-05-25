@@ -174,7 +174,12 @@
     "name_availability_available": "See nimi on vaba.",
     "name_availability_checking": "Kontrollin nime kättesaadavust...",
     "name_availability_same_as_current": "Vali nimi, mis erineb juba kasutatavast.",
-    "name_availability_taken": "See nimi on juba võetud."
+    "name_availability_taken": "See nimi on juba võetud.",
+    "online_users_count": "Võrgus kasutajad",
+    "online_users_count_value": "{{count}} võrgus",
+    "account_status_offline": "Võrgust väljas",
+    "blocked_settings": "Blokeeritud kontod",
+    "blocked_settings_description": "Halda selle rahakoti või kogu seadme blokeeritud nimesid ja aadresse."
   },
   "groups_widget": {
     "accept": "Nõustu",
@@ -248,7 +253,8 @@
     "view_conversation": "Vaata vestlust",
     "wants_to_join": "Soovib sellesse gruppi liituda.",
     "you": "Sina",
-    "publish": "Avalda"
+    "publish": "Avalda",
+    "recent_activity_placeholder": "Hiljutine grupitegevus"
   },
   "subscription": {
     "subscriptions": "tellimused",

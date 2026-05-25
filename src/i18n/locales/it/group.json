@@ -174,7 +174,12 @@
     "name_availability_available": "Il nome è disponibile.",
     "name_availability_checking": "Verifica disponibilità del nome...",
     "name_availability_same_as_current": "Scegli un nome diverso da quello che usi già.",
-    "name_availability_taken": "Quel nome è già in uso."
+    "name_availability_taken": "Quel nome è già in uso.",
+    "online_users_count": "Utenti online",
+    "online_users_count_value": "{{count}} online",
+    "account_status_offline": "Offline",
+    "blocked_settings": "Account bloccati",
+    "blocked_settings_description": "Gestisci nomi e indirizzi bloccati per questo wallet o su questo dispositivo."
   },
   "groups_widget": {
     "accept": "Accetta",
@@ -248,7 +253,8 @@
     "view_conversation": "Vedi conversazione",
     "wants_to_join": "Vuole unirsi a questo gruppo.",
     "you": "Tu",
-    "publish": "Pubblica"
+    "publish": "Pubblica",
+    "recent_activity_placeholder": "Attività recente del gruppo"
   },
   "subscription": {
     "subscriptions": "abbonamenti",

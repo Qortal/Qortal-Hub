@@ -324,7 +324,12 @@
       "unsaved_changes": "sul on salvestamata muudatusi kinnitatud rakendustes. Salvesta need QDN-i.",
       "updating": "uuendamine",
       "wait": "palun oota",
-      "open_q_trade_subtitle": "Ava Q-Trade ja osta QORT kauplemisportaalist."
+      "open_q_trade_subtitle": "Ava Q-Trade ja osta QORT kauplemisportaalist.",
+      "account_menu": "Konto menüü",
+      "authenticated_account": "Autenditud konto",
+      "address": "Aadress",
+      "copy_address": "Kopeeri aadress",
+      "new_notification": "Uus teavitus"
     },
     "message": "sõnum",
     "promotion_text": "Sisesta lühikene tutvustus",
@@ -621,7 +626,7 @@
     "notifications_enable": "Luba teavitused",
     "notifications_mute": "Summuta teavitused",
     "apps": "Rakendused",
-    "extras": "",
+    "extras": "Lisad",
     "hint_notifications_desktop_only": "See summutab ainult töölauahoiatused. Keskusesisesed teavitused jätkuvad.",
     "hint_minting_panel": "See paneel avaneb pärast minteriks saamist. Alusta külastades Q-Mintershipi!",
     "snackbar_backup_wallet": "Laadi oma rahakotifail alla. Kontole juurdepääsuks see on vajalik."

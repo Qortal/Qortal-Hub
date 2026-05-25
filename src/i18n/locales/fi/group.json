@@ -174,7 +174,12 @@
     "name_availability_available": "Nimi on vapaa.",
     "name_availability_checking": "Tarkistetaan nimen saatavuutta...",
     "name_availability_same_as_current": "Valitse nimi, joka eroaa jo käyttämästäsi.",
-    "name_availability_taken": "Tämä nimi on jo käytössä."
+    "name_availability_taken": "Tämä nimi on jo käytössä.",
+    "online_users_count": "Käyttäjiä verkossa",
+    "online_users_count_value": "{{count}} verkossa",
+    "account_status_offline": "Offline",
+    "blocked_settings": "Estetyt tilit",
+    "blocked_settings_description": "Hallitse estettyjä nimiä ja osoitteita tälle lompakolle tai koko laitteella."
   },
   "groups_widget": {
     "accept": "Hyväksy",
@@ -248,7 +253,8 @@
     "view_conversation": "Näytä keskustelu",
     "wants_to_join": "Haluaa liittyä tähän ryhmään.",
     "you": "Sinä",
-    "publish": "Julkaise"
+    "publish": "Julkaise",
+    "recent_activity_placeholder": "Viimeaikainen ryhmätoiminta"
   },
   "subscription": {
     "subscriptions": "tilaukset",

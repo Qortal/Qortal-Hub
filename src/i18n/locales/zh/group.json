@@ -174,7 +174,12 @@
     "name_availability_available": "该名称可用。",
     "name_availability_checking": "正在检查名称是否可用…",
     "name_availability_same_as_current": "请选择与您正在使用的名称不同的名称。",
-    "name_availability_taken": "该名称已被占用。"
+    "name_availability_taken": "该名称已被占用。",
+    "online_users_count": "在线用户",
+    "online_users_count_value": "{{count}} 在线",
+    "account_status_offline": "离线",
+    "blocked_settings": "已屏蔽账户",
+    "blocked_settings_description": "管理此钱包或此设备上的已屏蔽名称和地址。"
   },
   "groups_widget": {
     "accept": "接受",
@@ -248,7 +253,8 @@
     "view_conversation": "查看对话",
     "wants_to_join": "希望加入此群组。",
     "you": "你",
-    "publish": "发布"
+    "publish": "发布",
+    "recent_activity_placeholder": "最近的群组活动"
   },
   "subscription": {
     "subscriptions": "订阅",

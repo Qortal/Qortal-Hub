@@ -174,7 +174,12 @@
     "name_availability_available": "El nombre está disponible.",
     "name_availability_checking": "Comprobando disponibilidad del nombre...",
     "name_availability_same_as_current": "Elige un nombre distinto al que ya usas.",
-    "name_availability_taken": "Ese nombre ya está en uso."
+    "name_availability_taken": "Ese nombre ya está en uso.",
+    "online_users_count": "Usuarios en línea",
+    "online_users_count_value": "{{count}} en línea",
+    "account_status_offline": "Sin conexión",
+    "blocked_settings": "Cuentas bloqueadas",
+    "blocked_settings_description": "Gestiona nombres y direcciones bloqueados para esta billetera o en este dispositivo."
   },
   "groups_widget": {
     "accept": "Aceptar",
@@ -248,7 +253,8 @@
     "view_conversation": "Ver conversación",
     "wants_to_join": "Quiere unirse a este grupo.",
     "you": "Tú",
-    "publish": "Publicar"
+    "publish": "Publicar",
+    "recent_activity_placeholder": "Actividad reciente del grupo"
   },
   "subscription": {
     "subscriptions": "suscripciones",

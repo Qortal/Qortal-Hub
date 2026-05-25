@@ -324,7 +324,12 @@
       "unsaved_changes": "لديك تغييرات غير محفوظة على تطبيقاتك المثبتة. احفظها على QDN.",
       "updating": "جاري التحديث",
       "wait": "الرجاء الانتظار",
-      "open_q_trade_subtitle": "افتح Q-Trade واشترِ QORT من بوابة التداول."
+      "open_q_trade_subtitle": "افتح Q-Trade واشترِ QORT من بوابة التداول.",
+      "account_menu": "قائمة الحساب",
+      "authenticated_account": "حساب موثق",
+      "address": "العنوان",
+      "copy_address": "نسخ العنوان",
+      "new_notification": "إشعار جديد"
     },
     "message": "رسالة",
     "promotion_text": "نص الترويج",
@@ -621,7 +626,7 @@
     "notifications_enable": "تشغيل الإشعارات",
     "notifications_mute": "كتم الإشعارات",
     "apps": "التطبيقات",
-    "extras": "",
+    "extras": "إضافات",
     "hint_notifications_desktop_only": "يكتم ذلك تنبيهات سطح المكتب فقط. إشعارات داخل المركز لا تزال تعمل.",
     "hint_minting_panel": "يُفتَح هذا اللوح عندما تصبح مانِع عملات. ازرَ Q-Mintership للبدء!",
     "snackbar_backup_wallet": "نزِّل ملف محفظتك. هذا مطلوب للوصول إلى حسابك."

@@ -324,7 +324,12 @@
       "unsaved_changes": "У вас есть неспасенные изменения в ваши приложения. Сохраните их в QDN.",
       "updating": "обновление",
       "wait": "пожалуйста, подождите",
-      "open_q_trade_subtitle": "Откройте Q-Trade и купите QORT через торговый портал."
+      "open_q_trade_subtitle": "Откройте Q-Trade и купите QORT через торговый портал.",
+      "account_menu": "Меню аккаунта",
+      "authenticated_account": "Авторизованный аккаунт",
+      "address": "Адрес",
+      "copy_address": "Скопировать адрес",
+      "new_notification": "Новое уведомление"
     },
     "message": "сообщение",
     "promotion_text": "Текст продвижения",
@@ -621,7 +626,7 @@
     "notifications_enable": "Включить уведомления",
     "notifications_mute": "Отключить уведомления",
     "apps": "Приложения",
-    "extras": "",
+    "extras": "Дополнительно",
     "hint_notifications_desktop_only": "Отключаются только оповещения на рабочем столе. Уведомления в хабе продолжают приходить.",
     "hint_minting_panel": "Панель откроется, когда вы станете минтером. Загляните в Q-Mintership, чтобы начать!",
     "snackbar_backup_wallet": "Скачайте файл кошелька — он нужен для доступа к аккаунту."

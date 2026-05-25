@@ -290,7 +290,11 @@
       "notification_settings_desc": "Valitse, mitkä sovellukset voivat lähettää työpöytäilmoituksia; toiminta Hubissa näkyy edelleen.",
       "notifications": "Ilmoitukset",
       "revoke_permission": "Peruuta",
-      "open_q_trade_subtitle": "Avaa Q-Trade ja osta QORT kauppaportaalista."
+      "open_q_trade_subtitle": "Avaa Q-Trade ja osta QORT kauppaportaalista.",
+      "account_menu": "Tilivalikko",
+      "authenticated_account": "Todennettu tili",
+      "address": "Osoite",
+      "copy_address": "Kopioi osoite"
     },
     "success": {
       "transfer": "siirto onnistui!",
@@ -561,7 +565,7 @@
     "notifications_enable": "Ota ilmoitukset käyttöön",
     "notifications_mute": "Mykistä ilmoitukset",
     "apps": "Sovellukset",
-    "extras": "",
+    "extras": "Lisät",
     "hint_notifications_desktop_only": "Tämä mykistää vain työpöytähälytykset. Keskuksen sisäiset ilmoitukset jatkuvat.",
     "hint_minting_panel": "Tämä paneeli avautuu, kun olet minttaaja. Aloita käymällä Q-Mintershipissä!",
     "snackbar_backup_wallet": "Lataa lompakkotiedostosi. Sitä tarvitaan tilin käyttöön."

@@ -174,7 +174,12 @@
     "name_availability_available": "الاسم متاح.",
     "name_availability_checking": "جارٍ التحقق من توفر الاسم...",
     "name_availability_same_as_current": "اختر اسمًا يختلف عن الذي تستخدمه حاليًا.",
-    "name_availability_taken": "هذا الاسم مستخدم بالفعل."
+    "name_availability_taken": "هذا الاسم مستخدم بالفعل.",
+    "online_users_count": "المستخدمون المتصلون",
+    "online_users_count_value": "{{count}} متصل",
+    "account_status_offline": "غير متصل",
+    "blocked_settings": "الحسابات المحظورة",
+    "blocked_settings_description": "إدارة الأسماء والعناوين المحظورة لهذه المحفظة أو عبر هذا الجهاز."
   },
   "groups_widget": {
     "accept": "قبول",
@@ -248,7 +253,8 @@
     "view_conversation": "عرض المحادثة",
     "wants_to_join": "يريد الانضمام إلى هذه المجموعة.",
     "you": "أنت",
-    "publish": "نشر"
+    "publish": "نشر",
+    "recent_activity_placeholder": "نشاط المجموعة الأخير"
   },
   "subscription": {
     "subscriptions": "الاشتراكات",

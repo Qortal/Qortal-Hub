@@ -323,7 +323,12 @@
       "unsaved_changes": "sie haben nicht gespeicherte Änderungen an Ihren angestellten Apps. Speichern Sie sie bei QDN.",
       "updating": "aktualisierung",
       "wait": "bitte warten",
-      "open_q_trade_subtitle": "Öffne Q-Trade und kaufe QORT über das Handelsportal."
+      "open_q_trade_subtitle": "Öffne Q-Trade und kaufe QORT über das Handelsportal.",
+      "account_menu": "Kontomenü",
+      "authenticated_account": "Authentifiziertes Konto",
+      "address": "Adresse",
+      "copy_address": "Adresse kopieren",
+      "new_notification": "Neue Benachrichtigung"
     },
     "message": "Nachricht",
     "promotion_text": "Promotionstext",
@@ -618,7 +623,7 @@
     "notifications_enable": "Benachrichtigungen aktivieren",
     "notifications_mute": "Benachrichtigungen stumm schalten",
     "apps": "Apps",
-    "extras": "",
+    "extras": "Extras",
     "hint_notifications_desktop_only": "Nur Desktop-Warnhinweise werden stumm geschaltet. Benachrichtigungen im Hub laufen weiter.",
     "hint_minting_panel": "Dieses Panel schaltet sich frei, sobald du Minter bist. Schau bei Q-Mintership vorbei!",
     "snackbar_backup_wallet": "Lade deine Wallet-Datei herunter. Sie wird für den Kontozugang benötigt."

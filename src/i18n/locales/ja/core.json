@@ -324,7 +324,12 @@
       "unsaved_changes": "ピン留めアプリに救われていない変更があります。それらをqdnに保存します。",
       "updating": "更新",
       "wait": "お待ちください",
-      "open_q_trade_subtitle": "Q-Trade を開き、取引ポータルで QORT を購入します。"
+      "open_q_trade_subtitle": "Q-Trade を開き、取引ポータルで QORT を購入します。",
+      "account_menu": "アカウントメニュー",
+      "authenticated_account": "認証済みアカウント",
+      "address": "アドレス",
+      "copy_address": "アドレスをコピー",
+      "new_notification": "新しい通知"
     },
     "message": "メッセージ",
     "promotion_text": "プロモーションテキスト",
@@ -619,7 +624,7 @@
     "notifications_enable": "通知をオン",
     "notifications_mute": "通知をオフ",
     "apps": "アプリ",
-    "extras": "",
+    "extras": "その他",
     "hint_notifications_desktop_only": "デスクトップ通知のみをミュートします。ハブ内の通知は続きます。",
     "hint_minting_panel": "ミンターになるとこのパネルが使えます。まずは Q-Mintership へどうぞ。",
     "snackbar_backup_wallet": "ウォレットファイルをダウンロードしてください。アカウントにアクセスするために必要です。"
