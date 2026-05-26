@@ -136,6 +136,7 @@ import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
 import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
 import { openQWalletsTab } from './utils/openQWalletsTab';
+import { clearLastAuthenticatedWalletAddress } from './utils/lastAuthenticatedWallet';
 
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
@@ -994,6 +995,7 @@ function App() {
           }),
         });
       }
+      clearLastAuthenticatedWalletAddress();
       // Send the offline presence notice while the key is still in secure
       // storage. The background clears keyPair as part of logout, so signing
       // must happen here — before sendMessage('logout') is called.
@@ -1294,6 +1296,7 @@ function App() {
   const onAuthenticationFormBack = useCallback(() => {
     suppressWalletInfoRestoreRef.current = true;
     holdRefExtState.current = 'not-authenticated';
+    clearLastAuthenticatedWalletAddress();
     setRawWallet(null);
     setExtstate('not-authenticated');
     setAuthenticatePassword('');

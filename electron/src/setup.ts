@@ -1404,6 +1404,8 @@ export type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
 
 export interface AppSettings {
   closeAction?: CloseAction;
+  /** When true, skip the intro audio played on the unauthenticated startup screen. */
+  disableStartupSound?: boolean;
   /** Whether the Hub P2P network auto-starts on launch (default true). */
   p2pEnabled?: boolean;
   /**
@@ -1417,6 +1419,7 @@ export interface AppSettings {
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   closeAction: 'ask',
+  disableStartupSound: false,
   p2pEnabled: !isDisabledLegacy,
   reticulumMeshUpnpEnabled: true,
 };
@@ -1435,6 +1438,7 @@ export async function readAppSettings(): Promise<AppSettings> {
         ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
+      disableStartupSound: parsed.disableStartupSound === true,
       p2pEnabled: isDisabledLegacy
         ? false
         : parsed.p2pEnabled === false

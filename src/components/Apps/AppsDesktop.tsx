@@ -1205,19 +1205,8 @@ export const AppsDesktop = ({
   const duplicateTab = useCallback(
     (tab) => {
       if (!tab) return;
-
-      if (isLocalDevTab(tab)) {
-        executeEvent('appsDevModeAddTab', {
-          data: {
-            afterTabId: tab?.tabId,
-            url: tab.url,
-            customIcon: tab.customIcon,
-            name: tab.name,
-          },
-        });
-        executeEvent('open-dev-mode', {});
-        return;
-      }
+      if (tab.internal) return;
+      if (isLocalDevTab(tab)) return;
 
       const currentLink = tab?.tabId
         ? navigationController?.[tab.tabId]?.currentLink || ''

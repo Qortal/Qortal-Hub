@@ -783,7 +783,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const metricValueSx = {
     fontSize: '0.93rem',
     fontWeight: 700,
-    textAlign: 'right',
+    overflowWrap: 'anywhere',
+    textAlign: { xs: 'left', sm: 'right' },
   } as const;
 
   const silkyPrimaryButtonSx = {
@@ -952,12 +953,17 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               theme.palette.mode === 'dark'
                 ? '0 34px 120px rgba(0,0,0,0.46)'
                 : '0 28px 88px rgba(18,28,45,0.16)',
+            display: 'flex',
+            flexDirection: 'column',
             height: { xs: 'calc(100vh - 32px)', md: 'min(86vh, 920px)' },
             margin: { xs: 2, md: 3 },
             maxHeight: 'calc(100vh - 24px)',
             maxWidth: 'none',
             overflow: 'hidden',
-            width: 'min(1180px, calc(100vw - 48px))',
+            width: {
+              xs: 'calc(100vw - 24px)',
+              md: 'min(1180px, calc(100vw - 48px))',
+            },
           },
         }}
       >
@@ -1057,7 +1063,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               display: 'grid',
               flex: '1 1 auto',
               gap: 2.75,
-              gridTemplateColumns: { xs: '1fr', lg: '360px minmax(0, 1fr)' },
+              alignItems: 'start',
+              gridAutoRows: 'max-content',
+              gridTemplateColumns: {
+                xs: 'minmax(0, 1fr)',
+                xl: '360px minmax(0, 1fr)',
+              },
               minHeight: 0,
               overflowY: 'auto',
               px: { xs: 2, md: 2.75 },
@@ -1464,14 +1475,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               sx={{
                 borderLeft: {
                   xs: 'none',
-                  lg: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.06)}`,
+                  xl: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.06)}`,
                 },
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 2.4,
                 minWidth: 0,
                 opacity: isStatsLoading ? 0.62 : 1,
-                pl: { xs: 0, lg: 3 },
+                pl: { xs: 0, xl: 3 },
                 transition: 'opacity 0.2s ease',
               }}
             >
@@ -1500,10 +1511,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 <Typography
                   sx={{
                     color: currentStatusTone.accent,
-                    fontSize: '1.9rem',
+                    fontSize: { xs: '1.55rem', sm: '1.9rem' },
                     fontWeight: 800,
                     letterSpacing: '-0.04em',
                     lineHeight: 1.05,
+                    overflowWrap: 'anywhere',
                   }}
                 >
                   {userMintingState.title}
@@ -1512,8 +1524,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   sx={{
                     color: theme.palette.text.secondary,
                     fontSize: '0.92rem',
+                    lineHeight: 1.45,
                     mt: 0.85,
                     maxWidth: 520,
+                    overflowWrap: 'anywhere',
                   }}
                 >
                   {userMintingState.description}

@@ -88,6 +88,7 @@ const TabComponent = ({
   const interactionLockRef = tabInteractionLockedRef ?? localInteractionLockRef;
 
   const treatAsDevApp = Boolean(isDevApp);
+  const canDuplicate = !app?.internal && !!app?.service;
   const label = treatAsDevApp
     ? devTabLabel(app)
     : app?.privateAppProperties?.name ||
@@ -367,37 +368,39 @@ const TabComponent = ({
           },
         }}
       >
-        <MenuItem
-          onClick={() => {
-            onDuplicate();
-            setMenuPosition(null);
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: '24px !important',
-              marginRight: '6px',
+        {canDuplicate && (
+          <MenuItem
+            onClick={() => {
+              onDuplicate();
+              setMenuPosition(null);
             }}
           >
-            <ContentCopyIcon
+            <ListItemIcon
               sx={{
-                color: theme.palette.text.primary,
-                fontSize: 18,
+                minWidth: '24px !important',
+                marginRight: '6px',
               }}
-            />
-          </ListItemIcon>
+            >
+              <ContentCopyIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: 18,
+                }}
+              />
+            </ListItemIcon>
 
-          <ListItemText
-            sx={{
-              '& .MuiTypography-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                color: theme.palette.text.primary,
-              },
-            }}
-            primary="Duplicate Tab"
-          />
-        </MenuItem>
+            <ListItemText
+              sx={{
+                '& .MuiTypography-root': {
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: theme.palette.text.primary,
+                },
+              }}
+              primary="Duplicate Tab"
+            />
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             onCloseAll();

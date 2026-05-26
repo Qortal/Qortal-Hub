@@ -17,6 +17,7 @@ import {
 import { Wallets } from './Wallets';
 import { AuthButton, AuthFrame } from './Auth/AuthShell';
 import { ConnectionModeModal } from './Auth/ConnectionModeModal';
+import { hasAttemptedLastWalletAutoSelectThisSession } from '../utils/lastAuthenticatedWallet';
 import {
   useCallback,
   useEffect,
@@ -43,6 +44,7 @@ type IntroLogoMetrics = {
 type IntroStage = 'pending' | 'ready' | 'running' | 'settling' | 'complete';
 
 const AUTH_UI_ANIMATIONS_STORAGE_KEY = 'hub_ui_animations_enabled';
+const AUTH_STARTUP_AUDIO_DISABLED_STORAGE_KEY = 'hub_startup_audio_disabled';
 const AUTH_INTRO_OVERSHOOT_PX = 7;
 const AUTH_INTRO_START_DELAY_MS = 560;
 const AUTH_INTRO_FRAME_SETTLE_MS = 32;
@@ -63,8 +65,7 @@ const AUTH_INTRO_AUDIO_START_OFFSET_SECONDS = Math.max(
       1000
 );
 const AUTH_INTRO_LOGO_RING_DOWN_MS = Math.round(
-  (AUTH_INTRO_AUDIO_DURATION_SECONDS - AUTH_INTRO_AUDIO_PEAK_SECONDS) *
-    1000
+  (AUTH_INTRO_AUDIO_DURATION_SECONDS - AUTH_INTRO_AUDIO_PEAK_SECONDS) * 1000
 );
 const AUTH_INTRO_LOGO_RING_MS =
   AUTH_INTRO_SETTLE_MS + AUTH_INTRO_LOGO_RING_DOWN_MS;
@@ -105,6 +106,19 @@ const areAuthAnimationsEnabled = () => {
   }
 };
 
+const isAuthStartupAudioEnabled = () => {
+  if (typeof window === 'undefined') return true;
+
+  try {
+    return (
+      window.localStorage.getItem(AUTH_STARTUP_AUDIO_DISABLED_STORAGE_KEY) !==
+      'true'
+    );
+  } catch {
+    return true;
+  }
+};
+
 export const manifestData = {
   version: '1.0.0',
 };
@@ -121,6 +135,12 @@ export const NotAuthenticated = ({
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
   const [isEntryAccountsReady, setIsEntryAccountsReady] = useState(false);
+  const [isStartupAudioPreferenceLoaded, setIsStartupAudioPreferenceLoaded] =
+    useState(
+      () =>
+        typeof window === 'undefined' ||
+        typeof window.electronAPI?.getAppSettings !== 'function'
+    );
   const [isUnlockLeaving, setIsUnlockLeaving] = useState(false);
   const [isLogoRingDownActive, setIsLogoRingDownActive] = useState(false);
   const logoRef = useRef<HTMLImageElement | null>(null);
@@ -130,7 +150,9 @@ export const NotAuthenticated = ({
     wasDisabled?: boolean;
   } | null>(null);
   const [isIntroLogoReady, setIsIntroLogoReady] = useState(false);
-  const [introMetrics, setIntroMetrics] = useState<IntroLogoMetrics | null>(null);
+  const [introMetrics, setIntroMetrics] = useState<IntroLogoMetrics | null>(
+    null
+  );
   const [introStage, setIntroStage] = useState<IntroStage>('pending');
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
   const customNodeStatusLabel =
@@ -216,11 +238,13 @@ export const NotAuthenticated = ({
     />
   );
   const introComplete = introStage === 'complete';
-  const introCardGlowOpacity =
-    introComplete ? 1 : introStage === 'settling' ? 0.76 : 0;
+  const introCardGlowOpacity = introComplete
+    ? 1
+    : introStage === 'settling'
+      ? 0.76
+      : 0;
   const shouldAnimateIntro = !introComplete;
-  const isLogoAnimating =
-    introStage === 'running' || introStage === 'settling';
+  const isLogoAnimating = introStage === 'running' || introStage === 'settling';
   const isMainAuthContentVisible = introComplete || isLogoAnimating;
   const shouldRenderIntroOverlay = shouldAnimateIntro || isLogoRingDownActive;
   const isIntroOverlayAtRest = isLogoAnimating || isLogoRingDownActive;
@@ -273,7 +297,7 @@ export const NotAuthenticated = ({
           opacity: 0,
           pointerEvents: 'none',
           transform: 'translateY(6px)',
-    };
+        };
   const cardRevealSx = (delayMs: number) =>
     introComplete
       ? {}
@@ -283,7 +307,7 @@ export const NotAuthenticated = ({
             : 'none',
           opacity: 0,
           pointerEvents: 'none',
-    };
+        };
   const stopIntroAudio = useCallback(() => {
     const audio = introAudioRef.current;
 
@@ -299,6 +323,7 @@ export const NotAuthenticated = ({
   }, []);
   const playIntroAudio = useCallback(() => {
     if (!areAuthAnimationsEnabled()) return;
+    if (!isAuthStartupAudioEnabled()) return;
 
     const audio = introAudioRef.current ?? new Audio(authIntroAudioSrc);
     introAudioRef.current = audio;
@@ -362,7 +387,32 @@ export const NotAuthenticated = ({
   }, []);
 
   useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.electronAPI?.getAppSettings !== 'function'
+    ) {
+      setIsStartupAudioPreferenceLoaded(true);
+      return;
+    }
+
+    void window.electronAPI
+      .getAppSettings()
+      .then((settings) => {
+        window.localStorage.setItem(
+          AUTH_STARTUP_AUDIO_DISABLED_STORAGE_KEY,
+          settings?.disableStartupSound === true ? 'true' : 'false'
+        );
+      })
+      .catch(() => {})
+      .finally(() => {
+        setIsStartupAudioPreferenceLoaded(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!isStartupAudioPreferenceLoaded) return undefined;
     if (!areAuthAnimationsEnabled()) return undefined;
+    if (!isAuthStartupAudioEnabled()) return undefined;
 
     const audio = new Audio(authIntroAudioSrc);
     audio.preload = 'auto';
@@ -374,10 +424,11 @@ export const NotAuthenticated = ({
       stopIntroAudio();
       introAudioRef.current = null;
     };
-  }, [stopIntroAudio]);
+  }, [isStartupAudioPreferenceLoaded, stopIntroAudio]);
 
   useLayoutEffect(() => {
     if (!isEntryAccountsReady) return;
+    if (!isStartupAudioPreferenceLoaded) return;
 
     const globalMotionOverride =
       typeof document !== 'undefined'
@@ -386,7 +437,12 @@ export const NotAuthenticated = ({
           ) as HTMLStyleElement | null)
         : null;
     const wasGlobalMotionOverrideDisabled = globalMotionOverride?.disabled;
-    if (hasAuthIntroPlayedThisSession || !areAuthAnimationsEnabled()) {
+    if (
+      hasAuthIntroPlayedThisSession ||
+      hasAttemptedLastWalletAutoSelectThisSession() ||
+      !areAuthAnimationsEnabled()
+    ) {
+      hasAuthIntroPlayedThisSession = true;
       setIntroStage('complete');
       return;
     }
@@ -413,7 +469,7 @@ export const NotAuthenticated = ({
     return () => {
       restoreGlobalMotionOverride();
     };
-  }, [isEntryAccountsReady]);
+  }, [isEntryAccountsReady, isStartupAudioPreferenceLoaded]);
 
   useEffect(() => {
     if (introStage !== 'ready' || !isIntroLogoReady) return;
@@ -502,10 +558,7 @@ export const NotAuthenticated = ({
 
   return (
     <>
-      <AuthFrame
-        maxWidth={1160}
-        disableInitialAnimation
-      >
+      <AuthFrame maxWidth={1160} disableInitialAnimation>
         <Box
           sx={{
             alignItems: 'center',
@@ -699,10 +752,9 @@ export const NotAuthenticated = ({
                   transform: 'scale(1)',
                   transformOrigin: 'center',
                   transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
-                  animation:
-                    isLogoRingDownActive
-                      ? `authIntroLogoHaloRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
-                      : 'none',
+                  animation: isLogoRingDownActive
+                    ? `authIntroLogoHaloRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
+                    : 'none',
                 },
                 '&::after': {
                   background: isLight
@@ -730,15 +782,13 @@ export const NotAuthenticated = ({
                 data-auth-logo-target="entry-logo"
                 src={Logo1Dark}
                 sx={{
-                  animation:
-                    isLogoRingDownActive
-                      ? `authIntroLogoRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
-                      : 'none',
+                  animation: isLogoRingDownActive
+                    ? `authIntroLogoRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
+                    : 'none',
                   display: 'block',
                   filter: AUTH_INTRO_LOGO_FINAL_FILTER,
                   height: { xs: 94, md: 108 },
-                  opacity:
-                    introStage === 'settling' || introComplete ? 1 : 0,
+                  opacity: introStage === 'settling' || introComplete ? 1 : 0,
                   position: 'relative',
                   transition:
                     'opacity 220ms cubic-bezier(0.4, 0, 0.2, 1), filter 620ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1036,10 +1086,9 @@ export const NotAuthenticated = ({
             alt=""
             src={Logo1Dark}
             sx={{
-              animation:
-                isLogoRingDownActive
-                  ? `authIntroOverlayLogoRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
-                  : 'none',
+              animation: isLogoRingDownActive
+                ? `authIntroOverlayLogoRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
+                : 'none',
               display: 'block',
               filter:
                 introStage === 'settling'

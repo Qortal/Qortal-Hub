@@ -18,6 +18,7 @@ import {
   Menu,
   MenuItem,
   Portal,
+  Select,
   Switch,
   TextField,
   Tooltip,
@@ -95,6 +96,7 @@ type HomeProfileCardProps = {
 
 type PresenceDisplayStatus = SelectableStatus | 'idle';
 type NameAvailability = 'available' | 'loading' | 'not-available' | 'null';
+type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
 type AccountSettingsTab =
   | 'blocked'
   | 'developer'
@@ -105,6 +107,8 @@ type AccountSettingsTab =
 const ACCOUNT_SETTINGS_PRIVACY_STORAGE_KEY =
   'home_account_settings_privacy_mode';
 const ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY = 'hub_ui_animations_enabled';
+const ACCOUNT_SETTINGS_STARTUP_AUDIO_DISABLED_STORAGE_KEY =
+  'hub_startup_audio_disabled';
 const ACCOUNT_STATUS_DEFS: Array<{
   key: SelectableStatus;
 }> = [
@@ -187,9 +191,24 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
   );
   const [areAppNotificationsEnabled, setAreAppNotificationsEnabled] =
     useState(true);
+  const [isStartupSoundDisabled, setIsStartupSoundDisabled] = useState(() => {
+    if (typeof window === 'undefined') return false;
+
+    try {
+      return (
+        window.localStorage.getItem(
+          ACCOUNT_SETTINGS_STARTUP_AUDIO_DISABLED_STORAGE_KEY
+        ) === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
   const [areUiAnimationsEnabled, setAreUiAnimationsEnabled] = useState(() =>
     readStoredBoolean(ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY, true)
   );
+  const [closeAction, setCloseAction] = useState<CloseAction>('ask');
+  const [platform, setPlatform] = useState('');
   const [securityPassword, setSecurityPassword] = useState('');
   const [isSecurityPasswordEditable, setIsSecurityPasswordEditable] =
     useState(false);
@@ -574,6 +593,33 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
     }
   }, []);
 
+  const loadGeneralAppSettings = useCallback(async () => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.electronAPI?.getAppSettings !== 'function'
+    ) {
+      return;
+    }
+
+    try {
+      const settings = await window.electronAPI.getAppSettings();
+      const shouldDisableStartupSound =
+        settings?.disableStartupSound === true;
+      setIsStartupSoundDisabled(shouldDisableStartupSound);
+      if (settings?.closeAction) setCloseAction(settings.closeAction);
+      window.localStorage.setItem(
+        ACCOUNT_SETTINGS_STARTUP_AUDIO_DISABLED_STORAGE_KEY,
+        shouldDisableStartupSound ? 'true' : 'false'
+      );
+      if (typeof window.electronAPI?.getPlatform === 'function') {
+        const nextPlatform = await window.electronAPI.getPlatform();
+        setPlatform(nextPlatform || '');
+      }
+    } catch (error) {
+      console.error('Unable to load general app settings.', error);
+    }
+  }, []);
+
   const closeAccountSettingsModal = useCallback(() => {
     if (isChangeNameLoading) return;
     setIsAccountSettingsOpen(false);
@@ -602,8 +648,9 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
       setPrivateKeyError(null);
       setRevealedPrivateKey('');
       loadAppNotificationsPreference();
+      loadGeneralAppSettings();
     },
-    [loadAppNotificationsPreference]
+    [loadAppNotificationsPreference, loadGeneralAppSettings]
   );
 
   useEffect(() => {
@@ -682,6 +729,63 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
       }
     },
     [setIsEnabledDevMode]
+  );
+
+  const handleToggleStartupSound = useCallback(
+    async (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      setIsStartupSoundDisabled(checked);
+
+      try {
+        window.localStorage.setItem(
+          ACCOUNT_SETTINGS_STARTUP_AUDIO_DISABLED_STORAGE_KEY,
+          checked ? 'true' : 'false'
+        );
+        if (typeof window.electronAPI?.setAppSettings === 'function') {
+          await window.electronAPI.setAppSettings({
+            disableStartupSound: checked,
+          });
+        }
+      } catch (error) {
+        setIsStartupSoundDisabled(!checked);
+        window.localStorage.setItem(
+          ACCOUNT_SETTINGS_STARTUP_AUDIO_DISABLED_STORAGE_KEY,
+          !checked ? 'true' : 'false'
+        );
+        setInfoSnack({
+          type: 'error',
+          message: td(
+            'startup_sound_update_error',
+            'We could not update startup sound right now.'
+          ),
+        });
+        setOpenSnack(true);
+      }
+    },
+    [setInfoSnack, setOpenSnack, td]
+  );
+
+  const handleCloseActionChange = useCallback(
+    async (value: CloseAction) => {
+      const previousCloseAction = closeAction;
+      setCloseAction(value);
+
+      try {
+        if (typeof window.electronAPI?.setAppSettings === 'function') {
+          await window.electronAPI.setAppSettings({ closeAction: value });
+        }
+      } catch (error) {
+        setCloseAction(previousCloseAction);
+        setInfoSnack({
+          type: 'error',
+          message: td(
+            'close_action_update_error',
+            'We could not update close window behavior right now.'
+          ),
+        });
+        setOpenSnack(true);
+      }
+    },
+    [closeAction, setInfoSnack, setOpenSnack, td]
   );
 
   const handleToggleUiAnimations = useCallback(
@@ -3054,6 +3158,125 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                     <Switch
                       checked={!areAppNotificationsEnabled}
                       onChange={handleToggleAppNotifications}
+                      sx={settingsSwitchSx}
+                    />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mx: 1.35,
+                    }}
+                  />
+
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.primary,
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.01em',
+                        minWidth: 0,
+                      }}
+                    >
+                      {t('core:close_window_behavior', {
+                        defaultValue: 'When closing the window',
+                      })}
+                    </Typography>
+                    <Select
+                      size="small"
+                      value={closeAction}
+                      onChange={(event) =>
+                        handleCloseActionChange(
+                          event.target.value as CloseAction
+                        )
+                      }
+                      sx={{
+                        borderRadius: '10px',
+                        flexShrink: 0,
+                        fontSize: '0.82rem',
+                        minWidth: 170,
+                        '& .MuiSelect-select': {
+                          py: 0.85,
+                        },
+                      }}
+                    >
+                      <MenuItem value="ask">
+                        {t('core:close_always_ask', {
+                          defaultValue: 'Always ask',
+                        })}
+                      </MenuItem>
+                      <MenuItem value="minimizeToTray">
+                        {platform === 'darwin'
+                          ? t('core:close_minimize_to_dock', {
+                              defaultValue: 'Minimize to dock',
+                            })
+                          : t('core:close_minimize_to_tray', {
+                              defaultValue: 'Minimize to tray',
+                            })}
+                      </MenuItem>
+                      <MenuItem value="quit">
+                        {t('core:close_quit_completely', {
+                          defaultValue: 'Quit completely',
+                        })}
+                      </MenuItem>
+                    </Select>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mx: 1.35,
+                    }}
+                  />
+
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        {td('disable_startup_sound', 'Disable Startup Sound')}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                          mt: 0.4,
+                        }}
+                      >
+                        {td(
+                          'disable_startup_sound_desc',
+                          'Turn on to mute the intro audio played when the Hub starts.'
+                        )}
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={isStartupSoundDisabled}
+                      onChange={handleToggleStartupSound}
                       sx={settingsSwitchSx}
                     />
                   </Box>

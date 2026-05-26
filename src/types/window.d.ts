@@ -79,17 +79,20 @@ declare global {
       showAppMenu?: (x?: number, y?: number) => void;
       getAppSettings?: () => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        disableStartupSound?: boolean;
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
         reticulumMeshUpnpEnabled?: boolean;
       }>;
       setAppSettings?: (settings: {
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        disableStartupSound?: boolean;
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
         reticulumMeshUpnpEnabled?: boolean;
       }) => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        disableStartupSound?: boolean;
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
         reticulumMeshUpnpEnabled?: boolean;

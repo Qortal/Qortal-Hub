@@ -8,7 +8,10 @@ import {
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
-import { isLocalPrivateHttpsUrl, ensureElectronCertIfLocalPrivateHttps } from '../utils/helpers';
+import {
+  isLocalPrivateHttpsUrl,
+  ensureElectronCertIfLocalPrivateHttps,
+} from '../utils/helpers';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
   authenticatePasswordAtom,
@@ -38,6 +41,7 @@ import {
 import { ApiKey } from '../types/auth';
 import { useModalGlobal } from './useModalGlobal';
 import { getWalletErrorMessage } from '../utils/walletErrorMessages';
+import { saveLastAuthenticatedWalletAddress } from '../utils/lastAuthenticatedWallet';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
@@ -280,11 +284,10 @@ export const useAuth = () => {
 
   const handleSaveNodeInfo = useCallback(
     async (nodeInfo) => {
-      const nextNodeInfo =
-        nodeInfo || {
-          url: HTTPS_EXT_NODE_QORTAL_LINK,
-          apikey: '',
-        };
+      const nextNodeInfo = nodeInfo || {
+        url: HTTPS_EXT_NODE_QORTAL_LINK,
+        apikey: '',
+      };
 
       await window.sendMessage('setApiKey', nextNodeInfo);
       setSelectedNode(nextNodeInfo);
@@ -436,6 +439,7 @@ export const useAuth = () => {
         )
         .then((response) => {
           if (response && !response.error) {
+            saveLastAuthenticatedWalletAddress(rawWallet?.address0);
             setAuthenticatePassword('');
             setExtstate('authenticated');
             setWalletToBeDecryptedError('');

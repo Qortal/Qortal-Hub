@@ -35,7 +35,11 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
-import { getWallets, storeWallets, walletVersion } from '../background/background.ts';
+import {
+  getWallets,
+  storeWallets,
+  walletVersion,
+} from '../background/background.ts';
 import { getPrimaryNamesForAddresses } from './Group/groupApi';
 import { getBaseApiReactForAvatar } from '../App';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
@@ -44,6 +48,12 @@ import { crypto } from '../constants/decryptWallet.ts';
 import { PasswordField } from './index.ts';
 import { AuthButton, AuthSectionLabel } from './Auth/AuthShell';
 import type { AuthUnlockTransitionSnapshot } from '../types/authTransition';
+import {
+  clearLastAuthenticatedWalletAddress,
+  getLastAuthenticatedWalletAddress,
+  hasAttemptedLastWalletAutoSelectThisSession,
+  markLastWalletAutoSelectAttemptedThisSession,
+} from '../utils/lastAuthenticatedWallet';
 
 const parsefilenameQortal = (filename) => {
   return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
@@ -106,6 +116,9 @@ export const Wallets = ({
   const accountsScrollRef = useRef<HTMLDivElement | null>(null);
   /** True while reordering wallets; dragover hits header/footer/etc. unless we listen on document */
   const walletReorderDragActiveRef = useRef(false);
+  const attemptedLastWalletAutoSelectRef = useRef(
+    hasAttemptedLastWalletAutoSelectThisSession()
+  );
   const entryModeRef = useRef(mode);
   const editingWalletIndexRef = useRef(editingWalletIndex);
   entryModeRef.current = mode;
@@ -116,7 +129,10 @@ export const Wallets = ({
   useEffect(() => {
     const onDocumentDragOver = (event: globalThis.DragEvent) => {
       if (!walletReorderDragActiveRef.current) return;
-      if (entryModeRef.current !== 'entry' || editingWalletIndexRef.current !== null)
+      if (
+        entryModeRef.current !== 'entry' ||
+        editingWalletIndexRef.current !== null
+      )
         return;
       const el = accountsScrollRef.current;
       if (!el || el.scrollHeight <= el.clientHeight) return;
@@ -125,7 +141,8 @@ export const Wallets = ({
       const x = event.clientX;
       const y = event.clientY;
       const horizontalPad = 80;
-      if (x < rect.left - horizontalPad || x > rect.right + horizontalPad) return;
+      if (x < rect.left - horizontalPad || x > rect.right + horizontalPad)
+        return;
 
       /** Only past the clipped top/bottom — no scrolling from the interior of the list */
       const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
@@ -152,12 +169,9 @@ export const Wallets = ({
     return () => document.removeEventListener('dragover', onDocumentDragOver);
   }, []);
 
-  const registerReorderDragActive = useCallback(
-    (active: boolean) => {
-      walletReorderDragActiveRef.current = active;
-    },
-    []
-  );
+  const registerReorderDragActive = useCallback((active: boolean) => {
+    walletReorderDragActiveRef.current = active;
+  }, []);
 
   const handleWalletReorderDragStart = useCallback((sourceIdx: number) => {
     setWalletReorderDragSourceIndex(sourceIdx);
@@ -259,6 +273,23 @@ export const Wallets = ({
       .then((res) => {
         if (res && Array.isArray(res)) {
           setWallets(res);
+          if (mode === 'entry' && !attemptedLastWalletAutoSelectRef.current) {
+            const lastAddress = getLastAuthenticatedWalletAddress();
+            if (lastAddress) {
+              const lastWallet = res.find(
+                (wallet) => wallet?.address0 === lastAddress
+              );
+
+              if (lastWallet) {
+                attemptedLastWalletAutoSelectRef.current = true;
+                markLastWalletAutoSelectAttemptedThisSession();
+                setRawWallet(lastWallet);
+                setExtState('wallet-dropped');
+              } else {
+                clearLastAuthenticatedWalletAddress(lastAddress);
+              }
+            }
+          }
         }
         setIsLoading(false);
       })
@@ -266,7 +297,7 @@ export const Wallets = ({
         console.error(error);
         setIsLoading(false);
       });
-  }, []);
+  }, [mode, setExtState, setRawWallet]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -599,10 +630,57 @@ export const Wallets = ({
       ) : (
         <>
           {displayedWallets.map(({ wallet, idx }) => (
-        <Fragment key={wallet?.address0}>
+            <Fragment key={wallet?.address0}>
+              {walletDropGapBeforeIndex !== null &&
+                walletReorderDragSourceIndex !== null &&
+                walletDropGapBeforeIndex === idx && (
+                  <Box
+                    aria-hidden
+                    sx={{
+                      alignSelf: 'stretch',
+                      backgroundColor: theme.palette.primary.main,
+                      borderRadius: '999px',
+                      boxShadow:
+                        theme.palette.mode === 'light'
+                          ? `0 0 0 1px ${alpha(theme.palette.primary.dark, 0.12)}, 0 3px 16px ${alpha(theme.palette.primary.main, 0.38)}`
+                          : `0 0 0 1px ${alpha(theme.palette.primary.light, 0.28)}, 0 0 20px ${alpha(theme.palette.primary.main, 0.45)}`,
+                      flexShrink: 0,
+                      height: mode === 'entry' ? 5 : 4,
+                      mx: mode === 'entry' ? 0.85 : 0,
+                    }}
+                  />
+                )}
+              <WalletRow
+                idx={idx}
+                editingWalletIndex={editingWalletIndex}
+                finalizeWalletReorder={finalizeWalletReorder}
+                mode={mode}
+                onReorderDragEnd={handleWalletReorderDragEnd}
+                onReorderDragStart={handleWalletReorderDragStart}
+                primaryName={
+                  wallet?.address0
+                    ? primaryNamesByAddress[wallet.address0]
+                    : undefined
+                }
+                registerCardRef={registerCardRef}
+                registerReorderDragActive={
+                  mode === 'entry' && editingWalletIndex === null
+                    ? registerReorderDragActive
+                    : undefined
+                }
+                reorderDragHover={handleWalletReorderHover}
+                reorderDragHoverLeave={handleWalletReorderHoverLeave}
+                reorderDragSourceIndex={walletReorderDragSourceIndex}
+                setEditingWalletIndex={setEditingWalletIndex}
+                setSelectedWallet={selectedWalletFunc}
+                updateWalletItem={updateWalletItem}
+                wallet={wallet}
+              />
+            </Fragment>
+          ))}
           {walletDropGapBeforeIndex !== null &&
             walletReorderDragSourceIndex !== null &&
-            walletDropGapBeforeIndex === idx && (
+            walletDropGapBeforeIndex === wallets.length && (
               <Box
                 aria-hidden
                 sx={{
@@ -619,60 +697,24 @@ export const Wallets = ({
                 }}
               />
             )}
-          <WalletRow
-            idx={idx}
-            editingWalletIndex={editingWalletIndex}
-            finalizeWalletReorder={finalizeWalletReorder}
-            mode={mode}
-            onReorderDragEnd={handleWalletReorderDragEnd}
-            onReorderDragStart={handleWalletReorderDragStart}
-            primaryName={
-              wallet?.address0 ? primaryNamesByAddress[wallet.address0] : undefined
-            }
-            registerCardRef={registerCardRef}
-            registerReorderDragActive={
-              mode === 'entry' && editingWalletIndex === null
-                ? registerReorderDragActive
-                : undefined
-            }
-            reorderDragHover={handleWalletReorderHover}
-            reorderDragHoverLeave={handleWalletReorderHoverLeave}
-            reorderDragSourceIndex={walletReorderDragSourceIndex}
-            setEditingWalletIndex={setEditingWalletIndex}
-            setSelectedWallet={selectedWalletFunc}
-            updateWalletItem={updateWalletItem}
-            wallet={wallet}
-          />
-        </Fragment>
-      ))}
-      {walletDropGapBeforeIndex !== null &&
-        walletReorderDragSourceIndex !== null &&
-        walletDropGapBeforeIndex === wallets.length && (
-          <Box
-            aria-hidden
-            sx={{
-              alignSelf: 'stretch',
-              backgroundColor: theme.palette.primary.main,
-              borderRadius: '999px',
-              boxShadow:
-                theme.palette.mode === 'light'
-                  ? `0 0 0 1px ${alpha(theme.palette.primary.dark, 0.12)}, 0 3px 16px ${alpha(theme.palette.primary.main, 0.38)}`
-                  : `0 0 0 1px ${alpha(theme.palette.primary.light, 0.28)}, 0 0 20px ${alpha(theme.palette.primary.main, 0.45)}`,
-              flexShrink: 0,
-              height: mode === 'entry' ? 5 : 4,
-              mx: mode === 'entry' ? 0.85 : 0,
-            }}
-          />
-        )}
         </>
       )}
     </Box>
   );
 
   const entryAccountListColumn = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
+    <Box
+      sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}
+    >
       {showsEntryWalletFilter && (
-        <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.75, width: '100%' }}>
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 0.75,
+            width: '100%',
+          }}
+        >
           <Tooltip placement="top" title={t('auth:entry.filter_accounts_aria')}>
             <IconButton
               aria-expanded={walletEntrySearchOpen}
@@ -824,7 +866,8 @@ export const Wallets = ({
               px: 3,
               py: 3,
               textAlign: 'center',
-              transition: 'background-color 160ms ease, border-color 160ms ease',
+              transition:
+                'background-color 160ms ease, border-color 160ms ease',
               '&:hover': {
                 backgroundColor: 'rgba(255,255,255,0.03)',
                 borderColor: 'rgba(255,255,255,0.18)',
@@ -878,7 +921,8 @@ export const Wallets = ({
               px: 3,
               py: 3,
               textAlign: 'center',
-              transition: 'background-color 160ms ease, border-color 160ms ease',
+              transition:
+                'background-color 160ms ease, border-color 160ms ease',
               '&:hover': {
                 backgroundColor: 'rgba(255,255,255,0.03)',
                 borderColor: 'rgba(255,255,255,0.18)',
@@ -972,7 +1016,9 @@ export const Wallets = ({
           )}
 
           <AuthButton
-            disabled={!seedValue.trim() || !password.trim() || isLoadingEncryptSeed}
+            disabled={
+              !seedValue.trim() || !password.trim() || isLoadingEncryptSeed
+            }
             onClick={importSeedphrase}
           >
             {isLoadingEncryptSeed
@@ -1040,7 +1086,9 @@ const ChoiceRow = ({ icon, title, description, onClick }) => {
           </Typography>
         </Box>
       </Box>
-      <ArrowForwardRoundedIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} />
+      <ArrowForwardRoundedIcon
+        sx={{ color: theme.palette.text.secondary, fontSize: 18 }}
+      />
     </ButtonBase>
   );
 };
@@ -1157,8 +1205,7 @@ const WalletRow = ({
     (wallet?.filename ? parsefilenameQortal(wallet.filename) : null) ||
     t('auth:authentication_form.unnamed_account');
   const addressLabel = shortenAddress(wallet?.address0);
-  const canEditAccountName =
-    !primaryName && !wallet?.filename;
+  const canEditAccountName = !primaryName && !wallet?.filename;
 
   const handleSaveEdit = () => {
     updateWalletItem(idx, {
@@ -1169,7 +1216,9 @@ const WalletRow = ({
     setEditingWalletIndex(null);
   };
 
-  const getTransitionSnapshot = (): AuthUnlockTransitionSnapshot | undefined => {
+  const getTransitionSnapshot = ():
+    | AuthUnlockTransitionSnapshot
+    | undefined => {
     if (
       mode !== 'entry' ||
       !avatarRef.current ||
@@ -1269,7 +1318,9 @@ const WalletRow = ({
         borderBottom:
           mode === 'entry' ? 'none' : '1px solid rgba(255,255,255,0.06)',
         opacity:
-          reorderDragSourceIndex !== null && reorderDragSourceIndex === idx ? 0.46 : 1,
+          reorderDragSourceIndex !== null && reorderDragSourceIndex === idx
+            ? 0.46
+            : 1,
         pb: mode === 'entry' ? 0 : isEdit ? 1.2 : 0,
         pt: mode === 'entry' ? 0 : 0.2,
         transition: 'opacity 160ms ease',
@@ -1349,7 +1400,14 @@ const WalletRow = ({
         </Box>
 
         <Box sx={{ minWidth: 0 }}>
-          <Box sx={{ alignItems: 'baseline', display: 'inline-flex', gap: 0.35, maxWidth: '100%' }}>
+          <Box
+            sx={{
+              alignItems: 'baseline',
+              display: 'inline-flex',
+              gap: 0.35,
+              maxWidth: '100%',
+            }}
+          >
             <Typography
               ref={nameRef}
               sx={{
@@ -1514,10 +1572,7 @@ const WalletRow = ({
             >
               {t('auth:entry.wallet_edit_remove')}
             </ButtonBase>
-            <ButtonBase
-              onClick={handleSaveEdit}
-              sx={inlineActionSx(false)}
-            >
+            <ButtonBase onClick={handleSaveEdit} sx={inlineActionSx(false)}>
               {t('auth:entry.wallet_edit_save')}
             </ButtonBase>
           </Box>

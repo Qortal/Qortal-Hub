@@ -356,6 +356,7 @@ try {
     getAppSettings: () => ipcRenderer.invoke('appSettings:get'),
     setAppSettings: (settings: {
       closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+      disableStartupSound?: boolean;
       p2pEnabled?: boolean;
       legacyPublicStunFallback?: boolean;
       reticulumMeshUpnpEnabled?: boolean;
