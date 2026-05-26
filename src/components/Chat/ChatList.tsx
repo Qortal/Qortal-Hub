@@ -38,6 +38,7 @@ type ChatListProps = {
   hasSecretKey?: any;
   isPrivate?: any;
   compactScrollButton?: boolean;
+  chatId?: any;
 };
 
 export const ChatList = ({
@@ -60,6 +61,7 @@ export const ChatList = ({
   hasSecretKey,
   isPrivate,
   compactScrollButton = false,
+  chatId,
 }: ChatListProps) => {
   const theme = useTheme();
   const parentRef = useRef(null);
@@ -74,7 +76,24 @@ export const ChatList = ({
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const scrollRetryTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const scrollRetryFrameRef = useRef<number | null>(null);
+  const scrollRetrySequenceRef = useRef(0);
   const lastSeenUnreadMessageTimestamp = useRef(null);
+
+  const chatIdentity = useMemo(() => {
+    if (chatId != null) {
+      if (typeof chatId === 'object') {
+        if (chatId.groupId != null) return `group:${chatId.groupId}`;
+        if (chatId.id != null) return `chat:${chatId.id}`;
+        if (chatId.address != null) return `direct:${chatId.address}`;
+      }
+      return String(chatId);
+    }
+    if (selectedGroup?.groupId != null) return `group:${selectedGroup.groupId}`;
+    if (selectedGroup?.id != null) return `group:${selectedGroup.id}`;
+    return 'chat';
+  }, [chatId, selectedGroup?.groupId, selectedGroup?.id]);
 
   // Shared scroll button styling (memoized so Button sx refs stay stable)
   const scrollButtonSx = useMemo(
@@ -136,6 +155,51 @@ export const ChatList = ({
     estimateSize: useCallback(() => 80, []), // Provide an estimated height of items, adjust this as needed
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
   });
+
+  const clearScrollRetries = useCallback(() => {
+    scrollRetrySequenceRef.current += 1;
+    if (scrollRetryFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollRetryFrameRef.current);
+      scrollRetryFrameRef.current = null;
+    }
+    scrollRetryTimeoutsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    scrollRetryTimeoutsRef.current = [];
+  }, []);
+
+  const scrollToIndexAfterMeasurements = useCallback(
+    (index: number, align: 'start' | 'end' = 'end') => {
+      if (index < 0) return;
+
+      clearScrollRetries();
+      const sequence = scrollRetrySequenceRef.current;
+      const scroll = () => {
+        if (scrollRetrySequenceRef.current !== sequence) return;
+        rowVirtualizer.scrollToIndex(index, { align });
+      };
+
+      scroll();
+      scrollRetryFrameRef.current = window.requestAnimationFrame(scroll);
+      [50, 150, 350, 700].forEach((delay) => {
+        const timeoutId = window.setTimeout(scroll, delay);
+        scrollRetryTimeoutsRef.current.push(timeoutId);
+      });
+    },
+    [clearScrollRetries, rowVirtualizer]
+  );
+
+  useEffect(() => {
+    hasLoadedInitialRef.current = false;
+    lastSeenUnreadMessageTimestamp.current = null;
+    clearScrollRetries();
+  }, [chatIdentity, clearScrollRetries]);
+
+  useEffect(() => {
+    return () => {
+      clearScrollRetries();
+    };
+  }, [clearScrollRetries]);
 
   const isAtBottom = useMemo(() => {
     if (parentRef.current && rowVirtualizer?.isScrolling !== undefined) {
@@ -244,10 +308,10 @@ export const ChatList = ({
   const scrollToBottom = (initialMsgs?: unknown[], divideIndex?: number) => {
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
-      if (divideIndex) {
-        rowVirtualizer.scrollToIndex(divideIndex, { align: 'start' });
+      if (divideIndex !== undefined) {
+        scrollToIndexAfterMeasurements(divideIndex, 'start');
       } else {
-        rowVirtualizer.scrollToIndex(index, { align: 'end' });
+        scrollToIndexAfterMeasurements(index, 'end');
       }
     }
     handleMessageSeen();

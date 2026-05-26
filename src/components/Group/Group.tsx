@@ -2129,6 +2129,12 @@ export const Group = ({
                   getSecretKey={getSecretKey}
                   secretKey={secretKey}
                   isPrivate={isPrivate}
+                  isActive={
+                    isVisible &&
+                    groupSection === 'chat' &&
+                    !selectedDirect &&
+                    !newChat
+                  }
                   setSecretKey={setSecretKey}
                   handleNewEncryptionNotification={setNewEncryptionNotification}
                   hide={groupSection !== 'chat' || !!selectedDirect || newChat}

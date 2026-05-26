@@ -77,6 +77,7 @@ export const ChatGroup = ({
   triedToFetchSecretKey,
   getTimestampEnterChatParent,
   hideView,
+  isActive,
   isPrivate,
 }) => {
   const userInfo = useAtomValue(userInfoAtom);
@@ -171,9 +172,9 @@ export const ChatGroup = ({
   };
 
   useEffect(() => {
-    if (!selectedGroup) return;
+    if (!selectedGroup || !isActive) return;
     getTimestampEnterChat(selectedGroup);
-  }, [selectedGroup]);
+  }, [selectedGroup, isActive]);
 
   const members = useMemo(() => {
     const uniqueMembers = new Set();
