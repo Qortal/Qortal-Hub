@@ -14,7 +14,10 @@ import ErrorBoundary from '../../../common/ErrorBoundary';
 import { Spacer } from '../../../common/Spacer';
 import { HomeProfileCard } from '../HomeProfileCard';
 import { GETTING_STARTED_LS_KEY } from '../gettingStartedStorage';
-import { HomeQortinoWorkspaceCard } from '../HomeQortinoWorkspaceCard';
+import {
+  HomeQortinoWorkspaceCard,
+  QortinoMusicPlaybackController,
+} from '../HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from '../HomeQuickToolsPad';
 import { HomeFeaturedApps } from '../HomeFeaturedApps';
 import { useTranslation } from 'react-i18next';
@@ -514,9 +517,9 @@ export const HomeDesktop = ({
     ];
   const quitterWidgetSearchLimit =
     HOME_QUITTER_WIDGET_SEARCH_LIMITS[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
-
   return (
     <LazyMotion features={domAnimation}>
+      {desktopViewMode !== 'home' ? <QortinoMusicPlaybackController /> : null}
       <Activity mode={desktopViewMode === 'home' ? 'visible' : 'hidden'}>
         <motion.div
           key="home"
@@ -526,7 +529,7 @@ export const HomeDesktop = ({
           custom={reduce}
           style={{
             alignItems: 'center',
-            display: 'flex',
+            display: desktopViewMode === 'home' ? 'flex' : 'none',
             flexDirection: 'column',
             height: '100%',
             overflow: 'auto',
@@ -669,16 +672,18 @@ export const HomeDesktop = ({
                               '& > *': { height: '100%' },
                             }}
                           >
-                            <ErrorBoundary
-                              fallback={qortinoWorkspaceShellFallback}
-                            >
-                              <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={
-                                  handleGettingStartedComplete
-                                }
-                                onOpenAppsPanel={handleOpenAppsPanel}
-                              />
-                            </ErrorBoundary>
+                            {desktopViewMode === 'home' ? (
+                              <ErrorBoundary
+                                fallback={qortinoWorkspaceShellFallback}
+                              >
+                                <HomeQortinoWorkspaceCard
+                                  onGettingStartedComplete={
+                                    handleGettingStartedComplete
+                                  }
+                                  onOpenAppsPanel={handleOpenAppsPanel}
+                                />
+                              </ErrorBoundary>
+                            ) : null}
                           </Box>
                           <Box
                             ref={toolsDebugRef}
@@ -769,16 +774,18 @@ export const HomeDesktop = ({
                               '& > *': { height: '100%' },
                             }}
                           >
-                            <ErrorBoundary
-                              fallback={qortinoWorkspaceShellFallback}
-                            >
-                              <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={() => {
-                                  setIsOnboardingComplete(true);
-                                }}
-                                onOpenAppsPanel={handleOpenAppsPanel}
-                              />
-                            </ErrorBoundary>
+                            {desktopViewMode === 'home' ? (
+                              <ErrorBoundary
+                                fallback={qortinoWorkspaceShellFallback}
+                              >
+                                <HomeQortinoWorkspaceCard
+                                  onGettingStartedComplete={() => {
+                                    setIsOnboardingComplete(true);
+                                  }}
+                                  onOpenAppsPanel={handleOpenAppsPanel}
+                                />
+                              </ErrorBoundary>
+                            ) : null}
                           </Box>
                           <Box
                             ref={profileCardDebugRef}

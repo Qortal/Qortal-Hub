@@ -103,6 +103,7 @@ import {
   type EarbumpTrack,
 } from './earbumpLibraryApi';
 import {
+  emitSharedEarbumpActivity,
   getSharedEarbumpAudio,
   getSharedEarbumpTrackSnapshot,
   setSharedEarbumpTrackSnapshot,
@@ -664,6 +665,429 @@ const EMPTY_MUSIC_TRACK_BASE: MusicTrack = {
   updated: null,
   uploaded: '',
 };
+
+export const QortinoMusicPlaybackController = memo(
+  function QortinoMusicPlaybackController() {
+    const userInfo = useAtomValue(userInfoAtom);
+    const userAddress = userInfo?.address;
+    const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
+    const audioRef = useRef<HTMLAudioElement | null>(getSharedEarbumpAudio());
+    const discoveryRequestRef = useRef<AbortController | null>(null);
+    const selectedTrackRequestRef = useRef<AbortController | null>(null);
+    const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(() =>
+      loadWorkspaceStateFromFallbackStorage(userAddress)
+    );
+    const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+    const [earbumpDiscoveryTracks, setEarbumpDiscoveryTracks] = useState<
+      MusicTrack[]
+    >([]);
+    const [selectedTrackSnapshot, setSelectedTrackSnapshot] =
+      useState<MusicTrack | null>(() => getSharedEarbumpTrackSnapshot());
+    const [musicTrackDurations, setMusicTrackDurations] = useState<
+      Record<string, number>
+    >({});
+
+    const applyWorkspaceState = useCallback(
+      (updater: (current: WorkspaceState) => WorkspaceState) => {
+        setWorkspaceState((current) =>
+          sanitizeWorkspaceState(updater(current))
+        );
+      },
+      []
+    );
+
+    useEffect(() => {
+      audioRef.current = getSharedEarbumpAudio();
+    }, []);
+
+    useEffect(() => {
+      let active = true;
+      setWorkspaceState(loadWorkspaceStateFromFallbackStorage(userAddress));
+      setWorkspaceHydrated(false);
+
+      void loadWorkspaceState(userAddress).then((nextState) => {
+        if (!active) return;
+        setWorkspaceState(nextState);
+        setWorkspaceHydrated(true);
+      });
+
+      return () => {
+        active = false;
+        discoveryRequestRef.current?.abort();
+        selectedTrackRequestRef.current?.abort();
+      };
+    }, [userAddress]);
+
+    useEffect(() => {
+      if (!workspaceHydrated) return;
+      void persistWorkspaceState(workspaceState, userAddress);
+      emitSharedEarbumpActivity(
+        workspaceState.mode === 'music' && workspaceState.musicPlaying
+      );
+    }, [userAddress, workspaceHydrated, workspaceState]);
+
+    useEffect(() => {
+      if (!selectedTrackSnapshot?.id) return;
+      setSharedEarbumpTrackSnapshot(selectedTrackSnapshot);
+    }, [selectedTrackSnapshot]);
+
+    useEffect(() => {
+      if (!workspaceHydrated || workspaceState.mode !== 'music') {
+        return undefined;
+      }
+
+      discoveryRequestRef.current?.abort();
+      const controller = new AbortController();
+      discoveryRequestRef.current = controller;
+
+      void fetchEarbumpRecentTracks({
+        limit: 12,
+        signal: controller.signal,
+      })
+        .then((tracks) => {
+          setEarbumpDiscoveryTracks(tracks);
+          if (tracks.length === 0) return;
+
+          setSelectedTrackSnapshot((current) => current ?? tracks[0]);
+          applyWorkspaceState((current) =>
+            current.selectedTrackId
+              ? current
+              : {
+                  ...current,
+                  selectedTrackId: tracks[0].id,
+                }
+          );
+        })
+        .catch((error: unknown) => {
+          if (!isAbortError(error)) {
+            console.error('Failed to load EarBump discovery tracks', error);
+          }
+        });
+
+      return () => {
+        controller.abort();
+      };
+    }, [applyWorkspaceState, workspaceHydrated, workspaceState.mode]);
+
+    const knownMusicTracksById = useMemo(() => {
+      const nextMap = new Map<string, MusicTrack>();
+      for (const track of earbumpDiscoveryTracks) {
+        nextMap.set(track.id, track);
+      }
+      if (selectedTrackSnapshot) {
+        nextMap.set(selectedTrackSnapshot.id, selectedTrackSnapshot);
+      }
+      return nextMap;
+    }, [earbumpDiscoveryTracks, selectedTrackSnapshot]);
+
+    const resolveMusicTrack = useCallback(
+      (track: MusicTrack) => {
+        const knownDuration = musicTrackDurations[track.id];
+        if (!Number.isFinite(knownDuration) || knownDuration <= 0) {
+          return track;
+        }
+
+        const durationLabel = formatPlaybackTime(knownDuration);
+        return track.length === durationLabel
+          ? track
+          : {
+              ...track,
+              length: durationLabel,
+            };
+      },
+      [musicTrackDurations]
+    );
+
+    useEffect(() => {
+      if (
+        !workspaceHydrated ||
+        workspaceState.mode !== 'music' ||
+        !workspaceState.selectedTrackId
+      ) {
+        return undefined;
+      }
+
+      const matchedTrack = knownMusicTracksById.get(
+        workspaceState.selectedTrackId
+      );
+      if (matchedTrack) {
+        setSelectedTrackSnapshot(matchedTrack);
+        return undefined;
+      }
+
+      selectedTrackRequestRef.current?.abort();
+      const controller = new AbortController();
+      selectedTrackRequestRef.current = controller;
+
+      void fetchEarbumpTrackById(workspaceState.selectedTrackId, {
+        signal: controller.signal,
+      })
+        .then((track) => {
+          if (track) {
+            setSelectedTrackSnapshot(track);
+          }
+        })
+        .catch((error: unknown) => {
+          if (!isAbortError(error)) {
+            console.error('Failed to restore selected EarBump track', error);
+          }
+        });
+
+      return () => {
+        controller.abort();
+      };
+    }, [
+      knownMusicTracksById,
+      workspaceHydrated,
+      workspaceState.mode,
+      workspaceState.selectedTrackId,
+    ]);
+
+    const selectedTrackCandidate = workspaceState.selectedTrackId
+      ? (knownMusicTracksById.get(workspaceState.selectedTrackId) ??
+        (selectedTrackSnapshot?.id === workspaceState.selectedTrackId
+          ? selectedTrackSnapshot
+          : null))
+      : null;
+    const activeTrackSource =
+      selectedTrackCandidate ??
+      earbumpDiscoveryTracks[0] ??
+      selectedTrackSnapshot ??
+      null;
+    const activeTrack = useMemo(
+      () =>
+        activeTrackSource
+          ? resolveMusicTrack(activeTrackSource)
+          : EMPTY_MUSIC_TRACK_BASE,
+      [activeTrackSource, resolveMusicTrack]
+    );
+    const activeTrackResourceKey = useMemo(
+      () => buildTrackResourceKey(activeTrack),
+      [activeTrack]
+    );
+    const activeTrackResource = useAtomValue(
+      resourceKeySelector(activeTrackResourceKey)
+    );
+    const activeTrackResourceStatus =
+      typeof activeTrackResource?.status?.status === 'string'
+        ? activeTrackResource.status.status
+        : null;
+    const wasActiveTrackCancelledByMusicPlayer =
+      activeTrackResource?.cancelledByScope === MUSIC_PLAYER_DOWNLOAD_SCOPE;
+    const activeTrackReadyState = getTrackReadyState(
+      wasActiveTrackCancelledByMusicPlayer ? null : activeTrackResourceStatus,
+      Boolean(activeTrack.id)
+    );
+    const activeTrackPlaybackUrl =
+      activeTrackReadyState === 'ready' ? buildTrackPlaybackUrl(activeTrack) : '';
+    const activeTrackDurationSeconds = useMemo(() => {
+      if (!activeTrack.id) return 0;
+      const audio = audioRef.current;
+      if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+        return audio.duration;
+      }
+      const storedDuration = musicTrackDurations[activeTrack.id];
+      return Number.isFinite(storedDuration) && storedDuration > 0
+        ? storedDuration
+        : 0;
+    }, [activeTrack.id, musicTrackDurations]);
+    const hasTrackPlaybackMetadata = activeTrackDurationSeconds > 0;
+    const playbackQueue = useMemo(() => {
+      const resolvedTracks = earbumpDiscoveryTracks.map(resolveMusicTrack);
+      if (!activeTrack.id) return resolvedTracks;
+      return [
+        activeTrack,
+        ...resolvedTracks.filter((track) => track.id !== activeTrack.id),
+      ];
+    }, [activeTrack, earbumpDiscoveryTracks, resolveMusicTrack]);
+    const isResolvingSelectedTrack =
+      workspaceHydrated &&
+      workspaceState.mode === 'music' &&
+      Boolean(workspaceState.selectedTrackId) &&
+      activeTrack.id !== workspaceState.selectedTrackId;
+
+    const handleCycleTrack = useCallback(
+      (direction: 'next' | 'previous') => {
+        if (playbackQueue.length === 0) return;
+
+        const activeIndex = playbackQueue.findIndex(
+          (track) => track.id === workspaceState.selectedTrackId
+        );
+        const currentIndex = activeIndex >= 0 ? activeIndex : 0;
+        const nextIndex =
+          direction === 'next'
+            ? (currentIndex + 1) % playbackQueue.length
+            : (currentIndex - 1 + playbackQueue.length) % playbackQueue.length;
+        const nextTrack = playbackQueue[nextIndex];
+        if (!nextTrack) return;
+
+        setSelectedTrackSnapshot(nextTrack);
+        applyWorkspaceState((current) => ({
+          ...current,
+          mode: 'music',
+          musicPlaying: true,
+          selectedTrackId: nextTrack.id,
+        }));
+      },
+      [
+        applyWorkspaceState,
+        playbackQueue,
+        workspaceState.selectedTrackId,
+      ]
+    );
+
+    useEffect(() => {
+      if (workspaceState.mode !== 'music') return;
+      if (!activeTrack.id || !activeTrack.name) return;
+      if (activeTrackReadyState === 'ready' || hasTrackPlaybackMetadata) return;
+      if (
+        activeTrackReadyState === 'error' &&
+        !wasActiveTrackCancelledByMusicPlayer
+      ) {
+        return;
+      }
+
+      void downloadResource({
+        downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+        identifier: activeTrack.id,
+        name: activeTrack.name,
+        service: EARBUMP_AUDIO_SERVICE,
+      });
+    }, [
+      activeTrack.id,
+      activeTrack.name,
+      activeTrackReadyState,
+      downloadResource,
+      hasTrackPlaybackMetadata,
+      wasActiveTrackCancelledByMusicPlayer,
+      workspaceState.mode,
+    ]);
+
+    useEffect(() => {
+      const audio = audioRef.current;
+      if (!audio) return undefined;
+
+      const handleLoadedMetadata = () => {
+        if (
+          !activeTrack.id ||
+          !Number.isFinite(audio.duration) ||
+          audio.duration <= 0
+        ) {
+          return;
+        }
+
+        setMusicTrackDurations((current) =>
+          current[activeTrack.id] === audio.duration
+            ? current
+            : {
+                ...current,
+                [activeTrack.id]: audio.duration,
+              }
+        );
+      };
+
+      const handleEnded = () => {
+        if (workspaceState.repeatMode === 'one') {
+          audio.currentTime = 0;
+          void audio.play().catch((error) => {
+            console.error('Failed to replay EarBump track', error);
+            applyWorkspaceState((current) => ({
+              ...current,
+              musicPlaying: false,
+            }));
+          });
+          return;
+        }
+
+        handleCycleTrack('next');
+      };
+
+      const handleError = () => {
+        console.error('Failed to stream EarBump audio track', activeTrack);
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        applyWorkspaceState((current) => ({
+          ...current,
+          musicPlaying: false,
+        }));
+      };
+
+      const handleStalled = () => {
+        if (!activeTrack.id || workspaceState.mode !== 'music') return;
+        void downloadResource({
+          downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+          identifier: activeTrack.id,
+          name: activeTrack.name,
+          service: EARBUMP_AUDIO_SERVICE,
+        });
+      };
+
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.addEventListener('ended', handleEnded);
+      audio.addEventListener('error', handleError);
+      audio.addEventListener('stalled', handleStalled);
+      handleLoadedMetadata();
+
+      return () => {
+        audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.removeEventListener('ended', handleEnded);
+        audio.removeEventListener('error', handleError);
+        audio.removeEventListener('stalled', handleStalled);
+      };
+    }, [
+      activeTrack,
+      activeTrack.id,
+      activeTrack.name,
+      applyWorkspaceState,
+      downloadResource,
+      handleCycleTrack,
+      workspaceState.mode,
+      workspaceState.repeatMode,
+    ]);
+
+    useEffect(() => {
+      const audio = audioRef.current;
+      if (!audio || !workspaceHydrated || isResolvingSelectedTrack) return;
+
+      if (!activeTrack.id || !activeTrackPlaybackUrl) {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+        return;
+      }
+
+      if (audio.src !== activeTrackPlaybackUrl) {
+        audio.pause();
+        audio.src = activeTrackPlaybackUrl;
+        audio.load();
+      }
+
+      if (workspaceState.mode !== 'music' || !workspaceState.musicPlaying) {
+        audio.pause();
+        return;
+      }
+
+      void audio.play().catch((error) => {
+        console.error('Failed to play EarBump stream', error);
+        applyWorkspaceState((current) => ({
+          ...current,
+          musicPlaying: false,
+        }));
+      });
+    }, [
+      activeTrack.id,
+      activeTrackPlaybackUrl,
+      applyWorkspaceState,
+      isResolvingSelectedTrack,
+      workspaceHydrated,
+      workspaceState.mode,
+      workspaceState.musicPlaying,
+    ]);
+
+    return null;
+  }
+);
 
 const QortinoMascot = ({
   isDarkMode,
@@ -1902,6 +2326,12 @@ export const HomeQortinoWorkspaceCard = ({
     if (!workspaceHydrated) return;
     void persistWorkspaceState(workspaceState, userAddress);
   }, [userAddress, workspaceHydrated, workspaceState]);
+
+  useEffect(() => {
+    emitSharedEarbumpActivity(
+      workspaceState.mode === 'music' && workspaceState.musicPlaying
+    );
+  }, [workspaceState.mode, workspaceState.musicPlaying]);
 
   useEffect(() => {
     if (!selectedTrackSnapshot?.id) {
