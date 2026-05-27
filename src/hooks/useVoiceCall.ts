@@ -32,6 +32,7 @@ import {
   clearDirectVoiceUiLogs,
   pushDirectVoiceUiLog,
 } from '../lib/call/directVoiceUiLog';
+import { startDirectOutboundRingtone } from '../lib/call/directIncomingRingtone';
 import i18n from '../i18n/i18n';
 import { applyCallAudioOutput } from '../lib/call/audioDevices';
 import {
@@ -144,6 +145,7 @@ export interface UseVoiceCallReturn {
   callState: CallState;
   audioMode: AudioMode;
   startupStatus: DirectVoiceCallStartupStatus;
+  callMediaReady: boolean;
   isMuted: boolean;
   hearCall: boolean;
   callDuration: number;
@@ -212,6 +214,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const [callState, setCallState] = useState<CallState>('idle');
   const [audioMode, setAudioMode] = useState<AudioMode>(null);
+  const [callMediaReady, setCallMediaReady] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [hearCall, setHearCallState] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
@@ -260,6 +263,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const audioSeqRef = useRef(0);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startupStageSinceRef = useRef(Date.now());
+  const stopOutboundRingtoneRef = useRef<(() => void) | null>(null);
 
   const dmSenderEngineRef = useRef<GroupCallAudioSenderEngine | null>(null);
   if (!dmSenderEngineRef.current) {
@@ -836,6 +840,11 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
   }, []);
 
+  const stopOutboundRingtone = useCallback(() => {
+    stopOutboundRingtoneRef.current?.();
+    stopOutboundRingtoneRef.current = null;
+  }, []);
+
   const stopCapturePipeline = useCallback(async () => {
     await dmSenderEngineRef.current?.stop().catch(() => {});
     opusEncoderApplyBitrateRef.current = () => {};
@@ -922,6 +931,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         activeCallChatIdRef.current = null;
         setActiveCallChatId(null);
         updateCallState('ended');
+        setCallMediaReady(false);
         setCallDuration(0);
         setIsMuted(false);
         setHearCallState(true);
@@ -1768,6 +1778,21 @@ export function useVoiceCall(): UseVoiceCallReturn {
     });
   }, []);
 
+  useEffect(() => {
+    if (!window.audioSurface?.onEvent) return;
+    return window.audioSurface.onEvent((event) => {
+      if (event.type !== 'direct-voice-media-ready') return;
+      const roomId = dmRoomIdRef.current;
+      const peer = peerAddressRef.current;
+      if (event.roomId !== roomId || event.peerAddress !== peer) return;
+      setCallMediaReady(true);
+      pushDirectVoiceUiLog('log', 'direct voice media ready', {
+        roomTrunc: event.roomId.slice(0, 24),
+        peerTrunc: event.peerAddress.slice(0, 8),
+      });
+    });
+  }, []);
+
   const startDurationTimer = useCallback(() => {
     setCallDuration(0);
     durationTimerRef.current = setInterval(
@@ -1860,6 +1885,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
           'call:accepted — starting Reticulum media session'
         );
         updateCallState('connected');
+        setCallMediaReady(false);
         startDurationTimer();
         void startReticulumMediaSession().catch((e) => {
           pushDirectVoiceUiLog('warn', 'startReticulumMediaSession rejected', {
@@ -1925,6 +1951,17 @@ export function useVoiceCall(): UseVoiceCallReturn {
       );
     }
   }, []);
+
+  useEffect(() => {
+    if (callState !== 'calling') {
+      stopOutboundRingtone();
+      return;
+    }
+    stopOutboundRingtoneRef.current = startDirectOutboundRingtone();
+    return () => {
+      stopOutboundRingtone();
+    };
+  }, [callState, stopOutboundRingtone]);
 
   const reassertCallLocalAddress = useCallback(
     async (reason: string, opts?: { requireReticulumReady?: boolean }) => {
@@ -2019,6 +2056,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       callIdRef.current = callId;
       activeCallChatIdRef.current = chatId;
       setActiveCallChatId(chatId);
+      setCallMediaReady(false);
       updateCallState('calling');
 
       const result = await (window as any).call?.initiate(
@@ -2089,6 +2127,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
 
     updateCallState('connected');
+    setCallMediaReady(false);
     startDurationTimer();
 
     const acceptTs = Date.now();
@@ -2331,7 +2370,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const startupStageKey =
     callState === 'connected'
-      ? `${callState}:${audioMode ?? 'none'}:${callDuration > 0 ? 'live' : 'startup'}`
+      ? `${callState}:${audioMode ?? 'none'}:${callMediaReady ? 'live' : 'startup'}`
       : `${callState}:${audioMode ?? 'none'}`;
 
   useEffect(() => {
@@ -2342,7 +2381,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   useEffect(() => {
     if (
       callState !== 'calling' &&
-      !(callState === 'connected' && callDuration === 0)
+      !(callState === 'connected' && !callMediaReady)
     ) {
       return;
     }
@@ -2350,7 +2389,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       setStartupClock((tick) => tick + 1);
     }, 1_000);
     return () => window.clearInterval(id);
-  }, [callDuration, callState]);
+  }, [callMediaReady, callState]);
 
   void startupClock;
 
@@ -2368,13 +2407,13 @@ export function useVoiceCall(): UseVoiceCallReturn {
         delayed,
       };
     }
-    if (callState === 'connected' && callDuration === 0) {
+    if (callState === 'connected' && !callMediaReady) {
       return {
         stage: 'starting-audio',
-        headline: 'Starting secure audio...',
+        headline: 'Connecting...',
         detail: delayed
-          ? 'This call is taking longer than usual to start.'
-          : 'Finalizing secure audio so you can hear each other.',
+          ? 'Still establishing the secure audio link.'
+          : 'Establishing the secure audio link.',
         tone: delayed ? 'warning' : 'info',
         showProgress: true,
         delayed,
@@ -2404,6 +2443,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     callState,
     audioMode,
     startupStatus,
+    callMediaReady,
     isMuted,
     hearCall,
     callDuration,

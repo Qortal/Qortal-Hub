@@ -242,6 +242,8 @@ export const ChatDirect = ({
   const {
     callState,
     audioMode,
+    startupStatus,
+    callMediaReady,
     isMuted,
     hearCall,
     callDuration,
@@ -2071,9 +2073,13 @@ export const ChatDirect = ({
           sx={{
             alignItems: 'center',
             backgroundColor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(34,197,94,0.12)'
-                : 'rgba(34,197,94,0.08)',
+              callMediaReady
+                ? theme.palette.mode === 'dark'
+                  ? 'rgba(34,197,94,0.12)'
+                  : 'rgba(34,197,94,0.08)'
+                : theme.palette.mode === 'dark'
+                  ? 'rgba(59,130,246,0.14)'
+                  : 'rgba(59,130,246,0.08)',
             borderRadius: 1.5,
             display: 'flex',
             flexShrink: 0,
@@ -2088,7 +2094,7 @@ export const ChatDirect = ({
         >
           <Box
             sx={{
-              backgroundColor: '#22c55e',
+              backgroundColor: callMediaReady ? '#22c55e' : 'primary.main',
               borderRadius: '50%',
               flexShrink: 0,
               height: 8,
@@ -2098,15 +2104,17 @@ export const ChatDirect = ({
           <Typography
             variant="caption"
             sx={{
-              color: 'success.main',
+              color: callMediaReady ? 'success.main' : 'primary.main',
               flex: 1,
               fontSize: 11,
               fontWeight: 600,
             }}
           >
-            In call — {fmtCallDuration(callDuration)}
+            {callMediaReady
+              ? `In call — ${fmtCallDuration(callDuration)}`
+              : `${startupStatus.headline || 'Connecting...'} — ${fmtCallDuration(callDuration)}`}
           </Typography>
-          {audioMode === 'reticulum' && (
+          {audioMode === 'reticulum' && callMediaReady && (
             <Typography
               variant="caption"
               sx={{
@@ -2123,7 +2131,7 @@ export const ChatDirect = ({
               Reticulum
             </Typography>
           )}
-          <CallAudioSettingsButton />
+          {callMediaReady ? <CallAudioSettingsButton /> : null}
           <Tooltip
             title={
               isMuted
@@ -2137,6 +2145,7 @@ export const ChatDirect = ({
           >
             <IconButton
               size="small"
+              disabled={!callMediaReady}
               onClick={toggleMute}
               sx={{
                 color: isMuted ? 'error.main' : 'text.secondary',
@@ -2164,6 +2173,7 @@ export const ChatDirect = ({
           >
             <IconButton
               size="small"
+              disabled={!callMediaReady}
               onClick={toggleHearCall}
               sx={{
                 color: hearCall ? 'text.secondary' : 'error.main',

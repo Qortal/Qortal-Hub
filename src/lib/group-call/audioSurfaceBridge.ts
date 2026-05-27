@@ -136,6 +136,11 @@ export type AudioSurfaceEvent =
   | {
       type: 'engine-error';
       message: string;
+    }
+  | {
+      type: 'direct-voice-media-ready';
+      roomId: string;
+      peerAddress: string;
     };
 
 export function buildDefaultGroupCallControllerSnapshot(): GroupCallControllerSnapshot {

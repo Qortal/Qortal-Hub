@@ -98,10 +98,6 @@ const sortGroupNotificationItems = (
     return right.timestamp - left.timestamp;
   }
 
-  if (left.openedAt !== right.openedAt) {
-    return left.openedAt - right.openedAt;
-  }
-
   return right.timestamp - left.timestamp;
 };
 

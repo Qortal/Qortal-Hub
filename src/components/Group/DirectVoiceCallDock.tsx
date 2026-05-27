@@ -50,6 +50,7 @@ export function DirectVoiceCallDock() {
     callState,
     audioMode,
     startupStatus,
+    callMediaReady,
     isMuted,
     hearCall,
     callDuration,
@@ -100,7 +101,7 @@ export function DirectVoiceCallDock() {
         mode: 'connecting' as const,
       };
     }
-    if (audioMode === 'reticulum') {
+    if (audioMode === 'reticulum' && callMediaReady) {
       return {
         label: 'Reticulum',
         tooltip: 'Encrypted voice over Reticulum',
@@ -108,11 +109,11 @@ export function DirectVoiceCallDock() {
       };
     }
     return {
-      label: '…',
-      tooltip: 'Connecting',
+      label: 'Connecting…',
+      tooltip: 'Establishing secure audio',
       mode: 'connecting' as const,
     };
-  }, [audioMode, callState]);
+  }, [audioMode, callMediaReady, callState]);
 
   const durationLabel = useMemo(() => {
     const s = callDuration;
@@ -168,7 +169,7 @@ export function DirectVoiceCallDock() {
         DM · {title}
       </Typography>
 
-      {callState === 'connected' && (
+      {callState === 'connected' && callMediaReady && (
         <Typography
           variant="caption"
           sx={{ fontSize: 11, fontWeight: 600, color: '#dbdee1' }}
@@ -275,7 +276,7 @@ export function DirectVoiceCallDock() {
         </Box>
       </Box>
 
-      {callState === 'connected' && (
+      {callState === 'connected' && callMediaReady && (
         <Box
           sx={{
             '& .MuiIconButton-root': { color: '#b5bac1' },
@@ -299,7 +300,7 @@ export function DirectVoiceCallDock() {
       >
         <span>
           <IconButton
-            disabled={callState !== 'connected'}
+            disabled={callState !== 'connected' || !callMediaReady}
             onClick={toggleMute}
             sx={{
               width: 44,
@@ -334,7 +335,7 @@ export function DirectVoiceCallDock() {
       >
         <span>
           <IconButton
-            disabled={callState !== 'connected'}
+            disabled={callState !== 'connected' || !callMediaReady}
             onClick={toggleHearCall}
             sx={{
               width: 44,

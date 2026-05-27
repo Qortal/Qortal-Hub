@@ -1,6 +1,5 @@
 /**
- * Synthesized incoming DM call ringtone (Web Audio API — no sound file).
- * Soft double-chime in a major third, repeating every ~2.8s until stopped.
+ * Synthesized DM call tones (Web Audio API — no sound files).
  */
 
 function getAudioContextCtor(): typeof AudioContext | null {
@@ -72,4 +71,11 @@ export function startDirectIncomingRingtone(): () => void {
     }
     void ctx.close();
   };
+}
+
+/**
+ * @returns Stop function: silences, clears timers, closes the AudioContext.
+ */
+export function startDirectOutboundRingtone(): () => void {
+  return startDirectIncomingRingtone();
 }

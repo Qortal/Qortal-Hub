@@ -46,6 +46,8 @@ export function DirectVoiceCallNavWidget() {
   const myAddress = userInfo?.address ?? '';
   const {
     activeCallChatId,
+    startupStatus,
+    callMediaReady,
     callDuration,
     callState,
     hangUp,
@@ -197,14 +199,18 @@ export function DirectVoiceCallNavWidget() {
         {callState === 'connected' ? (
           <Typography
             sx={{
-              color: theme.palette.text.secondary,
+              color: callMediaReady
+                ? theme.palette.text.secondary
+                : theme.palette.primary.main,
               display: { xs: 'none', md: 'block' },
               flexShrink: 0,
               fontSize: 11,
               fontWeight: 800,
             }}
           >
-            {durationLabel}
+            {callMediaReady
+              ? durationLabel
+              : startupStatus.headline || 'Connecting...'}
           </Typography>
         ) : null}
 
@@ -217,7 +223,7 @@ export function DirectVoiceCallNavWidget() {
           }}
         />
 
-        {callState === 'connected' ? (
+        {callState === 'connected' && callMediaReady ? (
           <Box
             sx={{
               '& .MuiIconButton-root': {
@@ -249,7 +255,7 @@ export function DirectVoiceCallNavWidget() {
         >
           <span>
             <IconButton
-              disabled={callState !== 'connected'}
+              disabled={callState !== 'connected' || !callMediaReady}
               size="small"
               onClick={toggleMute}
               sx={{
@@ -282,7 +288,7 @@ export function DirectVoiceCallNavWidget() {
         >
           <span>
             <IconButton
-              disabled={callState !== 'connected'}
+              disabled={callState !== 'connected' || !callMediaReady}
               size="small"
               onClick={toggleHearCall}
               sx={{

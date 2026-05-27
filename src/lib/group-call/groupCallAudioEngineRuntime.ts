@@ -902,6 +902,7 @@ export class GroupCallAudioEngineRuntime {
   private directVoiceOutboundSendFailures = 0;
   private directVoiceOutboundLastFailureMessage: string | null = null;
   private directVoiceOutboundLastSendAtMs = 0;
+  private directVoiceMediaReadyEmitted = false;
   private unsubscribeGroupCallEvents: (() => void) | null = null;
   private currentChatId = '';
   private topology: GroupCallTopology | null = null;
@@ -1331,6 +1332,7 @@ export class GroupCallAudioEngineRuntime {
     this.directVoiceRoomId = roomId;
     this.directVoicePeerAddress = peerAddress;
     this.directVoiceRoomKey = key;
+    this.directVoiceMediaReadyEmitted = false;
     this.ensureGroupCallSubscription();
     await this.getDirectVoiceReceiveEngine().configure({
       outputDeviceId: command.outputDeviceId ?? this.outputDeviceId,
@@ -1369,6 +1371,7 @@ export class GroupCallAudioEngineRuntime {
     this.directVoicePeerAddress = peerAddress;
     this.directVoiceLocalAddress = localAddress;
     this.directVoiceRoomKey = key;
+    this.directVoiceMediaReadyEmitted = false;
     this.resetDirectVoiceOutboundDiagnostics();
     this.directVoiceInputDeviceId =
       command.inputDeviceId !== undefined
@@ -1493,6 +1496,7 @@ export class GroupCallAudioEngineRuntime {
     this.directVoiceOutputDeviceId = null;
     this.directVoiceHearCall = true;
     this.directVoiceProfile = this.snapshot.audioQualityProfile;
+    this.directVoiceMediaReadyEmitted = false;
     await this.directVoiceReceiveEngine?.reset();
   }
 
@@ -1589,6 +1593,7 @@ export class GroupCallAudioEngineRuntime {
     this.directVoiceRoomId = '';
     this.directVoicePeerAddress = '';
     this.directVoiceRoomKey = null;
+    this.directVoiceMediaReadyEmitted = false;
     await this.directVoiceReceiveEngine?.reset();
   }
 
@@ -5119,10 +5124,18 @@ export class GroupCallAudioEngineRuntime {
     try {
       const receiveEngine = this.directVoiceReceiveEngine;
       if (!receiveEngine) return;
-      await receiveEngine.handleIncomingAudio(
+      const decodedCount = await receiveEngine.handleIncomingAudio(
         audioPayload,
         this.directVoiceRoomKey
       );
+      if (decodedCount > 0 && !this.directVoiceMediaReadyEmitted) {
+        this.directVoiceMediaReadyEmitted = true;
+        this.emit({
+          type: 'direct-voice-media-ready',
+          roomId: this.directVoiceRoomId,
+          peerAddress: this.directVoicePeerAddress,
+        });
+      }
     } catch (error) {
       this.recordDiagEvent('direct-voice-audio-receive-failed', {
         roomId: this.directVoiceRoomId,
