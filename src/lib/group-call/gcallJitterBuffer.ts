@@ -3,6 +3,7 @@
  */
 
 import { GCALL_JITTER_SOFT_UNPRIME_MS } from './groupCallAudioProfile';
+import { gcallSeqIsAfter } from './gcallSequence';
 
 const DEFAULT_JITTER_BUFFER_SIZE = 6;
 const DEFAULT_JITTER_START_BUFFER_SIZE = 4;
@@ -134,7 +135,7 @@ export class JitterBuffer {
   /**
    * Highest seq this buffer has handed to the Opus decoder ("played"). Returns -1 if no
    * frame has been popped yet. Consumed by the decrypt-worker pool's stale-seq pre-skip:
-   * incoming packets whose `seq <= lastPlayedSeq` would be rejected on push anyway.
+   * incoming packets not newer than `lastPlayedSeq` would be rejected on push anyway.
    */
   getLastPlayedSeq(): number {
     return this.lastPlayedSeq;
@@ -194,7 +195,7 @@ export class JitterBuffer {
 
   push(seq: number, opusFrame: Uint8Array): JitterPushResult {
     this.checkSoftUnprime();
-    if (seq <= this.lastPlayedSeq) {
+    if (!gcallSeqIsAfter(seq, this.lastPlayedSeq)) {
       return { status: 'stale', depth: this.entries.length, trimmed: 0 };
     }
     let insertAt = this.entries.length;
@@ -203,7 +204,7 @@ export class JitterBuffer {
       if (prev.seq === seq) {
         return { status: 'duplicate', depth: this.entries.length, trimmed: 0 };
       }
-      if (prev.seq < seq) break;
+      if (!gcallSeqIsAfter(prev.seq, seq)) break;
       insertAt--;
     }
     this.entries.splice(insertAt, 0, {

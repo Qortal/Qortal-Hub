@@ -272,6 +272,26 @@ describe('DecryptWorkerPool', () => {
     }
   });
 
+  it('advances lastPlayedSeqByIngress across 16-bit sequence wraparound', async () => {
+    const { factory, workers } = makeFactory({ autoAckKey: true });
+    const pool = new DecryptWorkerPool({
+      initialSize: 1,
+      maxSize: 1,
+      workerFactory: factory,
+      handlers: { onDecryptResult: () => {}, onEncryptResult: () => {} },
+    });
+    await pool.setRoomKey(dummyKey, 1);
+
+    pool.setLastPlayedSeq('Qwrap', 65535);
+    pool.setLastPlayedSeq('Qwrap', 0);
+    pool.postDecrypt('Qwrap', 1, new ArrayBuffer(4));
+    await flushMicrotasks();
+
+    expect(workers[0]!.decryptBatches[0]!.lastPlayedSeqByIngress).toEqual({
+      Qwrap: 0,
+    });
+  });
+
   it('returns false from postDecrypt when no slot has applied the current key yet', () => {
     const { factory } = makeFactory({ autoAckKey: false });
     const pool = new DecryptWorkerPool({

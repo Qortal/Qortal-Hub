@@ -81,6 +81,42 @@ describe('gcallJitterBuffer', () => {
     expect(jb.consumePendingMissedFrames()).toBe(0);
   });
 
+  it('accepts and plays packets after 16-bit sequence wraparound', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 6,
+      jitterStartBufferSize: 1,
+    });
+
+    expect(jb.push(65534, new Uint8Array([1])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.push(65535, new Uint8Array([2])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([2]));
+    expect(jb.push(0, new Uint8Array([3])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([3]));
+    expect(jb.push(1, new Uint8Array([4])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([4]));
+
+    expect(jb.push(65535, new Uint8Array([5])).status).toBe('stale');
+  });
+
+  it('sorts buffered packets correctly across 16-bit sequence wraparound', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 6,
+      jitterStartBufferSize: 1,
+    });
+
+    jb.push(65533, new Uint8Array([33]));
+    expect(jb.pop()).toEqual(new Uint8Array([33]));
+
+    expect(jb.push(1, new Uint8Array([1])).status).toBe('accepted');
+    expect(jb.push(65535, new Uint8Array([35])).status).toBe('accepted');
+    expect(jb.push(0, new Uint8Array([0])).status).toBe('accepted');
+
+    expect(jb.pop()).toEqual(new Uint8Array([35]));
+    expect(jb.pop()).toEqual(new Uint8Array([0]));
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
   it('can force-prime a live one-frame buffer for exact-1-remote recovery escape', () => {
     const jb = new JitterBuffer();
     jb.push(1, new Uint8Array([1, 2, 3]));

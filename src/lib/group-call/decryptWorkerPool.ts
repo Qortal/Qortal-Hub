@@ -34,6 +34,7 @@
 
 import type { DecryptBatchResultEntry, DecryptResult } from '../../workers/audio-decrypt.worker';
 import { traceGcallAudioSurface } from './gcallAudioSurfaceTrace';
+import { gcallSeqIsAfter } from './gcallSequence';
 
 /**
  * `Worker.onerror` in Chromium often leaves `message` / `filename` empty; the real
@@ -211,7 +212,7 @@ export class DecryptWorkerPool {
   setLastPlayedSeq(source: string, seq: number): void {
     if (!source) return;
     const prev = this.lastPlayedSeqBySource[source];
-    if (typeof prev === 'number' && prev >= seq) return;
+    if (typeof prev === 'number' && !gcallSeqIsAfter(seq, prev)) return;
     this.lastPlayedSeqBySource[source] = seq;
   }
 

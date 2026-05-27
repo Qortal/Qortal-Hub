@@ -44,6 +44,7 @@ import {
   type SecretBoxProvider,
 } from '../lib/group-call/audioPacketCodec';
 import { initLibsodiumSecretBoxProvider } from '../lib/group-call/audioPacketCodecSodium';
+import { gcallSeqIsAfter } from '../lib/group-call/gcallSequence';
 
 export interface DecryptResult {
   sourceAddr: string;
@@ -216,7 +217,7 @@ function handleDecryptBatch(
     let anyFresh = false;
     for (const d of decoded) {
       const cutoff = getLastPlayedSeq(watermark, d.sourceAddr);
-      if (cutoff === null || d.seq > cutoff) {
+      if (cutoff === null || gcallSeqIsAfter(d.seq, cutoff)) {
         anyFresh = true;
         break;
       }
