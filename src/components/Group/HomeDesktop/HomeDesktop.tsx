@@ -147,7 +147,9 @@ export const HomeDesktop = ({
     (target: HTMLElement | null) => {
       if (!target) return;
       const rect = target.getBoundingClientRect();
-      const rightRailRect = rightRailRef.current?.getBoundingClientRect();
+      const rightRailRect = isWideDashboardLayout
+        ? rightRailRef.current?.getBoundingClientRect()
+        : null;
       executeEvent('openReceiveQortInternal', {
         address: myAddress ?? '',
         anchorRect: {
@@ -166,7 +168,7 @@ export const HomeDesktop = ({
           : null,
       });
     },
-    [myAddress]
+    [isWideDashboardLayout, myAddress]
   );
   const assignGroupActivityPanelNode = useCallback(
     (node: HTMLDivElement | null) => {

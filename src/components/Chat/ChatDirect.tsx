@@ -1260,7 +1260,20 @@ export const ChatDirect = ({
     async (message) => {
       try {
         const data = getQchatFileTransferData(message);
-        if (!data?.transferId || !message?.sender) return;
+        if (!data?.transferId || !message?.sender) {
+          console.error('[QchatFileTransfer] accept aborted: missing transfer id or sender', {
+            hasTransferId: Boolean(data?.transferId),
+            hasSender: Boolean(message?.sender),
+            data,
+          });
+          return;
+        }
+        console.log('[QchatFileTransfer] accept started', {
+          transferId: data.transferId,
+          fileName: data.fileName,
+          size: data.size,
+          sender: message.sender,
+        });
         if (qchatCompletedTransfers[data.transferId]) {
           throw new Error('This file has already been downloaded');
         }
@@ -1272,23 +1285,63 @@ export const ChatDirect = ({
         }
         const senderAddress = data.senderAddress || message.sender;
         if (senderAddress !== message.sender) {
+          console.error('[QchatFileTransfer] accept aborted: sender mismatch', {
+            transferId: data.transferId,
+            senderAddress,
+            messageSender: message.sender,
+          });
           throw new Error('File offer sender mismatch');
         }
         if (data.recipientAddress && data.recipientAddress !== myAddress) {
+          console.error('[QchatFileTransfer] accept aborted: recipient mismatch', {
+            transferId: data.transferId,
+            recipientAddress: data.recipientAddress,
+            myAddress,
+          });
           throw new Error('File offer is not addressed to this account');
         }
         const api = (window as any).electronAPI;
         if (!api?.qchatFileChooseSavePath || !api?.qchatFileAccept) {
+          console.error('[QchatFileTransfer] accept aborted: electron API unavailable', {
+            transferId: data.transferId,
+            hasChooseSavePath: Boolean(api?.qchatFileChooseSavePath),
+            hasAccept: Boolean(api?.qchatFileAccept),
+          });
           throw new Error('Reticulum file transfer is unavailable');
         }
+        console.log('[QchatFileTransfer] choosing save path', {
+          transferId: data.transferId,
+          fileName: data.fileName || 'received-file',
+        });
         const save = await api.qchatFileChooseSavePath(
           data.fileName || 'received-file'
         );
-        if (!save?.ok || !save.path) return;
+        if (!save?.ok || !save.path) {
+          console.error('[QchatFileTransfer] accept aborted: save path not selected', {
+            transferId: data.transferId,
+            save,
+          });
+          return;
+        }
+        console.log('[QchatFileTransfer] save path selected', {
+          transferId: data.transferId,
+          savePath: save.path,
+        });
+        console.log('[QchatFileTransfer] loading local Reticulum identity', {
+          transferId: data.transferId,
+        });
         const reticulumIdentity = await getLocalReticulumIdentityForQchatFile();
+        console.log('[QchatFileTransfer] local Reticulum identity ready', {
+          transferId: data.transferId,
+          destinationHash: reticulumIdentity.destinationHash,
+          hasIdentityPublicKey: Boolean(reticulumIdentity.identityPublicKeyBase64),
+        });
         const authTimestamp = Date.now();
         const downloaderPublicKey = userInfo?.publicKey || '';
         if (!downloaderPublicKey) {
+          console.error('[QchatFileTransfer] accept aborted: missing local public key', {
+            transferId: data.transferId,
+          });
           throw new Error('Missing local Qortal public key');
         }
         const authSignedFields = buildQchatFileLinkAuthSignedFields({
@@ -1301,11 +1354,30 @@ export const ChatDirect = ({
             reticulumIdentity.identityPublicKeyBase64,
           timestamp: authTimestamp,
         });
+        console.log('[QchatFileTransfer] signing accept auth message', {
+          transferId: data.transferId,
+          senderAddress,
+          downloaderAddress: myAddress,
+        });
         const authSigned = await signQchatFileFields(authSignedFields);
+        console.log('[QchatFileTransfer] accept auth message signed', {
+          transferId: data.transferId,
+          hasSignature: Boolean(authSigned?.signature),
+        });
         const authMessage = {
           ...authSignedFields,
           signature: authSigned.signature,
         };
+        console.log('[QchatFileTransfer] invoking qchatFileAccept', {
+          transferId: data.transferId,
+          fileName: data.fileName || 'received-file',
+          size: Number(data.size || 0),
+          hasSenderDestinationHash: Boolean(data.senderReticulumDestinationHash),
+          hasSenderIdentityPublicKey: Boolean(
+            data.senderReticulumIdentityPublicKeyBase64
+          ),
+          hasSha256: Boolean(data.sha256),
+        });
         const accepted = await api.qchatFileAccept({
           transferId: data.transferId,
           senderAddress,
@@ -1319,13 +1391,28 @@ export const ChatDirect = ({
           size: Number(data.size || 0),
           sha256: data.sha256,
         });
+        console.log('[QchatFileTransfer] qchatFileAccept result', {
+          transferId: data.transferId,
+          accepted,
+        });
         if (!accepted?.ok) {
+          console.error('[QchatFileTransfer] accept failed in electron/bridge', {
+            transferId: data.transferId,
+            accepted,
+          });
           throw new Error(accepted?.error || 'Unable to accept file transfer');
         }
         qchatAcceptedOfferMetaRef.current.set(data.transferId, {
           expiresAt: Number(data.expiresAt || 0),
         });
+        console.log('[QchatFileTransfer] accept registered', {
+          transferId: data.transferId,
+        });
       } catch (error) {
+        console.error('[QchatFileTransfer] accept exception', {
+          message: error?.message || String(error),
+          error,
+        });
         setInfoSnack({
           type: 'error',
           message: error?.message || String(error),

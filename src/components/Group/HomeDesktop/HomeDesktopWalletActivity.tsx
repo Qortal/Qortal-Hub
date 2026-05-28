@@ -16,7 +16,10 @@ import { executeEvent } from '../../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { DashboardUtilityPanel } from './DashboardUtilityPanel';
 import { WalletActionButton } from './WalletActionButton';
-import { WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT } from './homeDesktopConstants';
+import {
+  HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
+  WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
+} from './homeDesktopConstants';
 import type {
   WalletActivityEntry,
   WalletActivityTransaction,
@@ -33,6 +36,13 @@ const HOME_RIGHT_RAIL_DATA_ATTR = '[data-home-right-rail]';
 
 function getRightRailRectFromElement(element: HTMLElement | null) {
   if (!element) return null;
+  if (
+    typeof window !== 'undefined' &&
+    !window.matchMedia(`(min-width: ${HOME_WIDE_DASHBOARD_MIN_WIDTH_PX}px)`)
+      .matches
+  ) {
+    return null;
+  }
   const rail = element.closest(HOME_RIGHT_RAIL_DATA_ATTR);
   if (!rail) return null;
   return rail.getBoundingClientRect();
