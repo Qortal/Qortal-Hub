@@ -485,13 +485,6 @@ export const MessageItemComponent = ({
               paddingLeft: '14px',
             }),
             ...(!isShowingAsReply && {
-              '&:hover': {
-                backgroundColor: isScrollTarget
-                  ? alpha(theme.palette.primary.main, 0.09)
-                  : isOwn
-                    ? alpha(theme.palette.primary.main, 0.07)
-                    : alpha(theme.palette.text.primary, 0.04),
-              },
               '& .message-item-toolbar': {
                 opacity: 0,
                 pointerEvents: 'none',
