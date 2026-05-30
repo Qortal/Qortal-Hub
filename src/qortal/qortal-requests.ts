@@ -291,6 +291,10 @@ export function clearSessionPermissionsByTabId(tabId) {
 
 function setupMessageListenerQortalRequest() {
   window.addEventListener('message', async (event) => {
+    if (event.origin !== window.location.origin || event.source !== window) {
+      return;
+    }
+
     const request = event.data;
 
     // Ensure the message is from a trusted source

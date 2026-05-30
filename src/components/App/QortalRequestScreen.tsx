@@ -4,13 +4,17 @@ import { useTheme } from '@mui/material/styles';
 import { Spacer } from '../../common/Spacer';
 import { CustomButton, TextP } from '../../styles/App-styles.ts';
 import { ErrorText } from '../index';
+import {
+  QortalRequestDetails,
+  QortalRequestDetailsData,
+} from './QortalRequestDetails';
 
 type MessageQortalRequest = {
   text1?: string;
   text2?: string;
   text3?: string;
   text4?: string;
-  html?: string;
+  details?: QortalRequestDetailsData;
   highlightedText?: string;
   fee?: string;
   checkbox1?: { label?: string; value?: boolean };
@@ -86,8 +90,10 @@ export function QortalRequestScreen({
           </TextP>
         </Box>
       )}
-      {message?.html && (
-        <div dangerouslySetInnerHTML={{ __html: message.html }} />
+      {message?.details && (
+        <Box sx={{ width: '90%' }}>
+          <QortalRequestDetails details={message.details} />
+        </Box>
       )}
       <Spacer height="15px" />
       <TextP
