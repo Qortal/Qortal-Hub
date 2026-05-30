@@ -23,7 +23,7 @@ describe('GcallOpusFecPlayoutPipeline', () => {
     pipeline.postBatch('Qpeer', pcm, 3, decodeStats, true);
 
     expect(sink).toHaveBeenCalledTimes(1);
-    expect(sink).toHaveBeenCalledWith('Qpeer', pcm, 3);
+    expect(sink).toHaveBeenCalledWith('Qpeer', pcm, 3, null);
     expect(stats).toHaveBeenCalledWith(
       'Qpeer',
       expect.objectContaining({

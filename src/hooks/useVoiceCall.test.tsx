@@ -49,18 +49,43 @@ function base58Encode(bytes: Uint8Array): string {
   return encoded || alphabet[0];
 }
 
+const mockAudioGain = () => ({
+  gain: {
+    cancelScheduledValues: vi.fn(),
+    exponentialRampToValueAtTime: vi.fn(),
+    linearRampToValueAtTime: vi.fn(),
+    setValueAtTime: vi.fn(),
+    value: 0,
+  },
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+});
+
+const mockAudioOscillator = () => ({
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  frequency: { setValueAtTime: vi.fn(), value: 0 },
+  start: vi.fn(),
+  stop: vi.fn(),
+  type: 'sine',
+});
+
 describe('useVoiceCall', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('initiates a direct call without prewarming the main renderer audio context', async () => {
+  it('initiates a direct call and starts outgoing ringtone audio', async () => {
     const resume = vi.fn(async () => {});
     class MockAudioContext {
       state: AudioContextState = 'suspended';
       sampleRate = 48_000;
       baseLatency = 0;
+      currentTime = 0;
+      destination = {};
       constructor(_: AudioContextOptions) {}
+      createGain = vi.fn(mockAudioGain);
+      createOscillator = vi.fn(mockAudioOscillator);
       resume = vi.fn(async () => {
         this.state = 'running';
         await resume();
@@ -102,7 +127,7 @@ describe('useVoiceCall', () => {
     });
 
     expect((window as any).call.initiate).toHaveBeenCalled();
-    expect(resume).not.toHaveBeenCalled();
+    expect(resume).toHaveBeenCalled();
   });
 
   it('starts in idle state', () => {
@@ -296,7 +321,11 @@ describe('useVoiceCall', () => {
       state: AudioContextState = 'suspended';
       sampleRate = 48_000;
       baseLatency = 0;
+      currentTime = 0;
+      destination = {};
       constructor(_: AudioContextOptions) {}
+      createGain = vi.fn(mockAudioGain);
+      createOscillator = vi.fn(mockAudioOscillator);
       resume = vi.fn(async () => {
         this.state = 'running';
         await resume();
@@ -410,7 +439,11 @@ describe('useVoiceCall', () => {
         state: AudioContextState = 'running';
         sampleRate = 48_000;
         baseLatency = 0;
+        currentTime = 0;
+        destination = {};
         constructor(_: AudioContextOptions) {}
+        createGain = vi.fn(mockAudioGain);
+        createOscillator = vi.fn(mockAudioOscillator);
         resume = vi.fn(async () => {});
         close = vi.fn(async () => {
           this.state = 'closed';
@@ -535,6 +568,7 @@ describe('useVoiceCall', () => {
         state: AudioContextState = 'running';
         sampleRate = 48_000;
         baseLatency = 0;
+        currentTime = 0;
         constructor(_: AudioContextOptions) {}
         resume = vi.fn(async () => {});
         close = vi.fn(async () => {
@@ -542,10 +576,17 @@ describe('useVoiceCall', () => {
         });
         audioWorklet = { addModule: vi.fn(async () => {}) };
         createGain = vi.fn(() => ({
-          gain: { value: 0 },
+          gain: {
+            cancelScheduledValues: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+            linearRampToValueAtTime: vi.fn(),
+            setValueAtTime: vi.fn(),
+            value: 0,
+          },
           connect: vi.fn(),
           disconnect: vi.fn(),
         }));
+        createOscillator = vi.fn(mockAudioOscillator);
         createMediaStreamSource = vi.fn(() => ({
           connect: vi.fn(),
           disconnect: vi.fn(),
@@ -563,6 +604,14 @@ describe('useVoiceCall', () => {
         join,
         setLocalAddresses: vi.fn(async () => {}),
         requestPeerMediaRecovery: vi.fn(async () => ({ success: true })),
+        getRoomParticipants: vi.fn(async () => [
+          { address: myAddr },
+          { address: peerAddr },
+        ]),
+        getLinkStats: vi.fn(async () => ({
+          success: true,
+          stats: { establishedLinks: 1, participants: 2 },
+        })),
         sendKey,
         sendAudio: vi.fn(async () => ({ success: true })),
       },
@@ -643,7 +692,7 @@ describe('useVoiceCall', () => {
     expect(sendKey.mock.calls[0]?.[1]).toBe(peerAddr);
   });
 
-  it('falls back to direct voice receive when audio-surface DM media start fails', async () => {
+  it('stops after audio-surface DM media start fails', async () => {
     let callEventHandler:
       | ((event: string, payload: unknown) => void | Promise<void>)
       | null = null;
@@ -679,7 +728,11 @@ describe('useVoiceCall', () => {
         state: AudioContextState = 'running';
         sampleRate = 48_000;
         baseLatency = 0;
+        currentTime = 0;
+        destination = {};
         constructor(_: AudioContextOptions) {}
+        createGain = vi.fn(mockAudioGain);
+        createOscillator = vi.fn(mockAudioOscillator);
         resume = vi.fn(async () => {});
         close = vi.fn(async () => {
           this.state = 'closed';
@@ -691,6 +744,14 @@ describe('useVoiceCall', () => {
         join,
         setLocalAddresses: vi.fn(async () => {}),
         requestPeerMediaRecovery: vi.fn(async () => ({ success: true })),
+        getRoomParticipants: vi.fn(async () => [
+          { address: myAddr },
+          { address: peerAddr },
+        ]),
+        getLinkStats: vi.fn(async () => ({
+          success: true,
+          stats: { establishedLinks: 1, participants: 2 },
+        })),
         sendKey: vi.fn(async () => ({ success: true })),
         sendAudio: vi.fn(async () => ({ success: true })),
       },
@@ -748,15 +809,10 @@ describe('useVoiceCall', () => {
         })
       )
     );
-    await waitFor(() =>
-      expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'start-direct-voice-receive',
-          roomId,
-          peerAddress: peerAddr,
-          roomKey: expect.any(ArrayBuffer),
-        })
-      )
+    expect(audioSurfaceSendCommand).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'start-direct-voice-receive',
+      })
     );
   });
 });

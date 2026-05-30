@@ -167,13 +167,16 @@ export function simulatePermission(accepted: boolean): void {
     'message',
     (event: MessageEvent) => {
       if (event.data?.action === 'QORTAL_REQUEST_PERMISSION') {
-        window.postMessage(
-          {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: {
             action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
             requestId: event.data.requestId,
             result: { accepted },
-          },
-          window.location.origin
+            },
+            origin: window.location.origin,
+            source: window,
+          })
         );
       }
     },
