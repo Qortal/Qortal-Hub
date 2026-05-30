@@ -91,9 +91,10 @@ function processText(input) {
 
 const linkify = (text) => {
   if (!text) return '';
-  let textFormatted = text;
+  const cleanText = DOMPurify.sanitize(text);
+  let textFormatted = cleanText;
   const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
-  textFormatted = text.replace(urlPattern, (url) => {
+  textFormatted = cleanText.replace(urlPattern, (url) => {
     const href = url.startsWith('http') ? url : `https://${url}`;
     return `<a href="${DOMPurify.sanitize(href)}" class="auto-link">${DOMPurify.sanitize(url)}</a>`;
   });

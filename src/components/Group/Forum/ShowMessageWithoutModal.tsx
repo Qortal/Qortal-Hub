@@ -19,13 +19,69 @@ import { MessageDisplay } from '../../Chat/MessageDisplay';
 import { getBaseApiReact } from '../../../App';
 import { WrapperUserAction } from '../../WrapperUserAction';
 
+const allowedHtmlTags = [
+  'a',
+  'b',
+  'i',
+  'em',
+  'strong',
+  'p',
+  'br',
+  'div',
+  'span',
+  'img',
+  'ul',
+  'ol',
+  'li',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+  'code',
+  'pre',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
+  's',
+  'hr',
+];
+
+const allowedHtmlAttrs = [
+  'href',
+  'target',
+  'rel',
+  'class',
+  'src',
+  'alt',
+  'title',
+  'width',
+  'height',
+  'align',
+  'valign',
+  'colspan',
+  'rowspan',
+  'border',
+  'cellpadding',
+  'cellspacing',
+  'data-url',
+];
+
 export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
   const theme = useTheme();
   const [expandAttachments, setExpandAttachments] = useState<boolean>(false);
 
   let cleanHTML = '';
   if (message?.htmlContent) {
-    cleanHTML = DOMPurify.sanitize(message.htmlContent);
+    cleanHTML = DOMPurify.sanitize(message.htmlContent, {
+      ALLOWED_TAGS: allowedHtmlTags,
+      ALLOWED_ATTR: allowedHtmlAttrs,
+    });
   }
 
   return (
