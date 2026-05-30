@@ -9,6 +9,14 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  resolve: {
+    alias:
+      process.env.VITEST === 'true'
+        ? {
+            electron: resolve(__dirname, 'src/test/mocks/electron.ts'),
+          }
+        : {},
+  },
   build: {
     rollupOptions: {
       input: {
