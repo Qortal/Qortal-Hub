@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai';
 import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import {
   QORTAL_APP_CONTEXT,
-  getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
 } from '../../App';
@@ -46,7 +46,7 @@ export const getPublishesFromAdminsAdminSpace = async (
   groupId
 ) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=admins-symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=admins-symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -296,10 +296,13 @@ export const AdminSpaceInner = ({
                   group_id: selectedGroup,
                   postProcess: 'capitalizeFirstChar',
                 }),
-                labelDone: t('group:message.success.published_secret_key_label', {
-                  group_id: selectedGroup,
-                  postProcess: 'capitalizeFirstChar',
-                }),
+                labelDone: t(
+                  'group:message.success.published_secret_key_label',
+                  {
+                    group_id: selectedGroup,
+                    postProcess: 'capitalizeFirstChar',
+                  }
+                ),
                 done: false,
                 groupId: selectedGroup,
               },
@@ -416,10 +419,7 @@ export const AdminSpaceInner = ({
           </Typography>
         )}
 
-        <Button
-          onClick={openGroupKeyPublishSelect}
-          variant="contained"
-        >
+        <Button onClick={openGroupKeyPublishSelect} variant="contained">
           {t('auth:action.publish_group_secret_key', {
             postProcess: 'capitalizeFirstChar',
           })}
@@ -457,8 +457,7 @@ export const AdminSpaceInner = ({
             ) : (
               <List dense>
                 {groupKeyPublishList.map((publish) => {
-                  const ts =
-                    publish?.updated ?? publish?.created ?? 0;
+                  const ts = publish?.updated ?? publish?.created ?? 0;
                   const dateNum =
                     typeof ts === 'number' ? ts : new Date(ts).getTime();
                   const label = `${formatTimestampForum(dateNum)} by ${publish?.name ?? ''}`;
@@ -506,7 +505,9 @@ export const AdminSpaceInner = ({
 
         <Dialog
           open={groupKeyPublishConfirmOpen}
-          onClose={() => !isPublishingGroupKey && setGroupKeyPublishConfirmOpen(false)}
+          onClose={() =>
+            !isPublishingGroupKey && setGroupKeyPublishConfirmOpen(false)
+          }
         >
           <DialogTitle>
             {t('auth:message.generic.confirm_publish_group_secret_key', {

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
+import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   addressInfoControllerAtom,
   blobControllerAtom,
@@ -19,24 +20,32 @@ import {
   isRunningPublicNodeAtom,
   joinRequestsCacheAtom,
   lastPaymentSeenTimestampAtom,
-  mailsAtom,
+  managedSubscriptionsAtom,
+  managedSubscriptionsLoadingAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
+  myMemberGroupsAtom,
+  myMemberGroupsLastFetchedAtom,
+  mySubscriptionsAtom,
   navigationControllerAtom,
+  notificationsByAddressAtom,
   oldPinnedAppsAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
   qMailLastEnteredTimestampAtom,
+  quitterDashboardFeedCacheAtom,
   resourceDownloadControllerAtom,
   selectedGroupIdAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
+  subscriptionsLoadingAtom,
   timestampEnterDataAtom,
   txListAtom,
   isUsingImportExportSettingsAtom,
 } from '../atoms/global';
+import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   appCategoryFilterAtom,
   appSearchQueryAtom,
@@ -73,10 +82,11 @@ export function useAppReset() {
   const resetAtomQMailLastEnteredTimestampAtom = useResetAtom(
     qMailLastEnteredTimestampAtom
   );
-  const resetAtomMailsAtom = useResetAtom(mailsAtom);
   const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
-  const resetLastPaymentSeenTimestampAtom = useResetAtom(
-    lastPaymentSeenTimestampAtom
+  const setLastPaymentSeenTimestamp = useSetAtom(lastPaymentSeenTimestampAtom);
+  const resetLastPaymentSeenTimestampAtom = useCallback(
+    () => setLastPaymentSeenTimestamp(null),
+    [setLastPaymentSeenTimestamp]
   );
   const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
   const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);
@@ -88,24 +98,44 @@ export function useAppReset() {
   const resetMyGroupsWhereIAmAdminAtom = useResetAtom(
     myGroupsWhereIAmAdminAtom
   );
+  const resetMyMemberGroupsAtom = useResetAtom(myMemberGroupsAtom);
+  const resetMyMemberGroupsLastFetchedAtom = useResetAtom(
+    myMemberGroupsLastFetchedAtom
+  );
+  const resetMySubscriptionsAtom = useResetAtom(mySubscriptionsAtom);
+  const resetManagedSubscriptionsAtom = useResetAtom(managedSubscriptionsAtom);
+  const resetSubscriptionsLoadingAtom = useResetAtom(subscriptionsLoadingAtom);
+  const resetManagedSubscriptionsLoadingAtom = useResetAtom(
+    managedSubscriptionsLoadingAtom
+  );
   const resetResourceDownloadControllerAtom = useResetAtom(
     resourceDownloadControllerAtom
   );
   const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
 
-  const resetAddressInfoControllerAtom = useResetAtom(addressInfoControllerAtom);
+  const resetAddressInfoControllerAtom = useResetAtom(
+    addressInfoControllerAtom
+  );
   const resetBlobControllerAtom = useResetAtom(blobControllerAtom);
   const resetNavigationControllerAtom = useResetAtom(navigationControllerAtom);
+  const resetNotificationsByAddressAtom = useResetAtom(
+    notificationsByAddressAtom
+  );
   const resetEnabledDevModeAtom = useResetAtom(enabledDevModeAtom);
   const resetFullScreenAtom = useResetAtom(fullScreenAtom);
   const resetHasSettingsChangedAtom = useResetAtom(hasSettingsChangedAtom);
-  const resetIsDisabledEditorEnterAtom = useResetAtom(isDisabledEditorEnterAtom);
+  const resetIsDisabledEditorEnterAtom = useResetAtom(
+    isDisabledEditorEnterAtom
+  );
   const resetIsOpenBlockedModalAtom = useResetAtom(isOpenBlockedModalAtom);
   const resetIsRunningPublicNodeAtom = useResetAtom(isRunningPublicNodeAtom);
   const resetSelectedGroupIdAtom = useResetAtom(selectedGroupIdAtom);
   const resetPromotionsAtom = useResetAtom(promotionsAtom);
   const resetPromotionTimeIntervalAtom = useResetAtom(
     promotionTimeIntervalAtom
+  );
+  const resetQuitterDashboardFeedCacheAtom = useResetAtom(
+    quitterDashboardFeedCacheAtom
   );
 
   const resetAppSortAtom = useResetAtom(appSortAtom);
@@ -118,6 +148,7 @@ export function useAppReset() {
   const resetAllRecoil = useCallback(() => {
     if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
       Object.values(globalDownloadsValue).forEach((entry: any) => {
+        if (entry?.cancel) entry.cancel();
         if (entry?.interval) clearInterval(entry.interval);
         if (entry?.timeout) clearTimeout(entry.timeout);
         if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);
@@ -132,7 +163,6 @@ export function useAppReset() {
     resetAtomOldPinnedAppsAtom();
     resetAtomIsUsingImportExportSettingsAtom();
     resetAtomQMailLastEnteredTimestampAtom();
-    resetAtomMailsAtom();
     resetGroupPropertiesAtom();
     resetLastPaymentSeenTimestampAtom();
     resetGroupsOwnerNamesAtom();
@@ -143,11 +173,19 @@ export function useAppReset() {
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
     resetMyGroupsWhereIAmAdminAtom();
+    resetMyMemberGroupsAtom();
+    resetMyMemberGroupsLastFetchedAtom();
+    resetMySubscriptionsAtom();
+    resetManagedSubscriptionsAtom();
+    resetSubscriptionsLoadingAtom();
+    resetManagedSubscriptionsLoadingAtom();
+    clearMemberGroupsPolling();
     resetResourceDownloadControllerAtom();
     resetGlobalDownloadsAtom();
     resetAddressInfoControllerAtom();
     resetBlobControllerAtom();
     resetNavigationControllerAtom();
+    resetNotificationsByAddressAtom();
     resetEnabledDevModeAtom();
     resetFullScreenAtom();
     resetHasSettingsChangedAtom();
@@ -157,6 +195,7 @@ export function useAppReset() {
     resetSelectedGroupIdAtom();
     resetPromotionsAtom();
     resetPromotionTimeIntervalAtom();
+    resetQuitterDashboardFeedCacheAtom();
     resetAppSortAtom();
     resetAppCategoryFilterAtom();
     resetAppStatusFilterAtom();
@@ -174,7 +213,6 @@ export function useAppReset() {
     resetAtomOldPinnedAppsAtom,
     resetAtomIsUsingImportExportSettingsAtom,
     resetAtomQMailLastEnteredTimestampAtom,
-    resetAtomMailsAtom,
     resetGroupPropertiesAtom,
     resetLastPaymentSeenTimestampAtom,
     resetGroupsOwnerNamesAtom,
@@ -185,11 +223,18 @@ export function useAppReset() {
     resettxListAtomAtom,
     resetmemberGroupsAtomAtom,
     resetMyGroupsWhereIAmAdminAtom,
+    resetMyMemberGroupsAtom,
+    resetMyMemberGroupsLastFetchedAtom,
+    resetMySubscriptionsAtom,
+    resetManagedSubscriptionsAtom,
+    resetSubscriptionsLoadingAtom,
+    resetManagedSubscriptionsLoadingAtom,
     resetResourceDownloadControllerAtom,
     resetGlobalDownloadsAtom,
     resetAddressInfoControllerAtom,
     resetBlobControllerAtom,
     resetNavigationControllerAtom,
+    resetNotificationsByAddressAtom,
     resetEnabledDevModeAtom,
     resetFullScreenAtom,
     resetHasSettingsChangedAtom,
@@ -199,6 +244,7 @@ export function useAppReset() {
     resetSelectedGroupIdAtom,
     resetPromotionsAtom,
     resetPromotionTimeIntervalAtom,
+    resetQuitterDashboardFeedCacheAtom,
     resetAppSortAtom,
     resetAppCategoryFilterAtom,
     resetAppStatusFilterAtom,

@@ -21,6 +21,8 @@ export interface PeerDetail {
 }
 
 export interface ResourceStatus {
+  cancelledByScope?: string;
+  downloadScope?: string;
   status: Status;
   localChunkCount: number;
   totalChunkCount: number;
@@ -34,7 +36,9 @@ export interface ResourceStatus {
 }
 
 export interface GlobalDownloadEntry {
+  downloadScope?: string;
   interval: ReturnType<typeof setInterval> | null;
   timeout: ReturnType<typeof setTimeout> | null;
   retryTimeout: ReturnType<typeof setTimeout> | null;
+  cancel?: () => void;
 }

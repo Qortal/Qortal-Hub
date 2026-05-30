@@ -5,6 +5,28 @@
   "compression": "normal",
   "asar": true,
   "afterPack": "scripts/afterPack.js",
+  "extraResources": [
+    {
+      "from": "resources/presence_bridge.py",
+      "to": "reticulum/presence_bridge.py"
+    },
+    {
+      "from": "resources/mesh-network.identity",
+      "to": "reticulum/mesh-network.identity"
+    },
+    {
+      "from": "resources/mesh-network.passphrase",
+      "to": "reticulum/mesh-network.passphrase"
+    },
+    {
+      "from": "resources/reticulum",
+      "to": "reticulum"
+    },
+    {
+      "from": "resources/reticulum-runtime",
+      "to": "reticulum-runtime"
+    }
+  ],
   "files": [
     "assets/**/*",
     "build/**/*",
@@ -12,6 +34,7 @@
     "app/**/*",
     "scripts/**/*"
   ],
+  "asarUnpack": ["build/src/ed25519-verify.worker.js"],
   "linux": {
     "target": ["AppImage", "deb", "snap", "rpm"],
     "category": "Network",

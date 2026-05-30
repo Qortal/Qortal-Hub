@@ -7,18 +7,33 @@ import {
   DialogContent,
   DialogTitle,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { useAtom } from 'jotai';
 import { isOpenSyncingDialogAtom } from '../atoms/global';
 
 import { useTranslation } from 'react-i18next';
-import { getDefaultLocalNodeUrl } from '../constants/constants';
+import {
+  getDefaultLocalNodeUrl,
+  HTTP_LOCALHOST_12391,
+} from '../constants/constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  dialogActionsSx,
+  dialogContentSx,
+  dialogContentTextSx,
+  dialogInfoCardSx,
+  dialogTitleSx,
+  getDialogPaperSx,
+  getDialogPrimaryButtonSx,
+  getDialogSecondaryButtonSx,
+} from './App/dialogSurface';
 
 export function CoreSyncing() {
   const { authenticate, handleSaveNodeInfo } = useAuth();
   const { t } = useTranslation(['node', 'core']);
+  const theme = useTheme();
   const [canContinue, setCanContinue] = useState(false);
   const [open, setOpen] = useAtom(isOpenSyncingDialogAtom);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -101,38 +116,48 @@ export function CoreSyncing() {
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
+      PaperProps={{
+        sx: getDialogPaperSx(theme, { maxWidth: 500 }),
+      }}
     >
       {!canContinue && (
         <>
-          <DialogTitle id="core-setup-title">
+          <DialogTitle id="core-setup-title" sx={dialogTitleSx}>
             {t('node:sync.not_synchronized', {
               postProcess: 'capitalizeEachFirstChar',
             })}
           </DialogTitle>
-          <DialogContent dividers>
-            <Typography variant="body1" gutterBottom>
-              {blocksBehind > 0 &&
-                t('node:sync.behind', {
-                  count: Number(blocksBehind.toFixed(0)),
-                })}{' '}
-              {t('node:sync.waiting')}{' '}
-              <CircularProgress size="1.2rem" color="primary" />
+          <DialogContent sx={dialogContentSx}>
+            <Box sx={dialogInfoCardSx}>
+              <Typography sx={dialogContentTextSx}>
+                {blocksBehind > 0 &&
+                  t('node:sync.behind', {
+                    count: Number(blocksBehind.toFixed(0)),
+                  })}{' '}
+                {t('node:sync.waiting')}{' '}
+                <CircularProgress
+                  size="1.05rem"
+                  color="primary"
+                  sx={{ ml: 0.35, verticalAlign: 'middle' }}
+                />
+              </Typography>
+            </Box>
+            <Typography sx={{ ...dialogContentTextSx, mt: 1.45 }}>
+              {t('node:sync.description')}
             </Typography>
-            <Typography>{t('node:sync.description')}</Typography>
             <Box
               sx={{
-                width: '100%',
                 display: 'flex',
-                justifyContent: 'center',
-                marginTop: '15px',
+                justifyContent: 'flex-start',
+                mt: 1.75,
               }}
             >
               <Button
                 onClick={() => {
                   handleContinue(true);
                 }}
-                color="primary"
                 variant="contained"
+                sx={getDialogPrimaryButtonSx(theme)}
               >
                 {t('node:actions.continuePublic', {
                   postProcess: 'capitalizeFirstChar',
@@ -145,28 +170,31 @@ export function CoreSyncing() {
 
       {canContinue && (
         <>
-          <DialogTitle id="core-setup-title">
+          <DialogTitle id="core-setup-title" sx={dialogTitleSx}>
             {t('node:sync.synchronized', {
               postProcess: 'capitalizeEachFirstChar',
             })}
           </DialogTitle>
-          <DialogContent dividers>
-            <Typography variant="body1" gutterBottom>
-              {t('node:sync.synchronized_desc', {
-                postProcess: 'capitalizeFirstWord',
-              })}
-            </Typography>
+          <DialogContent sx={dialogContentSx}>
+            <Box sx={dialogInfoCardSx}>
+              <Typography sx={dialogContentTextSx}>
+                {t('node:sync.synchronized_desc', {
+                  postProcess: 'capitalizeFirstWord',
+                })}
+              </Typography>
+            </Box>
           </DialogContent>
         </>
       )}
 
-      <DialogActions sx={{ p: 2 }}>
+      <DialogActions sx={dialogActionsSx}>
         <Button
           onClick={() => {
             setOpen(false);
             cleanUp();
           }}
-          variant="text"
+          variant="outlined"
+          sx={getDialogSecondaryButtonSx(theme)}
         >
           {t('core:action.close', {
             postProcess: 'capitalizeFirstChar',
@@ -177,8 +205,8 @@ export function CoreSyncing() {
           onClick={() => {
             handleContinue();
           }}
-          color="success"
           variant="contained"
+          sx={getDialogPrimaryButtonSx(theme)}
         >
           {t('node:actions.continueLocal', {
             postProcess: 'capitalizeFirstChar',

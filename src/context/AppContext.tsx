@@ -1,11 +1,12 @@
 import { createContext } from 'react';
+import type { DownloadResourceFunction } from '../hooks/useFetchResources';
 
 export interface AppContextInterface {
   onCancel: (value?: any) => void;
   onOk: (payload?: any) => void;
   show: (data?: any) => Promise<any>;
   showInfo: (data?: any) => void;
-  downloadResource: (params: any) => Promise<void>;
+  downloadResource: DownloadResourceFunction;
   getIndividualUserInfo: (address: string) => Promise<any>;
 }
 
@@ -14,7 +15,10 @@ const defaultValues: AppContextInterface = {
   onOk: () => {},
   show: () => Promise.resolve(undefined),
   showInfo: () => {},
-  downloadResource: async () => {},
+  downloadResource: Object.assign(async () => {}, {
+    cancelAllResourceDownloads: () => {},
+    cancelResourceDownload: () => {},
+  }) as DownloadResourceFunction,
   getIndividualUserInfo: async () => null,
 };
 

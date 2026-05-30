@@ -1,10 +1,17 @@
 import { useContext, useState } from 'react';
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
 import {
   QORTAL_APP_CONTEXT,
-  getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
 } from '../../App';
@@ -38,6 +45,7 @@ export const CreateCommonSecret = ({
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [addNewKey, setAddNewKey] = useState(false);
 
   const theme = useTheme();
   const { t } = useTranslation([
@@ -50,7 +58,7 @@ export const CreateCommonSecret = ({
 
   const getPublishesFromAdmins = async (admins: string[]) => {
     const queryString = admins.map((name) => `name=${name}`).join('&');
-    const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
+    const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
       groupId
     }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
     const response = await fetch(url);
@@ -162,6 +170,8 @@ export const CreateCommonSecret = ({
         .sendMessage('encryptAndPublishSymmetricKeyGroupChat', {
           groupId: groupId,
           previousData: secretKeyToSend,
+          isOwner: true,
+          addKey: secretKeyToSend ? addNewKey : undefined,
         })
         .then((response) => {
           if (!response?.error) {
@@ -277,6 +287,44 @@ export const CreateCommonSecret = ({
           {t('core:action.hide', { postProcess: 'capitalizeFirstChar' })}
         </Button>
       </Box>
+
+      {secretKey && (
+        <Box sx={{ width: '100%', mt: 0 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={addNewKey}
+                onChange={(e) => setAddNewKey(e.target.checked)}
+                size="small"
+                color="primary"
+                sx={{ py: 0, '& .MuiSvgIcon-root': { fontSize: 16 } }}
+              />
+            }
+            label={
+              <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
+                {t('group:message.generic.add_new_key_option', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            }
+            sx={{ alignItems: 'flex-start', mr: 0 }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              fontSize: '0.7rem',
+              color: theme.palette.text.secondary,
+              mt: 0.25,
+              ml: 3.25,
+            }}
+          >
+            {t('group:message.generic.add_new_key_sparingly', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </Box>
+      )}
 
       <CustomizedSnackbars
         open={openSnack}

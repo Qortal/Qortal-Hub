@@ -1,0 +1,178 @@
+import { describe, expect, it } from 'vitest';
+import {
+  groupCallLocalConnectionHintFromLevel,
+  rawConnectionStressLevel,
+} from './groupCallLocalConnectionHint';
+import type { GroupCallMetricsSnapshot } from './router';
+
+function baseSnapshot(
+  overrides: Partial<GroupCallMetricsSnapshot> = {}
+): GroupCallMetricsSnapshot {
+  return {
+    role: 'participant',
+    packetsReceived: 0,
+    packetsForwarded: 0,
+    packetsDecoded: 0,
+    packetsDropped: 0,
+    packetsDroppedPendingDecrypt: 0,
+    packetsDroppedStaleWorkerDecrypt: 0,
+    packetsDroppedStartupGate: 0,
+    packetsDroppedDecodeFailure: 0,
+    packetsDroppedDecoderThrow: 0,
+    packetsDroppedStaleTimestamp: 0,
+    packetsDroppedUnknownSource: 0,
+    relayPacketsSent: 0,
+    relayPacketsReceived: 0,
+    lastRelayActivityAtMs: 0,
+    jitterUnderruns: 0,
+    missingFrames: 0,
+    concealmentTicks: 0,
+    decoderCount: 0,
+    playbackNodeCount: 0,
+    jitterBufferCount: 0,
+    avgIncomingPacketMs: 0,
+    maxIncomingPacketMs: 0,
+    avgJitterTickMs: 0,
+    maxJitterTickMs: 0,
+    avgPcmBufferedMs: 0,
+    playoutOutsideTargetFraction: 0,
+    playoutUnderTargetFraction: 0,
+    playoutOverTargetFraction: 0,
+    avgPlayoutDeltaMs: 0,
+    avgPlayoutRate: 1,
+    playoutRateFractionBelow1: 0,
+    playoutRateFractionBelow097: 0,
+    avgReticulumAudioBridgeToRendererIngressMs: 0,
+    maxReticulumAudioBridgeToRendererIngressMs: 0,
+    avgGcallSenderWorkletToMainThreadMs: 0,
+    maxGcallSenderWorkletToMainThreadMs: 0,
+    avgGcallSenderMainThreadToEncoderOutputMs: 0,
+    maxGcallSenderMainThreadToEncoderOutputMs: 0,
+    avgGcallSenderWorkletToEncoderOutputMs: 0,
+    maxGcallSenderWorkletToEncoderOutputMs: 0,
+    avgGcallSenderEncoderOutputToPacketTimestampMs: 0,
+    maxGcallSenderEncoderOutputToPacketTimestampMs: 0,
+    jitterBufferDepthFramesMean: 0,
+    jitterBufferDepthFramesWorst: 0,
+    jitterNotReadyFraction: 0,
+    jitterRawEmptyFraction: 0,
+    lastUpdatedAt: 0,
+    transportReady: true,
+    relayDwellMs: 0,
+    relayDwellFraction: 0,
+    adaptiveNetworkMode: 'low-latency',
+    playoutStarvationWorstSeverity: 'none',
+    relayThrottleDrops: 0,
+    relayCoalesceSuperseded: 0,
+    relayIpcFailures: 0,
+    reticulumAudioPendingFrames: 0,
+    reticulumAudioPendingOldestAgeMs: 0,
+    reticulumAudioPendingFramesHighWater: 0,
+    reticulumAudioPendingOldestAgeMaxMs: 0,
+    reticulumAudioBridgeQueuedFrames: 0,
+    reticulumAudioBridgeQueuedOldestAgeMs: 0,
+    reticulumAudioBridgeQueuedFramesHighWater: 0,
+    reticulumAudioBridgeQueuedOldestAgeMaxMs: 0,
+    reticulumAudioDecodedQueueDepth: 0,
+    reticulumAudioDecodedQueueOldestAgeMs: 0,
+    reticulumAudioDecodedQueueDepthHighWater: 0,
+    reticulumAudioDecodedQueueOldestAgeMaxMs: 0,
+    reticulumAudioBinaryOutQueueDepth: 0,
+    reticulumAudioBinaryOutQueueOldestAgeMs: 0,
+    reticulumAudioBinaryOutQueueDepthHighWater: 0,
+    reticulumAudioBinaryOutQueueOldestAgeMaxMs: 0,
+    reticulumAudioBridgeWaitingForDrain: false,
+    reticulumAudioQueuePressureDrops: 0,
+    reticulumAudioQueuePressureDropsLast5s: 0,
+    reticulumAudioStaleDrops: 0,
+    reticulumAudioStaleDropsLast5s: 0,
+    reticulumAudioLinkUnreadyDrops: 0,
+    reticulumAudioPacketSendFailures: 0,
+    reticulumAudioPacketPathRequests: 0,
+    reticulumAudioPacketPathResolutions: 0,
+    reticulumAudioPacketPathTimeouts: 0,
+    reticulumAudioPacketFreshSends: 0,
+    reticulumAudioPacketStaleSends: 0,
+    reticulumAudioPacketUnknownSends: 0,
+    reticulumAudioOutboundLinkSamples: 0,
+    reticulumAudioOutboundPacketSamples: 0,
+    reticulumAudioOutboundTransportLast: null,
+    mixerActiveSpeakerEstimate: 0,
+    mixerMasterGain: 1,
+    mixerCurrentReductionDb: 0,
+    mixerAvgReductionDb: 0,
+    mixerOverloadEvents: 0,
+    mixerHeavyReductionFraction: 0,
+    wasmFecPlcFrames: 0,
+    wasmFecAttempts: 0,
+    wasmFecSuccessCoarse: 0,
+    wasmFecDeferredPcmTicks: 0,
+    clusterFailoverPromotionCount: 0,
+    rootFailoverPromotionCount: 0,
+    clusterForwarderDemotionCount: 0,
+    pendingDecryptDepth: 0,
+    pendingDecryptDepthHighWater: 0,
+    gcallAudioBurstWindowCumulativeMs: 0,
+    gcallAudioOverloadCumulativeMs: 0,
+    gcallAudioIngressPacingCumulativeMs: 0,
+    gcallAudioStage5BoostCumulativeMs: 0,
+    gcallAudioFailSafeCumulativeMs: 0,
+    gcallAudioBurstWindowLastStintMs: 0,
+    gcallAudioOverloadLastStintMs: 0,
+    gcallAudioIngressPacingLastStintMs: 0,
+    gcallAudioStage5BoostLastStintMs: 0,
+    gcallAudioFailSafeLastStintMs: 0,
+    gcallAudioBurstWindowEntries: 0,
+    gcallAudioOverloadEntries: 0,
+    gcallAudioIngressPacingEntries: 0,
+    gcallAudioStage5BoostEntries: 0,
+    gcallAudioFailSafeEntries: 0,
+    ...overrides,
+  };
+}
+
+describe('rawConnectionStressLevel', () => {
+  it('returns 0 for healthy snapshot', () => {
+    expect(rawConnectionStressLevel(baseSnapshot())).toBe(0);
+  });
+
+  it('returns 2 for high relay dwell', () => {
+    expect(
+      rawConnectionStressLevel(
+        baseSnapshot({ relayDwellFraction: 0.25, adaptiveNetworkMode: 'low-latency' })
+      )
+    ).toBe(2);
+  });
+
+  it('returns 2 for recovery with moderate relay', () => {
+    expect(
+      rawConnectionStressLevel(
+        baseSnapshot({ adaptiveNetworkMode: 'recovery', relayDwellFraction: 0.15 })
+      )
+    ).toBe(2);
+  });
+
+  it('returns 1 for recovery alone', () => {
+    expect(
+      rawConnectionStressLevel(
+        baseSnapshot({ adaptiveNetworkMode: 'recovery', relayDwellFraction: 0 })
+      )
+    ).toBe(1);
+  });
+
+  it('returns 1 when transport is not ready', () => {
+    expect(rawConnectionStressLevel(baseSnapshot({ transportReady: false }))).toBe(1);
+  });
+});
+
+describe('groupCallLocalConnectionHintFromLevel', () => {
+  it('builds warning and severe hints', () => {
+    const w = groupCallLocalConnectionHintFromLevel(1);
+    expect(w.level).toBe('warning');
+    expect(w.headline).toContain('reduced');
+
+    const s = groupCallLocalConnectionHintFromLevel(2);
+    expect(s.level).toBe('severe');
+    expect(s.headline).toContain('unstable');
+  });
+});

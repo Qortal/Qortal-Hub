@@ -43,20 +43,30 @@ export const InnerChatBox = styled(Box)({
   display: 'flex',
   flexGrow: 1,
   height: '100%',
+  minHeight: 0,
   position: 'relative',
 });
 
-export const AdminRowBox = styled(Box)({
-  display: 'flex',
-  gap: '20px',
-  padding: '15px',
+export const AdminRowBox = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-});
+  borderRadius: theme.shape.borderRadius,
+  display: 'flex',
+  gap: theme.spacing(2),
+  justifyContent: 'space-between',
+  padding: theme.spacing(1.5, 2),
+  transition: 'background-color 0.2s ease',
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover,
+  },
+}));
 
 export const ChatContentBox = styled(Box)({
   display: 'flex',
-  flexGrow: 1,
-  height: `calc(100vh - ${70 + appChromeOffset}px)`,
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  overflow: 'hidden',
   position: 'relative',
 });
 
@@ -69,15 +79,15 @@ export const EncryptionKeyMessageDiv = styled('div')({
   width: '100%',
 });
 
-export const NotPartGroupDiv = styled('div')({
-  alignItems: 'flex-start',
+export const NotPartGroupDiv = styled('div')(({ theme }) => ({
+  alignItems: 'center',
   display: 'flex',
   flexDirection: 'column',
   height: `calc(100vh - ${70 + appChromeOffset}px)`,
   overflow: 'auto',
-  padding: '20px',
+  padding: theme.spacing(3),
   width: '100%',
-});
+}));
 
 export const NoSelectionTypography = styled(Typography)(({ theme }) => ({
   fontSize: '14px',
@@ -123,7 +133,10 @@ export const SelectedGroupWrapper = styled('div', {
   shouldForwardProp: (prop) => prop !== 'isVisible',
 })<SelectedGroupWrapperProps>(({ isVisible }) => ({
   width: '100%',
-  display: 'block',
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  minHeight: 0,
   opacity: !isVisible ? 0 : 1,
   position: isVisible ? 'absolute' : 'fixed',
   left: !isVisible ? '-100000px' : '0px',
@@ -140,4 +153,18 @@ export const GroupRightSidebar = styled(AuthenticatedContainerInnerRight, {
   width: '31px',
   padding: '5px',
   display: hide ? 'none' : 'flex',
+}));
+
+export const NotPartAdminListBox = styled(Box)(({ theme }) => ({
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius * 2,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(0.5),
+  maxHeight: 'min(420px, calc(100vh - 340px))',
+  maxWidth: 420,
+  minHeight: 0,
+  overflowX: 'hidden',
+  overflowY: 'auto',
+  width: '100%',
 }));

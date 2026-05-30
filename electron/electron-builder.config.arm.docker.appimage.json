@@ -1,0 +1,6 @@
+{
+  "extends": "./electron-builder.config.arm.json",
+  "linux": {
+    "target": ["AppImage"]
+  }
+}

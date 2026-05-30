@@ -12,16 +12,32 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseFullscreenRoundedIcon from '@mui/icons-material/CloseFullscreenRounded';
 import LockIcon from '@mui/icons-material/Lock';
-import { useState } from 'react';
+import { useRef, useState, type MutableRefObject } from 'react';
 import { alpha } from '@mui/material/styles';
 import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
 import {
-  AppsHorizontalTabButton,
-  AppsHorizontalTabLabel,
-} from './Apps-styles';
+  APP_BLUE_SURFACE_TEXT,
+  getBlueTier1PillSurface,
+} from '../../styles/blueMaterial';
+import { AppsHorizontalTabButton, AppsHorizontalTabLabel } from './Apps-styles';
 import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+
+function devTabLabel(app: any): string {
+  const base =
+    app?.privateAppProperties?.name || app?.metadata?.title || app?.name || '';
+  if (base) return base;
+  const url = app?.url;
+  if (typeof url === 'string' && url) {
+    try {
+      return new URL(url).hostname || url.slice(0, 28);
+    } catch {
+      return url.slice(0, 28);
+    }
+  }
+  return 'Dev';
+}
 
 type TabComponentProps = {
   app: any;
@@ -32,6 +48,12 @@ type TabComponentProps = {
   isVisuallySelected?: boolean;
   onClose: () => void;
   onSelect: () => void;
+  /** Dev-mode / local preview tabs (label + icon only; same chrome as app tabs) */
+  isDevApp?: boolean;
+  /** When false and the strip is wide enough, tab stays fixed at ~180px (measured in AppsDesktop). */
+  tabStripCompresses?: boolean;
+  /** Mutable drag-lock shared from AppsDesktop to avoid rerenders during drag. */
+  tabInteractionLockedRef?: MutableRefObject<boolean>;
 };
 
 const TabComponent = ({
@@ -43,6 +65,9 @@ const TabComponent = ({
   isVisuallySelected = isSelected,
   onClose,
   onSelect,
+  isDevApp = false,
+  tabStripCompresses = true,
+  tabInteractionLockedRef,
 }: TabComponentProps) => {
   const theme = useTheme();
   const {
@@ -59,12 +84,19 @@ const TabComponent = ({
     left: number;
     top: number;
   } | null>(null);
-  const label =
-    app?.privateAppProperties?.name || app?.metadata?.title || app?.name || '';
-  const selectedTabTextColor =
-    theme.palette.mode === 'dark'
-      ? theme.palette.common.white
-      : theme.palette.primary.contrastText;
+  const localInteractionLockRef = useRef(false);
+  const interactionLockRef = tabInteractionLockedRef ?? localInteractionLockRef;
+
+  const treatAsDevApp = Boolean(isDevApp);
+  const canDuplicate = !app?.internal && !!app?.service;
+  const label = treatAsDevApp
+    ? devTabLabel(app)
+    : app?.privateAppProperties?.name ||
+      app?.metadata?.title ||
+      app?.name ||
+      '';
+  const selectedTabSurface = getBlueTier1PillSurface(theme);
+  const selectedTabTextColor = APP_BLUE_SURFACE_TEXT;
   const dndStyle = {
     transform: CSS.Transform.toString(
       transform
@@ -85,8 +117,40 @@ const TabComponent = ({
       disableRipple
       {...attributes}
       {...listeners}
-      onClick={onSelect}
+      onClick={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onSelect();
+      }}
+      onMouseDown={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          return;
+        }
+        if (event.button === 1) {
+          event.preventDefault();
+        }
+      }}
+      onAuxClick={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (event.button !== 1) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
       onContextMenu={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          setMenuPosition(null);
+          return;
+        }
         event.preventDefault();
         onSelect();
         setMenuPosition({
@@ -95,27 +159,32 @@ const TabComponent = ({
         });
       }}
       sx={{
-        backgroundColor: isVisuallySelected
-          ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.78 : 0.88)
+        background: isVisuallySelected
+          ? selectedTabSurface.background
           : theme.palette.mode === 'dark'
             ? alpha(theme.palette.common.white, 0.03)
             : alpha(theme.palette.common.black, 0.03),
         borderColor: isVisuallySelected
-          ? 'transparent'
+          ? alpha(
+              theme.palette.common.white,
+              theme.palette.mode === 'dark' ? 0.045 : 0.035
+            )
           : theme.palette.mode === 'dark'
             ? alpha(theme.palette.common.white, 0.03)
             : alpha(theme.palette.common.black, 0.04),
-        boxShadow: 'none',
+        boxShadow: isVisuallySelected ? selectedTabSurface.boxShadow : 'none',
         color: isVisuallySelected
           ? selectedTabTextColor
           : theme.palette.text.secondary,
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: 'default',
         opacity: isEntering ? 0 : 1,
         ...dndStyle,
-        transform: `${dndStyle.transform || ''}${isEntering ? ' scale(0.96)' : ''}`.trim(),
-        transition:
-          `${transition ? `${transition}, ` : ''}background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease`,
-        animation: isEntering ? 'tabEntryFadeScale 190ms ease-out forwards' : 'none',
+        transform:
+          `${dndStyle.transform || ''}${isEntering ? ' scale(0.96)' : ''}`.trim(),
+        transition: `${transition ? `${transition}, ` : ''}background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease`,
+        animation: isEntering
+          ? 'tabEntryFadeScale 190ms ease-out forwards'
+          : 'none',
         ...(isDragging && {
           boxShadow:
             theme.palette.mode === 'dark'
@@ -124,11 +193,14 @@ const TabComponent = ({
           opacity: 0.96,
         }),
         '&:hover': {
-          backgroundColor: isVisuallySelected
-            ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.92 : 0.98)
+          background: isVisuallySelected
+            ? selectedTabSurface.background
             : theme.palette.mode === 'dark'
               ? alpha(theme.palette.common.white, 0.06)
               : alpha(theme.palette.common.black, 0.06),
+          boxShadow: isVisuallySelected
+            ? selectedTabSurface.boxShadow
+            : undefined,
           color: isVisuallySelected
             ? selectedTabTextColor
             : theme.palette.text.primary,
@@ -143,6 +215,13 @@ const TabComponent = ({
             transform: `${dndStyle.transform || ''} scale(1)`.trim(),
           },
         },
+        ...(!tabStripCompresses && {
+          flex: '0 0 180px',
+          flexShrink: 0,
+          maxWidth: '180px',
+          minWidth: '180px',
+          width: '180px',
+        }),
       }}
     >
       {app?.isPrivate && !app?.privateAppProperties?.logo ? (
@@ -150,9 +229,10 @@ const TabComponent = ({
           sx={{
             alignItems: 'center',
             color: isVisuallySelected
-              ? theme.palette.primary.contrastText
+              ? selectedTabTextColor
               : theme.palette.text.secondary,
             display: 'flex',
+            flexShrink: 0,
             height: '22px',
             justifyContent: 'center',
             width: '22px',
@@ -160,9 +240,29 @@ const TabComponent = ({
         >
           <LockIcon sx={{ fontSize: 16 }} />
         </Box>
+      ) : treatAsDevApp ? (
+        <Avatar
+          sx={{
+            flexShrink: 0,
+            height: '22px',
+            width: '22px',
+          }}
+          alt={label}
+          src=""
+        >
+          <img
+            style={{
+              width: '22px',
+              height: 'auto',
+            }}
+            src={app?.customIcon ? app.customIcon : LogoSelected}
+            alt=""
+          />
+        </Avatar>
       ) : (
         <Avatar
           sx={{
+            flexShrink: 0,
             height: '22px',
             width: '22px',
           }}
@@ -200,6 +300,21 @@ const TabComponent = ({
       <IconButton
         disableRipple
         onClick={(event) => {
+          event.stopPropagation();
+          if (interactionLockRef.current) {
+            event.preventDefault();
+            return;
+          }
+          onClose();
+        }}
+        onAuxClick={(event) => {
+          if (interactionLockRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          if (event.button !== 1) return;
+          event.preventDefault();
           event.stopPropagation();
           onClose();
         }}
@@ -253,37 +368,39 @@ const TabComponent = ({
           },
         }}
       >
-        <MenuItem
-          onClick={() => {
-            onDuplicate();
-            setMenuPosition(null);
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: '24px !important',
-              marginRight: '6px',
+        {canDuplicate && (
+          <MenuItem
+            onClick={() => {
+              onDuplicate();
+              setMenuPosition(null);
             }}
           >
-            <ContentCopyIcon
+            <ListItemIcon
               sx={{
-                color: theme.palette.text.primary,
-                fontSize: 18,
+                minWidth: '24px !important',
+                marginRight: '6px',
               }}
-            />
-          </ListItemIcon>
+            >
+              <ContentCopyIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: 18,
+                }}
+              />
+            </ListItemIcon>
 
-          <ListItemText
-            sx={{
-              '& .MuiTypography-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                color: theme.palette.text.primary,
-              },
-            }}
-            primary="Duplicate Tab"
-          />
-        </MenuItem>
+            <ListItemText
+              sx={{
+                '& .MuiTypography-root': {
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: theme.palette.text.primary,
+                },
+              }}
+              primary="Duplicate Tab"
+            />
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             onCloseAll();

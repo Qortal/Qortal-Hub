@@ -33,6 +33,7 @@
     "get_six_qorts_way3_action": "Ava Q-Trade",
     "register_name": "Registreeri oma nimi",
     "confirming_transaction": "Tehingut kinnitatakse",
+    "confirming": "Kinnitamine",
     "load_avatar": "Laadi oma avatar",
     "explore_apps": "Avasta esiletõstetud rakendusi",
     "done": "Valmis",
@@ -53,6 +54,17 @@
     "devnet_testing_desc": "Testi oma Q-App'e DevNet-testimise keskkonnas",
     "open_app": "Ava",
     "address_copied": "Aadress kopeeritud lõikelauale",
-    "group_activity": "Grupi aktiivsus"
+    "group_activity": "Grupi aktiivsus",
+    "get_qorts_workspace_hint": "Avage oma esimesed 6 QORT-i, et lubada ülejäänud seadistus.",
+    "register_name_workspace_hint": "Registreeritud nimi muudab selle konto äratuntavaks identiteediks.",
+    "load_avatar_workspace_hint": "Andke armatuurlauale nägu, et ruum tunduks teie oma.",
+    "onboarding_transition_hard_part_done": "Hea töö. Kõige raskem osa on tehtud.",
+    "onboarding_transition_one_more": "Suurepärane. Veel üks samm jäänud.",
+    "onboarding_press_next_when_ready": "Hea töö. Kõige raskem osa on tehtud. Vajutage järgmist, kui olete valmis.",
+    "register_name_pending_hint": "Nime salvestamine ahelas võtab hetk.",
+    "persistent_guide_get_qorts": "Alustame 6 QORT-iga. Valige ülemalt mõni võimalus.",
+    "persistent_guide_register_name": "Järgmisena registreerige oma nimi.",
+    "persistent_guide_load_avatar": "Viimaks lisage avatar.",
+    "post_onboarding_workspace_ready": "Kõik valmis. Tööjaama saate üles ehitada ülal."
   }
 }

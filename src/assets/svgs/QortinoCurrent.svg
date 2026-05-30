@@ -1,0 +1,90 @@
+<svg width="168" height="184" viewBox="0 0 168 184" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="qortino-current-shell-fill" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(61 46) rotate(57.5) scale(118 128)">
+      <stop offset="0" stop-color="#A5B9DB" stop-opacity="0.18"/>
+      <stop offset="0.22" stop-color="#4D5A72" stop-opacity="0.98"/>
+      <stop offset="0.64" stop-color="#1A212C"/>
+      <stop offset="1" stop-color="#0F141C"/>
+    </radialGradient>
+    <radialGradient id="qortino-current-shell-gloss" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(60 42) rotate(90) scale(40 56)">
+      <stop stop-color="#D8E7FF" stop-opacity="0.26"/>
+      <stop offset="0.52" stop-color="#9EB5D8" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#111722" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="qortino-current-shell-stroke" x1="30" y1="18" x2="138" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B7CAE8" stop-opacity="0.24"/>
+      <stop offset="0.52" stop-color="#5C6D89" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#2A3447" stop-opacity="0.26"/>
+    </linearGradient>
+    <linearGradient id="qortino-current-face-fill" x1="84" y1="60" x2="84" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16202D"/>
+      <stop offset="1" stop-color="#0A1017"/>
+    </linearGradient>
+    <radialGradient id="qortino-current-face-sheen" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(67 68) rotate(56) scale(30 44)">
+      <stop stop-color="#8FB8FF" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#0A1017" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="qortino-current-stem" x1="84" y1="10" x2="84" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D2E3FF" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#D2E3FF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="qortino-current-badge-fill" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) rotate(90) scale(11)">
+      <stop stop-color="#567099"/>
+      <stop offset="0.48" stop-color="#3C5275"/>
+      <stop offset="1" stop-color="#2A3A52"/>
+    </radialGradient>
+    <linearGradient id="qortino-current-badge-ring" x1="-9.8" y1="-10" x2="10" y2="10" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B0CEFA" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#B0CEFA" stop-opacity="0.08"/>
+    </linearGradient>
+    <filter id="qortino-current-eye-glow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+    <filter id="qortino-current-logo-soft" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="0.55"/>
+    </filter>
+    <path id="qortino-current-logo-core" d="M0 -9.2L7.8 -4.6V4.7L0 9.3L-7.8 4.7V-4.6L0 -9.2ZM0 -4.7L-4.2 -2.3V2.5L0 5L4.2 2.5V-2.3L0 -4.7Z"/>
+    <path id="qortino-current-logo-tail" d="M4.5 2.5L7.8 4.5V10.8L4.5 8.9V2.5Z"/>
+  </defs>
+
+  <g id="qortino-current">
+    <g id="antenna" transform="translate(84 28) scale(1.7) translate(-84 -28)">
+      <rect x="80" y="19" width="8" height="17" rx="4" fill="url(#qortino-current-stem)"/>
+      <g transform="translate(84 10)">
+        <circle r="10.1" fill="url(#qortino-current-badge-fill)"/>
+        <circle r="9.7" stroke="url(#qortino-current-badge-ring)" stroke-width="0.9"/>
+        <circle r="3.8" fill="#C4DAFB" fill-opacity="0.05"/>
+        <g transform="scale(1.48)">
+          <use href="#qortino-current-logo-core" fill="#C4DAFB" fill-opacity="0.14" filter="url(#qortino-current-logo-soft)" fill-rule="evenodd"/>
+          <use href="#qortino-current-logo-tail" fill="#C4DAFB" fill-opacity="0.14" filter="url(#qortino-current-logo-soft)"/>
+          <use href="#qortino-current-logo-core" fill="#C4DAFB" fill-opacity="0.23" fill-rule="evenodd"/>
+          <use href="#qortino-current-logo-tail" fill="#C4DAFB" fill-opacity="0.23"/>
+        </g>
+      </g>
+    </g>
+
+    <g id="body" transform="translate(84 100) scale(1 0.95) translate(-84 -82)">
+      <rect x="8" y="6" width="152" height="152" rx="69" ry="67" fill="url(#qortino-current-shell-fill)"/>
+      <rect x="8.7" y="6.7" width="150.6" height="150.6" rx="68.3" ry="66.3" stroke="url(#qortino-current-shell-stroke)" stroke-width="1.4"/>
+      <rect x="8" y="6" width="152" height="152" rx="69" ry="67" fill="url(#qortino-current-shell-gloss)"/>
+      <ellipse cx="84" cy="83" rx="50" ry="50" fill="#0A1220" fill-opacity="0.12"/>
+    </g>
+
+    <g id="face" transform="translate(84 105) scale(1.45) translate(-84 -87)">
+      <rect x="44" y="58" width="80" height="58" rx="28" fill="url(#qortino-current-face-fill)"/>
+      <rect x="44.6" y="58.6" width="78.8" height="56.8" rx="27.4" stroke="#B3D0FF" stroke-opacity="0.12" stroke-width="1.2"/>
+      <rect x="44" y="58" width="80" height="58" rx="28" fill="url(#qortino-current-face-sheen)"/>
+
+      <g id="left-eye">
+        <ellipse cx="24.5" cy="26.5" rx="5.4" ry="5.4" transform="translate(44 58)" fill="#DDEBFF" fill-opacity="0.26" filter="url(#qortino-current-eye-glow)"/>
+        <ellipse cx="68.5" cy="84.5" rx="4.5" ry="4.5" fill="#DDEBFF"/>
+      </g>
+      <g id="right-eye">
+        <ellipse cx="54.5" cy="26.5" rx="5.4" ry="5.4" transform="translate(44 58)" fill="#DDEBFF" fill-opacity="0.26" filter="url(#qortino-current-eye-glow)"/>
+        <ellipse cx="98.5" cy="84.5" rx="4.5" ry="4.5" fill="#DDEBFF"/>
+      </g>
+
+      <path d="M70 100.5C76.8 106.4 89.2 106.4 96 100.5" stroke="#DDEBFF" stroke-opacity="0.78" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

@@ -10,8 +10,15 @@ import {
   DialogTitle,
   MenuItem,
   Select,
+  Stack,
   styled,
   Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   useTheme,
 } from '@mui/material';
@@ -21,13 +28,7 @@ import IconButton from '@mui/material/IconButton';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useAtom } from 'jotai';
-import {
-  ChangeEvent,
-  Fragment,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { ChangeEvent, Fragment, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import {
@@ -42,6 +43,7 @@ import { decryptStoredWallet } from '../../utils/decryptWallet';
 import { executeEvent } from '../../utils/events';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 import ThemeManager from '../Theme/ThemeManager';
+import { isDisabledLegacy } from '../../constants/featureFlags';
 
 export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -77,12 +79,102 @@ export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
 }));
 
 type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
+type ReticulumStatus = {
+  running: boolean;
+  pid?: number;
+  mode: 'frozen' | 'venv' | 'system' | null;
+  configDir: string;
+  reason?: string;
+  bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+  reachability: 'unknown' | 'lan-only' | 'hub-connected' | 'disconnected';
+  transportEnabled?: boolean;
+  configuredHubInterfaces?: number;
+  onlineHubInterfaces?: number;
+  configuredRemoteHubInterfaces?: number;
+  onlineRemoteHubInterfaces?: number;
+  hubSummary?: string;
+  overlayLinksConnected?: number;
+};
+
+type ReticulumOverlayPeerStatus = {
+  linkId: string;
+  peerPresenceHash: string;
+  incoming?: boolean;
+  address?: string;
+  connectedAt: number;
+};
+
+type ReticulumMeshSettingsStatus = {
+  enabled: boolean;
+  listenPort: number;
+  meshListenEnabled: boolean;
+  upnpMapped: boolean;
+  reachableSelf: boolean;
+  meshDiscoveryClient: boolean;
+  meshPrivateGateway: boolean;
+  networkIdentityPath: string;
+  discoveryReachableHost?: string;
+  meshReachableOnHost?: string;
+  meshReachableOnEffective: string | null;
+};
+
+function formatReticulumReachability(status: ReticulumStatus | null): string {
+  switch (status?.reachability) {
+    case 'hub-connected':
+      return 'Hub connected';
+    case 'lan-only':
+      return 'LAN only';
+    case 'disconnected':
+      return 'Hub disconnected';
+    default:
+      if (status?.bridgeState === 'ready') return 'Bridge ready';
+      return 'Detecting reachability';
+  }
+}
+
+function formatReticulumMode(status: ReticulumStatus | null): string {
+  if (status?.mode === 'frozen') return 'Bundled binary';
+  if (status?.mode === 'venv') return 'Bundled Python venv';
+  if (status?.mode === 'system') return 'System Python (dev)';
+  return 'Unavailable';
+}
+
+function formatElapsedDuration(connectedAt: number, now: number): string {
+  const totalSeconds = Math.max(0, Math.floor((now - connectedAt) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  }
+  return `${seconds}s`;
+}
 
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
   const [platform, setPlatform] = useState<string>('');
+  const [reticulumStatus, setReticulumStatus] =
+    useState<ReticulumStatus | null>(null);
+  const [reticulumLocalDestinationHash, setReticulumLocalDestinationHash] =
+    useState<string | null>(null);
+  const [reticulumOverlayPeers, setReticulumOverlayPeers] = useState<
+    ReticulumOverlayPeerStatus[]
+  >([]);
+  const [reticulumMeshStatus, setReticulumMeshStatus] =
+    useState<ReticulumMeshSettingsStatus | null>(null);
+  const [overlayDurationNow, setOverlayDurationNow] = useState(() =>
+    Date.now()
+  );
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
+  const [meshIdentityBusy, setMeshIdentityBusy] = useState(false);
+  const [isPrivateKeyPasswordEditable, setIsPrivateKeyPasswordEditable] =
+    useState(false);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -104,8 +196,6 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
       .then((response) => {
         if (response?.error) {
           console.error('Error adding user settings:', response.error);
-        } else {
-          console.log('User settings added successfully');
         }
       })
       .catch((error) => {
@@ -167,15 +257,123 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     if (window?.electronAPI) loadAppSettings();
   }, [loadAppSettings]);
 
-  const handleCloseActionChange = useCallback(
-    async (value: CloseAction) => {
-      setCloseAction(value);
-      if (typeof window.electronAPI?.setAppSettings === 'function') {
-        await window.electronAPI.setAppSettings({ closeAction: value });
+  const loadReticulumStatus = useCallback(async () => {
+    if (typeof window.electronAPI?.reticulumGetStatus === 'function') {
+      try {
+        const status = await window.electronAPI.reticulumGetStatus();
+        setReticulumStatus(status);
+      } catch (error) {
+        setReticulumStatus({
+          running: false,
+          mode: null,
+          configDir: '',
+          reachability: 'unknown',
+          reason:
+            error instanceof Error ? error.message : 'Unable to read status',
+        });
       }
-    },
-    []
-  );
+    }
+    if (typeof window.electronAPI?.reticulumGetOverlayPeers === 'function') {
+      try {
+        const peers = await window.electronAPI.reticulumGetOverlayPeers();
+        setReticulumOverlayPeers(peers);
+      } catch {
+        setReticulumOverlayPeers([]);
+      }
+    }
+    if (typeof window.electronAPI?.reticulumGetMeshStatus === 'function') {
+      try {
+        const mesh = await window.electronAPI.reticulumGetMeshStatus();
+        setReticulumMeshStatus(mesh);
+      } catch {
+        setReticulumMeshStatus(null);
+      }
+    }
+    if (
+      typeof window.electronAPI?.reticulumGetLocalDestinationHash === 'function'
+    ) {
+      try {
+        const result =
+          await window.electronAPI.reticulumGetLocalDestinationHash();
+        setReticulumLocalDestinationHash(result?.destinationHash ?? null);
+      } catch {
+        setReticulumLocalDestinationHash(null);
+      }
+    }
+  }, []);
+
+  const handleEnsureMeshNetworkIdentity = useCallback(async () => {
+    if (
+      typeof window.electronAPI?.reticulumEnsureMeshNetworkIdentity !==
+      'function'
+    ) {
+      return;
+    }
+    setMeshIdentityBusy(true);
+    try {
+      const r = await window.electronAPI.reticulumEnsureMeshNetworkIdentity();
+      if (r.ok) {
+        setInfoSnackCustom({
+          type: 'success',
+          message: r.created
+            ? 'Community mesh identity installed from the app bundle. Reticulum will restart if needed.'
+            : 'Community mesh identity already installed.',
+        });
+        setOpenSnackGlobal(true);
+        void loadReticulumStatus();
+      } else {
+        setInfoSnackCustom({
+          type: 'error',
+          message: r.error ?? 'Could not install community mesh identity.',
+        });
+        setOpenSnackGlobal(true);
+      }
+    } catch (e) {
+      setInfoSnackCustom({
+        type: 'error',
+        message:
+          e instanceof Error ? e.message : 'Mesh network identity failed.',
+      });
+      setOpenSnackGlobal(true);
+    } finally {
+      setMeshIdentityBusy(false);
+    }
+  }, [loadReticulumStatus, setInfoSnackCustom, setOpenSnackGlobal]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (
+      typeof window.electronAPI?.reticulumGetStatus !== 'function' &&
+      typeof window.electronAPI?.reticulumGetMeshStatus !== 'function'
+    ) {
+      return;
+    }
+    void loadReticulumStatus();
+    const timer = window.setInterval(() => {
+      void loadReticulumStatus();
+    }, 3000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [loadReticulumStatus, open]);
+
+  useEffect(() => {
+    if (!open || reticulumOverlayPeers.length === 0) return;
+    setOverlayDurationNow(Date.now());
+    const timer = window.setInterval(() => {
+      setOverlayDurationNow(Date.now());
+    }, 1000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [open, reticulumOverlayPeers.length]);
+
+  const handleCloseActionChange = useCallback(async (value: CloseAction) => {
+    setCloseAction(value);
+    if (typeof window.electronAPI?.setAppSettings === 'function') {
+      await window.electronAPI.setAppSettings({ closeAction: value });
+    }
+  }, []);
 
   return (
     <Fragment>
@@ -223,10 +421,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             p: 2,
           }}
         >
-          <Box
-            sx={{ maxWidth: 560, mx: 'auto', py: 3, px: 1, width: '100%' }}
-          >
-
+          <Box sx={{ maxWidth: 760, mx: 'auto', py: 3, px: 1, width: '100%' }}>
             {/* Notifications */}
             <Box
               sx={{
@@ -294,6 +489,327 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                       );
                     }}
                   />
+                </Box>
+                {!isDisabledLegacy && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      px: 2,
+                      py: 1.25,
+                      borderBottom: 1,
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Enable Hub P2P networking
+                      </Typography>
+                      <Typography variant="caption" color="text.disabled">
+                        Allows presence, peer discovery and direct messaging.
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    gap: 1,
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      width: '100%',
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      Reticulum daemon
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        flexShrink: 0,
+                        color:
+                          reticulumStatus?.reachability === 'hub-connected'
+                            ? theme.palette.success.main
+                            : reticulumStatus?.running
+                              ? theme.palette.warning.main
+                              : theme.palette.warning.main,
+                        fontWeight: 600,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {formatReticulumReachability(reticulumStatus)}
+                    </Typography>
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.disabled"
+                    sx={{
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {reticulumStatus?.running
+                      ? `Config: ${reticulumStatus.configDir}`
+                      : reticulumStatus?.reason || 'Not started'}
+                  </Typography>
+                  {reticulumStatus?.hubSummary ? (
+                    <Typography
+                      variant="caption"
+                      component="div"
+                      color="text.disabled"
+                      sx={{
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {reticulumStatus.hubSummary}
+                    </Typography>
+                  ) : null}
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.disabled"
+                    sx={{ lineHeight: 1.6 }}
+                  >
+                    {reticulumStatus?.running ? 'Running' : 'Not running'}
+                    {reticulumStatus?.bridgeState
+                      ? ` · Bridge ${reticulumStatus.bridgeState}`
+                      : ''}
+                    {' · '}
+                    {formatReticulumMode(reticulumStatus)}
+                    {typeof reticulumStatus?.onlineHubInterfaces === 'number' &&
+                    typeof reticulumStatus?.configuredHubInterfaces === 'number'
+                      ? ` · Hubs ${reticulumStatus.onlineHubInterfaces}/${reticulumStatus.configuredHubInterfaces}`
+                      : ''}
+                    {typeof reticulumStatus?.onlineRemoteHubInterfaces ===
+                      'number' &&
+                    typeof reticulumStatus?.configuredRemoteHubInterfaces ===
+                      'number'
+                      ? ` · Remote hubs ${reticulumStatus.onlineRemoteHubInterfaces}/${reticulumStatus.configuredRemoteHubInterfaces}`
+                      : ''}
+                    {typeof reticulumStatus?.transportEnabled === 'boolean'
+                      ? ` · Transport ${reticulumStatus.transportEnabled ? 'on' : 'off'}`
+                      : ''}
+                    {typeof reticulumStatus?.overlayLinksConnected === 'number'
+                      ? ` · Overlay links ${reticulumStatus.overlayLinksConnected}`
+                      : ''}
+                    {reticulumStatus?.pid
+                      ? ` · PID ${reticulumStatus.pid}`
+                      : ''}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.disabled"
+                    sx={{
+                      mt: 0.5,
+                      fontFamily: 'monospace',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    Destination hash:{' '}
+                    {reticulumLocalDestinationHash ?? 'Unavailable'}
+                  </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    <Typography
+                      variant="caption"
+                      component="div"
+                      color="text.disabled"
+                    >
+                      Overlay peers
+                    </Typography>
+                    {reticulumOverlayPeers.length === 0 ? (
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        color="text.disabled"
+                        sx={{ mt: 0.5 }}
+                      >
+                        No active overlay peers connected.
+                      </Typography>
+                    ) : (
+                      <TableContainer
+                        sx={{
+                          mt: 0.75,
+                          border: 1,
+                          borderColor: alpha(theme.palette.divider, 0.4),
+                          borderRadius: 1.5,
+                          overflowX: 'auto',
+                        }}
+                      >
+                        <Table size="small" aria-label="overlay peers table">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Peer hash</TableCell>
+                              <TableCell>Address</TableCell>
+                              <TableCell>Initiated by</TableCell>
+                              <TableCell align="right">Connected</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {reticulumOverlayPeers.map((peer) => (
+                              <TableRow key={peer.linkId}>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.75rem',
+                                    wordBreak: 'break-all',
+                                  }}
+                                >
+                                  {peer.peerPresenceHash}
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: peer.address
+                                      ? 'inherit'
+                                      : 'monospace',
+                                    fontSize: '0.75rem',
+                                    wordBreak: 'break-all',
+                                  }}
+                                >
+                                  {peer.address || 'Unknown'}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: '0.75rem' }}>
+                                  {peer.incoming === true
+                                    ? 'Remote'
+                                    : peer.incoming === false
+                                      ? 'Local'
+                                      : '—'}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{
+                                    whiteSpace: 'nowrap',
+                                    fontSize: '0.75rem',
+                                  }}
+                                >
+                                  {formatElapsedDuration(
+                                    peer.connectedAt,
+                                    overlayDurationNow
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Box>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    gap: 1,
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Reticulum hub mesh (direct TCP)
+                  </Typography>
+                  {reticulumMeshStatus == null ? (
+                    <Typography variant="caption" color="text.disabled">
+                      Mesh status unavailable.
+                    </Typography>
+                  ) : !reticulumMeshStatus.enabled ? (
+                    <Typography variant="caption" color="text.disabled">
+                      Not available on secondary app instances.
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        color="text.disabled"
+                        sx={{ lineHeight: 1.6 }}
+                      >
+                        Listen port {reticulumMeshStatus.listenPort}
+                        {reticulumMeshStatus.meshListenEnabled
+                          ? ' · listen enabled'
+                          : ' · listen disabled'}
+                        {reticulumMeshStatus.upnpMapped ? ' · UPnP mapped' : ''}
+                        {reticulumMeshStatus.meshDiscoveryClient
+                          ? ' · RNS interface discovery + autoconnect (LXMF included with the Hub Reticulum runtime; see Reticulum manual)'
+                          : ''}
+                        {reticulumMeshStatus.meshPrivateGateway
+                          ? ' · encrypted private gateway on mesh listen'
+                          : ''}
+                      </Typography>
+                      {reticulumMeshStatus.meshPrivateGateway &&
+                        reticulumMeshStatus.meshReachableOnEffective != null &&
+                        reticulumMeshStatus.meshReachableOnEffective !== '' && (
+                          <Typography
+                            variant="caption"
+                            component="div"
+                            color="text.disabled"
+                            sx={{ lineHeight: 1.5, mt: 0.25 }}
+                          >
+                            Discovery reachable_on:{' '}
+                            {reticulumMeshStatus.meshReachableOnEffective}
+                            {reticulumMeshStatus.meshReachableOnHost?.trim()
+                              ? ' (manual)'
+                              : reticulumMeshStatus.discoveryReachableHost
+                                ? ' (UPnP)'
+                                : ''}
+                          </Typography>
+                        )}
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        color="text.disabled"
+                        sx={{ lineHeight: 1.5, mt: 0.5 }}
+                      >
+                        Bootstrap hubs use the managed TCP client entries in
+                        Reticulum config. Community mesh peers are reached via
+                        RNS discovery (not app-level gossip). The mesh network
+                        identity used for encrypted discovery/private gateways
+                        is installed automatically; file path:{' '}
+                        <Box component="span" sx={{ wordBreak: 'break-all' }}>
+                          {reticulumMeshStatus.networkIdentityPath}
+                        </Box>
+                      </Typography>
+                      {reticulumMeshStatus.meshListenEnabled &&
+                        !reticulumMeshStatus.meshPrivateGateway &&
+                        typeof window.electronAPI
+                          ?.reticulumEnsureMeshNetworkIdentity ===
+                          'function' && (
+                          <Box sx={{ mt: 1 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={meshIdentityBusy}
+                              onClick={() =>
+                                void handleEnsureMeshNetworkIdentity()
+                              }
+                            >
+                              {meshIdentityBusy
+                                ? 'Installing…'
+                                : 'Install community mesh identity'}
+                            </Button>
+                          </Box>
+                        )}
+                    </>
+                  )}
                 </Box>
                 <Box
                   sx={{
@@ -371,7 +887,6 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             >
               <ThemeManager />
             </Box>
-
           </Box>
         </Box>
       </Dialog>
@@ -436,11 +951,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
 
   return (
     <>
-      <Button
-        variant="contained"
-        size="small"
-        onClick={() => setIsOpen(true)}
-      >
+      <Button variant="contained" size="small" onClick={() => setIsOpen(true)}>
         {t('group:action.export_private_key', {
           postProcess: 'capitalizeFirstChar',
         })}
@@ -485,11 +996,38 @@ const ExportPrivateKey = ({ rawWallet }) => {
             autoFocus
             type="password"
             value={password}
-            autoComplete="off"
+            autoComplete="new-password"
+            name="settings-private-key-decrypt"
             size="small"
+            onFocus={() => setIsPrivateKeyPasswordEditable(true)}
+            onMouseDown={() => setIsPrivateKeyPasswordEditable(true)}
+            onBlur={() => {
+              if (!password) {
+                setIsPrivateKeyPasswordEditable(false);
+              }
+            }}
             onChange={(e) => setPassword(e.target.value)}
+            InputProps={{
+              readOnly: !isPrivateKeyPasswordEditable,
+            }}
+            inputProps={{
+              autoComplete: 'new-password',
+              'data-1p-ignore': 'true',
+              'data-lpignore': 'true',
+              spellCheck: 'false',
+            }}
             sx={{
               '& .MuiOutlinedInput-root': { borderRadius: 2 },
+              '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+                {
+                  WebkitBoxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0 0 0 100px rgb(38, 42, 50) inset'
+                      : '0 0 0 100px rgb(248, 250, 253) inset',
+                  WebkitTextFillColor: theme.palette.text.primary,
+                  caretColor: theme.palette.text.primary,
+                  transition: 'background-color 9999s ease-out 0s',
+                },
             }}
           />
 

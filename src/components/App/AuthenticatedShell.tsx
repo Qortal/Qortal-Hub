@@ -10,11 +10,9 @@ export type AuthenticatedShellProps = {
   // Group
   desktopViewMode: string;
   isMain: boolean;
-  isOpenDrawerProfile: boolean;
   logoutFunc: () => Promise<void>;
   myAddress: string;
   setDesktopViewMode: (mode: string) => void;
-  setIsOpenDrawerProfile: (open: boolean) => void;
   // AuthenticatedProfile
   balance: number;
   userInfo: any;
@@ -30,7 +28,6 @@ export type AuthenticatedShellProps = {
   onOpenSettings: () => void;
   onOpenDrawerLookup: () => void;
   onOpenWalletsApp: () => void;
-  onOpenDrawerProfile: () => void;
   getUserInfo: (useTimer?: boolean) => Promise<void>;
   onOpenMinting: () => void;
   showTutorial: (key: string, force?: boolean) => void;
@@ -41,11 +38,9 @@ export function AuthenticatedShell({
   balance,
   desktopViewMode,
   isMain,
-  isOpenDrawerProfile,
   logoutFunc,
   myAddress,
   setDesktopViewMode,
-  setIsOpenDrawerProfile,
   userInfo,
   rawWallet,
   qortBalanceLoading,
@@ -59,7 +54,6 @@ export function AuthenticatedShell({
   onOpenSettings,
   onOpenDrawerLookup,
   onOpenWalletsApp,
-  onOpenDrawerProfile,
   getUserInfo,
   onOpenMinting,
   showTutorial,
@@ -73,11 +67,12 @@ export function AuthenticatedShell({
         height: '100%',
         isolation: 'isolate',
         position: 'relative',
-        width: '100vw',
+        width: '100%',
+        willChange: 'opacity, transform',
         '&::before': {
           background:
             theme.palette.mode === 'dark'
-              ? 'linear-gradient(to bottom, rgba(16, 18, 22, 0.16), rgba(16, 18, 22, 0.09))'
+              ? 'linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(9, 11, 15, 0.02))'
               : 'linear-gradient(to bottom, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08))',
           content: '""',
           inset: 0,
@@ -94,11 +89,10 @@ export function AuthenticatedShell({
       <Group
         desktopViewMode={desktopViewMode}
         isMain={isMain}
-        isOpenDrawerProfile={isOpenDrawerProfile}
         logoutFunc={logoutFunc}
         myAddress={myAddress}
+        onOpenSettings={onOpenSettings}
         setDesktopViewMode={setDesktopViewMode}
-        setIsOpenDrawerProfile={setIsOpenDrawerProfile}
       />
       <AuthenticatedProfile
         userInfo={userInfo}
@@ -117,7 +111,6 @@ export function AuthenticatedShell({
         onOpenSettings={onOpenSettings}
         onOpenDrawerLookup={onOpenDrawerLookup}
         onOpenWalletsApp={onOpenWalletsApp}
-        onOpenDrawerProfile={onOpenDrawerProfile}
         getUserInfo={getUserInfo}
         onOpenMinting={onOpenMinting}
         showTutorial={showTutorial}

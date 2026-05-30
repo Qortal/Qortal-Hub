@@ -28,7 +28,10 @@ import { createEndpoint, isUsingLocal } from '../../background/background.ts';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
 import { useTranslation } from 'react-i18next';
-import { getDefaultLocalNodeUrl, LOCALHOST } from '../../constants/constants.ts';
+import {
+  getDefaultLocalNodeUrl,
+  LOCALHOST,
+} from '../../constants/constants.ts';
 import {
   devServerDomainAtom,
   devServerPortAtom,
@@ -176,7 +179,7 @@ export const AppsDevModeHome = ({
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: getDefaultLocalNodeUrl() + previewPath,
+            url: getBaseApiReact() + previewPath,
             isPreview: true,
             filePath,
             refreshFunc: (tabId) => {
@@ -189,7 +192,7 @@ export const AppsDevModeHome = ({
       }
       executeEvent('appsDevModeAddTab', {
         data: {
-          url: getDefaultLocalNodeUrl() + previewPath,
+          url: getBaseApiReact() + previewPath,
           isPreview: true,
           filePath,
           refreshFunc: (tabId) => {
@@ -262,7 +265,7 @@ export const AppsDevModeHome = ({
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: getDefaultLocalNodeUrl() + previewPath,
+            url: getBaseApiReact() + previewPath,
             isPreview: true,
             directoryPath,
             refreshFunc: (tabId) => {
@@ -275,7 +278,7 @@ export const AppsDevModeHome = ({
       }
       executeEvent('appsDevModeAddTab', {
         data: {
-          url: getDefaultLocalNodeUrl() + previewPath,
+          url: getBaseApiReact() + previewPath,
           isPreview: true,
           directoryPath,
           refreshFunc: (tabId) => {

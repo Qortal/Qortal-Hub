@@ -1,6 +1,21 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+Object.defineProperties(HTMLMediaElement.prototype, {
+  load: {
+    configurable: true,
+    value: vi.fn(),
+  },
+  pause: {
+    configurable: true,
+    value: vi.fn(),
+  },
+  play: {
+    configurable: true,
+    value: vi.fn().mockResolvedValue(undefined),
+  },
+});
+
 vi.mock('@evva/capacitor-secure-storage-plugin', () => ({
   SecureStoragePlugin: {
     get: vi.fn(async () => ({ value: null })),

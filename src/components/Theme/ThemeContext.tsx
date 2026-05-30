@@ -14,6 +14,10 @@ import { lightThemeOptions } from '../../styles/theme-light';
 import { darkThemeOptions } from '../../styles/theme-dark';
 import i18n from '../../i18n/i18n';
 
+export const ENABLE_CUSTOM_THEMES = false;
+const SAVED_UI_THEME_KEY = 'saved_ui_theme';
+const DEFAULT_THEME_ID = 'default';
+
 const defaultTheme = {
   id: 'default',
   name: i18n.t('core:theme.default', {
@@ -29,13 +33,13 @@ const ThemeContext = createContext({
   userThemes: [defaultTheme],
   addUserTheme: (themes) => {},
   setUserTheme: (theme, themes) => {},
-  currentThemeId: 'default',
+  currentThemeId: DEFAULT_THEME_ID,
 });
 
 export const ThemeProvider = ({ children }) => {
   const [themeMode, setThemeMode] = useState('dark');
   const [userThemes, setUserThemes] = useState([defaultTheme]);
-  const [currentThemeId, setCurrentThemeId] = useState('default');
+  const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_THEME_ID);
 
   const currentTheme =
     userThemes.find((theme) => theme.id === currentThemeId) || defaultTheme;
@@ -44,8 +48,9 @@ export const ThemeProvider = ({ children }) => {
     const baseThemeOptions =
       themeMode === 'light' ? lightThemeOptions : darkThemeOptions;
 
+    const activeTheme = ENABLE_CUSTOM_THEMES ? currentTheme : defaultTheme;
     const palette =
-      themeMode === 'light' ? currentTheme.light : currentTheme.dark;
+      themeMode === 'light' ? activeTheme.light : activeTheme.dark;
 
     return createTheme({
       ...baseThemeOptions,
@@ -58,8 +63,20 @@ export const ThemeProvider = ({ children }) => {
     mode = themeMode,
     themeId = currentThemeId
   ) => {
+    if (!ENABLE_CUSTOM_THEMES) {
+      localStorage.setItem(
+        SAVED_UI_THEME_KEY,
+        JSON.stringify({
+          mode,
+          currentThemeId: DEFAULT_THEME_ID,
+        })
+      );
+
+      return;
+    }
+
     localStorage.setItem(
-      'saved_ui_theme',
+      SAVED_UI_THEME_KEY,
       JSON.stringify({
         mode,
         userThemes: themes,
@@ -77,11 +94,13 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const addUserTheme = (themes) => {
+    if (!ENABLE_CUSTOM_THEMES) return;
     setUserThemes(themes);
     saveSettings(themes);
   };
 
   const setUserTheme = (theme, themes) => {
+    if (!ENABLE_CUSTOM_THEMES) return;
     if (theme.id === 'default') {
       setCurrentThemeId('default');
       saveSettings(themes || userThemes, themeMode, 'default');
@@ -92,12 +111,27 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const loadSettings = useCallback(() => {
-    const saved = localStorage.getItem('saved_ui_theme');
+    const saved = localStorage.getItem(SAVED_UI_THEME_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.mode === 'light' || parsed.mode === 'dark')
           setThemeMode(parsed.mode);
+        if (!ENABLE_CUSTOM_THEMES) {
+          setUserThemes([defaultTheme]);
+          setCurrentThemeId(DEFAULT_THEME_ID);
+          localStorage.setItem(
+            SAVED_UI_THEME_KEY,
+            JSON.stringify({
+              mode:
+                parsed.mode === 'light' || parsed.mode === 'dark'
+                  ? parsed.mode
+                  : themeMode,
+              currentThemeId: DEFAULT_THEME_ID,
+            })
+          );
+          return;
+        }
         if (Array.isArray(parsed.userThemes)) {
           const filteredThemes = parsed.userThemes.filter(
             (theme) => theme.id !== 'default'
@@ -107,9 +141,23 @@ export const ThemeProvider = ({ children }) => {
         if (parsed.currentThemeId) setCurrentThemeId(parsed.currentThemeId);
       } catch (error) {
         console.error('Failed to parse saved_ui_theme:', error);
+        if (!ENABLE_CUSTOM_THEMES) {
+          setUserThemes([defaultTheme]);
+          setCurrentThemeId(DEFAULT_THEME_ID);
+          localStorage.setItem(
+            SAVED_UI_THEME_KEY,
+            JSON.stringify({
+              mode: themeMode,
+              currentThemeId: DEFAULT_THEME_ID,
+            })
+          );
+        }
       }
+    } else if (!ENABLE_CUSTOM_THEMES) {
+      setUserThemes([defaultTheme]);
+      setCurrentThemeId(DEFAULT_THEME_ID);
     }
-  }, []);
+  }, [themeMode]);
 
   useEffect(() => {
     loadSettings();

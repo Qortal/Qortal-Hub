@@ -40,7 +40,8 @@
     "invalidKey": "clé API invalide",
     "failed_stop": "impossible d’arrêter le Core",
     "failed_bootstrap": "impossible d’initialiser",
-    "failed_delete": "impossible de supprimer la base de données"
+    "failed_delete": "impossible de supprimer la base de données",
+    "failed_bootstrap_or_clear": "impossible de bootstrapper, d’effacer les données de chaîne ou de démarrer le Core"
   },
   "status": {
     "complete": "terminé",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "êtes-vous sûr de vouloir arrêter le Core ?",
     "bootstrap": "êtes-vous sûr de vouloir initialiser ?",
-    "delete": "êtes-vous sûr de vouloir supprimer la base de données ?"
+    "delete": "êtes-vous sûr de vouloir supprimer la base de données ?",
+    "bootstrapOrClearChain": "Effectue une initialisation depuis un instantané si le Core fonctionne localement. Sinon ou en cas d’échec, la base chaîne locale peut être supprimée et le Core peut redémarrer ; les fichiers portefeuille ne sont pas modifiés. Continuer ?"
+  },
+  "bootstrapChainHelp": {
+    "title": "Initialiser la chaîne",
+    "body": "Un seul outil : bootstrap par instantané quand le Core répond, ou effacer la base chaîne locale et relancer le Core si le bootstrap est impossible. Votre portefeuille reste séparé."
   },
   "stop": "arrêter le Core",
   "bootstrap": "initialiser",
@@ -89,10 +95,93 @@
   "more": "plus d’options",
   "less": "moins d’options",
   "enableAuthWhenSyncing": "activer l'authentification lors de la synchronisation",
+  "coreSetupDialog": {
+    "title": "Configurer Qortal Core",
+    "introTitle": "Exécutez votre propre nœud localement.",
+    "introSubtitle": "Vous pouvez utiliser un nœud public pendant que Core démarre et se synchronise.",
+    "publicNodeUnavailable": "Les nœuds publics sont indisponibles pour le moment. Gardez cet écran ouvert pendant que le Core local démarre et se synchronise.",
+    "steps": {
+      "downloadDone": "Core téléchargé",
+      "downloadActive": "Téléchargement de Core",
+      "downloadIdle": "Télécharger Core",
+      "runningDone": "Core en cours d'exécution",
+      "runningActive": "Démarrage de Core",
+      "runningIdle": "Démarrer Core"
+    },
+    "readyToDownload": "Prêt à télécharger",
+    "readyToStart": "Prêt à démarrer",
+    "syncing": "Synchronisation",
+    "helpers": {
+      "downloadDone": "Les fichiers Core sont installés et prêts.",
+      "downloadActive": "Téléchargement et préparation de Qortal Core.",
+      "downloadIdle": "Téléchargez Qortal Core pour exécuter votre propre nœud.",
+      "runningDoneSyncing": "Core s'exécute et synchronise les données de la blockchain.",
+      "runningDone": "Core s'exécute localement.",
+      "runningWaiting": "Core démarrera et se synchronisera en arrière-plan.",
+      "runningBlocked": "Disponible après le téléchargement de Core."
+    },
+    "nextStepPill": "Étape suivante",
+    "locationTitle": "Emplacement de Core",
+    "locationCustom": "Qortal Core s'exécutera depuis ce dossier.",
+    "locationDefault": "Qortal Core utilisera le dossier par défaut de ce système.",
+    "locationPathDefault": "Emplacement par défaut de Qortal Core",
+    "change": "Modifier",
+    "choose": "Choisir",
+    "clear": "Effacer",
+    "advancedTitle": "Avancé",
+    "advancedSubtitle": "Outils et options avancés pour Core.",
+    "maintenanceUnavailable": "Les outils de maintenance de Core ne sont pas disponibles pendant le démarrage ou la synchronisation de Core.",
+    "stopCoreTitle": "Arrêter Core",
+    "stopCoreBody": "Arrête le processus Core local.",
+    "stopButton": "Arrêter",
+    "cancel": "Annuler",
+    "actionDownload": "Télécharger Core",
+    "actionStart": "Démarrer Core",
+    "actionDone": "Terminé",
+    "confirmTitle": "Confirmer l'action",
+    "folderCopied": "Dossier Core copié",
+    "progressAriaLabel": "Progression : {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core n'est pas complètement démarré",
     "descNotReady": "Qortal Core n'est pas encore complètement démarré. Veuillez patienter.",
     "titleReady": "Qortal Core est prêt",
     "descReady": "Tout est prêt pour continuer"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "Nœud local installé",
+      "description": "Un nœud local est déjà installé. Voulez-vous le démarrer pendant que vous utilisez le nœud public ?"
+    },
+    "localReady": {
+      "title": "Nœud local prêt",
+      "description": "Qortal Core est synchronisé. Vous pouvez maintenant passer du nœud public à votre nœud local."
+    },
+    "installing": {
+      "title": "Installation de Qortal Core",
+      "description": "Téléchargement et installation de Qortal Core."
+    },
+    "starting": {
+      "title": "Démarrage du Core local",
+      "description": "Démarrage de Qortal Core.",
+      "preparing": "Core démarre et prépare les données de la blockchain."
+    },
+    "syncing": {
+      "title": "Synchronisation de la blockchain",
+      "description": "Votre nœud local se met à jour en arrière-plan.",
+      "checking": "Core est en cours d’exécution. Vérification de la progression de la synchronisation de la blockchain."
+    },
+    "needsAttention": {
+      "title": "La configuration de Core nécessite votre attention",
+      "description": "Core nécessite votre attention. Ouvrez la configuration pour vérifier le problème."
+    },
+    "actions": {
+      "ignore": "Ignorer",
+      "start": "Démarrer",
+      "starting": "Démarrage...",
+      "later": "Plus tard",
+      "switchToLocal": "Passer au local",
+      "openSetup": "Ouvrir la configuration"
+    }
   }
 }

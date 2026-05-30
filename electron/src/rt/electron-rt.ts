@@ -1,11 +1,9 @@
 import { randomBytes } from 'crypto';
 import { ipcRenderer, contextBridge } from 'electron';
 import { EventEmitter } from 'events';
+import * as plugins from './electron-plugins';
 
 ////////////////////////////////////////////////////////
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const plugins = require('./electron-plugins');
-
 const randomId = (length = 5) => randomBytes(length).toString('hex');
 
 const contextApi: {

@@ -1,23 +1,44 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import {
   resourceDownloadControllerAtom,
   globalDownloadsAtom,
   useGetResourceStatus,
 } from '../atoms/global';
 import { getBaseApiReact } from '../App';
-import { useSetAtom, useAtomValue } from 'jotai';
+import { useSetAtom } from 'jotai';
 import { ResourceStatus, PeerDetail } from '../types/resources';
 
 interface QortalMetadata {
+  downloadScope?: string;
   service: string;
   name: string;
   identifier: string;
 }
 
+export type DownloadResourceFunction = ((
+  metadata: QortalMetadata,
+  build?: boolean,
+  triesFromBefore?: number
+) => Promise<void>) & {
+  cancelAllResourceDownloads: () => void;
+  cancelResourceDownload: (metadata: QortalMetadata) => void;
+};
+
+const buildResourceId = ({ service, name, identifier }: QortalMetadata) =>
+  `${service}-${name}-${identifier}`;
+
+const buildCancellationKey = (metadata: QortalMetadata) =>
+  `${buildResourceId(metadata)}::${metadata.downloadScope ?? ''}`;
+
 export const useFetchResources = () => {
   const setResources = useSetAtom(resourceDownloadControllerAtom);
   const setGlobalDownloads = useSetAtom(globalDownloadsAtom);
   const getResourceStatus = useGetResourceStatus();
+  const getResourceStatusRef = useRef(getResourceStatus);
+  const cancellationGenerationsRef = useRef(new Map<string, number>());
+  const globalCancellationGenerationRef = useRef(0);
+
+  getResourceStatusRef.current = getResourceStatus;
 
   const stopGlobalDownload = useCallback(
     (resourceId: string) => {
@@ -37,6 +58,105 @@ export const useFetchResources = () => {
     [setGlobalDownloads]
   );
 
+  const cancelResourceDownload = useCallback(
+    (metadata: QortalMetadata) => {
+      const resourceId = buildResourceId(metadata);
+      const cancellationKey = buildCancellationKey(metadata);
+      cancellationGenerationsRef.current.set(
+        cancellationKey,
+        (cancellationGenerationsRef.current.get(cancellationKey) ?? 0) + 1
+      );
+
+      setGlobalDownloads((prev) => {
+        const entry = prev[resourceId];
+        if (!entry) {
+          return prev;
+        }
+
+        if (
+          metadata.downloadScope &&
+          entry.downloadScope !== metadata.downloadScope
+        ) {
+          return prev;
+        }
+
+        entry.cancel?.();
+        if (entry.interval !== null) clearInterval(entry.interval);
+        if (entry.timeout !== null) clearTimeout(entry.timeout);
+        if (entry.retryTimeout !== null) clearTimeout(entry.retryTimeout);
+
+        const updated = { ...prev };
+        delete updated[resourceId];
+        return updated;
+      });
+
+      setResources((prev) => {
+        const existing = prev[resourceId];
+        if (!existing) {
+          return prev;
+        }
+
+        if (
+          metadata.downloadScope &&
+          existing.downloadScope !== metadata.downloadScope
+        ) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [resourceId]: {
+            ...existing,
+            cancelledByScope: metadata.downloadScope,
+            isFetching: false,
+            status: {
+              ...(existing.status || {}),
+              status: 'FAILED_TO_DOWNLOAD',
+            },
+          },
+        };
+      });
+    },
+    [setGlobalDownloads, setResources]
+  );
+
+  const cancelAllResourceDownloads = useCallback(() => {
+    globalCancellationGenerationRef.current += 1;
+
+    setGlobalDownloads((prev) => {
+      Object.values(prev).forEach((entry) => {
+        entry.cancel?.();
+        if (entry.interval !== null) clearInterval(entry.interval);
+        if (entry.timeout !== null) clearTimeout(entry.timeout);
+        if (entry.retryTimeout !== null) clearTimeout(entry.retryTimeout);
+      });
+
+      return {};
+    });
+
+    setResources((prev) => {
+      let changed = false;
+      const updated = Object.fromEntries(
+        Object.entries(prev).map(([resourceId, resource]) => {
+          if (!resource?.isFetching) {
+            return [resourceId, resource];
+          }
+
+          changed = true;
+          return [
+            resourceId,
+            {
+              ...resource,
+              isFetching: false,
+            },
+          ];
+        })
+      );
+
+      return changed ? updated : prev;
+    });
+  }, [setGlobalDownloads, setResources]);
+
   const startGlobalDownload = useCallback(
     async (
       metadata: QortalMetadata,
@@ -44,12 +164,65 @@ export const useFetchResources = () => {
       path?: string,
       filename?: string
     ) => {
-      const { service, name, identifier } = metadata;
-      const resourceId = `${service}-${name}-${identifier}`;
+      const { downloadScope, service, name, identifier } = metadata;
+      const resourceId = buildResourceId(metadata);
+      const cancellationKey = buildCancellationKey(metadata);
+      const startGlobalCancellationGeneration =
+        globalCancellationGenerationRef.current;
+      const startCancellationGeneration =
+        cancellationGenerationsRef.current.get(cancellationKey) ?? 0;
 
       // Check if already downloading
-      const existingValues = await getResourceStatus(resourceId);
-      if (existingValues && existingValues?.isFetching) return;
+      const existingValues = await getResourceStatusRef.current(resourceId);
+      if (
+        globalCancellationGenerationRef.current !==
+        startGlobalCancellationGeneration
+      ) {
+        return;
+      }
+
+      if (
+        (cancellationGenerationsRef.current.get(cancellationKey) ?? 0) !==
+        startCancellationGeneration
+      ) {
+        return;
+      }
+
+      if (existingValues && existingValues?.isFetching) {
+        if (!downloadScope) {
+          setGlobalDownloads((prev) => {
+            const entry = prev[resourceId];
+            if (!entry?.downloadScope) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [resourceId]: {
+                ...entry,
+                downloadScope: undefined,
+              },
+            };
+          });
+
+          setResources((prev) => {
+            const existing = prev[resourceId];
+            if (!existing?.downloadScope) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [resourceId]: {
+                ...existing,
+                downloadScope: undefined,
+              },
+            };
+          });
+        }
+
+        return;
+      }
 
       const intervalMap: Record<string, any> = {};
       const timeoutMap: Record<string, any> = {};
@@ -62,6 +235,31 @@ export const useFetchResources = () => {
       let tries = 0;
       let calledFirstTime = false;
       let isPaused = false;
+      let isCancelled = false;
+      const abortControllers = new Set<AbortController>();
+
+      const createAbortSignal = () => {
+        const controller = new AbortController();
+        abortControllers.add(controller);
+        return {
+          controller,
+          signal: controller.signal,
+        };
+      };
+
+      const releaseAbortController = (controller: AbortController) => {
+        abortControllers.delete(controller);
+      };
+
+      const cancelDownload = () => {
+        isCancelled = true;
+        abortControllers.forEach((controller) => controller.abort());
+        abortControllers.clear();
+        if (intervalMap[resourceId]) clearInterval(intervalMap[resourceId]);
+        if (timeoutMap[resourceId]) clearTimeout(timeoutMap[resourceId]);
+        if (retryTimeoutMap[resourceId])
+          clearTimeout(retryTimeoutMap[resourceId]);
+      };
 
       // Track progress for ETA calculation
       let progressHistory: Array<{ percent: number; timestamp: number }> = [];
@@ -191,12 +389,18 @@ export const useFetchResources = () => {
       };
 
       const setResourceStatus = (status: Partial<ResourceStatus>) => {
+        if (isCancelled) {
+          return;
+        }
+
         setResources((prev) => {
           const existing = prev[resourceId] || {};
           return {
             ...prev,
             [resourceId]: {
               ...existing,
+              cancelledByScope: undefined,
+              downloadScope,
               status: {
                 ...(existing.status || {}),
                 ...status,
@@ -214,6 +418,10 @@ export const useFetchResources = () => {
 
       const callFunction = async (build?: boolean, isRecalling?: boolean) => {
         try {
+          if (isCancelled) {
+            return;
+          }
+
           if (isCalling) {
             return;
           }
@@ -224,7 +432,7 @@ export const useFetchResources = () => {
 
           isCalling = true;
 
-          const currentStatus = await getResourceStatus(resourceId);
+          const currentStatus = await getResourceStatusRef.current(resourceId);
           if (currentStatus?.status === 'READY') {
             if (intervalMap[resourceId]) clearInterval(intervalMap[resourceId]);
             if (timeoutMap[resourceId]) clearTimeout(timeoutMap[resourceId]);
@@ -249,26 +457,38 @@ export const useFetchResources = () => {
           let res;
 
           if (!build) {
+            const statusRequest = createAbortSignal();
             const response = await fetch(
               `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}`,
               {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
+                signal: statusRequest.signal,
               }
             );
+            releaseAbortController(statusRequest.controller);
             res = await response.json();
 
             setResourceStatus(res);
 
             // Fetch peers non-blocking
+            const peersRequest = createAbortSignal();
             fetch(
-              `${getBaseApiReact()}/arbitrary/resource/request/peers/${service}/${name}/${identifier}`
+              `${getBaseApiReact()}/arbitrary/resource/request/peers/${service}/${name}/${identifier}`,
+              {
+                signal: peersRequest.signal,
+              }
             )
               .then((response) => response.json())
               .then(async (peersData) => {
+                if (isCancelled) {
+                  return;
+                }
+
                 const numberOfPeers = peersData?.peerCount ?? 0;
                 const peers: PeerDetail[] = peersData?.peers ?? [];
-                const currentStatus = await getResourceStatus(resourceId);
+                const currentStatus =
+                  await getResourceStatusRef.current(resourceId);
                 if (currentStatus?.status) {
                   setResourceStatus({
                     ...currentStatus.status,
@@ -294,24 +514,35 @@ export const useFetchResources = () => {
                       );
 
                       const url = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
+                      const slowdownRequest = createAbortSignal();
                       fetch(url, {
                         method: 'GET',
                         headers: { 'Content-Type': 'application/json' },
-                      }).catch((error) => {
-                        console.debug(
-                          'Failed to fetch async on slowdown:',
-                          error
-                        );
-                      });
+                        signal: slowdownRequest.signal,
+                      })
+                        .catch((error) => {
+                          console.debug(
+                            'Failed to fetch async on slowdown:',
+                            error
+                          );
+                        })
+                        .finally(() => {
+                          releaseAbortController(slowdownRequest.controller);
+                        });
                     }
                   }
                 }
               })
               .catch((error) => {
-                console.debug('Failed to fetch peers count:', error);
+                if (!isCancelled) {
+                  console.debug('Failed to fetch peers count:', error);
+                }
+              })
+              .finally(() => {
+                releaseAbortController(peersRequest.controller);
               });
 
-            if (tries > retryAttempts) {
+            if (tries >= retryAttempts) {
               if (intervalMap[resourceId])
                 clearInterval(intervalMap[resourceId]);
               if (timeoutMap[resourceId]) clearTimeout(timeoutMap[resourceId]);
@@ -330,10 +561,13 @@ export const useFetchResources = () => {
           if (build || (calledFirstTime === false && res?.status !== 'READY')) {
             calledFirstTime = true;
             const url = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
+            const asyncRequest = createAbortSignal();
             const resCall = await fetch(url, {
               method: 'GET',
               headers: { 'Content-Type': 'application/json' },
+              signal: asyncRequest.signal,
             });
+            releaseAbortController(asyncRequest.controller);
             res = await resCall.json();
             isPaused = false;
           }
@@ -397,10 +631,13 @@ export const useFetchResources = () => {
 
               try {
                 const url = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}?build=true`;
+                const buildRequest = createAbortSignal();
                 const resCall = await fetch(url, {
                   method: 'GET',
                   headers: { 'Content-Type': 'application/json' },
+                  signal: buildRequest.signal,
                 });
+                releaseAbortController(buildRequest.controller);
                 res = await resCall.json();
                 setResourceStatus(res);
 
@@ -424,7 +661,12 @@ export const useFetchResources = () => {
             }
           }
         } catch (error) {
-          console.error('Error during resource fetch:', error);
+          if (
+            !isCancelled &&
+            !(error instanceof DOMException && error.name === 'AbortError')
+          ) {
+            console.error('Error during resource fetch:', error);
+          }
         } finally {
           isCalling = false;
         }
@@ -442,26 +684,35 @@ export const useFetchResources = () => {
           interval: intervalMap[resourceId],
           timeout: timeoutMap[resourceId],
           retryTimeout: retryTimeoutMap[resourceId],
+          cancel: cancelDownload,
+          downloadScope,
         },
       }));
     },
-    [setResources, setGlobalDownloads, getResourceStatus, stopGlobalDownload]
+    [setResources, setGlobalDownloads, stopGlobalDownload]
   );
 
   // Legacy compatibility wrapper
   const downloadResource = useCallback(
-    async (
-      { service, name, identifier },
-      build?: boolean,
-      triesFromBefore?: number
-    ) => {
+    async (metadata, build?: boolean, triesFromBefore?: number) => {
       return startGlobalDownload(
-        { service, name, identifier },
-        triesFromBefore || 18
+        metadata,
+        triesFromBefore || 18,
+        undefined,
+        undefined
       );
     },
     [startGlobalDownload]
   );
 
-  return downloadResource;
+  const downloadResourceWithCancel = useMemo(
+    () =>
+      Object.assign(downloadResource, {
+        cancelAllResourceDownloads,
+        cancelResourceDownload,
+      }) as DownloadResourceFunction,
+    [cancelAllResourceDownloads, cancelResourceDownload, downloadResource]
+  );
+
+  return downloadResourceWithCancel;
 };

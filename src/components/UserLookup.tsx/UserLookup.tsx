@@ -1,73 +1,333 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Autocomplete,
   Avatar,
   Box,
   Button,
   ButtonBase,
-  Card,
-  Divider,
+  Chip,
+  CircularProgress,
+  Dialog,
   IconButton,
   LinearProgress,
+  Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
   Typography,
-  Table,
-  TablePagination,
-  CircularProgress,
   useTheme,
-  alpha,
-  Autocomplete,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import NorthEastRoundedIcon from '@mui/icons-material/NorthEastRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import PersonOffRoundedIcon from '@mui/icons-material/PersonOffRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
+import {
+  infoSnackGlobalAtom,
+  isRunningPublicNodeAtom,
+  openSnackGlobalAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import {
   getAddressInfo,
   getNameOrAddress,
 } from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
 import { getNameInfo } from '../Group/groupApi';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import { Spacer } from '../../common/Spacer';
-import { formatTimestamp } from '../../utils/time';
-import CloseIcon from '@mui/icons-material/Close';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import {
-  executeEvent,
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from '../../utils/events';
-import { useNameSearch } from '../../hooks/useNameSearch';
-import { useTranslation } from 'react-i18next';
-import { validateAddress } from '../../utils/validateAddress.ts';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import {
   accountTargetBlocks,
   levelUpBlocks,
   levelUpDays,
   nextLevel,
 } from '../Minting/MintingStats.tsx';
+import { useBlockedAddresses } from '../../hooks/useBlockUsers';
+import { useNameSearch } from '../../hooks/useNameSearch';
+import { validateAddress } from '../../utils/validateAddress.ts';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
+import { formatTimestamp } from '../../utils/time';
+import magnifierSvg from '../../assets/user-search/magnifier.svg?raw';
+import qortalLogo512 from '../../assets/user-search/qortal-logo-512.png';
 
-function formatAddress(str: string) {
-  if (!str || str.length <= 12) return str || '';
-  const first6 = str.slice(0, 6);
-  const last6 = str.slice(-6);
-  return `${first6}....${last6}`;
+type UserLookupProps = {
+  isOpenDrawerLookup: boolean;
+  setIsOpenDrawerLookup: (open: boolean) => void;
+};
+
+type LookupHistoryState = {
+  history: string[];
+  index: number;
+};
+
+type AddressNameEntry = {
+  loading: boolean;
+  name: string | null;
+};
+
+type AddressInfoResult = {
+  address: string;
+  balance?: number | string;
+  blocksMinted?: number;
+  blocksMintedAdjustment?: number;
+  level?: number;
+  name?: string;
+  publicKey?: string;
+};
+
+type UserSearchIllustrationConfig = {
+  magnifierX: number;
+  magnifierY: number;
+  lensOffsetX: number;
+  lensOffsetY: number;
+  lensAngleOffset: number;
+};
+
+const defaultUserSearchIllustrationConfig: UserSearchIllustrationConfig = {
+  magnifierX: -9,
+  magnifierY: -28,
+  lensOffsetX: 5,
+  lensOffsetY: -23,
+  lensAngleOffset: 18,
+};
+
+function formatAddress(value: string) {
+  if (!value || value.length <= 12) return value || '';
+  return `${value.slice(0, 6)}....${value.slice(-6)}`;
 }
 
 function formatBalance(value: number | string | undefined): string {
   if (value == null || value === '') return '0';
-  const n = typeof value === 'string' ? parseFloat(value) : value;
-  if (Number.isNaN(n)) return '0';
-  return n.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
+  const numericValue =
+    typeof value === 'string' ? parseFloat(value) : Number(value);
+  if (Number.isNaN(numericValue)) return '0';
+  return numericValue.toLocaleString('en-US', {
     maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
   });
 }
 
-export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
+function formatStatBalance(value: number | string | undefined): string {
+  if (value == null || value === '') return '0';
+  const numericValue =
+    typeof value === 'string' ? parseFloat(value) : Number(value);
+  if (Number.isNaN(numericValue)) return '0';
+  return numericValue.toLocaleString(undefined, {
+    maximumFractionDigits: 0,
+  });
+}
+
+function UserSearchIllustration({
+  glowColor,
+  logoSrc,
+  magnifierMarkup,
+}: {
+  glowColor: string;
+  logoSrc: string;
+  magnifierMarkup: string;
+}) {
+  const illustrationConfig = defaultUserSearchIllustrationConfig;
+
+  return (
+    <Box
+      className="user-search-gnel"
+      sx={{
+        '@keyframes qortalFloat': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-6px)' },
+        },
+        '@keyframes qortalFloatLens': {
+          '0%, 100%': {
+            transform: `translateY(0px) rotate(${illustrationConfig.lensAngleOffset}deg) scale(1.03)`,
+          },
+          '50%': {
+            transform: `translateY(-6px) rotate(${illustrationConfig.lensAngleOffset}deg) scale(1.03)`,
+          },
+        },
+        '@keyframes magnifierDrift': {
+          '0%, 100%': {
+            transform: 'rotate(-20deg) translateY(0px) translateX(0px)',
+          },
+          '50%': {
+            transform: 'rotate(-17deg) translateY(-2px) translateX(2px)',
+          },
+        },
+        '@keyframes dotPulse': {
+          '0%, 100%': { opacity: 0.16, transform: 'scale(1)' },
+          '50%': { opacity: 0.42, transform: 'scale(1.18)' },
+        },
+        '--user-search-mag-left': {
+          xs: `${104 + illustrationConfig.magnifierX}px`,
+          md: `${112 + illustrationConfig.magnifierX}px`,
+        },
+        '--user-search-mag-top': {
+          xs: `${12 + illustrationConfig.magnifierY}px`,
+          md: `${10 + illustrationConfig.magnifierY}px`,
+        },
+        '--user-search-mag-size': '154px',
+        '--user-search-logo-left': { xs: '58px', md: '66px' },
+        '--user-search-logo-top': { xs: '14px', md: '12px' },
+        '--user-search-logo-size': { xs: '96px', md: '106px' },
+        color: glowColor,
+        height: { xs: 182, md: 196 },
+        position: 'relative',
+        width: { xs: 232, md: 248 },
+        '&::before': {
+          background: `radial-gradient(circle, ${alpha(glowColor, 0.16)} 0%, ${alpha(
+            glowColor,
+            0.08
+          )} 30%, transparent 74%)`,
+          borderRadius: '50%',
+          content: '""',
+          height: { xs: 136, md: 146 },
+          left: { xs: 52, md: 60 },
+          position: 'absolute',
+          top: { xs: 12, md: 10 },
+          width: { xs: 136, md: 146 },
+          zIndex: 0,
+        },
+        '& .user-search-gnel__magnifier': {
+          animation: 'magnifierDrift 4.8s ease-in-out infinite',
+          filter: `drop-shadow(0 0 18px ${alpha(glowColor, 0.18)})`,
+          height: 'var(--user-search-mag-size)',
+          left: 'var(--user-search-mag-left)',
+          opacity: 0.95,
+          position: 'absolute',
+          top: 'var(--user-search-mag-top)',
+          transform: 'rotate(-20deg)',
+          transformOrigin: '50% 50%',
+          zIndex: 3,
+          width: 'var(--user-search-mag-size)',
+          '& svg': {
+            display: 'block',
+            height: '100%',
+            width: '100%',
+          },
+        },
+        '& .user-search-gnel__logo': {
+          animation: 'qortalFloat 3.6s ease-in-out infinite',
+          filter: `drop-shadow(0 0 14px ${alpha(glowColor, 0.24)})`,
+          height: 'var(--user-search-logo-size)',
+          left: 'var(--user-search-logo-left)',
+          pointerEvents: 'none',
+          position: 'absolute',
+          top: 'var(--user-search-logo-top)',
+          zIndex: 1,
+          width: 'var(--user-search-logo-size)',
+        },
+        '& .user-search-gnel__lens-logo': {
+          animation: 'magnifierDrift 4.8s ease-in-out infinite',
+          clipPath: 'circle(28px at 56px 55px)',
+          height: 'var(--user-search-mag-size)',
+          left: 'var(--user-search-mag-left)',
+          overflow: 'hidden',
+          pointerEvents: 'none',
+          position: 'absolute',
+          top: 'var(--user-search-mag-top)',
+          transform: 'rotate(-20deg)',
+          transformOrigin: '50% 50%',
+          width: 'var(--user-search-mag-size)',
+          zIndex: 2,
+        },
+        '& .user-search-gnel__lens-logo img': {
+          animation: 'qortalFloatLens 3.6s ease-in-out infinite',
+          filter: `brightness(1.08) drop-shadow(0 0 10px ${alpha(glowColor, 0.18)})`,
+          height: 'calc(var(--user-search-logo-size) * 1.03)',
+          left: `calc(var(--user-search-logo-left) - var(--user-search-mag-left) + ${illustrationConfig.lensOffsetX}px)`,
+          position: 'absolute',
+          top: `calc(var(--user-search-logo-top) - var(--user-search-mag-top) + ${illustrationConfig.lensOffsetY}px)`,
+          transformOrigin: 'center center',
+          width: 'calc(var(--user-search-logo-size) * 1.03)',
+        },
+        '& .user-search-gnel__lens-glass': {
+          backdropFilter: 'brightness(1.06)',
+          background:
+            'radial-gradient(circle at 42% 36%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 58%, rgba(255,255,255,0.01) 100%)',
+          borderRadius: '50%',
+          height: 56,
+          left: 28,
+          position: 'absolute',
+          top: 27,
+          width: 56,
+        },
+        '& .user-search-gnel__dots': {
+          display: 'flex',
+          gap: '6px',
+          left: { xs: 118, md: 128 },
+          pointerEvents: 'none',
+          position: 'absolute',
+          top: { xs: 70, md: 68 },
+          zIndex: 4,
+        },
+        '& .user-search-gnel__dots span': {
+          animation: 'dotPulse 1.8s ease-in-out infinite',
+          background: 'currentColor',
+          borderRadius: '50%',
+          height: 3,
+          opacity: 0.22,
+          width: 3,
+        },
+        '& .user-search-gnel__dots span:nth-of-type(2)': {
+          animationDelay: '0.15s',
+        },
+        '& .user-search-gnel__dots span:nth-of-type(3)': {
+          animationDelay: '0.3s',
+        },
+        '& .user-search-gnel__dots span:nth-of-type(4)': {
+          animationDelay: '0.45s',
+        },
+        '& .user-search-gnel__dots span:nth-of-type(5)': {
+          animationDelay: '0.6s',
+        },
+      }}
+    >
+      <Box
+        className="user-search-gnel__magnifier"
+        dangerouslySetInnerHTML={{ __html: magnifierMarkup }}
+      />
+
+      <Box
+        className="user-search-gnel__logo"
+        component="img"
+        alt=""
+        src={logoSrc}
+      />
+
+      <Box className="user-search-gnel__lens-logo" aria-hidden>
+        <Box className="user-search-gnel__lens-glass" />
+        <Box component="img" alt="" src={logoSrc} />
+      </Box>
+
+      <Box className="user-search-gnel__dots">
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+      </Box>
+    </Box>
+  );
+}
+
+export const UserLookup = ({
+  isOpenDrawerLookup,
+  setIsOpenDrawerLookup,
+}: UserLookupProps) => {
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -76,58 +336,120 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
     'question',
     'tutorial',
   ]);
+  const currentUser = useAtomValue(userInfoAtom);
+  const isRunningPublicNode = useAtomValue(isRunningPublicNodeAtom);
+  const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnack = useSetAtom(openSnackGlobalAtom);
+  const { addToBlockList, isUserBlocked, removeBlockFromList } =
+    useBlockedAddresses(true);
+
   const [nameOrAddress, setNameOrAddress] = useState('');
   const [inputValue, setInputValue] = useState('');
   const { results, isLoading } = useNameSearch(inputValue);
-  const options = useMemo(() => {
-    const isAddress = validateAddress(inputValue);
-    if (isAddress) return [inputValue];
-    return results?.map((item) => item.name);
-  }, [results, inputValue]);
   const [errorMessage, setErrorMessage] = useState('');
-  const [addressInfo, setAddressInfo] = useState<any>(null);
+  const [addressInfo, setAddressInfo] = useState<AddressInfoResult | null>(
+    null
+  );
   const [nodeStatus, setNodeStatus] = useState<any>(null);
   const [adminInfo, setAdminInfo] = useState<any>(null);
   const [nodeHeightBlock, setNodeHeightBlock] = useState<any>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
   const [payments, setPayments] = useState<any[]>([]);
-  const [totalPaymentsCount, setTotalPaymentsCount] = useState<number>(0);
+  const [totalPaymentsCount, setTotalPaymentsCount] = useState(0);
   const [paymentsPage, setPaymentsPage] = useState(0);
   const [paymentsRowsPerPage, setPaymentsRowsPerPage] = useState(5);
   const [addressNamesMap, setAddressNamesMap] = useState<
-    Record<string, { name: string | null; loading: boolean }>
+    Record<string, AddressNameEntry>
   >({});
-  const [lookupHistory, setLookupHistory] = useState<{
-    history: string[];
-    index: number;
-  }>({ history: [], index: -1 });
+  const [lookupHistory, setLookupHistory] = useState<LookupHistoryState>({
+    history: [],
+    index: -1,
+  });
+  const [isBlockActionPending, setIsBlockActionPending] = useState(false);
 
   const tRef = useRef(t);
   tRef.current = t;
   const lookupInProgressRef = useRef(false);
   const lastFetchedOwnerRef = useRef<string | null>(null);
-  const hoverNameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
+
+  const currentUserName =
+    typeof currentUser?.name === 'string' && currentUser.name.trim().length > 0
+      ? currentUser.name.trim()
+      : '';
+  const currentUserAddress =
+    typeof currentUser?.address === 'string' ? currentUser.address : '';
+  const targetUserName =
+    typeof addressInfo?.name === 'string' ? addressInfo.name.trim() : '';
+  const hasUnsafeTargetUserName = Boolean(
+    targetUserName && hasInvisibleCharacters(targetUserName)
+  );
+  const isCurrentUserProfile =
+    !!addressInfo?.address &&
+    (addressInfo.address === currentUserAddress ||
+      (targetUserName && targetUserName === currentUserName));
+  const isBlocked =
+    !!addressInfo?.address && isUserBlocked(addressInfo.address);
+
+  const lookupOptions = useMemo(() => {
+    if (!inputValue.trim()) {
+      return results?.map((item) => item.name) ?? [];
+    }
+
+    if (validateAddress(inputValue)) {
+      return [inputValue];
+    }
+
+    return results?.map((item) => item.name) ?? [];
+  }, [inputValue, results]);
+
+  const pushSnack = useCallback(
+    (type: 'error' | 'info' | 'success', message: string) => {
+      setInfoSnack({ compact: true, duration: 3200, message, type });
+      setOpenSnack(true);
+    },
+    [setInfoSnack, setOpenSnack]
   );
 
-  const HOVER_DELAY_MS = 750;
+  const resetLookupState = useCallback(() => {
+    setNameOrAddress('');
+    setInputValue('');
+    setErrorMessage('');
+    setPayments([]);
+    setTotalPaymentsCount(0);
+    setNodeStatus(null);
+    setAdminInfo(null);
+    setNodeHeightBlock(null);
+    setPaymentsPage(0);
+    setIsLoadingUser(false);
+    setIsLoadingPayments(false);
+    setAddressInfo(null);
+    setAddressNamesMap({});
+    setLookupHistory({ history: [], index: -1 });
+    setIsBlockActionPending(false);
+    lastFetchedOwnerRef.current = null;
+  }, []);
+
+  const closeLookup = useCallback(() => {
+    setIsOpenDrawerLookup(false);
+    resetLookupState();
+  }, [resetLookupState, setIsOpenDrawerLookup]);
 
   const lookupFunc = useCallback(
     async (
-      messageAddressOrName: string,
+      requestedAddressOrName: string,
       options?: { skipHistoryPush?: boolean }
     ) => {
-      const inputAddressOrName = (
-        messageAddressOrName ?? nameOrAddress
-      )?.trim();
-      if (!inputAddressOrName) {
+      const lookupInput = requestedAddressOrName.trim();
+      if (!lookupInput || lookupInProgressRef.current) {
         return;
       }
-      if (lookupInProgressRef.current) return;
+
       lookupInProgressRef.current = true;
+
       try {
-        const owner = await getNameOrAddress(inputAddressOrName);
+        const owner = await getNameOrAddress(lookupInput);
+
         if (!owner) {
           throw new Error(
             tRef.current('auth:message.error.name_not_existing', {
@@ -135,6 +457,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             })
           );
         }
+
         if (
           !options?.skipHistoryPush &&
           lastFetchedOwnerRef.current === owner
@@ -142,10 +465,12 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
           lookupInProgressRef.current = false;
           return;
         }
+
         lastFetchedOwnerRef.current = owner;
 
         setErrorMessage('');
         setIsLoadingUser(true);
+        setIsLoadingPayments(true);
         setPayments([]);
         setTotalPaymentsCount(0);
         setAddressInfo(null);
@@ -154,139 +479,167 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
         setNodeHeightBlock(null);
         setPaymentsPage(0);
 
-        const addressInfoRes = await getAddressInfo(owner);
-        if (!addressInfoRes?.publicKey) {
+        const addressInfoResponse = await getAddressInfo(owner);
+
+        if (!addressInfoResponse?.publicKey) {
           throw new Error(
             tRef.current('auth:message.error.address_not_existing', {
               postProcess: 'capitalizeFirstChar',
             })
           );
         }
-        const isAddress = validateAddress(messageAddressOrName);
-        const name = !isAddress
-          ? messageAddressOrName
+
+        const isAddressSearch = validateAddress(lookupInput);
+        const registeredName = !isAddressSearch
+          ? lookupInput
           : await getNameInfo(owner);
         const baseUrl = getBaseApiReact();
-        const balanceRes = await fetch(`${baseUrl}/addresses/balance/${owner}`);
-        const balanceData = await balanceRes.json();
+
+        const balanceResponse = await fetch(
+          `${baseUrl}/addresses/balance/${owner}`
+        );
+        const balance = await balanceResponse.json();
+
         setAddressInfo({
-          ...addressInfoRes,
-          balance: balanceData,
-          name,
+          ...addressInfoResponse,
+          address: owner,
+          balance,
+          name: registeredName,
         });
-        setIsLoadingUser(false);
 
         if (!options?.skipHistoryPush) {
-          setLookupHistory((prev) => {
-            const truncated = prev.history.slice(0, prev.index + 1);
-            truncated.push(owner);
-            const maxLen = 50;
-            const history =
-              truncated.length > maxLen ? truncated.slice(-maxLen) : truncated;
-            return { history, index: history.length - 1 };
+          setLookupHistory((previous) => {
+            const nextHistory = previous.history.slice(0, previous.index + 1);
+            nextHistory.push(owner);
+            const boundedHistory =
+              nextHistory.length > 50 ? nextHistory.slice(-50) : nextHistory;
+            return {
+              history: boundedHistory,
+              index: boundedHistory.length - 1,
+            };
           });
         }
 
-        // Node status for level progress (remaining blocks / days)
         try {
-          const statusRes = await fetch(`${baseUrl}/admin/status`);
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            setNodeStatus(statusData);
-            if (statusData?.height != null) {
-              const blockHeight = statusData.height - 1440;
-              const blockRes = await fetch(
+          const statusResponse = await fetch(`${baseUrl}/admin/status`);
+          if (statusResponse.ok) {
+            const nextNodeStatus = await statusResponse.json();
+            setNodeStatus(nextNodeStatus);
+
+            if (nextNodeStatus?.height != null) {
+              const blockHeight = nextNodeStatus.height - 1440;
+              const blockResponse = await fetch(
                 `${baseUrl}/blocks/byheight/${blockHeight}`
               );
-              if (blockRes.ok) {
-                setNodeHeightBlock(await blockRes.json());
+              if (blockResponse.ok) {
+                setNodeHeightBlock(await blockResponse.json());
               }
-              const adminRes = await fetch(`${baseUrl}/admin/info`);
-              if (adminRes.ok) {
-                setAdminInfo(await adminRes.json());
+
+              const adminResponse = await fetch(`${baseUrl}/admin/info`);
+              if (adminResponse.ok) {
+                setAdminInfo(await adminResponse.json());
               }
             }
           }
-        } catch (_) {
+        } catch {
           // non-fatal
         }
 
-        setIsLoadingPayments(true);
-        try {
-          const paymentsRes = await fetch(
-            `${baseUrl}/transactions/search?txType=PAYMENT&address=${owner}&confirmationStatus=CONFIRMED&limit=500&reverse=true`
-          );
-          const paymentsData = await paymentsRes.json();
-          const list = Array.isArray(paymentsData) ? paymentsData : [];
-          setPayments(list);
-          setTotalPaymentsCount(list.length);
-        } finally {
-          setIsLoadingPayments(false);
-        }
-      } catch (error) {
-        setErrorMessage(error?.message);
-        console.error(error);
+        const paymentsResponse = await fetch(
+          `${baseUrl}/transactions/search?txType=PAYMENT&address=${owner}&confirmationStatus=CONFIRMED&limit=500&reverse=true`
+        );
+        const paymentsData = await paymentsResponse.json();
+        const nextPayments = Array.isArray(paymentsData) ? paymentsData : [];
+        setPayments(nextPayments);
+        setTotalPaymentsCount(nextPayments.length);
+      } catch (error: any) {
+        setErrorMessage(
+          error?.message ||
+            tRef.current('core:account_lookup.error_lookup_failed', {
+              postProcess: 'capitalizeFirstChar',
+            })
+        );
       } finally {
+        lookupInProgressRef.current = false;
         setIsLoadingUser(false);
         setIsLoadingPayments(false);
-        lookupInProgressRef.current = false;
       }
     },
-    [nameOrAddress]
+    []
   );
 
   const fetchNameForAddress = useCallback((address: string) => {
     if (!address) return;
-    setAddressNamesMap((prev) => {
-      const existing = prev[address];
-      if (existing) return prev;
-      return { ...prev, [address]: { name: null, loading: true } };
+
+    setAddressNamesMap((previous) => {
+      const existing = previous[address];
+      if (existing) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [address]: { loading: true, name: null },
+      };
     });
+
     getNameInfo(address)
       .then((name) => {
-        setAddressNamesMap((prev) => ({
-          ...prev,
-          [address]: { name: name || null, loading: false },
+        setAddressNamesMap((previous) => ({
+          ...previous,
+          [address]: { loading: false, name: name || null },
         }));
       })
       .catch(() => {
-        setAddressNamesMap((prev) => ({
-          ...prev,
-          [address]: { name: null, loading: false },
+        setAddressNamesMap((previous) => ({
+          ...previous,
+          [address]: { loading: false, name: null },
         }));
       });
   }, []);
 
-  const scheduleFetchNameForAddress = useCallback(
-    (address: string) => {
-      if (hoverNameTimeoutRef.current) {
-        clearTimeout(hoverNameTimeoutRef.current);
-        hoverNameTimeoutRef.current = null;
-      }
-      if (!address) return;
-      hoverNameTimeoutRef.current = setTimeout(() => {
-        fetchNameForAddress(address);
-        hoverNameTimeoutRef.current = null;
-      }, HOVER_DELAY_MS);
-    },
-    [fetchNameForAddress]
-  );
+  useEffect(() => {
+    const addressesToResolve = new Set<string>();
+    const currentProfileAddress = addressInfo?.address;
 
-  const cancelFetchNameForAddress = useCallback(() => {
-    if (hoverNameTimeoutRef.current) {
-      clearTimeout(hoverNameTimeoutRef.current);
-      hoverNameTimeoutRef.current = null;
+    for (const payment of payments.slice(
+      paymentsPage * paymentsRowsPerPage,
+      paymentsPage * paymentsRowsPerPage + paymentsRowsPerPage
+    )) {
+      if (
+        payment?.creatorAddress &&
+        payment.creatorAddress !== currentProfileAddress &&
+        !addressNamesMap[payment.creatorAddress]
+      ) {
+        addressesToResolve.add(payment.creatorAddress);
+      }
+
+      if (
+        payment?.recipient &&
+        payment.recipient !== currentProfileAddress &&
+        !addressNamesMap[payment.recipient]
+      ) {
+        addressesToResolve.add(payment.recipient);
+      }
     }
-  }, []);
+
+    addressesToResolve.forEach(fetchNameForAddress);
+  }, [
+    addressInfo?.address,
+    addressNamesMap,
+    fetchNameForAddress,
+    payments,
+    paymentsPage,
+    paymentsRowsPerPage,
+  ]);
 
   const openUserLookupDrawerFunc = useCallback(
-    (e) => {
+    (event: CustomEvent) => {
       setIsOpenDrawerLookup(true);
-      const message = e.detail?.addressOrName;
-      if (message) {
-        setNameOrAddress(message);
-        setInputValue(message);
-        lookupFunc(message);
+      const requestedAddressOrName = event.detail?.addressOrName;
+      if (requestedAddressOrName) {
+        setNameOrAddress(requestedAddressOrName);
+        setInputValue(requestedAddressOrName);
+        void lookupFunc(requestedAddressOrName);
       }
     },
     [lookupFunc, setIsOpenDrawerLookup]
@@ -301,50 +654,115 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   }, [openUserLookupDrawerFunc]);
 
   const goBack = useCallback(() => {
-    const { history, index } = lookupHistory;
-    if (index <= 0) return;
-    const prevAddress = history[index - 1];
+    const previousIndex = lookupHistory.index - 1;
+    if (previousIndex < 0) {
+      return;
+    }
+
+    const previousAddress = lookupHistory.history[previousIndex];
     lastFetchedOwnerRef.current = null;
-    setNameOrAddress(prevAddress);
-    setInputValue(prevAddress);
-    setLookupHistory((prev) => ({ ...prev, index: prev.index - 1 }));
-    lookupFunc(prevAddress, { skipHistoryPush: true });
-  }, [lookupHistory, lookupFunc]);
+    setNameOrAddress(previousAddress);
+    setInputValue(previousAddress);
+    setLookupHistory((previous) => ({ ...previous, index: previousIndex }));
+    void lookupFunc(previousAddress, { skipHistoryPush: true });
+  }, [lookupFunc, lookupHistory.history, lookupHistory.index]);
 
   const goForward = useCallback(() => {
-    const { history, index } = lookupHistory;
-    if (index >= history.length - 1 || index < 0) return;
-    const nextAddress = history[index + 1];
+    const nextIndex = lookupHistory.index + 1;
+    if (nextIndex >= lookupHistory.history.length) {
+      return;
+    }
+
+    const nextAddress = lookupHistory.history[nextIndex];
     lastFetchedOwnerRef.current = null;
     setNameOrAddress(nextAddress);
     setInputValue(nextAddress);
-    setLookupHistory((prev) => ({ ...prev, index: prev.index + 1 }));
-    lookupFunc(nextAddress, { skipHistoryPush: true });
-  }, [lookupHistory, lookupFunc]);
+    setLookupHistory((previous) => ({ ...previous, index: nextIndex }));
+    void lookupFunc(nextAddress, { skipHistoryPush: true });
+  }, [lookupFunc, lookupHistory.history, lookupHistory.index]);
 
-  const canGoBack = lookupHistory.history.length > 0 && lookupHistory.index > 0;
-  const canGoForward =
-    lookupHistory.history.length > 0 &&
-    lookupHistory.index >= 0 &&
-    lookupHistory.index < lookupHistory.history.length - 1;
+  const handleSearchSubmit = useCallback(() => {
+    if (!inputValue.trim()) {
+      return;
+    }
 
-  const onClose = () => {
-    setIsOpenDrawerLookup(false);
-    setNameOrAddress('');
-    setInputValue('');
-    setErrorMessage('');
-    setPayments([]);
-    setTotalPaymentsCount(0);
-    setNodeStatus(null);
-    setAdminInfo(null);
-    setNodeHeightBlock(null);
-    setPaymentsPage(0);
-    setIsLoadingUser(false);
-    setIsLoadingPayments(false);
-    setAddressInfo(null);
-    lastFetchedOwnerRef.current = null;
-    setLookupHistory({ history: [], index: -1 });
-  };
+    setNameOrAddress(inputValue.trim());
+    void lookupFunc(inputValue.trim());
+  }, [inputValue, lookupFunc]);
+
+  const handleCopyAddress = useCallback(() => {
+    if (!addressInfo?.address) {
+      return;
+    }
+
+    navigator.clipboard.writeText(addressInfo.address);
+    pushSnack(
+      'success',
+      t('tutorial:home.address_copied', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }, [addressInfo?.address, pushSnack, t]);
+
+  const handleToggleBlock = useCallback(async () => {
+    if (!addressInfo?.address || isCurrentUserProfile || isRunningPublicNode) {
+      return;
+    }
+
+    setIsBlockActionPending(true);
+
+    try {
+      if (isBlocked) {
+        await removeBlockFromList(addressInfo.address, targetUserName);
+        pushSnack(
+          'success',
+          t('auth:action.unblock_name', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      } else {
+        await addToBlockList(addressInfo.address, targetUserName);
+        pushSnack(
+          'success',
+          t('auth:action.block_name', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+    } catch (error: any) {
+      pushSnack(
+        'error',
+        error?.message ||
+          t('auth:message.error.block_user', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
+    } finally {
+      setIsBlockActionPending(false);
+    }
+  }, [
+    addToBlockList,
+    addressInfo?.address,
+    isBlocked,
+    isCurrentUserProfile,
+    isRunningPublicNode,
+    pushSnack,
+    removeBlockFromList,
+    t,
+    targetUserName,
+  ]);
+
+  const handleSendQort = useCallback(() => {
+    if (!addressInfo?.address) {
+      return;
+    }
+
+    executeEvent('openPaymentInternal', {
+      address: addressInfo.address,
+      name: addressInfo.name,
+    });
+    closeLookup();
+  }, [addressInfo?.address, addressInfo?.name, closeLookup]);
 
   const currentBlocks =
     (addressInfo?.blocksMinted ?? 0) +
@@ -367,972 +785,1419 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
     addressInfo && nodeStatus && adminInfo && nodeHeightBlock
       ? levelUpDays(addressInfo, adminInfo, nodeHeightBlock, nodeStatus)
       : undefined;
-  const nextLevelNum =
+  const nextLevelNumber =
     addressInfo?.level != null ? nextLevel(addressInfo.level) : undefined;
 
-  const paginatedPayments = useMemo(() => {
-    const start = paymentsPage * paymentsRowsPerPage;
-    return payments.slice(start, start + paymentsRowsPerPage);
-  }, [payments, paymentsPage, paymentsRowsPerPage]);
-
   const { totalReceived, totalSent } = useMemo(() => {
-    const owner = addressInfo?.address;
-    if (!owner || !payments.length) {
-      return { totalReceived: undefined, totalSent: undefined };
+    const ownerAddress = addressInfo?.address;
+
+    if (!ownerAddress || payments.length === 0) {
+      return {
+        totalReceived: undefined,
+        totalSent: undefined,
+      };
     }
+
     let received = 0;
     let sent = 0;
-    for (const tx of payments) {
-      const amount = parseFloat(tx?.amount ?? '0') || 0;
-      if (tx?.recipient === owner) received += amount;
-      if (tx?.creatorAddress === owner) sent += amount;
+
+    for (const payment of payments) {
+      const amount = parseFloat(payment?.amount ?? '0') || 0;
+      if (payment?.recipient === ownerAddress) {
+        received += amount;
+      }
+      if (payment?.creatorAddress === ownerAddress) {
+        sent += amount;
+      }
     }
-    return { totalReceived: received, totalSent: sent };
+
+    return {
+      totalReceived: received,
+      totalSent: sent,
+    };
   }, [addressInfo?.address, payments]);
 
-  if (!isOpenDrawerLookup) return null;
+  const paginatedPayments = useMemo(() => {
+    const startIndex = paymentsPage * paymentsRowsPerPage;
+    return payments.slice(startIndex, startIndex + paymentsRowsPerPage);
+  }, [payments, paymentsPage, paymentsRowsPerPage]);
+
+  const canGoBack = lookupHistory.index > 0;
+  const canGoForward =
+    lookupHistory.index >= 0 &&
+    lookupHistory.index < lookupHistory.history.length - 1;
+  const isEmptyLookupState = !errorMessage && !isLoadingUser && !addressInfo;
+
+  const surfaceBorder = alpha(theme.palette.divider, 0.42);
+  const dividerColor = alpha(
+    theme.palette.common.white,
+    theme.palette.mode === 'dark' ? 0.04 : 0.07
+  );
+  const summarySurface =
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(23,27,35,0.98) 0%, rgba(17,20,27,0.985) 100%)'
+      : 'linear-gradient(180deg, rgba(248,250,253,0.985) 0%, rgba(241,245,250,0.99) 100%)';
+  const sectionSurface = alpha(
+    theme.palette.mode === 'dark'
+      ? theme.palette.common.white
+      : theme.palette.text.primary,
+    theme.palette.mode === 'dark' ? 0.026 : 0.036
+  );
+  const softSectionSurface = alpha(
+    theme.palette.mode === 'dark'
+      ? theme.palette.common.white
+      : theme.palette.text.primary,
+    theme.palette.mode === 'dark' ? 0.018 : 0.028
+  );
+  const sectionLabelSx = {
+    color: alpha(theme.palette.text.secondary, 0.64),
+    display: 'block',
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    letterSpacing: '0.11em',
+    lineHeight: 1.1,
+    textTransform: 'uppercase',
+  } as const;
+  const helperNoteSx = {
+    color: alpha(theme.palette.text.secondary, 0.8),
+    fontSize: '0.84rem',
+    lineHeight: 1.55,
+  } as const;
+  const silkyActionBackground =
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(144,184,244,0.985) 0%, rgba(118,160,227,0.985) 100%)'
+      : 'linear-gradient(180deg, rgba(125,168,235,0.985) 0%, rgba(98,145,220,0.985) 100%)';
+  const silkyDangerBackground =
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(244,143,143,0.985) 0%, rgba(221,92,92,0.985) 100%)'
+      : 'linear-gradient(180deg, rgba(230,120,120,0.985) 0%, rgba(208,82,82,0.985) 100%)';
+  const neutralActionBackground =
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(76,84,100,0.96) 0%, rgba(58,64,77,0.96) 100%)'
+      : 'linear-gradient(180deg, rgba(197,204,216,0.98) 0%, rgba(176,184,198,0.98) 100%)';
+
+  const createSilkyActionButtonSx = (
+    background: string,
+    textColor: string,
+    shadow: string,
+    disabledBackground = neutralActionBackground,
+    disabledTextColor = alpha(
+      theme.palette.mode === 'dark' ? '#E7ECF7' : '#243247',
+      0.7
+    )
+  ) => ({
+    background,
+    border: `1px solid ${alpha(theme.palette.common.white, 0.18)}`,
+    borderRadius: '10px',
+    boxShadow: shadow,
+    color: textColor,
+    fontSize: '0.78rem',
+    fontWeight: 700,
+    gap: 0.7,
+    justifyContent: 'center',
+    letterSpacing: '0.01em',
+    minHeight: 40,
+    px: 1.35,
+    textAlign: 'center',
+    textTransform: 'none',
+    whiteSpace: 'nowrap',
+    '& .MuiButton-startIcon': {
+      marginLeft: 0,
+      marginRight: 0,
+    },
+    '& .MuiSvgIcon-root': {
+      fontSize: '1rem',
+    },
+    '&.Mui-disabled': {
+      background: disabledBackground,
+      borderColor: alpha(theme.palette.common.white, 0.12),
+      color: disabledTextColor,
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? 'inset 0 1px 0 rgba(255,255,255,0.08), 0 6px 18px rgba(18,22,31,0.16)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.2), 0 6px 18px rgba(117,127,144,0.12)',
+      opacity: 1,
+    },
+  });
+
+  const sendActionButtonSx = createSilkyActionButtonSx(
+    silkyActionBackground,
+    theme.palette.mode === 'dark' ? '#0F1725' : '#F8FBFF',
+    theme.palette.mode === 'dark'
+      ? 'inset 0 1px 0 rgba(255,255,255,0.16), 0 10px 24px rgba(59,98,168,0.18)'
+      : 'inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 22px rgba(82,126,201,0.16)',
+    neutralActionBackground
+  );
+
+  const blockActionButtonSx = createSilkyActionButtonSx(
+    silkyDangerBackground,
+    '#FFF6F6',
+    theme.palette.mode === 'dark'
+      ? 'inset 0 1px 0 rgba(255,255,255,0.14), 0 10px 24px rgba(135,40,40,0.22)'
+      : 'inset 0 1px 0 rgba(255,255,255,0.28), 0 10px 22px rgba(170,56,56,0.18)',
+    neutralActionBackground,
+    alpha(theme.palette.mode === 'dark' ? '#D9DFEA' : '#314055', 0.78)
+  );
+
+  const displayStatRows = [
+    {
+      label: t('core:balance', { postProcess: 'capitalizeFirstChar' }),
+      value: `${formatStatBalance(addressInfo?.balance)} QORT`,
+    },
+    {
+      label: t('core:total_received', { postProcess: 'capitalizeFirstChar' }),
+      value:
+        totalReceived != null
+          ? `${formatStatBalance(totalReceived)} QORT`
+          : '\u2014',
+    },
+    {
+      label: t('core:total_sent', { postProcess: 'capitalizeFirstChar' }),
+      value:
+        totalSent != null ? `${formatStatBalance(totalSent)} QORT` : '\u2014',
+    },
+    {
+      label: t('core:total_blocks_minted', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      value: currentBlocks.toLocaleString(),
+    },
+  ];
+
+  const renderActionButton = (
+    button: React.ReactNode,
+    tooltip?: string,
+    disabled?: boolean
+  ) => {
+    if (!tooltip) {
+      return button;
+    }
+
+    return (
+      <Tooltip title={tooltip}>
+        <Box component="span" sx={{ width: '100%' }}>
+          {button}
+        </Box>
+      </Tooltip>
+    );
+  };
+
+  const profileActionButtons = (
+    <>
+      {renderActionButton(
+        <Button
+          fullWidth
+          variant="contained"
+          onClick={handleSendQort}
+          disabled={isCurrentUserProfile}
+          startIcon={<NorthEastRoundedIcon />}
+          sx={sendActionButtonSx}
+        >
+          {t('core:action.send_qort', { postProcess: 'capitalizeFirstChar' })}
+        </Button>,
+        isCurrentUserProfile
+          ? t('core:account_lookup.tooltip_send_disabled')
+          : undefined
+      )}
+
+      {renderActionButton(
+        <Button
+          fullWidth
+          variant="contained"
+          onClick={handleToggleBlock}
+          startIcon={
+            isBlockActionPending ? (
+              <CircularProgress color="inherit" size={16} />
+            ) : (
+              <PersonOffRoundedIcon />
+            )
+          }
+          disabled={
+            isCurrentUserProfile ||
+            isRunningPublicNode ||
+            isBlockActionPending ||
+            !addressInfo?.address
+          }
+          sx={blockActionButtonSx}
+        >
+          {isBlocked
+            ? t('core:account_lookup.action_unblock', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:account_lookup.action_block', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+        </Button>,
+        isRunningPublicNode
+          ? t('core:account_lookup.tooltip_block_public_node')
+          : isCurrentUserProfile
+            ? t('core:account_lookup.tooltip_block_self')
+            : undefined,
+        isRunningPublicNode || isCurrentUserProfile
+      )}
+    </>
+  );
 
   return (
-    <Box
-      sx={{
-        backgroundColor: theme.palette.background.paper,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        bottom: 0,
-        boxShadow: theme.shadows[12],
-        height: `calc(100vh - ${appHeighOffsetPx})`,
-        left: 0,
-        overflow: 'hidden',
-        position: 'fixed',
-        right: 0,
-        width: '100vw',
-        zIndex: 100,
+    <Dialog
+      open={isOpenDrawerLookup}
+      onClose={closeLookup}
+      fullWidth
+      maxWidth={false}
+      slotProps={{
+        backdrop: {
+          sx: {
+            backdropFilter: 'blur(12px)',
+            backgroundColor: alpha('#07090D', 0.72),
+          },
+        },
+        paper: {
+          sx: {
+            background:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+                : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)',
+            border: `1px solid ${surfaceBorder}`,
+            borderRadius: '14px',
+            boxShadow:
+              theme.palette.mode === 'dark'
+                ? '0 34px 120px rgba(0,0,0,0.46)'
+                : '0 28px 88px rgba(18,28,45,0.16)',
+            height: {
+              xs: 'calc(100vh - 32px)',
+              md: 'min(78vh, 860px)',
+              lg: 'min(74vh, 820px)',
+            },
+            margin: { xs: 2, md: 3 },
+            maxHeight: 'calc(100vh - 24px)',
+            overflow: 'hidden',
+            width: 'min(1140px, calc(100vw - 48px))',
+          },
+        },
       }}
     >
       <Box
         sx={{
-          height: '100%',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
+          height: '100%',
+          minHeight: 0,
+          position: 'relative',
         }}
       >
         <Box
           sx={{
-            display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.42)}`,
+            display: 'flex',
             gap: 1,
-            px: 2,
-            py: 1.5,
-            borderBottom: 1,
-            borderColor: 'divider',
+            justifyContent: 'space-between',
+            px: { xs: 2, md: 2.75 },
+            py: 1.1,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.5 }}>
             <IconButton
               onClick={goBack}
               disabled={!canGoBack}
               size="small"
-              aria-label={t('core:pagination.previous', {
-                postProcess: 'capitalizeFirstChar',
-              })}
               sx={{
                 color: canGoBack
                   ? theme.palette.text.primary
                   : theme.palette.text.disabled,
-                '&:hover': canGoBack
-                  ? {
-                      backgroundColor: alpha(theme.palette.action.hover, 0.5),
-                    }
-                  : {},
               }}
             >
-              <ChevronLeftIcon fontSize="small" />
+              <ArrowBackRoundedIcon fontSize="small" />
             </IconButton>
             <IconButton
               onClick={goForward}
               disabled={!canGoForward}
               size="small"
-              aria-label={t('core:pagination.next', {
-                postProcess: 'capitalizeFirstChar',
-              })}
               sx={{
                 color: canGoForward
                   ? theme.palette.text.primary
                   : theme.palette.text.disabled,
-                '&:hover': canGoForward
-                  ? {
-                      backgroundColor: alpha(theme.palette.action.hover, 0.5),
-                    }
-                  : {},
               }}
             >
-              <ChevronRightIcon fontSize="small" />
+              <ArrowForwardRoundedIcon fontSize="small" />
             </IconButton>
-          </Box>
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}
-          >
-            {t('core:user_lookup', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-          <IconButton
-            onClick={onClose}
-            size="small"
-            sx={{
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.action.hover, 0.5),
-                color: theme.palette.text.primary,
-              },
-            }}
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            flexGrow: 1,
-            minHeight: 0,
-            overflow: 'auto',
-            p: 2,
-          }}
-        >
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              component="label"
-              htmlFor="user-lookup-address-name"
-              variant="body2"
-              color="text.secondary"
-              sx={{ display: 'block', mb: 1 }}
-            >
-              {t('auth:address_name', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Typography>
-            <Autocomplete
-              value={nameOrAddress}
-              onChange={(event: any, newValue: string | null) => {
-                if (!newValue) {
-                  setNameOrAddress('');
-                  return;
-                }
-                if (
-                  addressInfo &&
-                  (addressInfo.address === newValue ||
-                    addressInfo.name === newValue)
-                ) {
-                  setNameOrAddress(newValue);
-                  return;
-                }
-                setNameOrAddress(newValue);
-                lookupFunc(newValue);
-              }}
-              inputValue={inputValue}
-              onInputChange={(event, newInputValue) => {
-                setInputValue(newInputValue);
-              }}
-              id="controllable-states-demo"
-              loading={isLoading}
-              noOptionsText={t('core:option_no', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              options={options}
-              sx={{ flexGrow: 1 }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  id="user-lookup-address-name"
-                  autoFocus
-                  autoComplete="off"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && inputValue) {
-                      lookupFunc(inputValue);
-                    }
-                  }}
-                  variant="outlined"
-                  size="small"
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      backgroundColor: theme.palette.background.default,
-                    },
-                  }}
-                />
-              )}
-            />
           </Box>
 
           <Box
             sx={{
+              alignItems: 'center',
               display: 'flex',
-              flexDirection: 'column',
-              flexGrow: 1,
-              minHeight: 0,
-              overflow: 'auto',
-              flexShrink: 0,
+              gap: 1,
+              justifyContent: 'center',
+              minWidth: 0,
             }}
           >
-            {!isLoadingUser && errorMessage && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  minHeight: 120,
-                  width: '100%',
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: alpha(theme.palette.error.main, 0.08),
-                  border: 1,
-                  borderColor: alpha(theme.palette.error.main, 0.2),
-                }}
-              >
-                <Typography color="error" variant="body2">
-                  {errorMessage}
-                </Typography>
-              </Box>
-            )}
+            <SearchRoundedIcon
+              sx={{
+                color: alpha(theme.palette.primary.main, 0.9),
+                fontSize: '1.05rem',
+              }}
+            />
+            <Typography
+              sx={{
+                fontSize: '1rem',
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.1,
+              }}
+            >
+              {t('core:account_lookup.dialog_title', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
 
-            {isLoadingUser && (
+          <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.5 }}>
+            <IconButton
+              onClick={closeLookup}
+              size="small"
+              sx={{
+                color: theme.palette.text.secondary,
+              }}
+            >
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.35)}`,
+            px: { xs: 2, md: 2.75 },
+            py: { xs: 1.05, md: 1.15 },
+          }}
+        >
+          <Autocomplete
+            freeSolo
+            value={nameOrAddress}
+            onChange={(_event, newValue) => {
+              const nextValue =
+                typeof newValue === 'string' ? newValue.trim() : '';
+              if (!nextValue) {
+                setNameOrAddress('');
+                return;
+              }
+
+              setNameOrAddress(nextValue);
+              setInputValue(nextValue);
+              void lookupFunc(nextValue);
+            }}
+            inputValue={inputValue}
+            onInputChange={(_event, newInputValue) => {
+              setInputValue(newInputValue);
+            }}
+            loading={isLoading}
+            noOptionsText={t('core:option_no', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            options={lookupOptions}
+            renderOption={(props, option) => {
+              const hasUnsafeOptionName =
+                !validateAddress(option) && hasInvisibleCharacters(option);
+
+              return (
+                <Box component="li" {...props}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.92rem',
+                      ...(hasUnsafeOptionName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
+                    }}
+                  >
+                    {option}
+                  </Typography>
+                </Box>
+              );
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                autoFocus
+                id="user-lookup-address-name"
+                placeholder={t('auth:message.generic.name_address', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleSearchSubmit();
+                  }
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {isLoading ? (
+                        <CircularProgress
+                          color="inherit"
+                          size={18}
+                          sx={{ mr: 0.5 }}
+                        />
+                      ) : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+                size="small"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: alpha(
+                      theme.palette.mode === 'dark'
+                        ? theme.palette.common.white
+                        : theme.palette.text.primary,
+                      theme.palette.mode === 'dark' ? 0.03 : 0.028
+                    ),
+                    borderRadius: '12px',
+                    boxShadow: 'none',
+                    height: 44,
+                    pr: 0.75,
+                    transition:
+                      'background-color 180ms ease, border-color 180ms ease, box-shadow 200ms ease',
+                    '& fieldset': {
+                      borderColor: alpha(
+                        theme.palette.common.white,
+                        theme.palette.mode === 'dark' ? 0.14 : 0.18
+                      ),
+                      borderWidth: '0.75px',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: alpha(
+                        theme.palette.common.white,
+                        theme.palette.mode === 'dark' ? 0.18 : 0.22
+                      ),
+                    },
+                    '&.Mui-focused': {
+                      boxShadow: `inset 0 0 0 1px ${alpha(
+                        theme.palette.primary.main,
+                        theme.palette.mode === 'dark' ? 0.18 : 0.14
+                      )}`,
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: alpha(
+                        theme.palette.primary.main,
+                        theme.palette.mode === 'dark' ? 0.2 : 0.16
+                      ),
+                      borderWidth: '0.75px',
+                    },
+                  },
+                }}
+              />
+            )}
+          />
+        </Box>
+
+        <Box
+          sx={{
+            display: 'flex',
+            flex: '1 1 auto',
+            minHeight: 0,
+            overflowX: 'hidden',
+            overflowY: { xs: 'auto', md: 'hidden' },
+            px: { xs: 2, md: 2.75 },
+            py: { xs: 1.6, md: 2.4 },
+          }}
+        >
+          {errorMessage && !isLoadingUser ? (
+            <Box
+              sx={{
+                alignItems: 'center',
+                backgroundColor: alpha(theme.palette.error.main, 0.08),
+                border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+                borderRadius: '20px',
+                display: 'flex',
+                flex: 1,
+                justifyContent: 'center',
+                px: 3,
+                py: 4,
+                textAlign: 'center',
+              }}
+            >
+              <Typography color="error">{errorMessage}</Typography>
+            </Box>
+          ) : null}
+
+          {!errorMessage && isLoadingUser ? (
+            <Box
+              sx={{
+                alignItems: 'center',
+                color: theme.palette.text.secondary,
+                display: 'flex',
+                flex: 1,
+                flexDirection: 'column',
+                gap: 1.5,
+                justifyContent: 'center',
+              }}
+            >
+              <CircularProgress
+                size={42}
+                thickness={4}
+                sx={{ color: theme.palette.primary.main }}
+              />
+              <Typography variant="body2">
+                {t('core:loading.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            </Box>
+          ) : null}
+
+          {isEmptyLookupState ? (
+            <Box
+              sx={{
+                alignItems: 'center',
+                backgroundColor: softSectionSurface,
+                border: `1px solid ${alpha(theme.palette.divider, 0.26)}`,
+                borderRadius: '12px',
+                display: 'flex',
+                flex: 1,
+                flexDirection: 'column',
+                gap: { xs: 1.85, md: 2.2 },
+                justifyContent: 'center',
+                overflow: 'hidden',
+                px: 3,
+                py: { xs: 5, md: 5.5 },
+                position: 'relative',
+                textAlign: 'center',
+                '&::before': {
+                  background: `radial-gradient(circle at 50% 55%, ${alpha(
+                    theme.palette.primary.main,
+                    0.12
+                  )} 0%, ${alpha(theme.palette.primary.main, 0.05)} 26%, transparent 74%)`,
+                  content: '""',
+                  inset: 0,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  zIndex: 0,
+                },
+                '& > *': {
+                  position: 'relative',
+                  zIndex: 1,
+                },
+              }}
+            >
+              <UserSearchIllustration
+                glowColor={alpha(theme.palette.primary.main, 0.92)}
+                logoSrc={qortalLogo512}
+                magnifierMarkup={magnifierSvg}
+              />
               <Box
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: 200,
-                  width: '100%',
-                  gap: 2,
+                  gap: { xs: 0.15, md: 0.25 },
+                  mt: '-10px',
                 }}
               >
-                <CircularProgress
-                  size={40}
-                  thickness={4}
-                  sx={{ color: theme.palette.primary.main }}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {t('core:loading.generic', {
+                <Typography
+                  sx={{
+                    fontSize: { xs: '1.28rem', md: '1.38rem' },
+                    fontWeight: 800,
+                    letterSpacing: '-0.014em',
+                    lineHeight: 1.14,
+                  }}
+                >
+                  {t('core:account_lookup.empty_title', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.primary, 0.76),
+                    fontSize: { xs: '0.96rem', md: '1rem' },
+                    maxWidth: '34ch',
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {t('core:account_lookup.empty_subtitle', {
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               </Box>
-            )}
+            </Box>
+          ) : null}
 
-            {!isLoadingUser && addressInfo && (
+          {!errorMessage && !isLoadingUser && addressInfo ? (
+            <Box
+              sx={{
+                display: { xs: 'flex', md: 'grid' },
+                flex: 1,
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: { xs: 1.5, md: 0 },
+                gridTemplateColumns: { md: '296px minmax(0, 1fr)' },
+                minHeight: 0,
+                overflowX: 'hidden',
+                overflowY: { xs: 'visible', md: 'hidden' },
+                width: '100%',
+              }}
+            >
               <Box
                 sx={{
+                  alignSelf: { xs: 'stretch', md: 'start' },
+                  background: summarySurface,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.28)}`,
+                  borderRadius: '12px',
                   display: 'flex',
-                  flexDirection: 'row',
-                  flex: 1,
-                  gap: 0,
-                  minHeight: 0,
+                  flexShrink: 0,
+                  flexDirection: 'column',
+                  gap: 1.35,
+                  justifySelf: { md: 'start' },
+                  minWidth: 0,
                   overflow: 'hidden',
+                  p: 1.7,
+                  width: { xs: '100%', md: 'min(100%, 284px)' },
                 }}
               >
-                {/* Left panel: name, avatar, level progress */}
-                <Card
+                <Box
                   sx={{
-                    alignItems: 'center',
-                    background: alpha(theme.palette.background.default, 0.6),
-                    borderRadius: 3,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flexShrink: 0,
-                    minWidth: 280,
-                    p: 3,
-                    width: 280,
-                    boxShadow: theme.shadows[2],
-                    border: 1,
-                    borderColor: alpha(theme.palette.divider, 0.5),
+                    display: 'grid',
+                    gap: 1.15,
+                    minWidth: 0,
                   }}
                 >
-                  <Typography
-                    variant="h6"
+                  <Box
                     sx={{
-                      fontWeight: 700,
+                      alignItems: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 1.05,
+                      justifyContent: 'center',
                       textAlign: 'center',
-                      letterSpacing: '-0.02em',
                     }}
                   >
-                    {addressInfo?.name ??
-                      t('auth:message.error.name_not_registered', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                  </Typography>
-                  <Spacer height="20px" />
-                  {addressInfo?.name ? (
-                    <Avatar
-                      sx={{
-                        height: 80,
-                        width: 80,
-                        boxShadow: theme.shadows[4],
-                        border: 3,
-                        borderColor: theme.palette.background.paper,
-                        '& img': { objectFit: 'cover' },
-                      }}
-                      alt={addressInfo?.name}
-                      src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${addressInfo?.name}/qortal_avatar?async=true`}
-                    >
-                      <AccountCircleIcon sx={{ fontSize: 56 }} />
-                    </Avatar>
-                  ) : (
+                    {addressInfo.name ? (
+                      <Avatar
+                        alt={addressInfo.name}
+                        src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${addressInfo.name}/qortal_avatar?async=true`}
+                        sx={{
+                          border: `3px solid ${alpha(
+                            theme.palette.common.white,
+                            theme.palette.mode === 'dark' ? 0.08 : 0.54
+                          )}`,
+                          boxShadow:
+                            theme.palette.mode === 'dark'
+                              ? '0 16px 40px rgba(0,0,0,0.24)'
+                              : '0 16px 36px rgba(18,28,45,0.12)',
+                          height: 108,
+                          width: 108,
+                        }}
+                      >
+                        <AccountCircleRoundedIcon sx={{ fontSize: 78 }} />
+                      </Avatar>
+                    ) : (
+                      <Box
+                        sx={{
+                          alignItems: 'center',
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.12
+                          ),
+                          borderRadius: '50%',
+                          color: theme.palette.primary.main,
+                          display: 'flex',
+                          height: 108,
+                          justifyContent: 'center',
+                          width: 108,
+                        }}
+                      >
+                        <AccountCircleRoundedIcon sx={{ fontSize: 78 }} />
+                      </Box>
+                    )}
+
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          fontSize: '1.02rem',
+                          fontWeight: 700,
+                          letterSpacing: '-0.025em',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          ...(hasUnsafeTargetUserName
+                            ? {
+                                textDecorationLine: 'line-through',
+                                textDecorationThickness: '2px',
+                                textDecorationColor: theme.palette.error.main,
+                              }
+                            : {}),
+                        }}
+                      >
+                        {addressInfo.name ||
+                          t('auth:message.error.name_not_registered', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                      </Typography>
+                    </Box>
+
                     <Box
                       sx={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: '50%',
-                        bgcolor: alpha(theme.palette.action.hover, 0.3),
-                        display: 'flex',
                         alignItems: 'center',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 0.75,
                         justifyContent: 'center',
                       }}
                     >
-                      <AccountCircleIcon
-                        sx={{ fontSize: 56, color: 'text.secondary' }}
+                      <Chip
+                        label={t('core:account_lookup.chip_level', {
+                          level: addressInfo.level ?? 0,
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                        size="small"
+                        sx={{
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.14
+                          ),
+                          color: theme.palette.primary.light,
+                          fontWeight: 700,
+                        }}
                       />
-                    </Box>
-                  )}
-                  <Spacer height="24px" />
-                  <Box
-                    sx={{
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.primary.main, 0.12),
-                    }}
-                  >
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        fontWeight: 600,
-                        color: theme.palette.primary.main,
-                      }}
-                    >
-                      {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
-                      {addressInfo?.level ?? 0}
-                    </Typography>
-                  </Box>
-                  {targetBlocks != null && (
-                    <>
-                      <Box sx={{ width: '100%', mt: 2 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={progress * 100}
+                      {isBlocked ? (
+                        <Chip
+                          icon={<ShieldRoundedIcon />}
+                          label={t('core:account_lookup.chip_blocked', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                          size="small"
                           sx={{
-                            height: 10,
-                            borderRadius: 5,
                             backgroundColor: alpha(
-                              theme.palette.primary.main,
-                              0.2
+                              theme.palette.error.main,
+                              0.12
                             ),
-                            '& .MuiLinearProgress-bar': {
-                              borderRadius: 5,
-                            },
+                            color: theme.palette.error.light,
+                            fontWeight: 700,
                           }}
                         />
-                      </Box>
-                      <Typography
-                        variant="body2"
-                        color="text.primary"
-                        sx={{ mt: 1, fontWeight: 600 }}
-                      >
-                        {currentBlocks.toLocaleString()} / {targetBlocks.toLocaleString()}
-                      </Typography>
-                      {nextLevelNum != null && (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mt: 0.25 }}
-                        >
-                          {t('core:remaining_to_level', {
-                            level: nextLevelNum,
-                          })}
-                        </Typography>
-                      )}
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.25 }}
-                      >
-                        {remainingBlocks.toLocaleString()}{' '}
-                        {t('core:blocks', {
+                      ) : null}
+                      {!addressInfo.name ? (
+                        <Chip
+                          label={t(
+                            'core:account_lookup.chip_no_registered_name',
+                            {
+                              postProcess: 'capitalizeFirstChar',
+                            }
+                          )}
+                          size="small"
+                          sx={{
+                            backgroundColor: alpha(
+                              theme.palette.text.secondary,
+                              0.12
+                            ),
+                            color: theme.palette.text.secondary,
+                          }}
+                        />
+                      ) : null}
+                    </Box>
+                  </Box>
+
+                  {targetBlocks != null ? (
+                    <Box
+                      sx={{
+                        backgroundColor: softSectionSurface,
+                        border: `1px solid ${alpha(theme.palette.divider, 0.22)}`,
+                        borderRadius: '10px',
+                        p: 1.25,
+                      }}
+                    >
+                      <Typography sx={sectionLabelSx}>
+                        {t('core:account_lookup.section_minting_progress', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
-                      {daysToLevel != null && daysToLevel >= 0 && (
+                      <LinearProgress
+                        value={progress * 100}
+                        variant="determinate"
+                        sx={{
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.12
+                          ),
+                          borderRadius: '999px',
+                          height: 10,
+                          mt: 1,
+                          '& .MuiLinearProgress-bar': {
+                            borderRadius: '999px',
+                          },
+                        }}
+                      />
+                      <Typography
+                        sx={{ fontSize: '0.84rem', fontWeight: 700, mt: 0.85 }}
+                      >
+                        {currentBlocks.toLocaleString()} /{' '}
+                        {targetBlocks.toLocaleString()}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.8rem',
+                          mt: 0.4,
+                        }}
+                      >
+                        {nextLevelNumber != null
+                          ? t('core:account_lookup.minting_blocks_to_level', {
+                              remaining: remainingBlocks.toLocaleString(),
+                              level: nextLevelNumber,
+                              postProcess: 'capitalizeFirstChar',
+                            })
+                          : t('core:account_lookup.minting_remaining', {
+                              remaining: remainingBlocks.toLocaleString(),
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                      </Typography>
+                      {daysToLevel != null && daysToLevel >= 0 ? (
                         <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mt: 0.25 }}
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '0.8rem',
+                            mt: 0.25,
+                          }}
                         >
-                          ~{Math.round(daysToLevel)}{' '}
-                          {t('core:days_of_minting', {
+                          {t('core:account_lookup.minting_days_label')}{' '}
+                          {t('core:account_lookup.minting_approx', {
+                            count: Math.round(daysToLevel),
                             postProcess: 'capitalizeFirstChar',
                           })}
                         </Typography>
-                      )}
-                    </>
-                  )}
-                </Card>
+                      ) : null}
+                    </Box>
+                  ) : null}
+                </Box>
 
-                {/* Right panel: details for address */}
                 <Box
                   sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: 1,
+                    display: 'grid',
+                    gap: 0.8,
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                     minWidth: 0,
-                    minHeight: 0,
-                    overflow: 'auto',
-                    pl: 3,
-                    pr: 2,
-                    py: 2,
+                    position: 'relative',
+                    pt: 0.35,
+                    zIndex: 1,
                   }}
                 >
-                  <Typography
-                    variant="subtitle1"
-                    sx={{
-                      fontWeight: 600,
-                      letterSpacing: '-0.01em',
-                      mb: 2,
-                      color: theme.palette.text.primary,
-                    }}
-                  >
-                    {t('core:details_for_address', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  <Box
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      bgcolor: alpha(theme.palette.background.default, 0.5),
-                      border: 1,
-                      borderColor: alpha(theme.palette.divider, 0.4),
-                      mb: 2,
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
+                  {profileActionButtons}
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  borderLeft: {
+                    xs: 'none',
+                    md: `1px solid ${dividerColor}`,
+                  },
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexShrink: 0,
+                  gap: 1.55,
+                  minHeight: 0,
+                  overflow: { xs: 'visible', md: 'hidden' },
+                  pl: { xs: 0, md: 2.3 },
+                }}
+              >
+                <Box
+                  sx={{
+                    backgroundColor: softSectionSurface,
+                    border: `1px solid ${alpha(theme.palette.divider, 0.22)}`,
+                    borderRadius: '12px',
+                    display: 'grid',
+                    gap: 0,
+                    gridTemplateColumns: {
+                      xs: 'repeat(2, minmax(0, 1fr))',
+                      md: 'repeat(4, minmax(0, 1fr))',
+                    },
+                    overflow: 'hidden',
+                  }}
+                >
+                  {displayStatRows.map((row, index) => (
+                    <Box
+                      key={row.label}
                       sx={{
-                        color: theme.palette.text.secondary,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                        fontWeight: 600,
+                        borderLeft: {
+                          xs:
+                            index % 2 === 1
+                              ? `1px solid ${dividerColor}`
+                              : 'none',
+                          md: index > 0 ? `1px solid ${dividerColor}` : 'none',
+                        },
+                        borderTop: {
+                          xs: index >= 2 ? `1px solid ${dividerColor}` : 'none',
+                          md: 'none',
+                        },
+                        minWidth: 0,
+                        p: 1.25,
                       }}
                     >
-                      {t('auth:address', {
+                      <Typography sx={sectionLabelSx}>{row.label}</Typography>
+                      <Typography
+                        sx={{
+                          fontSize: '0.88rem',
+                          fontWeight: 700,
+                          letterSpacing: '-0.02em',
+                          mt: 0.35,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.value}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+
+                <Box
+                  sx={{
+                    backgroundColor: softSectionSurface,
+                    border: `1px solid ${alpha(theme.palette.divider, 0.22)}`,
+                    borderRadius: '12px',
+                    display: 'grid',
+                    gap: 0,
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      minWidth: 0,
+                      p: 1.35,
+                    }}
+                  >
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:account_lookup.label_address', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Typography>
-                    <Tooltip
-                      title={t('auth:action.copy_address', {
+                    <ButtonBase
+                      onClick={handleCopyAddress}
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: 0.9,
+                        justifyContent: 'flex-start',
+                        mt: 0.45,
+                        textAlign: 'left',
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: '0.86rem',
+                          fontWeight: 600,
+                          letterSpacing: '-0.01em',
+                          lineHeight: 1.52,
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {addressInfo.address}
+                      </Typography>
+                      <ContentCopyRoundedIcon sx={{ fontSize: '1rem' }} />
+                    </ButtonBase>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderLeft: {
+                        xs: 'none',
+                        md: `1px solid ${dividerColor}`,
+                      },
+                      borderTop: {
+                        xs: `1px solid ${dividerColor}`,
+                        md: 'none',
+                      },
+                      minWidth: 0,
+                      p: 1.35,
+                    }}
+                  >
+                    <Typography sx={sectionLabelSx}>
+                      {t('core:account_lookup.label_public_key', {
                         postProcess: 'capitalizeFirstChar',
                       })}
-                      placement="bottom"
-                      arrow
-                      slotProps={{
-                        tooltip: {
-                          sx: {
-                            color: theme.palette.text.primary,
-                            backgroundColor: theme.palette.background.default,
-                          },
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '0.86rem',
+                        fontWeight: 600,
+                        letterSpacing: '-0.01em',
+                        lineHeight: 1.52,
+                        mt: 0.45,
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {addressInfo.publicKey || '\u2014'}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box
+                  sx={{
+                    backgroundColor: softSectionSurface,
+                    border: `1px solid ${alpha(theme.palette.divider, 0.22)}`,
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flex: '1 1 auto',
+                    flexDirection: 'column',
+                    minHeight: { xs: 280, md: 0 },
+                    overflow: 'hidden',
+                    p: 1.15,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      justifyContent: 'flex-start',
+                      pb: 0.9,
+                      px: 0.4,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        sx={{
+                          fontSize: '0.92rem',
+                          fontWeight: 800,
+                          letterSpacing: '-0.03em',
+                        }}
+                      >
+                        {t('core:account_lookup.payments_title', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          ...helperNoteSx,
+                          mt: 0.2,
+                        }}
+                      >
+                        {t('core:payments_count', {
+                          count: totalPaymentsCount,
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <TableContainer
+                    sx={{
+                      border: `1px solid ${alpha(theme.palette.divider, 0.18)}`,
+                      borderRadius: '10px',
+                      flex: '1 1 auto',
+                      minHeight: 0,
+                    }}
+                  >
+                    <Table
+                      size="small"
+                      stickyHeader
+                      sx={{
+                        '& .MuiTableCell-root': {
+                          borderColor: alpha(theme.palette.divider, 0.16),
+                          py: 1.15,
+                        },
+                        '& .MuiTableHead-root .MuiTableCell-head': {
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? alpha(theme.palette.common.white, 0.025)
+                              : '#EEF2F7',
+                          color: alpha(theme.palette.text.secondary, 0.72),
+                          fontSize: '0.66rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.09em',
+                          textTransform: 'uppercase',
+                        },
+                        '& .MuiTableBody-root .MuiTableCell-root': {
+                          fontSize: '0.78rem',
+                        },
+                        '& .MuiTableRow-hover:hover': {
+                          backgroundColor: alpha(
+                            theme.palette.primary.main,
+                            0.04
+                          ),
                         },
                       }}
                     >
-                      <ButtonBase
-                        onClick={() => {
-                          navigator.clipboard.writeText(addressInfo?.address);
-                        }}
-                        sx={{ display: 'block', textAlign: 'left', mt: 0.25 }}
-                      >
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontFamily: 'monospace',
-                            wordBreak: 'break-all',
-                            '&:hover': { opacity: 0.8 },
-                          }}
-                        >
-                          {addressInfo?.address}
-                        </Typography>
-                      </ButtonBase>
-                    </Tooltip>
-                  </Box>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 0,
-                      mb: 2,
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      border: 1,
-                      borderColor: alpha(theme.palette.divider, 0.4),
-                      bgcolor: alpha(theme.palette.background.default, 0.5),
-                      paddingBottom: 1,
-                    }}
-                  >
-                    {[
-                      {
-                        label: t('core:balance', {
-                          postProcess: 'capitalizeFirstChar',
-                        }),
-                        value: `${formatBalance(addressInfo?.balance)} QORT`,
-                      },
-                      {
-                        label: t('core:total_received', {
-                          postProcess: 'capitalizeFirstChar',
-                        }),
-                        value:
-                          totalReceived != null
-                            ? `${formatBalance(totalReceived)} QORT`
-                            : '—',
-                      },
-                      {
-                        label: t('core:total_sent', {
-                          postProcess: 'capitalizeFirstChar',
-                        }),
-                        value:
-                          totalSent != null
-                            ? `${formatBalance(totalSent)} QORT`
-                            : '—',
-                      },
-                      {
-                        label: t('core:total_blocks_minted', {
-                          postProcess: 'capitalizeFirstChar',
-                        }),
-                        value: (
-                          (addressInfo?.blocksMinted ?? 0) +
-                          (addressInfo?.blocksMintedAdjustment ?? 0)
-                        ).toLocaleString(),
-                      },
-                    ].map((row, i) => (
-                      <Box
-                        key={row.label}
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          px: 2,
-                          py: 1.25,
-                          ...(i === 3 && { pb: 1.75 }),
-                          borderBottom: i < 3 ? 1 : 0,
-                          borderColor: 'divider',
-                        }}
-                      >
-                        <Typography
-                          variant="body2"
-                          color={i === 3 ? 'text.primary' : 'text.secondary'}
-                          sx={i === 3 ? { fontWeight: 600 } : undefined}
-                        >
-                          {row.label}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {row.value}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      executeEvent('openPaymentInternal', {
-                        address: addressInfo?.address,
-                        name: addressInfo?.name,
-                      });
-                    }}
-                    sx={{
-                      alignSelf: 'flex-start',
-                      mb: 2,
-                      px: 3,
-                      py: 1.25,
-                      borderRadius: 2,
-                      fontWeight: 600,
-                      textTransform: 'none',
-                      boxShadow: theme.shadows[2],
-                      '&:hover': { boxShadow: theme.shadows[4] },
-                    }}
-                  >
-                    {t('core:action.send_qort', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                  <Divider
-                    sx={{
-                      my: 2,
-                      borderColor: alpha(theme.palette.divider, 0.5),
-                    }}
-                  />
-                  <Typography
-                    variant="subtitle2"
-                    color="text.secondary"
-                    sx={{ mb: 1, fontWeight: 600 }}
-                  >
-                    {t('core:payments_count', {
-                      count: totalPaymentsCount,
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  <Table
-                    size="small"
-                    sx={{
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      border: 1,
-                      borderColor: alpha(theme.palette.divider, 0.4),
-                      '& .MuiTableHead-root .MuiTableCell-head': {
-                        fontWeight: 600,
-                        backgroundColor: alpha(
-                          theme.palette.background.default,
-                          0.8
-                        ),
-                        color: theme.palette.text.secondary,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        fontSize: '0.75rem',
-                      },
-                      '& .MuiTableBody-root .MuiTableRow-root:hover': {
-                        backgroundColor: alpha(theme.palette.action.hover, 0.4),
-                      },
-                      '& .MuiTableBody-root .MuiTableRow-root:hover .MuiButtonBase-root .MuiTypography-root':
-                        {
-                          color: theme.palette.primary.light,
-                        },
-                      '& .MuiTableCell-root': {
-                        borderColor: alpha(theme.palette.divider, 0.3),
-                      },
-                    }}
-                  >
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>
-                          {t('core:sender', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          {t('core:receiver', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          {t('core:amount', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          {t('core:time.time', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {isLoadingPayments && (
+                      <TableHead>
                         <TableRow>
-                          <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                            <CircularProgress
-                              size={24}
-                              sx={{ color: theme.palette.text.primary }}
-                            />
+                          <TableCell>
+                            {t('core:sender', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
                           </TableCell>
-                        </TableRow>
-                      )}
-                      {!isLoadingPayments && paginatedPayments.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4}>
-                            {t('core:message.generic.no_payments', {
+                          <TableCell>
+                            {t('core:receiver', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </TableCell>
+                          <TableCell align="right">
+                            {t('core:amount', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </TableCell>
+                          <TableCell align="right">
+                            {t('core:time.time', {
                               postProcess: 'capitalizeFirstChar',
                             })}
                           </TableCell>
                         </TableRow>
-                      )}
-                      {paginatedPayments.map((payment) => {
-                        const currentAddress = addressInfo?.address;
-                        const isSenderCurrent =
-                          currentAddress &&
-                          payment?.creatorAddress === currentAddress;
-                        const isReceiverCurrent =
-                          currentAddress &&
-                          payment?.recipient === currentAddress;
-                        const handleAddressClick = (address: string) => {
-                          if (!address || address === currentAddress) return;
-                          setNameOrAddress(address);
-                          setInputValue(address);
-                          lookupFunc(address);
-                        };
-                        return (
-                          <TableRow
-                            key={payment?.signature ?? payment?.timestamp}
-                          >
-                            <TableCell>
-                              {isSenderCurrent ? (
-                                <Typography variant="body2">
-                                  {addressInfo?.name?.trim() ||
-                                    formatAddress(payment?.creatorAddress)}
-                                </Typography>
-                              ) : (
-                                <Tooltip
-                                  onOpen={() =>
-                                    scheduleFetchNameForAddress(
-                                      payment?.creatorAddress
-                                    )
-                                  }
-                                  onClose={cancelFetchNameForAddress}
-                                  title={(() => {
-                                    const entry =
-                                      addressNamesMap[payment?.creatorAddress];
-                                    if (!entry || entry.loading)
-                                      return (
-                                        <Box
-                                          sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            py: 1,
-                                            minWidth: 48,
-                                          }}
-                                        >
-                                          <CircularProgress
-                                            size={24}
-                                            sx={{
-                                              color: theme.palette.primary.main,
-                                            }}
-                                          />
-                                        </Box>
-                                      );
-                                    if (entry.name)
-                                      return (
-                                        <Typography
-                                          variant="body1"
-                                          sx={{
-                                            fontSize: '1.0625rem',
-                                            fontWeight: 600,
-                                          }}
-                                        >
-                                          {entry.name}
-                                        </Typography>
-                                      );
-                                    return (
-                                      <Typography
-                                        variant="body2"
-                                        sx={{
-                                          fontFamily: 'monospace',
-                                          fontSize: '0.9375rem',
-                                          wordBreak: 'break-all',
-                                        }}
-                                      >
-                                        {payment?.creatorAddress ?? ''}
-                                      </Typography>
-                                    );
-                                  })()}
-                                  placement="top"
-                                  arrow
-                                  slotProps={{
-                                    tooltip: {
-                                      sx: {
-                                        color: theme.palette.text.primary,
-                                        backgroundColor:
-                                          theme.palette.background.paper,
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: 2,
-                                        boxShadow: theme.shadows[4],
-                                        padding: '12px 16px',
-                                        maxWidth: 360,
-                                      },
-                                    },
-                                    arrow: {
-                                      sx: {
-                                        color: theme.palette.background.paper,
-                                      },
-                                    },
-                                  }}
-                                >
-                                  <ButtonBase
-                                    onClick={() =>
-                                      handleAddressClick(
-                                        payment?.creatorAddress
-                                      )
-                                    }
-                                    sx={{ textAlign: 'left' }}
-                                  >
-                                    <Typography
-                                      variant="body2"
-                                      sx={{
-                                        fontFamily: 'monospace',
-                                        color: theme.palette.primary.light,
-                                        fontWeight: 500,
-                                        '&:hover': {
-                                          textDecoration: 'underline',
-                                          opacity: 0.95,
-                                        },
-                                      }}
-                                    >
-                                      {formatAddress(payment?.creatorAddress)}
-                                    </Typography>
-                                  </ButtonBase>
-                                </Tooltip>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {isReceiverCurrent ? (
-                                <Typography variant="body2">
-                                  {addressInfo?.name?.trim() ||
-                                    formatAddress(payment?.recipient)}
-                                </Typography>
-                              ) : (
-                                <Tooltip
-                                  onOpen={() =>
-                                    scheduleFetchNameForAddress(
-                                      payment?.recipient
-                                    )
-                                  }
-                                  onClose={cancelFetchNameForAddress}
-                                  title={(() => {
-                                    const entry =
-                                      addressNamesMap[payment?.recipient];
-                                    if (!entry || entry.loading)
-                                      return (
-                                        <Box
-                                          sx={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            py: 1,
-                                            minWidth: 48,
-                                          }}
-                                        >
-                                          <CircularProgress
-                                            size={24}
-                                            sx={{
-                                              color: theme.palette.primary.main,
-                                            }}
-                                          />
-                                        </Box>
-                                      );
-                                    if (entry.name)
-                                      return (
-                                        <Typography
-                                          variant="body1"
-                                          sx={{
-                                            fontSize: '1.0625rem',
-                                            fontWeight: 600,
-                                          }}
-                                        >
-                                          {entry.name}
-                                        </Typography>
-                                      );
-                                    return (
-                                      <Typography
-                                        variant="body2"
-                                        sx={{
-                                          fontFamily: 'monospace',
-                                          fontSize: '0.9375rem',
-                                          wordBreak: 'break-all',
-                                        }}
-                                      >
-                                        {payment?.recipient ?? ''}
-                                      </Typography>
-                                    );
-                                  })()}
-                                  placement="top"
-                                  arrow
-                                  slotProps={{
-                                    tooltip: {
-                                      sx: {
-                                        color: theme.palette.text.primary,
-                                        backgroundColor:
-                                          theme.palette.background.paper,
-                                        border: 1,
-                                        borderColor: 'divider',
-                                        borderRadius: 2,
-                                        boxShadow: theme.shadows[4],
-                                        padding: '12px 16px',
-                                        maxWidth: 360,
-                                      },
-                                    },
-                                    arrow: {
-                                      sx: {
-                                        color: theme.palette.background.paper,
-                                      },
-                                    },
-                                  }}
-                                >
-                                  <ButtonBase
-                                    onClick={() =>
-                                      handleAddressClick(payment?.recipient)
-                                    }
-                                    sx={{ textAlign: 'left' }}
-                                  >
-                                    <Typography
-                                      variant="body2"
-                                      sx={{
-                                        fontFamily: 'monospace',
-                                        color: theme.palette.primary.light,
-                                        fontWeight: 500,
-                                        '&:hover': {
-                                          textDecoration: 'underline',
-                                          opacity: 0.95,
-                                        },
-                                      }}
-                                    >
-                                      {formatAddress(payment?.recipient)}
-                                    </Typography>
-                                  </ButtonBase>
-                                </Tooltip>
-                              )}
-                            </TableCell>
-                            <TableCell>{payment?.amount} QORT</TableCell>
-                            <TableCell>
-                              {formatTimestamp(payment?.timestamp)}
+                      </TableHead>
+                      <TableBody>
+                        {isLoadingPayments ? (
+                          <TableRow>
+                            <TableCell
+                              align="center"
+                              colSpan={4}
+                              sx={{ py: 4 }}
+                            >
+                              <CircularProgress size={22} />
                             </TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        ) : null}
+
+                        {!isLoadingPayments &&
+                        paginatedPayments.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} sx={{ py: 3 }}>
+                              {t('core:message.generic.no_payments', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+
+                        {!isLoadingPayments
+                          ? paginatedPayments.map((payment) => {
+                              const ownerAddress = addressInfo.address;
+                              const senderAddress =
+                                payment?.creatorAddress || '';
+                              const receiverAddress = payment?.recipient || '';
+                              const senderEntry =
+                                addressNamesMap[senderAddress];
+                              const receiverEntry =
+                                addressNamesMap[receiverAddress];
+                              const senderLabel =
+                                senderAddress === ownerAddress
+                                  ? addressInfo.name?.trim() ||
+                                    formatAddress(senderAddress)
+                                  : senderEntry?.name ||
+                                    formatAddress(senderAddress);
+                              const receiverLabel =
+                                receiverAddress === ownerAddress
+                                  ? addressInfo.name?.trim() ||
+                                    formatAddress(receiverAddress)
+                                  : receiverEntry?.name ||
+                                    formatAddress(receiverAddress);
+                              const senderHasUnsafeName = Boolean(
+                                senderAddress === ownerAddress
+                                  ? targetUserName &&
+                                      hasInvisibleCharacters(targetUserName)
+                                  : senderEntry?.name &&
+                                      hasInvisibleCharacters(senderEntry.name)
+                              );
+                              const receiverHasUnsafeName = Boolean(
+                                receiverAddress === ownerAddress
+                                  ? targetUserName &&
+                                      hasInvisibleCharacters(targetUserName)
+                                  : receiverEntry?.name &&
+                                      hasInvisibleCharacters(receiverEntry.name)
+                              );
+
+                              const handleLookupAddress = (address: string) => {
+                                if (!address || address === ownerAddress) {
+                                  return;
+                                }
+
+                                setNameOrAddress(address);
+                                setInputValue(address);
+                                void lookupFunc(address);
+                              };
+
+                              return (
+                                <TableRow
+                                  hover
+                                  key={payment?.signature ?? payment?.timestamp}
+                                >
+                                  <TableCell>
+                                    {senderAddress === ownerAddress ? (
+                                      <Typography
+                                        sx={{
+                                          fontSize: '0.76rem',
+                                          fontWeight: 500,
+                                          ...(senderHasUnsafeName
+                                            ? {
+                                                textDecorationLine:
+                                                  'line-through',
+                                                textDecorationThickness: '2px',
+                                                textDecorationColor:
+                                                  theme.palette.error.main,
+                                              }
+                                            : {}),
+                                        }}
+                                      >
+                                        {senderLabel}
+                                      </Typography>
+                                    ) : (
+                                      <ButtonBase
+                                        onClick={() =>
+                                          handleLookupAddress(senderAddress)
+                                        }
+                                        sx={{ textAlign: 'left' }}
+                                      >
+                                        <Typography
+                                          sx={{
+                                            color: theme.palette.primary.main,
+                                            fontSize: '0.76rem',
+                                            fontWeight: 600,
+                                            ...(senderHasUnsafeName
+                                              ? {
+                                                  textDecorationLine:
+                                                    'line-through',
+                                                  textDecorationThickness:
+                                                    '2px',
+                                                  textDecorationColor:
+                                                    theme.palette.error.main,
+                                                }
+                                              : {}),
+                                          }}
+                                        >
+                                          {senderLabel}
+                                        </Typography>
+                                      </ButtonBase>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {receiverAddress === ownerAddress ? (
+                                      <Typography
+                                        sx={{
+                                          fontSize: '0.76rem',
+                                          fontWeight: 500,
+                                          ...(receiverHasUnsafeName
+                                            ? {
+                                                textDecorationLine:
+                                                  'line-through',
+                                                textDecorationThickness: '2px',
+                                                textDecorationColor:
+                                                  theme.palette.error.main,
+                                              }
+                                            : {}),
+                                        }}
+                                      >
+                                        {receiverLabel}
+                                      </Typography>
+                                    ) : (
+                                      <ButtonBase
+                                        onClick={() =>
+                                          handleLookupAddress(receiverAddress)
+                                        }
+                                        sx={{ textAlign: 'left' }}
+                                      >
+                                        <Typography
+                                          sx={{
+                                            color: theme.palette.primary.main,
+                                            fontSize: '0.76rem',
+                                            fontWeight: 600,
+                                            ...(receiverHasUnsafeName
+                                              ? {
+                                                  textDecorationLine:
+                                                    'line-through',
+                                                  textDecorationThickness:
+                                                    '2px',
+                                                  textDecorationColor:
+                                                    theme.palette.error.main,
+                                                }
+                                              : {}),
+                                          }}
+                                        >
+                                          {receiverLabel}
+                                        </Typography>
+                                      </ButtonBase>
+                                    )}
+                                  </TableCell>
+                                  <TableCell
+                                    align="right"
+                                    sx={{
+                                      fontSize: '0.76rem',
+                                      fontWeight: 700,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {formatBalance(payment?.amount)} QORT
+                                  </TableCell>
+                                  <TableCell
+                                    align="right"
+                                    sx={{
+                                      color: theme.palette.text.secondary,
+                                      fontSize: '0.74rem',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {formatTimestamp(payment?.timestamp)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          : null}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
                   <TablePagination
                     component="div"
                     count={totalPaymentsCount}
-                    page={paymentsPage}
-                    onPageChange={(_, p) => setPaymentsPage(p)}
-                    rowsPerPage={paymentsRowsPerPage}
-                    onRowsPerPageChange={(e) => {
-                      setPaymentsRowsPerPage(parseInt(e.target.value, 10));
+                    onPageChange={(_event, page) => setPaymentsPage(page)}
+                    onRowsPerPageChange={(event) => {
+                      setPaymentsRowsPerPage(parseInt(event.target.value, 10));
                       setPaymentsPage(0);
                     }}
-                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    page={paymentsPage}
+                    rowsPerPage={paymentsRowsPerPage}
+                    rowsPerPageOptions={[5, 10, 20]}
+                    labelRowsPerPage={t(
+                      'core:account_lookup.pagination_rows_per_page'
+                    )}
                     labelDisplayedRows={({ from, to, count }) =>
-                      t('core:pagination_of', {
-                        from: count === 0 ? 0 : from,
-                        to: to,
-                        total: count,
+                      t('core:account_lookup.pagination_displayed_rows', {
+                        from,
+                        to,
+                        count,
                       })
                     }
-                    labelRowsPerPage={t('core:items_per_page', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
                     sx={{
-                      borderTop: 1,
-                      borderColor: alpha(theme.palette.divider, 0.4),
+                      borderTop: `1px solid ${alpha(theme.palette.divider, 0.16)}`,
+                      mt: 1,
+                      '& .MuiTablePagination-toolbar': {
+                        minHeight: 42,
+                        px: 0.5,
+                      },
                       '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows':
-                        { fontSize: '0.875rem' },
+                        {
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.74rem',
+                          fontWeight: 500,
+                          m: 0,
+                        },
+                      '& .MuiTablePagination-select': {
+                        fontSize: '0.76rem',
+                        fontWeight: 600,
+                        py: 0.25,
+                      },
+                      '& .MuiTablePagination-actions .MuiIconButton-root': {
+                        p: 0.5,
+                      },
                     }}
                   />
                 </Box>
               </Box>
-            )}
-          </Box>
+            </Box>
+          ) : null}
         </Box>
       </Box>
-    </Box>
+    </Dialog>
   );
 };

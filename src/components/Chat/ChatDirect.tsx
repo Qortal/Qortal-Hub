@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAtomValue } from 'jotai';
-import { userInfoAtom, balanceAtom } from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
+import {
+  userInfoAtom,
+  balanceAtom,
+  dmFriendsByAddressAtom,
+  p2pHealthAtom,
+} from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
 import './chat.css';
@@ -9,18 +14,34 @@ import CircularProgress from '@mui/material/CircularProgress';
 import {
   Avatar,
   Box,
+  Button,
   ButtonBase,
   ClickAwayListener,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   InputAdornment,
   List,
   ListItem,
   ListItemButton,
   ListItemText,
   Paper,
+  SvgIcon,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
+import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
+import CallRoundedIcon from '@mui/icons-material/CallRounded';
+import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
+import PersonRemoveRoundedIcon from '@mui/icons-material/PersonRemoveRounded';
+import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
+import MicRoundedIcon from '@mui/icons-material/MicRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SendIcon from '@mui/icons-material/Send';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
@@ -52,9 +73,152 @@ import {
   MIN_REQUIRED_QORTS,
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { useVoiceCallContext } from '../../context/VoiceCallContext';
+import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
+import { buildDirectVoiceCallChatId } from '../../lib/call/directVoiceCallChatId';
+import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
+import { useIsOnline } from '../../hooks/usePresence';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 const uid = new ShortUniqueId({ length: 5 });
+const QCHAT_FILE_DEFAULT_EXPIRY_HOURS = 2;
+const QCHAT_FILE_COMPLETED_CACHE_KEY = 'qchat-dm-file-transfer-completed-v1';
+const QCHAT_FILE_COMPLETED_CACHE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+const QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+const formatQchatFileSize = (bytes?: number) => {
+  const size = Number(bytes || 0);
+  if (!Number.isFinite(size) || size <= 0) return '0 KB';
+  if (size < 1024 * 1024) return `${Math.max(1, Math.ceil(size / 1024))} KB`;
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
+
+const ReticulumFileTransferIcon = (props) => (
+  <SvgIcon viewBox="0 0 24 24" {...props}>
+    <circle cx="5" cy="12" r="2" fill="currentColor" />
+    <circle cx="19" cy="6" r="2" fill="currentColor" />
+    <circle cx="19" cy="18" r="2" fill="currentColor" />
+    <path
+      d="M7 12C12 12 12 6 17 6"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      opacity="0.45"
+      fill="none"
+    />
+    <path
+      d="M7 12C12 12 12 18 17 18"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      opacity="0.45"
+      fill="none"
+    />
+    <path
+      d="M8 12H15"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <path
+      d="M13 9L16 12L13 15"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </SvgIcon>
+);
+
+const loadQchatCompletedTransfers = (address?: string) => {
+  if (!address || typeof window === 'undefined') return {};
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(QCHAT_FILE_COMPLETED_CACHE_KEY) || '{}'
+    );
+    const scoped = parsed?.[address] || {};
+    const now = Date.now();
+    const entries = Object.entries(scoped)
+      .filter(([, value]: any) => {
+        const expiresAt = Number(value?.expiresAt || 0);
+        const completedAt = Number(value?.completedAt || 0);
+        if (expiresAt)
+          return expiresAt + QCHAT_FILE_COMPLETED_CACHE_GRACE_MS > now;
+        return (
+          !completedAt ||
+          completedAt + QCHAT_FILE_COMPLETED_CACHE_MAX_AGE_MS > now
+        );
+      })
+      .slice(-5000);
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
+};
+
+const saveQchatCompletedTransfers = (
+  address: string,
+  records: Record<string, any>
+) => {
+  if (!address || typeof window === 'undefined') return;
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(QCHAT_FILE_COMPLETED_CACHE_KEY) || '{}'
+    );
+    parsed[address] = records;
+    window.localStorage.setItem(
+      QCHAT_FILE_COMPLETED_CACHE_KEY,
+      JSON.stringify(parsed)
+    );
+  } catch {
+    // Ignore storage failures; transfer state still works for the current session.
+  }
+};
+
+const getQchatFileTransferData = (message: any) => {
+  if (message?.decryptedData?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData || {}),
+      ...(message.decryptedData.data || {}),
+    };
+  }
+  if (message?.decryptedData?.data?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData.data || {}),
+      ...(message.decryptedData.data.data || {}),
+    };
+  }
+  if (message?.type === 'qchat-dm-file-transfer') {
+    return { ...(message || {}), ...(message.data || {}) };
+  }
+  return null;
+};
+
+const buildQchatFileLinkAuthSignedFields = (payload: {
+  transferId: string;
+  senderAddress: string;
+  downloaderAddress: string;
+  downloaderPublicKey: string;
+  downloaderReticulumDestinationHash: string;
+  downloaderReticulumIdentityPublicKeyBase64: string;
+  timestamp: number;
+}) => ({
+  type: 'QCHAT_FILE_LINK_AUTH',
+  transferId: payload.transferId,
+  senderAddress: payload.senderAddress,
+  downloaderAddress: payload.downloaderAddress,
+  downloaderPublicKey: payload.downloaderPublicKey,
+  downloaderReticulumDestinationHash:
+    payload.downloaderReticulumDestinationHash,
+  downloaderReticulumIdentityPublicKeyBase64:
+    payload.downloaderReticulumIdentityPublicKeyBase64,
+  timestamp: payload.timestamp,
+});
 
 export const ChatDirect = ({
   myAddress,
@@ -68,8 +232,113 @@ export const ChatDirect = ({
 }) => {
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
+  const [dmFriendsByAddress, setDmFriendsByAddress] = useAtom(
+    dmFriendsByAddressAtom
+  );
   const myName = userInfo?.name;
   const theme = useTheme();
+  const p2pHealth = useAtomValue(p2pHealthAtom);
+
+  const {
+    callState,
+    audioMode,
+    startupStatus,
+    callMediaReady,
+    isMuted,
+    hearCall,
+    callDuration,
+    activeCallChatId,
+    initiateCall: initiateVoiceCall,
+    hangUp,
+    toggleMute,
+    toggleHearCall,
+  } = useVoiceCallContext();
+  const { confirmCallSwitch } = useCallSwitchGuard();
+
+  const peerOnline = useIsOnline(selectedDirect?.address);
+
+  const directVoiceChatId = useMemo(() => {
+    if (!myAddress || !selectedDirect?.address) return null;
+    return buildDirectVoiceCallChatId(myAddress, selectedDirect.address);
+  }, [myAddress, selectedDirect?.address]);
+
+  const callMatchesThisDirect = Boolean(
+    directVoiceChatId &&
+    ((callState === 'calling' && activeCallChatId === directVoiceChatId) ||
+      (callState === 'connected' && activeCallChatId === directVoiceChatId))
+  );
+  const p2pHealthGood = p2pHealth === 'good';
+  const directVoiceBlockedByP2p = !callMatchesThisDirect && !p2pHealthGood;
+
+  const signCallRequest = useCallback(
+    async (fields: Record<string, unknown>) => {
+      const res = await (window as any).sendMessage(
+        'signPresenceMessage',
+        fields,
+        10_000
+      );
+      return {
+        signature: res?.signature ?? '',
+        publicKey: userInfo?.publicKey ?? '',
+      };
+    },
+    [userInfo?.publicKey]
+  );
+
+  const signQchatFileFields = useCallback(
+    async (fields: Record<string, unknown>) => {
+      const res = await (window as any).sendMessage(
+        'signPresenceMessage',
+        fields,
+        10_000
+      );
+      if (!res?.signature || !userInfo?.publicKey) {
+        throw new Error('Unable to sign file transfer message');
+      }
+      return {
+        signature: res.signature,
+        publicKey: userInfo.publicKey,
+      };
+    },
+    [userInfo?.publicKey]
+  );
+
+  const handleStartDirectVoiceCall = useCallback(async () => {
+    if (!directVoiceChatId || !selectedDirect?.address) return;
+    if (callMatchesThisDirect) return;
+    if (!peerOnline) return;
+    if (directVoiceBlockedByP2p) return;
+    const confirmed = await confirmCallSwitch({
+      type: 'direct',
+      chatId: directVoiceChatId,
+    });
+    if (!confirmed) return;
+    initiateVoiceCall(
+      selectedDirect.address,
+      directVoiceChatId,
+      signCallRequest
+    );
+  }, [
+    callMatchesThisDirect,
+    confirmCallSwitch,
+    directVoiceChatId,
+    directVoiceBlockedByP2p,
+    initiateVoiceCall,
+    peerOnline,
+    selectedDirect?.address,
+    signCallRequest,
+  ]);
+
+  const fmtCallDuration = useCallback(
+    (secs: number): string => {
+      const m = Math.floor(secs / 60)
+        .toString()
+        .padStart(2, '0');
+      const s = (secs % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    },
+    [myAddress]
+  );
   const { t } = useTranslation([
     'auth',
     'core',
@@ -77,6 +346,7 @@ export const ChatDirect = ({
     'question',
     'tutorial',
   ]);
+  const p2pHealthBadTooltip = t('core:p2p_health_bad_call_tooltip');
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [onEditMessage, setOnEditMessage] = useState(null);
@@ -85,7 +355,8 @@ export const ChatDirect = ({
   const [directToValue, setDirectToValue] = useState('');
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const nameSearchInputRef = useRef<HTMLDivElement>(null);
-  const searchQuery = directToValue.trim().length >= 1 ? directToValue.trim() : '';
+  const searchQuery =
+    directToValue.trim().length >= 1 ? directToValue.trim() : '';
   const { results: nameSearchResults, isLoading: nameSearchLoading } =
     useNameSearch(searchQuery, 15);
   const hasInitialized = useRef(false);
@@ -101,10 +372,26 @@ export const ChatDirect = ({
   const [messageSize, setMessageSize] = useState(0);
   const groupSocketTimeoutRef = useRef(null);
   const [replyMessage, setReplyMessage] = useState(null);
+  const [qchatFileTransferStates, setQchatFileTransferStates] = useState({});
+  const [qchatCompletedTransfers, setQchatCompletedTransfers] = useState({});
+  const [pendingQchatFileOffer, setPendingQchatFileOffer] = useState(null);
+  const [qchatFileExpiryHours, setQchatFileExpiryHours] = useState(
+    QCHAT_FILE_DEFAULT_EXPIRY_HOURS
+  );
+  const outgoingQchatFileTransfersRef = useRef(new Map());
+  const qchatAcceptedOfferMetaRef = useRef(new Map());
+  const qchatTerminalTransferIdsRef = useRef(new Set<string>());
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
   const publicKeyOfRecipientRef = useRef(null);
+
+  useEffect(() => {
+    const records = loadQchatCompletedTransfers(myAddress);
+    setQchatCompletedTransfers(records);
+    qchatTerminalTransferIdsRef.current = new Set(Object.keys(records));
+    saveQchatCompletedTransfers(myAddress, records);
+  }, [myAddress]);
 
   const handleReaction = useCallback(
     async (reaction, chatMessage, reactionState = true) => {
@@ -478,15 +765,18 @@ export const ChatDirect = ({
               }
               return;
             }
-            rej(response.error);
+            console.warn(
+              '[DirectChat] Unable to decrypt direct messages',
+              decryptResponse.error
+            );
+            res([]);
           })
           .catch((error) => {
-            rej(
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
+            console.warn(
+              '[DirectChat] Unable to decrypt direct messages',
+              error?.message || error
             );
+            res([]);
           });
       });
     } catch (error) {
@@ -586,6 +876,85 @@ export const ChatDirect = ({
     if (validateAddress(trimmed)) return [trimmed];
     return nameSearchResults ?? [];
   }, [directToValue, nameSearchResults]);
+
+  const resolvedNewChatTarget = useMemo(() => {
+    const trimmed = directToValue.trim();
+    if (!trimmed) return null;
+    if (validateAddress(trimmed)) {
+      return { address: trimmed, name: trimmed };
+    }
+    const exact = (nameSearchResults || []).filter((r) => r.name === trimmed);
+    if (exact.length === 1) {
+      return { address: exact[0].address, name: exact[0].name };
+    }
+    return null;
+  }, [directToValue, nameSearchResults]);
+
+  const [friendActionBusy, setFriendActionBusy] = useState(false);
+
+  const handleToggleDmFriend = useCallback(
+    async (
+      address: string,
+      displayName: string | undefined,
+      isCurrentlyFriend: boolean
+    ) => {
+      if (!address || address === myAddress) return;
+      if (isCurrentlyFriend) {
+        setDmFriendsByAddress((prev) => {
+          if (!prev[address]) return prev;
+          const next = { ...prev };
+          delete next[address];
+          return next;
+        });
+        setInfoSnack({
+          type: 'success',
+          message: t('core:dm_friends.removed', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+        return;
+      }
+      setFriendActionBusy(true);
+      try {
+        const pk = await getPublicKey(address);
+        if (!pk) {
+          throw new Error('no public key');
+        }
+        let name = displayName;
+        if (!name || name === address) {
+          try {
+            const resolvedName = await getNameInfo(address);
+            name = resolvedName || address;
+          } catch {
+            name = address;
+          }
+        }
+        setDmFriendsByAddress((prev) => ({
+          ...prev,
+          [address]: { publicKey: pk, name, addedAt: Date.now() },
+        }));
+        setInfoSnack({
+          type: 'success',
+          message: t('core:dm_friends.added', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+      } catch {
+        setInfoSnack({
+          type: 'error',
+          message: t('core:dm_friends.add_failed', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+      } finally {
+        setFriendActionBusy(false);
+      }
+    },
+    [myAddress, setDmFriendsByAddress, t]
+  );
 
   const handleSelectNameOrAddress = useCallback(
     async (option: NameOrAddressOption | null) => {
@@ -717,6 +1086,446 @@ export const ChatDirect = ({
       editorRef.current.chain().focus().clearContent().run();
     }
   };
+
+  const getLocalReticulumIdentityForQchatFile = useCallback(async () => {
+    const api = (window as any).electronAPI;
+    const [hashResult, keyResult] = await Promise.all([
+      api?.reticulumGetLocalDestinationHash?.(),
+      api?.reticulumGetLocalIdentityPublicKeyBase64?.(),
+    ]);
+    const destinationHash = hashResult?.destinationHash;
+    const identityPublicKeyBase64 = keyResult?.publicKeyBase64;
+    if (!destinationHash || !identityPublicKeyBase64) {
+      throw new Error('Reticulum identity is unavailable');
+    }
+    return {
+      destinationHash,
+      identityPublicKeyBase64,
+    };
+  }, []);
+
+  const handleSendQchatFileOffer = useCallback(async () => {
+    try {
+      if (isNewChat || !selectedDirect?.address) return;
+      if (isSending) return;
+      if (+balance < MIN_REQUIRED_QORTS) {
+        throw new Error(
+          t('group:message.error.qortals_required', {
+            quantity: MIN_REQUIRED_QORTS,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      const api = (window as any).electronAPI;
+      if (!api?.qchatFileSelect) {
+        throw new Error('Reticulum file transfer is unavailable');
+      }
+      const selected = await api.qchatFileSelect();
+      if (!selected?.ok || !selected.file) return;
+      setPendingQchatFileOffer(selected.file);
+      setQchatFileExpiryHours(QCHAT_FILE_DEFAULT_EXPIRY_HOURS);
+    } catch (error) {
+      setInfoSnack({
+        type: 'error',
+        message: error?.message || String(error),
+      });
+      setOpenSnack(true);
+    }
+  }, [balance, isNewChat, isSending, selectedDirect?.address, t]);
+
+  const handleConfirmQchatFileOffer = useCallback(async () => {
+    try {
+      if (isNewChat || !selectedDirect?.address || !pendingQchatFileOffer)
+        return;
+      if (isSending) return;
+      if (+balance < MIN_REQUIRED_QORTS) {
+        throw new Error(
+          t('group:message.error.qortals_required', {
+            quantity: MIN_REQUIRED_QORTS,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      const api = (window as any).electronAPI;
+      if (!api?.qchatFileSend) {
+        throw new Error('Reticulum file transfer is unavailable');
+      }
+      const selectedFile = pendingQchatFileOffer;
+      const reticulumIdentity = await getLocalReticulumIdentityForQchatFile();
+      const transferId = `qft-${Date.now()}-${uid.rnd()}`;
+      const expiryHours = Math.max(
+        0.05,
+        Math.min(
+          168,
+          Number(qchatFileExpiryHours) || QCHAT_FILE_DEFAULT_EXPIRY_HOURS
+        )
+      );
+      const expiresAt = Date.now() + expiryHours * 60 * 60 * 1000;
+      outgoingQchatFileTransfersRef.current.set(transferId, {
+        ...selectedFile,
+        recipientAddress: selectedDirect.address,
+        senderAddress: myAddress,
+        expiresAt,
+      });
+      const otherData = {
+        specialId: transferId,
+        type: 'qchat-dm-file-transfer',
+        status: 'offer',
+        transferId,
+        fileName: selectedFile.name,
+        size: selectedFile.size,
+        sha256: selectedFile.sha256,
+        expiresAt,
+        senderAddress: myAddress,
+        recipientAddress: selectedDirect.address,
+        senderReticulumDestinationHash: reticulumIdentity.destinationHash,
+        senderReticulumIdentityPublicKeyBase64:
+          reticulumIdentity.identityPublicKeyBase64,
+        data: {
+          status: 'offer',
+          transferId,
+          fileName: selectedFile.name,
+          size: selectedFile.size,
+          sha256: selectedFile.sha256,
+          expiresAt,
+          senderAddress: myAddress,
+          recipientAddress: selectedDirect.address,
+          senderReticulumDestinationHash: reticulumIdentity.destinationHash,
+          senderReticulumIdentityPublicKeyBase64:
+            reticulumIdentity.identityPublicKeyBase64,
+        },
+      };
+      const sendMessageFunc = async () => {
+        const registered = await api.qchatFileSend({
+          transferId,
+          senderAddress: myAddress,
+          allowedRecipientAddress: selectedDirect.address,
+          recipientAddress: selectedDirect.address,
+          filePath: selectedFile.path,
+          fileName: selectedFile.name,
+          size: selectedFile.size,
+          sha256: selectedFile.sha256,
+          expiresAt,
+        });
+        if (!registered?.ok) {
+          throw new Error(
+            registered?.error || 'Unable to register file transfer'
+          );
+        }
+        const sent = await sendChatDirect(
+          { messageText: '', otherData },
+          selectedDirect.address,
+          publicKeyOfRecipient,
+          false
+        );
+        return sent;
+      };
+      addToQueue(
+        sendMessageFunc,
+        {
+          message: {
+            timestamp: Date.now(),
+            senderName: myName,
+            sender: myAddress,
+            ...otherData,
+          },
+        },
+        'chat-direct',
+        selectedDirect.address
+      );
+      setPendingQchatFileOffer(null);
+    } catch (error) {
+      setInfoSnack({
+        type: 'error',
+        message: error?.message || String(error),
+      });
+      setOpenSnack(true);
+    }
+  }, [
+    addToQueue,
+    balance,
+    getLocalReticulumIdentityForQchatFile,
+    isNewChat,
+    isSending,
+    myAddress,
+    myName,
+    pendingQchatFileOffer,
+    publicKeyOfRecipient,
+    qchatFileExpiryHours,
+    selectedDirect?.address,
+    t,
+  ]);
+
+  const handleAcceptQchatFileTransfer = useCallback(
+    async (message) => {
+      try {
+        const data = getQchatFileTransferData(message);
+        if (!data?.transferId || !message?.sender) {
+          console.error('[QchatFileTransfer] accept aborted: missing transfer id or sender', {
+            hasTransferId: Boolean(data?.transferId),
+            hasSender: Boolean(message?.sender),
+            data,
+          });
+          return;
+        }
+        console.log('[QchatFileTransfer] accept started', {
+          transferId: data.transferId,
+          fileName: data.fileName,
+          size: data.size,
+          sender: message.sender,
+        });
+        if (qchatCompletedTransfers[data.transferId]) {
+          throw new Error('This file has already been downloaded');
+        }
+        if (
+          Number(data.expiresAt || 0) > 0 &&
+          Number(data.expiresAt) <= Date.now()
+        ) {
+          throw new Error('This file transfer offer has expired');
+        }
+        const senderAddress = data.senderAddress || message.sender;
+        if (senderAddress !== message.sender) {
+          console.error('[QchatFileTransfer] accept aborted: sender mismatch', {
+            transferId: data.transferId,
+            senderAddress,
+            messageSender: message.sender,
+          });
+          throw new Error('File offer sender mismatch');
+        }
+        if (data.recipientAddress && data.recipientAddress !== myAddress) {
+          console.error('[QchatFileTransfer] accept aborted: recipient mismatch', {
+            transferId: data.transferId,
+            recipientAddress: data.recipientAddress,
+            myAddress,
+          });
+          throw new Error('File offer is not addressed to this account');
+        }
+        const api = (window as any).electronAPI;
+        if (!api?.qchatFileChooseSavePath || !api?.qchatFileAccept) {
+          console.error('[QchatFileTransfer] accept aborted: electron API unavailable', {
+            transferId: data.transferId,
+            hasChooseSavePath: Boolean(api?.qchatFileChooseSavePath),
+            hasAccept: Boolean(api?.qchatFileAccept),
+          });
+          throw new Error('Reticulum file transfer is unavailable');
+        }
+        console.log('[QchatFileTransfer] choosing save path', {
+          transferId: data.transferId,
+          fileName: data.fileName || 'received-file',
+        });
+        const save = await api.qchatFileChooseSavePath(
+          data.fileName || 'received-file'
+        );
+        if (!save?.ok || !save.path) {
+          console.error('[QchatFileTransfer] accept aborted: save path not selected', {
+            transferId: data.transferId,
+            save,
+          });
+          return;
+        }
+        console.log('[QchatFileTransfer] save path selected', {
+          transferId: data.transferId,
+          savePath: save.path,
+        });
+        console.log('[QchatFileTransfer] loading local Reticulum identity', {
+          transferId: data.transferId,
+        });
+        const reticulumIdentity = await getLocalReticulumIdentityForQchatFile();
+        console.log('[QchatFileTransfer] local Reticulum identity ready', {
+          transferId: data.transferId,
+          destinationHash: reticulumIdentity.destinationHash,
+          hasIdentityPublicKey: Boolean(reticulumIdentity.identityPublicKeyBase64),
+        });
+        const authTimestamp = Date.now();
+        const downloaderPublicKey = userInfo?.publicKey || '';
+        if (!downloaderPublicKey) {
+          console.error('[QchatFileTransfer] accept aborted: missing local public key', {
+            transferId: data.transferId,
+          });
+          throw new Error('Missing local Qortal public key');
+        }
+        const authSignedFields = buildQchatFileLinkAuthSignedFields({
+          transferId: data.transferId,
+          senderAddress,
+          downloaderAddress: myAddress,
+          downloaderPublicKey,
+          downloaderReticulumDestinationHash: reticulumIdentity.destinationHash,
+          downloaderReticulumIdentityPublicKeyBase64:
+            reticulumIdentity.identityPublicKeyBase64,
+          timestamp: authTimestamp,
+        });
+        console.log('[QchatFileTransfer] signing accept auth message', {
+          transferId: data.transferId,
+          senderAddress,
+          downloaderAddress: myAddress,
+        });
+        const authSigned = await signQchatFileFields(authSignedFields);
+        console.log('[QchatFileTransfer] accept auth message signed', {
+          transferId: data.transferId,
+          hasSignature: Boolean(authSigned?.signature),
+        });
+        const authMessage = {
+          ...authSignedFields,
+          signature: authSigned.signature,
+        };
+        console.log('[QchatFileTransfer] invoking qchatFileAccept', {
+          transferId: data.transferId,
+          fileName: data.fileName || 'received-file',
+          size: Number(data.size || 0),
+          hasSenderDestinationHash: Boolean(data.senderReticulumDestinationHash),
+          hasSenderIdentityPublicKey: Boolean(
+            data.senderReticulumIdentityPublicKeyBase64
+          ),
+          hasSha256: Boolean(data.sha256),
+        });
+        const accepted = await api.qchatFileAccept({
+          transferId: data.transferId,
+          senderAddress,
+          recipientAddress: myAddress,
+          authMessage,
+          senderReticulumDestinationHash: data.senderReticulumDestinationHash,
+          senderReticulumIdentityPublicKeyBase64:
+            data.senderReticulumIdentityPublicKeyBase64,
+          savePath: save.path,
+          fileName: data.fileName || 'received-file',
+          size: Number(data.size || 0),
+          sha256: data.sha256,
+        });
+        console.log('[QchatFileTransfer] qchatFileAccept result', {
+          transferId: data.transferId,
+          accepted,
+        });
+        if (!accepted?.ok) {
+          console.error('[QchatFileTransfer] accept failed in electron/bridge', {
+            transferId: data.transferId,
+            accepted,
+          });
+          throw new Error(accepted?.error || 'Unable to accept file transfer');
+        }
+        qchatAcceptedOfferMetaRef.current.set(data.transferId, {
+          expiresAt: Number(data.expiresAt || 0),
+        });
+        console.log('[QchatFileTransfer] accept registered', {
+          transferId: data.transferId,
+        });
+      } catch (error) {
+        console.error('[QchatFileTransfer] accept exception', {
+          message: error?.message || String(error),
+          error,
+        });
+        setInfoSnack({
+          type: 'error',
+          message: error?.message || String(error),
+        });
+        setOpenSnack(true);
+      }
+    },
+    [
+      getLocalReticulumIdentityForQchatFile,
+      myAddress,
+      qchatCompletedTransfers,
+      signQchatFileFields,
+      userInfo?.publicKey,
+    ]
+  );
+
+  useEffect(() => {
+    const unsubscribe = (window as any).electronAPI?.onQchatFileTransferEvent?.(
+      (payload) => {
+        if (!payload?.status || !payload?.transferId) return;
+        const incomingFailure =
+          payload.status === 'failed' || payload.status === 'rejected';
+        if (
+          incomingFailure &&
+          qchatTerminalTransferIdsRef.current.has(payload.transferId)
+        ) {
+          return;
+        }
+        if (payload.status === 'sent' || payload.status === 'received') {
+          qchatTerminalTransferIdsRef.current.add(payload.transferId);
+        }
+        setQchatFileTransferStates((prev) => {
+          const current = prev[payload.transferId] || {};
+          const currentDone =
+            current.status === 'sent' || current.status === 'received';
+          if (currentDone && incomingFailure) {
+            return prev;
+          }
+          const currentHasTransferProgress =
+            (current.status === 'receiving' || current.status === 'sending') &&
+            typeof current.progress === 'number';
+          const incomingLinkSetup =
+            payload.status === 'accepted' ||
+            payload.status === 'connecting' ||
+            payload.status === 'retrying' ||
+            payload.status === 'link_established' ||
+            payload.status === 'auth_sent' ||
+            payload.status === 'auth' ||
+            payload.status === 'authorized';
+          const nextPayload =
+            currentHasTransferProgress && incomingLinkSetup
+              ? {
+                  ...payload,
+                  status: current.status,
+                  progress: current.progress,
+                }
+              : payload;
+          return {
+            ...prev,
+            [payload.transferId]: {
+              ...current,
+              ...nextPayload,
+              updatedAt: Date.now(),
+            },
+          };
+        });
+        if (payload.status === 'sent' || payload.status === 'received') {
+          if (payload.status === 'received') {
+            const offerMeta = qchatAcceptedOfferMetaRef.current.get(
+              payload.transferId
+            );
+            setQchatCompletedTransfers((prev) => {
+              const next = {
+                ...prev,
+                [payload.transferId]: {
+                  transferId: payload.transferId,
+                  fileName: payload.fileName || '',
+                  path: payload.path || '',
+                  sha256: payload.sha256 || '',
+                  expiresAt: Number(offerMeta?.expiresAt || 0),
+                  completedAt: Date.now(),
+                },
+              };
+              saveQchatCompletedTransfers(myAddress, next);
+              return next;
+            });
+            qchatAcceptedOfferMetaRef.current.delete(payload.transferId);
+          }
+          setInfoSnack({
+            type: 'success',
+            message:
+              payload.status === 'sent'
+                ? `Sent ${payload.fileName || 'file'}`
+                : `Received ${payload.fileName || 'file'}`,
+          });
+          setOpenSnack(true);
+        } else if (
+          payload.status === 'failed' ||
+          payload.status === 'rejected'
+        ) {
+          setInfoSnack({
+            type: 'error',
+            message: `File transfer failed: ${payload.reason || 'unknown error'}`,
+          });
+          setOpenSnack(true);
+        }
+      }
+    );
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     if (!editorRef?.current) return;
     const handleUpdate = () => {
@@ -763,7 +1572,7 @@ export const ChatDirect = ({
         if (replyMessage?.chatReference) {
           repliedTo = replyMessage?.chatReference;
         }
-        let chatReference = onEditMessage?.signature;
+        const chatReference = onEditMessage?.signature;
 
         const otherData = {
           ...(onEditMessage?.decryptedData || {}),
@@ -847,9 +1656,13 @@ export const ChatDirect = ({
     <Box
       style={{
         background: theme.palette.background.default,
+        boxSizing: 'border-box',
         display: 'flex',
+        flex: 1,
         flexDirection: 'column',
-        height: `calc(100vh - ${appHeighOffsetPx})`,
+        height: '100%',
+        minHeight: 0,
+        padding: '10px',
         width: '100%',
       }}
     >
@@ -901,224 +1714,754 @@ export const ChatDirect = ({
             {t('core:action.new.chat', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
         )}
+        {!isNewChat && selectedDirect?.address && (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexShrink: 0,
+              gap: 1,
+              marginLeft: 'auto',
+            }}
+          >
+            <Tooltip
+              title={
+                peerOnline
+                  ? t('core:presence.peer_online_hint')
+                  : t('core:presence.peer_offline_hint')
+              }
+            >
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexShrink: 0,
+                  gap: 0.5,
+                }}
+              >
+                <Box
+                  sx={{
+                    backgroundColor: peerOnline
+                      ? '#44b700'
+                      : theme.palette.action.disabled,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    height: 8,
+                    width: 8,
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: peerOnline ? 'success.main' : 'text.disabled',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {peerOnline
+                    ? t('core:presence.online')
+                    : t('core:presence.offline')}
+                </Typography>
+              </Box>
+            </Tooltip>
+            <Tooltip
+              title={
+                dmFriendsByAddress[selectedDirect.address]
+                  ? t('core:dm_friends.remove_friend', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('core:dm_friends.add_friend', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+              }
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={friendActionBusy}
+                  onClick={() =>
+                    handleToggleDmFriend(
+                      selectedDirect.address,
+                      selectedDirect.name,
+                      Boolean(dmFriendsByAddress[selectedDirect.address])
+                    )
+                  }
+                  sx={{ color: 'text.secondary' }}
+                >
+                  {dmFriendsByAddress[selectedDirect.address] ? (
+                    <PersonRemoveRoundedIcon sx={{ fontSize: 20 }} />
+                  ) : (
+                    <PersonAddRoundedIcon sx={{ fontSize: 20 }} />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip
+              title={
+                callMatchesThisDirect && callState === 'connected'
+                  ? 'In call'
+                  : callMatchesThisDirect && callState === 'calling'
+                    ? ''
+                    : !peerOnline
+                      ? t('core:presence.call_offline_tooltip')
+                      : directVoiceBlockedByP2p
+                        ? p2pHealthBadTooltip
+                        : 'Start voice call'
+              }
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={
+                    !(
+                      (peerOnline &&
+                        !callMatchesThisDirect &&
+                        !directVoiceBlockedByP2p) ||
+                      (callMatchesThisDirect && callState === 'connected')
+                    )
+                  }
+                  onClick={
+                    callMatchesThisDirect && callState === 'connected'
+                      ? hangUp
+                      : handleStartDirectVoiceCall
+                  }
+                  sx={{
+                    color:
+                      callMatchesThisDirect && callState === 'connected'
+                        ? '#ef4444'
+                        : 'text.secondary',
+                    '&:hover': {
+                      color:
+                        callMatchesThisDirect && callState === 'connected'
+                          ? '#dc2626'
+                          : 'text.primary',
+                    },
+                    '&.Mui-disabled': {
+                      color: theme.palette.action.disabled,
+                    },
+                  }}
+                >
+                  {callMatchesThisDirect && callState === 'connected' ? (
+                    <CallEndRoundedIcon sx={{ fontSize: 20 }} />
+                  ) : (
+                    <CallRoundedIcon sx={{ fontSize: 20 }} />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
+
+      {!isNewChat && callMatchesThisDirect && callState === 'calling' && (
+        <Box
+          sx={{
+            alignItems: 'center',
+            backgroundColor: 'action.selected',
+            display: 'flex',
+            flexShrink: 0,
+            gap: 1.5,
+            px: 2,
+            py: 1,
+          }}
+        >
+          <CircularProgress size={14} thickness={5} />
+          <Typography
+            variant="body2"
+            sx={{ flex: 1, fontSize: 12, fontWeight: 600 }}
+          >
+            Calling…
+          </Typography>
+          <IconButton size="small" onClick={hangUp} sx={{ color: '#ef4444' }}>
+            <CallEndRoundedIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
 
       {isNewChat && (
         <>
-        <ClickAwayListener onClickAway={() => setSuggestionsOpen(false)}>
-          <Box
-            ref={nameSearchInputRef}
-            sx={{
-              flexShrink: 0,
-              padding: '20px 16px 16px',
-              position: 'relative',
-              width: '100%',
-            }}
-          >
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder={t('auth:message.generic.name_address', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              value={directToValue}
-              onChange={(e) => {
-                setDirectToValue(e.target.value);
-                setSuggestionsOpen(true);
+          <ClickAwayListener onClickAway={() => setSuggestionsOpen(false)}>
+            <Box
+              ref={nameSearchInputRef}
+              sx={{
+                flexShrink: 0,
+                padding: '20px 16px 16px',
+                position: 'relative',
+                width: '100%',
               }}
-              onFocus={() => setSuggestionsOpen(true)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === 'Enter' &&
-                  directToValue.trim() &&
-                  validateAddress(directToValue.trim())
-                ) {
-                  e.preventDefault();
-                  handleSelectNameOrAddress(directToValue.trim());
-                  setSuggestionsOpen(false);
-                }
-              }}
-              autoFocus
-              slotProps={{
-                htmlInput: {
-                  'aria-label': t('auth:message.generic.name_address', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchRoundedIcon
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '22px',
-                      }}
-                    />
-                  </InputAdornment>
-                ),
-                endAdornment: nameSearchLoading ? (
-                  <InputAdornment position="end">
-                    <CircularProgress size={20} />
-                  </InputAdornment>
-                ) : null,
-                sx: {
-                  backgroundColor: theme.palette.background.paper,
-                  borderRadius: '14px',
-                  fontFamily: 'Inter',
-                  fontSize: '15px',
-                  transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-                  '& fieldset': {
-                    borderColor: theme.palette.divider,
-                    borderRadius: '14px',
-                    transition: 'border-color 0.2s ease',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: theme.palette.text.secondary,
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderWidth: '2px',
-                    borderColor: theme.palette.primary.main,
-                    boxShadow: `0 0 0 3px ${theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(25, 118, 210, 0.12)'}`,
-                  },
-                },
-              }}
-            />
-            {suggestionsOpen && (nameOptions.length > 0 || nameSearchLoading) && (
-              <Paper
-                elevation={8}
-                sx={{
-                  position: 'absolute',
-                  left: 16,
-                  right: 16,
-                  top: '100%',
-                  marginTop: 8,
-                  maxHeight: 300,
-                  overflow: 'hidden',
-                  overflowY: 'auto',
-                  zIndex: 1400,
-                  borderRadius: '14px',
-                  border: `1px solid ${theme.palette.divider}`,
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 8px 32px rgba(0,0,0,0.4)'
-                    : '0 8px 32px rgba(0,0,0,0.12)',
-                  '&::-webkit-scrollbar': { width: 8 },
-                  '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: theme.palette.divider,
-                    borderRadius: 4,
+            >
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder={t('auth:message.generic.name_address', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                value={directToValue}
+                onChange={(e) => {
+                  setDirectToValue(e.target.value);
+                  setSuggestionsOpen(true);
+                }}
+                onFocus={() => setSuggestionsOpen(true)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Enter' &&
+                    directToValue.trim() &&
+                    validateAddress(directToValue.trim())
+                  ) {
+                    e.preventDefault();
+                    handleSelectNameOrAddress(directToValue.trim());
+                    setSuggestionsOpen(false);
+                  }
+                }}
+                autoFocus
+                slotProps={{
+                  htmlInput: {
+                    'aria-label': t('auth:message.generic.name_address', {
+                      postProcess: 'capitalizeFirstChar',
+                    }),
                   },
                 }}
-              >
-                {nameSearchLoading && nameOptions.length === 0 ? (
-                  <Box
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchRoundedIcon
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '22px',
+                        }}
+                      />
+                    </InputAdornment>
+                  ),
+                  endAdornment:
+                    (resolvedNewChatTarget &&
+                      resolvedNewChatTarget.address !== myAddress) ||
+                    nameSearchLoading ? (
+                      <InputAdornment
+                        position="end"
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          maxHeight: 40,
+                        }}
+                      >
+                        {resolvedNewChatTarget &&
+                          resolvedNewChatTarget.address !== myAddress && (
+                            <Tooltip
+                              title={
+                                dmFriendsByAddress[
+                                  resolvedNewChatTarget.address
+                                ]
+                                  ? t('core:dm_friends.remove_friend', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })
+                                  : t('core:dm_friends.add_friend', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  tabIndex={-1}
+                                  disabled={friendActionBusy}
+                                  onClick={() =>
+                                    handleToggleDmFriend(
+                                      resolvedNewChatTarget.address,
+                                      resolvedNewChatTarget.name,
+                                      Boolean(
+                                        dmFriendsByAddress[
+                                          resolvedNewChatTarget.address
+                                        ]
+                                      )
+                                    )
+                                  }
+                                  sx={{ color: 'text.secondary' }}
+                                >
+                                  {dmFriendsByAddress[
+                                    resolvedNewChatTarget.address
+                                  ] ? (
+                                    <PersonRemoveRoundedIcon
+                                      sx={{ fontSize: 22 }}
+                                    />
+                                  ) : (
+                                    <PersonAddRoundedIcon
+                                      sx={{ fontSize: 22 }}
+                                    />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                        {nameSearchLoading ? (
+                          <CircularProgress size={20} />
+                        ) : null}
+                      </InputAdornment>
+                    ) : null,
+                  sx: {
+                    backgroundColor: theme.palette.background.paper,
+                    borderRadius: '14px',
+                    fontFamily: 'Inter',
+                    fontSize: '15px',
+                    transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+                    '& fieldset': {
+                      borderColor: theme.palette.divider,
+                      borderRadius: '14px',
+                      transition: 'border-color 0.2s ease',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: theme.palette.text.secondary,
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderWidth: '2px',
+                      borderColor: theme.palette.primary.main,
+                      boxShadow: `0 0 0 3px ${theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(25, 118, 210, 0.12)'}`,
+                    },
+                  },
+                }}
+              />
+              {suggestionsOpen &&
+                (nameOptions.length > 0 || nameSearchLoading) && (
+                  <Paper
+                    elevation={8}
                     sx={{
-                      py: 3,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1.5,
+                      position: 'absolute',
+                      left: 16,
+                      right: 16,
+                      top: '100%',
+                      marginTop: 8,
+                      maxHeight: 300,
+                      overflow: 'hidden',
+                      overflowY: 'auto',
+                      zIndex: 1400,
+                      borderRadius: '14px',
+                      border: `1px solid ${theme.palette.divider}`,
+                      boxShadow:
+                        theme.palette.mode === 'dark'
+                          ? '0 8px 32px rgba(0,0,0,0.4)'
+                          : '0 8px 32px rgba(0,0,0,0.12)',
+                      '&::-webkit-scrollbar': { width: 8 },
+                      '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: theme.palette.divider,
+                        borderRadius: 4,
+                      },
                     }}
                   >
-                    <CircularProgress size={22} />
-                    <Typography variant="body2" color="text.secondary">
-                      {t('core:loading.generic', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <List disablePadding sx={{ py: 0.5 }}>
-                    {nameOptions.map((opt) => {
-                      const label =
-                        typeof opt === 'string' ? opt : opt.name;
-                      const key =
-                        typeof opt === 'string' ? opt : opt.address;
-                      const initial = (label || '?').charAt(0).toUpperCase();
-                      return (
-                        <ListItem key={key} disablePadding sx={{ px: 1 }}>
-                          <ListItemButton
-                            onClick={() => {
-                              const valueToSet =
-                                typeof opt === 'string' ? opt : opt.name;
-                              setDirectToValue(valueToSet);
-                              setSuggestionsOpen(false);
-                            }}
-                            sx={{
-                              borderRadius: '10px',
-                              py: 1.25,
-                              px: 1.5,
-                              mx: 0.5,
-                              transition: 'background-color 0.15s ease',
-                              '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                              },
-                            }}
-                          >
-                            <Avatar
-                              sx={{
-                                width: 36,
-                                height: 36,
-                                mr: 1.5,
-                                fontSize: '1rem',
-                                fontWeight: 600,
-                                bgcolor: theme.palette.primary.main,
-                                color: theme.palette.primary.contrastText,
-                              }}
-                            >
-                              {initial}
-                            </Avatar>
-                            <ListItemText
-                              primary={label}
-                              primaryTypographyProps={{
-                                fontWeight: 500,
-                                fontSize: '0.9375rem',
-                              }}
-                            />
-                          </ListItemButton>
-                        </ListItem>
-                      );
-                    })}
-                  </List>
+                    {nameSearchLoading && nameOptions.length === 0 ? (
+                      <Box
+                        sx={{
+                          py: 3,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 1.5,
+                        }}
+                      >
+                        <CircularProgress size={22} />
+                        <Typography variant="body2" color="text.secondary">
+                          {t('core:loading.generic', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <List disablePadding sx={{ py: 0.5 }}>
+                        {nameOptions.map((opt) => {
+                          const label =
+                            typeof opt === 'string' ? opt : opt.name;
+                          const hasUnsafeName =
+                            typeof opt !== 'string' &&
+                            hasInvisibleCharacters(opt.name);
+                          const key =
+                            typeof opt === 'string' ? opt : opt.address;
+                          const initial = (label || '?')
+                            .charAt(0)
+                            .toUpperCase();
+                          return (
+                            <ListItem key={key} disablePadding sx={{ px: 1 }}>
+                              <ListItemButton
+                                onClick={() => {
+                                  const valueToSet =
+                                    typeof opt === 'string' ? opt : opt.name;
+                                  setDirectToValue(valueToSet);
+                                  setSuggestionsOpen(false);
+                                }}
+                                sx={{
+                                  borderRadius: '10px',
+                                  py: 1.25,
+                                  px: 1.5,
+                                  mx: 0.5,
+                                  transition: 'background-color 0.15s ease',
+                                  '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                  },
+                                }}
+                              >
+                                <Avatar
+                                  sx={{
+                                    width: 36,
+                                    height: 36,
+                                    mr: 1.5,
+                                    fontSize: '1rem',
+                                    fontWeight: 600,
+                                    bgcolor: theme.palette.primary.main,
+                                    color: theme.palette.primary.contrastText,
+                                  }}
+                                >
+                                  {initial}
+                                </Avatar>
+                                <ListItemText
+                                  primary={label}
+                                  primaryTypographyProps={{
+                                    sx: {
+                                      fontWeight: 500,
+                                      fontSize: '0.9375rem',
+                                      ...(hasUnsafeName
+                                        ? {
+                                            textDecorationLine: 'line-through',
+                                            textDecorationThickness: '2px',
+                                            textDecorationColor:
+                                              theme.palette.error.main,
+                                          }
+                                        : {}),
+                                    },
+                                  }}
+                                />
+                              </ListItemButton>
+                            </ListItem>
+                          );
+                        })}
+                      </List>
+                    )}
+                  </Paper>
                 )}
-              </Paper>
-            )}
+            </Box>
+          </ClickAwayListener>
+          <Box sx={{ padding: '0 16px 20px', width: '100%' }}>
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '13px',
+                lineHeight: 1.4,
+                paddingLeft: '4px',
+              }}
+            >
+              {t('auth:message.generic.insert_name_address', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
           </Box>
-        </ClickAwayListener>
-        <Box sx={{ padding: '0 16px 20px', width: '100%' }}>
-          <Typography
-            sx={{
-              color: theme.palette.text.secondary,
-              fontSize: '13px',
-              lineHeight: 1.4,
-              paddingLeft: '4px',
-            }}
-          >
-            {t('auth:message.generic.insert_name_address', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </Box>
         </>
       )}
 
-      <ChatList
-        chatReferences={chatReferences}
-        handleReaction={handleReaction}
-        onEdit={onEdit}
-        onReply={onReply}
-        chatId={selectedDirect?.address}
-        initialMessages={messages}
-        myAddress={myAddress}
-        tempMessages={tempMessages}
-        tempChatReferences={tempChatReferences}
-      />
+      {!isNewChat && callMatchesThisDirect && callState === 'connected' && (
+        <Box
+          sx={{
+            alignItems: 'center',
+            backgroundColor:
+              callMediaReady
+                ? theme.palette.mode === 'dark'
+                  ? 'rgba(34,197,94,0.12)'
+                  : 'rgba(34,197,94,0.08)'
+                : theme.palette.mode === 'dark'
+                  ? 'rgba(59,130,246,0.14)'
+                  : 'rgba(59,130,246,0.08)',
+            borderRadius: 1.5,
+            display: 'flex',
+            flexShrink: 0,
+            flexWrap: 'wrap',
+            gap: 1,
+            mb: 1,
+            mx: 2,
+            mt: 1,
+            px: 2,
+            py: 0.75,
+          }}
+        >
+          <Box
+            sx={{
+              backgroundColor: callMediaReady ? '#22c55e' : 'primary.main',
+              borderRadius: '50%',
+              flexShrink: 0,
+              height: 8,
+              width: 8,
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              color: callMediaReady ? 'success.main' : 'primary.main',
+              flex: 1,
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {callMediaReady
+              ? `In call — ${fmtCallDuration(callDuration)}`
+              : `${startupStatus.headline || 'Connecting...'} — ${fmtCallDuration(callDuration)}`}
+          </Typography>
+          {audioMode === 'reticulum' && callMediaReady && (
+            <Typography
+              variant="caption"
+              sx={{
+                backgroundColor: 'primary.main',
+                borderRadius: 1,
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.3,
+                px: 0.75,
+                py: 0.2,
+              }}
+            >
+              Reticulum
+            </Typography>
+          )}
+          {callMediaReady ? <CallAudioSettingsButton /> : null}
+          <Tooltip
+            title={
+              isMuted
+                ? t('core:group_call_unmute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:group_call_mute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+            }
+          >
+            <IconButton
+              size="small"
+              disabled={!callMediaReady}
+              onClick={toggleMute}
+              sx={{
+                color: isMuted ? 'error.main' : 'text.secondary',
+                height: 26,
+                width: 26,
+              }}
+            >
+              {isMuted ? (
+                <MicOffRoundedIcon sx={{ fontSize: 15 }} />
+              ) : (
+                <MicRoundedIcon sx={{ fontSize: 15 }} />
+              )}
+            </IconButton>
+          </Tooltip>
+          <Tooltip
+            title={
+              hearCall
+                ? t('core:call_audio_mute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:call_audio_hear', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+            }
+          >
+            <IconButton
+              size="small"
+              disabled={!callMediaReady}
+              onClick={toggleHearCall}
+              sx={{
+                color: hearCall ? 'text.secondary' : 'error.main',
+                height: 26,
+                width: 26,
+              }}
+            >
+              {hearCall ? (
+                <VolumeUpRoundedIcon sx={{ fontSize: 15 }} />
+              ) : (
+                <VolumeOffRoundedIcon sx={{ fontSize: 15 }} />
+              )}
+            </IconButton>
+          </Tooltip>
+          <IconButton
+            size="small"
+            onClick={hangUp}
+            sx={{
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              height: 26,
+              width: 26,
+              '&:hover': { backgroundColor: '#dc2626' },
+            }}
+          >
+            <CallEndRoundedIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+        </Box>
+      )}
+
+      <Box
+        sx={{
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          minHeight: 0,
+          overflow: 'hidden',
+          width: '100%',
+        }}
+      >
+        <ChatList
+          chatReferences={chatReferences}
+          handleReaction={handleReaction}
+          onEdit={onEdit}
+          onReply={onReply}
+          chatId={selectedDirect?.address}
+          initialMessages={messages}
+          myAddress={myAddress}
+          tempMessages={tempMessages}
+          tempChatReferences={tempChatReferences}
+          onAcceptQchatFileTransfer={handleAcceptQchatFileTransfer}
+          qchatFileTransferStates={qchatFileTransferStates}
+          qchatCompletedTransfers={qchatCompletedTransfers}
+        />
+      </Box>
+
+      <Dialog
+        open={!!pendingQchatFileOffer}
+        onClose={() => setPendingQchatFileOffer(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundImage: 'none',
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '8px',
+            boxShadow:
+              theme.palette.mode === 'dark'
+                ? '0 18px 48px rgba(0,0,0,0.48)'
+                : '0 18px 48px rgba(15,23,42,0.18)',
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 1.25,
+            px: 3,
+            py: 2,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'center',
+              border: '1px solid',
+              borderColor: theme.palette.divider,
+              borderRadius: '8px',
+              color: theme.palette.primary.main,
+              display: 'flex',
+              height: 36,
+              justifyContent: 'center',
+              width: 36,
+            }}
+          >
+            <ReticulumFileTransferIcon sx={{ fontSize: 22 }} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.25 }}
+            >
+              Send file
+            </Typography>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+            >
+              Reticulum direct transfer offer
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent
+          dividers
+          sx={{
+            borderColor: theme.palette.divider,
+            px: 3,
+            py: 2.25,
+          }}
+        >
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: theme.palette.divider,
+                borderRadius: '8px',
+                display: 'grid',
+                gap: 0.5,
+                p: 1.5,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={pendingQchatFileOffer?.name || 'Selected file'}
+              >
+                {pendingQchatFileOffer?.name || 'Selected file'}
+              </Typography>
+              <Typography
+                sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+              >
+                {formatQchatFileSize(pendingQchatFileOffer?.size)}
+              </Typography>
+            </Box>
+            <TextField
+              label="Expires in hours"
+              type="number"
+              value={qchatFileExpiryHours}
+              onChange={(event) =>
+                setQchatFileExpiryHours(Number(event.target.value))
+              }
+              inputProps={{ min: 0.05, max: 168, step: 0.25 }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography
+                      sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+                    >
+                      hours
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
+              size="small"
+              fullWidth
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ gap: 1, px: 3, py: 2 }}>
+          <Button
+            onClick={() => setPendingQchatFileOffer(null)}
+            sx={{ borderRadius: '8px', px: 2, textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmQchatFileOffer}
+            disabled={isSending}
+            sx={{ borderRadius: '8px', px: 2.25, textTransform: 'none' }}
+          >
+            Send offer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Box
         sx={{
           alignItems: 'flex-end',
           backgroundColor: theme.palette.background.default,
-          borderTop: '1px solid',
-          borderColor: 'divider',
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: '8px',
           bottom: isFocusedParent ? '0px' : 'unset',
           boxSizing: 'border-box',
           display: 'flex',
@@ -1228,10 +2571,30 @@ export const ChatDirect = ({
 
         <Box
           sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: '8px',
             flexShrink: 0,
             paddingBottom: '2px',
           }}
         >
+          <Tooltip title="Transfer file with Reticulum">
+            <span>
+              <IconButton
+                onClick={handleSendQchatFileOffer}
+                disabled={isSending || isNewChat || !selectedDirect?.address}
+                sx={{
+                  border: '1px solid',
+                  borderColor: theme.palette.divider,
+                  borderRadius: '8px',
+                  height: 44,
+                  width: 44,
+                }}
+              >
+                <ReticulumFileTransferIcon sx={{ fontSize: 22 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
           <CustomButton
             onClick={() => {
               if (isSending) return;

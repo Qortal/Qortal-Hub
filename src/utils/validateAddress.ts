@@ -13,8 +13,8 @@ export const validateAddress = (address) => {
     } else {
       isAddress = true;
     }
-  } catch (error) {
-    console.log(error);
+  } catch {
+    isAddress = false;
   }
 
   return isAddress;

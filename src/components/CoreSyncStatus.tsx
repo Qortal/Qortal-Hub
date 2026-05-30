@@ -1,16 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import syncedImg from '../assets/syncStatus/synced.webp';
 import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
 import syncingImg from '../assets/syncStatus/syncing.webp';
-import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
-import { useAtom } from 'jotai';
-import { nodeInfosAtom } from '../atoms/global';
+import { useAtomValue, useSetAtom } from 'jotai';
+import {
+  nodeInfosAtom,
+  p2pHealthAtom,
+  selectedNodeInfoAtom,
+} from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
-import { isLocalNodeUrl } from '../constants/constants';
+import { computeP2pHealth, type P2pHealthLevel } from '../lib/p2pHealth';
+
+export type { P2pHealthLevel };
+import {
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
+} from '../constants/constants';
+
+type ReticulumStatusSnapshot = {
+  onlineRemoteHubInterfaces?: number;
+  p2pActiveOverlayPeers?: number;
+};
 
 export const CoreSyncStatus = ({
   renderIcon,
@@ -19,10 +33,19 @@ export const CoreSyncStatus = ({
   renderIcon?: React.ReactNode;
   useExternalTooltip?: boolean;
 }) => {
-  const [nodeInfos] = useAtom(nodeInfosAtom);
+  const nodeInfos = useAtomValue(nodeInfosAtom);
+  const selectedNode = useAtomValue(selectedNodeInfoAtom);
+  const setSharedP2pHealth = useSetAtom(p2pHealthAtom);
   const [coreInfos, setCoreInfos] = useState({});
+  const [p2pActiveOverlayPeers, setP2pActiveOverlayPeers] = useState<
+    number | null
+  >(null);
+  const [connectedRemoteInterfaces, setConnectedRemoteInterfaces] = useState<
+    number | null
+  >(null);
+  const [p2pHealth, setP2pHealth] = useState<P2pHealthLevel | null>(null);
 
-  const [nodeBase, setNodeBase] = useState(getBaseApiReact());
+  const nodeBase = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
   const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
   const { t } = useTranslation([
     'auth',
@@ -33,10 +56,39 @@ export const CoreSyncStatus = ({
   ]);
   const theme = useTheme();
 
+  const applyReticulumStatus = useCallback(
+    (status: ReticulumStatusSnapshot | null | undefined) => {
+      const active =
+        typeof status?.p2pActiveOverlayPeers === 'number'
+          ? status.p2pActiveOverlayPeers
+          : null;
+      setP2pActiveOverlayPeers(active);
+      setConnectedRemoteInterfaces(
+        typeof status?.onlineRemoteHubInterfaces === 'number'
+          ? status.onlineRemoteHubInterfaces
+          : null
+      );
+      if (!status) {
+        setP2pHealth(null);
+        setSharedP2pHealth('unknown');
+        return;
+      }
+      const hubs = status.onlineRemoteHubInterfaces ?? 0;
+      const nextP2pHealth = computeP2pHealth({
+        onlineRemoteHubInterfaces: hubs,
+        p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
+      });
+      setP2pHealth(nextP2pHealth);
+      setSharedP2pHealth(nextP2pHealth);
+    },
+    [setSharedP2pHealth]
+  );
+
   useEffect(() => {
+    let canceled = false;
     const getCoreInfos = async () => {
       try {
-        const url = `${getBaseApiReact()}/admin/info`;
+        const url = `${nodeBase}/admin/info`;
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -44,20 +96,69 @@ export const CoreSyncStatus = ({
           },
         });
         const data = await response.json();
-        setCoreInfos(data);
+        if (!canceled) {
+          setCoreInfos(data);
+        }
       } catch (error) {
         console.error('Request failed', error);
+        if (!canceled) {
+          setCoreInfos({});
+        }
       }
     };
 
+    setCoreInfos({});
     getCoreInfos();
 
-    const interval = setInterval(() => {
-      getCoreInfos();
-    }, 30000);
+    const interval = setInterval(getCoreInfos, 30000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      canceled = true;
+      clearInterval(interval);
+    };
+  }, [nodeBase]);
+
+  useEffect(() => {
+    let canceled = false;
+    const api = window.electronAPI as any;
+    if (typeof api?.reticulumGetStatus !== 'function') {
+      applyReticulumStatus(null);
+      return;
+    }
+
+    void api
+      .reticulumGetStatus()
+      .then((status) => {
+        if (!canceled) applyReticulumStatus(status);
+      })
+      .catch(() => {
+        if (!canceled) applyReticulumStatus(null);
+      });
+
+    const unsubscribe =
+      typeof api.onReticulumStatus === 'function'
+        ? api.onReticulumStatus((status) => {
+            if (!canceled) applyReticulumStatus(status);
+          })
+        : undefined;
+
+    const reconciliationInterval = window.setInterval(() => {
+      void api
+        .reticulumGetStatus?.()
+        .then((status) => {
+          if (!canceled) applyReticulumStatus(status);
+        })
+        .catch(() => {
+          if (!canceled) applyReticulumStatus(null);
+        });
+    }, 120000);
+
+    return () => {
+      canceled = true;
+      unsubscribe?.();
+      window.clearInterval(reconciliationInterval);
+    };
+  }, [applyReticulumStatus]);
 
   const renderSyncStatusIcon = () => {
     const {
@@ -114,8 +215,8 @@ export const CoreSyncStatus = ({
         className="core-panel"
         style={{
           right: 'unset',
-          left: '55px',
-          top: '10px',
+          left: 'calc(100% + 16px)',
+          top: '0px',
         }}
       >
         <h3>
@@ -138,9 +239,7 @@ export const CoreSyncStatus = ({
 
         <h4 className="lineHeight">
           {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
-          <span style={{ color: '#03a9f4' }}>
-            {numberOfConnections || ''}
-          </span>
+          <span style={{ color: '#03a9f4' }}>{numberOfConnections || ''}</span>
         </h4>
 
         <h4 className="lineHeight">
@@ -149,6 +248,48 @@ export const CoreSyncStatus = ({
             {numberOfDataConnections || ''}
           </span>
         </h4>
+
+        {connectedRemoteInterfaces !== null && (
+          <h4 className="lineHeight">
+            {t('core:core.connected_remote_interfaces', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            :{' '}
+            <span style={{ color: '#03a9f4' }}>
+              {connectedRemoteInterfaces}
+            </span>
+          </h4>
+        )}
+
+        {p2pActiveOverlayPeers !== null && (
+          <h4 className="lineHeight">
+            {t('core:core.p2p_active_overlay_peers', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            : <span style={{ color: '#03a9f4' }}>{p2pActiveOverlayPeers}</span>
+          </h4>
+        )}
+
+        {p2pHealth !== null && (
+          <h4 className="lineHeight">
+            {t('core:core.p2p_health', { postProcess: 'capitalizeFirstChar' })}:{' '}
+            <span
+              style={{
+                color:
+                  p2pHealth === 'bad'
+                    ? theme.palette.error.main
+                    : p2pHealth === 'low'
+                      ? theme.palette.warning.main
+                      : theme.palette.success.main,
+                fontWeight: 600,
+              }}
+            >
+              {t(`core:core.p2p_health_${p2pHealth}`, {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </span>
+          </h4>
+        )}
 
         <h4 className="lineHeight">
           {t('auth:node.using', {

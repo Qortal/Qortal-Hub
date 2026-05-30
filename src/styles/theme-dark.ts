@@ -1,30 +1,39 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions, getCommonGlobalStyles } from './theme-common';
+import { APP_BLUE } from './blueMaterial';
 
 export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'dark',
     primary: {
-      main: 'rgb(100, 155, 240)',
-      dark: 'rgb(45, 92, 201)',
-      light: 'rgb(130, 185, 255)',
+      main: APP_BLUE.primary,
+      dark: APP_BLUE.pressed,
+      light: APP_BLUE.gradientTop,
     },
     secondary: {
-      main: 'rgb(69, 173, 255)',
+      main: APP_BLUE.hover,
     },
     background: {
-      default: 'rgb(49, 51, 56)',
-      surface: 'rgb(58, 60, 65)',
-      paper: 'rgb(77, 80, 85)',
+      default: '#0E0F14',
+      surface: '#1B1D24',
+      paper: '#1D1F27',
+      elevated: '#23262F',
     },
     text: {
-      primary: 'rgb(255, 255, 255)',
-      secondary: 'rgb(179, 179, 179)',
+      primary: 'rgb(244, 247, 251)',
+      secondary: '#989BA7',
     },
+    divider: '#23262F',
     border: {
-      main: 'rgba(255, 255, 255, 0.12)',
-      subtle: 'rgba(255, 255, 255, 0.08)',
+      main: '#23262F',
+      subtle: '#23262F',
+    },
+    action: {
+      hover: '#23262F',
+      selected: '#262931',
+      focus: '#262931',
+      active: 'rgba(236, 243, 255, 0.86)',
     },
     other: {
       positive: 'rgb(94, 176, 73)',
@@ -37,13 +46,15 @@ export const darkThemeOptions: ThemeOptions = {
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: 'none',
+          boxShadow: '0 8px 18px rgba(0, 0, 0, 0.12)',
           borderRadius: '8px',
-          transition: 'all 0.3s ease-in-out',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          transition:
+            'background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease',
           '&:hover': {
             cursor: 'pointer',
-            boxShadow:
-              ' 0px 3px 4px 0px hsla(0,0%,0%,0.14), 0px 3px 3px -2px hsla(0,0%,0%,0.12), 0px 1px 8px 0px hsla(0,0%,0%,0.2);',
+            borderColor: 'rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 10px 20px rgba(0, 0, 0, 0.14)',
           },
         },
       },
@@ -52,18 +63,29 @@ export const darkThemeOptions: ThemeOptions = {
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
-          '--Mail-Background': 'rgba(6, 10, 30, 1)',
-          '--bg-primary': 'rgba(6, 10, 30, 1)',
-          '--bg-2': 'rgb(39, 40, 44)',
+          '--Mail-Background': '#0E0F14',
+          '--bg-primary': '#0E0F14',
+          '--bg-2': '#0E0F14',
           '--primary-main': theme.palette.primary.main,
           '--text-primary': theme.palette.text.primary,
           '--text-secondary': theme.palette.text.secondary,
           '--background-default': theme.palette.background.default,
           '--background-paper': theme.palette.background.paper,
           '--background-surface': theme.palette.background.surface,
-          '--videoplayer-bg': 'rgba(31, 32, 35, 1)',
+          '--background-elevated': theme.palette.background.elevated,
+          '--videoplayer-bg': 'rgb(18, 21, 27)',
         },
         ...getCommonGlobalStyles(theme),
+        html: {
+          backgroundColor: '#0E0F14',
+          backgroundImage: 'linear-gradient(180deg, #0E0F14 0%, #0E0F14 100%)',
+          backgroundRepeat: 'no-repeat',
+        },
+        body: {
+          backgroundColor: '#0E0F14',
+          backgroundImage: 'linear-gradient(180deg, #0E0F14 0%, #0E0F14 100%)',
+          backgroundRepeat: 'no-repeat',
+        },
       }),
     },
 

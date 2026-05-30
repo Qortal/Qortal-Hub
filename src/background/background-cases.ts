@@ -1,3 +1,6 @@
+import nacl from '../encryption/nacl-fast';
+import ed2curve from '../encryption/ed2curve';
+import { Sha256 } from 'asmcrypto.js';
 import {
   addDataPublishes,
   addEnteredQmailTimestamp,
@@ -40,10 +43,12 @@ import {
   kickFromGroup,
   leaveGroup,
   makeAdmin,
+  markAllMemberGroupsRead,
   notifyAdminRegenerateSecretKey,
   pauseAllQueues,
   processTransactionVersion2,
   registerName,
+  updateName,
   removeAdmin,
   resumeAllQueues,
   saveTempPublish,
@@ -68,6 +73,7 @@ import { encryptSingle } from '../qdn/encryption/group-encryption';
 import { _createPoll, _voteOnPoll } from '../qortal/get.ts';
 import { createTransaction } from '../transactions/transactions';
 import { getData, storeData } from '../utils/chromeStorage';
+import { getWalletErrorMessage } from '../utils/walletErrorMessages.ts';
 
 export function versionCase(request, event) {
   event.source.postMessage(
@@ -259,7 +265,7 @@ export async function decryptWalletCase(request, event) {
       {
         requestId: request.requestId,
         action: 'decryptWallet',
-        error: error?.message,
+        error: getWalletErrorMessage(error),
         type: 'backgroundMessageResponse',
       },
       event.origin
@@ -808,6 +814,32 @@ export async function registerNameCase(request, event) {
     );
   }
 }
+export async function updateNameCase(request, event) {
+  try {
+    const { newName, oldName, description } = request.payload;
+    const response = await updateName({ newName, oldName, description });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateName',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateName',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
 export async function createPollCase(request, event) {
   try {
     const { pollName, pollDescription, pollOptions } = request.payload;
@@ -941,6 +973,33 @@ export async function addTimestampEnterChatCase(request, event) {
       {
         requestId: request.requestId,
         action: 'addTimestampEnterChat',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+export async function markAllMemberGroupsReadCase(request, event) {
+  try {
+    const { groupIds } = request.payload;
+    const response = await markAllMemberGroupsRead(groupIds);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'markAllMemberGroupsRead',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'markAllMemberGroupsRead',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },
@@ -1426,13 +1485,17 @@ export async function encryptAndPublishSymmetricKeyGroupChatCase(
   event
 ) {
   try {
-    const { groupId, previousData } = request.payload;
+    const { groupId, previousData, isOwner, addKey } = request.payload;
+    let addKeyVar = false;
+    if (isOwner && addKey) {
+      addKeyVar = true;
+    }
     const { data, numberOfMembers } =
       await encryptAndPublishSymmetricKeyGroupChat({
         groupId,
         previousData,
+        addKey: addKeyVar,
       });
-
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -1570,7 +1633,6 @@ export async function publishOnQDNCase(request, event) {
       tag5,
       uploadType,
     });
-
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -2140,6 +2202,454 @@ export async function getRewardSharePrivateKeyCase(request, event) {
       {
         requestId: request.requestId,
         action: 'getRewardSharePrivateKey',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+/**
+ * Signs a presence message payload using the authenticated user's Ed25519
+ * private key. The renderer passes the fields to sign; this case canonicalises
+ * them (sorted keys → JSON → UTF-8) and returns a Base58-encoded signature.
+ *
+ * Expected request.payload shape:
+ *   { type, address, publicKey, sessionId, timestamp, clientVersion? }
+ */
+export async function signPresenceMessageCase(request, event) {
+  try {
+    const resKeyPair = await getKeyPair();
+    const privateKeyBytes = Base58.decode(resKeyPair.privateKey);
+
+    // Build canonical signed data — keys sorted alphabetically, then
+    // JSON-stringify and UTF-8 encode. Must match canonicalizeForSigning()
+    // in electron/src/presence.ts exactly.
+    const fields = request.payload as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(fields).sort()) {
+      sorted[key] = fields[key];
+    }
+    const messageBytes = new TextEncoder().encode(JSON.stringify(sorted));
+    const signature = nacl.sign.detached(messageBytes, privateKeyBytes);
+    const signatureBase58 = Base58.encode(signature);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'signPresenceMessage',
+        payload: { signature: signatureBase58 },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'signPresenceMessage',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+/**
+ * Decrypts a nacl.box-encrypted payload using the local user's Curve25519
+ * private key (derived from their Ed25519 key via ed2curve).
+ *
+ * Expected request.payload shape:
+ *   { ephemeralPublicKey: string, nonce: string, ciphertext: string }
+ *   — all Base64-encoded.
+ *
+ * Wire format matches distributeRoomKey in useGroupVoiceCall.ts:
+ *   [ephemeralPK (32 bytes)] + [nonce (24 bytes)] + [ciphertext]
+ */
+export async function decryptBoxWithMyKeyCase(request, event) {
+  try {
+    const { ephemeralPublicKey, nonce, ciphertext } = request.payload;
+    const resKeyPair = await getKeyPair();
+    const privateKeyBytes = Base58.decode(resKeyPair.privateKey);
+
+    const myCurve25519SK = ed2curve.convertSecretKey(privateKeyBytes);
+    const ephemeralPK = Uint8Array.from(atob(ephemeralPublicKey), (c) =>
+      c.charCodeAt(0)
+    );
+    const nonceBytes = Uint8Array.from(atob(nonce), (c) => c.charCodeAt(0));
+    const cipherBytes = Uint8Array.from(atob(ciphertext), (c) =>
+      c.charCodeAt(0)
+    );
+
+    const sharedKey = nacl.box.before(ephemeralPK, myCurve25519SK);
+    const plaintext = nacl.box.open.after(cipherBytes, nonceBytes, sharedKey);
+    if (!plaintext) throw new Error('Decryption failed');
+
+    const decryptedKey = btoa(String.fromCharCode(...plaintext));
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptBoxWithMyKey',
+        payload: { decryptedKey },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptBoxWithMyKey',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+// ── Support Chat encryption ───────────────────────────────────────────────────
+//
+// One shared support keypair drives the encryption for the support chat.
+//
+// User side (no QORT, no core, no QDN required):
+//   ECDH( userPrivKey,       SUPPORT_PUBLIC_KEY  ) → sharedSecret
+//   Encrypt outgoing, decrypt incoming agent replies.
+//
+// Agent side (hard-coded key for testing; production: fetch from QDN group resource):
+//   ECDH( SUPPORT_PRIVATE_KEY, userPublicKey ) → identical sharedSecret
+//   Decrypt user messages, encrypt replies.
+//
+// SUPPORT_PUBLIC_KEY is baked into the app binary — key rotation = app update.
+// SUPPORT_PRIVATE_KEY is kept out of the binary in production; see plan notes.
+
+const SUPPORT_PUBLIC_KEY = 'Ecg4aNUYHonfGjC77BnJZ5dw3s6wYGoKUT2JXfMzQgtn';
+const SUPPORT_PRIVATE_KEY =
+  '2PJdmgbhkWu1zNuU3bk8jL3eTiAn3Fq9aPSqGHpq8uWE2SPLan1XdxMGvek9z6twwtG7iduQBNCc697pRff3emv6';
+
+/**
+ * Derives the 32-byte symmetric encryption key shared between the user and
+ * the support team via ECDH (Ed25519→Curve25519) + SHA-256.
+ * SHA-256 is applied to the raw Diffie-Hellman output to produce a proper
+ * symmetric key, matching the pattern used elsewhere in the codebase.
+ */
+function deriveSupportSharedKey(
+  privateKeyBytes: Uint8Array,
+  publicKeyBytes: Uint8Array
+): Uint8Array {
+  const convertedPrivKey = ed2curve.convertSecretKey(privateKeyBytes);
+  const convertedPubKey = ed2curve.convertPublicKey(publicKeyBytes);
+  const rawSecret = new Uint8Array(32);
+  nacl.lowlevel.crypto_scalarmult(rawSecret, convertedPrivKey, convertedPubKey);
+  return new Sha256().process(rawSecret).finish().result as Uint8Array;
+}
+
+/**
+ * Encodes a Uint8Array to a Base64 string without using spread (safe for large arrays).
+ */
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Encrypts a plaintext string for the support channel.
+ *
+ * User mode (isAgent not set):
+ *   sharedKey = ECDH( userPrivKey, SUPPORT_PUBLIC_KEY )
+ *
+ * Agent mode (isAgent: true AND recipientPublicKey provided):
+ *   sharedKey = ECDH( SUPPORT_PRIVATE_KEY, recipientPublicKey )
+ *
+ * Wire format: base64( nonce[24] || nacl.secretbox_ciphertext )
+ *
+ * Expected request.payload: { text: string, isAgent?: boolean, recipientPublicKey?: string }
+ */
+export async function encryptSupportMessageCase(request, event) {
+  try {
+    const { text, isAgent, recipientPublicKey } = request.payload as {
+      text: string;
+      isAgent?: boolean;
+      recipientPublicKey?: string;
+    };
+
+    let encKey: Uint8Array;
+
+    if (isAgent && recipientPublicKey) {
+      // Agent mode: encrypt using the shared support private key.
+      const supportPrivBytes = Base58.decode(SUPPORT_PRIVATE_KEY);
+      const recipientPubBytes = Base58.decode(recipientPublicKey);
+      encKey = deriveSupportSharedKey(supportPrivBytes, recipientPubBytes);
+    } else {
+      // User mode: encrypt using the user's own key pair + the hard-coded
+      // support public key. No core, QDN, or QORT required.
+      const resKeyPair = await getKeyPair();
+      const userPrivBytes = Base58.decode(resKeyPair.privateKey);
+      const supportPubBytes = Base58.decode(SUPPORT_PUBLIC_KEY);
+      encKey = deriveSupportSharedKey(userPrivBytes, supportPubBytes);
+    }
+
+    const textBytes = new TextEncoder().encode(text);
+    const nonce = nacl.randomBytes(24);
+    const ciphertext = nacl.secretbox(textBytes, nonce, encKey);
+
+    const combined = new Uint8Array(24 + ciphertext.length);
+    combined.set(nonce, 0);
+    combined.set(ciphertext, 24);
+    const encryptedData = uint8ToBase64(combined);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'encryptSupportMessage',
+        payload: { encryptedData },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'encryptSupportMessage',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+/**
+ * Decrypts a support-channel ciphertext.
+ *
+ * User mode (isAgent not set):
+ *   sharedKey = ECDH( userPrivKey, SUPPORT_PUBLIC_KEY )
+ *   senderPublicKey is ignored — the shared secret does not depend on who sent.
+ *
+ * Agent mode (isAgent: true):
+ *   sharedKey = ECDH( SUPPORT_PRIVATE_KEY, senderPublicKey )
+ *   senderPublicKey must be the user's Base58 Ed25519 public key.
+ *
+ * Expected request.payload: { encryptedData: string, senderPublicKey: string, isAgent?: boolean }
+ */
+export async function decryptSupportMessageCase(request, event) {
+  try {
+    const { encryptedData, senderPublicKey, isAgent } = request.payload as {
+      encryptedData: string;
+      senderPublicKey: string;
+      isAgent?: boolean;
+    };
+
+    let encKey: Uint8Array;
+
+    if (isAgent) {
+      // Agent mode: derive key using the shared support private key and the
+      // sender's (user's) public key from the message.
+      const supportPrivBytes = Base58.decode(SUPPORT_PRIVATE_KEY);
+      const senderPubBytes = Base58.decode(senderPublicKey);
+      encKey = deriveSupportSharedKey(supportPrivBytes, senderPubBytes);
+    } else {
+      // User mode: derive key using the user's own private key and the
+      // hard-coded support public key.
+      const resKeyPair = await getKeyPair();
+      const userPrivBytes = Base58.decode(resKeyPair.privateKey);
+      const supportPubBytes = Base58.decode(SUPPORT_PUBLIC_KEY);
+      encKey = deriveSupportSharedKey(userPrivBytes, supportPubBytes);
+    }
+
+    // Base64-decode the wire format: nonce[0:24] || ciphertext[24:]
+    const decoded = atob(encryptedData);
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i++) {
+      bytes[i] = decoded.charCodeAt(i);
+    }
+
+    const nonce = bytes.slice(0, 24);
+    const ciphertext = bytes.slice(24);
+
+    const decryptedBytes = nacl.secretbox.open(ciphertext, nonce, encKey);
+    if (!decryptedBytes) {
+      throw new Error('Decryption failed: authentication tag mismatch');
+    }
+
+    const decryptedText = new TextDecoder().decode(decryptedBytes);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptSupportMessage',
+        payload: { decryptedText },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptSupportMessage',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+// ── Support Chat attachment encryption ────────────────────────────────────────
+//
+// Same ECDH key-derivation and nacl.secretbox scheme as the support message
+// cases above, but operates on raw binary data (base64-encoded image bytes)
+// rather than UTF-8 text.  This allows the same shared key to protect both
+// text messages and image attachments without any key management overhead.
+
+/**
+ * Encrypts a raw image attachment for the support channel.
+ *
+ * User mode (isAgent not set):
+ *   sharedKey = ECDH( userPrivKey, SUPPORT_PUBLIC_KEY )
+ *
+ * Agent mode (isAgent: true AND recipientPublicKey provided):
+ *   sharedKey = ECDH( SUPPORT_PRIVATE_KEY, recipientPublicKey )
+ *
+ * Wire format: base64( nonce[24] || nacl.secretbox_ciphertext )
+ *
+ * Expected request.payload:
+ *   { data: string (base64-encoded raw image bytes), isAgent?, recipientPublicKey? }
+ *
+ * Returns: { encryptedData: string (base64 ciphertext) }
+ */
+export async function encryptSupportAttachmentCase(request, event) {
+  try {
+    const { data, isAgent, recipientPublicKey } = request.payload as {
+      data: string;
+      isAgent?: boolean;
+      recipientPublicKey?: string;
+    };
+
+    let encKey: Uint8Array;
+
+    if (isAgent && recipientPublicKey) {
+      const supportPrivBytes = Base58.decode(SUPPORT_PRIVATE_KEY);
+      const recipientPubBytes = Base58.decode(recipientPublicKey);
+      encKey = deriveSupportSharedKey(supportPrivBytes, recipientPubBytes);
+    } else {
+      const resKeyPair = await getKeyPair();
+      const userPrivBytes = Base58.decode(resKeyPair.privateKey);
+      const supportPubBytes = Base58.decode(SUPPORT_PUBLIC_KEY);
+      encKey = deriveSupportSharedKey(userPrivBytes, supportPubBytes);
+    }
+
+    // Decode the base64 image bytes to raw bytes for encryption.
+    const decoded = atob(data);
+    const imageBytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i++) {
+      imageBytes[i] = decoded.charCodeAt(i);
+    }
+
+    const nonce = nacl.randomBytes(24);
+    const ciphertext = nacl.secretbox(imageBytes, nonce, encKey);
+
+    const combined = new Uint8Array(24 + ciphertext.length);
+    combined.set(nonce, 0);
+    combined.set(ciphertext, 24);
+    const encryptedData = uint8ToBase64(combined);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'encryptSupportAttachment',
+        payload: { encryptedData },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'encryptSupportAttachment',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+/**
+ * Decrypts an encrypted support-channel attachment.
+ *
+ * User mode (isAgent not set):
+ *   sharedKey = ECDH( userPrivKey, SUPPORT_PUBLIC_KEY )
+ *
+ * Agent mode (isAgent: true):
+ *   sharedKey = ECDH( SUPPORT_PRIVATE_KEY, senderPublicKey )
+ *
+ * Expected request.payload:
+ *   { data: string (base64 ciphertext), senderPublicKey: string, isAgent?: boolean }
+ *
+ * Returns: { decryptedData: string (base64-encoded raw image bytes) }
+ */
+export async function decryptSupportAttachmentCase(request, event) {
+  try {
+    const { data, senderPublicKey, isAgent } = request.payload as {
+      data: string;
+      senderPublicKey: string;
+      isAgent?: boolean;
+    };
+
+    let encKey: Uint8Array;
+
+    if (isAgent) {
+      const supportPrivBytes = Base58.decode(SUPPORT_PRIVATE_KEY);
+      const senderPubBytes = Base58.decode(senderPublicKey);
+      encKey = deriveSupportSharedKey(supportPrivBytes, senderPubBytes);
+    } else {
+      const resKeyPair = await getKeyPair();
+      const userPrivBytes = Base58.decode(resKeyPair.privateKey);
+      const supportPubBytes = Base58.decode(SUPPORT_PUBLIC_KEY);
+      encKey = deriveSupportSharedKey(userPrivBytes, supportPubBytes);
+    }
+
+    // Decode wire format: nonce[0:24] || ciphertext[24:]
+    const decoded = atob(data);
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i++) {
+      bytes[i] = decoded.charCodeAt(i);
+    }
+
+    const nonce = bytes.slice(0, 24);
+    const ciphertext = bytes.slice(24);
+
+    const decryptedBytes = nacl.secretbox.open(ciphertext, nonce, encKey);
+    if (!decryptedBytes) {
+      throw new Error('Decryption failed: authentication tag mismatch');
+    }
+
+    // Return decrypted image bytes as base64 so the renderer can build a data URI.
+    const decryptedData = uint8ToBase64(decryptedBytes);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptSupportAttachment',
+        payload: { decryptedData },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptSupportAttachment',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

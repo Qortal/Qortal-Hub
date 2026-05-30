@@ -10,6 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import PhoneInTalkIcon from '@mui/icons-material/PhoneInTalk';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { ContextMenu } from '../ContextMenu';
@@ -30,6 +31,10 @@ import {
   groupsOwnerNamesSelector,
   isRunningPublicNodeAtom,
   memberGroupsAtom,
+  qortalGroupMeshCallActiveAtom,
+  qortalGroupMeshCallMaxParticipantsAtom,
+  qortalGroupMeshCallParticipantCountAtom,
+  qortalGroupSelfGcallRoomIdAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
 import { timeDifferenceForNotificationChats } from './Group';
@@ -37,6 +42,11 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
+import {
+  meshCallActiveForMemberGroup,
+  meshCallMaxParticipantsForMemberGroup,
+  meshCallParticipantCountForMemberGroup,
+} from '../../lib/group-call/qortalGroupIdKey';
 
 const GroupListInner = ({
   selectGroupFunc,
@@ -372,6 +382,14 @@ const GroupItem = memo(
     const timestampEnterData = useAtomValue(
       timestampEnterDataSelector(group?.groupId)
     );
+    const meshCallActiveByGroup = useAtomValue(qortalGroupMeshCallActiveAtom);
+    const meshCallParticipantCountByGroup = useAtomValue(
+      qortalGroupMeshCallParticipantCountAtom
+    );
+    const meshCallMaxParticipantsByGroup = useAtomValue(
+      qortalGroupMeshCallMaxParticipantsAtom
+    );
+    const selfGcallRoomId = useAtomValue(qortalGroupSelfGcallRoomIdAtom);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewSrc, setPreviewSrc] = useState(null);
     const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
@@ -411,6 +429,26 @@ const GroupItem = memo(
     }, [setIsPreviewOpen, setPreviewSrc]);
 
     const isSelected = group?.groupId === selectedGroupId;
+
+    const gcallRoomIdForRow =
+      group?.groupId && group.groupId !== '0' && Number.isFinite(Number(group.groupId))
+        ? `gcall-qortal-${Number(group.groupId)}`
+        : null;
+    const imInThisGroupGcall =
+      Boolean(gcallRoomIdForRow) && selfGcallRoomId === gcallRoomIdForRow;
+    const meshShowsCall = meshCallActiveForMemberGroup(
+      meshCallActiveByGroup,
+      group?.groupId
+    );
+    const meshCallParticipantCount = meshCallParticipantCountForMemberGroup(
+      meshCallParticipantCountByGroup,
+      group?.groupId
+    );
+    const meshCallMaxParticipants = meshCallMaxParticipantsForMemberGroup(
+      meshCallMaxParticipantsByGroup,
+      group?.groupId
+    );
+    const showGroupCallIndicator = Boolean(gcallRoomIdForRow) && (imInThisGroupGcall || meshShowsCall);
 
     return (
       <ListItem
@@ -569,6 +607,55 @@ const GroupItem = memo(
                     fontSize: '18px',
                   }}
                 />
+              )}
+
+              {showGroupCallIndicator && (
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    color: imInThisGroupGcall
+                      ? theme.palette.primary.main
+                      : theme.palette.info.main,
+                    display: 'flex',
+                    gap: '3px',
+                    flexShrink: 0,
+                  }}
+                  title={
+                    imInThisGroupGcall
+                      ? t('core:group_list_call_youre_in', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('core:group_list_call_active', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                  }
+                >
+                  <PhoneInTalkIcon
+                    sx={{
+                      color: 'inherit',
+                      fontSize: '18px',
+                      flexShrink: 0,
+                    }}
+                  />
+                  {meshCallParticipantCount !== null && (
+                    <Typography
+                      component="span"
+                      sx={{
+                        color: 'inherit',
+                        fontFamily: 'Inter',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        minWidth: '7px',
+                      }}
+                    >
+                      {meshCallParticipantCount}
+                      {meshCallMaxParticipants !== null
+                        ? `/${meshCallMaxParticipants}`
+                        : ''}
+                    </Typography>
+                  )}
+                </Box>
               )}
             </Box>
           </Box>

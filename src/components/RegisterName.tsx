@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   Box,
-  Button,
+  ButtonBase,
   Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   TextField,
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 import { getBaseApiReact } from '../App';
 import { getFee } from '../background/background.ts';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
@@ -22,6 +20,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { getBlueTier1ButtonSx } from '../styles/blueMaterial';
 
 enum NameAvailability {
   NULL = 'null',
@@ -47,6 +46,7 @@ export const RegisterName = ({
   );
   const [nameFee, setNameFee] = useState(null);
   const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
   const { t } = useTranslation([
     'auth',
     'core',
@@ -54,6 +54,35 @@ export const RegisterName = ({
     'question',
     'tutorial',
   ]);
+  const modalSurface = isDarkMode
+    ? 'linear-gradient(145deg, rgba(49,54,64,0.985) 0%, rgba(35,39,47,0.992) 48%, rgba(24,27,33,0.996) 100%)'
+    : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)';
+  const surfaceBorder = isDarkMode
+    ? 'rgba(255,255,255,0.08)'
+    : alpha(theme.palette.divider, 0.32);
+  const shellDivider = isDarkMode
+    ? 'rgba(255,255,255,0.052)'
+    : alpha(theme.palette.divider, 0.24);
+  const sectionDivider = isDarkMode
+    ? 'rgba(255,255,255,0.052)'
+    : alpha(theme.palette.divider, 0.18);
+  const softSectionSurface = isDarkMode
+    ? 'linear-gradient(145deg, rgba(94,101,114,0.34) 0%, rgba(72,78,89,0.3) 100%)'
+    : alpha(theme.palette.text.primary, 0.035);
+  const fieldBorder =
+    theme.palette.border?.subtle ??
+    (isDarkMode ? 'rgba(255,255,255,0.085)' : 'rgba(24,29,36,0.12)');
+  const fieldSurface = isDarkMode
+    ? 'linear-gradient(145deg, rgba(88,95,108,0.2) 0%, rgba(56,62,73,0.28) 44%, rgba(37,41,49,0.42) 100%)'
+    : 'linear-gradient(180deg, rgba(17,23,34,0.042) 0%, rgba(17,23,34,0.024) 100%)';
+  const fieldSurfaceHover = isDarkMode
+    ? 'linear-gradient(145deg, rgba(98,106,120,0.24) 0%, rgba(63,70,82,0.34) 46%, rgba(43,48,57,0.48) 100%)'
+    : 'linear-gradient(180deg, rgba(17,23,34,0.06) 0%, rgba(17,23,34,0.034) 100%)';
+  const fieldInsetShadow = isDarkMode
+    ? '0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.035)'
+    : '0 4px 10px rgba(24,32,44,0.06), inset 0 1px 0 rgba(255,255,255,0.5)';
+  const contentColumnMaxWidth = 428;
+
   const checkIfNameExisits = async (name) => {
     if (!name?.trim()) {
       setIsNameAvailable(NameAvailability.NULL);
@@ -112,6 +141,13 @@ export const RegisterName = ({
     nameRegistrationFee();
   }, []);
 
+  const closeRegisterName = useCallback(() => {
+    if (isLoadingRegisterName) return;
+    setIsOpen(false);
+    setRegisterNameValue('');
+    setIsNameAvailable(NameAvailability.NULL);
+  }, [isLoadingRegisterName]);
+
   const registerName = async () => {
     try {
       if (!userInfo?.address)
@@ -134,64 +170,46 @@ export const RegisterName = ({
         }),
         publishFee: fee.fee + ' QORT',
       });
+      const nameToRegister = registerNameValue.trim();
       setIsLoadingRegisterName(true);
-      new Promise((res, rej) => {
-        window
-          .sendMessage('registerName', {
-            name: registerNameValue,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              setIsLoadingRegisterName(false);
-              setInfoSnack({
-                type: 'success',
-                message: t('group:message.success.registered_name', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-              });
-              setIsOpen(false);
-              setRegisterNameValue('');
-              setOpenSnack(true);
-              setTxList((prev) => [
-                {
-                  ...response,
-                  type: 'register-name',
-                  label: t('group:message.success.registered_name_label', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                  labelDone: t(
-                    'group:message.success.registered_name_success',
-                    {
-                      postProcess: 'capitalizeFirstChar',
-                    }
-                  ),
-                  done: false,
-                },
-                ...prev.filter((item) => !item.done),
-              ]);
-              return;
-            }
-            setInfoSnack({
-              type: 'error',
-              message: response?.error,
-            });
-            setOpenSnack(true);
-            rej(response.error);
-          })
-          .catch((error) => {
-            setInfoSnack({
-              type: 'error',
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-            setOpenSnack(true);
-            rej(error);
-          });
+      setIsOpen(false);
+      setRegisterNameValue('');
+      setIsNameAvailable(NameAvailability.NULL);
+
+      const response = await window.sendMessage('registerName', {
+        name: nameToRegister,
       });
+
+      if (response?.error) {
+        setInfoSnack({
+          type: 'error',
+          message: response.error,
+        });
+        setOpenSnack(true);
+        return;
+      }
+
+      setInfoSnack({
+        type: 'success',
+        message: t('group:message.success.registered_name', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      setOpenSnack(true);
+      setTxList((prev) => [
+        {
+          ...response,
+          type: 'register-name',
+          label: t('group:message.success.registered_name_label', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          labelDone: t('group:message.success.registered_name_success', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          done: false,
+        },
+        ...prev.filter((item) => !item.done),
+      ]);
     } catch (error) {
       if (error?.message) {
         setOpenSnack(true);
@@ -217,272 +235,512 @@ export const RegisterName = ({
   return (
     <Dialog
       open={isOpen}
+      onClose={closeRegisterName}
       aria-labelledby="register-name-dialog-title"
       aria-describedby="register-name-dialog-description"
       maxWidth="sm"
       fullWidth
       slotProps={{
+        backdrop: {
+          sx: {
+            backdropFilter: isDarkMode
+              ? 'blur(12px) brightness(0.76) saturate(0.88)'
+              : 'blur(12px) brightness(0.9) saturate(0.94)',
+            WebkitBackdropFilter: isDarkMode
+              ? 'blur(12px) brightness(0.76) saturate(0.88)'
+              : 'blur(12px) brightness(0.9) saturate(0.94)',
+            backgroundColor: isDarkMode
+              ? 'rgba(6, 8, 12, 0.4)'
+              : 'rgba(22, 26, 34, 0.14)',
+          },
+        },
         paper: {
           sx: {
-            borderRadius: '16px',
+            background: modalSurface,
+            border: `1px solid ${surfaceBorder}`,
+            borderRadius: '14px',
+            boxShadow: isDarkMode
+              ? '0 34px 120px rgba(0,0,0,0.46)'
+              : '0 28px 88px rgba(18,28,45,0.16)',
+            clipPath: 'inset(0 round 14px)',
+            isolation: 'isolate',
             overflow: 'hidden',
-            bgcolor: theme.palette.background.paper,
-            border: `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
-            boxShadow: theme.shadows[24],
+            width: 'min(700px, calc(100vw - 32px))',
           },
         },
       }}
     >
-      <DialogTitle
-        id="register-name-dialog-title"
-        sx={{
-          pb: 2.5,
-          pt: 2.5,
-          px: 2.5,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          fontWeight: 600,
-          fontSize: '1.125rem',
-          textAlign: 'center',
-          color: theme.palette.text.primary,
-          textTransform: 'none',
-        }}
-      >
-        {t('core:action.register_name', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </DialogTitle>
-
-      <DialogContent id="register-name-dialog-description" sx={{ px: 2.5 }}>
+      <Box sx={{ background: modalSurface, display: 'flex', flexDirection: 'column' }}>
         <Box
           sx={{
+            alignItems: 'center',
             display: 'flex',
-            flexDirection: 'column',
-            gap: 2.5,
-            maxWidth: 400,
-            mx: 'auto',
-            pt: 1,
-            pb: 1,
+            justifyContent: 'space-between',
+            px: 2.25,
+            py: 1.45,
           }}
         >
-          <Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px',
+              maxWidth: `${contentColumnMaxWidth}px`,
+              width: '100%',
+            }}
+          >
             <Typography
-              variant="subtitle2"
-              color="text.secondary"
-              sx={{ mb: 1, display: 'block', fontWeight: 600 }}
+              id="register-name-dialog-title"
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: '0.98rem',
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+              }}
             >
-              {t('core:action.choose_name', {
+              {t('core:action.register_name', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
-            <TextField
-              autoComplete="off"
-              autoFocus
-              fullWidth
-              variant="outlined"
-              size="medium"
-              onChange={(e) => setRegisterNameValue(e.target.value)}
-              value={registerNameValue}
-              placeholder={t('core:action.choose_name', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+            <Typography
+              id="register-name-dialog-description"
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor:
-                    theme.palette.background?.default ??
-                    'rgba(255,255,255,0.04)',
-                },
+                color: theme.palette.text.secondary,
+                fontSize: '0.76rem',
+                lineHeight: 1.45,
               }}
-            />
+            >
+              {t('tutorial:home.register_name_workspace_hint')}
+            </Typography>
           </Box>
+          <ButtonBase
+            aria-label={t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            onClick={closeRegisterName}
+            disabled={isLoadingRegisterName}
+            sx={{
+              borderRadius: '8px',
+              color: theme.palette.text.secondary,
+              height: 30,
+              width: 30,
+              '&:hover': {
+                backgroundColor: alpha(
+                  theme.palette.common.white,
+                  isDarkMode ? 0.05 : 0.55
+                ),
+                color: theme.palette.text.primary,
+              },
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 17 }} />
+          </ButtonBase>
+        </Box>
 
-          {hasInsufficientBalance && (
-            <Alert
-              severity="warning"
-              icon={<InfoOutlinedIcon fontSize="small" />}
-              sx={{
-                borderRadius: '10px',
-                '& .MuiAlert-message': { fontSize: '0.8125rem' },
-              }}
-            >
-              {t('core:message.generic.name_registration', {
-                balance: balance ?? 0,
-                fee: nameFee != null ? Number(nameFee).toFixed(2) : nameFee,
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Alert>
-          )}
-
-          {isNameAvailable === NameAvailability.AVAILABLE && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                py: 1,
-                px: 1.5,
-                borderRadius: '10px',
-                bgcolor:
-                  theme.palette.mode === 'dark'
-                    ? `${theme.palette.success?.main ?? theme.palette.other?.positive ?? '#2e7d32'}30`
-                    : `${theme.palette.success?.main ?? theme.palette.other?.positive ?? '#2e7d32'}18`,
-                border: `1px solid ${theme.palette.success?.main ?? theme.palette.other?.positive ?? '#2e7d32'}50`,
-              }}
-            >
-              <CheckIcon
-                sx={{ color: 'success.main', fontSize: 22, flexShrink: 0 }}
+        <Box
+          sx={{
+            borderTop: `1px solid ${shellDivider}`,
+            display: 'flex',
+            flexDirection: 'column',
+            px: 2.25,
+            pb: 1.85,
+            pt: 1.75,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.25,
+              maxWidth: `${contentColumnMaxWidth}px`,
+              mx: 'auto',
+              width: '100%',
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}>
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  display: 'block',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {t('core:name', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+              <TextField
+                autoComplete="off"
+                autoFocus
+                fullWidth
+                variant="outlined"
+                size="medium"
+                onChange={(e) => setRegisterNameValue(e.target.value)}
+                value={registerNameValue}
+                placeholder={t('core:name', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    background: fieldSurface,
+                    borderRadius: '10px',
+                    boxShadow: fieldInsetShadow,
+                    color: theme.palette.text.primary,
+                    '& fieldset': {
+                      borderColor: fieldBorder,
+                    },
+                    '&:hover fieldset': {
+                      borderColor: isDarkMode
+                        ? 'rgba(255,255,255,0.12)'
+                        : alpha(theme.palette.primary.main, 0.42),
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: alpha(theme.palette.primary.main, 0.9),
+                      borderWidth: 1.5,
+                    },
+                    '&:hover': {
+                      background: fieldSurfaceHover,
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    fontSize: '0.92rem',
+                    px: 1.25,
+                    py: 1.18,
+                  },
+                }}
               />
-              <Typography
-                variant="body2"
-                sx={{ color: theme.palette.text.primary, fontWeight: 500 }}
-              >
-                {t('core:message.generic.name_available', {
-                  name: registerNameValue,
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
             </Box>
-          )}
 
-          {isNameAvailable === NameAvailability.NOT_AVAILABLE && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                py: 1,
-                px: 1.5,
-                borderRadius: '10px',
-                bgcolor:
-                  theme.palette.mode === 'dark'
-                    ? `${theme.palette.error?.main ?? theme.palette.other?.danger ?? '#d32f2f'}28`
-                    : `${theme.palette.error?.main ?? theme.palette.other?.danger ?? '#d32f2f'}14`,
-                border: `1px solid ${theme.palette.error?.main ?? theme.palette.other?.danger ?? '#d32f2f'}50`,
-              }}
-            >
-              <ErrorIcon
-                sx={{ color: 'error.main', fontSize: 22, flexShrink: 0 }}
-              />
-              <Typography
-                variant="body2"
-                sx={{ color: theme.palette.text.primary, fontWeight: 500 }}
-              >
-                {t('core:message.generic.name_unavailable', {
-                  name: registerNameValue,
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-            </Box>
-          )}
-
-          {isNameAvailable === NameAvailability.LOADING && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                py: 1,
-                px: 1.5,
-                borderRadius: '10px',
-                bgcolor: theme.palette.action.hover,
-                border: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <BarSpinner width="16px" color={theme.palette.text.primary} />
-              <Typography
-                variant="body2"
-                sx={{ color: theme.palette.text.primary, fontWeight: 500 }}
-              >
-                {t('core:message.generic.name_checking', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-            </Box>
-          )}
-
-          <Box sx={{ pt: 0.5 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 600 }}>
-              {t('core:message.generic.name_benefits', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+            {hasInsufficientBalance && (
               <Box
-                sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}
+                sx={{
+                  alignItems: 'flex-start',
+                  background: alpha(
+                    theme.palette.warning?.main ?? '#d19932',
+                    isDarkMode ? 0.13 : 0.08
+                  ),
+                  border: `1px solid ${alpha(
+                    theme.palette.warning?.main ?? '#d19932',
+                    isDarkMode ? 0.28 : 0.2
+                  )}`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  gap: 1,
+                  px: 1.25,
+                  py: 1.1,
+                }}
               >
-                <CheckCircleOutlineIcon
+                <InfoOutlinedIcon
                   sx={{
-                    color: theme.palette.primary.main,
-                    fontSize: 20,
-                    mt: 0.15,
+                    color: theme.palette.warning?.main ?? '#d19932',
+                    fontSize: 18,
                     flexShrink: 0,
+                    mt: '1px',
                   }}
                 />
-                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
-                  {t('core:message.generic.publish_data', {
+                <Typography
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: '0.77rem',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {t('core:message.generic.name_registration', {
+                    balance: balance ?? 0,
+                    fee: nameFee != null ? Number(nameFee).toFixed(2) : nameFee,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               </Box>
+            )}
+
+            {isNameAvailable === NameAvailability.AVAILABLE && (
               <Box
-                sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}
+                sx={{
+                  alignItems: 'center',
+                  background: alpha(
+                    theme.palette.success?.main ?? '#2e7d32',
+                    isDarkMode ? 0.13 : 0.08
+                  ),
+                  border: `1px solid ${alpha(
+                    theme.palette.success?.main ?? '#2e7d32',
+                    isDarkMode ? 0.28 : 0.2
+                  )}`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  gap: 1,
+                  px: 1.25,
+                  py: 1.05,
+                }}
               >
-                <CheckCircleOutlineIcon
+                <CheckIcon
                   sx={{
-                    color: theme.palette.primary.main,
-                    fontSize: 20,
-                    mt: 0.15,
+                    color: theme.palette.success?.main ?? '#2e7d32',
+                    fontSize: 18,
                     flexShrink: 0,
                   }}
                 />
-                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
-                  {t('core:message.generic.secure_ownership', {
+                <Typography
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontSize: '0.77rem',
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {t('core:message.generic.name_available', {
+                    name: registerNameValue,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
+              </Box>
+            )}
+
+            {isNameAvailable === NameAvailability.NOT_AVAILABLE && (
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  background: alpha(
+                    theme.palette.error?.main ?? '#d32f2f',
+                    isDarkMode ? 0.13 : 0.08
+                  ),
+                  border: `1px solid ${alpha(
+                    theme.palette.error?.main ?? '#d32f2f',
+                    isDarkMode ? 0.28 : 0.2
+                  )}`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  gap: 1,
+                  px: 1.25,
+                  py: 1.05,
+                }}
+              >
+                <ErrorIcon
+                  sx={{
+                    color: theme.palette.error?.main ?? '#d32f2f',
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontSize: '0.77rem',
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {t('core:message.generic.name_unavailable', {
+                    name: registerNameValue,
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </Box>
+            )}
+
+            {isNameAvailable === NameAvailability.LOADING && (
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  background: softSectionSurface,
+                  border: `1px solid ${fieldBorder}`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  gap: 1,
+                  px: 1.25,
+                  py: 1.05,
+                }}
+              >
+                <BarSpinner width="16px" color={theme.palette.text.primary} />
+                <Typography
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontSize: '0.77rem',
+                    fontWeight: 500,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {t('core:message.generic.name_checking', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </Box>
+            )}
+
+            <Box
+              sx={{
+                borderTop: `1px solid ${sectionDivider}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.82,
+                pt: 1.2,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.72),
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {t('core:message.generic.name_benefits', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.88,
+                  opacity: 0.86,
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 0.9, alignItems: 'flex-start' }}>
+                  <CheckCircleOutlineIcon
+                    sx={{
+                      color: alpha(theme.palette.primary.main, 0.88),
+                      fontSize: 17,
+                      mt: '1px',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.75rem',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {t('core:message.generic.publish_data', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 0.9, alignItems: 'flex-start' }}>
+                  <CheckCircleOutlineIcon
+                    sx={{
+                      color: alpha(theme.palette.primary.main, 0.88),
+                      fontSize: 17,
+                      mt: '1px',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.75rem',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {t('core:message.generic.secure_ownership', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
           </Box>
         </Box>
-      </DialogContent>
 
-      <DialogActions
-        sx={{
-          px: 2.5,
-          py: 2.5,
-          pt: 3,
-          gap: 1.5,
-          borderTop: `1px solid ${theme.palette.divider}`,
-        }}
-      >
-        <Button
-          disabled={isLoadingRegisterName}
-          variant="outlined"
-          onClick={() => {
-            setIsOpen(false);
-            setRegisterNameValue('');
-          }}
-          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
-        >
-          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
-        </Button>
-        <Button
-          disabled={isRegisterDisabled}
-          variant="contained"
-          onClick={registerName}
-          autoFocus
+        <Box
           sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            borderRadius: '10px',
-            minWidth: 140,
+            borderTop: `1px solid ${shellDivider}`,
+            px: 2.25,
+            py: 1.5,
+            mt: 0.5,
           }}
         >
-          {t('core:action.register_name', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Button>
-      </DialogActions>
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.7,
+              maxWidth: `${contentColumnMaxWidth}px`,
+              mx: 'auto',
+              width: '100%',
+            }}
+          >
+            <ButtonBase
+              disabled={isRegisterDisabled}
+              onClick={registerName}
+              autoFocus
+              sx={{
+                ...getBlueTier1ButtonSx(),
+                alignItems: 'center',
+                borderRadius: '10px',
+                justifyContent: 'center',
+                minHeight: 40,
+                px: 1.65,
+                width: '100%',
+                '& .register-name-primary-label': {
+                  color: alpha('#FFFFFF', 0.98),
+                },
+                '&.Mui-disabled': {
+                  background: isDarkMode
+                    ? 'rgba(255,255,255,0.035)'
+                    : 'rgba(24,29,36,0.04)',
+                  border: isDarkMode
+                    ? '1px solid rgba(255,255,255,0.055)'
+                    : '1px solid rgba(24,29,36,0.06)',
+                  boxShadow: 'none',
+                },
+              }}
+            >
+              <Typography
+                className="register-name-primary-label"
+                sx={{
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                  lineHeight: 1.2,
+                }}
+              >
+                {t('core:action.register_name', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            </ButtonBase>
+            <ButtonBase
+              disabled={isLoadingRegisterName}
+              onClick={closeRegisterName}
+              sx={{
+                alignItems: 'center',
+                borderRadius: '10px',
+                color: theme.palette.text.secondary,
+                display: 'inline-flex',
+                justifyContent: 'center',
+                minHeight: 32,
+                px: 1.2,
+                textAlign: 'center',
+                transition:
+                  'background-color 160ms ease, color 160ms ease, opacity 160ms ease',
+                '&:hover': {
+                  backgroundColor: softSectionSurface,
+                  color: theme.palette.text.primary,
+                },
+                '&.Mui-disabled': {
+                  opacity: 0.5,
+                },
+              }}
+            >
+              <Typography
+                sx={{
+                  color: 'inherit',
+                  fontSize: '0.76rem',
+                  fontWeight: 500,
+                  lineHeight: 1.2,
+                }}
+              >
+                {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
+              </Typography>
+            </ButtonBase>
+          </Box>
+        </Box>
+      </Box>
     </Dialog>
   );
 };

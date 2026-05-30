@@ -1,0 +1,7 @@
+{
+  "seedAddrs": ["qortal.home.ro:62391", "example.invalid:12345"],
+  "expectedUrls": [
+    "stun:qortal.home.ro:47321",
+    "stun:example.invalid:47321"
+  ]
+}

@@ -17,11 +17,13 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
+import { GroupActivityEmptyState } from './GroupActivityEmptyState';
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2);
 
 export const GroupJoinRequests = ({
   myAddress,
   groups,
+  setOpenAddGroup,
   setOpenManageMembers,
   getTimestampEnterChat,
   setSelectedGroup,
@@ -29,11 +31,14 @@ export const GroupJoinRequests = ({
   setMobileViewMode,
   setDesktopViewMode,
   compact = false,
+  isVisible = true,
+  compactViewportHeight,
   onCountChange,
   onLoadingChange,
 }: {
   myAddress: string;
   groups?: any[];
+  setOpenAddGroup?: (v: boolean) => void;
   setOpenManageMembers?: (v: boolean) => void;
   getTimestampEnterChat?: () => void;
   setSelectedGroup?: (g: any) => void;
@@ -41,6 +46,8 @@ export const GroupJoinRequests = ({
   setMobileViewMode?: (m: string) => void;
   setDesktopViewMode?: (m: string) => void;
   compact?: boolean;
+  isVisible?: boolean;
+  compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
   onLoadingChange?: (loading: boolean) => void;
 }) => {
@@ -68,6 +75,9 @@ export const GroupJoinRequests = ({
   const [infoSnack, setInfoSnack] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const theme = useTheme();
+  const compactViewportHeightCss =
+    compactViewportHeight != null ? `${compactViewportHeight}px` : undefined;
+  const hasFixedCompactViewport = compact && compactViewportHeightCss != null;
   const adminGroupIds = useMemo(
     () =>
       [...(myGroupsWhereIAmAdmin ?? [])]
@@ -156,6 +166,9 @@ export const GroupJoinRequests = ({
     () => filteredJoinRequests?.filter((g) => g?.data?.length > 0)?.length ?? 0,
     [filteredJoinRequests]
   );
+  const hasAdminGroups = adminGroupIds.length > 0;
+  const hasMemberGroups = (groups?.length ?? 0) > 0;
+  const shouldShowEmptyStateHelper = !hasAdminGroups && !hasMemberGroups;
 
   useEffect(() => {
     onCountChange?.(activeRequestCount);
@@ -180,22 +193,50 @@ export const GroupJoinRequests = ({
     getJoinRequests(true, true);
   };
 
+  const handleCreateGroup = () => {
+    setOpenAddGroup?.(true);
+  };
+
+  const emptyStateTertiaryText = useMemo(
+    () =>
+      shouldShowEmptyStateHelper
+        ? t('group:group_join_requests.empty_tertiary_no_admin_groups', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : undefined,
+    [shouldShowEmptyStateHelper, t]
+  );
+
+  const emptyJoinRequestsSecondaryLines = useMemo(
+    () => [
+      t('group:group_join_requests.empty_secondary_1', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      t('group:group_join_requests.empty_secondary_2', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    ],
+    [t]
+  );
+
   const listContent = (
     <Box
       sx={{
-        bgcolor: theme.palette.background.paper,
+        bgcolor: compact ? 'transparent' : theme.palette.background.paper,
         borderRadius: compact ? '0' : '12px',
         display: 'flex',
         flexDirection: 'column',
-        height: compact ? 'auto' : '250px',
-        maxHeight: compact ? '300px' : undefined,
-        overflow: compact ? 'auto' : undefined,
+        flex: hasFixedCompactViewport ? 1 : undefined,
+        height: hasFixedCompactViewport ? '100%' : compact ? 'auto' : '250px',
+        maxHeight: compact && !hasFixedCompactViewport ? '300px' : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        overflow: hasFixedCompactViewport ? 'hidden' : compact ? 'auto' : undefined,
         padding: compact ? 1.5 : 2,
         width: compact ? '100%' : '322px',
       }}
     >
       {loading && filteredJoinRequests.length === 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4, width: '100%' }}>
+        <Box sx={{ alignItems: 'center', display: 'flex', flex: hasFixedCompactViewport ? 1 : undefined, justifyContent: 'center', py: 4, width: '100%' }}>
           <CustomLoader />
         </Box>
       )}
@@ -206,19 +247,27 @@ export const GroupJoinRequests = ({
             sx={{
               alignItems: 'center',
               display: 'flex',
+              flex: hasFixedCompactViewport ? 1 : undefined,
               justifyContent: 'center',
               py: compact ? 4 : 5,
+              px: 2,
               width: '100%',
             }}
           >
-            <Typography
-              variant="body2"
-              sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}
-            >
-              {t('group:message.generic.no_display', {
+            <GroupActivityEmptyState
+              compact={compact}
+              isVisible={isVisible}
+              title={t('group:group_join_requests.empty_title', {
                 postProcess: 'capitalizeFirstChar',
               })}
-            </Typography>
+              secondaryLines={emptyJoinRequestsSecondaryLines}
+              tertiaryText={emptyStateTertiaryText}
+              ctaLabel={t('group:action.create_group', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              onCtaClick={handleCreateGroup}
+              graphicVariant="requests"
+            />
           </Box>
         )}
 
@@ -227,8 +276,10 @@ export const GroupJoinRequests = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
+            flex: hasFixedCompactViewport ? 1 : undefined,
             gap: 1,
-            maxHeight: '300px',
+            maxHeight: hasFixedCompactViewport ? '100%' : '300px',
+            minHeight: 0,
             overflow: 'auto',
             width: '100%',
           }}
@@ -277,11 +328,13 @@ export const GroupJoinRequests = ({
                       mt: 0.25,
                     }}
                   >
-                    {t('group:message.generic.pending_join_requests_count', {
-                      count,
-                      postProcess: 'capitalizeFirstChar',
-                      defaultValue: '{{count}} pending join request(s)',
-                    })}
+                    {t(
+                      'group:message.generic.pending_join_requests_count',
+                      {
+                        count,
+                        postProcess: 'capitalizeFirstChar',
+                      }
+                    )}
                   </Typography>
                 </Box>
                 <Button
@@ -318,6 +371,8 @@ export const GroupJoinRequests = ({
         display: 'flex',
         flexDirection: 'column',
         alignItems: compact ? 'stretch' : 'center',
+        height: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
       }}
     >
       {!compact && (

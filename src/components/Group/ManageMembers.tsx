@@ -394,6 +394,7 @@ export const ManageMembers = ({
                 isAdmin={isAdmin}
                 isOwner={isOwner}
                 show={show}
+                ownerAddress={groupInfo?.owner}
               />
             </Box>
           )}

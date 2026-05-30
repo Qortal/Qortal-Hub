@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.emsdk
+native/libopus-fec-wasm/build
 dist
 dist.zip
 dist-ssr
@@ -16,7 +18,6 @@ dist-ssr
 
 # Editor directories and files
 .vscode/*
-!.vscode/extensions.json
 .idea
 .DS_Store
 *.suo
@@ -31,8 +32,33 @@ release-builds/
 scripts/i18n_report*
 *wallet-storage.json
 
+# Local dev/preview console captures
+devserver*.err
+devserver*.out
+preview*.err
+preview*.out
+previewserver*.err
+previewserver*.out
+
+# Local external reference workspaces
+/external/qapp-core-inspect/
+/external/quittersource/
+
 squashfs-root/
 appimagetool-x86_64.AppImage
 *.bak
 *-fixed.AppImage
 *-secured.AppImage
+
+# PyInstaller rnsd binary (see electron/resources/reticulum/README.md)
+electron/resources/reticulum/*
+!electron/resources/reticulum/README.md
+!electron/resources/reticulum/.gitkeep
+
+# Optional dev-only venv (see electron/resources/reticulum-runtime/README.md)
+electron/resources/reticulum-runtime/*
+!electron/resources/reticulum-runtime/README.md
+!electron/resources/reticulum-runtime/.gitkeep
+
+# PyInstaller / venv build scratch (build-rnsd-frozen.py)
+electron/.build/

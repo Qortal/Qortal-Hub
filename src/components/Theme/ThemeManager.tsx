@@ -22,7 +22,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
-import { useThemeContext } from './ThemeContext';
+import { ENABLE_CUSTOM_THEMES, useThemeContext } from './ThemeContext';
 import { darkThemeOptions } from '../../styles/theme-dark';
 import { lightThemeOptions } from '../../styles/theme-light';
 import ShortUniqueId from 'short-unique-id';
@@ -97,6 +97,19 @@ export default function ThemeManager() {
       nameInputRef.current.focus();
     }
   }, [openEditor]);
+
+  if (!ENABLE_CUSTOM_THEMES) {
+    return (
+      <Box p={2}>
+        <Typography variant="h5" gutterBottom>
+          {t('core:theme.manager', { postProcess: 'capitalizeFirstChar' })}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Custom themes are currently disabled.
+        </Typography>
+      </Box>
+    );
+  }
 
   const handleAddTheme = () => {
     setThemeDraft({

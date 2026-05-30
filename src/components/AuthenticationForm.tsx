@@ -1,20 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
-import { Box, Typography, useTheme } from '@mui/material';
-import Avatar from '@mui/material/Avatar';
-import PersonIcon from '@mui/icons-material/Person';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Avatar,
+  Box,
+  ButtonBase,
+  Divider,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
+import PersonIcon from '@mui/icons-material/Person';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import SettingsEthernetRoundedIcon from '@mui/icons-material/SettingsEthernetRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import { useAtom } from 'jotai';
 import { authenticatePasswordAtom } from '../atoms/global';
-import { Return } from '../assets/Icons/Return.tsx';
-import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
-import { isLocalNodeUrl } from '../constants/constants';
-import { nodeDisplay } from '../utils/helpers.ts';
-import { CustomButton, CustomLabel, TextP } from '../styles/App-styles.ts';
-import { Spacer } from '../common/Spacer';
 import { PasswordField, ErrorText } from './index';
 import type { ApiKey } from '../types/auth';
 import { getBaseApiReactForAvatar } from '../App';
 import { getPrimaryNameForAvatar } from './Group/groupApi';
+import { AuthButton, AuthFrame, authPasswordFieldSx } from './Auth/AuthShell';
+import {
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
+} from '../constants/constants';
+import { ConnectionModeModal } from './Auth/ConnectionModeModal';
+import type {
+  AuthUnlockTransitionSnapshot,
+  SharedElementRect,
+} from '../types/authTransition';
 
 type RawWallet = {
   name?: string;
@@ -26,182 +42,624 @@ type AuthenticationFormProps = {
   rawWallet: RawWallet;
   selectedNode: ApiKey | null;
   walletToBeDecryptedError: string;
+  unlockTransition?: AuthUnlockTransitionSnapshot | null;
   onBack: () => void;
   onAuthenticate: () => Promise<void>;
+  onUnlockTransitionComplete?: () => void;
+};
+
+const shortenAddress = (address?: string) => {
+  if (!address) return '';
+  if (address.length <= 20) return address;
+  return `${address.slice(0, 8)}...${address.slice(-8)}`;
+};
+
+const isAddressLikeLabel = (value?: string, walletAddress?: string) => {
+  const trimmedValue = value?.trim();
+  const trimmedWalletAddress = walletAddress?.trim();
+  if (!trimmedValue) return false;
+  if (trimmedWalletAddress && trimmedValue === trimmedWalletAddress) return true;
+  return /^Q[a-zA-Z0-9]{24,}$/.test(trimmedValue) && !trimmedValue.includes(' ');
+};
+
+const parsefilenameQortal = (filename?: string) => {
+  if (!filename) return '';
+  return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
 };
 
 export const AuthenticationForm = ({
   rawWallet,
   selectedNode,
   walletToBeDecryptedError,
+  unlockTransition,
   onBack,
   onAuthenticate,
+  onUnlockTransitionComplete,
 }: AuthenticationFormProps) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core']);
+  const isLight = theme.palette.mode === 'light';
+  const { t } = useTranslation(['auth']);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
   );
   const passwordRef = useRef<HTMLInputElement>(null);
-  const [primaryName, setPrimaryName] = useState<string | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
+  const initialPrimaryNameRef = useRef({
+    address: unlockTransition?.walletAddress,
+    name: unlockTransition?.primaryName ?? null,
+  });
+  const [primaryName, setPrimaryName] = useState<string | null>(
+    initialPrimaryNameRef.current.address === rawWallet?.address0
+      ? initialPrimaryNameRef.current.name
+      : null
+  );
+  const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
+  const [sharedTransition, setSharedTransition] = useState<{
+    isRunning: boolean;
+    snapshot: AuthUnlockTransitionSnapshot;
+    targetAvatarRect: SharedElementRect;
+  } | null>(null);
 
-  // Fetch primary name for this address first; only then can we construct the avatar URL.
-  // Use getPrimaryNameForAvatar so the request uses the avatar-friendly base URL (e.g. HTTP when local HTTPS).
   useEffect(() => {
     if (!rawWallet?.address0) {
       setPrimaryName(null);
       return;
     }
-    getPrimaryNameForAvatar(rawWallet.address0)
-      .then((name) => setPrimaryName(name || null))
-      .catch(() => setPrimaryName(null));
-  }, [rawWallet?.address0]);
 
-  // Avatar URL is built only from the fetched primary name (each address has its own primary name).
-  // Use getBaseApiReactForAvatar so local HTTPS uses HTTP for avatars (avoids cert issues).
-  const avatarSrc = primaryName
-    ? `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`
-    : undefined;
-  const displayLabel =
-    primaryName ||
-    rawWallet?.name ||
-    rawWallet?.filename ||
-    rawWallet?.address0 ||
-    '';
+    const seededPrimaryName =
+      initialPrimaryNameRef.current.address === rawWallet.address0
+        ? initialPrimaryNameRef.current.name
+        : null;
+
+    if (seededPrimaryName) {
+      setPrimaryName(seededPrimaryName);
+      return;
+    }
+
+    setPrimaryName(null);
+    let isMounted = true;
+    getPrimaryNameForAvatar(rawWallet.address0)
+      .then((name) => {
+        if (isMounted) setPrimaryName(name || null);
+      })
+      .catch(() => {
+        if (isMounted) setPrimaryName(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [rawWallet?.address0]);
 
   useEffect(() => {
     passwordRef.current?.focus();
   }, []);
 
+  const avatarSrc = primaryName
+    ? `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`
+    : undefined;
+  const walletAddress = rawWallet?.address0?.trim() || '';
+  const addressLabel = shortenAddress(walletAddress);
+  const parsedFilenameLabel = parsefilenameQortal(rawWallet?.filename).trim();
+  const preferredIdentityLabel =
+    primaryName?.trim() || rawWallet?.name?.trim() || parsedFilenameLabel || '';
+  const unnamedAccountLabel = t('auth:authentication_form.unnamed_account', {
+    postProcess: 'capitalizeFirstChar',
+  });
+  const displayLabel =
+    preferredIdentityLabel || addressLabel || unnamedAccountLabel;
+  const titleLabel = isAddressLikeLabel(displayLabel, walletAddress)
+    ? addressLabel || unnamedAccountLabel
+    : displayLabel;
+  const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
+  const customNodeStatusLabel =
+    selectedNode?.name?.trim() || selectedNode?.url?.trim() || '';
+  const connectionLabel = usingLocalNode
+    ? t('auth:authentication_form.using_local_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    : selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
+      ? t('auth:authentication_form.using_public_node', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      : customNodeStatusLabel
+        ? t('auth:authentication_form.using_custom_node_named', {
+            label: customNodeStatusLabel,
+            defaultValue: 'Using {{label}}',
+            postProcess: 'capitalizeFirstChar',
+          })
+        : t('auth:authentication_form.using_custom_node', {
+            postProcess: 'capitalizeFirstChar',
+          });
+  const isSharedTransitionActive = Boolean(sharedTransition);
+  const storedAnimationPreference =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem('hub_ui_animations_enabled')
+      : null;
+  const shouldReduceMotion =
+    typeof window !== 'undefined' &&
+    (storedAnimationPreference === 'false' ||
+      (storedAnimationPreference === null &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches));
+
+  useLayoutEffect(() => {
+    if (
+      !unlockTransition ||
+      shouldReduceMotion ||
+      !avatarRef.current
+    ) {
+      return;
+    }
+
+    const rectToObject = (rect: DOMRect) => ({
+      height: rect.height,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+    });
+
+    setSharedTransition({
+      isRunning: false,
+      snapshot: unlockTransition,
+      targetAvatarRect: rectToObject(avatarRef.current.getBoundingClientRect()),
+    });
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    const finishTimer = window.setTimeout(() => {
+      setSharedTransition(null);
+      onUnlockTransitionComplete?.();
+    }, 430);
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setSharedTransition((current) =>
+          current ? { ...current, isRunning: true } : current
+        );
+      });
+    });
+
+    return () => {
+      window.clearTimeout(finishTimer);
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [onUnlockTransitionComplete, shouldReduceMotion, unlockTransition]);
+
+  const avatarSharedOpacitySx = {
+    opacity: isSharedTransitionActive ? 0 : 1,
+    transition: 'none',
+  };
+  const revealFormSx = unlockTransition
+    ? {
+        animation:
+          'authUnlockFormReveal 320ms cubic-bezier(0.4, 0, 0.2, 1) 110ms both',
+      }
+    : {};
+
   return (
     <>
-      <Spacer height="22px" />
-      <Box
-        sx={{
-          boxSizing: 'border-box',
-          display: 'flex',
-          justifyContent: 'flex-start',
-          maxWidth: '700px',
-          paddingLeft: '22px',
-          width: '100%',
-        }}
-      >
-        <Return
-          style={{
-            cursor: 'pointer',
-            height: '24px',
-            width: 'auto',
-          }}
-          onClick={onBack}
-        />
-      </Box>
-
-      <Spacer height="10px" />
-
-      <div
-        className="image-container"
-        style={{
-          width: '136px',
-          height: '154px',
-        }}
-      >
-        <img src={Logo1Dark} className="base-image" alt="" />
-      </div>
-
-      <Spacer height="35px" />
-
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+      <AuthFrame maxWidth={402} disableInitialAnimation>
         <Box
           sx={{
-            alignItems: 'center',
             display: 'flex',
-            gap: '10px',
+            flexDirection: 'column',
+            gap: 0,
+            '@keyframes authUnlockFormReveal': {
+              from: {
+                opacity: 0,
+                transform: 'translateY(5px)',
+              },
+              to: {
+                opacity: 1,
+                transform: 'translateY(0)',
+              },
+            },
           }}
         >
-          <Avatar
-            alt={displayLabel}
-            src={avatarSrc}
-            sx={{ width: 40, height: 40 }}
-          >
-            <PersonIcon sx={{ fontSize: 24 }} />
-          </Avatar>
-          <Typography>{displayLabel}</Typography>
-        </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start', width: '100%' }}>
+            <ButtonBase
+              onClick={onBack}
+              sx={{
+                alignItems: 'center',
+                color: isLight
+                  ? alpha(theme.palette.text.primary, 0.55)
+                  : 'rgba(214,221,233,0.7)',
+                display: 'inline-flex',
+                height: 32,
+                justifyContent: 'center',
+                minWidth: 0,
+                width: 32,
+                '&:hover': {
+                  color: theme.palette.text.primary,
+                },
+              }}
+            >
+              <ArrowBackRoundedIcon sx={{ fontSize: 28 }} />
+            </ButtonBase>
+          </Box>
 
-        <Spacer height="10px" />
-
-        <TextP
-          sx={{
-            textAlign: 'start',
-            lineHeight: '24px',
-            fontSize: '20px',
-            fontWeight: 600,
-          }}
-        >
-          {t('auth:authentication', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </TextP>
-      </Box>
-
-      <Spacer height="35px" />
-
-      <>
-        <CustomLabel htmlFor="standard-adornment-password">
-          {t('auth:wallet.password', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomLabel>
-
-        <Spacer height="10px" />
-
-        <PasswordField
-          id="standard-adornment-password"
-          value={authenticatePassword}
-          onChange={(e) => setAuthenticatePassword(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              onAuthenticate();
-            }
-          }}
-          ref={passwordRef}
-        />
-
-        <>
-          <Spacer height="20px" />
-
-          <Typography
+          <Box
             sx={{
-              fontSize: '12px',
-              ...(isLocalNodeUrl(selectedNode?.url) && {
-                fontWeight: 'bold',
-                color: theme.palette.other.positive,
-              }),
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.6,
+              mt: 1.1,
+              textAlign: 'center',
             }}
           >
-            {t('auth:node.using', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            : {nodeDisplay(selectedNode?.url)}
-          </Typography>
-        </>
+            <Avatar
+              ref={avatarRef}
+              alt={displayLabel}
+              src={avatarSrc}
+              sx={{ height: 84, width: 84, ...avatarSharedOpacitySx }}
+            >
+              <PersonIcon sx={{ fontSize: 42 }} />
+            </Avatar>
+            <Typography
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: '1.95rem',
+                fontWeight: 700,
+                letterSpacing: '-0.04em',
+                lineHeight: 1.04,
+                maxWidth: '100%',
+                mt: 1.25,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                textShadow: isLight
+                  ? 'none'
+                  : '0 1px 8px rgba(0,0,0,0.16)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {titleLabel}
+            </Typography>
+            <Box
+              sx={{
+                alignItems: 'center',
+                color: isLight
+                  ? theme.palette.text.secondary
+                  : 'rgba(214,221,233,0.5)',
+                display: 'inline-flex',
+                gap: 0.58,
+                mt: 0.05,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: isLight
+                    ? theme.palette.text.secondary
+                    : 'rgba(214,221,233,0.42)',
+                  fontSize: '0.72rem',
+                  fontWeight: 500,
+                  lineHeight: 1.2,
+                }}
+              >
+                {addressLabel}
+              </Typography>
+              <ButtonBase
+                onClick={() => {
+                  if (rawWallet?.address0) {
+                    void navigator.clipboard?.writeText(rawWallet.address0).catch(() => {});
+                  }
+                }}
+                sx={{
+                  color: isLight
+                    ? alpha(theme.palette.text.secondary, 0.85)
+                    : 'rgba(214,221,233,0.34)',
+                  minWidth: 0,
+                  p: 0,
+                  '&:hover': {
+                    color: isLight
+                      ? theme.palette.primary.main
+                      : 'rgba(214,221,233,0.7)',
+                  },
+                }}
+              >
+                <ContentCopyRoundedIcon sx={{ fontSize: 18 }} />
+              </ButtonBase>
+            </Box>
+          </Box>
 
-        <Spacer height="20px" />
+          <Divider
+            sx={{
+              borderColor: isLight
+                ? theme.palette.divider
+                : 'rgba(128,143,173,0.14)',
+              mt: 2.15,
+            }}
+          />
 
-        <CustomButton onClick={onAuthenticate}>
-          {t('auth:action.authenticate', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomButton>
+          <Box
+            sx={{
+              ...revealFormSx,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.05,
+              mt: 2.15,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color: isLight
+                    ? theme.palette.text.secondary
+                    : 'rgba(214,221,233,0.62)',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  mb: 0.9,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t('auth:wallet.password', { postProcess: 'capitalizeFirstChar' })}
+              </Typography>
+              <PasswordField
+                id="wallet-unlock-password"
+                value={authenticatePassword}
+                onChange={(e) => setAuthenticatePassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onAuthenticate();
+                  }
+                }}
+                ref={passwordRef}
+                placeholder={t('auth:authentication_form.password_placeholder', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                sx={authPasswordFieldSx(theme)}
+              />
+            </Box>
 
-        <ErrorText>{walletToBeDecryptedError}</ErrorText>
-      </>
+            <Box sx={{ minHeight: 16, mt: -0.1 }}>
+              <ErrorText>{walletToBeDecryptedError}</ErrorText>
+            </Box>
+
+            <AuthButton
+              onClick={onAuthenticate}
+              disabled={!authenticatePassword}
+              sx={walletUnlockSubmitButtonSx(theme)}
+            >
+              {t('auth:authentication_form.unlock', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </AuthButton>
+          </Box>
+
+          <Box
+            sx={{
+              ...revealFormSx,
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2.1,
+              mt: 2.2,
+            }}
+          >
+            <ButtonBase
+              onClick={onBack}
+              sx={{
+                alignItems: 'center',
+                color: isLight
+                  ? theme.palette.primary.main
+                  : 'rgba(126,170,248,0.88)',
+                display: 'inline-flex',
+                fontSize: '0.79rem',
+                fontWeight: 500,
+                gap: 0.28,
+                justifyContent: 'center',
+                lineHeight: 1,
+                minHeight: 26,
+                width: '100%',
+                '&:hover': {
+                  color: isLight
+                    ? theme.palette.primary.dark
+                    : 'rgba(148,186,255,0.96)',
+                },
+              }}
+              >
+                {t('auth:authentication_form.choose_another_account', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                <ChevronRightRoundedIcon sx={{ fontSize: 15 }} />
+              </ButtonBase>
+
+            <Divider
+              sx={{
+                alignSelf: 'stretch',
+                borderColor: isLight
+                  ? theme.palette.divider
+                  : 'rgba(128,143,173,0.14)',
+              }}
+            />
+
+            <Box
+              sx={{
+                alignItems: 'center',
+                color: isLight
+                  ? theme.palette.text.secondary
+                  : 'rgba(214,221,233,0.42)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.52,
+                mx: 'auto',
+                minWidth: 0,
+                textAlign: 'center',
+                width: '100%',
+              }}
+            >
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'inline-flex',
+                  gap: 0.38,
+                  justifyContent: 'center',
+                  width: '100%',
+                }}
+              >
+                <CheckCircleRoundedIcon
+                  sx={{
+                    color: usingLocalNode
+                      ? isLight
+                        ? theme.palette.other.positive
+                        : 'rgba(116,208,138,0.62)'
+                      : isLight
+                        ? theme.palette.primary.main
+                        : 'rgba(118,164,255,0.66)',
+                    fontSize: 11,
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: isLight
+                      ? theme.palette.text.secondary
+                      : 'rgba(214,221,233,0.5)',
+                    fontSize: '0.76rem',
+                    fontWeight: 400,
+                    lineHeight: 1,
+                  }}
+                >
+                  {connectionLabel}
+                </Typography>
+              </Box>
+              <ButtonBase
+                onClick={() => setIsConnectionModeOpen(true)}
+                sx={{
+                  alignItems: 'center',
+                  color: isLight
+                    ? theme.palette.text.secondary
+                    : 'rgba(214,221,233,0.62)',
+                  display: 'inline-flex',
+                  fontSize: '0.76rem',
+                  fontWeight: 500,
+                  gap: 0.38,
+                  justifyContent: 'center',
+                  minWidth: 0,
+                  p: 0,
+                  width: '100%',
+                  '&:hover': {
+                    color: isLight
+                      ? theme.palette.text.primary
+                      : 'rgba(214,221,233,0.78)',
+                  },
+                }}
+              >
+                <SettingsEthernetRoundedIcon sx={{ fontSize: 11 }} />
+                <Typography sx={{ fontSize: '0.76rem', fontWeight: 500 }}>
+                  {t('auth:connection_mode.title')}
+                </Typography>
+              </ButtonBase>
+            </Box>
+          </Box>
+        </Box>
+      </AuthFrame>
+
+      <ConnectionModeModal
+        open={isConnectionModeOpen}
+        onClose={() => setIsConnectionModeOpen(false)}
+      />
+      {sharedTransition && (
+        <SharedUnlockTransitionOverlay transition={sharedTransition} />
+      )}
+    </>
+  );
+};
+
+function walletUnlockSubmitButtonSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      border: '1px solid rgba(105,139,225,0.34)',
+      borderRadius: '10px',
+      boxShadow: '0 12px 30px rgba(10,18,36,0.24)',
+      fontSize: '0.92rem',
+      fontWeight: 600,
+      height: 52,
+      '&:disabled': {
+        background:
+          'linear-gradient(180deg, rgba(51,83,151,0.84) 0%, rgba(35,62,120,0.84) 100%)',
+        borderColor: 'rgba(105,139,225,0.22)',
+        color: 'rgba(230,236,247,0.58)',
+        opacity: 1,
+      },
+    };
+  }
+
+  return {
+    border: `1px solid ${alpha(theme.palette.primary.main, 0.34)}`,
+    borderRadius: '10px',
+    boxShadow: '0 10px 28px rgba(45, 72, 112, 0.11)',
+    fontSize: '0.92rem',
+    fontWeight: 600,
+    height: 52,
+    '&:disabled': {
+      background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.28)}, ${alpha(theme.palette.primary.dark, 0.32)})`,
+      borderColor: alpha(theme.palette.primary.main, 0.22),
+      color: alpha(theme.palette.text.secondary, 0.82),
+      opacity: 1,
+    },
+  };
+}
+
+const buildSharedTransform = (
+  originRect: SharedElementRect,
+  targetRect: SharedElementRect,
+  isRunning: boolean,
+  shouldScale = false
+) => {
+  const translateX = targetRect.left - originRect.left;
+  const translateY = targetRect.top - originRect.top;
+  const scaleX = shouldScale ? targetRect.width / originRect.width : 1;
+  const scaleY = shouldScale ? targetRect.height / originRect.height : 1;
+
+  return isRunning
+    ? `translate3d(${translateX}px, ${translateY}px, 0) scale(${scaleX}, ${scaleY})`
+    : 'translate3d(0, 0, 0) scale(1, 1)';
+};
+
+const sharedOverlayBaseSx = {
+  opacity: 1,
+  pointerEvents: 'none',
+  position: 'fixed',
+  transformOrigin: 'top left',
+  transition:
+    'transform 400ms cubic-bezier(0.4, 0, 0.2, 1), opacity 140ms cubic-bezier(0.4, 0, 0.2, 1)',
+  zIndex: 5200,
+};
+
+const SharedUnlockTransitionOverlay = ({
+  transition,
+}: {
+  transition: {
+    isRunning: boolean;
+    snapshot: AuthUnlockTransitionSnapshot;
+    targetAvatarRect: SharedElementRect;
+  };
+}) => {
+  const { isRunning, snapshot, targetAvatarRect } = transition;
+
+  return (
+    <>
+      <Avatar
+        alt={snapshot.displayName}
+        src={snapshot.avatarSrc}
+        sx={{
+          ...sharedOverlayBaseSx,
+          height: snapshot.avatarRect.height,
+          left: snapshot.avatarRect.left,
+          top: snapshot.avatarRect.top,
+          transform: buildSharedTransform(
+            snapshot.avatarRect,
+            targetAvatarRect,
+            isRunning,
+            true
+          ),
+          width: snapshot.avatarRect.width,
+        }}
+      >
+        <PersonIcon sx={{ fontSize: 22 }} />
+      </Avatar>
     </>
   );
 };

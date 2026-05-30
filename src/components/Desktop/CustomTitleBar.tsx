@@ -10,21 +10,8 @@ import MenuIcon from '@mui/icons-material/Menu';
 import RemoveIcon from '@mui/icons-material/Remove';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import FilterNoneIcon from '@mui/icons-material/FilterNone';
-import LogoutIcon from '@mui/icons-material/Logout';
-import SettingsIcon from '@mui/icons-material/Settings';
-import PersonSearchIcon from '@mui/icons-material/PersonSearch';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import EngineeringIcon from '@mui/icons-material/Engineering';
-import HelpIcon from '@mui/icons-material/Help';
-import DownloadIcon from '@mui/icons-material/Download';
 import QortalLogo from '../../assets/svgs/Logo1Dark.svg';
 import { WalletIcon } from '../../assets/Icons/WalletIcon';
-import { QMailStatus } from '../QMailStatus';
-import { GeneralNotifications } from '../GeneralNotifications';
-import { Save } from '../Save/Save';
-import { TaskManager } from '../TaskManager/TaskManager';
-import { GlobalActions } from '../GlobalActions/GlobalActions';
-import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 
 const TITLE_BAR_HEIGHT = 32;
 export const APP_NAV_BAR_HEIGHT = 48;
@@ -43,6 +30,9 @@ declare global {
       windowMaximize?: () => Promise<void>;
       windowClose?: () => Promise<void>;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
+      onWindowStateChange?: (
+        callback: (state: { isMaximized: boolean }) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
       showAppMenu?: (x?: number, y?: number) => Promise<void>;
     };
@@ -62,7 +52,6 @@ export type CustomTitleBarRightNavProps = {
   onOpenSettings: () => void;
   onOpenDrawerLookup: () => void;
   onOpenWalletsApp: () => void;
-  onOpenDrawerProfile: () => void;
   onLogout: () => void;
   getUserInfo: (useTimer?: boolean) => Promise<void>;
   onOpenMinting: () => void;
@@ -127,10 +116,14 @@ export function CustomTitleBar(props?: {
   }, [isElectron, refreshMaximized]);
 
   useEffect(() => {
-    if (!isElectron || typeof window.electronAPI?.getWindowState !== 'function')
+    if (
+      !isElectron ||
+      typeof window.electronAPI?.onWindowStateChange !== 'function'
+    )
       return;
-    const interval = setInterval(refreshMaximized, 500);
-    return () => clearInterval(interval);
+    return window.electronAPI.onWindowStateChange((state) => {
+      setIsMaximized(Boolean(state?.isMaximized));
+    });
   }, [isElectron, refreshMaximized]);
 
   const handleMinimize = useCallback(() => {
@@ -158,10 +151,22 @@ export function CustomTitleBar(props?: {
   }, [platform, refreshMaximized]);
 
   const bg =
-    theme.palette.mode === 'dark' ? '#27282c' : theme.palette.background.paper;
-  const borderColor = theme.palette.divider;
+    theme.palette.mode === 'dark'
+      ? 'rgba(34, 37, 43, 0.97)'
+      : theme.palette.background.paper;
+  const borderColor =
+    theme.palette.mode === 'dark'
+      ? theme.palette.border.subtle
+      : theme.palette.divider;
   const controlColor = theme.palette.text.secondary;
-  const controlHover = theme.palette.action.hover;
+  const controlHover =
+    theme.palette.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.09)'
+      : theme.palette.action.hover;
+  const toolbarShadow =
+    theme.palette.mode === 'dark'
+      ? '0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(0,0,0,0.14)'
+      : '0 1px 0 rgba(15,23,42,0.06), 0 6px 14px rgba(15,23,42,0.05)';
 
   const macColors = {
     close: '#ff5f57',
@@ -308,7 +313,13 @@ export function CustomTitleBar(props?: {
         height: TITLE_BAR_HEIGHT,
         padding: 0,
         WebkitAppRegion: 'no-drag',
+        transition:
+          'background-color 140ms ease, color 140ms ease, transform 120ms ease',
         '&:hover': { backgroundColor: controlHover },
+        '&:focus-visible': {
+          outline: `1px solid ${theme.palette.primary.main}`,
+          outlineOffset: '-1px',
+        },
       }}
       aria-label="Application menu"
     >
@@ -367,260 +378,6 @@ export function CustomTitleBar(props?: {
     </span>
   );
 
-  const navIconSx = {
-    color: controlColor,
-    width: 32,
-    height: 32,
-    borderRadius: 1,
-    '&:hover': { backgroundColor: controlHover },
-  };
-
-  /** Uniform 32x32 cell for widgets so all title-bar icons align; scales inner icons to 20px */
-  const navCellSx = {
-    width: 32,
-    height: 32,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    overflow: 'hidden',
-    '& .MuiSvgIcon-root': { fontSize: 20 },
-    '& .MuiIconButton-root': { width: 32, height: 32, padding: 0, minWidth: 0 },
-    '& svg': { width: 20, height: 20 },
-  };
-
-  const navSectionSx = {
-    alignItems: 'center' as const,
-    display: 'flex',
-    flexShrink: 0,
-    gap: 0.5,
-    height: '100%',
-    pl: 0.5,
-    pr: 0.5,
-    ...(isElectron && { WebkitAppRegion: 'no-drag' as const }),
-  };
-
-  const leftNavSection = rightNav && (
-    <Box sx={navSectionSx}>
-      <Tooltip
-        title={tooltipTitle(t('core:settings'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenSettings}
-          sx={navIconSx}
-          aria-label={t('core:settings')}
-        >
-          <SettingsIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      <Tooltip
-        title={tooltipTitle(
-          t('core:user_lookup', { postProcess: 'capitalizeAll' })
-        )}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenDrawerLookup}
-          sx={navIconSx}
-          aria-label={t('core:user_lookup')}
-        >
-          <PersonSearchIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      <Tooltip
-        title={tooltipTitle(t('core:wallet.wallet_other'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenWalletsApp}
-          sx={navIconSx}
-          aria-label={t('core:wallet.wallet_other')}
-        >
-          <AccountBalanceWalletIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-
-      <Box sx={{ width: 2 }} />
-      <QMailStatus compact />
-      {rightNav.extState === 'authenticated' && (
-        <Box sx={navCellSx}>
-          <GeneralNotifications
-            address={rightNav.userInfo?.address}
-            tooltipPlacement="bottom"
-          />
-        </Box>
-      )}
-      <Box sx={{ width: 2 }} />
-      <Tooltip
-        title={tooltipTitle(
-          t('core:action.save', { postProcess: 'capitalizeFirstChar' })
-        )}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <Box component="span">
-          <Save
-            isDesktop
-            disableWidth={false}
-            myName={rightNav.userInfo?.name}
-          />
-        </Box>
-      </Tooltip>
-      <Box sx={{ width: 2 }} />
-      {rightNav.desktopViewMode !== 'home' && (
-        <Tooltip
-          title={tooltipTitle(t('auth:account.your'))}
-          placement="bottom"
-          arrow
-          slotProps={tooltipSlotProps(theme)}
-        >
-          <IconButton
-            {...titleBarIconButtonProps}
-            size="small"
-            onClick={rightNav.onOpenDrawerProfile}
-            sx={navIconSx}
-            aria-label={t('auth:account.your')}
-          >
-            <WalletIcon color={controlColor} width="22" />
-          </IconButton>
-        </Tooltip>
-      )}
-    </Box>
-  );
-
-  const rightNavSection = rightNav && (
-    <Box sx={navSectionSx}>
-      <ChatWidgetReopenIcon inTitleBar />
-      {/* {rightNav.extState === 'authenticated' && rightNav.isMainWindow && ( */}
-      <>
-        <Tooltip
-          title={tooltipTitle(t('core:message.generic.ongoing_transactions'))}
-          placement="bottom"
-          arrow
-          slotProps={tooltipSlotProps(theme)}
-        >
-          <Box sx={navCellSx} component="span">
-            <TaskManager getUserInfo={rightNav.getUserInfo} />
-          </Box>
-        </Tooltip>
-        <Box sx={navCellSx}>
-          <GlobalActions />
-        </Box>
-      </>
-      {/* )} */}
-      <Box sx={{ width: 2 }} />
-      <Tooltip
-        title={tooltipTitle(t('core:minting.status_title'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenMinting}
-          sx={navIconSx}
-          aria-label={t('core:minting.status_title')}
-        >
-          <EngineeringIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      {/* {(rightNav.desktopViewMode === 'apps' || rightNav.desktopViewMode === 'home') && (
-        <Tooltip title={tooltipTitle(t('core:tutorial'))} placement="bottom" arrow slotProps={tooltipSlotProps(theme)}>
-          <IconButton
-            {...titleBarIconButtonProps}
-            size="small"
-            onClick={() => (rightNav.desktopViewMode === 'apps' ? rightNav.showTutorial('qapps', true) : rightNav.showTutorial('getting-started', true))}
-            sx={navIconSx}
-            aria-label={t('core:tutorial')}
-          >
-            <HelpIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
-      )} */}
-      <Tooltip
-        title={tooltipTitle(t('core:action.backup_wallet'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onBackupWallet}
-          sx={navIconSx}
-          aria-label={t('core:action.backup_wallet')}
-        >
-          <DownloadIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      <Box
-        sx={{
-          width: '1px',
-          minWidth: '1px',
-          alignSelf: 'stretch',
-          backgroundColor: borderColor,
-          mx: 0.5,
-          my: 0.75,
-        }}
-        aria-hidden
-      />
-      <Tooltip
-        title={tooltipTitle(t('core:action.logout'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onLogout}
-          sx={navIconSx}
-          aria-label={t('core:action.logout')}
-        >
-          <LogoutIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-    </Box>
-  );
-
-  const titleBarVerticalDivider = (
-    <Box
-      sx={{
-        width: '1px',
-        minWidth: '1px',
-        alignSelf: 'stretch',
-        backgroundColor: borderColor,
-        my: 0.75,
-      }}
-      aria-hidden
-    />
-  );
-
-  const leftOffsetSpacer = (
-    <Box
-      sx={{
-        width: TITLE_BAR_LEFT_OFFSET_PX - TITLE_BAR_MENU_WIDTH_PX,
-        minWidth: TITLE_BAR_LEFT_OFFSET_PX - TITLE_BAR_MENU_WIDTH_PX,
-        flexShrink: 0,
-      }}
-    />
-  );
-
   const leftPushCluster = (children: React.ReactNode) => (
     <Box
       sx={{
@@ -643,6 +400,7 @@ export function CustomTitleBar(props?: {
         borderBottom: '1px solid',
         borderColor,
         backgroundColor: bg,
+        boxShadow: toolbarShadow,
         display: 'flex',
         flexDirection: 'row',
         height: TITLE_BAR_HEIGHT,
@@ -659,44 +417,29 @@ export function CustomTitleBar(props?: {
               <>
                 {macWindowControls}
                 {menuButton}
-                {rightNav && (
-                  <>
-                    {leftOffsetSpacer}
-                    {titleBarVerticalDivider}
-                    {leftNavSection}
-                  </>
-                )}
               </>
             )}
             <Box sx={{ flex: 1 }} />
-            {rightNavSection}
             <Box sx={{ width: 52 }} />
           </>
         ) : (
           <>
-            {leftPushCluster(
-              <>
-                {menuButton}
-                {rightNav && (
-                  <>
-                    {leftOffsetSpacer}
-                    {titleBarVerticalDivider}
-                    {leftNavSection}
-                  </>
-                )}
-              </>
-            )}
+            {leftPushCluster(<>{menuButton}</>)}
             <Box sx={{ flex: 1 }} />
-            {rightNavSection}
-            {titleBarVerticalDivider}
             {winWindowControls}
           </>
         ))}
       {!isElectron && (
         <>
-          {leftPushCluster(<>{rightNav && <>{leftNavSection}</>}</>)}
+          {leftPushCluster(
+            <Box
+              sx={{
+                width: TITLE_BAR_LEFT_OFFSET_PX,
+                minWidth: TITLE_BAR_LEFT_OFFSET_PX,
+              }}
+            />
+          )}
           <Box sx={{ flex: 1 }} />
-          {rightNavSection}
         </>
       )}
     </Box>

@@ -49,6 +49,7 @@ import { addDataPublishesFunc, getDataPublishesFunc } from '../Group';
 import { useTranslation } from 'react-i18next';
 import { SortIcon } from '../../../assets/Icons/SortIcon';
 import { CustomButton } from '../../../styles/App-styles';
+import { hasInvisibleCharacters } from '../../../utils/hasInvisibleCharacters';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
 import CheckIcon from '@mui/icons-material/Check';
@@ -111,7 +112,7 @@ export const GroupMail = ({
       const getTempAnnouncements = await getTempPublish();
 
       if (getTempAnnouncements?.thread) {
-        let tempData = [];
+        const tempData = [];
         Object.keys(getTempAnnouncements?.thread || {}).map((key) => {
           const value = getTempAnnouncements?.thread[key];
           if (value?.data?.groupId === groupIdRef?.current) {
@@ -296,7 +297,7 @@ export const GroupMail = ({
         const responseData = await response.json();
         const messagesForThread: any = {};
         for (const message of responseData) {
-          let str = message.identifier;
+          const str = message.identifier;
           const parts = str.split('-');
 
           // Get the second last element
@@ -424,7 +425,7 @@ export const GroupMail = ({
       const response = await fetch(`/groups/members/${groupNumber}?limit=0`);
       const groupData = await response.json();
 
-      let members: any = {};
+      const members: any = {};
       if (groupData && Array.isArray(groupData?.members)) {
         for (const member of groupData.members) {
           if (member.member) {
@@ -690,6 +691,10 @@ export const GroupMail = ({
           <Spacer height="16px" />
 
           {combinedListTempAndReal.map((thread) => {
+            const threadAuthorName = thread?.threadData?.name || '';
+            const hasUnsafeThreadAuthorName = Boolean(
+              threadAuthorName && hasInvisibleCharacters(threadAuthorName)
+            );
             const hasViewedRecent =
               viewedThreads[
                 `qmail_threads_${thread?.threadData?.groupId}_${thread?.threadId}`
@@ -731,9 +736,19 @@ export const GroupMail = ({
                 </Avatar>
 
                 <ThreadInfoColumn>
-                  <ThreadInfoColumnNameP>
+                  <ThreadInfoColumnNameP
+                    sx={{
+                      ...(hasUnsafeThreadAuthorName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
+                    }}
+                  >
                     <ThreadInfoColumnbyP>by </ThreadInfoColumnbyP>
-                    {thread?.threadData?.name}
+                    {threadAuthorName}
                   </ThreadInfoColumnNameP>
 
                   <ThreadInfoColumnTime>

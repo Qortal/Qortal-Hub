@@ -72,6 +72,7 @@ export const AppsLibraryDesktop = ({
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterOption>('all');
   const theme = useTheme();
+  const isSearchActive = searchValue.trim().length > 0;
   const { t } = useTranslation([
     'auth',
     'core',
@@ -277,7 +278,11 @@ export const AppsLibraryDesktop = ({
               width: '100%',
             }}
           >
-            <AppsTabs currentTab={currentTab} onTabChange={handleTabChange} />
+            <AppsTabs
+              currentTab={currentTab}
+              isSearchActive={isSearchActive}
+              onTabChange={handleTabChange}
+            />
 
             <Box
               sx={{

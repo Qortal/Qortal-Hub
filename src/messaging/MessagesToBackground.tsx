@@ -2,6 +2,10 @@ import { TIME_MINUTES_10_IN_MILLISECONDS } from '../constants/constants';
 
 // Utility to generate unique request IDs
 function generateRequestId() {
+  if (globalThis.crypto?.randomUUID) {
+    return `msg-${globalThis.crypto.randomUUID()}`;
+  }
+
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
@@ -10,6 +14,10 @@ const callbackMap = new Map();
 
 // Global listener for handling message responses
 window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin || event.source !== window) {
+    return;
+  }
+
   const { type, requestId, payload, error, message } = event.data;
 
   // Only process messages of type `backgroundMessageResponse`
@@ -56,7 +64,7 @@ export const sendMessageBackground = async (
       callbackMap.delete(requestId);
       reject({
         error: 'timeout',
-        message: `Request timed out after ${timeout} ms`,
+        message: `Request timed out after ${timeout} ms (action: ${action})`,
       });
     }, timeout);
 

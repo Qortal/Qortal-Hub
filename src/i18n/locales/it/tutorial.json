@@ -33,6 +33,7 @@
     "get_six_qorts_way3_action": "Apri Q-Trade",
     "register_name": "Registra il tuo nome",
     "confirming_transaction": "Conferma transazione",
+    "confirming": "Conferma",
     "load_avatar": "Carica il tuo avatar",
     "explore_apps": "Esplora le app in evidenza",
     "done": "Fatto",
@@ -53,6 +54,17 @@
     "devnet_testing_desc": "Testa le tue Q-Apps nell'ambiente DevNet-Testing",
     "open_app": "Apri",
     "address_copied": "Indirizzo copiato negli appunti",
-    "group_activity": "Attività di gruppo"
+    "group_activity": "Attività di gruppo",
+    "get_qorts_workspace_hint": "Sblocca i primi 6 QORT per attivare il resto della configurazione.",
+    "register_name_workspace_hint": "Un nome registrato rende questo account un’identità riconoscibile.",
+    "load_avatar_workspace_hint": "Dai un volto alla dashboard perché tutto sia più tuo.",
+    "onboarding_transition_hard_part_done": "Ottimo lavoro. La parte più dura è fatta.",
+    "onboarding_transition_one_more": "Grande. Ne manca ancora una.",
+    "onboarding_press_next_when_ready": "Ottimo lavoro. La parte più dura è fatta. Premi Avanti quando sei pronto.",
+    "register_name_pending_hint": "Salvataggio nome on-chain: può richiedere qualche momento.",
+    "persistent_guide_get_qorts": "Iniziamo con 6 QORT. Scegli un’opzione sopra.",
+    "persistent_guide_register_name": "Poi registra il tuo nome.",
+    "persistent_guide_load_avatar": "Infine carica il tuo avatar.",
+    "post_onboarding_workspace_ready": "Tutto pronto. Puoi iniziare a costruire lo workspace sopra."
   }
 }

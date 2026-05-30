@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import './chat.css';
 import { executeEvent } from '../../utils/events';
+import { openHttpUrlExternally } from '../../utils/openExternalHttp';
 import { Embed } from '../Embeds/Embed';
 import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -70,7 +71,6 @@ function processText(input) {
             link.setAttribute('data-url', part);
             link.setAttribute('class', 'qortal-link');
             link.textContent = part;
-            link.style.cursor = 'pointer';
             fragment.appendChild(link);
           } else {
             fragment.appendChild(document.createTextNode(part));
@@ -91,9 +91,10 @@ function processText(input) {
 
 const linkify = (text) => {
   if (!text) return '';
-  let textFormatted = text;
+  const cleanText = DOMPurify.sanitize(text);
+  let textFormatted = cleanText;
   const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
-  textFormatted = text.replace(urlPattern, (url) => {
+  textFormatted = cleanText.replace(urlPattern, (url) => {
     const href = url.startsWith('http') ? url : `https://${url}`;
     return `<a href="${DOMPurify.sanitize(href)}" class="auto-link">${DOMPurify.sanitize(url)}</a>`;
   });
@@ -151,7 +152,6 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
         'title',
         'width',
         'height',
-        'style',
         'align',
         'valign',
         'colspan',
@@ -203,12 +203,7 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
 
     const target = e.target;
     if (target.tagName === 'A') {
-      const href = target.getAttribute('href');
-      if (window?.electronAPI) {
-        window.electronAPI.openExternal(href);
-      } else {
-        window.open(href, '_system');
-      }
+      openHttpUrlExternally(target.getAttribute('href'));
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
 

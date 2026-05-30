@@ -1825,13 +1825,12 @@ export async function downloadCoreWindows() {
 
 export async function installCore(executeProgress) {
   executeProgress();
-  return new Promise(async (res, rej) => {
-    if (process.platform === 'win32') {
-      await downloadCoreWindows();
-    } else {
-      await javaversion();
-    }
-  });
+  if (process.platform === 'win32') {
+    await downloadCoreWindows();
+  } else {
+    await javaversion();
+  }
+  return true;
 }
 
 export async function startCore() {
@@ -2179,6 +2178,28 @@ export async function bootstrap(): Promise<boolean> {
     } else {
       return false;
     }
+  } catch (error) {
+    return false;
+  }
+}
+
+/** When Core can reach `/admin/bootstrap`, runs existing {@link bootstrap}. Otherwise deletes chain `db` (if needed) and {@link startCore}. */
+export async function bootstrapOrClearChainAndStart(): Promise<boolean> {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (!isInstalled) return false;
+
+    const running = await isCoreRunning();
+    if (running) {
+      const bootOk = await bootstrap();
+      if (bootOk) return true;
+    }
+
+    const delOk = await deleteDB();
+    if (!delOk && (await dbExists())) return false;
+
+    await startCore();
+    return true;
   } catch (error) {
     return false;
   }

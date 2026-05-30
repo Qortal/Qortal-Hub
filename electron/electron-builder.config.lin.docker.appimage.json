@@ -1,0 +1,6 @@
+{
+  "extends": "./electron-builder.config.lin.docker.json",
+  "linux": {
+    "target": ["AppImage"]
+  }
+}
