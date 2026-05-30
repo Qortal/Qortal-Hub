@@ -7,13 +7,17 @@ import { Spacer } from '../../common/Spacer';
 import { CustomButtonAccept, TextP } from '../../styles/App-styles.ts';
 import { ErrorText } from '../index';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
+import {
+  QortalRequestDetails,
+  QortalRequestDetailsData,
+} from './QortalRequestDetails';
 
 export type MessageQortalRequestExtension = {
   text1?: string;
   text2?: string;
   text3?: string;
   text4?: string;
-  html?: string;
+  details?: QortalRequestDetailsData;
   highlightedText?: string;
   json?: any;
   fee?: string;
@@ -163,10 +167,12 @@ export function QortalRequestExtensionDialog({
             </TextP>
           </Box>
         )}
-        {message?.html && (
+        {message?.details && (
           <>
             <Spacer height="15px" />
-            <div dangerouslySetInnerHTML={{ __html: message.html }} />
+            <Box sx={{ width: '90%' }}>
+              <QortalRequestDetails details={message.details} />
+            </Box>
           </>
         )}
         <Spacer height="15px" />

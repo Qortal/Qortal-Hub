@@ -2,7 +2,10 @@ import { useEffect, MutableRefObject } from 'react';
 import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
 
-type PermissionHandler = (message: any, event: MessageEvent) => void | Promise<void>;
+type PermissionHandler = (
+  message: any,
+  event: MessageEvent
+) => void | Promise<void>;
 
 /**
  * Subscribes to window 'message' events for app/extension communication.
@@ -43,7 +46,8 @@ export function useAppMessageHandler(
         });
       } else if (
         message.action === 'QORTAL_REQUEST_PERMISSION' &&
-        message?.isFromExtension
+        message?.isFromExtension &&
+        event.source === window
       ) {
         const handler = permissionHandlerRef.current;
         handler?.(message, event);
