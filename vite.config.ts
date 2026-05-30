@@ -13,7 +13,32 @@ export default defineConfig({
     alias:
       process.env.VITEST === 'true'
         ? {
+            '@silentbot1/nat-api': resolve(
+              __dirname,
+              'src/test/mocks/natApi.ts'
+            ),
+            'better-sqlite3': resolve(
+              __dirname,
+              'src/test/mocks/betterSqlite3.ts'
+            ),
             electron: resolve(__dirname, 'src/test/mocks/electron.ts'),
+            'electron-serve': resolve(
+              __dirname,
+              'src/test/mocks/electronServe.ts'
+            ),
+            'electron-unhandled': resolve(
+              __dirname,
+              'src/test/mocks/electronUnhandled.ts'
+            ),
+            'electron-updater': resolve(
+              __dirname,
+              'src/test/mocks/electronUpdater.ts'
+            ),
+            'electron-window-state': resolve(
+              __dirname,
+              'src/test/mocks/electronWindowState.ts'
+            ),
+            selfsigned: resolve(__dirname, 'src/test/mocks/selfsigned.ts'),
           }
         : {},
   },
