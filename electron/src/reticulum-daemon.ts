@@ -67,6 +67,7 @@ const RETICULUM_SHARED_STATE_DIRNAME = 'qortal-shared';
 const RETICULUM_APP_INSTANCE_REGISTRY_FILENAME = 'reticulum-app-instances.json';
 const RETICULUM_SHARED_DAEMON_STATE_FILENAME = 'reticulum-daemon-state.json';
 const RETICULUM_SHARED_TRANSPORT_STATE_FILENAME = 'reticulum-transport-state.json';
+const RETICULUM_DAEMON_LOCK_DIRNAME = 'reticulum-daemon.lock';
 const RETICULUM_SHARED_RPC_KEY_FILENAME = 'reticulum-rpc-key.hex';
 const RETICULUM_PRESENCE_BRIDGE_IDENTITY_FILENAME = 'presence-bridge.identity';
 const QCHAT_FILE_PENDING_SENDS_DIRNAME = 'qchat-file-transfers';
@@ -77,6 +78,9 @@ const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
+const RETICULUM_DAEMON_LOCK_STALE_MS = 120_000;
+const RETICULUM_DAEMON_LOCK_WAIT_MS = 2_000;
+const RETICULUM_DAEMON_LOCK_POLL_MS = 50;
 const RETICULUM_PRIORITY_NICE_DEFAULT = -7;
 const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
 const QCHAT_FILE_OFFER_TTL_MS = 2 * 60 * 60 * 1000;
@@ -113,6 +117,12 @@ export type ReticulumSharedTransportState = {
   reason?: string;
   updatedAt: number;
   sourceInstanceIndex: number;
+};
+type ReticulumDaemonLockRecord = {
+  appPid: number;
+  instanceIndex: number;
+  createdAt: number;
+  context: string;
 };
 export type ReticulumReachability =
   | 'unknown'
@@ -369,6 +379,14 @@ export function getReticulumSharedTransportStatePath(): string {
   );
 }
 
+function getReticulumDaemonLockDir(): string {
+  return path.join(getReticulumSharedStateDir(), RETICULUM_DAEMON_LOCK_DIRNAME);
+}
+
+function getReticulumDaemonLockOwnerPath(): string {
+  return path.join(getReticulumDaemonLockDir(), 'owner.json');
+}
+
 export function getReticulumSharedRpcKeyPath(): string {
   return path.join(
     getReticulumSharedStateDir(),
@@ -468,6 +486,161 @@ function readJsonFile<T>(filePath: string): T | null {
 function writeJsonFile(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
+}
+
+function sleepSync(ms: number): void {
+  const waitMs = Math.max(0, Math.trunc(ms));
+  if (waitMs <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitMs);
+}
+
+function normalizeReticulumDaemonLockRecord(
+  raw: unknown
+): ReticulumDaemonLockRecord | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const candidate = raw as Record<string, unknown>;
+  const appPid = candidate.appPid;
+  const instanceIndex = candidate.instanceIndex;
+  const createdAt = candidate.createdAt;
+  const context = candidate.context;
+  if (
+    !Number.isInteger(appPid) ||
+    !Number.isInteger(instanceIndex) ||
+    typeof createdAt !== 'number' ||
+    !Number.isFinite(createdAt) ||
+    typeof context !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    appPid: Number(appPid),
+    instanceIndex: Number(instanceIndex),
+    createdAt: Number(createdAt),
+    context,
+  };
+}
+
+function readReticulumDaemonLockRecord():
+  | ReticulumDaemonLockRecord
+  | null {
+  return normalizeReticulumDaemonLockRecord(
+    readJsonFile<unknown>(getReticulumDaemonLockOwnerPath())
+  );
+}
+
+function removeReticulumDaemonLockDir(): void {
+  const ownerPath = getReticulumDaemonLockOwnerPath();
+  const lockDir = getReticulumDaemonLockDir();
+  try {
+    fs.unlinkSync(ownerPath);
+  } catch {
+    /* ignore */
+  }
+  try {
+    fs.rmdirSync(lockDir);
+  } catch {
+    /* ignore */
+  }
+}
+
+function releaseReticulumDaemonLockDir(context: string): boolean {
+  const lock = readReticulumDaemonLockRecord();
+  if (
+    !lock ||
+    lock.appPid !== process.pid ||
+    lock.instanceIndex !== reticulumInstanceIndex ||
+    lock.context !== context
+  ) {
+    loggerLog(
+      `[Reticulum] Skipped daemon lock release for non-owned lock context=${context} owner_pid=${lock?.appPid ?? 'unknown'} owner_context=${lock?.context ?? 'unknown'}`
+    );
+    return false;
+  }
+  removeReticulumDaemonLockDir();
+  return true;
+}
+
+function getReticulumDaemonLockDirAgeMs(now = Date.now()): number | null {
+  try {
+    return now - fs.statSync(getReticulumDaemonLockDir()).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+function reticulumDaemonLockIsStale(now = Date.now()): boolean {
+  const lock = readReticulumDaemonLockRecord();
+  if (!lock) {
+    const ageMs = getReticulumDaemonLockDirAgeMs(now);
+    return ageMs === null || ageMs > RETICULUM_DAEMON_LOCK_STALE_MS;
+  }
+  if (now - lock.createdAt > RETICULUM_DAEMON_LOCK_STALE_MS) {
+    return true;
+  }
+  return !isPidAlive(lock.appPid);
+}
+
+function acquireReticulumDaemonLock(
+  context: string
+): (() => void) | null {
+  const deadline = Date.now() + RETICULUM_DAEMON_LOCK_WAIT_MS;
+  const lockDir = getReticulumDaemonLockDir();
+  const ownerPath = getReticulumDaemonLockOwnerPath();
+
+  while (Date.now() <= deadline) {
+    let createdLockDir = false;
+    try {
+      fs.mkdirSync(lockDir);
+      createdLockDir = true;
+      writeJsonFile(ownerPath, {
+        appPid: process.pid,
+        instanceIndex: reticulumInstanceIndex,
+        createdAt: Date.now(),
+        context,
+      } satisfies ReticulumDaemonLockRecord);
+      loggerLog(`[Reticulum] Acquired daemon lock context=${context}`);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        if (releaseReticulumDaemonLockDir(context)) {
+          loggerLog(`[Reticulum] Released daemon lock context=${context}`);
+        }
+      };
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error && 'code' in error
+          ? String((error as { code?: unknown }).code ?? '')
+          : '';
+      if (code !== 'EEXIST') {
+        if (createdLockDir) {
+          removeReticulumDaemonLockDir();
+        }
+        loggerError(
+          `[Reticulum] Failed to acquire daemon lock context=${context}:`,
+          error
+        );
+        return null;
+      }
+      if (reticulumDaemonLockIsStale()) {
+        const stale = readReticulumDaemonLockRecord();
+        loggerLog(
+          `[Reticulum] Removing stale daemon lock context=${context} owner_pid=${stale?.appPid ?? 'unknown'} owner_context=${stale?.context ?? 'unknown'}`
+        );
+        removeReticulumDaemonLockDir();
+        continue;
+      }
+      sleepSync(RETICULUM_DAEMON_LOCK_POLL_MS);
+    }
+  }
+
+  const owner = readReticulumDaemonLockRecord();
+  loggerLog(
+    `[Reticulum] Timed out waiting for daemon lock context=${context} owner_pid=${owner?.appPid ?? 'unknown'} owner_context=${owner?.context ?? 'unknown'}`
+  );
+  return null;
 }
 
 function normalizeReticulumAppInstanceRecord(
@@ -757,6 +930,26 @@ function signalReticulumPid(
 }
 
 export function recoverReticulumStateForAppLaunch(
+  instanceIndex = reticulumInstanceIndex
+): ReticulumAppLaunchRecovery {
+  const releaseLock = acquireReticulumDaemonLock('startup-recovery');
+  if (!releaseLock) {
+    loggerLog('[Reticulum] Skipping startup recovery because daemon lock is held.');
+    return {
+      activeInstances: getReticulumActiveAppInstances().length,
+      orphanedDaemonFound: false,
+      orphanedDaemonStopped: false,
+      daemonStateCleared: false,
+    };
+  }
+  try {
+    return recoverReticulumStateForAppLaunchLocked(instanceIndex);
+  } finally {
+    releaseLock?.();
+  }
+}
+
+function recoverReticulumStateForAppLaunchLocked(
   instanceIndex = reticulumInstanceIndex
 ): ReticulumAppLaunchRecovery {
   const activeInstances = getReticulumActiveAppInstances();
@@ -1762,6 +1955,19 @@ export function resolveReticulumDaemonStartupAction():
 }
 
 export function stopBundledReticulumDaemon(): void {
+  const releaseLock = acquireReticulumDaemonLock('stop-local');
+  if (!releaseLock) {
+    loggerLog('[Reticulum] Skipping local rnsd stop because daemon lock is held.');
+    return;
+  }
+  try {
+    stopBundledReticulumDaemonLocked();
+  } finally {
+    releaseLock?.();
+  }
+}
+
+function stopBundledReticulumDaemonLocked(): void {
   if (!child) return;
   if (child.exitCode !== null || child.killed) {
     clearReticulumSharedDaemonState(child.pid);
@@ -1785,26 +1991,35 @@ export function stopBundledReticulumDaemon(): void {
 }
 
 export function stopSharedReticulumDaemon(): void {
-  if (child && child.exitCode === null && !child.killed) {
-    stopBundledReticulumDaemon();
+  const releaseLock = acquireReticulumDaemonLock('stop-shared');
+  if (!releaseLock) {
+    loggerLog('[Reticulum] Skipping shared rnsd stop because daemon lock is held.');
     return;
   }
-  const state = readReticulumSharedDaemonState();
-  if (!state) {
-    return;
-  }
-  if (!isPidAlive(state.pid)) {
-    clearReticulumSharedDaemonState(state.pid);
-    return;
-  }
-  if (
-    signalReticulumPid(
-      state.pid,
-      process.platform === 'win32' ? undefined : 'SIGTERM',
-      'last-app-instance-exit'
-    )
-  ) {
-    clearReticulumSharedDaemonState(state.pid);
+  try {
+    if (child && child.exitCode === null && !child.killed) {
+      stopBundledReticulumDaemonLocked();
+      return;
+    }
+    const state = readReticulumSharedDaemonState();
+    if (!state) {
+      return;
+    }
+    if (!isPidAlive(state.pid)) {
+      clearReticulumSharedDaemonState(state.pid);
+      return;
+    }
+    if (
+      signalReticulumPid(
+        state.pid,
+        process.platform === 'win32' ? undefined : 'SIGTERM',
+        'last-app-instance-exit'
+      )
+    ) {
+      clearReticulumSharedDaemonState(state.pid);
+    }
+  } finally {
+    releaseLock?.();
   }
 }
 
@@ -1876,12 +2091,23 @@ function canConnectToSharedInstance(port: number): Promise<boolean> {
 export async function stopBundledReticulumDaemonAndWait(
   timeoutMs = RETICULUM_DAEMON_STOP_TIMEOUT_MS
 ): Promise<void> {
-  const subprocess = child;
-  stopBundledReticulumDaemon();
-  if (!subprocess || subprocess.exitCode !== null) {
+  const releaseLock = acquireReticulumDaemonLock('stop-local-wait');
+  if (!releaseLock) {
+    loggerLog(
+      '[Reticulum] Skipping local rnsd stop-and-wait because daemon lock is held.'
+    );
     return;
   }
-  await waitForChildExit(subprocess, timeoutMs);
+  try {
+    const subprocess = child;
+    stopBundledReticulumDaemonLocked();
+    if (!subprocess || subprocess.exitCode !== null) {
+      return;
+    }
+    await waitForChildExit(subprocess, timeoutMs);
+  } finally {
+    releaseLock();
+  }
 }
 
 export async function waitForReticulumSharedInstanceReady(
@@ -1907,12 +2133,26 @@ export async function waitForReticulumSharedInstanceReady(
 export async function restartBundledReticulumDaemonAndWaitReady(
   timeoutMs = RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS
 ): Promise<void> {
-  await stopBundledReticulumDaemonAndWait();
-  startBundledReticulumDaemon();
-  if (reticulumInstanceIndex === 0 && (!child || child.exitCode !== null)) {
-    throw new Error('Reticulum daemon did not start');
+  const releaseLock = acquireReticulumDaemonLock('restart');
+  if (!releaseLock) {
+    throw new Error('Timed out waiting for Reticulum daemon restart lock');
   }
-  await waitForReticulumSharedInstanceReady(timeoutMs);
+  try {
+    const subprocess = child;
+    stopBundledReticulumDaemonLocked();
+    if (subprocess && subprocess.exitCode === null) {
+      await waitForChildExit(subprocess, RETICULUM_DAEMON_STOP_TIMEOUT_MS);
+    }
+    fs.mkdirSync(getReticulumConfigDir(), { recursive: true });
+    ensureManagedReticulumConfig();
+    startBundledReticulumDaemonLocked();
+    if (reticulumInstanceIndex === 0 && (!child || child.exitCode !== null)) {
+      throw new Error('Reticulum daemon did not start');
+    }
+    await waitForReticulumSharedInstanceReady(timeoutMs);
+  } finally {
+    releaseLock?.();
+  }
 }
 
 /**
@@ -1926,6 +2166,29 @@ export function startBundledReticulumDaemon(): void {
   fs.mkdirSync(getReticulumConfigDir(), { recursive: true });
   ensureManagedReticulumConfig();
 
+  const releaseLock = acquireReticulumDaemonLock('start');
+  if (!releaseLock) {
+    const fallbackAction = resolveReticulumDaemonStartupAction();
+    if (fallbackAction !== 'spawn') {
+      loggerLog(
+        `[Reticulum] Rechecked startup action after lock timeout: ${fallbackAction}`
+      );
+      return;
+    }
+    loggerLog(
+      '[Reticulum] Skipping rnsd spawn because another app instance holds the daemon lock.'
+    );
+    return;
+  }
+
+  try {
+    startBundledReticulumDaemonLocked();
+  } finally {
+    releaseLock();
+  }
+}
+
+function startBundledReticulumDaemonLocked(): void {
   const startupAction = resolveReticulumDaemonStartupAction();
   if (startupAction === 'reuse-local') {
     return;
