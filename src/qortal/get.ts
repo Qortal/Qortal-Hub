@@ -449,7 +449,20 @@ function getFileFromContentScript(fileId) {
 const responseResolvers = new Map();
 const notificationPermissionResolvers = new Map();
 
+function generatePermissionRequestId(): string {
+  if (globalThis.crypto?.randomUUID) {
+    return `qortalRequest_${globalThis.crypto.randomUUID()}`;
+  }
+
+  const randomPart = Math.random().toString(36).slice(2);
+  return `qortalRequest_${Date.now()}_${randomPart}`;
+}
+
 const handleMessage = (event) => {
+  if (event.origin !== window.location.origin || event.source !== window) {
+    return;
+  }
+
   const { action, requestId, result } = event.data;
 
   // Check if this is the expected response action and if we have a stored resolver
@@ -473,7 +486,7 @@ window.addEventListener('message', handleMessage);
 
 async function getUserPermission(payload, isFromExtension) {
   return new Promise((resolve) => {
-    const requestId = `qortalRequest_${Date.now()}`;
+    const requestId = generatePermissionRequestId();
     responseResolvers.set(requestId, resolve); // Store resolver by requestId
     const targetOrigin = window.location.origin;
 
@@ -716,26 +729,6 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
       );
     }
 
-    // Show permission modal with the list of permissions
-    const permissionsListHtml = permissions
-      .map(
-        (permission) => `
-      <div style="
-        background-color: var(--background-paper);
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        padding: 8px 12px;
-        margin: 4px 0;
-        font-family: monospace;
-        font-size: 14px;
-        color: var(--text-primary);
-      ">
-        ${permission}
-      </div>
-    `
-      )
-      .join('');
-
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.session_permissions', {
@@ -748,18 +741,10 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
             'The following permissions will be automatically granted for this session:',
           postProcess: 'capitalizeFirstChar',
         }),
-        html: `
-  <div style="
-    max-height: 40vh;
-    overflow-y: auto;
-    font-family: sans-serif;
-    padding: 10px;
-    background-color: var(--background-default);
-    border-radius: 8px;
-  ">
-    ${permissionsListHtml}
-  </div>
-`,
+        details: {
+          type: 'sessionPermissions',
+          permissions,
+        },
         confirmCheckbox: true,
         confirmCheckboxLabel: i18n.t('question:permission.session_understand', {
           postProcess: 'capitalizeFirstChar',
@@ -2135,63 +2120,15 @@ export const publishMultipleQDNResources = async (
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
         }),
-        html: `
-    <div style="max-height: 30vh; overflow-y: auto;">
-    <style>
-      .resource-container {
-        display: flex;
-        flex-direction: column;
-        border: 1px solid #444;
-        padding: 16px;
-        margin: 8px 0;
-        border-radius: 8px;
-        background-color: var(--background-default);
-      }
-      
-      .resource-detail {
-        margin-bottom: 8px;
-      }
-      
-      .resource-detail span {
-        font-weight: bold;
-        color: var(--text-primary);
-      }
-  
-      @media (min-width: 600px) {
-        .resource-container {
-          flex-direction: row;
-          flex-wrap: wrap;
-        }
-        .resource-detail {
-          flex: 1 1 45%;
-          margin-bottom: 0;
-          padding: 4px 0;
-        }
-      }
-    </style>
-  
-    ${data.resources
-      .map(
-        (resource) => `
-        <div class="resource-container">
-          <div class="resource-detail"><span>Service:</span> ${
-            resource.service
-          }</div>
-          <div class="resource-detail"><span>Name:</span> ${resource?.name || name}</div>
-          <div class="resource-detail"><span>Identifier:</span> ${
-            resource.identifier
-          }</div>
-          ${
-            resource.filename
-              ? `<div class="resource-detail"><span>Filename:</span> ${resource.filename}</div>`
-              : ''
-          }
-        </div>`
-      )
-      .join('')}
-  </div>
-  
-      `,
+        details: {
+          type: 'resources',
+          resources: data.resources.map((resource) => ({
+            service: resource.service,
+            name: resource?.name || name,
+            identifier: resource.identifier,
+            filename: resource.filename,
+          })),
+        },
         fee: +fee.fee * resources.length,
         ...handleDynamicValues,
       },
@@ -6227,54 +6164,33 @@ export const createBuyOrder = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         }),
         fee: '',
-        html: `
-  <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
-    <style>
-      .fee-container {
-        background-color: var(--background-default);
-        color: var(--text-primary);
-        border: 1px solid #444;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 12px;
-      }
-      .fee-label {
-        font-weight: bold;
-        color: var(--text-primary);
-        margin-bottom: 4px;
-      }
-      .fee-description {
-        font-size: 14px;
-        color: var(--text-primary);
-        margin-bottom: 16px;
-      }
-    </style>
-
-    <div class="fee-container">
-      <div class="fee-label">${i18n.t('question:total_unlocking_fee', {
-        postProcess: 'capitalizeFirstChar',
-      })}</div>
-      <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
-     <div class="fee-description">
-     ${i18n.t('question:permission.buy_order_fee_estimation', {
-       count: atAddresses?.length,
-       fee: buyingFees?.unlock?.feePerKb?.toFixed(8),
-       ticker: buyingFees.ticker,
-       postProcess: 'capitalizeFirstChar',
-     })}
-     </div>
-     <div class="fee-label">${i18n.t('question:total_locking_fee', {
-       postProcess: 'capitalizeFirstChar',
-     })}</div>
-     <div>${i18n.t('question:permission.buy_order_per_kb', {
-       fee: +buyingFees?.lock.fee.toFixed(8),
-       ticker: buyingFees.ticker,
-       postProcess: 'capitalizeFirstChar',
-     })}
-     </div>
-    </div>
-  </div>
-`,
+        details: {
+          type: 'buyOrderFees',
+          unlockLabel: i18n.t('question:total_unlocking_fee', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          unlockAmount: (
+            +buyingFees?.unlock?.fee * atAddresses?.length
+          )?.toFixed(8),
+          ticker: buyingFees.ticker,
+          unlockDescription: i18n.t(
+            'question:permission.buy_order_fee_estimation',
+            {
+              count: atAddresses?.length,
+              fee: buyingFees?.unlock?.feePerKb?.toFixed(8),
+              ticker: buyingFees.ticker,
+              postProcess: 'capitalizeFirstChar',
+            }
+          ),
+          lockLabel: i18n.t('question:total_locking_fee', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          lockDescription: i18n.t('question:permission.buy_order_per_kb', {
+            fee: +buyingFees?.lock.fee.toFixed(8),
+            ticker: buyingFees.ticker,
+            postProcess: 'capitalizeFirstChar',
+          }),
+        },
       },
       isFromExtension
     );
@@ -8543,72 +8459,22 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         asset: assetInfo.name,
         postProcess: 'capitalizeFirstChar',
       }),
-      html: `
-      <div style="max-height: 30vh; overflow-y: auto;">
-      <style>
-
-        .resource-container {
-          display: flex;
-          flex-direction: column;
-          border: 1px solid;
-          padding: 16px;
-          margin: 8px 0;
-          border-radius: 8px;
-          background-color: var(--background-default);
-        }
-        
-        .resource-detail {
-          margin-bottom: 8px;
-        }
-        
-        .resource-detail span {
-          font-weight: bold;
-          color: var(--text-primary);
-        }
-    
-        @media (min-width: 600px) {
-          .resource-container {
-            flex-direction: row;
-            flex-wrap: wrap;
-          }
-          .resource-detail {
-            flex: 1 1 45%;
-            margin-bottom: 0;
-            padding: 4px 0;
-          }
-        }
-      </style>
-    
-      ${pendingTransactions
-        .filter((item) => item.type === 'PAYMENT')
-        .map(
-          (payment) => `
-          <div class="resource-container">
-            <div class="resource-detail"><span>Recipient:</span> ${
-              payment.recipientAddress
-            }</div>
-            <div class="resource-detail"><span>Amount:</span> ${payment.amount}</div>
-          </div>`
-        )
-        .join('')}
-         ${[...pendingTransactions, ...pendingAdditionalArbitraryTxs]
-           .filter((item) => item.type === 'ARBITRARY')
-           .map(
-             (arbitraryTx) => `
-          <div class="resource-container">
-            <div class="resource-detail"><span>Service:</span> ${
-              arbitraryTx.service
-            }</div>
-            <div class="resource-detail"><span>Name:</span> ${name}</div>
-            <div class="resource-detail"><span>Identifier:</span> ${
-              arbitraryTx.identifier
-            }</div>
-          </div>`
-           )
-           .join('')}
-    </div>
-    
-        `,
+      details: {
+        type: 'paymentsAndResources',
+        payments: pendingTransactions
+          .filter((item) => item.type === 'PAYMENT')
+          .map((payment) => ({
+            recipientAddress: payment.recipientAddress,
+            amount: payment.amount,
+          })),
+        resources: [...pendingTransactions, ...pendingAdditionalArbitraryTxs]
+          .filter((item) => item.type === 'ARBITRARY')
+          .map((arbitraryTx) => ({
+            service: arbitraryTx.service,
+            name,
+            identifier: arbitraryTx.identifier,
+          })),
+      },
       highlightedText: `Total Amount: ${totalAmount}`,
       fee: fee,
     },

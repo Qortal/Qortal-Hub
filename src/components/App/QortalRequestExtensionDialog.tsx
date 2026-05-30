@@ -17,6 +17,10 @@ import { ErrorText } from '../index';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
+import {
+  QortalRequestDetails,
+  QortalRequestDetailsData,
+} from './QortalRequestDetails';
 
 const QORTAL_REQUEST_DIALOG_Z_INDEX = 11000;
 
@@ -25,7 +29,7 @@ export type MessageQortalRequestExtension = {
   text2?: string;
   text3?: string;
   text4?: string;
-  html?: string;
+  details?: QortalRequestDetailsData;
   highlightedText?: string;
   json?: any;
   fee?: string;
@@ -296,7 +300,7 @@ export function QortalRequestExtensionDialog({
             </Box>
           </Box>
 
-          {requestMessage.html && (
+          {requestMessage.details && (
             <>
               <Spacer height="15px" />
               <Box
@@ -308,8 +312,9 @@ export function QortalRequestExtensionDialog({
                   ...wrappingTextSx,
                   '& *': wrappingTextSx,
                 }}
-                dangerouslySetInnerHTML={{ __html: requestMessage.html }}
-              />
+              >
+                <QortalRequestDetails details={requestMessage.details} />
+              </Box>
             </>
           )}
 

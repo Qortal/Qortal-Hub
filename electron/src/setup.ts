@@ -983,6 +983,7 @@ export class ElectronCapacitorApp {
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
+      const requestUrl = details.url;
       const expandedDomains = [...domainHolder.allowedDomains];
       for (const d of domainHolder.allowedDomains) {
         try {
@@ -1018,12 +1019,14 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         'https://127.0.0.1:*',
         ...allowedSources,
       ];
+      const isHubShellRequest = requestUrl.startsWith(`${customScheme}://`);
+      const inlineScriptSource = isHubShellRequest ? '' : " 'unsafe-inline'";
 
       // Create the Content Security Policy (CSP) string
       const csp = `
     default-src 'self' ${frameSources.join(' ')};
     frame-src ${frameSources.join(' ')};
-    script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${frameSources.join(' ')};
+    script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'${inlineScriptSource} ${frameSources.join(' ')};
     worker-src 'self' blob: data: ${frameSources.join(' ')};
     object-src 'self';
     connect-src 'self' blob: ${frameSources.join(' ')};
@@ -1036,7 +1039,6 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         .trim();
 
       // Get the request URL and origin
-      const requestUrl = details.url;
       const requestOrigin =
         details.origin || details.referrer || 'capacitor-electron://-';
 
