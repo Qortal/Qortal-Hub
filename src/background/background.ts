@@ -3224,7 +3224,7 @@ async function getChatHeadsDirect() {
 
 function setupMessageListener() {
   window.addEventListener('message', async (event) => {
-    if (event.origin !== window.location.origin) {
+    if (event.origin !== window.location.origin || event.source !== window) {
       return;
     }
     const request = event.data;

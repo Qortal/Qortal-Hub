@@ -130,6 +130,8 @@ const getAppStorage = () =>
   ).appStorage;
 
 const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
+const NOTIFICATION_PERMISSION_SEPARATOR = ':';
+const NOTIFICATION_PERMISSION_NO_ADDRESS = '__no_current_address__';
 
 function normalizeNotificationPermissionAppName(appName: unknown): string {
   return String(appName ?? '')
@@ -137,8 +139,52 @@ function normalizeNotificationPermissionAppName(appName: unknown): string {
     .toLowerCase();
 }
 
-export function getNotificationPermissionKey(appName: unknown): string {
-  return `${NOTIFICATION_PERMISSION_PREFIX}${normalizeNotificationPermissionAppName(appName)}`;
+function getCurrentAddress(): string {
+  if (typeof window === 'undefined') return NOTIFICATION_PERMISSION_NO_ADDRESS;
+  const w = window as Window & { __qortalCurrentAddress?: string | null };
+  return String(w.__qortalCurrentAddress || NOTIFICATION_PERMISSION_NO_ADDRESS);
+}
+
+function normalizeNotificationPermissionAddress(address: unknown): string {
+  return (
+    String(address || NOTIFICATION_PERMISSION_NO_ADDRESS).trim() ||
+    NOTIFICATION_PERMISSION_NO_ADDRESS
+  );
+}
+
+function buildNotificationPermissionKey(
+  address: unknown,
+  appName: unknown
+): string {
+  return `${NOTIFICATION_PERMISSION_PREFIX}${normalizeNotificationPermissionAddress(
+    address
+  )}${NOTIFICATION_PERMISSION_SEPARATOR}${normalizeNotificationPermissionAppName(
+    appName
+  )}`;
+}
+
+function parseNotificationPermissionKey(
+  key: unknown
+): { address: string; appName: string } | null {
+  if (!isNotificationPermissionKey(key)) return null;
+  const body = key.slice(NOTIFICATION_PERMISSION_PREFIX.length);
+  const separatorIndex = body.indexOf(NOTIFICATION_PERMISSION_SEPARATOR);
+  if (separatorIndex <= 0) return null;
+  const address = normalizeNotificationPermissionAddress(
+    body.slice(0, separatorIndex)
+  );
+  const appName = normalizeNotificationPermissionAppName(
+    body.slice(separatorIndex + 1)
+  );
+  if (!address || !appName) return null;
+  return { address, appName };
+}
+
+export function getNotificationPermissionKey(
+  appName: unknown,
+  address: unknown = getCurrentAddress()
+): string {
+  return buildNotificationPermissionKey(address, appName);
 }
 
 function isNotificationPermissionKey(key: unknown): key is string {
@@ -149,6 +195,10 @@ function isNotificationPermissionKey(key: unknown): key is string {
 
 function normalizePermissionKey(key: unknown): string {
   if (!isNotificationPermissionKey(key)) return String(key ?? '');
+  const parsed = parseNotificationPermissionKey(key);
+  if (parsed) {
+    return buildNotificationPermissionKey(parsed.address, parsed.appName);
+  }
   return getNotificationPermissionKey(
     key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
   );
@@ -159,16 +209,17 @@ function migrateNotificationPermissionKeys(
   normalizedKey: string
 ): Record<string, unknown> {
   if (!isNotificationPermissionKey(normalizedKey)) return permissions;
-  const normalizedAppName = normalizeNotificationPermissionAppName(
-    normalizedKey.slice(NOTIFICATION_PERMISSION_PREFIX.length)
-  );
+  const normalized = parseNotificationPermissionKey(normalizedKey);
+  if (!normalized) return permissions;
   const next = { ...permissions };
   for (const key of Object.keys(next)) {
-    if (!isNotificationPermissionKey(key)) continue;
-    const keyAppName = normalizeNotificationPermissionAppName(
-      key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
-    );
-    if (keyAppName === normalizedAppName && key !== normalizedKey) {
+    const parsed = parseNotificationPermissionKey(key);
+    if (!parsed) continue;
+    if (
+      parsed.address === normalized.address &&
+      parsed.appName === normalized.appName &&
+      key !== normalizedKey
+    ) {
       delete next[key];
     }
   }
@@ -248,17 +299,21 @@ export async function getQortalRequestPermissions() {
   }
 }
 
-/** App names that have qAPPNotification-<appName> === true. */
-export async function getAppsWithNotificationPermission() {
+/** App names that have qAPPNotification-<address>:<appName> === true for the current address. */
+export async function getAppsWithNotificationPermission(
+  address: unknown = getCurrentAddress()
+) {
   const perms = await getQortalRequestPermissions();
+  const currentAddress = normalizeNotificationPermissionAddress(address);
   const apps = [];
   for (const key of Object.keys(perms)) {
-    if (key.startsWith('qAPPNotification-') && perms[key] === true) {
-      apps.push(
-        normalizeNotificationPermissionAppName(
-          key.replace(/^qAPPNotification-/, '')
-        )
-      );
+    const parsed = parseNotificationPermissionKey(key);
+    if (
+      parsed?.address === currentAddress &&
+      parsed.appName &&
+      perms[key] === true
+    ) {
+      apps.push(parsed.appName);
     }
   }
   return apps;
@@ -312,6 +367,14 @@ const sessionPermissionsStore = new Map<
   }
 >();
 
+function getSessionPermissionKey(tabId, qapName) {
+  return `${tabId}-${qapName}`;
+}
+
+function getAddressScopedSessionPermissionKey(tabId, qapName) {
+  return `${tabId}-${getCurrentAddress()}-${qapName}`;
+}
+
 // Valid permissions that can be granted in a session
 export const VALID_SESSION_PERMISSIONS = [
   'JOIN_GROUP',
@@ -357,28 +420,45 @@ export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
 
 export function setSessionPermissions(tabId, qapName, permissions) {
   try {
-    const key = `${tabId}-${qapName}`;
-
-    // Get existing permissions for this tab+app
-    const existing = sessionPermissionsStore.get(key);
-    const existingPermissions = existing?.permissions || [];
-
-    // Validate new permissions
     const validPermissions = permissions.filter((permission) =>
       VALID_SESSION_PERMISSIONS.includes(permission)
     );
+    const notificationPermissions = validPermissions.filter(
+      (permission) => permission === 'NOTIFICATION_PERMISSION'
+    );
+    const generalPermissions = validPermissions.filter(
+      (permission) => permission !== 'NOTIFICATION_PERMISSION'
+    );
 
-    // Merge with existing permissions (deduplicate using Set)
-    const mergedPermissions = [
-      ...new Set([...existingPermissions, ...validPermissions]),
+    const savePermissions = (key, permissionsToSave) => {
+      if (permissionsToSave.length === 0) return [];
+      const existing = sessionPermissionsStore.get(key);
+      const existingPermissions = existing?.permissions || [];
+      const mergedPermissions = [
+        ...new Set([...existingPermissions, ...permissionsToSave]),
+      ];
+      sessionPermissionsStore.set(key, {
+        permissions: mergedPermissions,
+        timestamp: Date.now(),
+      });
+      return mergedPermissions;
+    };
+
+    const mergedGeneralPermissions = savePermissions(
+      getSessionPermissionKey(tabId, qapName),
+      generalPermissions
+    );
+    const mergedNotificationPermissions = savePermissions(
+      getAddressScopedSessionPermissionKey(tabId, qapName),
+      notificationPermissions
+    );
+
+    return [
+      ...new Set([
+        ...mergedGeneralPermissions,
+        ...mergedNotificationPermissions,
+      ]),
     ];
-
-    sessionPermissionsStore.set(key, {
-      permissions: mergedPermissions,
-      timestamp: Date.now(),
-    });
-
-    return mergedPermissions;
   } catch (error) {
     console.error('Error setting session permissions:', error);
     throw error;
@@ -387,10 +467,19 @@ export function setSessionPermissions(tabId, qapName, permissions) {
 
 export function getSessionPermissions(tabId, qapName) {
   try {
-    const key = `${tabId}-${qapName}`;
-    const sessionData = sessionPermissionsStore.get(key);
+    const sessionData = sessionPermissionsStore.get(
+      getSessionPermissionKey(tabId, qapName)
+    );
+    const notificationSessionData = sessionPermissionsStore.get(
+      getAddressScopedSessionPermissionKey(tabId, qapName)
+    );
 
-    return sessionData?.permissions || [];
+    return [
+      ...new Set([
+        ...(sessionData?.permissions || []),
+        ...(notificationSessionData?.permissions || []),
+      ]),
+    ];
   } catch (error) {
     console.error('Error getting session permissions:', error);
     return [];
@@ -409,8 +498,10 @@ export function hasSessionPermission(tabId, qapName, requestType) {
 
 export function clearSessionPermissions(tabId, qapName) {
   try {
-    const key = `${tabId}-${qapName}`;
-    sessionPermissionsStore.delete(key);
+    sessionPermissionsStore.delete(getSessionPermissionKey(tabId, qapName));
+    sessionPermissionsStore.delete(
+      getAddressScopedSessionPermissionKey(tabId, qapName)
+    );
   } catch (error) {
     console.error('Error clearing session permissions:', error);
     throw error;

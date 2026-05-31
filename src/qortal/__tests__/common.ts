@@ -19,6 +19,12 @@ import { vi } from 'vitest';
 export const qortalRequestsFactory = () => ({
   isRunningGateway: vi.fn(),
   getPermission: vi.fn(),
+  getNotificationPermissionKey: vi.fn(
+    (appName: unknown) =>
+      `qAPPNotification-Q-test-address:${String(appName ?? '')
+        .trim()
+        .toLowerCase()}`
+  ),
   setPermission: vi.fn(),
   setSessionPermissions: vi.fn(),
   hasSessionPermission: vi.fn(),
