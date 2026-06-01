@@ -18,8 +18,18 @@ import { AttachmentCard } from './AttachmentEmbed';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
+const encodeQdnPathSegment = (value) => {
+  const rawValue = String(value ?? '');
+
+  try {
+    return encodeURIComponent(decodeURIComponent(rawValue));
+  } catch {
+    return encodeURIComponent(rawValue);
+  }
+};
+
 const getPoll = async (name) => {
-  const pollName = name;
+  const pollName = encodeQdnPathSegment(name);
   const url = `${getBaseApiReact()}/polls/${pollName}`;
 
   const response = await fetch(url, {
@@ -147,8 +157,11 @@ export const Embed = ({ embedLink }) => {
       let hasTriggeredDownload = false;
 
       const tryToGetImageStatus = async () => {
+        const encodedService = encodeQdnPathSegment(service);
+        const encodedName = encodeQdnPathSegment(name);
+        const encodedIdentifier = encodeQdnPathSegment(identifier);
         // First, check status WITHOUT build parameter
-        const urlStatus = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}`;
+        const urlStatus = `${getBaseApiReact()}/arbitrary/resource/status/${encodedService}/${encodedName}/${encodedIdentifier}`;
 
         const responseStatus = await fetch(urlStatus, {
           method: 'GET',
@@ -162,7 +175,7 @@ export const Embed = ({ embedLink }) => {
         // If not ready and haven't triggered download yet, trigger it ONCE with async=true
         if (responseData?.status !== 'READY' && !hasTriggeredDownload) {
           hasTriggeredDownload = true;
-          const urlAsync = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
+          const urlAsync = `${getBaseApiReact()}/arbitrary/${encodedService}/${encodedName}/${encodedIdentifier}?async=true`;
 
           // Trigger download but don't wait for response
           fetch(urlAsync, {
@@ -180,7 +193,7 @@ export const Embed = ({ embedLink }) => {
           responseData?.status === 'DOWNLOADED'
         ) {
           if (parsedData?.encryptionType) {
-            const urlData = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?encoding=base64`;
+            const urlData = `${getBaseApiReact()}/arbitrary/${encodedService}/${encodedName}/${encodedIdentifier}?encoding=base64`;
 
             const responseData = await fetch(urlData, {
               method: 'GET',
@@ -249,7 +262,7 @@ export const Embed = ({ embedLink }) => {
               );
             }
           } else {
-            imageFinalUrl = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}`;
+            imageFinalUrl = `${getBaseApiReact()}/arbitrary/${encodedService}/${encodedName}/${encodedIdentifier}`;
           }
         }
       };

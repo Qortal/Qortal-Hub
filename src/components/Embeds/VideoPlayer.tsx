@@ -62,6 +62,14 @@ const ControlsContainer = styled(Box)`
   right: 0;
 `;
 
+const encodeQdnPathSegment = (value: string) => {
+  try {
+    return encodeURIComponent(decodeURIComponent(value));
+  } catch {
+    return encodeURIComponent(value);
+  }
+};
+
 interface VideoPlayerProps {
   autoplay?: boolean;
   customStyle?: any;
@@ -133,7 +141,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
 
   const src = useMemo(() => {
     if (name && identifier && service) {
-      return `${node || getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}`;
+      return `${node || getBaseApiReact()}/arbitrary/${encodeQdnPathSegment(service)}/${encodeQdnPathSegment(name)}/${encodeQdnPathSegment(identifier)}`;
     }
     return null;
   }, [service, name, identifier]);
