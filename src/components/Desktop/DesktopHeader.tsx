@@ -1,11 +1,20 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useAtomValue } from 'jotai';
-import { ButtonBase, Typography, useTheme } from '@mui/material';
+import {
+  ButtonBase,
+  CircularProgress,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import CallIcon from '@mui/icons-material/Call';
+import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import {
   groupChatHasUnreadAtom,
   groupsAnnHasUnreadAtom,
   hasUnreadGroupsAtom,
   isUnreadChatAtomFamily,
+  p2pHealthAtom,
 } from '../../atoms/global';
 import Box from '@mui/material/Box';
 import { NotificationIcon2 } from '../../assets/Icons/NotificationIcon2';
@@ -24,6 +33,13 @@ const IconWrapper = ({
   selected,
   selectColor,
   customHeight,
+}: {
+  children: ReactNode;
+  label: string;
+  color: string;
+  selected: boolean;
+  selectColor?: string;
+  customHeight?: string;
 }) => {
   return (
     <Box
@@ -74,7 +90,6 @@ export const DesktopHeader = ({
   chatMode,
   openDrawerGroups,
   goToHome,
-  setIsOpenDrawerProfile,
   mobileViewMode,
   setMobileViewMode,
   setMobileViewModeKeepOpen,
@@ -89,8 +104,14 @@ export const DesktopHeader = ({
   isForum,
   setGroupSection,
   isPrivate,
+  onGroupCallClick,
+  groupCallInCall = false,
+  groupCallJoining = false,
+  groupCallDisabled = false,
+  groupCallTooltip = '',
 }) => {
   const [value, setValue] = useState(0);
+  const p2pHealth = useAtomValue(p2pHealthAtom);
   const theme = useTheme();
   const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
   const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
@@ -106,6 +127,16 @@ export const DesktopHeader = ({
     'question',
     'tutorial',
   ]);
+  const p2pHealthBadTooltip = t('core:p2p_health_bad_call_tooltip');
+  const p2pBlocked =
+    typeof onGroupCallClick === 'function' &&
+    !groupCallInCall &&
+    !groupCallJoining &&
+    p2pHealth !== 'good';
+  const effectiveGroupCallDisabled =
+    groupCallDisabled || groupCallJoining || p2pBlocked;
+  const effectiveGroupCallTooltip =
+    groupCallTooltip || (p2pBlocked ? p2pHealthBadTooltip : '');
 
   return (
     <Box
@@ -167,6 +198,73 @@ export const DesktopHeader = ({
           visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visible',
         }}
       >
+        {typeof onGroupCallClick === 'function' && (
+          <Tooltip
+            title={effectiveGroupCallTooltip}
+            disableHoverListener={!effectiveGroupCallTooltip}
+          >
+            <span style={{ display: 'inline-flex' }}>
+              <ButtonBase
+                disabled={effectiveGroupCallDisabled}
+                onClick={onGroupCallClick}
+                sx={{
+                  borderRadius: '12px',
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                  },
+                }}
+              >
+                <IconWrapper
+                  color={
+                    groupCallInCall || groupCallJoining
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary
+                  }
+                  label={
+                    groupCallJoining
+                      ? t('core:group_call_joining', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : groupCallInCall
+                        ? t('core:group_call_leave', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:group_call', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                  }
+                  selected={groupCallInCall || groupCallJoining}
+                  selectColor={theme.palette.action.selected}
+                  customHeight="55px"
+                >
+                  {groupCallJoining ? (
+                    <CircularProgress
+                      size={22}
+                      sx={{
+                        color: theme.palette.text.secondary,
+                      }}
+                    />
+                  ) : groupCallInCall ? (
+                    <CallEndRoundedIcon
+                      sx={{
+                        fontSize: 25,
+                        color: theme.palette.error.light,
+                      }}
+                    />
+                  ) : (
+                    <CallIcon
+                      sx={{
+                        fontSize: 25,
+                        color: theme.palette.text.secondary,
+                      }}
+                    />
+                  )}
+                </IconWrapper>
+              </ButtonBase>
+            </span>
+          </Tooltip>
+        )}
+
         <ButtonBase
           onClick={() => {
             goToAnnouncements();

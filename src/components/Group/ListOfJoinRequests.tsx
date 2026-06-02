@@ -24,6 +24,7 @@ import { getBaseApiReact } from '../../App';
 import { txListAtom } from '../../atoms/global';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -34,7 +35,7 @@ export const getMemberInvites = async (groupNumber) => {
 };
 
 const getNames = async (listOfMembers, includeNoNames) => {
-  let members = [];
+  const members = [];
   if (listOfMembers && Array.isArray(listOfMembers)) {
     for (const member of listOfMembers) {
       if (member.joiner) {
@@ -194,6 +195,9 @@ export const ListOfJoinRequests = ({
     if (findJoinRequestInTxList) return null;
 
     const displayName = member?.name || member?.joiner || '';
+    const hasUnsafeDisplayName = Boolean(
+      member?.name && hasInvisibleCharacters(member.name)
+    );
     const isSelected = openPopoverIndex === index;
 
     return (
@@ -252,7 +256,20 @@ export const ListOfJoinRequests = ({
                       {displayName?.charAt(0)?.toUpperCase() || '?'}
                     </Avatar>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="subtitle1" fontWeight={600} noWrap>
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight={600}
+                        noWrap
+                        sx={{
+                          ...(hasUnsafeDisplayName
+                            ? {
+                                textDecorationLine: 'line-through',
+                                textDecorationThickness: '2px',
+                                textDecorationColor: theme.palette.error.main,
+                              }
+                            : {}),
+                        }}
+                      >
                         {displayName}
                       </Typography>
                       {member?.joiner && (
@@ -302,7 +319,20 @@ export const ListOfJoinRequests = ({
                     }
                   />
                 </ListItemAvatar>
-                <ListItemText primary={member?.name || member?.joiner} />
+                <ListItemText
+                  primary={displayName}
+                  primaryTypographyProps={{
+                    sx: {
+                      ...(hasUnsafeDisplayName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
+                    },
+                  }}
+                />
               </ListItemButton>
             </ListItem>
           </div>

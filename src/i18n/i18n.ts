@@ -1,69 +1,85 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import HttpBackend from 'i18next-http-backend';
-import LanguageDetector from 'i18next-browser-languagedetector';
 import {
   capitalizeAll,
   capitalizeEachFirstChar,
   capitalizeFirstChar,
   capitalizeFirstWord,
+  capitalizeSentenceStarts,
 } from './processors';
 
 export const supportedLanguages = {
-  ar: { name: 'Arab', flag: '🇦🇪' },
-  de: { name: 'Deutsch', flag: '🇩🇪' },
   en: { name: 'English', flag: '🇺🇸' },
+  ar: { name: 'العربية', flag: '🇸🇦' },
+  de: { name: 'Deutsch', flag: '🇩🇪' },
   es: { name: 'Español', flag: '🇪🇸' },
-  fi: { name: 'Suomi', flag: '🇫🇮' },
   et: { name: 'Eesti', flag: '🇪🇪' },
+  fi: { name: 'Suomi', flag: '🇫🇮' },
   fr: { name: 'Français', flag: '🇫🇷' },
   it: { name: 'Italiano', flag: '🇮🇹' },
-  pt: { name: 'Português', flag: '🇧🇷' },
-  ru: { name: 'Русский', flag: '🇷🇺' },
   ja: { name: '日本語', flag: '🇯🇵' },
+  pt: { name: 'Português', flag: '🇵🇹' },
+  ru: { name: 'Русский', flag: '🇷🇺' },
   zh: { name: '中文', flag: '🇨🇳' },
-};
+} as const;
 
-// Load all JSON files under locales/**/*
-const modules = import.meta.glob('./locales/**/*.json', {
+const supportedLngs = Object.keys(supportedLanguages);
+
+const modules = import.meta.glob('./locales/*/*.json', {
   eager: true,
-}) as Record<string, any>;
+}) as Record<string, { default: Record<string, unknown> }>;
 
-// Construct i18n resources object
-const resources: Record<string, Record<string, any>> = {};
+const resources: Record<string, Record<string, unknown>> = {};
 
-for (const path in modules) {
-  // Path format: './locales/en/core.json'
+for (const path of Object.keys(modules)) {
   const match = path.match(/\.\/locales\/([^/]+)\/([^/]+)\.json$/);
   if (!match) continue;
 
-  const [, lang, ns] = match;
-  resources[lang] = resources[lang] || {};
-  resources[lang][ns] = modules[path].default;
+  const [, lng, ns] = match;
+  if (!supportedLngs.includes(lng)) continue;
+
+  if (!resources[lng]) resources[lng] = {};
+  resources[lng][ns] = modules[path].default;
 }
 
+function getInitialLanguage(): string {
+  try {
+    const raw = localStorage.getItem('i18nextLng');
+    if (!raw) return 'en';
+    const base = raw.split('-')[0];
+    return supportedLngs.includes(base) ? base : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+export const namespaces = [
+  'auth',
+  'core',
+  'group',
+  'question',
+  'tutorial',
+  'node',
+] as const;
+
 i18n
-  .use(HttpBackend)
   .use(initReactI18next)
-  .use(LanguageDetector)
   .use(capitalizeAll as any)
   .use(capitalizeEachFirstChar as any)
   .use(capitalizeFirstChar as any)
   .use(capitalizeFirstWord as any)
+  .use(capitalizeSentenceStarts as any)
   .init({
     resources,
     fallbackLng: 'en',
-    lng: localStorage.getItem('i18nextLng') || 'en',
-    supportedLngs: Object.keys(supportedLanguages),
-    backend: {
-      loadPath: '/locales/{{lng}}/{{ns}}.json',
-    },
-    ns: ['auth', 'core', 'group', 'question', 'tutorial'],
+    lng: getInitialLanguage(),
+    supportedLngs,
+    ns: [...namespaces],
     defaultNS: 'core',
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
-    returnEmptyString: false, // return fallback instead of empty string
-    returnNull: false, // return fallback instead of null
+    returnEmptyString: false,
+    returnNull: false,
     debug: import.meta.env.MODE === 'development',
   });
 

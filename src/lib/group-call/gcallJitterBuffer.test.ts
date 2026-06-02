@@ -1,0 +1,269 @@
+import { describe, expect, it, vi } from 'vitest';
+import { JitterBuffer } from './gcallJitterBuffer';
+
+describe('gcallJitterBuffer', () => {
+  it('reports accepted, duplicate, stale, and trimmed push results', () => {
+    const jb = new JitterBuffer();
+
+    expect(jb.push(1, new Uint8Array([1]))).toEqual({
+      status: 'accepted',
+      depth: 1,
+      trimmed: 0,
+    });
+    expect(jb.push(1, new Uint8Array([1]))).toEqual({
+      status: 'duplicate',
+      depth: 1,
+      trimmed: 0,
+    });
+
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.push(1, new Uint8Array([1]))).toEqual({
+      status: 'stale',
+      depth: 0,
+      trimmed: 0,
+    });
+
+    for (let seq = 2; seq <= 14; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.getBufferedFrames()).toBe(12);
+    expect(jb.push(15, new Uint8Array([15]))).toEqual({
+      status: 'accepted',
+      depth: 12,
+      trimmed: 1,
+    });
+  });
+
+  it('does not report intentional trim skips as unexpected missing frames', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 2,
+      jitterStartBufferSize: 1,
+    });
+
+    jb.push(1, new Uint8Array([1]));
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+
+    for (let seq = 2; seq <= 5; seq++) {
+      expect(jb.push(seq, new Uint8Array([seq])).trimmed).toBe(0);
+    }
+    expect(jb.push(6, new Uint8Array([6]))).toEqual({
+      status: 'accepted',
+      depth: 4,
+      trimmed: 1,
+    });
+
+    expect(jb.pop()).toEqual(new Uint8Array([3]));
+    expect(jb.consumeLastRawGapAfterPop()).toBe(1);
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+  });
+
+  it('does not report intentional latency shedding as unexpected missing frames', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 4,
+      jitterStartBufferSize: 1,
+    });
+
+    jb.push(1, new Uint8Array([1]));
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+
+    for (let seq = 2; seq <= 8; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.discardOldest(2)).toBe(2);
+
+    expect(jb.pop()).toEqual(new Uint8Array([4]));
+    expect(jb.consumeLastRawGapAfterPop()).toBe(2);
+    expect(jb.consumePendingMissedFrames()).toBe(0);
+  });
+
+  it('accepts and plays packets after 16-bit sequence wraparound', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 6,
+      jitterStartBufferSize: 1,
+    });
+
+    expect(jb.push(65534, new Uint8Array([1])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.push(65535, new Uint8Array([2])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([2]));
+    expect(jb.push(0, new Uint8Array([3])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([3]));
+    expect(jb.push(1, new Uint8Array([4])).status).toBe('accepted');
+    expect(jb.pop()).toEqual(new Uint8Array([4]));
+
+    expect(jb.push(65535, new Uint8Array([5])).status).toBe('stale');
+  });
+
+  it('sorts buffered packets correctly across 16-bit sequence wraparound', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 6,
+      jitterStartBufferSize: 1,
+    });
+
+    jb.push(65533, new Uint8Array([33]));
+    expect(jb.pop()).toEqual(new Uint8Array([33]));
+
+    expect(jb.push(1, new Uint8Array([1])).status).toBe('accepted');
+    expect(jb.push(65535, new Uint8Array([35])).status).toBe('accepted');
+    expect(jb.push(0, new Uint8Array([0])).status).toBe('accepted');
+
+    expect(jb.pop()).toEqual(new Uint8Array([35]));
+    expect(jb.pop()).toEqual(new Uint8Array([0]));
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
+  it('can force-prime a live one-frame buffer for exact-1-remote recovery escape', () => {
+    const jb = new JitterBuffer();
+    jb.push(1, new Uint8Array([1, 2, 3]));
+
+    expect(jb.getBufferedFrames()).toBe(1);
+    expect(jb.hasReadyFrame()).toBe(false);
+
+    jb.forcePrimeForRecoveryEscape();
+
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1, 2, 3]));
+    expect(jb.getBufferedFrames()).toBe(0);
+  });
+
+  it('with steadyPrimedHoldFrames=1 (N=1 group recovery), needs 2 frames after forcePrime before ready', () => {
+    const jb = new JitterBuffer();
+    jb.setSteadyPrimedHoldFrames(1);
+    jb.push(1, new Uint8Array([1, 2, 3]));
+    expect(jb.hasReadyFrame()).toBe(false);
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.getBufferedFrames()).toBe(1);
+    expect(jb.hasReadyFrame()).toBe(false);
+    jb.push(2, new Uint8Array([4, 5, 6]));
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1, 2, 3]));
+    expect(jb.getBufferedFrames()).toBe(1);
+    expect(jb.hasReadyFrame()).toBe(false);
+  });
+
+  it('does nothing when recovery escape tries to prime an empty buffer', () => {
+    const jb = new JitterBuffer();
+
+    jb.forcePrimeForRecoveryEscape();
+
+    expect(jb.getBufferedFrames()).toBe(0);
+    expect(jb.hasReadyFrame()).toBe(false);
+    expect(jb.pop()).toBe(null);
+  });
+
+  it('burst-recovery extra hold defers pops until recovery escape intentionally releases it', () => {
+    const jb = new JitterBuffer();
+    jb.setBurstRecoveryExtraHoldFrames(4);
+    jb.setSteadyPrimedHoldFrames(1);
+
+    // Worker delivers first 3 of a 5-frame preroll burst; pop must not start
+    // yet (unprimed threshold = jitterStartBufferSize + burstHold).
+    for (let seq = 1; seq <= 3; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.hasReadyFrame()).toBe(false);
+    expect(jb.pop()).toBe(null);
+
+    // Worker catches up with frames 4 and 5. A recovery force-prime is an
+    // explicit "play what we have" escape, so it clears the additive burst
+    // hold rather than letting the call remain silent.
+    jb.push(4, new Uint8Array([4]));
+    jb.push(5, new Uint8Array([5]));
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(0);
+    expect(jb.hasReadyFrame()).toBe(true);
+
+    expect(jb.push(2, new Uint8Array([2]))).toEqual({
+      status: 'duplicate',
+      depth: 5,
+      trimmed: 0,
+    });
+
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
+  it('caps burst-recovery extra hold so the unprimed threshold remains reachable', () => {
+    const jb = new JitterBuffer(0, {
+      jitterBufferSize: 12,
+      jitterStartBufferSize: 11,
+    });
+
+    expect(jb.getMaxEntries()).toBe(24);
+    expect(jb.setBurstRecoveryExtraHoldFrames(18)).toBe(13);
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(13);
+
+    for (let seq = 1; seq <= 23; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.hasReadyFrame()).toBe(false);
+    jb.push(24, new Uint8Array([24]));
+    expect(jb.hasReadyFrame()).toBe(true);
+  });
+
+  it('clearing burst-recovery hold restores the normal primed threshold', () => {
+    const jb = new JitterBuffer();
+    jb.setBurstRecoveryExtraHoldFrames(4);
+    jb.setSteadyPrimedHoldFrames(1);
+    for (let seq = 1; seq <= 2; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    jb.forcePrimeForRecoveryEscape();
+    // Force-prime clears the burst hold; primed + steadyPrimedHoldFrames=1
+    // means 2 frames suffice.
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
+  it('can preserve burst-recovery hold when force-prime is only escaping the startup threshold', () => {
+    const jb = new JitterBuffer();
+    jb.setBurstRecoveryExtraHoldFrames(4);
+    jb.setSteadyPrimedHoldFrames(1);
+    for (let seq = 1; seq <= 3; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+
+    jb.forcePrimeForRecoveryEscape(5000, {
+      clearBurstRecoveryHold: false,
+    });
+
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(4);
+    expect(jb.hasReadyFrame()).toBe(false);
+    jb.push(4, new Uint8Array([4]));
+    jb.push(5, new Uint8Array([5]));
+    jb.push(6, new Uint8Array([6]));
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+  });
+
+  it('clear() resets the burst-recovery hold', () => {
+    const jb = new JitterBuffer();
+    jb.setBurstRecoveryExtraHoldFrames(4);
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(4);
+    jb.clear();
+    expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(0);
+  });
+
+  it('keeps a recovery-escape prime sticky for a short window so a one-source path does not immediately fall back to the full startup threshold', () => {
+    vi.useFakeTimers();
+    const jb = new JitterBuffer();
+    jb.push(1, new Uint8Array([1]));
+    jb.forcePrimeForRecoveryEscape(5000);
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+
+    vi.advanceTimersByTime(2000);
+    jb.push(2, new Uint8Array([2]));
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([2]));
+
+    vi.advanceTimersByTime(3500);
+    jb.push(3, new Uint8Array([3]));
+    expect(jb.hasReadyFrame()).toBe(false);
+    vi.useRealTimers();
+  });
+});

@@ -33,6 +33,7 @@
     "get_six_qorts_way3_action": "Q-Tradeを開く",
     "register_name": "名前を登録する",
     "confirming_transaction": "取引を確認中",
+    "confirming": "確認中…",
     "load_avatar": "アバターを読み込む",
     "explore_apps": "おすすめアプリを探索する",
     "done": "完了",
@@ -53,6 +54,17 @@
     "devnet_testing_desc": "DevNet-Testing環境でQ-Appsをテストする",
     "open_app": "開く",
     "address_copied": "アドレスをクリップボードにコピーしました",
-    "group_activity": "グループアクティビティ"
+    "group_activity": "グループアクティビティ",
+    "get_qorts_workspace_hint": "最初の 6 QORT を解放すると、セットアップの続きが有効になります。",
+    "register_name_workspace_hint": "名前を登録すると、このアカウントが識別しやすい身元になります。",
+    "load_avatar_workspace_hint": "ダッシュボードに顔を与え、空間が自分らしく感じられるようにしましょう。",
+    "onboarding_transition_hard_part_done": "よくできました。いちばん難しい部分は終わりです。",
+    "onboarding_transition_one_more": "素晴らしい。あとひとつです。",
+    "onboarding_press_next_when_ready": "よくできました。いちばん難しい部分は終わりです。準備ができたら「次へ」を押してください。",
+    "register_name_pending_hint": "名前をオンチェーンで保存しています。しばらくかかることがあります。",
+    "persistent_guide_get_qorts": "まずは 6 QORT から。上の選択肢から選んでください。",
+    "persistent_guide_register_name": "次に名前を登録しましょう。",
+    "persistent_guide_load_avatar": "最後にアバターを設定しましょう。",
+    "post_onboarding_workspace_ready": "準備完了です。上のワークスペースを組み立て始められます。"
   }
 }

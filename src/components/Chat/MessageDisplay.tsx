@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import './chat.css';
 import { executeEvent } from '../../utils/events';
+import { openHttpUrlExternally } from '../../utils/openExternalHttp';
 import { Embed } from '../Embeds/Embed';
 import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -23,19 +24,31 @@ export const extractComponents = (url: string) => {
   // If nothing meaningful left (e.g., "qortal://", "qortal:////"), return null
   if (!/[^/]/.test(url)) return null;
 
-  // Case 1: url contains a slash → already service-based
+  // Case 1: url contains a slash -> already service-based
   if (url.includes('/')) {
-    const parts = url.split('/');
+    // Identifier is part of QDN resource identity when present. Keep older
+    // links without identifier working, and route future reopen flows here.
+    const [basePart, queryString = ''] = url.split('?');
+    const parts = basePart.split('/');
     const service = parts[0].toUpperCase();
     parts.shift();
     const name = parts[0];
     parts.shift();
-    let identifier;
-    const path = parts.join('/');
+
+    const params = new URLSearchParams(queryString);
+    const identifier = params.get('identifier') || undefined;
+    if (identifier) {
+      params.delete('identifier');
+    }
+
+    const remainingQuery = params.toString();
+    const basePath = parts.join('/');
+    const path = `${basePath}${remainingQuery ? `?${remainingQuery}` : ''}`;
+
     return { service, name, identifier, path };
   }
 
-  // Case 2: url is just a username → default to WEBSITE
+  // Case 2: url is just a username -> default to WEBSITE
   return {
     service: 'WEBSITE',
     name: url,
@@ -58,7 +71,6 @@ function processText(input) {
             link.setAttribute('data-url', part);
             link.setAttribute('class', 'qortal-link');
             link.textContent = part;
-            link.style.cursor = 'pointer';
             fragment.appendChild(link);
           } else {
             fragment.appendChild(document.createTextNode(part));
@@ -140,7 +152,6 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
         'title',
         'width',
         'height',
-        'style',
         'align',
         'valign',
         'colspan',
@@ -159,7 +170,12 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
   const handleClickCapture = (e) => {
     if (isReply) {
       const target = e.target;
-      const isLink = target.tagName === 'A' || target.getAttribute?.('data-url') || target.closest?.('a') || target.closest?.('.qortal-link') || target.closest?.('[data-url]');
+      const isLink =
+        target.tagName === 'A' ||
+        target.getAttribute?.('data-url') ||
+        target.closest?.('a') ||
+        target.closest?.('.qortal-link') ||
+        target.closest?.('[data-url]');
       if (isLink) {
         e.preventDefault();
         e.stopPropagation();
@@ -171,7 +187,12 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
     if (isReply) {
       e.preventDefault();
       const target = e.target;
-      const isLink = target.tagName === 'A' || target.getAttribute?.('data-url') || target.closest?.('a') || target.closest?.('.qortal-link') || target.closest?.('[data-url]');
+      const isLink =
+        target.tagName === 'A' ||
+        target.getAttribute?.('data-url') ||
+        target.closest?.('a') ||
+        target.closest?.('.qortal-link') ||
+        target.closest?.('[data-url]');
       if (isLink) {
         e.stopPropagation();
         return;
@@ -182,12 +203,7 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
 
     const target = e.target;
     if (target.tagName === 'A') {
-      const href = target.getAttribute('href');
-      if (window?.electronAPI) {
-        window.electronAPI.openExternal(href);
-      } else {
-        window.open(href, '_system');
-      }
+      openHttpUrlExternally(target.getAttribute('href'));
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
 
@@ -196,12 +212,11 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
       try {
         copyUrl = copyUrl.replace(/^(qortal:\/\/)/, '');
         if (copyUrl.startsWith('use-')) {
-          // Handle the new 'use' format
           const parts = copyUrl.split('/');
           parts.shift();
-          const action = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., 'invite' from 'action-invite'
+          const action = parts.length > 0 ? parts[0].split('-')[1] : null;
           parts.shift();
-          const id = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., '321' from 'groupid-321'
+          const id = parts.length > 0 ? parts[0].split('-')[1] : null;
           if (action === 'join') {
             executeEvent('globalActionJoinGroup', { groupId: id });
             return;

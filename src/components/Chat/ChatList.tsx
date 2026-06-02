@@ -17,6 +17,30 @@ export type ReactionsMap = {
   [reactionType: string]: ReactionItem[];
 };
 
+type ChatListProps = {
+  [key: string]: any;
+  initialMessages: any;
+  myAddress: any;
+  tempMessages: any;
+  onReply: any;
+  onEdit: any;
+  handleReaction: any;
+  chatReferences: any;
+  tempChatReferences: any;
+  members?: any;
+  myName?: any;
+  selectedGroup?: any;
+  enableMentions?: any;
+  openQManager?: any;
+  onAcceptQchatFileTransfer?: (message: any) => void;
+  qchatFileTransferStates?: Record<string, any>;
+  qchatCompletedTransfers?: Record<string, any>;
+  hasSecretKey?: any;
+  isPrivate?: any;
+  compactScrollButton?: boolean;
+  chatId?: any;
+};
+
 export const ChatList = ({
   initialMessages,
   myAddress,
@@ -31,10 +55,14 @@ export const ChatList = ({
   selectedGroup,
   enableMentions,
   openQManager,
+  onAcceptQchatFileTransfer,
+  qchatFileTransferStates,
+  qchatCompletedTransfers,
   hasSecretKey,
   isPrivate,
   compactScrollButton = false,
-}) => {
+  chatId,
+}: ChatListProps) => {
   const theme = useTheme();
   const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
@@ -48,7 +76,24 @@ export const ChatList = ({
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const scrollRetryTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const scrollRetryFrameRef = useRef<number | null>(null);
+  const scrollRetrySequenceRef = useRef(0);
   const lastSeenUnreadMessageTimestamp = useRef(null);
+
+  const chatIdentity = useMemo(() => {
+    if (chatId != null) {
+      if (typeof chatId === 'object') {
+        if (chatId.groupId != null) return `group:${chatId.groupId}`;
+        if (chatId.id != null) return `chat:${chatId.id}`;
+        if (chatId.address != null) return `direct:${chatId.address}`;
+      }
+      return String(chatId);
+    }
+    if (selectedGroup?.groupId != null) return `group:${selectedGroup.groupId}`;
+    if (selectedGroup?.id != null) return `group:${selectedGroup.id}`;
+    return 'chat';
+  }, [chatId, selectedGroup?.groupId, selectedGroup?.id]);
 
   // Shared scroll button styling (memoized so Button sx refs stay stable)
   const scrollButtonSx = useMemo(
@@ -111,6 +156,51 @@ export const ChatList = ({
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
   });
 
+  const clearScrollRetries = useCallback(() => {
+    scrollRetrySequenceRef.current += 1;
+    if (scrollRetryFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollRetryFrameRef.current);
+      scrollRetryFrameRef.current = null;
+    }
+    scrollRetryTimeoutsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    scrollRetryTimeoutsRef.current = [];
+  }, []);
+
+  const scrollToIndexAfterMeasurements = useCallback(
+    (index: number, align: 'start' | 'end' = 'end') => {
+      if (index < 0) return;
+
+      clearScrollRetries();
+      const sequence = scrollRetrySequenceRef.current;
+      const scroll = () => {
+        if (scrollRetrySequenceRef.current !== sequence) return;
+        rowVirtualizer.scrollToIndex(index, { align });
+      };
+
+      scroll();
+      scrollRetryFrameRef.current = window.requestAnimationFrame(scroll);
+      [50, 150, 350, 700].forEach((delay) => {
+        const timeoutId = window.setTimeout(scroll, delay);
+        scrollRetryTimeoutsRef.current.push(timeoutId);
+      });
+    },
+    [clearScrollRetries, rowVirtualizer]
+  );
+
+  useEffect(() => {
+    hasLoadedInitialRef.current = false;
+    lastSeenUnreadMessageTimestamp.current = null;
+    clearScrollRetries();
+  }, [chatIdentity, clearScrollRetries]);
+
+  useEffect(() => {
+    return () => {
+      clearScrollRetries();
+    };
+  }, [clearScrollRetries]);
+
   const isAtBottom = useMemo(() => {
     if (parentRef.current && rowVirtualizer?.isScrolling !== undefined) {
       const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
@@ -158,9 +248,24 @@ export const ChatList = ({
       }
     });
 
-    const uniqueInitialMessages = Array.from(
-      uniqueInitialMessagesMap.values()
-    ).sort((a, b) => a.timestamp - b.timestamp);
+    const uniqueInitialMessages = Array.from(uniqueInitialMessagesMap.values())
+      .filter((message) => {
+        const directType =
+          message?.type ||
+          message?.decryptedData?.type ||
+          message?.decryptedData?.data?.type;
+        const directStatus =
+          message?.status ||
+          message?.data?.status ||
+          message?.decryptedData?.status ||
+          message?.decryptedData?.data?.status ||
+          message?.decryptedData?.data?.data?.status;
+        return !(
+          directType === 'qchat-dm-file-transfer' &&
+          directStatus === 'accepted'
+        );
+      })
+      .sort((a, b) => a.timestamp - b.timestamp);
     const totalMessages = [...uniqueInitialMessages, ...(tempMessages || [])];
 
     if (totalMessages.length === 0) return;
@@ -203,10 +308,10 @@ export const ChatList = ({
   const scrollToBottom = (initialMsgs?: unknown[], divideIndex?: number) => {
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
-      if (divideIndex) {
-        rowVirtualizer.scrollToIndex(divideIndex, { align: 'start' });
+      if (divideIndex !== undefined) {
+        scrollToIndexAfterMeasurements(divideIndex, 'start');
       } else {
-        rowVirtualizer.scrollToIndex(index, { align: 'end' });
+        scrollToIndexAfterMeasurements(index, 'end');
       }
     }
     handleMessageSeen();
@@ -510,6 +615,9 @@ export const ChatList = ({
                         myAddress={myAddress}
                         onEdit={onEdit}
                         onReply={onReply}
+                        onAcceptQchatFileTransfer={onAcceptQchatFileTransfer}
+                        qchatFileTransferStates={qchatFileTransferStates}
+                        qchatCompletedTransfers={qchatCompletedTransfers}
                         onSeen={handleMessageSeen}
                         reactions={reactions}
                         reply={reply}
@@ -528,9 +636,7 @@ export const ChatList = ({
         {showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
-            startIcon={
-              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-            }
+            startIcon={<KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />}
             sx={{
               ...scrollButtonSx,
               backgroundColor: theme.palette.primary.dark,
@@ -564,9 +670,7 @@ export const ChatList = ({
           ) : (
             <Button
               onClick={() => scrollToBottom()}
-              startIcon={
-                <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-              }
+              startIcon={<KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />}
               sx={scrollButtonSx}
             >
               {t('group:action.scroll_bottom', {

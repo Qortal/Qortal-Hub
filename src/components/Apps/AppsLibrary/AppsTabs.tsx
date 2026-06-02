@@ -10,6 +10,7 @@ export type AppsLibraryTabValue =
 
 interface AppsTabsProps {
   currentTab: AppsLibraryTabValue;
+  isSearchActive?: boolean;
   onTabChange: (tab: AppsLibraryTabValue) => void;
 }
 
@@ -29,6 +30,7 @@ const StyledTabs = styled(Tabs)(({ theme }) => ({
 const StyledTab = styled(Tab)(({ theme }) => ({
   borderRadius: '6px',
   color: theme.palette.text.secondary,
+  cursor: 'default',
   fontSize: '14px',
   fontWeight: 500,
   minHeight: '34px',
@@ -53,7 +55,11 @@ const TabsContainer = styled(Box)(({ theme }) => ({
   width: '100%',
 }));
 
-export const AppsTabs = ({ currentTab, onTabChange }: AppsTabsProps) => {
+export const AppsTabs = ({
+  currentTab,
+  isSearchActive = false,
+  onTabChange,
+}: AppsTabsProps) => {
   const { t } = useTranslation(['core']);
 
   const handleChange = (_event: React.SyntheticEvent, newValue: string) => {
@@ -63,7 +69,7 @@ export const AppsTabs = ({ currentTab, onTabChange }: AppsTabsProps) => {
   return (
     <TabsContainer>
       <StyledTabs
-        value={currentTab}
+        value={isSearchActive ? false : currentTab}
         onChange={handleChange}
         aria-label={t('core:aria.apps_library_tabs', {
           defaultValue: 'Apps library navigation tabs',

@@ -14,6 +14,7 @@ import {
   Box,
   Button,
   ButtonBase,
+  LinearProgress,
   List,
   ListItem,
   ListItemText,
@@ -35,6 +36,8 @@ import ReplyIcon from '@mui/icons-material/Reply';
 import { ReactionPicker } from '../ReactionPicker';
 import KeyOffIcon from '@mui/icons-material/KeyOff';
 import EditIcon from '@mui/icons-material/Edit';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRounded';
 import TextStyle from '@tiptap/extension-text-style';
 import level0Img from '../../assets/badges/level-0.png';
 import level1Img from '../../assets/badges/level-1.png';
@@ -57,7 +60,26 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
-import { getClickableAvatarSx } from './clickableAvatarStyles';
+import { useStatus } from '../../hooks/usePresence';
+import {
+  getClickableAvatarSx,
+  getFallbackAvatarOutlineSx,
+} from './clickableAvatarStyles';
+import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
+
+const QCHAT_FILE_TRANSFER_TTL_MS = 2 * 60 * 60 * 1000;
+
+const formatQchatFileSize = (bytes?: number) => {
+  const size = Number(bytes || 0);
+  if (!Number.isFinite(size) || size <= 0) return '0 bytes';
+  if (size < 1024) return `${size} ${size === 1 ? 'byte' : 'bytes'}`;
+  if (size < 1024 * 1024) return `${Math.max(1, Math.ceil(size / 1024))} KB`;
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -103,6 +125,28 @@ const UserBadge = memo(({ userInfo }) => {
   );
 });
 
+const getQchatFileTransfer = (message: any) => {
+  if (message?.decryptedData?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData || {}),
+      data: message.decryptedData.data || {},
+    };
+  }
+  if (message?.decryptedData?.data?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...(message.decryptedData.data || {}),
+      data: message.decryptedData.data.data || {},
+    };
+  }
+  if (message?.type === 'qchat-dm-file-transfer') {
+    return {
+      ...message,
+      data: message.data || {},
+    };
+  }
+  return null;
+};
+
 type MessageItemProps = {
   handleReaction: (reaction: string, messageId: string) => void;
   isLast: boolean;
@@ -116,6 +160,9 @@ type MessageItemProps = {
   myAddress: string;
   onEdit: (messageId: string) => void;
   onReply: (messageId: string) => void;
+  onAcceptQchatFileTransfer?: (message: any) => void;
+  qchatFileTransferStates?: Record<string, any>;
+  qchatCompletedTransfers?: Record<string, any>;
   onSeen: () => void;
   reactions: ReactionsMap | null;
   reply: string | null;
@@ -137,6 +184,9 @@ export const MessageItemComponent = ({
   myAddress,
   onEdit,
   onReply,
+  onAcceptQchatFileTransfer,
+  qchatFileTransferStates,
+  qchatCompletedTransfers,
   onSeen,
   reactions,
   reply,
@@ -151,6 +201,7 @@ export const MessageItemComponent = ({
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [avatarPreviewSrc, setAvatarPreviewSrc] = useState(null);
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
     const getInfo = async () => {
@@ -258,8 +309,126 @@ export const MessageItemComponent = ({
     'question',
     'tutorial',
   ]);
+  const hasUnsafeSenderName = Boolean(
+    message?.senderName && hasInvisibleCharacters(message.senderName)
+  );
+  const hasUnsafeReplyName = Boolean(
+    reply?.senderName && hasInvisibleCharacters(reply.senderName)
+  );
+  const hasUnsafeExpiredReplyName = Boolean(
+    replyExpiredMeta?.senderName &&
+      hasInvisibleCharacters(replyExpiredMeta.senderName)
+  );
 
+  const qchatFileTransfer = getQchatFileTransfer(message);
+  const qchatFileData = qchatFileTransfer?.data || {};
+  const qchatTransferState =
+    qchatFileData?.transferId && qchatFileTransferStates
+      ? qchatFileTransferStates[qchatFileData.transferId]
+      : null;
+  const qchatDownloaded =
+    !!qchatFileData?.transferId &&
+    !!qchatCompletedTransfers?.[qchatFileData.transferId];
+  const qchatDisplayStatus = qchatDownloaded
+    ? 'received'
+    : qchatTransferState?.status || qchatFileData?.status || 'offer';
+  const qchatProgress =
+    typeof qchatTransferState?.progress === 'number'
+      ? Math.max(0, Math.min(100, Math.round(qchatTransferState.progress * 100)))
+      : null;
+  const qchatTransferBusy =
+    qchatDisplayStatus === 'accepted' ||
+    qchatDisplayStatus === 'connecting' ||
+    qchatDisplayStatus === 'retrying' ||
+    qchatDisplayStatus === 'link_established' ||
+    qchatDisplayStatus === 'auth_sent' ||
+    qchatDisplayStatus === 'auth' ||
+    qchatDisplayStatus === 'authorized' ||
+    qchatDisplayStatus === 'sending' ||
+    qchatDisplayStatus === 'receiving';
+  const qchatTransferDone =
+    qchatDisplayStatus === 'sent' ||
+    qchatDisplayStatus === 'received' ||
+    qchatDownloaded;
+  const qchatTransferError =
+    qchatDisplayStatus === 'failed' || qchatDisplayStatus === 'rejected';
+  const qchatShowOfferExpiry =
+    qchatDisplayStatus === 'offer' || qchatDisplayStatus === 'registered';
+  const qchatExpiresAt =
+    typeof qchatFileData?.expiresAt === 'number'
+      ? qchatFileData.expiresAt
+      : typeof message?.timestamp === 'number'
+        ? message.timestamp + QCHAT_FILE_TRANSFER_TTL_MS
+        : null;
+  const qchatMsLeft =
+    qchatShowOfferExpiry && qchatExpiresAt && !qchatTransferDone && !qchatTransferError
+      ? Math.max(0, qchatExpiresAt - nowMs)
+      : null;
+  const qchatOfferExpired =
+    qchatShowOfferExpiry &&
+    !qchatTransferDone &&
+    !qchatTransferError &&
+    !!qchatExpiresAt &&
+    qchatExpiresAt <= nowMs;
+  const qchatExpiryText =
+    qchatMsLeft === null
+      ? ''
+      : qchatMsLeft <= 0
+        ? 'expired'
+        : `${Math.floor(qchatMsLeft / 60000)}:${Math.floor(
+            (qchatMsLeft % 60000) / 1000
+          )
+            .toString()
+            .padStart(2, '0')} left`;
+  const qchatStatusText = (() => {
+    switch (qchatDisplayStatus) {
+      case 'offer':
+        if (qchatDownloaded) return 'downloaded';
+        if (qchatOfferExpired) return 'expired';
+        return 'offer';
+      case 'registered':
+        return 'waiting for downloader';
+      case 'accepted':
+      case 'connecting':
+        return 'creating link';
+      case 'retrying':
+        return `retrying link ${qchatTransferState?.attempt || ''}`.trim();
+      case 'link_established':
+        return 'link established';
+      case 'auth_sent':
+        return 'waiting for sender authorization';
+      case 'auth':
+        return 'verifying downloader';
+      case 'authorized':
+        return 'authorized';
+      case 'sending':
+        return qchatProgress !== null ? `uploading ${qchatProgress}%` : 'uploading';
+      case 'receiving':
+        return qchatProgress !== null
+          ? `downloading ${qchatProgress}%`
+          : 'downloading';
+      case 'sent':
+        return 'sent';
+      case 'received':
+        return 'downloaded';
+      case 'failed':
+      case 'rejected':
+        return `error: ${
+          qchatTransferState?.error ||
+          qchatTransferState?.reason ||
+          'transfer failed'
+        }`;
+      default:
+        return qchatDisplayStatus;
+    }
+  })();
+  useEffect(() => {
+    if (!qchatFileTransfer) return;
+    const interval = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [qchatFileTransfer]);
   const hasNoMessage =
+    !qchatFileTransfer &&
     (!message.decryptedData?.data?.message ||
       message.decryptedData?.data?.message === '<p></p>') &&
     (message?.images || [])?.length === 0 &&
@@ -267,8 +436,10 @@ export const MessageItemComponent = ({
     (!message?.text || message?.text === '<p></p>');
 
   const isOwn = message?.sender === myAddress;
+  const senderStatus = useStatus(message?.sender);
   const isRepliedToMe =
     reply?.sender === myAddress || replyExpiredMeta?.sender === myAddress;
+  const isQchatFileOffer = qchatFileTransfer?.data?.status === 'offer';
 
   return (
     <>
@@ -314,13 +485,6 @@ export const MessageItemComponent = ({
               paddingLeft: '14px',
             }),
             ...(!isShowingAsReply && {
-              '&:hover': {
-                backgroundColor: isScrollTarget
-                  ? alpha(theme.palette.primary.main, 0.09)
-                  : isOwn
-                    ? alpha(theme.palette.primary.main, 0.07)
-                    : alpha(theme.palette.text.primary, 0.04),
-              },
               '& .message-item-toolbar': {
                 opacity: 0,
                 pointerEvents: 'none',
@@ -359,30 +523,38 @@ export const MessageItemComponent = ({
                 address={message?.sender}
                 name={message?.senderName}
               >
-                <Avatar
-                  sx={{
-                    backgroundColor: alpha(theme.palette.text.primary, 0.06),
-                    color: theme.palette.text.primary,
-                    height: '38px',
-                    width: '38px',
-                    fontSize: '15px',
-                    fontWeight: 600,
-                    ...getClickableAvatarSx(theme, isAvatarLoaded),
-                  }}
-                  alt={message?.senderName}
-                  src={userAvatarUrl}
-                  onClick={handleAvatarPreview}
-                  imgProps={{
-                    onLoad: () => {
-                      setIsAvatarLoaded(true);
-                    },
-                    onError: () => {
-                      setIsAvatarLoaded(false);
-                    },
-                  }}
+                <PresenceStatusBadge
+                  online={Boolean(senderStatus)}
+                  status={senderStatus}
                 >
-                  {message?.senderName?.charAt(0)}
-                </Avatar>
+                  <Avatar
+                    sx={{
+                      backgroundColor: alpha(theme.palette.text.primary, 0.06),
+                      color: theme.palette.text.primary,
+                      height: '38px',
+                      width: '38px',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      ...(!isAvatarLoaded
+                        ? getFallbackAvatarOutlineSx(theme)
+                        : {}),
+                      ...getClickableAvatarSx(theme, isAvatarLoaded),
+                    }}
+                    alt={message?.senderName}
+                    src={userAvatarUrl}
+                    onClick={handleAvatarPreview}
+                    imgProps={{
+                      onLoad: () => {
+                        setIsAvatarLoaded(true);
+                      },
+                      onError: () => {
+                        setIsAvatarLoaded(false);
+                      },
+                    }}
+                  >
+                    {message?.senderName?.charAt(0)}
+                  </Avatar>
+                </PresenceStatusBadge>
               </WrapperUserAction>
               <UserBadge userInfo={userInfo} />
             </Box>
@@ -399,63 +571,160 @@ export const MessageItemComponent = ({
               width: '100%',
             }}
           >
-            {/* Header: sender name + timestamp + edited label inline */}
+            {/* Header: sender name + timestamp + edited label inline, toolbar on the right */}
             <Box
               sx={{
                 alignItems: 'center',
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: '8px',
+                justifyContent: 'space-between',
+                minHeight: '32px',
               }}
             >
-              <WrapperUserAction
-                disabled={myAddress === message?.sender}
-                address={message?.sender}
-                name={message?.senderName}
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  minWidth: 0,
+                }}
               >
-                <Typography
-                  sx={{
-                    color: isOwn
-                      ? theme.palette.primary.main
-                      : theme.palette.text.primary,
-                    fontFamily: 'Inter',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    lineHeight: 1.3,
-                  }}
+                <WrapperUserAction
+                  disabled={myAddress === message?.sender}
+                  address={message?.sender}
+                  name={message?.senderName}
                 >
-                  {message?.senderName || message?.sender}
-                </Typography>
-              </WrapperUserAction>
+                  <Typography
+                    sx={{
+                      color: isOwn
+                        ? theme.palette.primary.main
+                        : theme.palette.text.primary,
+                      fontFamily: 'Inter',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                      ...(hasUnsafeSenderName
+                        ? {
+                            textDecorationLine: 'line-through',
+                            textDecorationThickness: '2px',
+                            textDecorationColor: theme.palette.error.main,
+                          }
+                        : {}),
+                    }}
+                  >
+                    {message?.senderName || message?.sender}
+                  </Typography>
+                </WrapperUserAction>
 
-              {!isUpdating && !isTemp && (
-                <Typography
+                {!isUpdating && !isTemp && (
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      flexShrink: 0,
+                      fontFamily: 'Inter',
+                      fontSize: '11px',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {formatTimestamp(message.timestamp)}
+                  </Typography>
+                )}
+
+                {message?.isEdit && !isUpdating && !isTemp && (
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontFamily: 'Inter',
+                      fontSize: '11px',
+                      fontStyle: 'italic',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {t('core:message.generic.edited', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Action toolbar in header row so it never overlaps message body */}
+              {!isShowingAsReply && (
+                <Box
+                  className="message-item-toolbar"
                   sx={{
-                    color: theme.palette.text.secondary,
+                    alignItems: 'center',
+                    backgroundColor: theme.palette.background.paper,
+                    border: '1px solid',
+                    borderColor: theme.palette.divider,
+                    borderRadius: '8px',
+                    boxShadow: theme.shadows[2],
+                    display: 'flex',
                     flexShrink: 0,
-                    fontFamily: 'Inter',
-                    fontSize: '11px',
-                    lineHeight: 1,
+                    gap: '2px',
+                    padding: '3px 6px',
+                    transition: 'opacity 0.15s ease',
+                    zIndex: 2,
                   }}
                 >
-                  {formatTimestamp(message.timestamp)}
-                </Typography>
-              )}
+                  {message?.sender === myAddress &&
+                    (!message?.isNotEncrypted || isPrivate === false) && (
+                      <Tooltip title="Edit" disableFocusListener>
+                        <ButtonBase
+                          sx={{
+                            borderRadius: '6px',
+                            color: theme.palette.text.secondary,
+                            padding: '4px',
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                              color: theme.palette.text.primary,
+                            },
+                          }}
+                          onClick={() => {
+                            onEdit(message);
+                          }}
+                        >
+                          <EditIcon sx={{ fontSize: '18px' }} />
+                        </ButtonBase>
+                      </Tooltip>
+                    )}
 
-              {message?.isEdit && !isUpdating && !isTemp && (
-                <Typography
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontFamily: 'Inter',
-                    fontSize: '11px',
-                    fontStyle: 'italic',
-                    lineHeight: 1,
-                  }}
-                >
-                  {t('core:message.generic.edited', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
+                  <Tooltip title="Reply" disableFocusListener>
+                    <ButtonBase
+                      sx={{
+                        borderRadius: '6px',
+                        color: theme.palette.text.secondary,
+                        padding: '4px',
+                        '&:hover': {
+                          backgroundColor: theme.palette.action.hover,
+                          color: theme.palette.text.primary,
+                        },
+                      }}
+                      onClick={() => {
+                        onReply(message);
+                      }}
+                    >
+                      <ReplyIcon sx={{ fontSize: '18px' }} />
+                    </ButtonBase>
+                  </Tooltip>
+
+                  {handleReaction && (
+                    <ReactionPicker
+                      onReaction={(val) => {
+                        if (
+                          reactions &&
+                          reactions[val] &&
+                          reactions[val]?.find((item) => item?.sender === myAddress)
+                        ) {
+                          handleReaction(val, message, false);
+                        } else {
+                          handleReaction(val, message, true);
+                        }
+                      }}
+                    />
+                  )}
+                </Box>
               )}
             </Box>
 
@@ -522,6 +791,13 @@ export const MessageItemComponent = ({
                             : theme.palette.primary.main,
                         fontSize: '13px',
                         fontWeight: isRepliedToMe ? 600 : 500,
+                        ...(hasUnsafeReplyName
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       }}
                     >
                       {isRepliedToMe
@@ -605,6 +881,13 @@ export const MessageItemComponent = ({
                             : theme.palette.text.secondary,
                         fontSize: '13px',
                         fontWeight: 500,
+                        ...(hasUnsafeExpiredReplyName
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       }}
                     >
                       {replyExpiredMeta?.senderName || replyExpiredMeta?.sender
@@ -638,7 +921,100 @@ export const MessageItemComponent = ({
             )}
 
             {/* Message body - show only one of htmlText or message.text to avoid duplicate for open groups */}
-            {message?.decryptedData?.type === 'notification' ? (
+            {qchatFileTransfer ? (
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  border: '1px solid',
+                  borderColor: theme.palette.divider,
+                  borderRadius: '8px',
+                  display: 'flex',
+                  gap: '10px',
+                  maxWidth: 420,
+                  p: 1.25,
+                }}
+              >
+                <InsertDriveFileRoundedIcon
+                  sx={{ color: theme.palette.text.secondary, flexShrink: 0 }}
+                />
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {qchatFileData?.fileName || 'File transfer'}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: qchatTransferError
+                        ? theme.palette.error.main
+                        : theme.palette.text.secondary,
+                      fontSize: 12,
+                    }}
+                  >
+                    {formatQchatFileSize(qchatFileData?.size)} · {qchatStatusText}
+                  </Typography>
+                  {qchatExpiryText && (
+                    <Typography
+                      sx={{
+                        color:
+                          qchatMsLeft === 0
+                            ? theme.palette.error.main
+                            : theme.palette.text.secondary,
+                        fontSize: 11,
+                        mt: 0.25,
+                      }}
+                    >
+                      expires: {qchatExpiryText}
+                    </Typography>
+                  )}
+                  {(qchatProgress !== null ||
+                    qchatTransferBusy ||
+                    (qchatTransferDone && !qchatDownloaded)) &&
+                    !qchatTransferError && (
+                    <LinearProgress
+                      variant={qchatProgress !== null ? 'determinate' : 'indeterminate'}
+                      value={
+                        qchatTransferDone
+                          ? 100
+                          : qchatProgress ?? undefined
+                      }
+                      color="primary"
+                      sx={{
+                        mt: 0.75,
+                        height: 4,
+                        borderRadius: 1,
+                      }}
+                    />
+                  )}
+                </Box>
+                {!isOwn && isQchatFileOffer && onAcceptQchatFileTransfer && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DownloadRoundedIcon />}
+                    disabled={
+                      qchatTransferBusy ||
+                      qchatTransferDone ||
+                      qchatOfferExpired
+                    }
+                    onClick={() => onAcceptQchatFileTransfer(message)}
+                    sx={{ flexShrink: 0, textTransform: 'none' }}
+                  >
+                    {qchatDownloaded
+                      ? 'Downloaded'
+                      : qchatOfferExpired
+                        ? 'Expired'
+                        : 'Accept'}
+                  </Button>
+                )}
+              </Box>
+            ) : message?.decryptedData?.type === 'notification' ? (
               <MessageDisplay
                 htmlContent={message.decryptedData?.data?.message}
               />
@@ -883,31 +1259,48 @@ export const MessageItemComponent = ({
                       marginBottom: '12px',
                     }}
                   >
-                    {reactions[selectedReaction]?.map((reactionItem) => (
-                      <ListItem
-                        key={reactionItem.sender}
-                        disablePadding
-                        sx={{
-                          borderRadius: '8px',
-                          marginBottom: '2px',
-                          '&:last-of-type': { marginBottom: 0 },
-                          '&:hover': {
-                            backgroundColor: theme.palette.action.hover,
-                          },
-                        }}
-                      >
-                        <ListItemText
-                          primary={
-                            reactionItem.senderName || reactionItem.sender
-                          }
-                          primaryTypographyProps={{
-                            fontSize: '14px',
-                            fontWeight: 500,
+                    {reactions[selectedReaction]?.map((reactionItem) => {
+                      const hasUnsafeReactionName = Boolean(
+                        reactionItem.senderName &&
+                          hasInvisibleCharacters(reactionItem.senderName)
+                      );
+
+                      return (
+                        <ListItem
+                          key={reactionItem.sender}
+                          disablePadding
+                          sx={{
+                            borderRadius: '8px',
+                            marginBottom: '2px',
+                            '&:last-of-type': { marginBottom: 0 },
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                            },
                           }}
-                          sx={{ py: '8px', px: '12px' }}
-                        />
-                      </ListItem>
-                    ))}
+                        >
+                          <ListItemText
+                            primary={
+                              reactionItem.senderName || reactionItem.sender
+                            }
+                            primaryTypographyProps={{
+                              sx: {
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                ...(hasUnsafeReactionName
+                                  ? {
+                                      textDecorationLine: 'line-through',
+                                      textDecorationThickness: '2px',
+                                      textDecorationColor:
+                                        theme.palette.error.main,
+                                    }
+                                  : {}),
+                              },
+                            }}
+                            sx={{ py: '8px', px: '12px' }}
+                          />
+                        </ListItem>
+                      );
+                    })}
                   </List>
 
                   <Button
@@ -948,86 +1341,6 @@ export const MessageItemComponent = ({
               </Popover>
             )}
           </Box>
-
-          {/* Floating action toolbar — visible on hover (via CSS so only one row is hovered) */}
-          {!isShowingAsReply && (
-            <Box
-              className="message-item-toolbar"
-              sx={{
-                alignItems: 'center',
-                backgroundColor: theme.palette.background.paper,
-                border: '1px solid',
-                borderColor: theme.palette.divider,
-                borderRadius: '8px',
-                boxShadow: theme.shadows[2],
-                display: 'flex',
-                gap: '2px',
-                padding: '3px 6px',
-                position: 'absolute',
-                right: '16px',
-                top: '4px',
-                transition: 'opacity 0.15s ease',
-                zIndex: 2,
-              }}
-            >
-              {message?.sender === myAddress &&
-                (!message?.isNotEncrypted || isPrivate === false) && (
-                  <Tooltip title="Edit" disableFocusListener>
-                    <ButtonBase
-                      sx={{
-                        borderRadius: '6px',
-                        color: theme.palette.text.secondary,
-                        padding: '4px',
-                        '&:hover': {
-                          backgroundColor: theme.palette.action.hover,
-                          color: theme.palette.text.primary,
-                        },
-                      }}
-                      onClick={() => {
-                        onEdit(message);
-                      }}
-                    >
-                      <EditIcon sx={{ fontSize: '18px' }} />
-                    </ButtonBase>
-                  </Tooltip>
-                )}
-
-              <Tooltip title="Reply" disableFocusListener>
-                <ButtonBase
-                  sx={{
-                    borderRadius: '6px',
-                    color: theme.palette.text.secondary,
-                    padding: '4px',
-                    '&:hover': {
-                      backgroundColor: theme.palette.action.hover,
-                      color: theme.palette.text.primary,
-                    },
-                  }}
-                  onClick={() => {
-                    onReply(message);
-                  }}
-                >
-                  <ReplyIcon sx={{ fontSize: '18px' }} />
-                </ButtonBase>
-              </Tooltip>
-
-              {handleReaction && (
-                <ReactionPicker
-                  onReaction={(val) => {
-                    if (
-                      reactions &&
-                      reactions[val] &&
-                      reactions[val]?.find((item) => item?.sender === myAddress)
-                    ) {
-                      handleReaction(val, message, false);
-                    } else {
-                      handleReaction(val, message, true);
-                    }
-                  }}
-                />
-              )}
-            </Box>
-          )}
         </Box>
         <AvatarPreviewModal
           open={isAvatarPreviewOpen}

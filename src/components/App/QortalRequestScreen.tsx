@@ -39,6 +39,10 @@ export function QortalRequestScreen({
 }: QortalRequestScreenProps) {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const wrappingTextSx = {
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  };
 
   return (
     <>
@@ -57,6 +61,7 @@ export function QortalRequestScreen({
             textAlign: 'center',
             fontSize: '16px',
             marginBottom: '10px',
+            ...wrappingTextSx,
           }}
         >
           {message?.text1}
@@ -65,8 +70,17 @@ export function QortalRequestScreen({
       {message?.text2 && (
         <>
           <Spacer height="10px" />
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', width: '90%' }}>
-            <TextP sx={{ lineHeight: 1.2, fontSize: '16px', fontWeight: 'normal' }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'flex-start', width: '90%' }}
+          >
+            <TextP
+              sx={{
+                lineHeight: 1.2,
+                fontSize: '16px',
+                fontWeight: 'normal',
+                ...wrappingTextSx,
+              }}
+            >
               {message.text2}
             </TextP>
           </Box>
@@ -75,8 +89,17 @@ export function QortalRequestScreen({
       )}
       {message?.text3 && (
         <>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', width: '90%' }}>
-            <TextP sx={{ lineHeight: 1.2, fontSize: '16px', fontWeight: 'normal' }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'flex-start', width: '90%' }}
+          >
+            <TextP
+              sx={{
+                lineHeight: 1.2,
+                fontSize: '16px',
+                fontWeight: 'normal',
+                ...wrappingTextSx,
+              }}
+            >
               {message.text3}
             </TextP>
           </Box>
@@ -84,8 +107,17 @@ export function QortalRequestScreen({
         </>
       )}
       {message?.text4 && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-start', width: '90%' }}>
-          <TextP sx={{ lineHeight: 1.2, fontSize: '16px', fontWeight: 'normal' }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'flex-start', width: '90%' }}
+        >
+          <TextP
+            sx={{
+              lineHeight: 1.2,
+              fontSize: '16px',
+              fontWeight: 'normal',
+              ...wrappingTextSx,
+            }}
+          >
             {message.text4}
           </TextP>
         </Box>
@@ -103,6 +135,7 @@ export function QortalRequestScreen({
           lineHeight: 1.2,
           maxWidth: '90%',
           textAlign: 'center',
+          ...wrappingTextSx,
         }}
       >
         {message?.highlightedText}
@@ -117,6 +150,7 @@ export function QortalRequestScreen({
               fontSize: '16px',
               fontWeight: 'normal',
               maxWidth: '90%',
+              ...wrappingTextSx,
             }}
           >
             {t('core:message.generic.fee_qort', {
@@ -149,7 +183,7 @@ export function QortalRequestScreen({
               '& .MuiSvgIcon-root': { color: theme.palette.text.secondary },
             }}
           />
-          <Typography sx={{ fontSize: '14px' }}>
+          <Typography sx={{ fontSize: '14px', ...wrappingTextSx }}>
             {message.checkbox1?.label}
           </Typography>
         </Box>

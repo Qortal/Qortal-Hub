@@ -1,0 +1,720 @@
+/**
+ * In-memory ring buffer for group-call diagnostics + redacted JSON export.
+ * Used by useGroupVoiceCall (ingest) and export UI / window.__qortalGCallExportDiagnostics.
+ *
+ * **Audio-safe vs QA telemetry**
+ * - **Console (`debugLog` in the hook):** gated by `isGcallDebugEnabled()` (`localStorage qortal:gcall-debug=1`).
+ *   No steady `[GCall] metrics` console work unless that flag is set.
+ * - **Ring buffer:** in **production**, recording is **off** unless `localStorage qortal:gcall-diagnostics=1`,
+ *   or `qortal:gcall-debug=1`, or `qortal:gcall-mic-debug=1`. In **development**, ring capture defaults **on**
+ *   unless `qortal:gcall-diagnostics` is `0`/`off`.
+ * - **gcall-perf** (tick stats + long-task observer): **off** in production builds by default; opt in with
+ *   `qortal:gcall-perf=1`. Full `GcallPerfCollector.snapshot()` runs on diagnostics **export** or via
+ *   `window.__qortalGCallPerfStats` when perf is enabled — not on the live call interval.
+ */
+
+import type { AnyGcallV2Event } from './v2/diagnosticsContract';
+
+export type GcallDiagLevel = 'log' | 'warn' | 'info';
+
+export interface GcallDiagEvent {
+  t: number;
+  level: GcallDiagLevel;
+  tag: string;
+  payload: unknown;
+}
+
+export interface GcallDiagExportContext {
+  buildMode: string;
+  appVersionLabel: string;
+  userAgent: string;
+  platform?: string;
+  roomId: string | null;
+  chatId: string | null;
+  roomState: string | null;
+  /** Truncated local address (PII-friendly). */
+  myAddressTruncated: string | null;
+}
+
+export interface GcallDiagExportPayload {
+  schemaVersion: 1;
+  exportedAtMs: number;
+  context: GcallDiagExportContext;
+  /**
+   * Point-in-time root election / startup authority state. This is exported
+   * even when the event ring is disabled so split-brain investigations can
+   * reconstruct why a client did or did not run a local election.
+   */
+  authoritySnapshot?: unknown;
+  /** Latest metrics snapshot at export (session totals + transport hints). */
+  liveMetricsSnapshot: unknown;
+  /** Last closed window from manual capture during export (may be empty if none). */
+  exportWindowMetrics: unknown;
+  /**
+   * How to read `transportTriadSnapshot` with decrypt/backlog metrics: if the triad is
+   * elevated together, suspect Node/bridge/daemon delivery before blaming decrypt-only limits.
+   */
+  transportTriadInterpretation: string;
+  /**
+   * Subset of live metrics for field triage: bridge backpressure, main bridge queue HW,
+   * Python binary-out queue HW (same window as `liveMetricsSnapshot`).
+   */
+  transportTriadSnapshot: {
+    reticulumAudioBridgeWaitingForDrain: boolean;
+    reticulumAudioBridgeQueuedFramesHighWater: number;
+    reticulumAudioBinaryOutQueueDepthHighWater: number;
+  } | null;
+  /** QA hint for 2-way pending-decrypt vs long-task correlation (see `GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT`). */
+  twoWayDecryptVerificationHint: string;
+  /** QA hint for 2-way jitter/playout paired exports (see `GCALL_TWO_WAY_JITTER_BASELINE_HINT`). */
+  twoWayJitterVerificationHint: string;
+  /** Phase 0: per-peer classification before N===1/adaptive policy changes (see `GCALL_PHASE0_CLASSIFICATION_HINT`). */
+  phase0ClassificationHint: string;
+  /** Phase 2: pending-decrypt tuning vs session aggregates (see `GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT`). */
+  phase2PendingDecryptWindowHint: string;
+  /** Phase 5: paired verification + merge bar (see `GCALL_PHASE5_PAIRED_VERIFICATION_HINT`). */
+  phase5PairedVerificationHint: string;
+  /**
+   * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
+   * Includes `enabled` so exports can distinguish a disabled production collector from an empty sample set.
+   * Group-call perf is off in production by default; opt in via `qortal:gcall-perf`.
+   */
+  gcallPerfSnapshot?: unknown;
+  recentWindowSummary?: unknown;
+  recentWindowTrends?: unknown[];
+  audioSurfaceRuntimeDiagnostics?: unknown;
+  v2Diagnostics?: {
+    eventCount: number;
+    v2ManagedSourceAddrs: string[];
+    legacyWindowOpusMetricsMeaningful: boolean;
+    avgJitterBufferedMs: number;
+    avgPcmRingBufferedMs: number;
+    avgPcmRingOldestFrameAgeMs: number;
+    maxPcmRingOldestFrameAgeMs: number;
+    stalePcmDrops: number;
+    avgTargetBufferMs: number;
+    stateTransitionCounts: Partial<Record<string, number>>;
+    perStream: Array<{
+      streamKey: string;
+      lastState: string | null;
+      avgJitterBufferedMs: number;
+      avgPcmRingBufferedMs: number;
+      avgPcmRingOldestFrameAgeMs: number;
+      maxPcmRingOldestFrameAgeMs: number;
+      stalePcmDrops: number;
+      targetBufferMs: number;
+    }>;
+    events: unknown[];
+  };
+  events: GcallDiagEvent[];
+  webrtcStats?: Record<string, unknown>;
+}
+
+const MAX_EVENTS = 900;
+const METRICS_THROTTLE_MS = 8000;
+const GCALL_NOISY_DIAGNOSTIC_TAGS = new Set([
+  '[GCall] bufferEnforceActive',
+  '[GCall] jitterPushStats',
+]);
+const GCALL_PROTECTED_DIAGNOSTIC_TAGS = new Set([
+  '[GCall] inboundMediaMissing',
+  '[GCall] inboundMediaReannounce',
+  '[GCall] localJoinReannounce',
+  '[GCall] n1SevereRebuildDeadzoneReset',
+  '[GCall] n1SevereRebuildReadyEscape',
+  '[GCall] peerMediaRecoveryRequested',
+  '[GCall] peerMediaRecoveryRequestFailed',
+  '[GCall] predictivePathWarm',
+  '[GCall] rootInboundPathWarm',
+  '[GCall] postKeyRootPathWarm',
+  '[GCall] reticulumInboundAudioObserved',
+  '[GCall] reticulumAudioSendFailed',
+  '[GCall] reticulumAudioSendException',
+  '[GCall] reticulumPacketPathDegraded',
+  '[GCall] pathRouteKeyChanged',
+  '[GCall] trustedRootKeyApplied',
+  '[GCall] startupKeyDeliveryObserved',
+  '[GCall] workerRoomKeySyncRequested',
+  '[GCall] workerRoomKeySyncApplied',
+]);
+
+const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
+const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
+/** When set to `1`/`on` in production, enables ring-buffer capture without full console debug. */
+const GCALL_DIAGNOSTICS_RING_STORAGE_KEY = 'qortal:gcall-diagnostics';
+/**
+ * In-memory override for diagnostics ring capture.
+ * Set to `true`/`false` to force behavior regardless of localStorage.
+ * Set to `null` to fall back to the storage/debug-driven behavior.
+ */
+const GCALL_DIAGNOSTICS_RING_ENABLED_OVERRIDE: boolean | null = true;
+
+/** Verbose GCall console + ingest from `debugLog` / `debugWarn` in useGroupVoiceCall. */
+export function isGcallDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function isGcallMicDebugEnabled(): boolean {
+  try {
+    return (
+      localStorage.getItem(GCALL_MIC_DEBUG_STORAGE_KEY) === '1' ||
+      localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether diagnostics **ring** events are recorded. Prefer **dropping** pushes when false (hot path).
+ * Export still works: live metrics + perf snapshot are attached at export time from current state.
+ */
+export function readGcallDiagnosticsRingEnabled(): boolean {
+  if (GCALL_DIAGNOSTICS_RING_ENABLED_OVERRIDE !== null) {
+    return GCALL_DIAGNOSTICS_RING_ENABLED_OVERRIDE;
+  }
+  const prod =
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.PROD === true;
+  try {
+    if (prod) {
+      const v = localStorage.getItem(GCALL_DIAGNOSTICS_RING_STORAGE_KEY);
+      if (v === '1' || v === 'on') return true;
+      return isGcallDebugEnabled() || isGcallMicDebugEnabled();
+    }
+    const v = localStorage.getItem(GCALL_DIAGNOSTICS_RING_STORAGE_KEY);
+    if (v === '0' || v === 'off') return false;
+    return true;
+  } catch {
+    return !prod;
+  }
+}
+
+/** Shipped with exports so QA can interpret bridge vs daemon vs decrypt without a wiki. */
+export const GCALL_TRANSPORT_TRIAD_INTERPRETATION =
+  'Read these three together before blaming a single layer. ' +
+  '`reticulumAudioBridgeWaitingForDrain`: main-process bridge is waiting for the Python side to drain (backpressure). ' +
+  '`reticulumAudioBridgeQueuedFramesHighWater`: high-water of frames queued in the main-process bridge toward Reticulum. ' +
+  '`reticulumAudioBinaryOutQueueDepthHighWater`: high-water of the Python child→parent binary queue (fd3 path). ' +
+  'If this triad spikes together with decrypt symptoms, tune upstream delivery first; if the triad is calm but `packetsDroppedPendingDecrypt` / `pendingDecryptDepthHighWater` are high, focus on the renderer decrypt path.';
+
+/**
+ * 2-way / pending-decrypt field triage: correlate `gcallPerf.longTasks.recent` time ranges with
+ * `packetsDroppedPendingDecrypt` / depth spikes; read transport triad on the same export.
+ * Provisional pass bar (steady 2-way speech): `packetsDroppedPendingDecryptRatePerSec` under 1.0/s
+ * averaged over the export window.
+ */
+export const GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT =
+  'Correlate pending-decrypt stress with gcallPerf.longTasks (timestamps) and transportTriadSnapshot; ' +
+  'pass bar for sustained 2-way speech: packetsDroppedPendingDecryptRatePerSec < 1.0/s (window average).';
+
+/** Paired before/after: jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction, playoutOutsideTargetFraction, avgPlayoutDeltaMs, and playoutRateFractionBelow1; watch bufferEnforceActive tier logs in steady/recovery modes. */
+export const GCALL_TWO_WAY_JITTER_BASELINE_HINT =
+  'Paired 2-way jitter: compare jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction, playoutOutsideTargetFraction, avgPlayoutDeltaMs, and playoutRateFractionBelow1; ' +
+  'provisional pass (steady speech): jitterNotReadyFraction under 0.35 (window), median buffer at least ~0.45× adaptive target; see steady/recovery bufferEnforceActive and recoveryJitterGeometryApplied in events.';
+
+/**
+ * Phase 0: classify each peer before changing N===1/adaptive constants. **Primary** (and optional
+ * **secondary**) class must come from the **same failing segment** as subjective QA (`exportWindowMetrics`),
+ * not a whole-session impression. Classes: stall-dominated, decrypt-dominated, transport-dominated,
+ * policy-dominated. **Do not** ship N===1/adaptive policy tweaks unless **policy-dominated is primary**;
+ * address the primary bucket first when mixed.
+ */
+export const GCALL_PHASE0_CLASSIFICATION_HINT =
+  'Phase 0: assign each peer a primary class (optional secondary if mixed) from the **same failing window** used for subjective QA, not session-wide averages. ' +
+  'Classes: stall-dominated (longTasks), decrypt-dominated (pendingDecrypt drops/depth with calm triad), transport-dominated (transport triad hot), policy-dominated (bad jitter bars with low stalls/decrypt/triad). ' +
+  'Gate: no N===1/adaptive tuning until classified; Phases 3–4 only when policy-dominated is **primary**.';
+
+/**
+ * Phase 2: use **exportWindowMetrics** (aligned bad segment) for decrypt drop rate / depth; session-level
+ * totals can diverge from the window used for jitter bars.
+ */
+export const GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT =
+  'Phase 2: drive pending-decrypt tuning from **exportWindowMetrics** and the same failing QA window; do not rely on session aggregates alone (they can diverge from the window).';
+
+/**
+ * Phase 5: both peers must pass bars for merge success; keep **root vs standby** role pairing consistent
+ * with baseline when comparing before/after.
+ */
+export const GCALL_PHASE5_PAIRED_VERIFICATION_HINT =
+  'Phase 5: a fix is not successful if one peer passes provisional bars and the other fails; compare paired exports. ' +
+  'When possible, verify with the **same topology roles** as baseline (root forwarder vs standby forwarder per machine) so role load does not confound before/after.';
+
+export function extractTransportTriadFromLiveMetrics(
+  live: unknown
+): GcallDiagExportPayload['transportTriadSnapshot'] {
+  if (!live || typeof live !== 'object') return null;
+  const m = live as Record<string, unknown>;
+  const drain = m.reticulumAudioBridgeWaitingForDrain;
+  const bridgeHw = m.reticulumAudioBridgeQueuedFramesHighWater;
+  const binaryHw = m.reticulumAudioBinaryOutQueueDepthHighWater;
+  if (typeof drain !== 'boolean') return null;
+  if (typeof bridgeHw !== 'number' || !Number.isFinite(bridgeHw)) return null;
+  if (typeof binaryHw !== 'number' || !Number.isFinite(binaryHw)) return null;
+  return {
+    reticulumAudioBridgeWaitingForDrain: drain,
+    reticulumAudioBridgeQueuedFramesHighWater: Math.max(0, Math.trunc(bridgeHw)),
+    reticulumAudioBinaryOutQueueDepthHighWater: Math.max(0, Math.trunc(binaryHw)),
+  };
+}
+
+const events: GcallDiagEvent[] = [];
+let lastMetricsPushAt = 0;
+
+/** Qortal-style base58 addresses are typically 30+ chars. */
+const BASE58_LIKE = /^[1-9A-HJ-NP-Za-km-z]{28,80}$/;
+
+export function truncateGcallDiagAddress(addr: string): string {
+  if (!addr || addr.length <= 14) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function redactDeep(value: unknown, depth = 0): unknown {
+  if (depth > 24) return '[max-depth]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    if (BASE58_LIKE.test(value)) return truncateGcallDiagAddress(value);
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    const cap = value.length > 400 ? 400 : value.length;
+    const out: unknown[] = [];
+    for (let i = 0; i < cap; i++) out.push(redactDeep(value[i], depth + 1));
+    if (value.length > cap) out.push(`[truncated ${value.length - cap} items]`);
+    return out;
+  }
+  if (typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    const keys = Object.keys(o);
+    const keyCap = keys.length > 200 ? 200 : keys.length;
+    for (let i = 0; i < keyCap; i++) {
+      const k = keys[i]!;
+      out[k] = redactDeep(o[k], depth + 1);
+    }
+    if (keys.length > keyCap) {
+      out._truncatedKeys = keys.length - keyCap;
+    }
+    return out;
+  }
+  return String(value);
+}
+
+/** When true, `gcallDiagnosticsPush('info', ...)` is dropped (overload / stage-4 work reduction). */
+let gcallDiagnosticsSuppressInfo = false;
+
+export function setGcallDiagnosticsSuppressInfo(suppress: boolean): void {
+  gcallDiagnosticsSuppressInfo = suppress;
+}
+
+function isProtectedGcallDiagnosticEvent(event: GcallDiagEvent): boolean {
+  return (
+    event.level === 'warn' || GCALL_PROTECTED_DIAGNOSTIC_TAGS.has(event.tag)
+  );
+}
+
+function pruneGcallDiagnosticsRing(): void {
+  while (events.length > MAX_EVENTS) {
+    const noisyIndex = events.findIndex(
+      (event) =>
+        !isProtectedGcallDiagnosticEvent(event) &&
+        GCALL_NOISY_DIAGNOSTIC_TAGS.has(event.tag)
+    );
+    if (noisyIndex >= 0) {
+      events.splice(noisyIndex, 1);
+      continue;
+    }
+
+    const unprotectedIndex = events.findIndex(
+      (event) => !isProtectedGcallDiagnosticEvent(event)
+    );
+    if (unprotectedIndex >= 0) {
+      events.splice(unprotectedIndex, 1);
+      continue;
+    }
+
+    events.shift();
+  }
+}
+
+export function gcallDiagnosticsPush(
+  level: GcallDiagLevel,
+  tag: string,
+  payload: unknown
+): void {
+  if (!readGcallDiagnosticsRingEnabled()) return;
+  if (gcallDiagnosticsSuppressInfo && level === 'info') return;
+  events.push({
+    t: Date.now(),
+    level,
+    tag,
+    /** Copy-on-export via `redactDeep` in `buildGcallDiagnosticsExportJson`; avoid JSON clone on hot path. */
+    payload,
+  });
+  if (events.length > MAX_EVENTS) {
+    pruneGcallDiagnosticsRing();
+  }
+}
+
+/**
+ * Throttled ingest for high-frequency `[GCall] metrics` snapshots.
+ */
+export function gcallDiagnosticsPushMetricsThrottled(payload: unknown): void {
+  const now = Date.now();
+  if (now - lastMetricsPushAt < METRICS_THROTTLE_MS) return;
+  lastMetricsPushAt = now;
+  gcallDiagnosticsPush('log', '[GCall] metrics', payload);
+}
+
+export function gcallDiagnosticsClear(): void {
+  events.length = 0;
+  lastMetricsPushAt = 0;
+}
+
+export function gcallDiagnosticsGetEvents(): readonly GcallDiagEvent[] {
+  return events;
+}
+
+export function gcallDiagnosticsIngestConsoleArgs(
+  level: GcallDiagLevel,
+  args: unknown[]
+): void {
+  if (!readGcallDiagnosticsRingEnabled()) return;
+  const head = args[0];
+  if (typeof head !== 'string' || !head.startsWith('[GCall]')) return;
+
+  if (head === '[GCall] metrics' || head.startsWith('[GCall] metrics')) {
+    const payload = args.length >= 2 ? args[1] : {};
+    gcallDiagnosticsPushMetricsThrottled(payload);
+    return;
+  }
+
+  const tag = head;
+  let payload: unknown;
+  if (args.length === 1) payload = {};
+  else if (args.length === 2) payload = args[1];
+  else payload = { parts: args.slice(1) };
+
+  gcallDiagnosticsPush(level, tag, payload);
+}
+
+export function buildGcallDiagnosticsExportJson(params: {
+  context: GcallDiagExportContext;
+  authoritySnapshot?: unknown;
+  liveMetricsSnapshot: unknown;
+  exportWindowMetrics: unknown;
+  gcallPerfSnapshot?: unknown;
+  recentWindowTrends?: unknown[];
+  recentWindowSummary?: unknown;
+  audioSurfaceRuntimeDiagnostics?: unknown;
+  v2DiagnosticEvents?: readonly AnyGcallV2Event[];
+  v2ManagedSourceAddrs?: readonly string[];
+}): string {
+  const triad = extractTransportTriadFromLiveMetrics(params.liveMetricsSnapshot);
+  const v2Diagnostics = buildV2DiagnosticsExportSection(
+    params.v2DiagnosticEvents,
+    params.v2ManagedSourceAddrs
+  );
+  const payload: GcallDiagExportPayload = {
+    schemaVersion: 1,
+    exportedAtMs: Date.now(),
+    context: { ...params.context },
+    authoritySnapshot:
+      params.authoritySnapshot !== undefined
+        ? redactDeep(params.authoritySnapshot)
+        : undefined,
+    liveMetricsSnapshot: redactDeep(params.liveMetricsSnapshot),
+    exportWindowMetrics: redactDeep(params.exportWindowMetrics),
+    transportTriadInterpretation: GCALL_TRANSPORT_TRIAD_INTERPRETATION,
+    transportTriadSnapshot: triad
+      ? (redactDeep(triad) as GcallDiagExportPayload['transportTriadSnapshot'])
+      : null,
+    twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
+    twoWayJitterVerificationHint: GCALL_TWO_WAY_JITTER_BASELINE_HINT,
+    phase0ClassificationHint: GCALL_PHASE0_CLASSIFICATION_HINT,
+    phase2PendingDecryptWindowHint: GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT,
+    phase5PairedVerificationHint: GCALL_PHASE5_PAIRED_VERIFICATION_HINT,
+    gcallPerfSnapshot:
+      params.gcallPerfSnapshot !== undefined
+        ? redactDeep(params.gcallPerfSnapshot)
+        : undefined,
+    recentWindowSummary:
+      params.recentWindowSummary !== undefined
+        ? redactDeep(params.recentWindowSummary)
+        : undefined,
+    recentWindowTrends:
+      params.recentWindowTrends !== undefined
+        ? (redactDeep(params.recentWindowTrends) as GcallDiagExportPayload['recentWindowTrends'])
+        : undefined,
+    audioSurfaceRuntimeDiagnostics:
+      params.audioSurfaceRuntimeDiagnostics !== undefined
+        ? redactDeep(params.audioSurfaceRuntimeDiagnostics)
+        : undefined,
+    v2Diagnostics:
+      v2Diagnostics !== null
+        ? (redactDeep(v2Diagnostics) as GcallDiagExportPayload['v2Diagnostics'])
+        : undefined,
+    events: events.map((e) => ({
+      ...e,
+      payload: redactDeep(e.payload),
+    })),
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+function buildV2DiagnosticsExportSection(
+  eventsInput?: readonly AnyGcallV2Event[],
+  managedSourceAddrsInput?: readonly string[]
+): GcallDiagExportPayload['v2Diagnostics'] | null {
+  const events = eventsInput ? [...eventsInput] : [];
+  const managedSourceAddrs = [...new Set(managedSourceAddrsInput ?? [])];
+  if (events.length === 0 && managedSourceAddrs.length === 0) return null;
+
+  const stateTransitionCounts: Partial<Record<string, number>> = {};
+  const perStream = new Map<
+    string,
+    {
+      lastState: string | null;
+      jitterTotal: number;
+      jitterCount: number;
+      pcmTotal: number;
+      pcmCount: number;
+      targetBufferMs: number;
+    }
+  >();
+
+  for (const event of events) {
+    switch (event.kind) {
+      case 'state-transition': {
+        const payload = event.payload;
+        stateTransitionCounts[payload.toState] =
+          (stateTransitionCounts[payload.toState] ?? 0) + 1;
+        const stream = ensureV2StreamSummary(perStream, payload.streamKey);
+        stream.lastState = payload.toState;
+        if (payload.policyOutput.targetBufferMs > 0) {
+          stream.targetBufferMs = payload.policyOutput.targetBufferMs;
+        }
+        break;
+      }
+      case 'jitter-stats': {
+        const payload = event.payload;
+        const stream = ensureV2StreamSummary(perStream, payload.streamKey);
+        stream.lastState = payload.state;
+        stream.jitterTotal += payload.bufferedMs;
+        stream.jitterCount += 1;
+        break;
+      }
+      case 'pcm-ring-stats': {
+        const payload = event.payload;
+        const stream = ensureV2StreamSummary(perStream, payload.streamKey);
+        stream.lastState = payload.state;
+        stream.pcmTotal += payload.bufferedMs;
+        stream.pcmCount += 1;
+        stream.pcmOldestAgeTotal += payload.oldestFrameAgeMs;
+        stream.pcmOldestAgeCount += 1;
+        stream.pcmOldestAgeMax = Math.max(
+          stream.pcmOldestAgeMax,
+          payload.oldestFrameAgeMs
+        );
+        stream.stalePcmDrops = Math.max(stream.stalePcmDrops, payload.staleDrops);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const perStreamSummary = [...perStream.entries()]
+    .map(([streamKey, stream]) => ({
+      streamKey,
+      lastState: stream.lastState,
+      avgJitterBufferedMs:
+        stream.jitterCount > 0 ? stream.jitterTotal / stream.jitterCount : 0,
+      avgPcmRingBufferedMs:
+        stream.pcmCount > 0 ? stream.pcmTotal / stream.pcmCount : 0,
+      avgPcmRingOldestFrameAgeMs:
+        stream.pcmOldestAgeCount > 0
+          ? stream.pcmOldestAgeTotal / stream.pcmOldestAgeCount
+          : 0,
+      maxPcmRingOldestFrameAgeMs: stream.pcmOldestAgeMax,
+      stalePcmDrops: stream.stalePcmDrops,
+      targetBufferMs: stream.targetBufferMs,
+    }))
+    .sort((a, b) => a.streamKey.localeCompare(b.streamKey));
+
+  const avgJitterBufferedMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.avgJitterBufferedMs, 0) /
+        perStreamSummary.length
+      : 0;
+  const avgPcmRingBufferedMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.avgPcmRingBufferedMs, 0) /
+        perStreamSummary.length
+      : 0;
+  const avgPcmRingOldestFrameAgeMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce(
+          (sum, stream) => sum + stream.avgPcmRingOldestFrameAgeMs,
+          0
+        ) / perStreamSummary.length
+      : 0;
+  const maxPcmRingOldestFrameAgeMs =
+    perStreamSummary.length > 0
+      ? Math.max(...perStreamSummary.map((stream) => stream.maxPcmRingOldestFrameAgeMs))
+      : 0;
+  const stalePcmDrops =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.stalePcmDrops, 0)
+      : 0;
+  const avgTargetBufferMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.targetBufferMs, 0) /
+        perStreamSummary.length
+      : 0;
+
+  return {
+    eventCount: events.length,
+    v2ManagedSourceAddrs: managedSourceAddrs,
+    legacyWindowOpusMetricsMeaningful: managedSourceAddrs.length === 0,
+    avgJitterBufferedMs,
+    avgPcmRingBufferedMs,
+    avgPcmRingOldestFrameAgeMs,
+    maxPcmRingOldestFrameAgeMs,
+    stalePcmDrops,
+    avgTargetBufferMs,
+    stateTransitionCounts,
+    perStream: perStreamSummary,
+    events,
+  };
+}
+
+function ensureV2StreamSummary(
+  perStream: Map<
+    string,
+    {
+      lastState: string | null;
+      jitterTotal: number;
+      jitterCount: number;
+      pcmTotal: number;
+      pcmCount: number;
+      pcmOldestAgeTotal: number;
+      pcmOldestAgeCount: number;
+      pcmOldestAgeMax: number;
+      stalePcmDrops: number;
+      targetBufferMs: number;
+    }
+  >,
+  streamKey: string
+) {
+  let summary = perStream.get(streamKey);
+  if (!summary) {
+    summary = {
+      lastState: null,
+      jitterTotal: 0,
+      jitterCount: 0,
+      pcmTotal: 0,
+      pcmCount: 0,
+      pcmOldestAgeTotal: 0,
+      pcmOldestAgeCount: 0,
+      pcmOldestAgeMax: 0,
+      stalePcmDrops: 0,
+      targetBufferMs: 0,
+    };
+    perStream.set(streamKey, summary);
+  }
+  return summary;
+}
+
+type GcallElectronFile = {
+  startStreamSave: (options: {
+    filename: string;
+    mimeType?: string;
+  }) => Promise<{ canceled?: boolean; filePath?: string }>;
+  writeChunk: (
+    filePath: string,
+    chunk: Uint8Array,
+    append: boolean
+  ) => Promise<void>;
+};
+
+function getGcallElectronFileApi(): GcallElectronFile | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const w = window as typeof window & { electron?: GcallElectronFile };
+  return w.electron?.startStreamSave ? w.electron : undefined;
+}
+
+/**
+ * Save diagnostics JSON via Electron native save dialog when available; otherwise
+ * File System Access `showSaveFilePicker`, then anchor download fallback.
+ */
+export async function downloadGcallDiagnosticsJson(
+  json: string,
+  filename = `qortal-gcall-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+): Promise<void> {
+  const electron = getGcallElectronFileApi();
+  if (electron) {
+    const saveResult = await electron.startStreamSave({
+      filename,
+      mimeType: 'application/json',
+    });
+    if (saveResult?.canceled || !saveResult?.filePath) return;
+    const encoder = new TextEncoder();
+    await electron.writeChunk(saveResult.filePath, encoder.encode(json), false);
+    return;
+  }
+
+  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+    try {
+      const handle = await (
+        window as unknown as {
+          showSaveFilePicker: (opts: {
+            suggestedName: string;
+            types: {
+              description: string;
+              accept: Record<string, string[]>;
+            }[];
+          }) => Promise<FileSystemFileHandle>;
+        }
+      ).showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'JSON',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      return;
+    } catch (err: unknown) {
+      const name = err && typeof err === 'object' && 'name' in err ? String((err as Error).name) : '';
+      if (name === 'AbortError') return;
+    }
+  }
+
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function copyGcallDiagnosticsToClipboard(json: string): Promise<void> {
+  await navigator.clipboard.writeText(json);
+}

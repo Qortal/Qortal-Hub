@@ -44,6 +44,28 @@ export async function getAllUserNames() {
   return nameData.map((item) => item.name);
 }
 
+async function getQortBalanceInfo() {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + '/addresses/balance/' + address);
+
+  if (!response?.ok) throw new Error('0 QORT in your balance');
+  return await response.json();
+}
+
+async function getArbitraryPublishFee() {
+  const validApi = await getBaseApi();
+  const timestamp = Date.now();
+  const response = await fetch(
+    `${validApi}/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`
+  );
+
+  if (!response?.ok) throw new Error('Unable to get fee');
+  const fee = await response.json();
+  return Number(fee) / 1e8;
+}
+
 async function getKeyPair() {
   const res = await getData<any>('keyPair').catch(() => null);
   if (res) {
@@ -294,6 +316,19 @@ export const publishOnQDN = async ({
   title,
   uploadType = 'base64',
 }) => {
+  const [balance, fee] = await Promise.all([
+    getQortBalanceInfo(),
+    getArbitraryPublishFee(),
+  ]);
+
+  if (+balance < fee) {
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   if (data && service) {
     const registeredName = name || (await getNameInfo());
     if (!registeredName)

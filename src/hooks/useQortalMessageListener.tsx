@@ -11,10 +11,12 @@ import { mimeToExtensionMap } from '../utils/memeTypes';
 import FileSaver from 'file-saver';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
+  QORTAL_PROTOCOL,
   TIME_HOURS_1_IN_MILLISECONDS,
   TIME_MINUTES_30_IN_MILLISECONDS,
   TIME_SECONDS_30_IN_MILLISECONDS,
 } from '../constants/constants';
+import { buildQortalResourceLink } from '../utils/qortalLink';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -242,7 +244,14 @@ export const listOfAllQortalRequests = [
   'LIST_QDN_RESOURCES',
   'LOCK_TAB',
   'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA',
+  'NOTIFICATION_ADD',
+  'NOTIFICATION_GET',
+  'NOTIFICATION_HAS_PERMISSION',
+  'NOTIFICATION_MARK_SEEN',
+  'NOTIFICATION_PERMISSION',
+  'NOTIFICATION_REMOVE',
   'OPEN_NEW_TAB',
+  'OPEN_USER_LOOKUP',
   'PLAY_ENCRYPTED_MEDIA',
   'PUBLISH_MULTIPLE_QDN_RESOURCES',
   'PUBLISH_QDN_RESOURCE',
@@ -270,6 +279,7 @@ export const listOfAllQortalRequests = [
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
+  'UPDATE_SUBSCRIPTIONS',
   'VOTE_ON_POLL',
   'WHICH_UI',
 ];
@@ -320,7 +330,14 @@ export const UIQortalRequests = [
   'LEAVE_GROUP',
   'LOCK_TAB',
   'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA',
+  'NOTIFICATION_ADD',
+  'NOTIFICATION_GET',
+  'NOTIFICATION_HAS_PERMISSION',
+  'NOTIFICATION_MARK_SEEN',
+  'NOTIFICATION_PERMISSION',
+  'NOTIFICATION_REMOVE',
   'OPEN_NEW_TAB',
+  'OPEN_USER_LOOKUP',
   'PLAY_ENCRYPTED_MEDIA',
   'REENCRYPT_GROUP_KEYS',
   'REGISTER_NAME',
@@ -341,6 +358,7 @@ export const UIQortalRequests = [
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
+  'UPDATE_SUBSCRIPTIONS',
   'VOTE_ON_POLL',
   'WHICH_UI',
 ];
@@ -535,6 +553,7 @@ export const useQortalMessageListener = (
   isDevMode,
   appName,
   appService,
+  appIdentifier,
   skipAuth
 ) => {
   const [path, setPath] = useState('');
@@ -553,15 +572,38 @@ export const useQortalMessageListener = (
   useEffect(() => {
     if (tabId && !isNaN(history?.currentIndex)) {
       setHasSettingsChangedAtom((prev) => {
+        // Preserve identifier in qortal:// links when present because QDN
+        // targeting depends on it. Links without identifier must still work.
         return {
           ...prev,
           [tabId]: {
             hasBack: history?.currentIndex > 0,
+            hasForward:
+              history?.currentIndex >= 0 &&
+              history?.currentIndex <
+                (history?.customQDNHistoryPaths?.length || 0) - 1,
+            currentLink:
+              appService && appName
+                ? buildQortalResourceLink({
+                    service: appService,
+                    name: appName,
+                    path: path || '',
+                    identifier: appIdentifier,
+                  })
+                : '',
           },
         };
       });
     }
-  }, [history?.currentIndex, tabId]);
+  }, [
+    appIdentifier,
+    appName,
+    appService,
+    history?.currentIndex,
+    history?.customQDNHistoryPaths,
+    path,
+    tabId,
+  ]);
 
   const changeCurrentIndex = useCallback((value) => {
     setHistory((prev) => {
@@ -618,6 +660,7 @@ export const useQortalMessageListener = (
       'GET_USER_WALLET',
       'GET_WALLET_BALANCE',
       'IS_USING_PUBLIC_NODE',
+      'NOTIFICATION_HAS_PERMISSION',
       'LIST_ATS',
       'LIST_GROUPS',
       'LIST_QDN_RESOURCES',

@@ -1,6 +1,8 @@
 import { useEffect, MutableRefObject } from 'react';
 import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
+import { extractComponents } from '../components/Chat/MessageDisplay';
+import { openQWalletsTab } from '../utils/openQWalletsTab';
 
 type PermissionHandler = (
   message: any,
@@ -43,6 +45,23 @@ export function useAppMessageHandler(
       } else if (message.action === 'NOTIFICATION_OPEN_THREAD_NEW_POST') {
         executeEvent('openThreadNewPost', {
           data: message.payload?.data,
+        });
+      } else if (message.action === 'NOTIFICATION_OPEN_APP') {
+        const payload = message.payload;
+        if (payload?.openWallets) {
+          openQWalletsTab();
+        } else if (payload?.link) {
+          const data = extractComponents(payload.link);
+          if (data) {
+            executeEvent('addTab', { data });
+            executeEvent('open-apps-mode', {});
+          }
+        }
+      } else if (message.action === 'NOTIFICATION_PERMISSION_REQUEST') {
+        executeEvent('show-notification-permission', {
+          requestId: message.requestId,
+          appInfo: message.appInfo,
+          payload: message.payload,
         });
       } else if (
         message.action === 'QORTAL_REQUEST_PERMISSION' &&

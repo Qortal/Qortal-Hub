@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { URL } from 'url';
 
 import { log as loggerLog, error as loggerError } from './logger';
+import { isLocalPrivateHost } from './local-https-cert';
 
 interface EncryptionConfig {
   key: Buffer;
@@ -75,7 +76,7 @@ function decryptChunk(
 function fetchRange(url: string, start: number, end: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
-    const client = urlObj.protocol === 'https:' ? https : http;
+    const client = urlObj.protocol === 'https:' && !isLocalPrivateHost(urlObj.hostname) ? https : http;
 
     const options: http.RequestOptions = {
       hostname: urlObj.hostname,
@@ -162,9 +163,7 @@ const routes: Record<string, RouteHandler> = {
     const existed = encryptionConfigs.has(videoId!);
     encryptionConfigs.delete(videoId!);
 
-    loggerLog(
-      `[Cleanup] Video unregistered: ${videoId} (existed: ${existed})`
-    );
+    loggerLog(`[Cleanup] Video unregistered: ${videoId} (existed: ${existed})`);
     sendJSON(res, 200, { success: true, existed });
   },
 

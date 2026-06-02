@@ -1,7 +1,11 @@
-import { Box } from '@mui/material';
-import { Return } from '../../assets/Icons/Return.tsx';
-import { Spacer } from '../../common/Spacer';
+import { Box, ButtonBase } from '@mui/material';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import { useTranslation } from 'react-i18next';
 import { Wallets } from '../Wallets';
+import { AuthScreen } from '../Auth/AuthShell';
+import { useEffect, useState } from 'react';
+
+type ImportView = 'choice' | 'backup' | 'seedphrase' | 'authenticate';
 
 type WalletsViewProps = {
   onBack: () => void;
@@ -16,36 +20,59 @@ export function WalletsView({
   setExtState,
   rawWallet,
 }: WalletsViewProps) {
+  const { t } = useTranslation(['auth']);
+  const [importView, setImportView] = useState<ImportView>('choice');
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onBack();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onBack]);
+
   return (
-    <>
-      <Spacer height="22px" />
-      <Box
-        sx={{
-          boxSizing: 'border-box',
-          display: 'flex',
-          justifyContent: 'flex-start',
-          alignItems: 'center',
-          maxWidth: '700px',
-          paddingLeft: '22px',
-          paddingRight: '22px',
-          width: '100%',
-          marginBottom: 4,
-        }}
-      >
-        <Return
-          style={{
-            cursor: 'pointer',
-            height: '24px',
-            width: 'auto',
-          }}
-          onClick={onBack}
-        />
-      </Box>
+    <AuthScreen
+      title={t('auth:import_account.title', {
+        postProcess: 'capitalizeFirstChar',
+      })}
+      subtitle={t('auth:import_account.subtitle', {
+        postProcess: 'capitalizeFirstChar',
+      })}
+      maxWidth={420}
+    >
+      {importView === 'choice' && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <ButtonBase
+            onClick={onBack}
+            sx={{
+              color: 'rgba(214,221,233,0.62)',
+              minWidth: 0,
+              p: 0,
+              '&:hover': {
+                color: 'rgba(230,236,247,0.92)',
+              },
+            }}
+          >
+            <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
+          </ButtonBase>
+        </Box>
+      )}
+
       <Wallets
         setRawWallet={setRawWallet}
         setExtState={setExtState}
         rawWallet={rawWallet}
+        mode="import"
+        onImportViewChange={setImportView}
       />
-    </>
+    </AuthScreen>
   );
 }

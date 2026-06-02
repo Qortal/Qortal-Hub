@@ -18,13 +18,17 @@ import {
   dialog,
 } from 'electron';
 import electronIsDev from 'electron-is-dev';
-import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
-import { join } from 'path';
-import { log as loggerLog, error as loggerError } from './logger';
+import { dirname, join } from 'path';
+import {
+  log as loggerLog,
+  error as loggerError,
+  warn as loggerWarn,
+} from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
+  bootstrapOrClearChainAndStart,
   customQortalInstalledDir,
   dbExists,
   deleteDB,
@@ -51,10 +55,220 @@ import {
   getVideoServerPort,
   isVideoServerRunning,
 } from './video-server';
+import {
+  startP2PNetwork,
+  stopP2PNetwork,
+  getP2PNetwork,
+  type P2PNetworkOptions,
+} from './p2p-network';
+import {
+  startStunCoordinator,
+  getStunCoordinator,
+  GET_ICE_SERVERS_DEADLINE_MS,
+} from './stun-coordinator';
+import {
+  startPresenceManager,
+  stopPresenceManager,
+  publishPresenceEnvelope,
+  getPresenceManager,
+  setPresenceManagerTransports,
+} from './presence';
+import {
+  startChatManager,
+  stopChatManager,
+  getChatManager,
+  flushChatStore,
+} from './chat';
+import { startCallManager, stopCallManager, getCallManager } from './call';
+import {
+  startGroupCallManager,
+  stopGroupCallManager,
+  getGroupCallManager,
+  GC_MESSAGE_TYPES,
+} from './group-call';
+import type { GcEnvelope } from './group-call';
+import {
+  startReticulumBridge,
+  stopReticulumBridge,
+  getReticulumBridge,
+  type ReticulumOverlayVerifiedPeer,
+} from './reticulum-bridge';
+import { attachReticulumStatusBridgeEvents } from './reticulum-daemon';
+import {
+  startReticulumMeshCoordinator,
+  stopReticulumMeshCoordinator,
+} from './reticulum-mesh';
+import { isDisabledLegacy } from './feature-flags';
+import {
+  AUDIO_SURFACE_WINDOW_ROLE,
+  AUDIO_SURFACE_ENTRY_PATH,
+  MAIN_WINDOW_ROLE,
+  buildAudioSurfaceScheme,
+  buildAudioSurfaceUrl,
+  withAudioSurfaceIsolationHeaders,
+} from './audio-window-policy';
+import { ensureAudioSurfaceHttpsServer } from './audio-surface-https';
+import {
+  buildDefaultAudioSurfaceBridgeStateLike,
+  type AudioSurfaceCommand,
+  type AudioSurfaceCommandEnvelope,
+  type AudioSurfaceCommandResultEnvelope,
+  type AudioSurfaceEvent,
+  type AudioSurfaceResponseLike,
+} from './audio-surface-ipc';
+import { registerStaticAppProtocol } from './app-protocol';
+import {
+  getSystemCallReadinessSnapshot,
+  refreshSystemCallReadinessSnapshot,
+  startSystemCallReadinessMonitor,
+} from './system-call-readiness';
+
+const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
+  'qortal.gcallAudioRendererSendAtMs'
+);
+const GCALL_AUDIO_MAIN_IPC_AT_MS = Symbol.for('qortal.gcallAudioMainIpcAtMs');
+const OPEN_DEVTOOLS_IN_DEVELOPMENT = false;
+const GCALL_AUDIO_IPC_DELAY_LOG_THRESHOLD_MS = 80;
+const GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS = 50;
+const GCALL_MAIN_LOOP_STALL_LOG_THRESHOLD_MS = 80;
+const GCALL_MAIN_LOOP_STALL_RECENT_LIMIT = 16;
+const GCALL_MAIN_LOOP_STALL_LOG_THROTTLE_MS = 1000;
+
+type MainLoopStallSample = {
+  atMs: number;
+  delayMs: number;
+};
+
+let mainLoopExpectedAtMs = Date.now() + GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS;
+let mainLoopStallCount = 0;
+let mainLoopStallMaxDelayMs = 0;
+let mainLoopLastStallAtMs = 0;
+let mainLoopLastStallDelayMs = 0;
+let mainLoopLastLogAtMs = 0;
+const mainLoopRecentStalls: MainLoopStallSample[] = [];
+
+function recordMainLoopStall(delayMs: number, nowMs = Date.now()): void {
+  mainLoopStallCount++;
+  mainLoopStallMaxDelayMs = Math.max(mainLoopStallMaxDelayMs, delayMs);
+  mainLoopLastStallAtMs = nowMs;
+  mainLoopLastStallDelayMs = delayMs;
+  mainLoopRecentStalls.push({ atMs: nowMs, delayMs });
+  while (mainLoopRecentStalls.length > GCALL_MAIN_LOOP_STALL_RECENT_LIMIT) {
+    mainLoopRecentStalls.shift();
+  }
+
+  if (nowMs - mainLoopLastLogAtMs < GCALL_MAIN_LOOP_STALL_LOG_THROTTLE_MS) {
+    return;
+  }
+  mainLoopLastLogAtMs = nowMs;
+  loggerWarn(
+    `[GCall] target=reticulum-audio-ipc stage=main-event-loop-stall delay_ms=${Math.round(
+      delayMs
+    )} stall_count=${mainLoopStallCount} max_delay_ms=${Math.round(
+      mainLoopStallMaxDelayMs
+    )}`
+  );
+}
+
+const mainLoopMonitorTimer = setInterval(() => {
+  const nowMs = Date.now();
+  const delayMs = Math.max(0, nowMs - mainLoopExpectedAtMs);
+  mainLoopExpectedAtMs = nowMs + GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS;
+  if (delayMs >= GCALL_MAIN_LOOP_STALL_LOG_THRESHOLD_MS) {
+    recordMainLoopStall(delayMs, nowMs);
+  }
+}, GCALL_MAIN_LOOP_SAMPLE_INTERVAL_MS);
+mainLoopMonitorTimer.unref?.();
+
+function getMainLoopIpcTimingDetail(rendererSendAtMs: number, nowMs: number) {
+  const lastStallAgeMs =
+    mainLoopLastStallAtMs > 0 ? Math.max(0, nowMs - mainLoopLastStallAtMs) : -1;
+  const currentLagMs = Math.max(0, nowMs - mainLoopExpectedAtMs);
+  let recentStallMaxMs = 0;
+  let stallSinceRendererMaxMs = 0;
+  for (const sample of mainLoopRecentStalls) {
+    if (nowMs - sample.atMs <= 5000) {
+      recentStallMaxMs = Math.max(recentStallMaxMs, sample.delayMs);
+    }
+    if (sample.atMs >= rendererSendAtMs) {
+      stallSinceRendererMaxMs = Math.max(
+        stallSinceRendererMaxMs,
+        sample.delayMs
+      );
+    }
+  }
+  return {
+    currentLagMs,
+    lastStallAgeMs,
+    lastStallDelayMs: mainLoopLastStallDelayMs,
+    recentStallMaxMs,
+    stallSinceRendererMaxMs,
+    stallCount: mainLoopStallCount,
+    stallMaxDelayMs: mainLoopStallMaxDelayMs,
+  };
+}
+
+function attachGroupAudioIpcTiming(
+  buf: Buffer,
+  timing?: { rendererSendAtWallMs?: number },
+  context?: {
+    channel: 'sendAudio' | 'sendAudioBatch';
+    roomId?: string;
+    targetCount?: number;
+  }
+): void {
+  const rendererSendAtMs = timing?.rendererSendAtWallMs;
+  const mainIpcAtMs = Date.now();
+  if (
+    typeof rendererSendAtMs === 'number' &&
+    Number.isFinite(rendererSendAtMs) &&
+    rendererSendAtMs > 0
+  ) {
+    Object.defineProperty(buf, GCALL_AUDIO_RENDERER_SEND_AT_MS, {
+      value: rendererSendAtMs,
+      enumerable: false,
+      configurable: true,
+    });
+    const rendererToMainMs = Math.max(0, mainIpcAtMs - rendererSendAtMs);
+    if (rendererToMainMs >= GCALL_AUDIO_IPC_DELAY_LOG_THRESHOLD_MS) {
+      const mainLoopTiming = getMainLoopIpcTimingDetail(
+        rendererSendAtMs,
+        mainIpcAtMs
+      );
+      loggerWarn(
+        `[GCall] target=reticulum-audio-ipc stage=gcall-audio-ipc-handler-entry-delay channel=${
+          context?.channel ?? 'unknown'
+        } room=${context?.roomId ?? 'n/a'} target_count=${
+          context?.targetCount ?? 0
+        } delay_ms=${Math.round(
+          rendererToMainMs
+        )} main_loop_current_lag_ms=${Math.round(
+          mainLoopTiming.currentLagMs
+        )} main_loop_last_stall_ms=${Math.round(
+          mainLoopTiming.lastStallDelayMs
+        )} main_loop_last_stall_age_ms=${Math.round(
+          mainLoopTiming.lastStallAgeMs
+        )} main_loop_recent_stall_max_ms=${Math.round(
+          mainLoopTiming.recentStallMaxMs
+        )} main_loop_stall_since_renderer_max_ms=${Math.round(
+          mainLoopTiming.stallSinceRendererMaxMs
+        )} main_loop_stall_count=${mainLoopTiming.stallCount} main_loop_stall_max_ms=${Math.round(
+          mainLoopTiming.stallMaxDelayMs
+        )}`
+      );
+    }
+  }
+  Object.defineProperty(buf, GCALL_AUDIO_MAIN_IPC_AT_MS, {
+    value: mainIpcAtMs,
+    enumerable: false,
+    configurable: true,
+  });
+}
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
+const writeFileAtomic = require('write-file-atomic');
 
 const defaultDomains = [
   'capacitor-electron://-',
@@ -80,12 +294,199 @@ const defaultDomains = [
 const domainHolder = {
   allowedDomains: [...defaultDomains],
 };
+
+/** Same path layout as `getSharedSettingsFilePath('wallet-storage.json')` (preload `walletStorage`). */
+function getWalletStorageJsonPathSync(): string {
+  return path.join(app.getPath('appData'), 'qortal-hub', 'wallet-storage.json');
+}
+
+function readCustomNodeUrlsFromWalletStorageFile(): string[] {
+  try {
+    const filePath = getWalletStorageJsonPathSync();
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw) as { customNodes?: unknown };
+    const nodes = data?.customNodes;
+    if (!Array.isArray(nodes)) return [];
+    return nodes
+      .map((n: { url?: unknown }) =>
+        typeof n?.url === 'string' ? n.url.trim() : ''
+      )
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function mergeUserDomainsIntoAllowlist(domains: string[]): string[] {
+  const validatedUserDomains = domains
+    .flatMap((domain) => {
+      try {
+        const url = new URL(domain);
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        return [url.origin, socketUrl];
+      } catch {
+        return [];
+      }
+    })
+    .filter(Boolean) as string[];
+
+  return [...new Set([...defaultDomains, ...validatedUserDomains])];
+}
+
+function applyAllowedDomainsFromUserUrls(
+  domains: string[],
+  options: { reloadWindow: boolean }
+): void {
+  if (!Array.isArray(domains)) {
+    return;
+  }
+  const newAllowedDomains = mergeUserDomainsIntoAllowlist(domains);
+  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
+  const sortedNewDomains = [...newAllowedDomains].sort();
+  const hasChanged =
+    sortedCurrentDomains.length !== sortedNewDomains.length ||
+    sortedCurrentDomains.some(
+      (domain, index) => domain !== sortedNewDomains[index]
+    );
+
+  if (hasChanged) {
+    domainHolder.allowedDomains = newAllowedDomains;
+
+    if (options.reloadWindow) {
+      const mainWindow = myCapacitorApp.getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.reload();
+      }
+    }
+  }
+}
+
+/** Apply custom node URLs from wallet storage before the web app loads (no window reload). */
+export function loadPersistedAllowedDomainsAtStartup(): void {
+  const urls = readCustomNodeUrlsFromWalletStorageFile();
+  applyAllowedDomainsFromUserUrls(urls, { reloadWindow: false });
+}
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
   debouncer: null,
   ready: false,
   watcher: null,
 };
+
+const isolatedAudioSurfaceContents = new Set<number>();
+const audioSurfaceSubscribers = new Set<Electron.WebContents>();
+const pendingAudioSurfaceCommands = new Map<
+  string,
+  {
+    resolve: (value: AudioSurfaceResponseLike) => void;
+    reject: (reason?: unknown) => void;
+  }
+>();
+const AUDIO_SURFACE_IDLE_CLOSE_MS = 90_000;
+const AUDIO_SURFACE_READY_TIMEOUT_MS = 10_000;
+let audioSurfaceHostReady = false;
+const audioSurfaceReadyResolvers: Array<() => void> = [];
+let audioSurfaceBridgeState = buildDefaultAudioSurfaceBridgeStateLike();
+
+function isMainShellSender(sender: Electron.WebContents): boolean {
+  const mainWindow = myCapacitorApp?.getMainWindow?.();
+  return Boolean(
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    mainWindow.webContents.id === sender.id
+  );
+}
+
+/**
+ * Trust only the hidden audio-surface window (webContents id captured at creation).
+ * Comparing to getAudioSurfaceWindow() is fragile if references or lifetimes diverge.
+ */
+function isAudioSurfaceHostSender(sender: Electron.WebContents): boolean {
+  return isolatedAudioSurfaceContents.has(sender.id);
+}
+
+function waitForAudioSurfaceHostReady(): Promise<void> {
+  if (audioSurfaceHostReady) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout: NodeJS.Timeout | null = null;
+    const resolveReady = () => {
+      if (settled) return;
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      resolve();
+    };
+    timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      const resolverIndex = audioSurfaceReadyResolvers.indexOf(resolveReady);
+      if (resolverIndex !== -1) {
+        audioSurfaceReadyResolvers.splice(resolverIndex, 1);
+      }
+      loggerWarn('[GCall:audio-surface] host ready wait timed out', {
+        timeoutMs: AUDIO_SURFACE_READY_TIMEOUT_MS,
+      });
+      resolve();
+    }, AUDIO_SURFACE_READY_TIMEOUT_MS);
+    audioSurfaceReadyResolvers.push(resolveReady);
+  });
+}
+
+function markAudioSurfaceHostReady(): void {
+  audioSurfaceHostReady = true;
+  audioSurfaceBridgeState = {
+    ...audioSurfaceBridgeState,
+    hostReady: true,
+  };
+  for (const resolve of audioSurfaceReadyResolvers.splice(0)) {
+    resolve();
+  }
+}
+
+function markAudioSurfaceHostClosed(): void {
+  audioSurfaceHostReady = false;
+  audioSurfaceBridgeState = buildDefaultAudioSurfaceBridgeStateLike();
+  for (const resolve of audioSurfaceReadyResolvers.splice(0)) {
+    resolve();
+  }
+  for (const [, pending] of pendingAudioSurfaceCommands) {
+    pending.reject(new Error('audio-surface-window-closed'));
+  }
+  pendingAudioSurfaceCommands.clear();
+  for (const webContents of audioSurfaceSubscribers) {
+    if (!webContents.isDestroyed()) {
+      webContents.send('audio-surface:event', {
+        type: 'engine-closed',
+      } satisfies AudioSurfaceEvent);
+    }
+  }
+}
+
+function emitAudioSurfaceEvent(event: AudioSurfaceEvent): void {
+  if (event.type === 'engine-ready') {
+    audioSurfaceBridgeState = {
+      ...audioSurfaceBridgeState,
+      hostReady: true,
+      bootstrapRevisionApplied: event.bootstrapRevisionApplied,
+    };
+  } else if (event.type === 'snapshot') {
+    audioSurfaceBridgeState = {
+      ...audioSurfaceBridgeState,
+      snapshot: event.snapshot,
+    };
+  }
+  for (const webContents of audioSurfaceSubscribers) {
+    if (!webContents.isDestroyed()) {
+      webContents.send('audio-surface:event', event);
+    }
+  }
+}
 export function setupReloadWatcher(
   electronCapacitorApp: ElectronCapacitorApp
 ): void {
@@ -115,6 +516,7 @@ export function setupReloadWatcher(
 // Define our class to manage our app.
 export class ElectronCapacitorApp {
   private MainWindow: BrowserWindow | null = null;
+  private AudioSurfaceWindow: BrowserWindow | null = null;
   private SplashScreen: CapacitorSplashScreen | null = null;
   private TrayIcon: Tray | null = null;
   private CapacitorFileConfig: CapacitorElectronConfig;
@@ -129,6 +531,10 @@ export class ElectronCapacitorApp {
   private mainWindowState;
   private loadWebApp;
   private customScheme: string;
+  private audioSurfaceScheme: string;
+  private audioSurfaceHttpsOrigin: string | null = null;
+  private audioSurfaceWindowReady: Promise<BrowserWindow> | null = null;
+  private audioSurfaceIdleCloseTimer: NodeJS.Timeout | null = null;
 
   constructor(
     capacitorFileConfig: CapacitorElectronConfig,
@@ -140,6 +546,7 @@ export class ElectronCapacitorApp {
     this.customScheme =
       this.CapacitorFileConfig.electron?.customUrlScheme ??
       'capacitor-electron';
+    this.audioSurfaceScheme = buildAudioSurfaceScheme(this.customScheme);
 
     if (trayMenuTemplate) {
       this.TrayMenuTemplate = trayMenuTemplate;
@@ -150,10 +557,9 @@ export class ElectronCapacitorApp {
     }
 
     // Setup our web app loader, this lets us load apps like react, vue, and angular without changing their build chains.
-    this.loadWebApp = electronServe({
-      directory: join(app.getAppPath(), 'app'),
-      scheme: this.customScheme,
-    });
+    this.loadWebApp = async (window: BrowserWindow) => {
+      await window.loadURL(`${this.customScheme}://-`);
+    };
   }
 
   // Helper function to load in the app.
@@ -170,7 +576,167 @@ export class ElectronCapacitorApp {
     return this.customScheme;
   }
 
-  async init(): Promise<void> {
+  getAudioSurfaceWindow(): BrowserWindow | null {
+    return this.AudioSurfaceWindow;
+  }
+
+  async ensureAudioSurfaceWindow(): Promise<BrowserWindow> {
+    this.cancelAudioSurfaceIdleClose('ensure');
+    if (this.AudioSurfaceWindow && !this.AudioSurfaceWindow.isDestroyed()) {
+      return this.AudioSurfaceWindow;
+    }
+    if (this.audioSurfaceWindowReady) {
+      return this.audioSurfaceWindowReady;
+    }
+    this.audioSurfaceWindowReady = this.createAudioSurfaceWindow();
+    try {
+      return await this.audioSurfaceWindowReady;
+    } finally {
+      this.audioSurfaceWindowReady = null;
+    }
+  }
+
+  private async createAudioSurfaceWindow(): Promise<BrowserWindow> {
+    if (!this.MainWindow || this.MainWindow.isDestroyed()) {
+      throw new Error('Main window must exist before creating audio surface');
+    }
+    const preloadPath = join(
+      app.getAppPath(),
+      'build',
+      'src',
+      'audio-surface-preload.js'
+    );
+    const window = new BrowserWindow({
+      show: false,
+      width: 320,
+      height: 240,
+      frame: false,
+      transparent: true,
+      skipTaskbar: true,
+      focusable: false,
+      webPreferences: {
+        // The hidden audio surface should behave like a normal isolated web page.
+        // Node-enabled or unsandboxed renderers do not qualify for
+        // cross-origin isolation / SharedArrayBuffer in Electron.
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        preload: preloadPath,
+        additionalArguments: [`--window-role=${AUDIO_SURFACE_WINDOW_ROLE}`],
+      },
+    });
+    this.AudioSurfaceWindow = window;
+    const webContentsId = window.webContents.id;
+    isolatedAudioSurfaceContents.add(webContentsId);
+    window.on('closed', () => {
+      isolatedAudioSurfaceContents.delete(webContentsId);
+      if (this.AudioSurfaceWindow === window) {
+        this.AudioSurfaceWindow = null;
+      }
+      markAudioSurfaceHostClosed();
+    });
+    const targetUrl = buildAudioSurfaceUrl(
+      this.audioSurfaceHttpsOrigin ?? this.MainWindow.webContents.getURL(),
+      this.customScheme,
+      this.audioSurfaceScheme
+    );
+    loggerLog('[GCall:audio-surface] create window target', {
+      mainWindowUrl: this.MainWindow.webContents.getURL(),
+      targetUrl,
+      webContentsId,
+    });
+    window.webContents.on('did-finish-load', () => {
+      loggerLog('[GCall:audio-surface] did-finish-load', {
+        url: window.webContents.getURL(),
+        webContentsId,
+      });
+      void window.webContents
+        .executeJavaScript(
+          `({
+            href: location.href,
+            origin: location.origin,
+            crossOriginIsolated: typeof crossOriginIsolated === 'boolean' ? crossOriginIsolated : null,
+            sharedArrayBufferDefined: typeof SharedArrayBuffer !== 'undefined'
+          })`,
+          true
+        )
+        .then((state) => {
+          loggerLog('[GCall:audio-surface] runtime isolation probe', {
+            webContentsId,
+            ...(state as Record<string, unknown>),
+          });
+        })
+        .catch((error) => {
+          loggerWarn('[GCall:audio-surface] runtime isolation probe failed', {
+            webContentsId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        });
+    });
+    await window.loadURL(targetUrl);
+    if (electronIsDev && OPEN_DEVTOOLS_IN_DEVELOPMENT) {
+      try {
+        window.webContents.openDevTools({ mode: 'detach' });
+        loggerLog(
+          '[GCall:audio-surface] dev: opened DevTools for audio-surface window'
+        );
+      } catch (e) {
+        loggerWarn('[GCall:audio-surface] dev: openDevTools failed', e);
+      }
+    }
+    return window;
+  }
+
+  cancelAudioSurfaceIdleClose(reason: string): void {
+    if (!this.audioSurfaceIdleCloseTimer) return;
+    clearTimeout(this.audioSurfaceIdleCloseTimer);
+    this.audioSurfaceIdleCloseTimer = null;
+    loggerLog('[GCall:audio-surface] idle close canceled', { reason });
+  }
+
+  scheduleAudioSurfaceIdleClose(reason: string): void {
+    if (!this.AudioSurfaceWindow || this.AudioSurfaceWindow.isDestroyed()) {
+      return;
+    }
+    this.cancelAudioSurfaceIdleClose('reschedule');
+    loggerLog('[GCall:audio-surface] idle close scheduled', {
+      reason,
+      delayMs: AUDIO_SURFACE_IDLE_CLOSE_MS,
+    });
+    this.audioSurfaceIdleCloseTimer = setTimeout(() => {
+      this.audioSurfaceIdleCloseTimer = null;
+      this.closeAudioSurfaceWindow(`idle-timeout:${reason}`);
+    }, AUDIO_SURFACE_IDLE_CLOSE_MS);
+  }
+
+  closeAudioSurfaceWindow(reason: string): void {
+    this.cancelAudioSurfaceIdleClose('close');
+    const audioWindow = this.AudioSurfaceWindow;
+    if (!audioWindow || audioWindow.isDestroyed()) {
+      markAudioSurfaceHostClosed();
+      return;
+    }
+    loggerLog('[GCall:audio-surface] closing window', {
+      reason,
+      webContentsId: audioWindow.webContents.id,
+    });
+    audioWindow.close();
+  }
+
+  async init(p2pBootstrapSeeds?: string[]): Promise<void> {
+    await registerStaticAppProtocol(
+      session.defaultSession,
+      this.customScheme,
+      join(app.getAppPath(), 'app')
+    );
+    await registerStaticAppProtocol(
+      session.defaultSession,
+      this.audioSurfaceScheme,
+      join(app.getAppPath(), 'app')
+    );
+    this.audioSurfaceHttpsOrigin = await ensureAudioSurfaceHttpsServer(
+      join(app.getAppPath(), 'app')
+    );
     const icon = nativeImage.createFromPath(
       join(
         app.getAppPath(),
@@ -184,6 +750,11 @@ export class ElectronCapacitorApp {
     });
     // Setup preload script path and construct our main window.
     const preloadPath = join(app.getAppPath(), 'build', 'src', 'preload.js');
+    const seedsPayload = JSON.stringify({
+      v: 1,
+      seeds: Array.isArray(p2pBootstrapSeeds) ? p2pBootstrapSeeds : [],
+    });
+    const seedsB64 = Buffer.from(seedsPayload, 'utf8').toString('base64');
     this.MainWindow = new BrowserWindow({
       icon,
       show: false,
@@ -197,9 +768,50 @@ export class ElectronCapacitorApp {
         nodeIntegration: true,
         contextIsolation: true,
         preload: preloadPath,
+        additionalArguments: [
+          `--hub-p2p-seeds=${seedsB64}`,
+          `--window-role=${MAIN_WINDOW_ROLE}`,
+        ],
       },
     });
     this.mainWindowState.manage(this.MainWindow);
+    this.MainWindow.on('maximize', () => {
+      this.MainWindow?.webContents.send('window:state-changed', true);
+    });
+    this.MainWindow.on('unmaximize', () => {
+      this.MainWindow?.webContents.send('window:state-changed', false);
+    });
+
+    // Allow microphone access for voice calls.
+    const summarizeMediaPermissionDetails = (
+      details: unknown
+    ): Record<string, unknown> => {
+      if (!details || typeof details !== 'object') return {};
+      const d = details as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      if (typeof d.requestingUrl === 'string')
+        out.requestingUrl = d.requestingUrl;
+      if (typeof d.isMainFrame === 'boolean') out.isMainFrame = d.isMainFrame;
+      if (Array.isArray(d.mediaTypes)) out.mediaTypes = d.mediaTypes;
+      if (typeof d.securityOrigin === 'string')
+        out.securityOrigin = d.securityOrigin;
+      return out;
+    };
+    // TODO: Restore if mic permissions don't work
+    // this.MainWindow.webContents.session.setPermissionRequestHandler(
+    //   (_webContents, permission, callback, details) => {
+    //     const summary = summarizeMediaPermissionDetails(details);
+    //     const granted = permission === 'media';
+    //     loggerLog('[GCall][perm] request', { permission, granted, ...summary });
+    //     if (granted) return callback(true);
+    //     loggerWarn(
+    //       '[GCall][perm] denied — handler only auto-allows "media"; got:',
+    //       permission,
+    //       summary
+    //     );
+    //     callback(false);
+    //   }
+    // );
 
     if (this.CapacitorFileConfig.backgroundColor) {
       this.MainWindow.setBackgroundColor(
@@ -356,7 +968,7 @@ export class ElectronCapacitorApp {
         this.MainWindow.show();
       }
       setTimeout(() => {
-        if (electronIsDev) {
+        if (electronIsDev && OPEN_DEVTOOLS_IN_DEVELOPMENT) {
           this.MainWindow.webContents.openDevTools();
         }
         CapElectronEventEmitter.emit(
@@ -371,6 +983,7 @@ export class ElectronCapacitorApp {
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
+      const requestUrl = details.url;
       const expandedDomains = [...domainHolder.allowedDomains];
       for (const d of domainHolder.allowedDomains) {
         try {
@@ -395,6 +1008,7 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         customScheme,
         ...new Set(expandedDomains),
       ];
+
       const frameSources = [
         "'self'",
         'http://localhost:*',
@@ -405,7 +1019,6 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         'https://127.0.0.1:*',
         ...allowedSources,
       ];
-      const requestUrl = details.url;
       const isHubShellRequest = requestUrl.startsWith(`${customScheme}://`);
       const inlineScriptSource = isHubShellRequest ? '' : " 'unsafe-inline'";
 
@@ -462,6 +1075,16 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         'Content-Security-Policy': [csp],
       };
 
+      Object.assign(
+        responseHeaders,
+        withAudioSurfaceIsolationHeaders(responseHeaders, {
+          url: details.url,
+          resourceType: details.resourceType,
+          origin: details.origin,
+          referrer: details.referrer,
+        })
+      );
+
       if (isCrossOrigin && !hasAccessControlAllowOrigin) {
         // Handle CORS for cross-origin requests lacking CORS headers
         // Optionally, check if the requestOrigin is allowed
@@ -483,45 +1106,7 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   if (!Array.isArray(domains)) {
     return;
   }
-  // Validate and transform user-provided domains
-  const validatedUserDomains = domains
-    .flatMap((domain) => {
-      try {
-        const url = new URL(domain);
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-        return [url.origin, socketUrl];
-      } catch {
-        return [];
-      }
-    })
-    .filter(Boolean) as string[];
-
-  // Combine default and validated user domains
-  const newAllowedDomains = [
-    ...new Set([...defaultDomains, ...validatedUserDomains]),
-  ];
-
-  // Sort both current allowed domains and new domains for comparison
-  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
-  const sortedNewDomains = [...newAllowedDomains].sort();
-
-  // Check if the lists are different
-  const hasChanged =
-    sortedCurrentDomains.length !== sortedNewDomains.length ||
-    sortedCurrentDomains.some(
-      (domain, index) => domain !== sortedNewDomains[index]
-    );
-
-  // If there's a change, update allowedDomains and reload the window
-  if (hasChanged) {
-    domainHolder.allowedDomains = newAllowedDomains;
-
-    const mainWindow = myCapacitorApp.getMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.reload();
-    }
-  }
+  applyAllowedDomainsFromUserUrls(domains, { reloadWindow: true });
 });
 
 // Custom title bar: window controls (minimize, maximize, close)
@@ -543,12 +1128,30 @@ ipcMain.handle('window:close', () => {
   if (win && !win.isDestroyed()) win.close();
 });
 
+ipcMain.handle('window:focus', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) {
+    win.show();
+    win.focus();
+  }
+});
+
 ipcMain.handle('window:isMaximized', () => {
   const win = myCapacitorApp.getMainWindow();
   return win != null && !win.isDestroyed() && win.isMaximized();
 });
 
 ipcMain.handle('window:getPlatform', () => process.platform);
+
+startSystemCallReadinessMonitor();
+
+ipcMain.handle('systemCallReadiness:getSnapshot', () =>
+  getSystemCallReadinessSnapshot()
+);
+
+ipcMain.handle('systemCallReadiness:refreshSnapshot', () =>
+  refreshSystemCallReadinessSnapshot()
+);
 
 ipcMain.handle(
   'window:showAppMenu',
@@ -634,6 +1237,168 @@ export async function getSharedSettingsFilePath(
   return path.join(dir, fileName);
 }
 
+// Persistent store: shared across instances via atomic writes to appData/qortal-hub/
+// Uses write-file-atomic to prevent partial writes corrupting the file.
+// On set/delete: read-from-disk → merge → atomic write, so concurrent instances
+// never overwrite each other's keys (only a simultaneous write of the *same* key
+// by two instances at the exact same moment could still race, which is acceptable).
+const PERSISTENT_STORE_FILENAME = 'qortal-persistent-store.json';
+const MISC_PERSISTENT_STORE_FILENAME = 'misc-persist.json';
+
+function parsePersistentStoreRaw(raw: string): Record<string, unknown> {
+  const trimmed = raw?.trim() ?? '';
+  if (trimmed === '') return {};
+  try {
+    return (JSON.parse(trimmed) as Record<string, unknown>) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function createPersistentJsonStore(fileName: string, label: string) {
+  let cache: Record<string, unknown> | null = null;
+  let loadedFromDisk = false;
+
+  const getFilePath = (): string => {
+    const dir = path.join(app.getPath('appData'), 'qortal-hub');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, fileName);
+  };
+
+  const readFromDisk = async (): Promise<Record<string, unknown>> => {
+    try {
+      const filePath = getFilePath();
+      const stats = await fs.promises.stat(filePath).catch(() => null);
+      if (!stats?.isFile()) return {};
+      const raw = await fs.promises.readFile(filePath, 'utf-8');
+      return parsePersistentStoreRaw(raw);
+    } catch (err) {
+      loggerError(`Error reading ${label} from disk`, err);
+      return {};
+    }
+  };
+
+  const load = async (): Promise<Record<string, unknown>> => {
+    if (cache !== null) return cache;
+    const data = await readFromDisk();
+    const hadData = Object.keys(data).length > 0;
+    cache = data;
+    if (hadData) loadedFromDisk = true;
+    return cache;
+  };
+
+  const flush = (): void => {
+    if (cache === null) return;
+    if (!loadedFromDisk && Object.keys(cache).length === 0) {
+      return;
+    }
+    try {
+      const filePath = getFilePath();
+      let onDisk: Record<string, unknown> = {};
+      if (fs.existsSync(filePath)) {
+        try {
+          onDisk = parsePersistentStoreRaw(fs.readFileSync(filePath, 'utf-8'));
+        } catch (_) {
+          onDisk = {};
+        }
+      }
+      const merged = { ...onDisk, ...cache };
+      writeFileAtomic.sync(filePath, JSON.stringify(merged, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error flushing ${label}`, err);
+    }
+  };
+
+  const get = async (key: string): Promise<unknown> => {
+    const store = await load();
+    return store[key];
+  };
+
+  const set = async (key: string, value: unknown): Promise<void> => {
+    // Read-merge-write: fetch fresh disk state, merge the new key, write atomically.
+    // This ensures concurrent instances don't clobber each other's unrelated keys.
+    const onDisk = await readFromDisk();
+    onDisk[key] = value;
+    try {
+      const filePath = getFilePath();
+      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error writing ${label} (set)`, err);
+    }
+    if (cache === null) cache = {};
+    cache[key] = value;
+    loadedFromDisk = true;
+  };
+
+  const deleteKey = async (key: string): Promise<void> => {
+    // Read-merge-write: fetch fresh disk state, remove the key, write atomically.
+    const onDisk = await readFromDisk();
+    delete onDisk[key];
+    try {
+      const filePath = getFilePath();
+      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError(`Error writing ${label} (delete)`, err);
+    }
+    if (cache !== null) delete cache[key];
+  };
+
+  return { deleteKey, flush, get, set };
+}
+
+const persistentStore = createPersistentJsonStore(
+  PERSISTENT_STORE_FILENAME,
+  'persistent store'
+);
+const miscPersistentStore = createPersistentJsonStore(
+  MISC_PERSISTENT_STORE_FILENAME,
+  'misc persistent store'
+);
+
+export function flushPersistentStore(): void {
+  persistentStore.flush();
+}
+
+export function flushMiscPersistentStore(): void {
+  miscPersistentStore.flush();
+}
+
+ipcMain.handle('persistentStore:get', async (_event, key: string) =>
+  persistentStore.get(key)
+);
+
+ipcMain.handle(
+  'persistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    await persistentStore.set(key, value);
+  }
+);
+
+ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
+  await persistentStore.deleteKey(key);
+});
+
+ipcMain.handle('miscPersistentStore:get', async (_event, key: string) =>
+  miscPersistentStore.get(key)
+);
+
+ipcMain.handle(
+  'miscPersistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    await miscPersistentStore.set(key, value);
+  }
+);
+
+ipcMain.handle('miscPersistentStore:delete', async (_event, key: string) => {
+  await miscPersistentStore.deleteKey(key);
+});
+
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray preference
 const APP_SETTINGS_FILENAME = 'app-settings.json';
 
@@ -641,9 +1406,25 @@ export type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
 
 export interface AppSettings {
   closeAction?: CloseAction;
+  /** When true, skip the intro audio played on the unauthenticated startup screen. */
+  disableStartupSound?: boolean;
+  /** Whether the Hub P2P network auto-starts on launch (default true). */
+  p2pEnabled?: boolean;
+  /**
+   * When true, append public Google/Cloudflare STUN URLs to ICE (rollback / lab).
+   * Default false — use decentralized peer STUN + bootstrap.
+   */
+  legacyPublicStunFallback?: boolean;
+  /** When false, skip UPnP for Reticulum hub mesh TCP listen port (default true). */
+  reticulumMeshUpnpEnabled?: boolean;
 }
 
-const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask' };
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  closeAction: 'ask',
+  disableStartupSound: false,
+  p2pEnabled: !isDisabledLegacy,
+  reticulumMeshUpnpEnabled: true,
+};
 
 export async function readAppSettings(): Promise<AppSettings> {
   try {
@@ -655,9 +1436,21 @@ export async function readAppSettings(): Promise<AppSettings> {
       ...DEFAULT_APP_SETTINGS,
       ...parsed,
       closeAction:
-        parsed.closeAction && ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
+        parsed.closeAction &&
+        ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
+      disableStartupSound: parsed.disableStartupSound === true,
+      p2pEnabled: isDisabledLegacy
+        ? false
+        : parsed.p2pEnabled === false
+          ? false
+          : true,
+      legacyPublicStunFallback: isDisabledLegacy
+        ? false
+        : parsed.legacyPublicStunFallback === true,
+      reticulumMeshUpnpEnabled:
+        parsed.reticulumMeshUpnpEnabled === false ? false : true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -666,7 +1459,11 @@ export async function readAppSettings(): Promise<AppSettings> {
 
 async function writeAppSettings(settings: AppSettings): Promise<void> {
   const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
-  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf-8');
+  await fs.promises.writeFile(
+    filePath,
+    JSON.stringify(settings, null, 2),
+    'utf-8'
+  );
 }
 
 // READ handler
@@ -700,6 +1497,43 @@ ipcMain.handle(
   }
 );
 
+// Persistent store: shared across instances via atomic writes to appData/qortal-hub/
+// Uses write-file-atomic to prevent partial writes corrupting the file.
+// On set/delete: read-from-disk → merge → atomic write, so concurrent instances
+// never overwrite each other's keys (only a simultaneous write of the *same* key
+// by two instances at the exact same moment could still race, which is acceptable).
+
+let persistentStoreCache: Record<string, unknown> | null = null;
+let persistentStoreLoadedFromDisk = false;
+
+function getPersistentStoreFilePath(): string {
+  const dir = path.join(app.getPath('appData'), 'qortal-hub');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, PERSISTENT_STORE_FILENAME);
+}
+
+async function readPersistentStoreFromDisk(): Promise<Record<string, unknown>> {
+  try {
+    const filePath = getPersistentStoreFilePath();
+    const stats = await fs.promises.stat(filePath).catch(() => null);
+    if (!stats?.isFile()) return {};
+    const raw = await fs.promises.readFile(filePath, 'utf-8');
+    return parsePersistentStoreRaw(raw);
+  } catch (err) {
+    loggerError('Error reading persistent store from disk', err);
+    return {};
+  }
+}
+
+async function loadPersistentStore(): Promise<Record<string, unknown>> {
+  if (persistentStoreCache !== null) return persistentStoreCache;
+  const data = await readPersistentStoreFromDisk();
+  const hadData = Object.keys(data).length > 0;
+  persistentStoreCache = data;
+  if (hadData) persistentStoreLoadedFromDisk = true;
+  return persistentStoreCache;
+}
+
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray
 ipcMain.handle('appSettings:get', async () => {
   return readAppSettings();
@@ -709,9 +1543,83 @@ ipcMain.handle(
   'appSettings:set',
   async (_event, partial: Partial<AppSettings>) => {
     const current = await readAppSettings();
-    const next: AppSettings = { ...current, ...partial };
+    const next: AppSettings = {
+      ...current,
+      ...partial,
+      ...(isDisabledLegacy
+        ? {
+            p2pEnabled: false,
+            legacyPublicStunFallback: false,
+          }
+        : {}),
+    };
     await writeAppSettings(next);
+    if (!isDisabledLegacy) {
+      getStunCoordinator()?.setLegacyPublicStunFallback(
+        next.legacyPublicStunFallback === true
+      );
+    }
     return next;
+  }
+);
+
+ipcMain.handle('hub:getIceServers', async () => {
+  if (isDisabledLegacy) return [];
+  const c = getStunCoordinator();
+  if (!c) return [];
+  return await new Promise<{ urls: string }[]>((resolve, reject) => {
+    const slots: { immediate?: ReturnType<typeof setImmediate> } = {};
+    const timeoutId = setTimeout(() => {
+      const im = slots.immediate;
+      if (im !== undefined) {
+        clearImmediate(im);
+      }
+      loggerLog(
+        '[STUN][telemetry] getIceServers ipc deadline — returning last snapshot'
+      );
+      resolve(c.peekLastServedIceServers());
+    }, GET_ICE_SERVERS_DEADLINE_MS);
+
+    slots.immediate = setImmediate(() => {
+      try {
+        const list = c.getIceServersForRenderer();
+        clearTimeout(timeoutId);
+        resolve(list);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        reject(err);
+      }
+    });
+  });
+});
+
+ipcMain.handle(
+  'hub:reportStunCallOutcome',
+  async (_event, urls: unknown, success: unknown) => {
+    if (isDisabledLegacy) return { ok: false };
+    const c = getStunCoordinator();
+    if (!c) return { ok: false };
+    if (!Array.isArray(urls)) return { ok: false };
+    const u = urls.filter((x): x is string => typeof x === 'string');
+    c.recordCallStunBundleOutcome(u, success === true);
+    loggerLog('[STUN][telemetry] call bundle outcome', {
+      urls: u.length,
+      success: success === true,
+    });
+    return { ok: true };
+  }
+);
+
+ipcMain.handle(
+  'hub:reportObservedStunSources',
+  async (_event, urls: unknown) => {
+    if (isDisabledLegacy) return { ok: false };
+    const c = getStunCoordinator();
+    if (!c) return { ok: false };
+    if (!Array.isArray(urls)) return { ok: false };
+    const u = urls.filter((x): x is string => typeof x === 'string');
+    c.recordObservedStunSources(u);
+    return { ok: true };
   }
 );
 
@@ -1002,7 +1910,7 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
       });
     }
 
-    if (isInstalled) return;
+    if (isInstalled) return true;
     const wc = event.sender;
 
     const sendProgress = (p) => {
@@ -1010,7 +1918,16 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
     };
     const running = await installCore(sendProgress);
     return running;
-  } catch (error) {}
+  } catch (error) {
+    console.error('Failed to install Qortal Core:', error);
+    broadcastProgress({
+      step: 'downloadedCore',
+      status: 'error',
+      progress: 0,
+      message: '010',
+    });
+    return false;
+  }
 });
 
 ipcMain.handle('coreSetup:startCore', async () => {
@@ -1087,6 +2004,14 @@ ipcMain.handle('coreSetup:bootstrap', async () => {
   }
 });
 
+ipcMain.handle('coreSetup:bootstrapOrClearChainAndStart', async () => {
+  try {
+    return await bootstrapOrClearChainAndStart();
+  } catch (error) {
+    loggerError('error', error);
+  }
+});
+
 ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
   try {
     const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -1098,11 +2023,9 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
     if (isInstalled) {
       const filePath = await getSharedSettingsFilePath('wallet-storage.json');
 
-      const stats = await fs.promises.stat(filePath).catch(() => null);
-      if (!stats || !stats.isFile()) return null;
-
-      const raw = await fs.promises.readFile(filePath, 'utf-8');
-
+      const raw = await fs.promises
+        .readFile(filePath, 'utf-8')
+        .catch(() => null);
       const data = raw ? JSON.parse(raw) : {};
       data['qortalDirectory'] = dir;
       await fs.promises.writeFile(
@@ -1113,7 +2036,7 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
       broadcastProgress({
         type: 'hasCustomPath',
         hasCustomPath: true,
-        customPath: filePath,
+        customPath: dir,
       });
     } else return false;
   } catch (error) {
@@ -1149,3 +2072,1685 @@ ipcMain.handle('videoServer:getPort', async () => {
 ipcMain.handle('videoServer:isRunning', async () => {
   return isVideoServerRunning();
 });
+
+// ── P2P Network IPC Handlers ─────────────────────────────────────────────────
+
+const p2pMessageSubscribers = new Set<Electron.WebContents>();
+const p2pPeerChangeSubscribers = new Set<Electron.WebContents>();
+
+function broadcastToSet(
+  subscribers: Set<Electron.WebContents>,
+  channel: string,
+  payload: unknown
+): void {
+  for (const wc of subscribers) {
+    if (wc.isDestroyed()) {
+      subscribers.delete(wc);
+    } else {
+      wc.send(channel, payload);
+    }
+  }
+}
+
+export function notifyPresenceTransportReady(): void {
+  broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
+}
+
+/** Stores the options used when P2P was last started so the IPC toggle can
+ *  restart with the same ports, seeds, etc. */
+let lastP2POptions: P2PNetworkOptions = {};
+
+export function setLastP2POptions(opts: P2PNetworkOptions): void {
+  lastP2POptions = opts;
+}
+
+export function attachP2PListeners(
+  network: ReturnType<typeof getP2PNetwork>
+): void {
+  if (!network) return;
+  network.on('message', (payload) =>
+    broadcastToSet(p2pMessageSubscribers, 'p2p:message', payload)
+  );
+  network.on('peer-connected', (payload) =>
+    broadcastToSet(p2pPeerChangeSubscribers, 'p2p:peerChange', {
+      type: 'connected',
+      ...payload,
+    })
+  );
+  network.on('peer-disconnected', (payload) =>
+    broadcastToSet(p2pPeerChangeSubscribers, 'p2p:peerChange', {
+      type: 'disconnected',
+      ...payload,
+    })
+  );
+}
+
+/** Start decentralized STUN (UDP server, probes, cache) after P2P is up. */
+export async function startDecentralizedStunAfterP2P(
+  network: NonNullable<ReturnType<typeof getP2PNetwork>>,
+  opts: P2PNetworkOptions
+): Promise<void> {
+  if (isDisabledLegacy) return;
+  const chatDb =
+    opts.dbPath ?? join(app.getPath('appData'), 'qortal-shared', 'chat.db');
+  const stunPath = join(dirname(chatDb), 'stun-cache.db');
+  const settings = await readAppSettings();
+  await startStunCoordinator(network, {
+    initialPeers: opts.initialPeers ?? [],
+    stunCacheDbPath: stunPath,
+    legacyPublicStunFallback: settings.legacyPublicStunFallback === true,
+  });
+  if (getStunCoordinator()?.didBindStunUdp()) {
+    await network.mapOwnedStunUdpIfPossible();
+  }
+}
+
+export async function ensureReticulumManagersStarted(): Promise<void> {
+  let bridgeTransport = getReticulumBridge();
+  if (bridgeTransport) {
+    try {
+      await bridgeTransport.start();
+    } catch (err) {
+      loggerError('[ReticulumBridge] Failed to finish startup:', err);
+      registerLateReticulumBridgeRecovery();
+    }
+  } else {
+    try {
+      bridgeTransport = await startReticulumBridge();
+    } catch (err) {
+      loggerError('[ReticulumBridge] Failed to start:', err);
+      bridgeTransport = getReticulumBridge();
+      if (bridgeTransport) {
+        registerLateReticulumBridgeRecovery();
+      }
+    }
+  }
+
+  if (bridgeTransport && bridgeTransport.getState() !== 'ready') {
+    registerLateReticulumBridgeRecovery();
+  }
+  attachReticulumStatusBridgeEvents(bridgeTransport);
+
+  let pm = getPresenceManager();
+  const transports = bridgeTransport ? [bridgeTransport] : [];
+  if (pm) {
+    setPresenceManagerTransports(transports);
+    void syncReticulumOverlayStateToBridge(pm);
+  } else {
+    pm = startPresenceManager(transports);
+    attachPresenceListeners(pm);
+  }
+
+  const callMgr = getCallManager();
+  if (callMgr) {
+    callMgr.setReticulumBridge(bridgeTransport);
+  } else {
+    const startedCallMgr = startCallManager(pm, bridgeTransport);
+    attachCallListeners(startedCallMgr);
+  }
+
+  const gcallMgr = getGroupCallManager();
+  if (gcallMgr) {
+    gcallMgr.setReticulumBridge(bridgeTransport);
+  } else {
+    const startedGcallMgr = startGroupCallManager(pm, bridgeTransport);
+    attachGroupCallListeners(startedGcallMgr);
+  }
+
+  stopReticulumMeshCoordinator();
+  startReticulumMeshCoordinator(getReticulumBridge());
+}
+
+ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
+  if (isDisabledLegacy) {
+    return { success: false, error: 'Legacy networking is disabled' };
+  }
+  try {
+    // Re-use the last known options if none supplied (e.g. from the settings toggle).
+    const opts =
+      options && Object.keys(options).length > 0 ? options : lastP2POptions;
+    lastP2POptions = opts;
+    await ensureReticulumManagersStarted();
+    const network = await startP2PNetwork(opts);
+    attachP2PListeners(network);
+    await startDecentralizedStunAfterP2P(network, opts);
+    // (Re-)start the chat manager backed by the shared SQLite database.
+    stopChatManager();
+    const sharedDbPath = join(
+      app.getPath('appData'),
+      'qortal-shared',
+      'chat.db'
+    );
+    const cm = await startChatManager(network, sharedDbPath);
+    attachChatListeners(cm);
+    notifyPresenceTransportReady();
+    return {
+      success: true,
+      port: network.getPort(),
+      peerId: network.getPeerId(),
+    };
+  } catch (err) {
+    loggerError('[P2P] Failed to start:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('p2p:stop', async () => {
+  if (isDisabledLegacy) {
+    return { success: true };
+  }
+  try {
+    stopP2PNetwork();
+    stopChatManager();
+    return { success: true };
+  } catch (err) {
+    loggerError('[P2P] Failed to stop:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('p2p:send', async (_event, to: string | null, data: unknown) => {
+  if (isDisabledLegacy) {
+    return { success: false, error: 'Legacy networking is disabled' };
+  }
+  const network = getP2PNetwork();
+  if (!network) return { success: false, error: 'P2P network is not running' };
+  try {
+    const messageId = network.send(to, data);
+    return { success: true, messageId };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('p2p:getPeers', async () => {
+  if (isDisabledLegacy) return [];
+  const network = getP2PNetwork();
+  return network ? network.getPeers() : [];
+});
+
+ipcMain.handle('p2p:getStatus', async () => {
+  if (isDisabledLegacy) {
+    return { running: false, port: null, peerId: null, connectedPeers: 0 };
+  }
+  const network = getP2PNetwork();
+  if (!network)
+    return { running: false, port: null, peerId: null, connectedPeers: 0 };
+  return {
+    running: network.isRunning(),
+    port: network.getPort(),
+    peerId: network.getPeerId(),
+    connectedPeers: network.connectedCount(),
+  };
+});
+
+ipcMain.handle('p2p:addPeer', async (_event, addr: string) => {
+  if (isDisabledLegacy) {
+    return { success: false, error: 'Legacy networking is disabled' };
+  }
+  const network = getP2PNetwork();
+  if (!network) return { success: false, error: 'P2P network is not running' };
+  network.addPeer(addr);
+  return { success: true };
+});
+
+ipcMain.on('p2p:message:subscribe', (event) => {
+  p2pMessageSubscribers.add(event.sender);
+});
+ipcMain.on('p2p:message:unsubscribe', (event) => {
+  p2pMessageSubscribers.delete(event.sender);
+});
+
+ipcMain.on('p2p:peerChange:subscribe', (event) => {
+  p2pPeerChangeSubscribers.add(event.sender);
+});
+ipcMain.on('p2p:peerChange:unsubscribe', (event) => {
+  p2pPeerChangeSubscribers.delete(event.sender);
+});
+
+// ── Presence IPC Handlers ────────────────────────────────────────────────────
+
+const presenceUpdateSubscribers = new Set<Electron.WebContents>();
+const queuedPresenceUpdates = new Map<string, unknown>();
+let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let lateReticulumRecoveryCleanup: (() => void) | null = null;
+
+function flushPresenceUpdates(): void {
+  if (presenceUpdateFlushTimer) {
+    clearTimeout(presenceUpdateFlushTimer);
+    presenceUpdateFlushTimer = null;
+  }
+  if (queuedPresenceUpdates.size === 0) return;
+
+  const payloads = Array.from(queuedPresenceUpdates.values());
+  queuedPresenceUpdates.clear();
+  loggerLog(
+    `[Presence] Flushing ${payloads.length} queued update(s) to ${presenceUpdateSubscribers.size} renderer subscriber(s)`
+  );
+  broadcastToSet(presenceUpdateSubscribers, 'presence:update-batch', payloads);
+}
+
+function queuePresenceUpdate(payload: unknown): void {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    typeof (payload as { address?: unknown }).address === 'string'
+  ) {
+    loggerLog(
+      `[Presence] Queueing renderer update for address=${(payload as { address: string }).address}`
+    );
+    queuedPresenceUpdates.set(
+      (payload as { address: string }).address,
+      payload
+    );
+  } else {
+    loggerLog('[Presence] Queueing renderer update without address key');
+    queuedPresenceUpdates.set(
+      `${Date.now()}:${queuedPresenceUpdates.size}`,
+      payload
+    );
+  }
+
+  if (presenceUpdateFlushTimer) return;
+  presenceUpdateFlushTimer = setTimeout(() => {
+    flushPresenceUpdates();
+  }, 16);
+  presenceUpdateFlushTimer.unref?.();
+}
+
+function broadcastPresenceUpdate(payload: unknown): void {
+  loggerLog(
+    '[Presence] Broadcasting presence update from manager to renderer queue'
+  );
+  queuePresenceUpdate(payload);
+}
+
+async function syncReticulumOverlayStateToBridge(
+  manager: NonNullable<ReturnType<typeof getPresenceManager>>
+): Promise<void> {
+  const bridge = getReticulumBridge();
+  if (!bridge || bridge.getState() !== 'ready') return;
+  const verifiedPeers: ReticulumOverlayVerifiedPeer[] = manager
+    .getReticulumVerifiedPeers()
+    .map((peer) => ({
+      destinationHash: peer.destinationHash,
+      address: peer.address,
+      lastSeen: peer.lastSeen,
+    }));
+  const activeNeighborHashes = manager.getReticulumActiveNeighborHashes();
+  const overlayNeighborHashes =
+    activeNeighborHashes.length > 0
+      ? activeNeighborHashes
+      : verifiedPeers.map((peer) => peer.destinationHash);
+  try {
+    await bridge.syncOverlayState(verifiedPeers, overlayNeighborHashes);
+  } catch (err) {
+    loggerWarn(
+      '[ReticulumOverlay] Failed to sync overlay state to bridge:',
+      err
+    );
+  }
+}
+
+export function attachPresenceListeners(
+  manager: ReturnType<typeof getPresenceManager>
+): void {
+  if (!manager) return;
+  loggerLog('[Presence] Attaching manager listeners.');
+  manager.on('presence-updated', broadcastPresenceUpdate);
+  manager.on('reticulum-overlay-changed', () => {
+    void syncReticulumOverlayStateToBridge(manager);
+  });
+  manager.on(
+    'reticulum-candidate-failed',
+    ({
+      destinationHash,
+      reason,
+    }: {
+      destinationHash: string;
+      reason: string;
+    }) => {
+      const bridge = getReticulumBridge();
+      if (!bridge || bridge.getState() !== 'ready') return;
+      void bridge
+        .noteOverlayCandidateFailure(destinationHash, reason)
+        .catch(() => {});
+    }
+  );
+  manager.on(
+    'reticulum-envelope-accepted',
+    ({
+      envelope,
+      route,
+    }: {
+      envelope: import('./presence').PresenceEnvelope;
+      route: import('./presence').PresenceRoute;
+    }) => {
+      if (route.kind !== 'reticulum') return;
+      const hops = route.overlayHopsRemaining ?? 0;
+      if (hops <= 0) return;
+      const bridge = getReticulumBridge();
+      if (!bridge || bridge.getState() !== 'ready') return;
+      void bridge
+        .forwardPresence(
+          envelope,
+          hops - 1,
+          [route.viaDestinationHash ?? route.destinationHash],
+          route.destinationHash
+        )
+        .catch(() => {});
+    }
+  );
+  void syncReticulumOverlayStateToBridge(manager);
+}
+
+export function clearLateReticulumBridgeRecovery(): void {
+  lateReticulumRecoveryCleanup?.();
+  lateReticulumRecoveryCleanup = null;
+}
+
+export function registerLateReticulumBridgeRecovery(): void {
+  clearLateReticulumBridgeRecovery();
+  const bridge = getReticulumBridge();
+  if (!bridge) {
+    loggerWarn(
+      '[ReticulumBridge] Late recovery not registered: no bridge instance'
+    );
+    return;
+  }
+
+  let recovered = false;
+  const recoverManagers = () => {
+    if (recovered) return;
+    recovered = true;
+    clearLateReticulumBridgeRecovery();
+
+    const currentBridge = getReticulumBridge();
+    if (!currentBridge || currentBridge.getState() !== 'ready') {
+      loggerWarn(
+        '[ReticulumBridge] Late recovery skipped: bridge missing or not ready'
+      );
+      return;
+    }
+    attachReticulumStatusBridgeEvents(currentBridge);
+
+    loggerLog(
+      '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and rebinding call/group-call managers'
+    );
+    let pm = getPresenceManager();
+    if (pm) {
+      setPresenceManagerTransports([currentBridge]);
+      void syncReticulumOverlayStateToBridge(pm);
+    } else {
+      pm = startPresenceManager([currentBridge]);
+      attachPresenceListeners(pm);
+    }
+    const callMgr = getCallManager();
+    if (callMgr) {
+      callMgr.setReticulumBridge(currentBridge);
+    } else {
+      attachCallListeners(startCallManager(pm, currentBridge));
+    }
+    const gcallMgr = getGroupCallManager();
+    if (gcallMgr) {
+      gcallMgr.setReticulumBridge(currentBridge);
+    } else {
+      attachGroupCallListeners(startGroupCallManager(pm, currentBridge));
+    }
+    stopReticulumMeshCoordinator();
+    startReticulumMeshCoordinator(currentBridge);
+    // Mirror the normal startup signal so an already-authenticated renderer can
+    // retry its initial presence announce after late Reticulum readiness.
+    notifyPresenceTransportReady();
+  };
+
+  if (bridge.getState() === 'ready') {
+    recoverManagers();
+    return;
+  }
+
+  bridge.once('ready', recoverManagers);
+  lateReticulumRecoveryCleanup = () => {
+    bridge.off('ready', recoverManagers);
+  };
+  loggerLog('[ReticulumBridge] Registered late-ready recovery hook');
+}
+
+/** Validates a renderer-supplied envelope, applies it locally, then relays. */
+async function handleLocalPresenceEnvelope(
+  envelope: unknown
+): Promise<boolean> {
+  const pm = getPresenceManager();
+  if (!pm) {
+    loggerLog(
+      '[Presence] Local envelope dropped because manager is unavailable.'
+    );
+    return false;
+  }
+  loggerLog('[Presence] Handling local renderer presence envelope.');
+  return publishPresenceEnvelope(envelope as any);
+}
+
+ipcMain.handle('presence:announce', async (_event, envelope: unknown) => {
+  try {
+    const ok = await handleLocalPresenceEnvelope(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Presence] announce error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('presence:heartbeat', async (_event, envelope: unknown) => {
+  try {
+    const ok = await handleLocalPresenceEnvelope(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Presence] heartbeat error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('presence:offline', async (_event, envelope: unknown) => {
+  try {
+    const ok = await handleLocalPresenceEnvelope(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Presence] offline error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('presence:getStatus', async (_event, address: string) => {
+  const pm = getPresenceManager();
+  if (!pm) return { online: false, lastSeen: null, sessions: [] };
+  return pm.getStatus(address);
+});
+
+ipcMain.handle('presence:getOnlineAddresses', async () => {
+  const pm = getPresenceManager();
+  return pm ? pm.getOnlineAddresses() : [];
+});
+
+ipcMain.handle('presence:getAllOnline', async () => {
+  const pm = getPresenceManager();
+  return pm ? pm.getAllOnline() : [];
+});
+
+ipcMain.on('presence:subscribe', (event) => {
+  presenceUpdateSubscribers.add(event.sender);
+  loggerLog(
+    `[Presence] Renderer subscribed. subscriber_count=${presenceUpdateSubscribers.size}`
+  );
+});
+ipcMain.on('presence:unsubscribe', (event) => {
+  presenceUpdateSubscribers.delete(event.sender);
+  loggerLog(
+    `[Presence] Renderer unsubscribed. subscriber_count=${presenceUpdateSubscribers.size}`
+  );
+});
+
+// ── Chat IPC Handlers ─────────────────────────────────────────────────────────
+
+const chatEventSubscribers = new Set<Electron.WebContents>();
+const chatTypingSubscribers = new Set<Electron.WebContents>();
+const chatReadSubscribers = new Set<Electron.WebContents>();
+
+export function attachChatListeners(
+  manager: ReturnType<typeof getChatManager>
+): void {
+  if (!manager) return;
+
+  manager.on('chat:event', (payload: unknown) =>
+    broadcastToSet(chatEventSubscribers, 'chat:event', payload)
+  );
+
+  manager.on('chat:typing', (payload: unknown) =>
+    broadcastToSet(chatTypingSubscribers, 'chat:typing', payload)
+  );
+
+  manager.on('chat:typingStopped', (payload: unknown) =>
+    broadcastToSet(chatTypingSubscribers, 'chat:typingStopped', payload)
+  );
+
+  manager.on('chat:read', (payload: unknown) =>
+    broadcastToSet(chatReadSubscribers, 'chat:read', payload)
+  );
+}
+
+/**
+ * Send a signed ChatEventEnvelope from the local renderer.
+ * The renderer must have already signed the event before calling this.
+ */
+ipcMain.handle('chat:sendEvent', async (_event, envelope: unknown) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  try {
+    const ok = await cm.handleLocalEvent(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Chat] sendEvent error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+/** Subscribe the local user to a chat and request sync from peers. */
+ipcMain.handle('chat:subscribe', async (_event, chatId: string) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  cm.subscribeToChat(chatId);
+  return { success: true };
+});
+
+/** Unsubscribe the local user from a chat. */
+ipcMain.handle('chat:unsubscribe', async (_event, chatId: string) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  cm.unsubscribeFromChat(chatId);
+  return { success: true };
+});
+
+/**
+ * Broadcast a typing indicator.
+ * authorAddress is the sender's Qortal address.
+ */
+ipcMain.handle(
+  'chat:sendTyping',
+  async (_event, chatId: string, authorAddress: string) => {
+    const cm = getChatManager();
+    if (!cm) return { success: false, error: 'Chat manager is not running' };
+    cm.sendTyping(chatId, authorAddress);
+    return { success: true };
+  }
+);
+
+/**
+ * Retrieve message history for a chat.
+ * `beforeTimestamp` enables reverse-scroll pagination.
+ */
+ipcMain.handle(
+  'chat:getHistory',
+  async (_event, chatId: string, limit: number, beforeTimestamp?: number) => {
+    const cm = getChatManager();
+    if (!cm) return [];
+    return cm.getHistory(chatId, limit, beforeTimestamp);
+  }
+);
+
+/** Returns summaries of all known chats (last message + unread count). */
+ipcMain.handle('chat:getSummaries', async () => {
+  const cm = getChatManager();
+  return cm ? cm.getChatSummaries() : [];
+});
+
+/**
+ * Advance the read watermark for a chat.
+ * All events with timestamp ≤ upToTimestamp are considered read.
+ */
+ipcMain.handle(
+  'chat:markRead',
+  async (_event, chatId: string, upToTimestamp: number) => {
+    const cm = getChatManager();
+    cm?.markRead(chatId, upToTimestamp);
+    return { success: true };
+  }
+);
+
+/**
+ * Register the local user's Qortal address so the chat manager can
+ * auto-accept incoming DMs addressed to them.
+ * Call when the user logs in; call with [] when they log out.
+ */
+ipcMain.handle(
+  'chat:setLocalAddresses',
+  async (_event, addresses: string[]) => {
+    const cm = getChatManager();
+    if (!cm) return { success: false, error: 'Chat manager is not running' };
+    cm.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    return { success: true };
+  }
+);
+
+/**
+ * Clear the support-queue rate-limit map.
+ * Called when an agent logs out so re-knocks are not silently dropped
+ * when the agent logs back in.
+ */
+ipcMain.handle('chat:clearQueueRateLimit', async () => {
+  const cm = getChatManager();
+  if (cm) cm.clearQueueRateLimit();
+  return { success: true };
+});
+
+/** Returns the list of chatIds the local node is currently subscribed to. */
+ipcMain.handle('chat:getSubscriptions', async () => {
+  const cm = getChatManager();
+  return cm ? cm.getLocalSubscriptions() : [];
+});
+
+ipcMain.on('chat:event:subscribe', (event) => {
+  chatEventSubscribers.add(event.sender);
+});
+ipcMain.on('chat:event:unsubscribe', (event) => {
+  chatEventSubscribers.delete(event.sender);
+});
+
+ipcMain.on('chat:typing:subscribe', (event) => {
+  chatTypingSubscribers.add(event.sender);
+});
+ipcMain.on('chat:typing:unsubscribe', (event) => {
+  chatTypingSubscribers.delete(event.sender);
+});
+
+/**
+ * Persist and broadcast a batch of read receipts.
+ * `eventIds` are the IDs of events the local user has seen.
+ */
+ipcMain.handle(
+  'chat:sendReadReceipt',
+  async (_event, chatId: string, eventIds: string[], readerAddress: string) => {
+    const cm = getChatManager();
+    if (!cm) return { success: false, error: 'Chat manager is not running' };
+    if (
+      typeof chatId !== 'string' ||
+      !Array.isArray(eventIds) ||
+      typeof readerAddress !== 'string'
+    ) {
+      return { success: false, error: 'Invalid arguments' };
+    }
+    cm.sendReadReceipt(chatId, eventIds, readerAddress);
+    return { success: true };
+  }
+);
+
+/**
+ * Query-scoped receipt loading.
+ * Returns receipts only for the provided event IDs — callers pass the IDs
+ * currently held in renderer memory so the result is bounded by the
+ * history page size rather than the total message count.
+ * Returns Record<eventId, readerAddress[]>.
+ */
+ipcMain.handle(
+  'chat:getReadReceipts',
+  async (_event, chatId: string, eventIds: string[]) => {
+    const cm = getChatManager();
+    if (!cm) return {};
+    if (typeof chatId !== 'string' || !Array.isArray(eventIds)) return {};
+    return cm.store.getReadReceiptsForEvents(eventIds);
+  }
+);
+
+ipcMain.on('chat:read:subscribe', (event) => {
+  chatReadSubscribers.add(event.sender);
+});
+ipcMain.on('chat:read:unsubscribe', (event) => {
+  chatReadSubscribers.delete(event.sender);
+});
+
+/**
+ * Fetch the encrypted attachment blob for a given event.
+ * Returns the base64 ciphertext string, or null when the attachment is not
+ * present locally (event was received via sync without attachment data).
+ */
+ipcMain.handle('chat:getAttachment', async (_event, eventId: string) => {
+  const cm = getChatManager();
+  if (!cm) return null;
+  if (typeof eventId !== 'string' || !eventId) return null;
+  return cm.store.getAttachment(eventId);
+});
+
+// ── Call IPC Handlers ─────────────────────────────────────────────────────────
+
+const callSubscribers = new Set<Electron.WebContents>();
+
+export function attachCallListeners(
+  manager: ReturnType<typeof getCallManager>
+): void {
+  if (!manager) return;
+
+  const forward = (channel: string) => (payload: unknown) =>
+    broadcastToSet(callSubscribers, channel, payload);
+
+  manager.on('call:incoming', forward('call:incoming'));
+  manager.on('call:accepted', forward('call:accepted'));
+  manager.on('call:rejected', forward('call:rejected'));
+  manager.on('call:hangup', forward('call:hangup'));
+}
+
+ipcMain.handle(
+  'call:initiate',
+  async (
+    _event,
+    targetAddress: string,
+    chatId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    callId: string,
+    timestamp: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    const resultCallId = await mgr.initiateCall(
+      targetAddress,
+      chatId,
+      localAddress,
+      signature,
+      publicKey,
+      callId,
+      timestamp
+    );
+    return resultCallId
+      ? { success: true, callId: resultCallId }
+      : { success: false, error: 'Target offline' };
+  }
+);
+
+ipcMain.handle(
+  'call:accept',
+  async (
+    _event,
+    callId: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.acceptCall(callId, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'call:reject',
+  async (
+    _event,
+    callId: string,
+    reason?: string,
+    signature?: string,
+    publicKey?: string,
+    timestamp?: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.rejectCall(callId, reason, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'call:hangup',
+  async (
+    _event,
+    callId: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.hangUp(callId, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'call:setLocalAddresses',
+  async (_event, addresses: string[]) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    return { success: true };
+  }
+);
+
+ipcMain.on('call:subscribe', (event) => {
+  callSubscribers.add(event.sender);
+  const mgr = getCallManager();
+  if (!mgr || event.sender.isDestroyed()) return;
+  for (const p of mgr.getPendingInboundRingingPayloads()) {
+    event.sender.send('call:incoming', p);
+  }
+  for (const p of mgr.getActiveOutboundAcceptedPayloads()) {
+    event.sender.send('call:accepted', p);
+  }
+});
+ipcMain.on('call:unsubscribe', (event) => {
+  callSubscribers.delete(event.sender);
+});
+
+// ── Group Call IPC Handlers ───────────────────────────────────────────────────
+
+const gcallSubscribers = new Set<Electron.WebContents>();
+/** Sidebar / list: lightweight `gcall:qortal-group-call-activity` only (no full GC_* stream). */
+const gcallActivitySubscribers = new Set<Electron.WebContents>();
+
+/** Throttled [GCall:main] logs for gcall:audio (manager received → IPC forward). */
+let gcallMainFirstAudio = false;
+let gcallMainAudioCountWindow = 0;
+let gcallMainAudioWindowT0 = 0;
+const GCALL_MAIN_AUDIO_LOG_MS = 2000;
+
+function gcallAudioPayloadBytes(data: unknown): number {
+  if (data instanceof ArrayBuffer) return data.byteLength;
+  if (ArrayBuffer.isView(data)) return data.byteLength;
+  return 0;
+}
+
+function withGcallAudioMainFanoutTimestamp(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return payload;
+  }
+  const record = payload as Record<string, unknown>;
+  const existingStage =
+    record.audioStageTimestamps &&
+    typeof record.audioStageTimestamps === 'object' &&
+    !Array.isArray(record.audioStageTimestamps)
+      ? (record.audioStageTimestamps as Record<string, unknown>)
+      : {};
+  return {
+    ...record,
+    audioStageTimestamps: {
+      ...existingStage,
+      bridgeReceivedAtWallMs:
+        typeof record.bridgeReceivedAtWallMs === 'number' &&
+        record.bridgeReceivedAtWallMs > 0
+          ? record.bridgeReceivedAtWallMs
+          : existingStage.bridgeReceivedAtWallMs,
+      mainFanoutAtWallMs: Date.now(),
+    },
+  };
+}
+
+export function attachGroupCallListeners(
+  manager: ReturnType<typeof getGroupCallManager>
+): void {
+  if (!manager) return;
+
+  const forward = (channel: string) => (payload: unknown) =>
+    broadcastToSet(gcallSubscribers, channel, payload);
+
+  manager.on('gcall:participant-joined', forward('gcall:participant-joined'));
+  manager.on('gcall:participant-left', forward('gcall:participant-left'));
+  manager.on('gcall:topology', forward('gcall:topology'));
+  manager.on('gcall:cluster-heartbeat', forward('gcall:cluster-heartbeat'));
+  manager.on('gcall:heartbeat', forward('gcall:heartbeat'));
+  manager.on('gcall:audio', (payload: unknown) => {
+    gcallMainAudioCountWindow += 1;
+    const now = Date.now();
+    if (gcallMainAudioWindowT0 === 0) gcallMainAudioWindowT0 = now;
+    if (!gcallMainFirstAudio) {
+      gcallMainFirstAudio = true;
+      const p0 = payload as {
+        roomId?: string;
+        fromAddress?: string;
+        data?: unknown;
+      };
+      loggerLog(
+        `[GCall:main] gcall:audio first from manager roomId=${p0?.roomId} from=${p0?.fromAddress} bytes~=${gcallAudioPayloadBytes(p0?.data)} → ${gcallSubscribers.size} IPC subscriber(s)`
+      );
+    }
+    if (now - gcallMainAudioWindowT0 >= GCALL_MAIN_AUDIO_LOG_MS) {
+      const p = payload as {
+        roomId?: string;
+        fromAddress?: string;
+        data?: unknown;
+      };
+      loggerLog(
+        `[GCall:main] gcall:audio throttled: ${gcallMainAudioCountWindow} pkt in ~${now - gcallMainAudioWindowT0}ms roomId=${p?.roomId} from=${p?.fromAddress} bytes~=${gcallAudioPayloadBytes(p?.data)} subs=${gcallSubscribers.size}`
+      );
+      gcallMainAudioCountWindow = 0;
+      gcallMainAudioWindowT0 = now;
+    }
+    broadcastToSet(
+      gcallSubscribers,
+      'gcall:audio',
+      withGcallAudioMainFanoutTimestamp(payload)
+    );
+  });
+  manager.on('gcall:key', (payload: unknown) => {
+    const p = payload as {
+      roomId?: string;
+      fromAddress?: string;
+      verified?: boolean;
+    };
+    loggerLog(
+      `[GCall:main] gcall:key from manager roomId=${p?.roomId} from=${p?.fromAddress} verified=${p?.verified} → ${gcallSubscribers.size} subscriber(s)`
+    );
+    broadcastToSet(gcallSubscribers, 'gcall:key', payload);
+  });
+  manager.on('gcall:key-request', forward('gcall:key-request'));
+  manager.on('gcall:session-updated', forward('gcall:session-updated'));
+  manager.on('gcall:qortal-group-call-activity', (payload: unknown) =>
+    broadcastToSet(
+      gcallActivitySubscribers,
+      'gcall:qortal-group-call-activity',
+      payload
+    )
+  );
+}
+
+ipcMain.handle(
+  'gcall:join',
+  async (
+    _event,
+    roomId: string,
+    chatId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number,
+    reticulumDestinationHash: string,
+    joinGeneration?: number,
+    topologyEpochFloor?: number,
+    reticulumIdentityPublicKeyBase64?: string,
+    joinRkSignature?: string
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    try {
+      const session = mgr.joinRoom(
+        roomId,
+        chatId,
+        localAddress,
+        signature,
+        publicKey,
+        timestamp,
+        reticulumDestinationHash,
+        joinGeneration,
+        topologyEpochFloor,
+        reticulumIdentityPublicKeyBase64,
+        joinRkSignature
+      );
+      return {
+        success: true,
+        callSessionId: session.callSessionId,
+        mediaSessionGeneration: session.mediaSessionGeneration,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+);
+
+ipcMain.handle(
+  'gcall:leave',
+  async (
+    _event,
+    roomId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.leaveRoom(roomId, localAddress, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.on(
+  'gcall:leaveSync',
+  (
+    event,
+    roomId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) {
+      event.returnValue = {
+        success: false,
+        error: 'GroupCall manager not running',
+      };
+      return;
+    }
+    mgr.leaveRoom(roomId, localAddress, signature, publicKey, timestamp);
+    event.returnValue = { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:broadcastTopology',
+  async (
+    _event,
+    roomId: string,
+    topology: unknown,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.broadcastTopology(
+      roomId,
+      topology as any,
+      signature,
+      publicKey,
+      timestamp
+    );
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendClusterHeartbeat',
+  async (
+    _event,
+    roomId: string,
+    payload: {
+      topologyEpoch: number;
+      clusterForwarder: string;
+      clusterIndex: number;
+      seq: number;
+      fromAddress: string;
+      fromPublicKey: string;
+      timestamp: number;
+    },
+    signature: string
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendClusterHeartbeat(roomId, payload, signature);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendAudio',
+  async (
+    _event,
+    roomId: string,
+    toAddress: string,
+    data: Buffer | Uint8Array,
+    timing?: { rendererSendAtWallMs?: number }
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    attachGroupAudioIpcTiming(buf, timing, {
+      channel: 'sendAudio',
+      roomId,
+      targetCount: 1,
+    });
+    const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
+    if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
+      return { success: false, error: 'payload-too-large' };
+    }
+    const result = mgr.sendAudio(roomId, toAddress, buf);
+    if (result.success) {
+      return { success: true, diagnostics: result.diagnostics };
+    }
+    return {
+      success: false,
+      error: ('error' in result ? result.error : undefined) ?? 'relay-rejected',
+      diagnostics: result.diagnostics,
+    };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendAudioBatch',
+  async (
+    _event,
+    roomId: string,
+    toAddresses: string[],
+    data: Buffer | Uint8Array,
+    timing?: { rendererSendAtWallMs?: number }
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    attachGroupAudioIpcTiming(buf, timing, {
+      channel: 'sendAudioBatch',
+      roomId,
+      targetCount: Array.isArray(toAddresses) ? toAddresses.length : 0,
+    });
+    const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
+    if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
+      return { success: false, error: 'payload-too-large' };
+    }
+    if (!Array.isArray(toAddresses) || toAddresses.length === 0) {
+      return { success: true, diagnostics: undefined };
+    }
+    const result = mgr.sendAudioBatch(roomId, toAddresses, buf);
+    if (result.success) {
+      return { success: true, diagnostics: result.diagnostics };
+    }
+    return {
+      success: false,
+      error: ('error' in result ? result.error : undefined) ?? 'relay-rejected',
+      diagnostics: result.diagnostics,
+    };
+  }
+);
+
+ipcMain.handle(
+  'gcall:getAudioDataPlaneSession',
+  async (_event, roomId: string, toAddresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { ok: false, reason: 'manager-unavailable' };
+    if (!Array.isArray(toAddresses) || toAddresses.length === 0) {
+      return { ok: false, reason: 'no-targets' };
+    }
+    const result = await mgr.getAudioDataPlaneSession(roomId, toAddresses);
+    return result;
+  }
+);
+
+ipcMain.handle(
+  'gcall:requestPeerMediaRecovery',
+  async (_event, roomId: string, address: string, reason: string) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.requestPeerMediaRecovery(roomId, address, reason);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:reportGcallAudioEscalation',
+  async (_event, opts: { failSafeActive?: boolean }) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.reportGcallAudioEscalation(opts ?? {});
+    return { success: true };
+  }
+);
+
+ipcMain.handle('gcall:getLinkStats', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+  return {
+    success: true,
+    stats: mgr.getReticulumAudioLinkStats(roomId),
+  };
+});
+
+ipcMain.handle(
+  'gcall:sendKey',
+  async (
+    _event,
+    roomId: string,
+    toAddress: string,
+    encryptedKey: string,
+    fromAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number,
+    meta: {
+      keyMessageVersion: number;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+      keyCommitment: string;
+      encryptedKeyDigest: string;
+    }
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    return mgr.sendKey(
+      roomId,
+      toAddress,
+      encryptedKey,
+      fromAddress,
+      signature,
+      publicKey,
+      timestamp,
+      meta
+    );
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendKeyRequest',
+  async (
+    _event,
+    roomId: string,
+    toAddress: string,
+    fromAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number,
+    callSessionId: string,
+    mediaSessionGeneration: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendKeyRequest(
+      roomId,
+      toAddress,
+      fromAddress,
+      signature,
+      publicKey,
+      timestamp,
+      callSessionId,
+      mediaSessionGeneration
+    );
+    return { success: true };
+  }
+);
+
+ipcMain.handle('gcall:requestSessionBreak', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+  const r = mgr.requestSessionBreak(roomId);
+  return r.ok
+    ? { success: true }
+    : { success: false, error: r.error ?? 'rejected' };
+});
+
+ipcMain.handle(
+  'gcall:setLocalAddresses',
+  async (_event, addresses: string[], source?: string) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.setLocalAddresses(
+      Array.isArray(addresses) ? addresses : [],
+      typeof source === 'string' ? source : undefined
+    );
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:setQortalGroupReticulumTargets',
+  async (_event, roomId: string, addresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.setQortalGroupReticulumTargets(
+      typeof roomId === 'string' ? roomId : '',
+      Array.isArray(addresses) ? addresses : []
+    );
+    return { success: true };
+  }
+);
+
+ipcMain.handle('gcall:getRoomParticipants', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return [];
+  return mgr.getRoomParticipants(roomId);
+});
+
+ipcMain.handle(
+  'gcall:getRoomBootstrapState',
+  async (_event, roomId: string) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return null;
+    return mgr.getRoomBootstrapState(roomId);
+  }
+);
+
+ipcMain.handle(
+  'gcall:reportTransportHealth',
+  async (_event, roomId: string, healthyPeerAddresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.reportTransportHealth(
+      roomId,
+      Array.isArray(healthyPeerAddresses) ? healthyPeerAddresses : []
+    );
+    return { success: true };
+  }
+);
+
+ipcMain.handle('gcall:getPendingKeyMetrics', async () => {
+  const mgr = getGroupCallManager();
+  if (!mgr) {
+    return {
+      pending_key_flush_success: 0,
+      pending_key_expired: 0,
+      pendingRooms: 0,
+    };
+  }
+  return mgr.getPendingKeyMetrics();
+});
+
+/**
+ * The hidden audio-surface cannot decrypt the wallet for `signPresenceMessage` (per-
+ * renderer in-memory key). Forward signing/decrypt to the main shell where the
+ * `background` message listener and keyPair are valid.
+ */
+ipcMain.handle(
+  'gcall:proxySignPresenceMessage',
+  async (event, payload: Record<string, unknown>) => {
+    if (!isAudioSurfaceHostSender(event.sender)) {
+      return { error: 'forbidden' };
+    }
+    const main = myCapacitorApp.getMainWindow();
+    if (!main || main.isDestroyed()) {
+      return { error: 'main-window-unavailable' };
+    }
+    const pJson = JSON.stringify(payload ?? {});
+    try {
+      return await main.webContents.executeJavaScript(
+        `(async () => {
+          const __p = ${pJson};
+          const result = await window.sendMessage('signPresenceMessage', __p, 10000);
+          if (result && typeof result === 'object' && result.error) {
+            return { error: String(result.error), message: result.message };
+          }
+          if (result && typeof result.signature === 'string') {
+            return { signature: result.signature };
+          }
+          return { error: 'signPresenceMessage returned no signature' };
+        })()`,
+        true
+      );
+    } catch (e) {
+      return {
+        error: e instanceof Error ? e.message : 'gcall-proxy-sign-failed',
+      };
+    }
+  }
+);
+
+ipcMain.handle(
+  'gcall:proxyDecryptBoxWithMyKey',
+  async (
+    event,
+    payload: {
+      ephemeralPublicKey: string;
+      nonce: string;
+      ciphertext: string;
+    }
+  ) => {
+    if (!isAudioSurfaceHostSender(event.sender)) {
+      return { error: 'forbidden' };
+    }
+    const main = myCapacitorApp.getMainWindow();
+    if (!main || main.isDestroyed()) {
+      return { error: 'main-window-unavailable' };
+    }
+    const pJson = JSON.stringify(payload ?? {});
+    try {
+      return await main.webContents.executeJavaScript(
+        `(async () => {
+          const __p = ${pJson};
+          const result = await window.sendMessage('decryptBoxWithMyKey', __p, 10000);
+          if (result && typeof result === 'object' && result.error) {
+            return { error: String(result.error), message: result.message };
+          }
+          if (result && typeof result.decryptedKey === 'string') {
+            return { decryptedKey: result.decryptedKey };
+          }
+          return { error: 'decryptBoxWithMyKey returned no key' };
+        })()`,
+        true
+      );
+    } catch (e) {
+      return {
+        error: e instanceof Error ? e.message : 'gcall-proxy-decrypt-failed',
+      };
+    }
+  }
+);
+
+ipcMain.handle('audio-surface:ensure-ready', async (event) => {
+  if (!isMainShellSender(event.sender)) {
+    loggerLog('[GCall:audio-surface] ensure-ready: rejected (not main shell)', {
+      senderId: event.sender.id,
+    });
+    return { success: false, error: 'audio-surface-main-shell-required' };
+  }
+  await myCapacitorApp.ensureAudioSurfaceWindow();
+  await waitForAudioSurfaceHostReady();
+  const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
+  if (!audioWindow || audioWindow.isDestroyed() || !audioSurfaceHostReady) {
+    loggerLog('[GCall:audio-surface] ensure-ready: window unavailable');
+    return { success: false, error: 'audio-surface-window-unavailable' };
+  }
+  loggerLog(
+    '[GCall:audio-surface] ensure-ready: ok (audio window + host ready)'
+  );
+  return { success: true };
+});
+
+ipcMain.handle('audio-surface:is-ready', async (event) => {
+  if (!isMainShellSender(event.sender)) {
+    return false;
+  }
+  const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
+  return Boolean(
+    audioWindow && !audioWindow.isDestroyed() && audioSurfaceHostReady
+  );
+});
+
+ipcMain.handle(
+  'audio-surface:send-command',
+  async (_event, command: AudioSurfaceCommand) => {
+    if (!isMainShellSender(_event.sender)) {
+      loggerLog(
+        '[GCall:audio-surface] send-command: rejected (not main shell)',
+        {
+          type: command.type,
+        }
+      );
+      return { ok: false, error: 'audio-surface-main-shell-required' };
+    }
+    if (command.type === 'join-group-call') {
+      loggerLog('[GCall:audio-surface] send-command: join-group-call', {
+        roomId: command.roomId,
+        chatId: command.chatId,
+      });
+    }
+    const existingAudioWindow = myCapacitorApp.getAudioSurfaceWindow();
+    const hasUsableAudioWindow = Boolean(
+      existingAudioWindow && !existingAudioWindow.isDestroyed()
+    );
+    if (
+      !hasUsableAudioWindow &&
+      (command.type === 'logout-cleanup' ||
+        command.type === 'leave-group-call' ||
+        command.type === 'stop-direct-voice-media' ||
+        command.type === 'stop-direct-voice-receive')
+    ) {
+      return { ok: true };
+    }
+    await myCapacitorApp.ensureAudioSurfaceWindow();
+    await waitForAudioSurfaceHostReady();
+    const audioWindow = myCapacitorApp.getAudioSurfaceWindow();
+    if (!audioWindow || audioWindow.isDestroyed() || !audioSurfaceHostReady) {
+      loggerLog(
+        '[GCall:audio-surface] send-command: audio window missing/destroyed'
+      );
+      return { ok: false, error: 'audio-surface-window-unavailable' };
+    }
+    const commandId = `${Date.now()}:${Math.random().toString(16).slice(2)}`;
+    const envelope: AudioSurfaceCommandEnvelope = { commandId, command };
+    const response = await new Promise<AudioSurfaceResponseLike>(
+      (resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pendingAudioSurfaceCommands.delete(commandId);
+          reject(new Error('audio-surface-command-timeout'));
+        }, 30_000);
+        pendingAudioSurfaceCommands.set(commandId, {
+          resolve: (value) => {
+            clearTimeout(timeout);
+            resolve(value);
+          },
+          reject: (reason) => {
+            clearTimeout(timeout);
+            reject(reason);
+          },
+        });
+        audioWindow.webContents.send('audio-surface:host-command', envelope);
+      }
+    ).catch((error) => ({
+      ok: false,
+      error:
+        error instanceof Error ? error.message : 'audio-surface-command-failed',
+    }));
+    if (
+      command.type === 'join-group-call' ||
+      (response as { ok?: boolean }).ok === false
+    ) {
+      loggerLog('[GCall:audio-surface] send-command: response', {
+        type: command.type,
+        ok: (response as { ok?: boolean }).ok,
+        error:
+          (response as { ok?: boolean; error?: string }).ok === false
+            ? (response as { error?: string }).error
+            : undefined,
+      });
+    }
+    const responsePayload = (response as { payload?: unknown }).payload as
+      | { idle?: unknown }
+      | undefined;
+    if (command.type === 'logout-cleanup') {
+      myCapacitorApp.closeAudioSurfaceWindow('logout-cleanup');
+    } else if (
+      (response as { ok?: boolean }).ok === true &&
+      responsePayload?.idle === true &&
+      (command.type === 'leave-group-call' ||
+        command.type === 'stop-direct-voice-media' ||
+        command.type === 'stop-direct-voice-receive')
+    ) {
+      myCapacitorApp.scheduleAudioSurfaceIdleClose(command.type);
+    }
+    return response;
+  }
+);
+
+ipcMain.on('audio-surface:subscribe', (event) => {
+  if (!isMainShellSender(event.sender)) {
+    loggerWarn(
+      '[AudioSurface] rejecting subscribe from non-main-shell sender',
+      {
+        senderId: event.sender.id,
+      }
+    );
+    return;
+  }
+  audioSurfaceSubscribers.add(event.sender);
+  if (audioSurfaceBridgeState.hostReady) {
+    event.sender.send('audio-surface:event', {
+      type: 'engine-ready',
+      bootstrapRevisionApplied:
+        audioSurfaceBridgeState.bootstrapRevisionApplied,
+    } satisfies AudioSurfaceEvent);
+  }
+  if (audioSurfaceBridgeState.snapshot !== null) {
+    event.sender.send('audio-surface:event', {
+      type: 'snapshot',
+      snapshot: audioSurfaceBridgeState.snapshot,
+    } satisfies AudioSurfaceEvent);
+  }
+});
+
+ipcMain.on('audio-surface:unsubscribe', (event) => {
+  audioSurfaceSubscribers.delete(event.sender);
+});
+
+ipcMain.on('audio-surface:host-ready', (event) => {
+  if (!isAudioSurfaceHostSender(event.sender)) {
+    loggerWarn('[AudioSurface] rejecting host-ready from unexpected sender', {
+      senderId: event.sender.id,
+    });
+    return;
+  }
+  markAudioSurfaceHostReady();
+});
+
+ipcMain.on('audio-surface:host-event', (event, payload: AudioSurfaceEvent) => {
+  if (!isAudioSurfaceHostSender(event.sender)) {
+    loggerWarn('[AudioSurface] rejecting host-event from unexpected sender', {
+      senderId: event.sender.id,
+      type: payload?.type ?? 'unknown',
+    });
+    return;
+  }
+  emitAudioSurfaceEvent(payload);
+});
+
+/**
+ * Audio surface must report command results via invoke (not one-way send) so the
+ * main process always pairs a reply with the pending `send-command` promise.
+ */
+ipcMain.handle(
+  'audio-surface:command-result',
+  (event, envelope: AudioSurfaceCommandResultEnvelope) => {
+    if (!isAudioSurfaceHostSender(event.sender)) {
+      loggerWarn('[AudioSurface] command-result: rejected sender', {
+        senderId: event.sender.id,
+        isolatedIds: [...isolatedAudioSurfaceContents],
+      });
+      return { ack: false as const, reason: 'bad-sender' };
+    }
+    const commandId = envelope?.commandId;
+    const response = envelope?.response;
+    if (typeof commandId !== 'string' || !commandId) {
+      loggerWarn('[AudioSurface] command-result: missing commandId', {
+        envelope,
+      });
+      return { ack: false as const, reason: 'missing-command-id' };
+    }
+    const pending = pendingAudioSurfaceCommands.get(commandId);
+    if (!pending) {
+      loggerWarn('[AudioSurface] command-result: no pending op', {
+        commandId,
+        pendingCount: pendingAudioSurfaceCommands.size,
+        sampleIds: [...pendingAudioSurfaceCommands.keys()].slice(0, 5),
+      });
+      return { ack: false as const, reason: 'unknown-command' };
+    }
+    pendingAudioSurfaceCommands.delete(commandId);
+    pending.resolve(response);
+    return { ack: true as const };
+  }
+);
+
+ipcMain.on('gcall:subscribe', (event) => {
+  gcallSubscribers.add(event.sender);
+  const url = event.sender.isDestroyed()
+    ? ''
+    : String(event.sender.getURL() ?? '');
+  loggerLog(
+    `[GCall:main] gcall:subscribe from sender (total gcall subscribers=${gcallSubscribers.size}) ${url ? `url=${url.slice(0, 80)}` : ''}`
+  );
+  getGroupCallManager()?.replayRetainedVerifiedKeyStatesTo(event.sender);
+});
+ipcMain.on('gcall:unsubscribe', (event) => {
+  gcallSubscribers.delete(event.sender);
+  loggerLog(
+    `[GCall:main] gcall:unsubscribe (remaining=${gcallSubscribers.size})`
+  );
+});
+/**
+ * Audio-surface subscribes before `gcall:join`; retained keys may only exist after
+ * joinRoom finishes. Request a second replay so the hidden window receives keys
+ * that landed in the manager after the initial subscribe-time replay.
+ */
+ipcMain.on('gcall:request-key-replay', (event) => {
+  if (event.sender.isDestroyed()) return;
+  const mgr = getGroupCallManager();
+  if (!mgr) return;
+  mgr.replayRetainedVerifiedKeyStatesTo(event.sender);
+});
+ipcMain.on('gcall:subscribe-activity', (event) => {
+  gcallActivitySubscribers.add(event.sender);
+  const mgr = getGroupCallManager();
+  if (!mgr || event.sender.isDestroyed()) return;
+  const activeByGroupId = mgr.getQortalGroupCallActivitySnapshotForSidebar();
+  event.sender.send('gcall:qortal-group-call-activity', activeByGroupId);
+});
+ipcMain.on('gcall:unsubscribe-activity', (event) => {
+  gcallActivitySubscribers.delete(event.sender);
+});
+
+ipcMain.handle(
+  'gcall:setWatchedQortalGroupIds',
+  async (_event, ids: unknown) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    const list = Array.isArray(ids) ? (ids as number[]) : [];
+    const activity = mgr.setWatchedQortalGroupIds(list);
+    return { success: true, ...activity };
+  }
+);

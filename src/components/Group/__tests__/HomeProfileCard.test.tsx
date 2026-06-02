@@ -91,36 +91,34 @@ describe('HomeProfileCard', () => {
 
   it('falls back to truncated address when name is absent', () => {
     renderCard({ name: null, address: 'QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H' }, 0);
-    // The name slot shows the first 8 chars of the address + ellipsis
-    expect(screen.getByText('QVosNNas…')).toBeInTheDocument();
+    expect(screen.getByText('QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H')).toBeInTheDocument();
   });
 
-  it('displays the full address in the copy area', () => {
+  it('displays the registered name in the identity area', () => {
     renderCard({ name: 'alice', address: 'QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H' }, 42.5);
-    expect(screen.getByText('QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H')).toBeInTheDocument();
+    expect(screen.getByText('alice')).toBeInTheDocument();
   });
 
   it('calls clipboard.writeText with the address on click', () => {
     renderCard({ name: 'alice', address: 'QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H' }, 42.5);
-    fireEvent.click(screen.getByText('QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H'));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy address' }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
       'QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H'
     );
   });
 
-  it('displays balance formatted to 2 decimal places', () => {
+  it('renders account overview when balance is present', () => {
     renderCard({ name: 'alice', address: 'QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H' }, 42.5);
-    expect(screen.getByText('42.50 QORT')).toBeInTheDocument();
+    expect(screen.getByText('Account Overview')).toBeInTheDocument();
   });
 
-  it('shows a dash when balance is null', () => {
+  it('renders account overview when balance is null', () => {
     renderCard({ name: 'alice', address: 'QVosNNasvHkNBAQ6rCYVepY3ax8XQsyv1H' }, null);
-    expect(screen.getByText('— QORT')).toBeInTheDocument();
+    expect(screen.getByText('Account Overview')).toBeInTheDocument();
   });
 
   it('renders without crashing when userInfo is null', () => {
     renderCard(null, null);
-    // Should render the balance dash at minimum
-    expect(screen.getByText('— QORT')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });

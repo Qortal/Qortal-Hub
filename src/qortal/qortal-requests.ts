@@ -50,6 +50,7 @@ import {
   leaveGroupRequest,
   lockTab,
   openNewTab,
+  openUserLookup,
   publishMultipleQDNResources,
   publishQDNResource,
   registerNameRequest,
@@ -76,9 +77,17 @@ import {
   playEncryptedMedia,
   cleanupEncryptedMedia,
   cleanupEncryptedMediaByTabId,
+  addNotificationSubscriptions,
+  getNotificationPermission,
+  getNotificationSubscriptions,
+  markNotificationSeenInApp,
+  notificationHasPermission,
+  removeNotificationSubscriptions,
 } from './get.ts';
+import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
+import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
@@ -109,16 +118,147 @@ export const isRunningGateway = async () => {
   return isGateway;
 };
 
+const getAppStorage = () =>
+  typeof window !== 'undefined' &&
+  (
+    window as {
+      appStorage?: {
+        get: (k: string) => Promise<unknown>;
+        set: (k: string, v: unknown) => Promise<void>;
+      };
+    }
+  ).appStorage;
+
+const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
+const NOTIFICATION_PERMISSION_SEPARATOR = ':';
+const NOTIFICATION_PERMISSION_NO_ADDRESS = '__no_current_address__';
+
+function normalizeNotificationPermissionAppName(appName: unknown): string {
+  return String(appName ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function getCurrentAddress(): string {
+  if (typeof window === 'undefined') return NOTIFICATION_PERMISSION_NO_ADDRESS;
+  const w = window as Window & { __qortalCurrentAddress?: string | null };
+  return String(w.__qortalCurrentAddress || NOTIFICATION_PERMISSION_NO_ADDRESS);
+}
+
+function normalizeNotificationPermissionAddress(address: unknown): string {
+  return (
+    String(address || NOTIFICATION_PERMISSION_NO_ADDRESS).trim() ||
+    NOTIFICATION_PERMISSION_NO_ADDRESS
+  );
+}
+
+function buildNotificationPermissionKey(
+  address: unknown,
+  appName: unknown
+): string {
+  return `${NOTIFICATION_PERMISSION_PREFIX}${normalizeNotificationPermissionAddress(
+    address
+  )}${NOTIFICATION_PERMISSION_SEPARATOR}${normalizeNotificationPermissionAppName(
+    appName
+  )}`;
+}
+
+function parseNotificationPermissionKey(
+  key: unknown
+): { address: string; appName: string } | null {
+  if (!isNotificationPermissionKey(key)) return null;
+  const body = key.slice(NOTIFICATION_PERMISSION_PREFIX.length);
+  const separatorIndex = body.indexOf(NOTIFICATION_PERMISSION_SEPARATOR);
+  if (separatorIndex <= 0) return null;
+  const address = normalizeNotificationPermissionAddress(
+    body.slice(0, separatorIndex)
+  );
+  const appName = normalizeNotificationPermissionAppName(
+    body.slice(separatorIndex + 1)
+  );
+  if (!address || !appName) return null;
+  return { address, appName };
+}
+
+export function getNotificationPermissionKey(
+  appName: unknown,
+  address: unknown = getCurrentAddress()
+): string {
+  return buildNotificationPermissionKey(address, appName);
+}
+
+function isNotificationPermissionKey(key: unknown): key is string {
+  return (
+    typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX)
+  );
+}
+
+function normalizePermissionKey(key: unknown): string {
+  if (!isNotificationPermissionKey(key)) return String(key ?? '');
+  const parsed = parseNotificationPermissionKey(key);
+  if (parsed) {
+    return buildNotificationPermissionKey(parsed.address, parsed.appName);
+  }
+  return getNotificationPermissionKey(
+    key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+  );
+}
+
+function migrateNotificationPermissionKeys(
+  permissions: Record<string, unknown>,
+  normalizedKey: string
+): Record<string, unknown> {
+  if (!isNotificationPermissionKey(normalizedKey)) return permissions;
+  const normalized = parseNotificationPermissionKey(normalizedKey);
+  if (!normalized) return permissions;
+  const next = { ...permissions };
+  for (const key of Object.keys(next)) {
+    const parsed = parseNotificationPermissionKey(key);
+    if (!parsed) continue;
+    if (
+      parsed.address === normalized.address &&
+      parsed.appName === normalized.appName &&
+      key !== normalizedKey
+    ) {
+      delete next[key];
+    }
+  }
+  return next;
+}
+
+function toPermissionRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export async function setPermission(key, value) {
   try {
-    // Get the existing qortalRequestPermissions object
-    const qortalRequestPermissions =
-      (await getLocalStorage('qortalRequestPermissions')) || {};
-
-    // Update the permission
-    qortalRequestPermissions[key] = value;
-
-    // Save the updated object back to storage
+    const normalizedKey = normalizePermissionKey(key);
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const rawPermissions = toPermissionRecord(
+        await appStorage.get('qortalRequestPermissions')
+      );
+      const qortalRequestPermissions = migrateNotificationPermissionKeys(
+        rawPermissions,
+        normalizedKey
+      );
+      qortalRequestPermissions[normalizedKey] = value;
+      await appStorage.set(
+        'qortalRequestPermissions',
+        qortalRequestPermissions
+      );
+      return;
+    }
+    const rawPermissions = toPermissionRecord(
+      await getLocalStorage('qortalRequestPermissions')
+    );
+    const qortalRequestPermissions = migrateNotificationPermissionKeys(
+      rawPermissions,
+      normalizedKey
+    );
+    qortalRequestPermissions[normalizedKey] = value;
     await setLocalStorage('qortalRequestPermissions', qortalRequestPermissions);
   } catch (error) {
     console.error('Error setting permission:', error);
@@ -127,15 +267,94 @@ export async function setPermission(key, value) {
 
 export async function getPermission(key) {
   try {
-    // Get the qortalRequestPermissions object from storage
-    const qortalRequestPermissions =
-      (await getLocalStorage('qortalRequestPermissions')) || {};
-
-    // Return the value for the given key, or null if it doesn't exist
-    return qortalRequestPermissions[key] || null;
+    const normalizedKey = normalizePermissionKey(key);
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const qortalRequestPermissions = toPermissionRecord(
+        await appStorage.get('qortalRequestPermissions')
+      );
+      return qortalRequestPermissions[normalizedKey] ?? null;
+    }
+    const qortalRequestPermissions = toPermissionRecord(
+      await getLocalStorage('qortalRequestPermissions')
+    );
+    return qortalRequestPermissions[normalizedKey] ?? null;
   } catch (error) {
     console.error('Error getting permission:', error);
     return null;
+  }
+}
+
+/** Returns the full permissions object (for listing apps with notification permission). */
+export async function getQortalRequestPermissions() {
+  try {
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      return (await appStorage.get('qortalRequestPermissions')) || {};
+    }
+    return (await getLocalStorage('qortalRequestPermissions')) || {};
+  } catch (error) {
+    console.error('Error getting permissions:', error);
+    return {};
+  }
+}
+
+/** App names that have qAPPNotification-<address>:<appName> === true for the current address. */
+export async function getAppsWithNotificationPermission(
+  address: unknown = getCurrentAddress()
+) {
+  const perms = await getQortalRequestPermissions();
+  const currentAddress = normalizeNotificationPermissionAddress(address);
+  const apps = [];
+  for (const key of Object.keys(perms)) {
+    const parsed = parseNotificationPermissionKey(key);
+    if (
+      parsed?.address === currentAddress &&
+      parsed.appName &&
+      perms[key] === true
+    ) {
+      apps.push(parsed.appName);
+    }
+  }
+  return apps;
+}
+
+const QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY =
+  'qortalNotificationOsPushDisabled';
+
+/** Map of appName -> true if OS push is disabled for that app. */
+export async function getNotificationOsPushDisabledMap() {
+  try {
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const map =
+        (await appStorage.get(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY)) || {};
+      return typeof map === 'object' && !Array.isArray(map) ? map : {};
+    }
+    const raw = await getData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY);
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function getNotificationOsPushDisabled(appName) {
+  const map = await getNotificationOsPushDisabledMap();
+  return map[appName] === true;
+}
+
+export async function setNotificationOsPushDisabled(appName, disabled) {
+  try {
+    const map = await getNotificationOsPushDisabledMap();
+    map[appName] = !!disabled;
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      await appStorage.set(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY, map);
+      return;
+    }
+    await storeData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY, map);
+  } catch (error) {
+    console.error('Error setting notification OS push disabled:', error);
   }
 }
 
@@ -147,6 +366,14 @@ const sessionPermissionsStore = new Map<
     timestamp: number;
   }
 >();
+
+function getSessionPermissionKey(tabId, qapName) {
+  return `${tabId}-${qapName}`;
+}
+
+function getAddressScopedSessionPermissionKey(tabId, qapName) {
+  return `${tabId}-${getCurrentAddress()}-${qapName}`;
+}
 
 // Valid permissions that can be granted in a session
 export const VALID_SESSION_PERMISSIONS = [
@@ -175,6 +402,7 @@ export const VALID_SESSION_PERMISSIONS = [
   'SIGN_FOREIGN_FEES',
   'REENCRYPT_GROUP_KEYS',
   'START_CROSSCHAIN_SERVER',
+  'NOTIFICATION_PERMISSION',
 ];
 
 // Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
@@ -192,28 +420,45 @@ export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
 
 export function setSessionPermissions(tabId, qapName, permissions) {
   try {
-    const key = `${tabId}-${qapName}`;
-
-    // Get existing permissions for this tab+app
-    const existing = sessionPermissionsStore.get(key);
-    const existingPermissions = existing?.permissions || [];
-
-    // Validate new permissions
     const validPermissions = permissions.filter((permission) =>
       VALID_SESSION_PERMISSIONS.includes(permission)
     );
+    const notificationPermissions = validPermissions.filter(
+      (permission) => permission === 'NOTIFICATION_PERMISSION'
+    );
+    const generalPermissions = validPermissions.filter(
+      (permission) => permission !== 'NOTIFICATION_PERMISSION'
+    );
 
-    // Merge with existing permissions (deduplicate using Set)
-    const mergedPermissions = [
-      ...new Set([...existingPermissions, ...validPermissions]),
+    const savePermissions = (key, permissionsToSave) => {
+      if (permissionsToSave.length === 0) return [];
+      const existing = sessionPermissionsStore.get(key);
+      const existingPermissions = existing?.permissions || [];
+      const mergedPermissions = [
+        ...new Set([...existingPermissions, ...permissionsToSave]),
+      ];
+      sessionPermissionsStore.set(key, {
+        permissions: mergedPermissions,
+        timestamp: Date.now(),
+      });
+      return mergedPermissions;
+    };
+
+    const mergedGeneralPermissions = savePermissions(
+      getSessionPermissionKey(tabId, qapName),
+      generalPermissions
+    );
+    const mergedNotificationPermissions = savePermissions(
+      getAddressScopedSessionPermissionKey(tabId, qapName),
+      notificationPermissions
+    );
+
+    return [
+      ...new Set([
+        ...mergedGeneralPermissions,
+        ...mergedNotificationPermissions,
+      ]),
     ];
-
-    sessionPermissionsStore.set(key, {
-      permissions: mergedPermissions,
-      timestamp: Date.now(),
-    });
-
-    return mergedPermissions;
   } catch (error) {
     console.error('Error setting session permissions:', error);
     throw error;
@@ -222,10 +467,19 @@ export function setSessionPermissions(tabId, qapName, permissions) {
 
 export function getSessionPermissions(tabId, qapName) {
   try {
-    const key = `${tabId}-${qapName}`;
-    const sessionData = sessionPermissionsStore.get(key);
+    const sessionData = sessionPermissionsStore.get(
+      getSessionPermissionKey(tabId, qapName)
+    );
+    const notificationSessionData = sessionPermissionsStore.get(
+      getAddressScopedSessionPermissionKey(tabId, qapName)
+    );
 
-    return sessionData?.permissions || [];
+    return [
+      ...new Set([
+        ...(sessionData?.permissions || []),
+        ...(notificationSessionData?.permissions || []),
+      ]),
+    ];
   } catch (error) {
     console.error('Error getting session permissions:', error);
     return [];
@@ -244,8 +498,10 @@ export function hasSessionPermission(tabId, qapName, requestType) {
 
 export function clearSessionPermissions(tabId, qapName) {
   try {
-    const key = `${tabId}-${qapName}`;
-    sessionPermissionsStore.delete(key);
+    sessionPermissionsStore.delete(getSessionPermissionKey(tabId, qapName));
+    sessionPermissionsStore.delete(
+      getAddressScopedSessionPermissionKey(tabId, qapName)
+    );
   } catch (error) {
     console.error('Error clearing session permissions:', error);
     throw error;
@@ -327,6 +583,65 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: 'Unable to get user account',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_PERMISSION': {
+        try {
+          const res = await getNotificationPermission({
+            isFromExtension,
+            appInfo,
+            skipAuth,
+          });
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'Unable to get notification permission',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_HAS_PERMISSION': {
+        try {
+          const res = await notificationHasPermission({
+            appInfo,
+            skipAuth,
+          });
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'Unable to read notification permission',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1414,6 +1729,32 @@ function setupMessageListenerQortalRequest() {
         break;
       }
 
+      case 'OPEN_USER_LOOKUP': {
+        try {
+          const res = await openUserLookup(request.payload);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
       case 'LOCK_TAB': {
         try {
           const res = await lockTab(request.payload, isFromExtension, appInfo);
@@ -1626,6 +1967,119 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_ADD': {
+        try {
+          const res = await addNotificationSubscriptions(
+            request.payload,
+            appInfo
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_ADD failed',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_GET': {
+        try {
+          const res = await getNotificationSubscriptions(
+            request.payload,
+            appInfo
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_GET failed',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_MARK_SEEN': {
+        try {
+          const res = await markNotificationSeenInApp(request.payload, appInfo);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_MARK_SEEN failed',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_REMOVE': {
+        try {
+          const res = await removeNotificationSubscriptions(
+            request.payload,
+            appInfo
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_REMOVE failed',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1997,6 +2451,37 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'UPDATE_SUBSCRIPTIONS': {
+        try {
+          if (appInfo?.name?.toLowerCase() !== 'subscriptions') {
+            throw new Error(
+              'UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app'
+            );
+          }
+          triggerMemberGroupsFetch();
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: { ok: true },
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'Unable to update subscriptions',
               type: 'backgroundMessageResponse',
             },
             event.origin

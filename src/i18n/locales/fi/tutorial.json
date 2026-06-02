@@ -33,6 +33,7 @@
     "get_six_qorts_way3_action": "Avaa Q-Trade",
     "register_name": "Rekisteröi nimesi",
     "confirming_transaction": "Vahvistetaan tapahtumaa",
+    "confirming": "Vahvistetaan",
     "load_avatar": "Lataa avatar",
     "explore_apps": "Tutustu suosittuihin sovelluksiin",
     "done": "Valmis",
@@ -53,6 +54,17 @@
     "devnet_testing_desc": "Testaa Q-App-sovelluksiasi DevNet-testausympäristössä",
     "open_app": "Avaa",
     "address_copied": "Osoite kopioitu leikepöydälle",
-    "group_activity": "Ryhmätoiminta"
+    "group_activity": "Ryhmätoiminta",
+    "get_qorts_workspace_hint": "Avaa ensimmäiset 6 QORT aktivoidaksesi loput määrityksestä.",
+    "register_name_workspace_hint": "Rekisteröity nimi tekee tilistä tunnistettavan identiteetin.",
+    "load_avatar_workspace_hint": "Anna kojelaudalle kasvot jotta tila alkaa näyttää sinulta.",
+    "onboarding_transition_hard_part_done": "Hyvää työtä vaikein osa on käsitelty.",
+    "onboarding_transition_one_more": "Hienosti vielä yksi vaihe.",
+    "onboarding_press_next_when_ready": "Hyvää työtä. Vaikein osuus on käsitelty. Paina \"Seuraava\", kun olet valmis.",
+    "register_name_pending_hint": "Nimeä tallennetaan ketjuun — tämä voi kestää hetken.",
+    "persistent_guide_get_qorts": "Aloitetaan kuudesta QORT valitse yhteys ylhäältä.",
+    "persistent_guide_register_name": "Seuraavaksi rekisteröi nimesi.",
+    "persistent_guide_load_avatar": "Vielä lisää avatarisi.",
+    "post_onboarding_workspace_ready": "Valmista. Voit alkaa rakentaa työtilaa yläpuolella."
   }
 }

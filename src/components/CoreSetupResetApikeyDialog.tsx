@@ -1,11 +1,12 @@
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { useAtom, useSetAtom } from 'jotai';
@@ -17,6 +18,18 @@ import {
 import { useTranslation } from 'react-i18next';
 import { getDefaultLocalNodeUrl } from '../constants/constants';
 import { useState } from 'react';
+import { AuthInput, AuthSectionLabel } from './Auth/AuthShell';
+import {
+  dialogActionsSx,
+  dialogContentSx,
+  dialogContentTextSx,
+  dialogInfoCardSx,
+  dialogModalBackdropSx,
+  dialogTitleSx,
+  getDialogPaperSx,
+  getDialogPrimaryButtonSx,
+  getDialogSecondaryButtonSx,
+} from './App/dialogSurface';
 
 const isElectron = !!window?.coreSetup;
 
@@ -29,6 +42,7 @@ export function CoreSetupResetApikeyDialog() {
     handleSaveNodeInfo,
   } = useAuth();
   const { t } = useTranslation(['node', 'core']);
+  const theme = useTheme();
   const [newApiKey, setNewApiKey] = useState('');
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
@@ -75,27 +89,43 @@ export function CoreSetupResetApikeyDialog() {
         fullWidth
         maxWidth="sm"
         aria-labelledby="core-setup-title"
+        slotProps={{
+          backdrop: { sx: dialogModalBackdropSx },
+        }}
+        PaperProps={{
+          sx: getDialogPaperSx(theme, { maxWidth: 460 }),
+        }}
       >
-        <DialogTitle id="core-setup-title">
+        <DialogTitle id="core-setup-title" sx={dialogTitleSx}>
           {t('node:invalidKey.title', {
             postProcess: 'capitalizeFirstChar',
           })}
         </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body1" gutterBottom>
-            {t('node:invalidKey.description', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-          <TextField
-            placeholder="Apikey"
-            value={newApiKey}
-            onChange={(e) => setNewApiKey(e.target.value)}
-          />
+        <DialogContent sx={dialogContentSx}>
+          <Box sx={dialogInfoCardSx}>
+            <Typography sx={dialogContentTextSx}>
+              {t('node:invalidKey.description', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 1.75 }}>
+            <AuthSectionLabel>API key</AuthSectionLabel>
+            <AuthInput
+              autoFocus
+              placeholder="Apikey"
+              value={newApiKey}
+              onChange={(e) => setNewApiKey(e.target.value)}
+            />
+          </Box>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpen(false)} variant="text">
+        <DialogActions sx={dialogActionsSx}>
+          <Button
+            onClick={() => setOpen(false)}
+            variant="outlined"
+            sx={getDialogSecondaryButtonSx(theme)}
+          >
             {t('core:action.close', {
               postProcess: 'capitalizeFirstChar',
             })}
@@ -106,8 +136,8 @@ export function CoreSetupResetApikeyDialog() {
             onClick={() => {
               insertApikeyFunc();
             }}
-            color="success"
             variant="contained"
+            sx={getDialogPrimaryButtonSx(theme)}
           >
             {t('node:actions.resetKey', {
               postProcess: 'capitalizeFirstChar',
@@ -123,23 +153,34 @@ export function CoreSetupResetApikeyDialog() {
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
+      slotProps={{
+        backdrop: { sx: dialogModalBackdropSx },
+      }}
+      PaperProps={{
+        sx: getDialogPaperSx(theme, { maxWidth: 460 }),
+      }}
     >
-      <DialogTitle id="core-setup-title">
-        {' '}
+      <DialogTitle id="core-setup-title" sx={dialogTitleSx}>
         {t('node:invalidKey.title', {
           postProcess: 'capitalizeFirstChar',
         })}
       </DialogTitle>
-      <DialogContent dividers>
-        <Typography variant="body1" gutterBottom>
-          {t('node:invalidKey.resetDescription', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
+      <DialogContent sx={dialogContentSx}>
+        <Box sx={dialogInfoCardSx}>
+          <Typography sx={dialogContentTextSx}>
+            {t('node:invalidKey.resetDescription', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={() => setOpen(false)} variant="text">
+      <DialogActions sx={dialogActionsSx}>
+        <Button
+          onClick={() => setOpen(false)}
+          variant="outlined"
+          sx={getDialogSecondaryButtonSx(theme)}
+        >
           {t('core:action.close', {
             postProcess: 'capitalizeFirstChar',
           })}
@@ -149,8 +190,8 @@ export function CoreSetupResetApikeyDialog() {
           onClick={() => {
             resetApikeyFunc();
           }}
-          color="success"
           variant="contained"
+          sx={getDialogPrimaryButtonSx(theme)}
         >
           {t('node:actions.resetKey', {
             postProcess: 'capitalizeFirstChar',

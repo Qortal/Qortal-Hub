@@ -110,11 +110,11 @@ export const saveFileToDisk = async (data, qortAddress) => {
       filename: fileName,
       mimeType: 'application/json',
     });
-    if (saveResult?.canceled || !saveResult?.filePath) return;
+    if (saveResult?.canceled || !saveResult?.filePath) return false;
     const encoder = new TextEncoder();
     const chunk = encoder.encode(dataString);
     await window.electron.writeChunk(saveResult.filePath, chunk, false);
-    return;
+    return true;
   }
 
   // Web: File System Access API for a real file picker when supported
@@ -135,9 +135,9 @@ export const saveFileToDisk = async (data, qortAddress) => {
       const writable = await handle.createWritable();
       await writable.write(dataString);
       await writable.close();
-      return;
+      return true;
     } catch (err) {
-      if (err?.name === 'AbortError') return; // User canceled
+      if (err?.name === 'AbortError') return false; // User canceled
       // Fall through to FileSaver fallback on other errors
     }
   }
@@ -145,6 +145,7 @@ export const saveFileToDisk = async (data, qortAddress) => {
   // Fallback: classic download (no guaranteed file picker)
   const blob = new Blob([dataString], { type: 'application/json' });
   await FileSaver.saveAs(blob, fileName);
+  return true;
 };
 
 export const saveFileToDiskGeneric = async (blob, filename) => {

@@ -1,5 +1,5 @@
 import {
-  getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   getBaseApiReactForPrimaryName,
 } from '../../App';
@@ -33,12 +33,52 @@ export async function getPrimaryNameForAvatar(address: string): Promise<string> 
   return '';
 }
 
+export async function getPrimaryNamesForAddresses(
+  addresses: string[]
+): Promise<Record<string, string>> {
+  const uniqueAddresses = Array.from(
+    new Set(addresses.filter((address) => Boolean(address)))
+  );
+  if (uniqueAddresses.length === 0) return {};
+
+  const response = await fetch(`${getBaseApiReactForPrimaryName()}/names/list`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(uniqueAddresses),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  const names = await response.json();
+  const primaryNamesByAddress: Record<string, string> = {};
+
+  if (Array.isArray(names)) {
+    names.forEach((item) => {
+      if (typeof item?.owner !== 'string') return;
+      primaryNamesByAddress[item.owner] =
+        typeof item?.name === 'string' ? item.name : '';
+    });
+  }
+
+  uniqueAddresses.forEach((address) => {
+    if (primaryNamesByAddress[address] === undefined) {
+      primaryNamesByAddress[address] = '';
+    }
+  });
+
+  return primaryNamesByAddress;
+}
+
 export const getPublishesFromAdmins = async (
   admins: string[],
   groupId: string
 ): Promise<Record<string, unknown> | false> => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -74,7 +114,7 @@ export const getAllPublishesFromAdmins = async (
   groupId: string
 ): Promise<Record<string, unknown>[]> => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -124,7 +164,7 @@ export const getGroupAdminsAddress = async (
 };
 
 export const getGroupMembers = async (groupNumber: number): Promise<{
-  members?: { member: string }[];
+  members?: { member: string; primaryName?: string }[];
   memberCount?: number;
   [key: string]: unknown;
 }> => {

@@ -622,11 +622,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                           >
                             <Typography
                               variant="body2"
-                              component="code"
                               sx={{
-                                fontFamily: 'monospace',
-                                fontSize: '0.75rem',
                                 color: theme.palette.text.secondary,
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                letterSpacing: '-0.01em',
                                 wordBreak: 'break-all',
                               }}
                             >

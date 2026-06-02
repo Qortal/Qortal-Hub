@@ -1,6 +1,49 @@
+import type {
+  AudioSurfaceCommand,
+  AudioSurfaceCommandEnvelope,
+  AudioSurfaceCommandResultEnvelope,
+  AudioSurfaceEvent,
+} from '../lib/group-call/audioSurfaceBridge';
+
 declare global {
   interface Window {
-    coreSetup?: unknown;
+    sendMessage?: (
+      action: string,
+      data?: unknown,
+      timeout?: number,
+      isExtension?: unknown,
+      appInfo?: unknown,
+      skipAuth?: unknown
+    ) => Promise<unknown>;
+    appStorage?: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<void>;
+    };
+    miscStorage?: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<void>;
+    };
+    coreSetup?: {
+      isCoreRunning?: () => Promise<boolean>;
+      isCoreRunningOnSystem?: () => Promise<boolean>;
+      isCoreInstalledOnSystem?: () => Promise<boolean>;
+      isCoreInstalled?: () => Promise<boolean>;
+      verifySteps?: () => Promise<void>;
+      deleteDB?: () => Promise<boolean>;
+      dbExists?: () => Promise<boolean>;
+      installCore?: () => Promise<unknown>;
+      startCore?: () => Promise<unknown>;
+      getApiKey?: () => Promise<string>;
+      resetApikey?: () => Promise<boolean>;
+      pickQortalDirectory?: () => Promise<unknown>;
+      removeCustomPath?: () => Promise<void>;
+      stopCore?: () => Promise<boolean>;
+      bootstrap?: () => Promise<boolean>;
+      bootstrapOrClearChainAndStart?: () => Promise<boolean>;
+      onProgress?: (cb: (p: unknown) => void) => () => void;
+    };
     electronAPI?: {
       openExternal?: (url: string) => void;
       setAllowedDomains?: (domains: string[]) => void;
@@ -11,20 +54,1006 @@ declare global {
       windowMinimize?: () => void;
       windowMaximize?: () => Promise<void>;
       windowClose?: () => void;
+      focusWindow?: () => Promise<void>;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
+      onWindowStateChange?: (
+        callback: (state: { isMaximized: boolean }) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
+      getSystemCallReadiness?: () => Promise<{
+        status: 'good' | 'warning' | 'blocked' | 'unknown';
+        reasons: string[];
+        cpuLoad: number | null;
+        memoryPressure: number;
+        eventLoopLagMs: number;
+        measuredAt: number;
+      }>;
+      refreshSystemCallReadiness?: () => Promise<{
+        status: 'good' | 'warning' | 'blocked' | 'unknown';
+        reasons: string[];
+        cpuLoad: number | null;
+        memoryPressure: number;
+        eventLoopLagMs: number;
+        measuredAt: number;
+      }>;
       showAppMenu?: (x?: number, y?: number) => void;
-      getAppSettings?: () => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit' }>;
-      setAppSettings?: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit' }) => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit' }>;
+      getAppSettings?: () => Promise<{
+        closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        disableStartupSound?: boolean;
+        p2pEnabled?: boolean;
+        legacyPublicStunFallback?: boolean;
+        reticulumMeshUpnpEnabled?: boolean;
+      }>;
+      setAppSettings?: (settings: {
+        closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        disableStartupSound?: boolean;
+        p2pEnabled?: boolean;
+        legacyPublicStunFallback?: boolean;
+        reticulumMeshUpnpEnabled?: boolean;
+      }) => Promise<{
+        closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        disableStartupSound?: boolean;
+        p2pEnabled?: boolean;
+        legacyPublicStunFallback?: boolean;
+        reticulumMeshUpnpEnabled?: boolean;
+      }>;
+      /** Reticulum (rnsd) child process status from main process. */
+      reticulumGetStatus?: () => Promise<{
+        running: boolean;
+        pid?: number;
+        mode: 'frozen' | 'venv' | 'system' | null;
+        configDir: string;
+        reason?: string;
+        bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+        reachability: 'unknown' | 'lan-only' | 'hub-connected' | 'disconnected';
+        transportEnabled?: boolean;
+        configuredHubInterfaces?: number;
+        onlineHubInterfaces?: number;
+        configuredRemoteHubInterfaces?: number;
+        onlineRemoteHubInterfaces?: number;
+        hubSummary?: string;
+        overlayLinksConnected?: number;
+        p2pActiveOverlayPeers?: number;
+        verifiedOverlayPeerCount?: number;
+      }>;
+      onReticulumStatus?: (
+        callback: (status: {
+          running: boolean;
+          pid?: number;
+          mode: 'frozen' | 'venv' | 'system' | null;
+          configDir: string;
+          reason?: string;
+          bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+          reachability:
+            | 'unknown'
+            | 'lan-only'
+            | 'hub-connected'
+            | 'disconnected';
+          transportEnabled?: boolean;
+          configuredHubInterfaces?: number;
+          onlineHubInterfaces?: number;
+          configuredRemoteHubInterfaces?: number;
+          onlineRemoteHubInterfaces?: number;
+          hubSummary?: string;
+          overlayLinksConnected?: number;
+          p2pActiveOverlayPeers?: number;
+          verifiedOverlayPeerCount?: number;
+        }) => void
+      ) => () => void;
+      reticulumGetOverlayPeers?: () => Promise<
+        Array<{
+          linkId: string;
+          peerPresenceHash: string;
+          incoming?: boolean;
+          address?: string;
+          connectedAt: number;
+        }>
+      >;
+      reticulumGetMeshStatus?: () => Promise<{
+        enabled: boolean;
+        listenPort: number;
+        meshListenEnabled: boolean;
+        upnpMapped: boolean;
+        reachableSelf: boolean;
+        meshDiscoveryClient: boolean;
+        meshPrivateGateway: boolean;
+        networkIdentityPath: string;
+        discoveryReachableHost?: string;
+        meshReachableOnHost?: string;
+        meshReachableOnEffective: string | null;
+      }>;
+      reticulumEnsureMeshNetworkIdentity?: () => Promise<{
+        ok: boolean;
+        error?: string;
+        created?: boolean;
+      }>;
+      /** Local Reticulum hub destination hash (hex); null if bridge not ready. */
+      reticulumGetLocalDestinationHash?: () => Promise<{
+        destinationHash: string | null;
+      }>;
+      /** RNS.Identity public key (64 bytes, standard base64); null if bridge not ready. */
+      reticulumGetLocalIdentityPublicKeyBase64?: () => Promise<{
+        publicKeyBase64: string | null;
+      }>;
+      /** Hidden audio-surface: proxy signing to the main shell (wallet key in-memory). */
+      gcallProxySignPresenceMessage?: (
+        payload: Record<string, unknown>
+      ) => Promise<{
+        signature?: string;
+        error?: string;
+        message?: string;
+      }>;
+      gcallProxyDecryptBoxWithMyKey?: (payload: {
+        ephemeralPublicKey: string;
+        nonce: string;
+        ciphertext: string;
+      }) => Promise<{
+        decryptedKey?: string;
+        error?: string;
+        message?: string;
+      }>;
     };
     videoServer?: {
-      start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>;
+      start: (
+        port?: number
+      ) => Promise<{ success: boolean; port?: number; error?: string }>;
       stop: () => Promise<{ success: boolean; error?: string }>;
       getPort: () => Promise<number | null>;
       isRunning: () => Promise<boolean>;
     };
+
+    // ── P2P Network ──────────────────────────────────────────────────────────
+    p2pNetwork?: {
+      start: (options?: {
+        port?: number;
+        maxPeers?: number;
+        initialPeers?: string[];
+      }) => Promise<{
+        success: boolean;
+        port?: number;
+        peerId?: string;
+        error?: string;
+      }>;
+      stop: () => Promise<{ success: boolean; error?: string }>;
+      send: (
+        to: string | null,
+        data: unknown
+      ) => Promise<{ success: boolean; messageId?: string; error?: string }>;
+      getPeers: () => Promise<
+        Array<{
+          id: string;
+          host: string;
+          port: number;
+          connected: boolean;
+          outbound: boolean;
+          remoteStunUdpPort?: number;
+        }>
+      >;
+      getStatus: () => Promise<{
+        running: boolean;
+        port: number | null;
+        peerId: string | null;
+        connectedPeers: number;
+      }>;
+      addPeer: (addr: string) => Promise<{ success: boolean; error?: string }>;
+      /** Subscribe to incoming data messages. Returns unsubscribe fn. */
+      onMessage: (
+        cb: (payload: {
+          id: string;
+          from: string;
+          via?: string;
+          to?: string;
+          data: unknown;
+        }) => void
+      ) => () => void;
+      /** Subscribe to peer connect/disconnect events. Returns unsubscribe fn. */
+      onPeerChange: (
+        cb: (payload: {
+          type: 'connected' | 'disconnected';
+          id: string;
+        }) => void
+      ) => () => void;
+    };
+
+    // ── P2P Chat ─────────────────────────────────────────────────────────────
+    chat?: {
+      /**
+       * Send a pre-signed ChatEventEnvelope.
+       * Build and sign the event in the renderer, then call this.
+       */
+      sendEvent: (envelope: {
+        type: 'CHAT_EVENT';
+        event: P2PChatEvent;
+      }) => Promise<{ success: boolean; error?: string }>;
+
+      /** Subscribe to a chat (start receiving events + request sync). */
+      subscribe: (
+        chatId: string
+      ) => Promise<{ success: boolean; error?: string }>;
+
+      /** Unsubscribe from a chat. */
+      unsubscribe: (chatId: string) => Promise<{ success: boolean }>;
+
+      /** Broadcast an ephemeral typing indicator. */
+      sendTyping: (
+        chatId: string,
+        authorAddress: string
+      ) => Promise<{ success: boolean }>;
+
+      /** Retrieve message history. Pass `beforeTimestamp` for pagination. */
+      getHistory: (
+        chatId: string,
+        limit: number,
+        beforeTimestamp?: number
+      ) => Promise<P2PChatEvent[]>;
+
+      /** Summary of every known chat (last event + unread count). */
+      getSummaries: () => Promise<
+        Array<{
+          chatId: string;
+          lastEvent: P2PChatEvent | null;
+          unreadCount: number;
+          updatedAt: number;
+        }>
+      >;
+
+      /** Advance the read watermark for a chat. */
+      markRead: (
+        chatId: string,
+        upToTimestamp: number
+      ) => Promise<{ success: boolean }>;
+
+      /**
+       * Register the local user's address(es) for DM auto-delivery.
+       * Call on login with [address]; call with [] on logout.
+       */
+      setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+
+      /**
+       * Clear the support-queue rate-limit map.
+       * Call when an agent logs out so re-knocks from users are accepted
+       * immediately after the agent logs back in.
+       */
+      clearQueueRateLimit: () => Promise<{ success: boolean }>;
+
+      /** Returns currently subscribed chatIds. */
+      getSubscriptions: () => Promise<string[]>;
+
+      /**
+       * Fetch the encrypted attachment blob for an event.
+       * Returns the base64 ciphertext string, or null if not available locally.
+       * Use for lazy-loading images in history that did not travel with the event.
+       */
+      getAttachment: (eventId: string) => Promise<string | null>;
+
+      /**
+       * Subscribe to incoming chat events.
+       * Returns an unsubscribe function.
+       */
+      onEvent: (cb: (payload: { event: P2PChatEvent }) => void) => () => void;
+
+      /** Subscribe to chat events for one chatId only. */
+      onEventForChat: (
+        chatId: string,
+        cb: (payload: { event: P2PChatEvent }) => void
+      ) => () => void;
+
+      /**
+       * Subscribe to typing indicators.
+       * `active: true` = started typing, `active: false` = stopped.
+       * Returns an unsubscribe function.
+       */
+      onTyping: (
+        cb: (payload: {
+          chatId: string;
+          authorAddress: string;
+          active: boolean;
+        }) => void
+      ) => () => void;
+
+      /** Subscribe to typing events for one chatId only. */
+      onTypingForChat: (
+        chatId: string,
+        cb: (payload: {
+          chatId: string;
+          authorAddress: string;
+          active: boolean;
+        }) => void
+      ) => () => void;
+
+      /**
+       * Subscribe to incoming read receipt events.
+       * Returns an unsubscribe function.
+       */
+      onRead: (
+        cb: (payload: {
+          chatId: string;
+          readerAddress: string;
+          eventIds: string[];
+        }) => void
+      ) => () => void;
+
+      /** Subscribe to read receipt events for one chatId only. */
+      onReadForChat: (
+        chatId: string,
+        cb: (payload: {
+          chatId: string;
+          readerAddress: string;
+          eventIds: string[];
+        }) => void
+      ) => () => void;
+    };
+
+    // ── Presence ─────────────────────────────────────────────────────────────
+    presence?: {
+      /**
+       * Announce that the local user is online.
+       * Build a signed PresenceEnvelope in the renderer and pass it here.
+       * See usePresence hook for the signing flow.
+       */
+      announce: (envelope: PresenceEnvelope) => Promise<{ success: boolean }>;
+      /** Send a periodic heartbeat (every 25 s) to keep the session alive. */
+      heartbeat: (envelope: PresenceEnvelope) => Promise<{ success: boolean }>;
+      /** Announce that the local user is going offline. */
+      offline: (envelope: PresenceEnvelope) => Promise<{ success: boolean }>;
+      /** Check whether an address currently has an active session. */
+      getStatus: (address: string) => Promise<PresenceStatusResult>;
+      /** All currently online addresses. */
+      getOnlineAddresses: () => Promise<string[]>;
+      /** Full session detail for every active user. */
+      getAllOnline: () => Promise<PresenceSession[]>;
+      /**
+       * Subscribe to presence updates pushed from the network.
+       * Returns an unsubscribe function.
+       */
+      onUpdate: (
+        cb: (payload: {
+          address: string;
+          online: boolean;
+          status: UserStatus | null;
+        }) => void
+      ) => () => void;
+      /** Subscribe to coalesced presence updates. */
+      onUpdateBatch: (
+        cb: (
+          payloads: Array<{
+            address: string;
+            online: boolean;
+            status: UserStatus | null;
+          }>
+        ) => void
+      ) => () => void;
+      /** Subscribe to the "all presence cleared" event (fired when P2P is disabled). */
+      onCleared: (cb: () => void) => () => void;
+      /** Subscribe to the "presence transport ready" event (fired after transport start or wake recovery). */
+      onStarted: (cb: () => void) => () => void;
+    };
+
+    /** Decentralized STUN bootstrap + ICE server list (Electron preload + main). */
+    hub?: {
+      getBootstrapIceServers: () => { urls: string }[];
+      getIceServers: () => Promise<{ urls: string }[]>;
+      reportStunCallOutcome: (
+        stunUrls: string[],
+        success: boolean
+      ) => Promise<{ ok?: boolean }>;
+      reportObservedStunSources: (
+        stunUrls: string[]
+      ) => Promise<{ ok?: boolean }>;
+    };
+
+    // ── Call (1v1) ────────────────────────────────────────────────────────────
+    call?: {
+      initiate: (
+        targetAddress: string,
+        chatId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        callId: string,
+        timestamp: number
+      ) => Promise<{ success: boolean; callId?: string; error?: string }>;
+      accept: (
+        callId: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
+      reject: (
+        callId: string,
+        reason?: string,
+        signature?: string,
+        publicKey?: string,
+        timestamp?: number
+      ) => Promise<{ success: boolean }>;
+      hangup: (
+        callId: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
+      setLocalAddresses: (
+        addresses: string[],
+        source?: string
+      ) => Promise<{ success: boolean }>;
+      onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
+    };
+
+    // ── Group Call ────────────────────────────────────────────────────────────
+    groupCall?: {
+      join: (
+        roomId: string,
+        chatId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        reticulumDestinationHash: string,
+        joinGeneration?: number,
+        topologyEpochFloor?: number,
+        reticulumIdentityPublicKeyBase64?: string,
+        joinRkSignature?: string
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        callSessionId?: string;
+        mediaSessionGeneration?: number;
+      }>;
+      leave: (
+        roomId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
+      leaveSync?: (
+        roomId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => { success: boolean; error?: string };
+      broadcastTopology: (
+        roomId: string,
+        topology: unknown,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
+      sendClusterHeartbeat?: (
+        roomId: string,
+        payload: {
+          topologyEpoch: number;
+          clusterForwarder: string;
+          clusterIndex: number;
+          seq: number;
+          fromAddress: string;
+          fromPublicKey: string;
+          timestamp: number;
+        },
+        signature: string
+      ) => Promise<{ success: boolean }>;
+      sendAudio: (
+        roomId: string,
+        toAddress: string,
+        data: Uint8Array,
+        timing?: { rendererSendAtWallMs?: number }
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        diagnostics?: {
+          transport: 'link' | 'packet';
+          pendingFrames: number;
+          queuePressureDrops: number;
+          staleDrops: number;
+          linkUnreadyDrops: number;
+          packetSendFailures: number;
+          targetAddress?: string;
+          peerPresenceHash?: string;
+          routeKey?: string;
+          lastInboundAtMs?: number;
+          recoveryReason?: string;
+          recoveryHoldUntilMs?: number;
+          linkFallbackActive?: boolean;
+          linkFallbackReason?: string;
+          linkFallbackDwellMs?: number;
+          linkFallbackProbeCount?: number;
+          linkFallbackExitCount?: number;
+          linkFallbackLastDwellMs?: number;
+          pathDiversityActive?: boolean;
+          pathDiversityReason?: string;
+          pathDiversityMirrorAttempts?: number;
+          pathDiversityMirrorSuccesses?: number;
+          pathDiversityMirrorFailures?: number;
+          rendererToMainIpcMsMax?: number;
+          mainIpcToManagerEnqueueMsMax?: number;
+          managerPendingDwellMsMax?: number;
+          managerFlushToBridgeEnqueueMsMax?: number;
+          bridge?: {
+            bridgeQueuedFrames: number;
+            bridgeQueuedBytes: number;
+            bridgeBinaryWritesQueued: number;
+            bridgeWaitingForDrain: boolean;
+            perLinkQueuedFrames: number;
+            queuePressureDrops: number;
+            queuePressureDropsLast5s: number;
+            staleDrops: number;
+            staleDropsLast5s: number;
+            decodedQueueDepth: number;
+            decodedQueueMax: number;
+            decodedQueueDrops: number;
+            binaryOutQueueDepth: number;
+            binaryOutQueueMax: number;
+            binaryOutQueueDrops: number;
+            jsonOutQueueDrops: number;
+            packetSendFailures: number;
+            packetPathRequests: number;
+            packetPathResolutions: number;
+            packetPathTimeouts: number;
+            packetFreshSends: number;
+            packetStaleSends: number;
+            packetUnknownSends: number;
+            deadlineDropCount: number;
+            decodedQueueEvictOldestCount: number;
+            decodedQueueDropNewestCount: number;
+            fd3DecodedAgeMsMax: number;
+            decodedQueueDwellMsMax: number;
+            rnsSendDurationMsMax: number;
+            packetPathCheckMsMax: number;
+            executorLoopGapMsMax: number;
+            executorGapWhileQueuedMsMax: number;
+            executorAudioPassMsMax: number;
+            processBatchMsMax: number;
+            processBatchFramesMax: number;
+            rnsSendSlowCount: number;
+            executorStallCount: number;
+            executorCommandMsMax: number;
+            executorCommandWhileQueuedMsMax: number;
+            executorCommandSlowCount: number;
+            rnsCallbackSchedulerGapMsMax: number;
+            rnsCallbackSchedulerGapOver100Count: number;
+            rnsCallbackSchedulerGapOver250Count: number;
+            rnsCallbackSchedulerGapOver500Count: number;
+            rnsCallbackSchedulerGapOver1000Count: number;
+            rnsRawInboundGapMsMax: number;
+            rnsRawInboundGapOver80Count: number;
+            rnsRawInboundGapOver160Count: number;
+            rnsRawInboundGapOver320Count: number;
+            rnsRawInboundGapOver640Count: number;
+            rnsRawInboundGapOver1000Count: number;
+            rnsRawInboundToLinkReceiveMsMax: number;
+            rnsRawInboundToLinkReceiveOver80Count: number;
+            rnsRawInboundToLinkReceiveOver160Count: number;
+            rnsRawInboundToLinkReceiveOver320Count: number;
+            rnsRawInboundToLinkReceiveOver640Count: number;
+            rnsRawInboundToLinkReceiveOver1000Count: number;
+            rnsRawInboundToLinkReceiveSamples: number;
+            rnsRawInboundInterfaceLast: string;
+            rnsRawInboundInterfaceWorst: string;
+            rnsSharedFrameGapMsMax: number;
+            rnsSharedFrameGapOver80Count: number;
+            rnsSharedFrameGapOver160Count: number;
+            rnsSharedFrameGapOver320Count: number;
+            rnsSharedFrameGapOver640Count: number;
+            rnsSharedFrameGapOver1000Count: number;
+            rnsSharedFrameToTransportInboundMsMax: number;
+            rnsSharedFrameToTransportInboundOver80Count: number;
+            rnsSharedFrameToTransportInboundOver160Count: number;
+            rnsSharedFrameToTransportInboundOver320Count: number;
+            rnsSharedFrameToTransportInboundOver640Count: number;
+            rnsSharedFrameToTransportInboundOver1000Count: number;
+            rnsSharedFrameToTransportInboundSamples: number;
+            rnsSharedFrameInterfaceLast: string;
+            rnsSharedFrameInterfaceWorst: string;
+            schedulerDiagnostics?: Array<Record<string, unknown>>;
+            rendererToBridgeEnqueueMsMax: number;
+            managerFlushToBridgeEnqueueMsMax: number;
+            bridgeEnqueueToFd3WriteMsMax: number;
+            bridgeEnqueueToFd3WriteQueueDwellMsMax: number;
+            rendererToFd3WriteMsMax: number;
+          };
+        };
+      }>;
+      sendAudioBatch?: (
+        roomId: string,
+        toAddresses: string[],
+        data: Uint8Array,
+        timing?: { rendererSendAtWallMs?: number }
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        diagnostics?: {
+          transport: 'link' | 'packet';
+          pendingFrames: number;
+          queuePressureDrops: number;
+          staleDrops: number;
+          linkUnreadyDrops: number;
+          packetSendFailures: number;
+          targetAddress?: string;
+          peerPresenceHash?: string;
+          routeKey?: string;
+          lastInboundAtMs?: number;
+          recoveryReason?: string;
+          recoveryHoldUntilMs?: number;
+          linkFallbackActive?: boolean;
+          linkFallbackReason?: string;
+          linkFallbackDwellMs?: number;
+          linkFallbackProbeCount?: number;
+          linkFallbackExitCount?: number;
+          linkFallbackLastDwellMs?: number;
+          pathDiversityActive?: boolean;
+          pathDiversityReason?: string;
+          pathDiversityMirrorAttempts?: number;
+          pathDiversityMirrorSuccesses?: number;
+          pathDiversityMirrorFailures?: number;
+          rendererToMainIpcMsMax?: number;
+          mainIpcToManagerEnqueueMsMax?: number;
+          managerPendingDwellMsMax?: number;
+          managerFlushToBridgeEnqueueMsMax?: number;
+          bridge?: {
+            bridgeQueuedFrames: number;
+            bridgeQueuedBytes: number;
+            bridgeBinaryWritesQueued: number;
+            bridgeWaitingForDrain: boolean;
+            perLinkQueuedFrames: number;
+            queuePressureDrops: number;
+            queuePressureDropsLast5s: number;
+            staleDrops: number;
+            staleDropsLast5s: number;
+            decodedQueueDepth: number;
+            decodedQueueMax: number;
+            decodedQueueDrops: number;
+            binaryOutQueueDepth: number;
+            binaryOutQueueMax: number;
+            binaryOutQueueDrops: number;
+            jsonOutQueueDrops: number;
+            packetSendFailures: number;
+            packetPathRequests: number;
+            packetPathResolutions: number;
+            packetPathTimeouts: number;
+            packetFreshSends: number;
+            packetStaleSends: number;
+            packetUnknownSends: number;
+            deadlineDropCount: number;
+            decodedQueueEvictOldestCount: number;
+            decodedQueueDropNewestCount: number;
+            fd3DecodedAgeMsMax: number;
+            decodedQueueDwellMsMax: number;
+            rnsSendDurationMsMax: number;
+            packetPathCheckMsMax: number;
+            executorLoopGapMsMax: number;
+            executorGapWhileQueuedMsMax: number;
+            executorAudioPassMsMax: number;
+            processBatchMsMax: number;
+            processBatchFramesMax: number;
+            rnsSendSlowCount: number;
+            executorStallCount: number;
+            executorCommandMsMax: number;
+            executorCommandWhileQueuedMsMax: number;
+            executorCommandSlowCount: number;
+            rnsCallbackSchedulerGapMsMax: number;
+            rnsCallbackSchedulerGapOver100Count: number;
+            rnsCallbackSchedulerGapOver250Count: number;
+            rnsCallbackSchedulerGapOver500Count: number;
+            rnsCallbackSchedulerGapOver1000Count: number;
+            rnsRawInboundGapMsMax: number;
+            rnsRawInboundGapOver80Count: number;
+            rnsRawInboundGapOver160Count: number;
+            rnsRawInboundGapOver320Count: number;
+            rnsRawInboundGapOver640Count: number;
+            rnsRawInboundGapOver1000Count: number;
+            rnsRawInboundToLinkReceiveMsMax: number;
+            rnsRawInboundToLinkReceiveOver80Count: number;
+            rnsRawInboundToLinkReceiveOver160Count: number;
+            rnsRawInboundToLinkReceiveOver320Count: number;
+            rnsRawInboundToLinkReceiveOver640Count: number;
+            rnsRawInboundToLinkReceiveOver1000Count: number;
+            rnsRawInboundToLinkReceiveSamples: number;
+            rnsRawInboundInterfaceLast: string;
+            rnsRawInboundInterfaceWorst: string;
+            rnsSharedFrameGapMsMax: number;
+            rnsSharedFrameGapOver80Count: number;
+            rnsSharedFrameGapOver160Count: number;
+            rnsSharedFrameGapOver320Count: number;
+            rnsSharedFrameGapOver640Count: number;
+            rnsSharedFrameGapOver1000Count: number;
+            rnsSharedFrameToTransportInboundMsMax: number;
+            rnsSharedFrameToTransportInboundOver80Count: number;
+            rnsSharedFrameToTransportInboundOver160Count: number;
+            rnsSharedFrameToTransportInboundOver320Count: number;
+            rnsSharedFrameToTransportInboundOver640Count: number;
+            rnsSharedFrameToTransportInboundOver1000Count: number;
+            rnsSharedFrameToTransportInboundSamples: number;
+            rnsSharedFrameInterfaceLast: string;
+            rnsSharedFrameInterfaceWorst: string;
+            schedulerDiagnostics?: Array<Record<string, unknown>>;
+            rendererToBridgeEnqueueMsMax: number;
+            managerFlushToBridgeEnqueueMsMax: number;
+            bridgeEnqueueToFd3WriteMsMax: number;
+            bridgeEnqueueToFd3WriteQueueDwellMsMax: number;
+            rendererToFd3WriteMsMax: number;
+          };
+        };
+      }>;
+      requestPeerMediaRecovery?: (
+        roomId: string,
+        address: string,
+        reason: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      getAudioDataPlaneSession?: (
+        roomId: string,
+        toAddresses: string[]
+      ) => Promise<
+        | {
+            ok: true;
+            endpoint: string;
+            token: string;
+            version: 2;
+            routeCount: number;
+          }
+        | { ok: false; reason?: string; error?: string }
+      >;
+      sendKey: (
+        roomId: string,
+        toAddress: string,
+        encryptedKey: string,
+        fromAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        meta: {
+          keyMessageVersion: number;
+          callSessionId: string;
+          mediaSessionGeneration: number;
+          keyCommitment: string;
+          encryptedKeyDigest: string;
+        }
+      ) => Promise<{ success: boolean; error?: string }>;
+      sendKeyRequest: (
+        roomId: string,
+        toAddress: string,
+        fromAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        callSessionId: string,
+        mediaSessionGeneration: number
+      ) => Promise<{ success: boolean }>;
+      requestSessionBreak: (
+        roomId: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      setLocalAddresses: (
+        addresses: string[],
+        source?: string
+      ) => Promise<{ success: boolean }>;
+      setQortalGroupReticulumTargets?: (
+        roomId: string,
+        addresses: string[]
+      ) => Promise<{ success: boolean; error?: string }>;
+      reportTransportHealth?: (
+        roomId: string,
+        healthyPeerAddresses: string[]
+      ) => Promise<{ success: boolean }>;
+      reportGcallAudioEscalation?: (opts: {
+        failSafeActive?: boolean;
+      }) => Promise<{ success: boolean; error?: string }>;
+      getLinkStats?: (roomId: string) => Promise<{
+        success: boolean;
+        error?: string;
+        stats?: {
+          roomId: string;
+          establishedLinks: number;
+          participants: number;
+        };
+      }>;
+      getRoomParticipants: (
+        roomId: string
+      ) => Promise<Array<{ address: string; publicKey: string }>>;
+      getRoomBootstrapState?: (roomId: string) => Promise<{
+        roomId: string;
+        chatId: string;
+        participants: Array<{
+          address: string;
+          publicKey: string;
+          joinedAt: number;
+        }>;
+        topologyEpoch: number;
+        lastTopology?: {
+          topologyEpoch: number;
+          rootForwarder: string;
+          standbyForwarder: string;
+          clusters: Array<{
+            members: string[];
+            forwarder: string;
+            standby: string;
+            standby2?: string;
+          }>;
+          lastSeen?: number | null;
+        };
+        callSessionId: string;
+        mediaSessionGeneration: number;
+        updatedAtMs: number;
+        fromRecentCache: boolean;
+      } | null>;
+      setWatchedQortalGroupIds?: (ids: number[]) => Promise<{
+        success: boolean;
+        error?: string;
+        activeByGroupId?: Record<string, boolean>;
+        participantCountByGroupId?: Record<string, number>;
+        maxParticipantsByGroupId?: Record<string, number>;
+      }>;
+      onQortalGroupCallActivity?: (
+        cb: (payload: {
+          activeByGroupId: Record<string, boolean>;
+          participantCountByGroupId?: Record<string, number>;
+          maxParticipantsByGroupId?: Record<string, number>;
+        }) => void
+      ) => () => void;
+      getPendingKeyMetrics?: () => Promise<{
+        pending_key_flush_success: number;
+        pending_key_expired: number;
+        pendingRooms: number;
+      }>;
+      /** Replays retained verified keys from main (use after join if initial replay was empty). */
+      requestRetainedKeyReplay?: () => void;
+      onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
+    };
+    audioSurface?: {
+      isReady?: () => Promise<boolean>;
+      ensureReady: () => Promise<{ success: boolean; error?: string }>;
+      sendCommand: (command: AudioSurfaceCommand) => Promise<{
+        ok: boolean;
+        payload?: unknown;
+        error?: string;
+      }>;
+      onEvent: (cb: (event: AudioSurfaceEvent) => void) => () => void;
+      getWindowRole: () => Promise<string>;
+    };
+    audioSurfaceHost?: {
+      notifyReady: () => void;
+      emitEvent: (event: AudioSurfaceEvent) => void;
+      resolveCommand: (envelope: AudioSurfaceCommandResultEnvelope) => void;
+      onCommand: (
+        cb: (envelope: AudioSurfaceCommandEnvelope) => void
+      ) => () => void;
+    };
+    __qortalGCallExportDiagnostics?: () => Promise<void>;
+    __qortalGCallPerfStats?: () => unknown;
+  }
+
+  // ── P2P Chat shared types ──────────────────────────────────────────────────
+
+  /**
+   * Cleartext metadata for an image attachment.
+   * Mirrors electron/src/chat.ts AttachmentMeta.
+   */
+  interface AttachmentMeta {
+    mimeType: string;
+    filename?: string;
+    width?: number;
+    height?: number;
+    sizeBytes: number;
+  }
+
+  interface P2PChatEvent {
+    /** UUID, assigned by the renderer and included in the signature. */
+    id: string;
+    /**
+     * Conversation identifier:
+     *   DM:    [addrA, addrB].sort().join(':')
+     *   Group: "group:" + numericGroupId
+     */
+    chatId: string;
+    eventType: 'message' | 'edit' | 'delete' | 'reaction';
+    authorAddress: string;
+    /** Base58-encoded Ed25519 public key. */
+    authorPublicKey: string;
+    /** Per-author monotonic counter within this chatId (starts at 1). */
+    seq: number;
+    /** Unix timestamp in milliseconds. */
+    timestamp: number;
+    content: string;
+    replyTo?: string;
+    targetId?: string;
+    /** Cleartext image attachment metadata — included in the signature. */
+    attachmentMeta?: AttachmentMeta;
+    /** SHA-256 hex digest of the encrypted attachment bytes — included in the signature. */
+    attachmentDataHash?: string;
+    /**
+     * Base64-encoded encrypted attachment blob.
+     * Present on live events received from the network.
+     * Absent on history events (fetched on demand via window.chat.getAttachment).
+     */
+    attachmentData?: string;
+    /** Base58 Ed25519 detached signature. */
+    signature: string;
+  }
+
+  interface RenderedMessage {
+    /** id of the original 'message' event */
+    id: string;
+    chatId: string;
+    authorAddress: string;
+    authorPublicKey: string;
+    seq: number;
+    timestamp: number;
+    /** Current content — mutated by edits, cleared by delete. */
+    content: string;
+    isEdited: boolean;
+    isDeleted: boolean;
+    /** Timestamp of the most recent edit, if any. */
+    editedAt?: number;
+    /** id of the parent message this replies to. */
+    replyTo?: string;
+    /**
+     * emoji → list of authorAddresses who have that reaction active.
+     * Toggle semantics: each reaction event from the same author with the same
+     * emoji flips the state (add if absent, remove if present).
+     */
+    reactions: Record<string, string[]>;
+    /** The raw original 'message' event, for reference. */
+    originalEvent: P2PChatEvent;
+    /** Attachment metadata when this message carries an image. */
+    attachmentMeta?: AttachmentMeta;
+  }
+
+  // ── Presence shared types ──────────────────────────────────────────────────
+
+  /** Presence status values that mean "present in the network". */
+  type UserStatus = 'online' | 'busy' | 'idle';
+
+  interface PresenceEnvelope {
+    id: string;
+    type: 'PRESENCE_ANNOUNCE' | 'PRESENCE_HEARTBEAT' | 'PRESENCE_OFFLINE';
+    senderAddress: string;
+    timestamp: number;
+    payload:
+      | PresenceAnnouncePayload
+      | PresenceHeartbeatPayload
+      | PresenceOfflinePayload;
+    signature: string;
+  }
+
+  interface PresenceAnnouncePayload {
+    address: string;
+    publicKey: string;
+    sessionId: string;
+    status: UserStatus;
+    clientVersion: string;
+  }
+
+  interface PresenceHeartbeatPayload {
+    address: string;
+    publicKey: string;
+    sessionId: string;
+    status: UserStatus;
+  }
+
+  interface PresenceOfflinePayload {
+    address: string;
+    publicKey: string;
+    sessionId: string;
+    status: 'offline';
+  }
+
+  interface PresenceSession {
+    address: string;
+    publicKey: string;
+    sessionId: string;
+    lastSeen: number;
+    firstSeen: number;
+    originNodeId: string;
+    viaPeerId: string;
+    clientVersion?: string;
+    status: UserStatus;
+    signatureValid: true;
+  }
+
+  interface PresenceStatusResult {
+    online: boolean;
+    lastSeen: number | null;
+    sessions: PresenceSession[];
   }
 }
 
 export {};
-

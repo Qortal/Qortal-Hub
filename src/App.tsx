@@ -7,11 +7,17 @@ import {
   Suspense,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Box, ButtonBase, useTheme } from '@mui/material';
+import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
+import { AnimatePresence } from 'framer-motion';
 import { decryptStoredWallet } from './utils/decryptWallet';
+import {
+  getWalletErrorMessage,
+  getWalletFieldLabel,
+} from './utils/walletErrorMessages';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
 import {
   createAccount,
+  generateRandomSentence,
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from './utils/generateWallet/generateWallet';
@@ -19,19 +25,22 @@ import { crypto, walletVersion } from './constants/decryptWallet';
 import PhraseWallet from './utils/generateWallet/phrase-wallet';
 import { AppContainer } from './styles/App-styles.ts';
 import { Loader } from './components/Loader';
+import ErrorBoundary from './common/ErrorBoundary';
 import { AuthenticationForm } from './components/AuthenticationForm';
-import { ProfileLeft } from './components/Profile';
 import {
   BuyOrderRequestScreen,
   ConnectionRequestScreen,
   CountdownOverlay,
   CreateWalletView,
+  ElectronPersistentStorageHydration,
   InfoDialog,
   NotAuthenticatedFooter,
+  NotificationPermissionSlideDown,
   PaymentPublishDialog,
   PaymentRequestScreen,
   QortalRequestExtensionDialog,
   QortalRequestScreen,
+  ReceiveQortOverlay,
   SendQortOverlay,
   SuccessOverlay,
   SuccessScreen,
@@ -41,18 +50,31 @@ import {
 } from './components/App';
 
 import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
+import { SupportChat, SUPPORT_ADDRESSES } from './components/Chat/SupportChat';
+import { VoiceCallProvider } from './context/VoiceCallContext';
+import { DirectVoiceCallGlobalOverlay } from './components/Chat/DirectVoiceCallGlobalOverlay';
+import { DirectVoiceCallNavWidget } from './components/Group/DirectVoiceCallNavWidget';
+import { AgentSupportDashboard } from './components/Chat/AgentSupportDashboard';
+import {
+  GroupSupportChat,
+  GROUP_SUPPORT_ADDRESSES,
+} from './components/Chat/GroupSupportChat';
+import { GroupAgentDashboard } from './components/Chat/GroupAgentDashboard';
+import { CallSwitchGuardProvider } from './contexts/CallSwitchGuardContext';
+import { GroupCallProvider } from './contexts/GroupCallContext';
+import { QortalGroupVoiceCallNavWidget } from './components/Group/QortalGroupVoiceCallNavWidget';
+import { QortalGroupVoiceCallStage } from './components/Group/QortalGroupVoiceCallStage';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
-import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
-import HelpIcon from '@mui/icons-material/Help';
+import { QortinoNotificationHost } from './components/Snackbar/QortinoNotificationHost';
 import { getWallets, storeWallets } from './background/background.ts';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from './utils/events';
-import { DrawerComponent } from './components/Drawer/Drawer';
+import { stopSharedEarbumpPlayback } from './components/Group/earbumpSharedAudio';
 import { Settings } from './components/Group/Settings';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
@@ -65,8 +87,10 @@ import {
   infoSnackGlobalAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
+  isPublicNodeUnavailableAtom,
   isRunningPublicNodeAtom,
   openSnackGlobalAtom,
+  qortalGroupCallPrimaryNamesAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -87,13 +111,16 @@ import { BuyQortInformation } from './components/BuyQortInformation';
 import { PdfViewer } from './common/PdfViewer';
 import { useTranslation } from 'react-i18next';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
+import { BackupWalletModal } from './components/Auth/BackupWalletModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import {
-  getDefaultLocalNodeUrl,
+  HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
   TIME_SECONDS_10_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
+import { usePresence } from './hooks/usePresence';
 import { useAuth } from './hooks/useAuth.tsx';
 import type { extStates } from './types/app';
 import { AppContextInterface, QORTAL_APP_CONTEXT } from './context/AppContext';
@@ -104,7 +131,15 @@ import {
   CustomTitleBar,
   CUSTOM_TITLE_BAR_HEIGHT,
 } from './components/Desktop/CustomTitleBar';
+import { isDisabledLegacy } from './constants/featureFlags';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
+import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
+import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
+import { openQWalletsTab } from './utils/openQWalletsTab';
+import { clearLastAuthenticatedWalletAddress } from './utils/lastAuthenticatedWallet';
+
+const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
+const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
 
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
@@ -122,11 +157,112 @@ export {
   getBaseApiReactForAvatar,
   getBaseApiReactForPrimaryName,
   getArbitraryEndpointReact,
+  getArbitrarySearchSimpleEndpointReact,
   getBaseApiReactSocket,
 } from './utils/globalApi';
 export { isMainWindow } from './constants/app';
 
+const formatRuntimeFaultMessage = (
+  value: unknown,
+  fallbackMessage: string
+): string => {
+  if (value instanceof Error) {
+    return value.stack || value.message || fallbackMessage;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'message' in value &&
+    typeof (value as { message?: unknown }).message === 'string' &&
+    (value as { message: string }).message.trim()
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'reason' in value &&
+    typeof (value as { reason?: unknown }).reason === 'string' &&
+    (value as { reason: string }).reason.trim()
+  ) {
+    return (value as { reason: string }).reason;
+  }
+
+  if (value != null) {
+    try {
+      const serialized = JSON.stringify(value, null, 2);
+      if (serialized && serialized !== '{}') {
+        return `${fallbackMessage}\n${serialized}`;
+      }
+    } catch {
+      // Fall through to String(value) below.
+    }
+
+    const stringified = String(value);
+    if (
+      stringified &&
+      stringified !== '[object Object]' &&
+      stringified !== 'undefined'
+    ) {
+      return `${fallbackMessage}\n${stringified}`;
+    }
+  }
+
+  return fallbackMessage;
+};
+
+/** Chromium reports this when resize work spans the same frame; not an app fault. */
+const RESIZE_OBSERVER_LOOP_MESSAGE =
+  /ResizeObserver loop completed with undelivered notifications/i;
+
+const isIgnorableRuntimeFault = (value: unknown): boolean => {
+  const extractMessage = (): string => {
+    if (typeof value === 'string') return value;
+    if (value instanceof Error) return value.message || '';
+    if (
+      value &&
+      typeof value === 'object' &&
+      'message' in value &&
+      typeof (value as { message?: unknown }).message === 'string'
+    ) {
+      return (value as { message: string }).message;
+    }
+    return '';
+  };
+
+  const message = extractMessage().trim();
+  if (RESIZE_OBSERVER_LOOP_MESSAGE.test(message)) {
+    return true;
+  }
+
+  const errorCode =
+    value &&
+    typeof value === 'object' &&
+    'error' in value &&
+    typeof (value as { error?: unknown }).error === 'string'
+      ? (value as { error: string }).error
+      : '';
+
+  return (
+    errorCode === 'timeout' &&
+    /^Request timed out after \d+ ms\b/i.test(message)
+  );
+};
+
 function App() {
+  type SendQortOriginRect = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
+
   const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
@@ -136,15 +272,31 @@ function App() {
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
   const [userInfo, setUserInfo] = useAtom(userInfoAtom);
+  useEffect(() => {
+    const w = window as Window & { __qortalCurrentAddress?: string | null };
+    w.__qortalCurrentAddress = userInfo?.address ?? null;
+    return () => {
+      delete w.__qortalCurrentAddress;
+    };
+  }, [userInfo?.address]);
   const [balance, setBalance] = useAtom(balanceAtom);
   const [paymentTo, setPaymentTo] = useState<string>('');
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
   const [countdown, setCountdown] = useState<null | number>(null);
+  const [globalRuntimeFault, setGlobalRuntimeFault] = useState<{
+    message: string;
+    source: 'boundary' | 'error' | 'promise';
+  } | null>(null);
+  const [authUnlockTransition, setAuthUnlockTransition] =
+    useState<AuthUnlockTransitionSnapshot | null>(null);
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
+  const [isBackupWalletModalOpen, setIsBackupWalletModalOpen] = useState(false);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
+  const setPublicNodeUnavailable = useSetAtom(isPublicNodeUnavailableAtom);
   const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
+  const setQcallPrimaryNames = useSetAtom(qortalGroupCallPrimaryNamesAtom);
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
@@ -173,8 +325,17 @@ function App() {
     hasSettingsChangedAtom
   );
 
+  useEffect(() => {
+    const w = window as Window & { __qortalCurrentAddress?: string | null };
+    w.__qortalCurrentAddress = userInfo?.address ?? null;
+    return () => {
+      delete w.__qortalCurrentAddress;
+    };
+  }, [userInfo?.address]);
+
   const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
+  const suppressWalletInfoRestoreRef = useRef(false);
   const isFocusedRef = useRef<boolean>(true);
   const permissionHandlerRef = useRef<
     ((message: any, event: MessageEvent) => void) | null
@@ -226,18 +387,29 @@ function App() {
 
   const [infoSnack, setInfoSnack] = useAtom(infoSnackGlobalAtom);
   const [openSnack, setOpenSnack] = useAtom(openSnackGlobalAtom);
-  const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
+  const [isOpenReceiveQort, setIsOpenReceiveQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
+  const [sendQortOriginRect, setSendQortOriginRect] =
+    useState<SendQortOriginRect>(null);
+  const [sendQortTargetRect, setSendQortTargetRect] =
+    useState<SendQortOriginRect>(null);
+  const [receiveQortOriginRect, setReceiveQortOriginRect] =
+    useState<SendQortOriginRect>(null);
+  const [receiveQortTargetRect, setReceiveQortTargetRect] =
+    useState<SendQortOriginRect>(null);
+  const [receiveQortAddress, setReceiveQortAddress] = useState('');
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const {
     isNodeValid,
     authenticate,
     getBalanceFunc,
+    handleSaveNodeInfo,
     validateApiKeyFromRegistration,
   } = useAuth();
   useBlockedAddressesLoader(extState === 'authenticated');
+  const { sendOfflineBeforeLogout } = usePresence();
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -251,8 +423,27 @@ function App() {
   const [isOpenMinting, setIsOpenMinting] = useState(false);
   const generatorRef = useRef(null);
 
+  const ensureGeneratedSeedphrase = useCallback(() => {
+    const currentPhrase = generatorRef.current?.parsedString;
+    if (currentPhrase) return currentPhrase;
+
+    const generatedPhrase = generateRandomSentence();
+    generatorRef.current = {
+      parsedString: generatedPhrase,
+    };
+    return generatedPhrase;
+  }, []);
+
+  const prepareNewSeedphrase = useCallback(() => {
+    const generatedPhrase = generateRandomSentence();
+    generatorRef.current = {
+      parsedString: generatedPhrase,
+    };
+    return generatedPhrase;
+  }, []);
+
   const exportSeedphrase = () => {
-    const seedPhrase = generatorRef.current.parsedString;
+    const seedPhrase = ensureGeneratedSeedphrase();
     saveSeedPhraseToDisk(seedPhrase);
   };
 
@@ -277,6 +468,64 @@ function App() {
 
   const [storeAccount, setStoredAccount] = useState<boolean>(true);
 
+  useEffect(() => {
+    const handleWindowError = (event: ErrorEvent) => {
+      if (isIgnorableRuntimeFault(event.error ?? event.message)) {
+        console.warn(
+          'Ignoring non-fatal runtime fault',
+          event.error || event.message,
+          event
+        );
+        return;
+      }
+      console.error(
+        'Global runtime error',
+        event.error || event.message,
+        event
+      );
+      setGlobalRuntimeFault({
+        message: formatRuntimeFaultMessage(
+          event.error ?? event.message,
+          'Unknown runtime error'
+        ),
+        source: 'error',
+      });
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      if (isIgnorableRuntimeFault(reason)) {
+        console.warn('Ignoring non-fatal runtime fault', reason, event);
+        return;
+      }
+      console.error('Unhandled promise rejection', reason, event);
+      setGlobalRuntimeFault({
+        message: formatRuntimeFaultMessage(
+          reason,
+          'Unhandled promise rejection'
+        ),
+        source: 'promise',
+      });
+    };
+
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener(
+        'unhandledrejection',
+        handleUnhandledRejection
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (extState !== 'authenticated' && globalRuntimeFault) {
+      setGlobalRuntimeFault(null);
+    }
+  }, [extState, globalRuntimeFault]);
+
   const contextValue = useMemo(
     () => ({
       onCancel,
@@ -300,10 +549,10 @@ function App() {
             setSelectedNode(response);
           } else {
             const payload = {
-              url: getDefaultLocalNodeUrl(),
+              url: HTTPS_EXT_NODE_QORTAL_LINK,
               apikey: '',
             };
-            handleSetGlobalApikey(response);
+            handleSetGlobalApikey(payload);
             setSelectedNode(payload);
           }
         })
@@ -318,18 +567,21 @@ function App() {
             .sendMessage('getWalletInfo')
             .then((response) => {
               if (response && response?.walletInfo) {
-                setRawWallet(response?.walletInfo);
+                if (suppressWalletInfoRestoreRef.current) return;
+
                 if (
                   holdRefExtState.current === 'web-app-request-payment' ||
                   holdRefExtState.current === 'web-app-request-connection' ||
                   holdRefExtState.current === 'web-app-request-buy-order'
                 )
                   return;
+
+                if (holdRefExtState.current !== 'not-authenticated') return;
+
                 if (response?.hasKeyPair) {
+                  setRawWallet(response?.walletInfo);
                   setExtstate('authenticated');
                   window.sendMessage('startNotificationCheck').catch(() => {});
-                } else {
-                  setExtstate('wallet-dropped');
                 }
               }
             })
@@ -399,7 +651,7 @@ function App() {
           if (!(field in pf))
             throw new Error(
               t('auth:message.error.field_not_found_json', {
-                field: field,
+                field: getWalletFieldLabel(field),
                 postProcess: 'capitalizeFirstChar',
               })
             );
@@ -574,22 +826,30 @@ function App() {
     getUserInfo();
   }, [address]);
 
-  useEffect(() => {
-    return () => {
-      console.log('exit');
-    };
-  }, []);
-
   const saveFileToDiskFunc = useCallback(async () => {
     try {
-      await saveFileToDisk(
+      if (!walletToBeDownloaded?.wallet || !walletToBeDownloaded?.qortAddress) {
+        setWalletToBeDownloadedError('No wallet backup is ready yet.');
+        return false;
+      }
+
+      const saved = await saveFileToDisk(
         walletToBeDownloaded.wallet,
         walletToBeDownloaded.qortAddress
       );
+      return Boolean(saved);
     } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
+      setWalletToBeDownloadedError(
+        getWalletErrorMessage(
+          error,
+          t('auth:wallet_errors.unable_to_save_backup', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        )
+      );
+      return false;
     }
-  }, [walletToBeDownloaded]);
+  }, [walletToBeDownloaded, t]);
 
   const saveWalletToLocalStorage = async (newWallet) => {
     try {
@@ -614,6 +874,7 @@ function App() {
 
   const createAccountFunc = async () => {
     try {
+      setWalletToBeDownloadedError('');
       if (!walletToBeDownloadedPassword) {
         setWalletToBeDownloadedError(
           t('core:message.generic.password_enter', {
@@ -640,6 +901,13 @@ function App() {
         );
         return;
       }
+      const generatedSeedphrase = ensureGeneratedSeedphrase();
+      if (!generatedSeedphrase) {
+        setWalletToBeDownloadedError(
+          'We could not prepare the seedphrase. Please go back and try again.'
+        );
+        return;
+      }
       setIsLoading(true);
 
       await new Promise<void>((res) => {
@@ -648,7 +916,7 @@ function App() {
         }, 250);
       });
 
-      const res = await createAccount(generatorRef.current.parsedString);
+      const res = await createAccount(generatedSeedphrase);
       const wallet = await res.generateSaveWalletData(
         walletToBeDownloadedPassword,
         crypto.kdfThreads,
@@ -687,18 +955,36 @@ function App() {
             getBalanceFunc();
           } else if (response?.error) {
             setIsLoading(false);
-            setWalletToBeDecryptedError(response.error);
+            setWalletToBeDecryptedError(getWalletErrorMessage(response.error));
           }
         })
         .catch((error) => {
           setIsLoading(false);
+          setWalletToBeDecryptedError(getWalletErrorMessage(error));
           console.error('Failed to decrypt wallet:', error);
         });
     } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
+      console.error('Failed to create account:', error);
+      setWalletToBeDownloadedError(
+        'We could not create this account. Please try again.'
+      );
       setIsLoading(false);
     }
   };
+
+  const cleanupAudioSurfaceBeforeLogout = useCallback(async () => {
+    if (typeof window.audioSurface?.sendCommand !== 'function') return;
+    try {
+      await Promise.race([
+        window.audioSurface.sendCommand({ type: 'logout-cleanup' }),
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, 2_000);
+        }),
+      ]);
+    } catch (error) {
+      console.warn('[GCall] Audio surface logout cleanup failed:', error);
+    }
+  }, []);
 
   const logoutFunc = useCallback(async () => {
     try {
@@ -709,10 +995,17 @@ function App() {
           }),
         });
       }
+      clearLastAuthenticatedWalletAddress();
+      // Send the offline presence notice while the key is still in secure
+      // storage. The background clears keyPair as part of logout, so signing
+      // must happen here — before sendMessage('logout') is called.
+      await cleanupAudioSurfaceBeforeLogout();
+      await sendOfflineBeforeLogout();
       window
         .sendMessage('logout', {})
         .then((response) => {
           if (response) {
+            stopSharedEarbumpPlayback();
             executeEvent('logout-event', {});
             resetAllStates();
           }
@@ -726,22 +1019,38 @@ function App() {
     } catch (error) {
       console.log(error);
     }
-  }, [hasSettingsChanged, extState]);
+  }, [
+    hasSettingsChanged,
+    extState,
+    cleanupAudioSurfaceBeforeLogout,
+    sendOfflineBeforeLogout,
+  ]);
 
   const returnToMain = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'authenticated';
     setPaymentTo('');
     setSendPaymentError('');
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
+    generatorRef.current = null;
     setShowSeed(false);
     setCreationStep(1);
+    setSendQortOriginRect(null);
+    setSendQortTargetRect(null);
+    setReceiveQortOriginRect(null);
+    setReceiveQortTargetRect(null);
+    setReceiveQortAddress('');
     setExtstate('authenticated');
     setIsOpenSendQort(false);
+    setIsOpenReceiveQort(false);
     setIsOpenSendQortSuccess(false);
   }, []);
 
   const resetAllStates = () => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setExtstate('not-authenticated');
     setRawWallet(null);
     setRequestConnection(null);
@@ -753,11 +1062,14 @@ function App() {
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
+    generatorRef.current = null;
     setShowSeed(false);
     setCreationStep(1);
     setWalletToBeDownloadedPasswordConfirm('');
     setWalletToBeDownloadedError('');
     setSendqortState(null);
+    setQcallPrimaryNames({});
+    downloadResource.cancelAllResourceDownloads();
     resetAllRecoil();
   };
 
@@ -812,66 +1124,96 @@ function App() {
     };
   }, []);
 
-  const openGlobalSnackBarFunc = (e) => {
-    const message = e.detail?.message;
-    const type = e.detail?.type;
-    setOpenSnack(true);
-    setInfoSnack({
-      type,
-      message,
-    });
-  };
-
-  useEffect(() => {
-    subscribeToEvent('openGlobalSnackBar', openGlobalSnackBarFunc);
-
-    return () => {
-      unsubscribeFromEvent('openGlobalSnackBar', openGlobalSnackBarFunc);
-    };
-  }, []);
-
   const openPaymentInternal = (e) => {
     const directAddress = e.detail?.address;
     const name = e.detail?.name;
+    const anchorRect = e.detail?.anchorRect;
+    const targetRect = e.detail?.targetRect;
+    setSendQortOriginRect(
+      anchorRect
+        ? {
+            left: anchorRect.left,
+            top: anchorRect.top,
+            width: anchorRect.width,
+            height: anchorRect.height,
+          }
+        : null
+    );
+    setSendQortTargetRect(
+      targetRect
+        ? {
+            left: targetRect.left,
+            top: targetRect.top,
+            width: targetRect.width,
+            height: targetRect.height,
+          }
+        : null
+    );
     setIsOpenSendQort(true);
-    setPaymentTo(name || directAddress);
+    setPaymentTo(name || directAddress || '');
+  };
+
+  const openReceiveQortInternal = (e) => {
+    const anchorRect = e.detail?.anchorRect;
+    const targetRect = e.detail?.targetRect;
+    setReceiveQortOriginRect(
+      anchorRect
+        ? {
+            left: anchorRect.left,
+            top: anchorRect.top,
+            width: anchorRect.width,
+            height: anchorRect.height,
+          }
+        : null
+    );
+    setReceiveQortTargetRect(
+      targetRect
+        ? {
+            left: targetRect.left,
+            top: targetRect.top,
+            width: targetRect.width,
+            height: targetRect.height,
+          }
+        : null
+    );
+    setReceiveQortAddress(e.detail?.address || address || '');
+    setIsOpenReceiveQort(true);
   };
 
   useEffect(() => {
     subscribeToEvent('openPaymentInternal', openPaymentInternal);
+    subscribeToEvent('openReceiveQortInternal', openReceiveQortInternal);
 
     return () => {
       unsubscribeFromEvent('openPaymentInternal', openPaymentInternal);
+      unsubscribeFromEvent('openReceiveQortInternal', openReceiveQortInternal);
     };
-  }, []);
+  }, [address]);
 
-  const onOpenSendQort = useCallback(() => setIsOpenSendQort(true), []);
-  const onCloseDrawerProfile = useCallback(
-    () => setIsOpenDrawerProfile(false),
-    []
-  );
-  const onOpenSendQortAndCloseDrawer = useCallback(() => {
+  const onOpenSendQort = useCallback(() => {
+    setSendQortOriginRect(null);
+    setSendQortTargetRect(null);
+    executeEvent('openSendQortInternal', {});
     setIsOpenSendQort(true);
-    setIsOpenDrawerProfile(false);
   }, []);
   const onOpenRegisterName = useCallback(
     () => executeEvent('openRegisterName', {}),
     []
   );
   const onOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
-  const onOpenDrawerLookup = useCallback(() => setIsOpenDrawerLookup(true), []);
-  const onOpenWalletsApp = useCallback(
-    () => executeEvent('openWalletsApp', {}),
+  const onOpenDrawerLookup = useCallback(
+    () => setIsOpenDrawerLookup((prev) => !prev),
     []
   );
-  const onOpenDrawerProfile = useCallback(
-    () => setIsOpenDrawerProfile(true),
-    []
-  );
+  const onOpenWalletsApp = useCallback(() => openQWalletsTab(), []);
   const onOpenMinting = useCallback(async () => {
     try {
+      const forceLocalMintingPreview =
+        typeof window !== 'undefined' &&
+        (localStorage.getItem(MINTING_LOCAL_DEBUG_STORAGE_KEY) === 'true' ||
+          localStorage.getItem(MINTING_LOCAL_DEBUG_STORAGE_KEY) === '1');
       const res = await isRunningGateway();
-      if (res)
+      if (res && !forceLocalMintingPreview)
         throw new Error(
           t('core:message.generic.no_minting_details', {
             postProcess: 'capitalizeFirstChar',
@@ -887,9 +1229,27 @@ function App() {
     }
   }, [t]);
   const onBackupWallet = useCallback(() => {
+    if (extState === 'authenticated' && rawWallet) {
+      setIsBackupWalletModalOpen(true);
+      return;
+    }
+
     setExtstate('download-wallet');
-    setIsOpenDrawerProfile(false);
-  }, [setExtstate]);
+  }, [extState, rawWallet, setExtstate]);
+
+  const closeBackupWalletModal = useCallback(() => {
+    setIsBackupWalletModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    subscribeToEvent('openMintingPanel', onOpenMinting);
+    subscribeToEvent('openBackupWallet', onBackupWallet);
+
+    return () => {
+      unsubscribeFromEvent('openMintingPanel', onOpenMinting);
+      unsubscribeFromEvent('openBackupWallet', onBackupWallet);
+    };
+  }, [onBackupWallet, onOpenMinting]);
 
   const onOkQortalRequestAccepted = useCallback(
     () => onOkQortalRequest('accepted'),
@@ -911,18 +1271,34 @@ function App() {
     () => confirmPayment(true),
     [confirmPayment]
   );
-  const onGoToCreateWallet = useCallback(
-    () => setExtstate('create-wallet'),
-    [setExtstate]
-  );
+  const onGoToCreateWallet = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'create-wallet';
+    prepareNewSeedphrase();
+    setWalletToBeDownloadedError('');
+    setWalletToBeDownloadedPassword('');
+    setWalletToBeDownloadedPasswordConfirm('');
+    setCreationStep(1);
+    setExtstate('create-wallet');
+  }, [
+    prepareNewSeedphrase,
+    setExtstate,
+    setWalletToBeDownloadedPassword,
+    setWalletToBeDownloadedPasswordConfirm,
+  ]);
   const onWalletsBack = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setRawWallet(null);
     setExtstate('not-authenticated');
     logoutFunc();
   }, [setExtstate, logoutFunc]);
   const onAuthenticationFormBack = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
+    clearLastAuthenticatedWalletAddress();
     setRawWallet(null);
-    setExtstate('wallets');
+    setExtstate('not-authenticated');
     setAuthenticatePassword('');
     logoutFunc();
   }, [setExtstate, logoutFunc]);
@@ -933,11 +1309,15 @@ function App() {
       setWalletToBeDownloadedPassword('');
       return;
     }
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setExtstate('not-authenticated');
     setShowSeed(false);
     setCreationStep(1);
     setWalletToBeDownloadedPasswordConfirm('');
     setWalletToBeDownloadedPassword('');
+    setWalletToBeDownloadedError('');
+    generatorRef.current = null;
   }, [
     creationStep,
     setExtstate,
@@ -946,16 +1326,109 @@ function App() {
   ]);
   const onShowSeed = useCallback(() => setShowSeed(true), []);
   const onHideSeed = useCallback(() => setShowSeed(false), []);
-  const onCreationStepNext = useCallback(() => setCreationStep(2), []);
+  const onCreationStepNext = useCallback(() => {
+    ensureGeneratedSeedphrase();
+    setWalletToBeDownloadedError('');
+    setCreationStep(2);
+  }, [ensureGeneratedSeedphrase]);
+
+  const isPublicNodeReachable = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${HTTPS_EXT_NODE_QORTAL_LINK}/admin/status`
+      );
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
+  const isLocalCoreReadyForHub = useCallback(async () => {
+    try {
+      const response = await fetch(`${HTTP_LOCALHOST_12391}/admin/status`);
+      if (!response.ok) return false;
+
+      const status = await response.json();
+      const syncPercent = Number(status?.syncPercent);
+      return (
+        Number.isFinite(syncPercent) &&
+        syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
+      );
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
+  const prepareNodeForHubEntry = useCallback(async () => {
+    const selectedUrl = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
+    const usingDefaultPublic = selectedUrl === HTTPS_EXT_NODE_QORTAL_LINK;
+    const blockedEntry = {
+      canEnter: false,
+      shouldOpenCoreSetupAfterEntry: false,
+    };
+
+    if (usingDefaultPublic) {
+      if (!(await isPublicNodeReachable())) {
+        setPublicNodeUnavailable(true);
+        setOpenCoreSetup(true);
+        return blockedEntry;
+      }
+
+      setPublicNodeUnavailable(false);
+      return {
+        canEnter: true,
+        shouldOpenCoreSetupAfterEntry: true,
+      };
+    }
+
+    if (isLocalNodeUrl(selectedUrl) && !(await isLocalCoreReadyForHub())) {
+      if (await isPublicNodeReachable()) {
+        setPublicNodeUnavailable(false);
+        await handleSaveNodeInfo({
+          url: HTTPS_EXT_NODE_QORTAL_LINK,
+          apikey: '',
+        });
+        return {
+          canEnter: true,
+          shouldOpenCoreSetupAfterEntry: true,
+        };
+      }
+
+      setPublicNodeUnavailable(true);
+      setOpenCoreSetup(true);
+      return blockedEntry;
+    }
+
+    setPublicNodeUnavailable(false);
+    return {
+      canEnter: true,
+      shouldOpenCoreSetupAfterEntry: false,
+    };
+  }, [
+    handleSaveNodeInfo,
+    isLocalCoreReadyForHub,
+    isPublicNodeReachable,
+    selectedNode?.url,
+    setOpenCoreSetup,
+    setPublicNodeUnavailable,
+  ]);
+
   const onBackupAccountConfirm = useCallback(async () => {
-    await saveFileToDiskFunc();
+    return saveFileToDiskFunc();
+  }, [saveFileToDiskFunc]);
+
+  const onEnterHubAfterCreate = useCallback(async () => {
+    const entryPreparation = await prepareNodeForHubEntry();
+    if (!entryPreparation.canEnter) return;
+
     returnToMain();
-    await showInfo({
-      message: t('auth:tips.wallet_secure', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-    });
-  }, [t, showInfo, saveFileToDiskFunc, returnToMain]);
+
+    if (window?.coreSetup && entryPreparation.shouldOpenCoreSetupAfterEntry) {
+      window.setTimeout(() => {
+        setOpenCoreSetup(true);
+      }, 650);
+    }
+  }, [prepareNodeForHubEntry, returnToMain, setOpenCoreSetup]);
   const onCountdownComplete = useCallback(() => {
     window.close();
   }, []);
@@ -978,77 +1451,202 @@ function App() {
     () => setOpenCoreSetup(true),
     [setOpenCoreSetup]
   );
-  const onShowTutorialImportantInfo = useCallback(
-    () => showTutorial('important-information', true),
-    [showTutorial]
-  );
-
   const isElectron =
     typeof window !== 'undefined' &&
     typeof (
       window as Window & { electronAPI?: { windowMinimize?: () => unknown } }
     ).electronAPI?.windowMinimize === 'function';
+  const shouldReduceAuthTransition =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      window.localStorage.getItem('hub_ui_animations_enabled') === 'false');
 
   const mainContent = (
     <>
       <PdfViewer />
 
       <QORTAL_APP_CONTEXT.Provider value={contextValue as AppContextInterface}>
+        <ElectronPersistentStorageHydration />
         <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
-            handleSetGlobalApikey={handleSetGlobalApikey}
+            onWalletUnlockStart={setAuthUnlockTransition}
             setExtstate={setExtstate}
-            useLocalNode={useLocalNode}
+            setRawWallet={setRawWallet}
+            rawWallet={rawWallet}
           />
         )}
 
         {extState === 'authenticated' && isMainWindow && (
           <Suspense fallback={<Loader />}>
-            <LazyAuthenticatedShell
-              balance={balance}
-              desktopViewMode={desktopViewMode}
-              isMain={true}
-              isOpenDrawerProfile={isOpenDrawerProfile}
-              logoutFunc={logoutFunc}
-              myAddress={address}
-              setDesktopViewMode={setDesktopViewMode}
-              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-              userInfo={userInfo}
-              rawWallet={rawWallet}
-              qortBalanceLoading={qortBalanceLoading}
-              setOpenSnack={setOpenSnack}
-              setInfoSnack={setInfoSnack}
-              onRefreshBalance={getBalanceAndUserInfoFunc}
-              onOpenSendQort={onOpenSendQort}
-              onOpenRegisterName={onOpenRegisterName}
-              extState={extState}
-              isMainWindow={isMainWindow}
-              onOpenSettings={onOpenSettings}
-              onOpenDrawerLookup={onOpenDrawerLookup}
-              onOpenWalletsApp={onOpenWalletsApp}
-              onOpenDrawerProfile={onOpenDrawerProfile}
-              getUserInfo={getUserInfo}
-              onOpenMinting={onOpenMinting}
-              showTutorial={showTutorial}
-              onBackupWallet={onBackupWallet}
-            />
+            <ErrorBoundary
+              fallback={({ error, componentStack }) => (
+                <Box
+                  sx={{
+                    alignItems: 'flex-start',
+                    backdropFilter: 'blur(18px)',
+                    background:
+                      theme.palette.mode === 'dark'
+                        ? 'linear-gradient(180deg, rgba(18,22,29,0.92) 0%, rgba(11,14,20,0.96) 100%)'
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,252,0.96) 100%)',
+                    border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,32,0.08)'}`,
+                    borderRadius: '24px',
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? '0 24px 48px rgba(0,0,0,0.3)'
+                        : '0 18px 36px rgba(15,20,30,0.12)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    m: '24px',
+                    maxWidth: '560px',
+                    p: '22px',
+                  }}
+                >
+                  <Typography sx={{ fontSize: '1.05rem', fontWeight: 800 }}>
+                    Hub runtime error
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.85rem',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    The authenticated shell crashed during render.
+                  </Typography>
+                  {error?.message ? (
+                    <Typography
+                      sx={{
+                        color: 'rgba(246,248,252,0.9)',
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace',
+                        fontSize: '0.78rem',
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {error.message}
+                    </Typography>
+                  ) : null}
+                  {componentStack ? (
+                    <Typography
+                      sx={{
+                        color: 'rgba(214,221,233,0.55)',
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace',
+                        fontSize: '0.7rem',
+                        lineHeight: 1.45,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {componentStack.trim()}
+                    </Typography>
+                  ) : null}
+                </Box>
+              )}
+            >
+              <GroupCallProvider>
+                <VoiceCallProvider>
+                  <CallSwitchGuardProvider>
+                    <Box
+                      sx={{
+                        animation: shouldReduceAuthTransition
+                          ? 'none'
+                          : 'dashboardAfterAuthIn 720ms cubic-bezier(0.4, 0, 0.2, 1) both',
+                        height: '100%',
+                        width: '100%',
+                        '@keyframes dashboardAfterAuthIn': {
+                          from: {
+                            opacity: 0,
+                            transform: 'translateY(8px)',
+                          },
+                          to: {
+                            opacity: 1,
+                            transform: 'translateY(0)',
+                          },
+                        },
+                      }}
+                    >
+                      <LazyAuthenticatedShell
+                        balance={balance}
+                        desktopViewMode={desktopViewMode}
+                        isMain={true}
+                        logoutFunc={logoutFunc}
+                        myAddress={address}
+                        setDesktopViewMode={setDesktopViewMode}
+                        userInfo={userInfo}
+                        rawWallet={rawWallet}
+                        qortBalanceLoading={qortBalanceLoading}
+                        setOpenSnack={setOpenSnack}
+                        setInfoSnack={setInfoSnack}
+                        onRefreshBalance={getBalanceAndUserInfoFunc}
+                        onOpenSendQort={onOpenSendQort}
+                        onOpenRegisterName={onOpenRegisterName}
+                        extState={extState}
+                        isMainWindow={isMainWindow}
+                        onOpenSettings={onOpenSettings}
+                        onOpenDrawerLookup={onOpenDrawerLookup}
+                        onOpenWalletsApp={onOpenWalletsApp}
+                        getUserInfo={getUserInfo}
+                        onOpenMinting={onOpenMinting}
+                        showTutorial={showTutorial}
+                        onBackupWallet={onBackupWallet}
+                      />
+                    </Box>
+                    <QortalGroupVoiceCallNavWidget />
+                    <DirectVoiceCallNavWidget />
+                    <QortalGroupVoiceCallStage />
+                    <DirectVoiceCallGlobalOverlay />
+                  </CallSwitchGuardProvider>
+                </VoiceCallProvider>
+              </GroupCallProvider>
+            </ErrorBoundary>
           </Suspense>
         )}
 
-        {isOpenSendQort && isMainWindow && (
-          <SendQortOverlay
-            balance={balance}
-            paymentTo={paymentTo}
-            onReturn={returnToMain}
-            onSuccess={() => {
-              setIsOpenSendQort(false);
-              setIsOpenSendQortSuccess(true);
-            }}
-            show={show}
+        {isMainWindow && (
+          <BackupWalletModal
+            open={isBackupWalletModalOpen}
+            onClose={closeBackupWalletModal}
+            rawWallet={rawWallet}
           />
         )}
+
+        <AnimatePresence>
+          {isOpenSendQort && isMainWindow && (
+            <SendQortOverlay
+              balance={balance}
+              originRect={sendQortOriginRect}
+              targetRect={sendQortTargetRect}
+              paymentTo={paymentTo}
+              onReturn={returnToMain}
+              onSuccess={() => {
+                setIsOpenSendQort(false);
+                setSendQortOriginRect(null);
+                setSendQortTargetRect(null);
+                setIsOpenSendQortSuccess(true);
+              }}
+              show={show}
+            />
+          )}
+          {isOpenReceiveQort && isMainWindow && (
+            <ReceiveQortOverlay
+              address={receiveQortAddress || address || ''}
+              originRect={receiveQortOriginRect}
+              targetRect={receiveQortTargetRect}
+              onReturn={() => {
+                setIsOpenReceiveQort(false);
+                setReceiveQortOriginRect(null);
+                setReceiveQortTargetRect(null);
+                setReceiveQortAddress('');
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {isShowQortalRequest && !isMainWindow && (
           <QortalRequestScreen
@@ -1118,16 +1716,17 @@ function App() {
           <AuthenticationForm
             rawWallet={rawWallet}
             selectedNode={selectedNode}
+            unlockTransition={authUnlockTransition}
             walletToBeDecryptedError={walletToBeDecryptedError}
             onBack={onAuthenticationFormBack}
             onAuthenticate={authenticateWallet}
+            onUnlockTransitionComplete={() => setAuthUnlockTransition(null)}
           />
         )}
         {extState === 'download-wallet' && (
           <DownloadWallet
             returnToMain={returnToMain}
             setIsLoading={setIsLoading}
-            showInfo={showInfo}
             rawWallet={rawWallet}
             setWalletToBeDownloaded={setWalletToBeDownloaded}
             walletToBeDownloaded={walletToBeDownloaded}
@@ -1158,6 +1757,7 @@ function App() {
             setStoredAccount={setStoredAccount}
             onCreateAccount={createAccountFunc}
             onBackupAccountConfirm={onBackupAccountConfirm}
+            onEnterHub={onEnterHubAfterCreate}
             exportSeedphrase={exportSeedphrase}
           />
         )}
@@ -1212,6 +1812,7 @@ function App() {
           onCancel={onCancelUnsavedChanges}
           onConfirm={() => onOkUnsavedChanges(undefined)}
         />
+        {isMainWindow && <NotificationPermissionSlideDown />}
         {isShowQortalRequestExtension && isMainWindow && (
           <QortalRequestExtensionDialog
             open={isShowQortalRequestExtension}
@@ -1236,34 +1837,12 @@ function App() {
           />
         )}
 
-        <CustomizedSnackbars
+        <QortinoNotificationHost
           open={openSnack}
           setOpen={setOpenSnack}
           info={infoSnack}
           setInfo={setInfoSnack}
         />
-
-        <DrawerComponent
-          open={isOpenDrawerProfile}
-          setOpen={setIsOpenDrawerProfile}
-        >
-          <ProfileLeft
-            userInfo={userInfo}
-            balance={balance}
-            rawWallet={rawWallet}
-            qortBalanceLoading={qortBalanceLoading}
-            setOpenSnack={setOpenSnack}
-            setInfoSnack={
-              setInfoSnack as (
-                info: { type: string; message: string } | null
-              ) => void
-            }
-            onRefreshBalance={getBalanceAndUserInfoFunc}
-            onOpenSendQort={onOpenSendQortAndCloseDrawer}
-            onOpenRegisterName={onOpenRegisterName}
-            onCloseDrawer={onCloseDrawerProfile}
-          />
-        </DrawerComponent>
 
         <UserLookup
           isOpenDrawerLookup={isOpenDrawerLookup}
@@ -1284,23 +1863,6 @@ function App() {
         <BuyQortInformation balance={balance} />
       </QORTAL_APP_CONTEXT.Provider>
 
-      {extState === 'create-wallet' && walletToBeDownloaded && (
-        <ButtonBase
-          onClick={onShowTutorialImportantInfo}
-          sx={{
-            bottom: '25px',
-            position: 'fixed',
-            right: '25px',
-          }}
-        >
-          <HelpIcon
-            sx={{
-              color: theme.palette.other.unread,
-            }}
-          />
-        </ButtonBase>
-      )}
-
       {isOpenMinting && (
         <Minting
           setIsOpenMinting={setIsOpenMinting}
@@ -1311,7 +1873,7 @@ function App() {
 
       {!isAuthenticated && (
         <NotAuthenticatedFooter
-          showCoreSetup={!!window?.coreSetup}
+          showCoreSetup
           onOpenCoreSetup={onOpenCoreSetup}
         />
       )}
@@ -1328,7 +1890,6 @@ function App() {
           onOpenSettings,
           onOpenDrawerLookup,
           onOpenWalletsApp,
-          onOpenDrawerProfile,
           onLogout: logoutFunc,
           getUserInfo,
           onOpenMinting,
@@ -1348,6 +1909,12 @@ function App() {
       }}
     >
       <CustomTitleBar rightNav={titleBarRightNav} />
+      {extState === 'authenticated' && isMainWindow && (
+        <GlobalQortalNavBar
+          desktopViewMode={desktopViewMode}
+          utilityNav={titleBarRightNav}
+        />
+      )}
 
       <Box
         sx={{
@@ -1359,7 +1926,86 @@ function App() {
           overflow: 'hidden',
         }}
       >
-        {mainContent}
+        {globalRuntimeFault && extState === 'authenticated' && isMainWindow ? (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'center',
+              p: 3,
+              width: '100%',
+            }}
+          >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                backdropFilter: 'blur(18px)',
+                background:
+                  theme.palette.mode === 'dark'
+                    ? 'linear-gradient(180deg, rgba(18,22,29,0.92) 0%, rgba(11,14,20,0.96) 100%)'
+                    : 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,252,0.96) 100%)',
+                border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,32,0.08)'}`,
+                borderRadius: '24px',
+                boxShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 24px 48px rgba(0,0,0,0.3)'
+                    : '0 18px 36px rgba(15,20,30,0.12)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                maxWidth: '620px',
+                p: '22px',
+                width: '100%',
+              }}
+            >
+              <Typography sx={{ fontSize: '1.05rem', fontWeight: 800 }}>
+                Hub runtime error
+              </Typography>
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.85rem',
+                  lineHeight: 1.55,
+                }}
+              >
+                The authenticated app hit a runtime fault after login. We are
+                surfacing it here instead of leaving a white screen.
+              </Typography>
+              <Box
+                sx={{
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(255,255,255,0.03)'
+                      : 'rgba(24,32,44,0.04)',
+                  border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(24,32,44,0.08)'}`,
+                  borderRadius: '16px',
+                  px: 1.5,
+                  py: 1.2,
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: '0.78rem', fontWeight: 700, mb: 0.45 }}
+                >
+                  {globalRuntimeFault.source}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontFamily: 'monospace',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {globalRuntimeFault.message}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        ) : (
+          mainContent
+        )}
       </Box>
     </AppContainer>
   );

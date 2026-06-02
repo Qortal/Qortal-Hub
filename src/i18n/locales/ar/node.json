@@ -40,7 +40,8 @@
     "invalidKey": "مفتاح API غير صالح",
     "failed_stop": "تعذر إيقاف النواة",
     "failed_bootstrap": "تعذر التمهيد",
-    "failed_delete": "تعذر حذف قاعدة البيانات"
+    "failed_delete": "تعذر حذف قاعدة البيانات",
+    "failed_bootstrap_or_clear": "تعذر التمهيد أو مسح بيانات السلسلة أو تشغيل Core"
   },
   "status": {
     "complete": "مكتمل",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "هل أنت متأكد أنك تريد إيقاف النواة؟",
     "bootstrap": "هل أنت متأكد أنك تريد التمهيد؟",
-    "delete": "هل أنت متأكد أنك تريد حذف قاعدة البيانات؟"
+    "delete": "هل أنت متأكد أنك تريد حذف قاعدة البيانات؟",
+    "bootstrapOrClearChain": "يُنفَّذ التمهيد من اللقطة عند تشغيل Core محليًا. إن تعذَّر ذلك أو فشل التمهيد، فقد تُزال قاعدة بيانات السلسلة المحلية ويُعاد تشغيل Core؛ لا تُغيَّر ملفات المحفظة. متابعة؟"
+  },
+  "bootstrapChainHelp": {
+    "title": "تمهيد السلسلة",
+    "body": "إجراء واحد: تمهيد من اللقطة عندما يستجيب Core؛ أو مسح قاعدة بيانات السلسلة المحلية ثم تشغيل Core من جديد عند تعذُّر التمهيد. المحفظة مخزَّنة على حدة."
   },
   "stop": "إيقاف النواة",
   "bootstrap": "تمهيد",
@@ -89,10 +95,93 @@
   "more": "خيارات إضافية",
   "less": "خيارات أقل",
   "enableAuthWhenSyncing": "تمكين المصادقة عند المزامنة",
+  "coreSetupDialog": {
+    "title": "إعداد Qortal Core",
+    "introTitle": "شغّل عقدتك الخاصة محليًا.",
+    "introSubtitle": "يمكنك استخدام عقدة عامة أثناء بدء Core ومزامنته.",
+    "publicNodeUnavailable": "العقد العامة غير متاحة حاليًا. اترك هذه الشاشة مفتوحة أثناء بدء Core المحلي ومزامنته.",
+    "steps": {
+      "downloadDone": "تم تنزيل Core",
+      "downloadActive": "جاري تنزيل Core",
+      "downloadIdle": "تنزيل Core",
+      "runningDone": "Core يعمل",
+      "runningActive": "جاري بدء Core",
+      "runningIdle": "بدء Core"
+    },
+    "readyToDownload": "جاهز للتنزيل",
+    "readyToStart": "جاهز للبدء",
+    "syncing": "جاري المزامنة",
+    "helpers": {
+      "downloadDone": "ملفات Core مثبتة وجاهزة.",
+      "downloadActive": "جاري تنزيل Qortal Core وإعداده.",
+      "downloadIdle": "نزّل Qortal Core لتشغيل عقدتك الخاصة.",
+      "runningDoneSyncing": "Core يعمل ويزامن بيانات السلسلة.",
+      "runningDone": "Core يعمل محليًا.",
+      "runningWaiting": "سيبدأ Core ويمزامن في الخلفية.",
+      "runningBlocked": "متاح بعد تنزيل Core."
+    },
+    "nextStepPill": "الخطوة التالية",
+    "locationTitle": "موقع Core",
+    "locationCustom": "سيتم تشغيل Qortal Core من هذا المجلد.",
+    "locationDefault": "سيستخدم Qortal Core المجلد الافتراضي لهذا النظام.",
+    "locationPathDefault": "موقع Qortal Core الافتراضي",
+    "change": "تغيير",
+    "choose": "اختيار",
+    "clear": "مسح",
+    "advancedTitle": "متقدم",
+    "advancedSubtitle": "أدوات وخيارات متقدمة لـ Core.",
+    "maintenanceUnavailable": "أدوات صيانة Core غير متاحة أثناء بدء Core أو مزامنته.",
+    "stopCoreTitle": "إيقاف Core",
+    "stopCoreBody": "يوقف عملية Core المحلية.",
+    "stopButton": "إيقاف",
+    "cancel": "إلغاء",
+    "actionDownload": "تنزيل Core",
+    "actionStart": "بدء Core",
+    "actionDone": "تم",
+    "confirmTitle": "تأكيد الإجراء",
+    "folderCopied": "تم نسخ مجلد Core",
+    "progressAriaLabel": "تقدّم {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core لم يبدأ بالكامل بعد",
     "descNotReady": "Qortal Core لم يبدأ بالكامل بعد. الرجاء الانتظار.",
     "titleReady": "Qortal Core جاهز",
     "descReady": "كل شيء جاهز للمتابعة"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "العقدة المحلية مثبتة",
+      "description": "لديك عقدة محلية مثبتة بالفعل. هل تريد تشغيلها أثناء استخدام العقدة العامة؟"
+    },
+    "localReady": {
+      "title": "العقدة المحلية جاهزة",
+      "description": "تمت مزامنة Qortal Core. يمكنك الآن التبديل من العقدة العامة إلى عقدتك المحلية."
+    },
+    "installing": {
+      "title": "تثبيت Qortal Core",
+      "description": "جارٍ تنزيل Qortal Core وتثبيته."
+    },
+    "starting": {
+      "title": "بدء تشغيل Core المحلي",
+      "description": "جارٍ بدء تشغيل Qortal Core.",
+      "preparing": "يتم بدء تشغيل Core وتجهيز بيانات البلوكشين."
+    },
+    "syncing": {
+      "title": "مزامنة البلوكشين",
+      "description": "عقدتك المحلية تلحق بالشبكة في الخلفية.",
+      "checking": "Core قيد التشغيل. يتم فحص تقدم مزامنة البلوكشين."
+    },
+    "needsAttention": {
+      "title": "إعداد Core يحتاج إلى انتباه",
+      "description": "يحتاج Core إلى انتباه. افتح الإعداد لمراجعة المشكلة."
+    },
+    "actions": {
+      "ignore": "تجاهل",
+      "start": "تشغيل",
+      "starting": "جارٍ التشغيل...",
+      "later": "لاحقًا",
+      "switchToLocal": "التبديل إلى المحلي",
+      "openSetup": "فتح الإعداد"
+    }
   }
 }

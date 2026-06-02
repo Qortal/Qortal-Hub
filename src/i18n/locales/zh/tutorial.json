@@ -33,6 +33,7 @@
     "get_six_qorts_way3_action": "打开 Q-Trade",
     "register_name": "注册您的名称",
     "confirming_transaction": "确认交易中",
+    "confirming": "确认中…",
     "load_avatar": "加载头像",
     "explore_apps": "探索精选应用",
     "done": "完成",
@@ -53,6 +54,17 @@
     "devnet_testing_desc": "在DevNet-Testing环境中测试您的Q-Apps",
     "open_app": "打开",
     "address_copied": "地址已复制到剪贴板",
-    "group_activity": "群组动态"
+    "group_activity": "群组动态",
+    "get_qorts_workspace_hint": "解锁你的前 6 个 QORT 以启用其余设置。",
+    "register_name_workspace_hint": "注册姓名后，此账户会变成可识别的身份。",
+    "load_avatar_workspace_hint": "给仪表板一张脸，让整个空间开始有你的感觉。",
+    "onboarding_transition_hard_part_done": "做得很好。最难的部分已经过去了。",
+    "onboarding_transition_one_more": "很棒。再走一步就完成了。",
+    "onboarding_press_next_when_ready": "做得很好。最难的部分已经过去了。准备好了请按下一步。",
+    "register_name_pending_hint": "正在链上保存姓名，这可能需要一点时间。",
+    "persistent_guide_get_qorts": "先从 6 个 QORT 开始。任选上方的一种方式。",
+    "persistent_guide_register_name": "接下来注册你的名字。",
+    "persistent_guide_load_avatar": "最后上传你的头像。",
+    "post_onboarding_workspace_ready": "全部就绪。你可以开始在上方搭建工作区。"
   }
 }

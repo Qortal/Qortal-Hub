@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getBaseApiReact } from '../App';
-import { getData, storeData } from '../utils/chromeStorage';
-import {
-  checkDifference,
-  getNameInfoForOthers,
-} from '../background/background.ts';
+import { useCallback, useEffect, useRef } from 'react';
+import { getNameInfoForOthers } from '../background/background.ts';
 import { lastPaymentSeenTimestampAtom } from '../atoms/global';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import { useAtom } from 'jotai';
@@ -12,21 +7,12 @@ import { useAtom } from 'jotai';
 export const useHandlePaymentNotification = (address) => {
   const nameAddressOfSender = useRef({});
   const isFetchingName = useRef({});
-  const [latestTx, setLatestTx] = useState(null);
   const [lastEnteredTimestampPayment, setLastEnteredTimestampPayment] = useAtom(
     lastPaymentSeenTimestampAtom
   );
 
-  useEffect(() => {
-    if (lastEnteredTimestampPayment && address) {
-      storeData(`last-seen-payment-${address}`, Date.now()).catch((error) => {
-        console.error(error);
-      });
-    }
-  }, [lastEnteredTimestampPayment, address]);
-
   const getNameOrAddressOfSender = useCallback(async (senderAddress) => {
-    if (isFetchingName.current[senderAddress]) return senderAddress;
+    if (isFetchingName.current[senderAddress]) return;
     try {
       isFetchingName.current[senderAddress] = true;
       const res = await getNameInfoForOthers(senderAddress);
@@ -39,81 +25,16 @@ export const useHandlePaymentNotification = (address) => {
   }, []);
 
   const getNameOrAddressOfSenderMiddle = useCallback(
-    async (senderAddress) => {
+    (senderAddress) => {
       getNameOrAddressOfSender(senderAddress);
       return senderAddress;
     },
     [getNameOrAddressOfSender]
   );
 
-  const hasNewPayment = useMemo(() => {
-    if (!latestTx) return false;
-    if (!checkDifference(latestTx?.timestamp)) return false;
-    if (
-      !lastEnteredTimestampPayment ||
-      lastEnteredTimestampPayment < latestTx?.timestamp
-    )
-      return true;
-
-    return false;
-  }, [lastEnteredTimestampPayment, latestTx]);
-
-  const getLastSeenData = useCallback(async () => {
-    try {
-      if (!address) return;
-      const key = `last-seen-payment-${address}`;
-
-      const res = await getData<any>(key).catch(() => null);
-
-      if (res) {
-        setLastEnteredTimestampPayment(res);
-      }
-
-      const response = await fetch(
-        `${getBaseApiReact()}/transactions/search?txType=PAYMENT&address=${address}&confirmationStatus=CONFIRMED&limit=5&reverse=true`
-      );
-
-      const responseData = await response.json();
-
-      const latestTx = responseData.filter(
-        (tx) => tx?.creatorAddress !== address && tx?.recipient === address
-      )[0];
-
-      if (!latestTx) {
-        return; // continue to the next group
-      }
-
-      setLatestTx(latestTx);
-    } catch (error) {
-      console.error(error);
-    }
-  }, [address, setLastEnteredTimestampPayment]);
-
-  useEffect(() => {
-    getLastSeenData();
-    // Handler function for incoming messages
-    const messageHandler = (event) => {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-      const message = event.data;
-      if (message?.action === 'SET_PAYMENT_ANNOUNCEMENT' && message?.payload) {
-        setLatestTx(message.payload);
-      }
-    };
-
-    // Attach the event listener
-    window.addEventListener('message', messageHandler);
-
-    // Clean up the event listener on component unmount
-    return () => {
-      window.removeEventListener('message', messageHandler);
-    };
-  }, [getLastSeenData]);
-
   const setLastEnteredTimestampPaymentEventFunc = useCallback(
-    (e) => {
-      setLastEnteredTimestampPayment(Date.now);
+    () => {
+      setLastEnteredTimestampPayment(Date.now());
     },
     [setLastEnteredTimestampPayment]
   );
@@ -133,9 +54,8 @@ export const useHandlePaymentNotification = (address) => {
   }, [setLastEnteredTimestampPaymentEventFunc]);
 
   return {
-    latestTx,
     getNameOrAddressOfSenderMiddle,
-    hasNewPayment,
+    lastEnteredTimestampPayment,
     setLastEnteredTimestampPayment,
     nameAddressOfSender,
   };

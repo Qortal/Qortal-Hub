@@ -40,7 +40,8 @@
     "invalidKey": "無効な APIキー",
     "failed_stop": "Core を停止できませんでした",
     "failed_bootstrap": "ブートストラップできませんでした",
-    "failed_delete": "データベースを削除できませんでした"
+    "failed_delete": "データベースを削除できませんでした",
+    "failed_bootstrap_or_clear": "ブートストラップ、チェーンデータのクリア、または Core の起動に失敗しました"
   },
   "status": {
     "complete": "完了",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "Core を停止してもよろしいですか？",
     "bootstrap": "ブートストラップしてもよろしいですか？",
-    "delete": "データベースを削除してもよろしいですか？"
+    "delete": "データベースを削除してもよろしいですか？",
+    "bootstrapOrClearChain": "Core がローカルで動作しているときはスナップショットからブートストラップします。できない場合や失敗した場合はローカルのチェーン DB を削除して Core を再起動する場合があります。ウォレット・ファイルはそのままです。続行しますか？"
+  },
+  "bootstrapChainHelp": {
+    "title": "チェーンブートストラップ",
+    "body": "1 つの操作：Core が応答できるときはスナップショットからブートストラップ。ブートストラップできないときはローカルチェーン DB を消去して Core を再起動。ウォレットは別に保存されます。"
   },
   "stop": "Core を停止",
   "bootstrap": "ブートストラップ",
@@ -89,10 +95,93 @@
   "more": "その他のオプション",
   "less": "少ないオプション",
   "enableAuthWhenSyncing": "同期時に認証を有効にする",
+  "coreSetupDialog": {
+    "title": "Qortal Core をセットアップ",
+    "introTitle": "自分のノードをローカルで実行できます。",
+    "introSubtitle": "Core の起動と同期中もパブリックノードを利用できます。",
+    "publicNodeUnavailable": "現在パブリックノードは利用できません。ローカル Core の起動と同期が終わるまでこの画面を開いたままにしてください。",
+    "steps": {
+      "downloadDone": "Core をダウンロード済み",
+      "downloadActive": "Core をダウンロード中",
+      "downloadIdle": "Core をダウンロード",
+      "runningDone": "Core 実行中",
+      "runningActive": "Core を起動中",
+      "runningIdle": "Core を起動"
+    },
+    "readyToDownload": "ダウンロードの準備完了",
+    "readyToStart": "起動の準備完了",
+    "syncing": "同期中",
+    "helpers": {
+      "downloadDone": "Core ファイルはインストール済みで準備できています。",
+      "downloadActive": "Qortal Core をダウンロードして準備しています。",
+      "downloadIdle": "自分のノードを動かすには Qortal Core をダウンロードしてください。",
+      "runningDoneSyncing": "Core は実行中でブロックチェーンを同期しています。",
+      "runningDone": "Core はローカルで実行中です。",
+      "runningWaiting": "Core はバックグラウンドで起動し同期を開始します。",
+      "runningBlocked": "Core のダウンロード後に利用できます。"
+    },
+    "nextStepPill": "次のステップ",
+    "locationTitle": "Core の場所",
+    "locationCustom": "Qortal Core はこのフォルダから実行されます。",
+    "locationDefault": "Qortal Core はこのシステムのデフォルトフォルダを使います。",
+    "locationPathDefault": "既定の Qortal Core の場所",
+    "change": "変更",
+    "choose": "選択",
+    "clear": "クリア",
+    "advancedTitle": "詳細",
+    "advancedSubtitle": "Core 向けの高度なツールとオプション。",
+    "maintenanceUnavailable": "Core の起動または同期中はメンテナンスツールは使えません。",
+    "stopCoreTitle": "Core を停止",
+    "stopCoreBody": "ローカルの Core プロセスを停止します。",
+    "stopButton": "停止",
+    "cancel": "キャンセル",
+    "actionDownload": "Core をダウンロード",
+    "actionStart": "Core を起動",
+    "actionDone": "完了",
+    "confirmTitle": "操作の確認",
+    "folderCopied": "Core フォルダをコピーしました",
+    "progressAriaLabel": "{{label}} の進行状況"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core は完全に起動していません",
     "descNotReady": "Qortal Core はまだ完全に起動していません。しばらくお待ちください。",
     "titleReady": "Qortal Core の準備ができました",
     "descReady": "続行する準備ができています"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "ローカルノードがインストール済みです",
+      "description": "ローカルノードはすでにインストールされています。パブリックノードを使用している間に起動しますか？"
+    },
+    "localReady": {
+      "title": "ローカルノードの準備完了",
+      "description": "Qortal Core は同期済みです。パブリックノードからローカルノードへ切り替えられます。"
+    },
+    "installing": {
+      "title": "Qortal Core をインストール中",
+      "description": "Qortal Core をダウンロードしてインストールしています。"
+    },
+    "starting": {
+      "title": "ローカル Core を起動中",
+      "description": "Qortal Core を起動しています。",
+      "preparing": "Core を起動し、ブロックチェーンデータを準備しています。"
+    },
+    "syncing": {
+      "title": "ブロックチェーンを同期中",
+      "description": "ローカルノードはバックグラウンドで追いついています。",
+      "checking": "Core は実行中です。ブロックチェーン同期の進行状況を確認しています。"
+    },
+    "needsAttention": {
+      "title": "Core 設定の確認が必要です",
+      "description": "Core の確認が必要です。設定を開いて問題を確認してください。"
+    },
+    "actions": {
+      "ignore": "無視",
+      "start": "起動",
+      "starting": "起動中...",
+      "later": "後で",
+      "switchToLocal": "ローカルへ切り替え",
+      "openSetup": "設定を開く"
+    }
   }
 }

@@ -15,6 +15,7 @@ function certLog(...args: unknown[]) {
  * This lets you be dynamic (user can switch nodes) without overwriting globals.
  */
 const trustedCaByHost = new Map<string, string>();
+const trustedPinnedLeafByHost = new Map<string, string>();
 
 /**
  * Block HTTPS to local node until ensureCertForBase has run (avoids Chromium caching a reject).
@@ -28,6 +29,18 @@ export function setLocalNodeHttpsReady(ready: boolean): void {
 
 export function isLocalNodeHttpsReady(): boolean {
   return localNodeHttpsReady;
+}
+
+export function trustPinnedCertificateForHost(
+  hostname: string,
+  certificatePem: string
+): void {
+  const normalizedHost = hostname.toLowerCase().trim();
+  const normalizedPem = normalizePem(certificatePem);
+  if (!normalizedHost || !isValidPemCertificate(normalizedPem)) {
+    return;
+  }
+  trustedPinnedLeafByHost.set(normalizedHost, normalizedPem);
 }
 
 const PERSISTED_CA_FILENAME = 'qortal-local-node-ca.pem';
@@ -263,6 +276,29 @@ export function installLocalNodeHttpsBlock(session: Session): void {
 export function installCertificateVerification(session: Session): void {
   session.setCertificateVerifyProc((request, callback) => {
     const hostname = normalizeHost(request.hostname);
+    const pinnedLeafPem = trustedPinnedLeafByHost.get(hostname);
+
+    if (pinnedLeafPem && isValidPemCertificate(pinnedLeafPem)) {
+      const pinnedLeafFp =
+        sha256FingerprintFromPem(pinnedLeafPem);
+      let cert: typeof request.certificate | undefined = request.certificate;
+      while (cert) {
+        const certFp = fingerprintToHex(cert.fingerprint ?? '');
+        const certFpFromPem = cert.data
+          ? sha256FingerprintFromPem(cert.data)
+          : '';
+        if (
+          (certFp && certFp === pinnedLeafFp) ||
+          (certFpFromPem && certFpFromPem === pinnedLeafFp)
+        ) {
+          callback(0);
+          return;
+        }
+        cert = cert.issuerCert;
+      }
+      callback(-2);
+      return;
+    }
 
     const caPem = trustedCaByHost.get(hostname);
 

@@ -40,7 +40,8 @@
     "invalidKey": "sobimatu API-võti",
     "failed_stop": "Core'i peatamine ebaõnnestus",
     "failed_bootstrap": "bootstrap ebaõnnestus",
-    "failed_delete": "andmebaasi kustutamine ebaõnnestus"
+    "failed_delete": "andmebaasi kustutamine ebaõnnestus",
+    "failed_bootstrap_or_clear": "bootstrap, ahelaandmete tühjendamine või Core uuesti käivitamine ebaõnnestus"
   },
   "status": {
     "complete": "valmis",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "kas oled kindel, et soovid Core peatada?",
     "bootstrap": "kas oled kindel, et soovid bootstrapi käivitada?",
-    "delete": "kas oled kindel, et soovid andmebaasi kustutada?"
+    "delete": "kas oled kindel, et soovid andmebaasi kustutada?",
+    "bootstrapOrClearChain": "Teostab bootstrapi hetktõmmisest, kui Core töötab kohapeal. Kui see pole võimalik või bootstrap nurjub, võidakse kustutada kohalik ahela andmebaas ja käivitada Core uuesti — rahakotifailid jäävad puutumata. Jätkada?"
+  },
+  "bootstrapChainHelp": {
+    "title": "Ahela bootstrap",
+    "body": "Üks tööriist: bootstrap hetktõmmisest kui Core on kättesaadav; või kohaliku keti andmebaasi puhastamine ja Core uuesti käivitamine kui bootstrap pole võimalik. Rahakott hoitakse eraldi."
   },
   "stop": "peata Core",
   "bootstrap": "bootstrap",
@@ -89,10 +95,93 @@
   "more": "rohkem valikuid",
   "less": "vähem valikuid",
   "enableAuthWhenSyncing": "luba autentimine sünkroonimisel",
+  "coreSetupDialog": {
+    "title": "Qortal Core seadistamine",
+    "introTitle": "Käivita oma sõlm kohapeal.",
+    "introSubtitle": "Core käivitamise ja sünkroonimise ajal võid kasutada avalikku sõlme.",
+    "publicNodeUnavailable": "Avalikud sõlmed pole praegu saadaval. Hoia see ekraan avatud, kuni kohalik Core käivitub ja sünkitub.",
+    "steps": {
+      "downloadDone": "Core alla laaditud",
+      "downloadActive": "Core allalaadimine",
+      "downloadIdle": "Laadi Core alla",
+      "runningDone": "Core töötab",
+      "runningActive": "Core käivitamine",
+      "runningIdle": "Käivita Core"
+    },
+    "readyToDownload": "Valmis allalaadimiseks",
+    "readyToStart": "Valmis käivitamiseks",
+    "syncing": "Sünkroonimine",
+    "helpers": {
+      "downloadDone": "Core failid on installitud ja valmis.",
+      "downloadActive": "Qortal Core allalaadimine ja ettevalmistus.",
+      "downloadIdle": "Laadi Qortal Core alla, et oma sõlme käitada.",
+      "runningDoneSyncing": "Core töötab ja sünkroonib plokiahela andmeid.",
+      "runningDone": "Core töötab kohapeal.",
+      "runningWaiting": "Core käivitub ja hakkab taustal sünkroonima.",
+      "runningBlocked": "Saadaval pärast Core allalaadimist."
+    },
+    "nextStepPill": "Järgmine samm",
+    "locationTitle": "Core asukoht",
+    "locationCustom": "Qortal Core käivitatakse sellest kaustast.",
+    "locationDefault": "Qortal Core kasutab selle süsteemi vaikimaskausta.",
+    "locationPathDefault": "Vaikimisi Qortal Core asukoht",
+    "change": "Muuda",
+    "choose": "Vali",
+    "clear": "Tühjenda",
+    "advancedTitle": "Täpsem",
+    "advancedSubtitle": "Core täiendavad tööriistad ja valikud.",
+    "maintenanceUnavailable": "Core hooldustööriistad pole saadaval Core käivitamise või sünkroonimise ajal.",
+    "stopCoreTitle": "Peata Core",
+    "stopCoreBody": "Peatab kohaliku Core protsessi.",
+    "stopButton": "Peata",
+    "cancel": "Tühista",
+    "actionDownload": "Laadi Core alla",
+    "actionStart": "Käivita Core",
+    "actionDone": "Valmis",
+    "confirmTitle": "Kinnita toiming",
+    "folderCopied": "Core kaust kopeeritud",
+    "progressAriaLabel": "Edenemine: {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core pole täielikult käivitatud",
     "descNotReady": "Qortal Core pole veel täielikult käivitatud. Palun oodake.",
     "titleReady": "Qortal Core on valmis",
     "descReady": "Kõik on valmis jätkamiseks"
+  },
+  "coreStatusNotice": {
+    "installedPrompt": {
+      "title": "Kohalik sõlm on installitud",
+      "description": "Sul on kohalik sõlm juba installitud. Kas soovid selle käivitada, kui kasutad avalikku sõlme?"
+    },
+    "localReady": {
+      "title": "Kohalik sõlm on valmis",
+      "description": "Qortal Core on sünkroonitud. Nüüd saad avalikult sõlmelt oma kohalikule sõlmele lülituda."
+    },
+    "installing": {
+      "title": "Qortal Core’i installimine",
+      "description": "Qortal Core’i laaditakse alla ja installitakse."
+    },
+    "starting": {
+      "title": "Kohaliku Core’i käivitamine",
+      "description": "Qortal Core’i käivitatakse.",
+      "preparing": "Core käivitub ja valmistab blockchaini andmeid ette."
+    },
+    "syncing": {
+      "title": "Blockchaini sünkroonimine",
+      "description": "Sinu kohalik sõlm jõuab taustal järele.",
+      "checking": "Core töötab. Kontrollitakse blockchaini sünkroonimise edenemist."
+    },
+    "needsAttention": {
+      "title": "Core’i seadistus vajab tähelepanu",
+      "description": "Core vajab tähelepanu. Ava seadistus, et probleem üle vaadata."
+    },
+    "actions": {
+      "ignore": "Eira",
+      "start": "Käivita",
+      "starting": "Käivitamine...",
+      "later": "Hiljem",
+      "switchToLocal": "Lülitu kohalikule",
+      "openSetup": "Ava seadistus"
+    }
   }
 }

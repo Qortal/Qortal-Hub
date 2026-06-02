@@ -45,6 +45,7 @@ import { WrapperUserAction } from '../../WrapperUserAction';
 import { formatTimestampForum } from '../../../utils/time';
 import { useTranslation } from 'react-i18next';
 import { ReturnIcon } from '../../../assets/Icons/ReturnIcon';
+import { hasInvisibleCharacters } from '../../../utils/hasInvisibleCharacters';
 
 const requestQueueSaveToLocal = new RequestQueueWithPromise(1);
 
@@ -127,15 +128,25 @@ export const Thread = ({
   const theme = useTheme();
   // Update: Use a new ref for the scrollable container
   const threadContainerRef = useRef(null);
-  const threadBeginningRef = useRef(null);
   // New state variables
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
 
   const secretKeyRef = useRef(null);
   const currentThreadRef = useRef(null);
-  const containerRef = useRef(null);
   const dataPublishes = useRef({});
+
+  const scrollThreadContainer = useCallback((position: 'top' | 'bottom') => {
+    setTimeout(() => {
+      const container = threadContainerRef.current;
+      if (!container) return;
+
+      container.scrollTo({
+        top: position === 'bottom' ? container.scrollHeight : 0,
+        behavior: position === 'bottom' ? 'smooth' : 'auto',
+      });
+    }, position === 'bottom' ? 300 : 100);
+  }, []);
 
   const getSavedData = useCallback(async (groupId) => {
     const res = await getDataPublishesFunc(groupId, 'thmsg');
@@ -202,13 +213,13 @@ export const Thread = ({
 
   const setTempData = async () => {
     try {
-      let threadId = currentThread.threadId;
+      const threadId = currentThread.threadId;
 
       const keyTemp = 'thread-post';
       const getTempAnnouncements = await getTempPublish();
 
       if (getTempAnnouncements?.[keyTemp]) {
-        let tempData = [];
+        const tempData = [];
         Object.keys(getTempAnnouncements?.[keyTemp] || {}).map((key) => {
           const value = getTempAnnouncements?.[keyTemp][key];
 
@@ -232,7 +243,7 @@ export const Thread = ({
         setHasPreviousPage(false);
         setHasLastPage(false);
         setHasNextPage(false);
-        let threadId = groupInfo.threadId;
+        const threadId = groupInfo.threadId;
 
         const identifier = `thmsg-${threadId}`;
         let url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=${threadIdentifier}&identifier=${identifier}&limit=20&includemetadata=false&prefix=true`;
@@ -268,14 +279,10 @@ export const Thread = ({
         }
         setMessages(fullArrayMsg);
         if (before === null && after === null && isReverse) {
-          setTimeout(() => {
-            containerRef.current.scrollIntoView({ behavior: 'smooth' });
-          }, 300);
+          scrollThreadContainer('bottom');
         }
         if (after || (before === null && after === null && !isReverse)) {
-          setTimeout(() => {
-            threadBeginningRef.current.scrollIntoView();
-          }, 100);
+          scrollThreadContainer('top');
         }
 
         if (fullArrayMsg.length === 0) {
@@ -365,7 +372,7 @@ export const Thread = ({
       localStorage.getItem(`qmail_threads_viewedtimestamp_${username}`) || '{}'
     );
     // Convert to an array of objects with identifier and all fields
-    let dataArray = Object.entries(threads).map(([identifier, value]) => ({
+    const dataArray = Object.entries(threads).map(([identifier, value]) => ({
       identifier,
       ...(value as any),
     }));
@@ -374,10 +381,10 @@ export const Thread = ({
     dataArray.sort((a, b) => b.timestamp - a.timestamp);
 
     // Slice the array to keep only the first 500 elements
-    let latest500 = dataArray.slice(0, 500);
+    const latest500 = dataArray.slice(0, 500);
 
     // Convert back to the original object format
-    let latest500Data: any = {};
+    const latest500Data: any = {};
     latest500.forEach((item) => {
       const { identifier, ...rest } = item;
       latest500Data[identifier] = rest;
@@ -420,7 +427,7 @@ export const Thread = ({
   const checkNewMessages = useCallback(
     async (groupInfo: any) => {
       try {
-        let threadId = groupInfo.threadId;
+        const threadId = groupInfo.threadId;
 
         const identifier = `thmsg-${threadId}`;
         const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=${threadIdentifier}&identifier=${identifier}&limit=20&includemetadata=false&offset=${0}&reverse=true&prefix=true`;
@@ -441,7 +448,7 @@ export const Thread = ({
           sliceLength = findMessage;
         }
         const newArray = responseData.slice(0, findMessage).reverse();
-        let fullArrayMsg = [...messages];
+        const fullArrayMsg = [...messages];
 
         for (const message of newArray) {
           try {
@@ -578,6 +585,8 @@ export const Thread = ({
       sx={{
         display: 'flex',
         flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
         overflow: 'hidden',
         position: 'relative',
         width: '100%',
@@ -655,11 +664,13 @@ export const Thread = ({
       <ThreadContainerFullWidth
         sx={{
           flexGrow: 1,
+          minHeight: 0,
           overflow: 'auto',
+          paddingBottom: '32px',
+          scrollPaddingBottom: '32px',
         }}
         ref={threadContainerRef} // Updated ref attached here
       >
-        <div ref={threadBeginningRef} />
         <ThreadContainer>
           <Spacer height={'30px'} />
 
@@ -774,6 +785,10 @@ export const Thread = ({
 
           {combinedListTempAndReal.map((message, index, list) => {
             let fullMessage = message;
+            const messageAuthorName = message?.name || '';
+            const hasUnsafeMessageAuthorName = Boolean(
+              messageAuthorName && hasInvisibleCharacters(messageAuthorName)
+            );
 
             if (hashMapMailMessages[message?.identifier]) {
               fullMessage = hashMapMailMessages[message.identifier];
@@ -826,8 +841,19 @@ export const Thread = ({
                             address={undefined}
                             name={message?.name}
                           >
-                            <ThreadInfoColumnNameP>
-                              {message?.name}
+                            <ThreadInfoColumnNameP
+                              sx={{
+                                ...(hasUnsafeMessageAuthorName
+                                  ? {
+                                      textDecorationLine: 'line-through',
+                                      textDecorationThickness: '2px',
+                                      textDecorationColor:
+                                        theme.palette.error.main,
+                                    }
+                                  : {}),
+                              }}
+                            >
+                              {messageAuthorName}
                             </ThreadInfoColumnNameP>
                           </WrapperUserAction>
 
@@ -924,8 +950,19 @@ export const Thread = ({
                         address={undefined}
                         name={message?.name}
                       >
-                        <ThreadInfoColumnNameP>
-                          {message?.name}
+                        <ThreadInfoColumnNameP
+                          sx={{
+                            ...(hasUnsafeMessageAuthorName
+                              ? {
+                                  textDecorationLine: 'line-through',
+                                  textDecorationThickness: '2px',
+                                  textDecorationColor:
+                                    theme.palette.error.main,
+                                }
+                              : {}),
+                          }}
+                        >
+                          {messageAuthorName}
                         </ThreadInfoColumnNameP>
                       </WrapperUserAction>
 
@@ -1095,8 +1132,6 @@ export const Thread = ({
 
             <Spacer height="30px" />
           </Box>
-
-          <div ref={containerRef} />
         </ThreadContainer>
       </ThreadContainerFullWidth>
 

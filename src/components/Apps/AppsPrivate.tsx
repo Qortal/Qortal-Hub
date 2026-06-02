@@ -163,7 +163,38 @@ export const AppsPrivate = ({ myName, myAddress }) => {
 
   const publishPrivateApp = async () => {
     try {
-      if (selectedGroup === 0) return;
+      if (selectedGroup === 0) {
+        setOpenSnackGlobal(true);
+        setInfoSnackCustom({
+          type: 'error',
+          message: t('group:message.generic.no_selection', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        return;
+      }
+
+      if (!name || name === 0) {
+        setOpenSnackGlobal(true);
+        setInfoSnackCustom({
+          type: 'error',
+          message: t('core:action.select_name_app', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        return;
+      }
+
+      if (!file) {
+        setOpenSnackGlobal(true);
+        setInfoSnackCustom({
+          type: 'error',
+          message: t('core:message.generic.select_zip', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        return;
+      }
 
       if (!logo)
         throw new Error(
@@ -759,6 +790,10 @@ export const AppsPrivate = ({ myName, myAddress }) => {
 
                 <Button
                   disabled={
+                    !name ||
+                    name === 0 ||
+                    !file ||
+                    !logo ||
                     !newPrivateAppValues.name ||
                     !newPrivateAppValues.service ||
                     !newPrivateAppValues.identifier ||

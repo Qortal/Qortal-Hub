@@ -10,7 +10,7 @@ export const AppContainer = styled(Box)(({ theme }) => ({
   height: '100vh',
   overflow: 'hidden',
   radius: '15px',
-  width: '100vw',
+  width: '100%',
 }));
 
 export const AuthenticatedContainer = styled(Box)(({ theme }) => ({

@@ -1,11 +1,13 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { Box, Button, ButtonBase, Collapse, Popover, Typography, useTheme } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   GROUP_ACTIVITY_CACHE_TTL_MS,
   groupInvitesCacheAtom,
+  memberGroupsAtom,
+  myGroupsWhereIAmAdminAtom,
   txListAtom,
 } from '../../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../../App';
@@ -17,17 +19,24 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
+import { GroupActivityEmptyState } from './GroupActivityEmptyState';
 
 export const GroupInvites = ({
   myAddress,
   setOpenAddGroup,
+  setOpenAddGroupTab,
   compact = false,
+  isVisible = true,
+  compactViewportHeight,
   onCountChange,
   onLoadingChange,
 }: {
   myAddress: string;
   setOpenAddGroup?: (v: boolean) => void;
+  setOpenAddGroupTab?: (tab: 0 | 1 | 2) => void;
   compact?: boolean;
+  isVisible?: boolean;
+  compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
   onLoadingChange?: (loading: boolean) => void;
 }) => {
@@ -39,9 +48,14 @@ export const GroupInvites = ({
     'tutorial',
   ]);
   const theme = useTheme();
+  const compactViewportHeightCss =
+    compactViewportHeight != null ? `${compactViewportHeight}px` : undefined;
+  const hasFixedCompactViewport = compact && compactViewportHeightCss != null;
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const [groupInvitesCache, setGroupInvitesCache] = useAtom(groupInvitesCacheAtom);
+  const memberGroups = useAtomValue(memberGroupsAtom);
+  const myGroupsWhereIAmAdmin = useAtomValue(myGroupsWhereIAmAdminAtom);
 
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -211,6 +225,35 @@ export const GroupInvites = ({
     onLoadingChange?.(loading);
   }, [loading, onLoadingChange]);
 
+  const hasAnyGroups =
+    (memberGroups?.length ?? 0) > 0 || (myGroupsWhereIAmAdmin?.length ?? 0) > 0;
+  const emptyStateTertiaryText = useMemo(
+    () =>
+      hasAnyGroups
+        ? undefined
+        : t('group:group_invites.empty_tertiary_no_groups', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+    [hasAnyGroups, t]
+  );
+
+  const emptyInviteSecondaryLines = useMemo(
+    () => [
+      t('group:group_invites.empty_secondary_1', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      t('group:group_invites.empty_secondary_2', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    ],
+    [t]
+  );
+
+  const handleFindGroups = useCallback(() => {
+    setOpenAddGroupTab?.(1);
+    setOpenAddGroup?.(true);
+  }, [setOpenAddGroup, setOpenAddGroupTab]);
+
   const handleInviteItemClick = (e: React.MouseEvent<HTMLElement>, group: (typeof groupsWithJoinRequests)[number]) => {
     setPopoverAnchor(e.currentTarget as HTMLElement);
     setSelectedGroupForPopover({
@@ -225,19 +268,21 @@ export const GroupInvites = ({
   const listContent = (
     <Box
       sx={{
-        bgcolor: theme.palette.background.paper,
+        bgcolor: compact ? 'transparent' : theme.palette.background.paper,
         borderRadius: compact ? '0' : '12px',
         display: 'flex',
         flexDirection: 'column',
-        height: compact ? 'auto' : '250px',
-        maxHeight: compact ? '300px' : undefined,
-        overflow: compact ? 'auto' : undefined,
+        flex: hasFixedCompactViewport ? 1 : undefined,
+        height: hasFixedCompactViewport ? '100%' : compact ? 'auto' : '250px',
+        maxHeight: compact && !hasFixedCompactViewport ? '300px' : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        overflow: hasFixedCompactViewport ? 'hidden' : compact ? 'auto' : undefined,
         padding: compact ? 1.5 : 2,
         width: compact ? '100%' : '322px',
       }}
     >
       {loading && groupsWithJoinRequests.length === 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4, width: '100%' }}>
+        <Box sx={{ alignItems: 'center', display: 'flex', flex: hasFixedCompactViewport ? 1 : undefined, justifyContent: 'center', py: 4, width: '100%' }}>
           <CustomLoader />
         </Box>
       )}
@@ -247,19 +292,27 @@ export const GroupInvites = ({
           sx={{
             alignItems: 'center',
             display: 'flex',
+            flex: hasFixedCompactViewport ? 1 : undefined,
             justifyContent: 'center',
             py: compact ? 4 : 5,
+            px: 2,
             width: '100%',
           }}
         >
-          <Typography
-            variant="body2"
-            sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}
-          >
-            {t('group:message.generic.no_display', {
+          <GroupActivityEmptyState
+            compact={compact}
+            isVisible={isVisible}
+            title={t('group:group_invites.empty_title', {
               postProcess: 'capitalizeFirstChar',
             })}
-          </Typography>
+            secondaryLines={emptyInviteSecondaryLines}
+            tertiaryText={emptyStateTertiaryText}
+            ctaLabel={t('group:group_invites.cta_find_groups', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            onCtaClick={handleFindGroups}
+            graphicVariant="invites"
+          />
         </Box>
       )}
 
@@ -268,8 +321,10 @@ export const GroupInvites = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
+            flex: hasFixedCompactViewport ? 1 : undefined,
             gap: 1,
-            maxHeight: '300px',
+            maxHeight: hasFixedCompactViewport ? '100%' : '300px',
+            minHeight: 0,
             overflow: 'auto',
             width: '100%',
           }}
@@ -352,6 +407,8 @@ export const GroupInvites = ({
         alignItems: compact ? 'stretch' : 'center',
         display: 'flex',
         flexDirection: 'column',
+        height: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
         width: '100%',
       }}
     >
@@ -427,7 +484,9 @@ export const GroupInvites = ({
             </Box>
             <Box sx={{ px: 2.5, py: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75, fontWeight: 600 }}>
-                {t('group:group.description', { postProcess: 'capitalizeFirstChar', defaultValue: 'Description' })}
+                {t('group:group.description', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
               <Typography
                 variant="body2"
@@ -442,7 +501,9 @@ export const GroupInvites = ({
                 }}
               >
                 {selectedGroupForPopover.description ||
-                  t('group:message.generic.no_description', { postProcess: 'capitalizeFirstChar', defaultValue: 'No description' })}
+                  t('group:message.generic.no_description', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
               </Typography>
               {selectedGroupForPopover.isOpen === false && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

@@ -33,6 +33,7 @@
     "get_six_qorts_way3_action": "فتح Q-Trade",
     "register_name": "سجل اسمك",
     "confirming_transaction": "جاري تأكيد المعاملة",
+    "confirming": "جارٍ التأكيد",
     "load_avatar": "تحميل الصورة الرمزية",
     "explore_apps": "استكشف التطبيقات المميزة",
     "done": "تم",
@@ -53,6 +54,17 @@
     "devnet_testing_desc": "اختبر تطبيقات Q-Apps في بيئة DevNet-Testing",
     "open_app": "فتح",
     "address_copied": "تم نسخ العنوان إلى الحافظة",
-    "group_activity": "نشاط المجموعة"
+    "group_activity": "نشاط المجموعة",
+    "get_qorts_workspace_hint": "حرِّر أول ‎٦‎ QORT لديك لتفعيل باقي الإعداد.",
+    "register_name_workspace_hint": "الاسم المسجَّل يحوّل هذا الحساب إلى هوية مُعرَّفة.",
+    "load_avatar_workspace_hint": "امنح لوحة التحكم وجهاً لتشعر أن المكان يخصّك.",
+    "onboarding_transition_hard_part_done": "أحسنت. أنهيت الجزء الأصعب.",
+    "onboarding_transition_one_more": "رائع. بقي خطوة واحدة.",
+    "onboarding_press_next_when_ready": "أحسنت. أنهيت الجزء الأصعب. اضغط التالي عندما تكون مستعدًا.",
+    "register_name_pending_hint": "يجري حفظ الاسم على السلسلة؛ قد يستغرق لحظة.",
+    "persistent_guide_get_qorts": "لنبدأ بـ‎٦‎ QORT. اختر أي خيار أعلاه.",
+    "persistent_guide_register_name": "بعد ذلك سجِّل اسمك.",
+    "persistent_guide_load_avatar": "وأخيرًا أضف صورة رمزية.",
+    "post_onboarding_workspace_ready": "تمّ كل شيء. يمكنك البدء ببناء مساحة العمل أعلاه."
   }
 }

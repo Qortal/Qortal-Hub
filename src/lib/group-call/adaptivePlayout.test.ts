@@ -1,0 +1,120 @@
+import { describe, expect, it } from 'vitest';
+import {
+  clampAdaptiveTargetMs,
+  computeAdaptiveIdealTargetMs,
+  computeAdaptiveJitterMs,
+  stepSmoothedAdaptiveTargetMs,
+} from './adaptivePlayout';
+
+describe('adaptivePlayout', () => {
+  it('clamps the ideal target into the configured range', () => {
+    expect(clampAdaptiveTargetMs(40, 80, 120)).toBe(80);
+    expect(clampAdaptiveTargetMs(220, 80, 120)).toBe(120);
+    expect(clampAdaptiveTargetMs(130, 80, 120)).toBe(120);
+  });
+
+  it('shows the BASE < MIN dead-zone until jitter or boost escapes the floor', () => {
+    expect(
+      computeAdaptiveIdealTargetMs({
+        baseTargetMs: 60,
+        minTargetMs: 80,
+        maxTargetMs: 120,
+        jitterMultiplier: 2.5,
+        jitterMs: 0,
+      })
+    ).toBe(80);
+
+    expect(
+      computeAdaptiveIdealTargetMs({
+        baseTargetMs: 60,
+        minTargetMs: 80,
+        maxTargetMs: 120,
+        jitterMultiplier: 2.5,
+        jitterMs: 10,
+      })
+    ).toBe(85);
+  });
+
+  it('grows monotonically as jitter and loss increase', () => {
+    const base = computeAdaptiveIdealTargetMs({
+      baseTargetMs: 80,
+      minTargetMs: 80,
+      maxTargetMs: 120,
+      jitterMultiplier: 2.2,
+      jitterMs: 5,
+      lossPenaltyMs: 4,
+    });
+    const worse = computeAdaptiveIdealTargetMs({
+      baseTargetMs: 80,
+      minTargetMs: 80,
+      maxTargetMs: 120,
+      jitterMultiplier: 2.2,
+      jitterMs: 18,
+      lossPenaltyMs: 10,
+    });
+    expect(worse).toBeGreaterThan(base);
+  });
+
+  it('allows recovery boost to use the higher severe ceiling', () => {
+    expect(
+      computeAdaptiveIdealTargetMs({
+        baseTargetMs: 80,
+        minTargetMs: 80,
+        maxTargetMs: 170,
+        jitterMultiplier: 2.2,
+        jitterMs: 40,
+        lossPenaltyMs: 40,
+        playoutBoostMs: 60,
+      })
+    ).toBe(170);
+  });
+
+  it('uses asymmetric smoothing for rising and falling targets', () => {
+    expect(
+      stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: 120,
+        previousTargetMs: 80,
+        alphaUp: 0.5,
+        alphaDown: 0.2,
+      })
+    ).toBe(100);
+
+    expect(
+      stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: 80,
+        previousTargetMs: 120,
+        alphaUp: 0.5,
+        alphaDown: 0.2,
+      })
+    ).toBe(112);
+  });
+
+  it('relaxes faster after a large target overshoot clears', () => {
+    expect(
+      stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: 100,
+        previousTargetMs: 120,
+        alphaUp: 0.5,
+        alphaDown: 0.2,
+      })
+    ).toBe(116);
+  });
+
+  it('clamps the smoothed target to the current max ceiling', () => {
+    expect(
+      stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: 140,
+        previousTargetMs: 180,
+        alphaUp: 0.5,
+        alphaDown: 0.2,
+        maxTargetMs: 130,
+      })
+    ).toBe(130);
+  });
+
+  it('computes zero jitter for tiny samples and variance for real windows', () => {
+    expect(computeAdaptiveJitterMs([])).toBe(0);
+    expect(computeAdaptiveJitterMs([20, 20])).toBe(0);
+    expect(computeAdaptiveJitterMs([20, 20, 30])).toBeGreaterThan(0);
+  });
+});

@@ -6,13 +6,16 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import CreateIcon from '@mui/icons-material/Create';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import { useTranslation } from 'react-i18next';
+import React from 'react';
 import { useAtomValue } from 'jotai';
 import {
   groupChatHasUnreadAtom,
@@ -23,13 +26,43 @@ import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './qmailUtils';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
-import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
+import {
+  getClickableAvatarSx,
+  getFallbackAvatarOutlineSx,
+} from '../Chat/clickableAvatarStyles';
+import { isOnlineAtomFamily, statusAtomFamily } from '../../atoms/presence';
+import type { DmFriendStored } from '../../atoms/global';
+import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
+import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
+
+/** Renders only the presence badge for a single DM address.
+ * Subscribes to per-address atoms so a change to any other peer
+ * does NOT trigger a re-render of this component.
+ */
+const DirectsPresenceBadge = React.memo(
+  ({
+    address,
+    children,
+  }: {
+    address: string;
+    children: React.ReactNode;
+  }) => {
+    const isOnline = useAtomValue(isOnlineAtomFamily(address));
+    const status = useAtomValue(statusAtomFamily(address));
+    return (
+      <PresenceStatusBadge online={isOnline} status={status}>
+        {children}
+      </PresenceStatusBadge>
+    );
+  }
+);
 
 export interface DirectsSidebarProps {
   setDesktopSideView: (view: 'groups' | 'directs') => void;
   desktopSideView: string;
   directChatHasUnread: boolean;
   directs: any[];
+  dmFriendsByAddress: Record<string, DmFriendStored>;
   getUserAvatarUrl: (name?: string) => string;
   directAvatarLoaded: Record<string, boolean>;
   setDirectAvatarLoaded: React.Dispatch<
@@ -58,6 +91,7 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
     desktopSideView,
     directChatHasUnread,
     directs,
+    dmFriendsByAddress,
     getUserAvatarUrl,
     directAvatarLoaded,
     setDirectAvatarLoaded,
@@ -301,10 +335,17 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                 Date.now() - direct?.timestamp <
                   timeDifferenceForNotificationChats) ||
                 timestampEnterData[direct?.address] < direct?.timestamp);
+            const isDmFriend = Boolean(
+              direct?.address && dmFriendsByAddress[direct.address]
+            );
+            const directName = direct?.name || direct?.address;
+            const hasUnsafeName = Boolean(
+              direct?.name && hasInvisibleCharacters(direct.name)
+            );
 
             return (
               <ListItem
-                key={direct?.timestamp + direct?.sender}
+                key={direct?.address || avatarKey}
                 onClick={() => {
                   setSelectedDirect(null);
                   setNewChat(false);
@@ -359,54 +400,59 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                   }}
                 >
                   <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
-                    <Avatar
-                      sx={{
-                        height: 40,
-                        width: 40,
-                        background: theme.palette.background.surface,
-                        color: theme.palette.text.primary,
-                        ...getClickableAvatarSx(theme, isAvatarLoaded),
-                      }}
-                      alt={direct?.name || direct?.address}
-                      src={avatarUrl}
-                      onClick={(event) => {
-                        if (!avatarUrl || !isAvatarLoaded) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openAvatarPreview(
-                          avatarUrl,
-                          direct?.name || direct?.address
-                        );
-                      }}
-                      imgProps={{
-                        onLoad: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey]) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: true,
-                            };
-                          });
-                        },
-                        onError: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey] === false) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: false,
-                            };
-                          });
-                        },
-                      }}
-                    >
-                      {(direct?.name || direct?.address)?.charAt(0)}
-                    </Avatar>
+                    <DirectsPresenceBadge address={direct?.address}>
+                      <Avatar
+                        sx={{
+                          height: 40,
+                          width: 40,
+                          background: theme.palette.background.surface,
+                          color: theme.palette.text.primary,
+                          ...(!isAvatarLoaded
+                            ? getFallbackAvatarOutlineSx(theme)
+                            : {}),
+                          ...getClickableAvatarSx(theme, isAvatarLoaded),
+                        }}
+                        alt={direct?.name || direct?.address}
+                        src={avatarUrl}
+                        onClick={(event) => {
+                          if (!avatarUrl || !isAvatarLoaded) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openAvatarPreview(
+                            avatarUrl,
+                            direct?.name || direct?.address
+                          );
+                        }}
+                        imgProps={{
+                          onLoad: () => {
+                            if (!avatarKey) return;
+                            setDirectAvatarLoaded((prev) => {
+                              if (prev[avatarKey]) return prev;
+                              return {
+                                ...prev,
+                                [avatarKey]: true,
+                              };
+                            });
+                          },
+                          onError: () => {
+                            if (!avatarKey) return;
+                            setDirectAvatarLoaded((prev) => {
+                              if (prev[avatarKey] === false) return prev;
+                              return {
+                                ...prev,
+                                [avatarKey]: false,
+                              };
+                            });
+                          },
+                        }}
+                      >
+                        {(direct?.name || direct?.address)?.charAt(0)}
+                      </Avatar>
+                    </DirectsPresenceBadge>
                   </ListItemAvatar>
 
                   <ListItemText
-                    primary={direct?.name || direct?.address}
+                    primary={directName}
                     secondary={
                       !direct?.timestamp
                         ? t('core:message.generic.no_messages', {
@@ -426,6 +472,13 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                         fontSize: '15px',
                         fontWeight: 600,
                         lineHeight: 1.3,
+                        ...(hasUnsafeName
+                          ? {
+                              textDecorationLine: 'line-through',
+                              textDecorationThickness: '2px',
+                              textDecorationColor: theme.palette.error.main,
+                            }
+                          : {}),
                       },
                     }}
                     secondaryTypographyProps={{
@@ -445,6 +498,19 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                     }}
                   />
 
+                  {isDmFriend && (
+                    <Tooltip title={t('core:dm_friends.friend_badge_aria')}>
+                      <StarRoundedIcon
+                        aria-label={t('core:dm_friends.friend_badge_aria')}
+                        sx={{
+                          color: theme.palette.warning.main,
+                          fontSize: '20px',
+                          flexShrink: 0,
+                          marginLeft: '4px',
+                        }}
+                      />
+                    </Tooltip>
+                  )}
                   {hasUnread && (
                     <MarkChatUnreadIcon
                       sx={{

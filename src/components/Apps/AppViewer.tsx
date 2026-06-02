@@ -143,9 +143,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         }
         navigator.clipboard
           .writeText(link)
-          .then(() => {
-            console.log('Path copied to clipboard:', path);
-          })
+          .then(() => undefined)
           .catch((error) => {
             console.error('Failed to copy path:', error);
           });
@@ -289,8 +287,6 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           );
           // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
         }
-      } else {
-        console.log('Iframe not accessible or does not have a content window.');
       }
     };
 
@@ -310,6 +306,74 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       };
     }, [app, history, themeMode, currentLang]);
 
+    const navigateToPathFunc = useCallback(
+      async (e) => {
+        const { path: targetPath = '' } = e.detail;
+        if (!iframeRef.current?.contentWindow) return;
+
+        const targetOrigin = iframeRef.current
+          ? new URL(iframeRef.current.src).origin
+          : '*';
+
+        const navigationPromise = new Promise((resolve, reject) => {
+          function handleNavigationSuccess(event) {
+            if (
+              event.data?.action === 'NAVIGATION_SUCCESS' &&
+              event.data.path === targetPath
+            ) {
+              frameWindow.removeEventListener(
+                'message',
+                handleNavigationSuccess
+              );
+              resolve(undefined);
+            }
+          }
+
+          frameWindow.addEventListener('message', handleNavigationSuccess);
+
+          setTimeout(() => {
+            frameWindow.removeEventListener('message', handleNavigationSuccess);
+            reject(new Error('navigation_timeout'));
+          }, 250);
+          iframeRef.current.contentWindow.postMessage(
+            {
+              action: 'NAVIGATE_TO_PATH',
+              path: targetPath,
+              requestedHandler: 'UI',
+            },
+            targetOrigin
+          );
+        });
+
+        try {
+          await navigationPromise;
+        } catch {
+          if (isDevMode) {
+            setUrl(
+              `${url}${targetPath}?theme=${themeMode}&lang=${currentLang}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            );
+            return;
+          }
+          setUrl(
+            `${getBaseApiReact()}/render/${app?.service}/${app?.name}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+          );
+        }
+      },
+      [app, frameWindow, iframeRef, isDevMode, url, themeMode, currentLang]
+    );
+
+    useEffect(() => {
+      if (!app?.tabId) return;
+      subscribeToEvent(`navigateToPath-${app?.tabId}`, navigateToPathFunc);
+
+      return () => {
+        unsubscribeFromEvent(
+          `navigateToPath-${app?.tabId}`,
+          navigateToPathFunc
+        );
+      };
+    }, [app?.tabId, navigateToPathFunc]);
+
     // Function to navigate back in iframe
     const navigateForwardInIframe = async () => {
       if (iframeRef.current && iframeRef.current.contentWindow) {
@@ -320,8 +384,6 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           { action: 'NAVIGATE_FORWARD' },
           targetOrigin
         );
-      } else {
-        console.log('Iframe not accessible or does not have a content window.');
       }
     };
 
