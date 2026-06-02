@@ -222,6 +222,7 @@
     "loading_requests": "Chargement des demandes",
     "members_count": "{{count}} membres",
     "new_encrypted_message": "Nouveau message chiffré",
+    "new_message": "Nouveau message",
     "notifications_empty_message": "Rejoignez des communautés dans Q-Chat pour alimenter ce fil avec des messages de groupe, des mentions et de l’activité.",
     "notifications_empty_title": "Commencez avec les groupes Q-Chat",
     "open": "Ouvrir",

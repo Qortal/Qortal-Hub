@@ -222,6 +222,7 @@
     "loading_requests": "Ladataan pyyntöjä",
     "members_count": "{{count}} jäsentä",
     "new_encrypted_message": "Uusi salattu viesti",
+    "new_message": "Uusi viesti",
     "notifications_empty_message": "Liity Q-Chat-yhteisöihin, jotta tämä syöte täyttyy ryhmäviesteillä, maininnoilla ja toiminnalla.",
     "notifications_empty_title": "Aloita Q-Chat-ryhmillä",
     "open": "Avaa",

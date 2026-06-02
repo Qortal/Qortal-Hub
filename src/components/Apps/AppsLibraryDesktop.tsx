@@ -320,9 +320,12 @@ export const AppsLibraryDesktop = ({
                     >
                       <IconButton
                         onClick={() => getQapps()}
-                        aria-label={t('core:action.refetch_apps_websites_list', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
+                        aria-label={t(
+                          'core:action.refetch_apps_websites_list',
+                          {
+                            postProcess: 'capitalizeFirstChar',
+                          }
+                        )}
                         sx={{ color: theme.palette.text.secondary }}
                       >
                         <RefreshIcon />
@@ -340,7 +343,10 @@ export const AppsLibraryDesktop = ({
                     onChange={setCategoryFilter}
                     categories={categories}
                   />
-                  <StatusFilter value={statusFilter} onChange={setStatusFilter} />
+                  <StatusFilter
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                  />
                 </>
               )}
             </Box>

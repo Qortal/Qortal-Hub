@@ -222,6 +222,7 @@
     "loading_requests": "Taotluste laadimine",
     "members_count": "{{count}} liiget",
     "new_encrypted_message": "Uus krüpteeritud sõnum",
+    "new_message": "Uus sõnum",
     "notifications_empty_message": "Liitu Q-Chati kogukondadega, et see voog täituks grupisõnumite, mainimiste ja tegevusega.",
     "notifications_empty_title": "Alusta Q-Chati gruppidega",
     "open": "Ava",

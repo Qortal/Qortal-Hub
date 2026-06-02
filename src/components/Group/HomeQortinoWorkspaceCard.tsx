@@ -240,6 +240,7 @@ type QAppResourceRecord = {
   };
   name?: string;
   service?: string;
+  identifier?: string;
 };
 
 type TrackReadyState = 'downloading' | 'error' | 'idle' | 'ready';
@@ -879,7 +880,9 @@ export const QortinoMusicPlaybackController = memo(
       Boolean(activeTrack.id)
     );
     const activeTrackPlaybackUrl =
-      activeTrackReadyState === 'ready' ? buildTrackPlaybackUrl(activeTrack) : '';
+      activeTrackReadyState === 'ready'
+        ? buildTrackPlaybackUrl(activeTrack)
+        : '';
     const activeTrackDurationSeconds = useMemo(() => {
       if (!activeTrack.id) return 0;
       const audio = audioRef.current;
@@ -929,11 +932,7 @@ export const QortinoMusicPlaybackController = memo(
           selectedTrackId: nextTrack.id,
         }));
       },
-      [
-        applyWorkspaceState,
-        playbackQueue,
-        workspaceState.selectedTrackId,
-      ]
+      [applyWorkspaceState, playbackQueue, workspaceState.selectedTrackId]
     );
 
     useEffect(() => {
@@ -2527,8 +2526,8 @@ export const HomeQortinoWorkspaceCard = ({
 
     try {
       const urls = [
-        `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`,
-        `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`,
+        `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&default=true&limit=0&includestatus=true&includemetadata=true`,
+        `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&default=true&limit=0&includestatus=true&includemetadata=true`,
       ];
       const responses = await Promise.all(
         urls.map((url) =>
@@ -2551,6 +2550,7 @@ export const HomeQortinoWorkspaceCard = ({
       const nextCatalog = Array.from(
         new Map(
           (Array.isArray(responseData) ? responseData : [])
+            ?.filter((res) => !res?.identifier)
             .map((resource) => {
               const appName =
                 typeof resource?.name === 'string' ? resource.name.trim() : '';

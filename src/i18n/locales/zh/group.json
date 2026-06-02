@@ -222,6 +222,7 @@
     "loading_requests": "正在加载请求",
     "members_count": "{{count}} 名成员",
     "new_encrypted_message": "新的加密消息",
+    "new_message": "新消息",
     "notifications_empty_message": "加入 Q-Chat 社区，让这个信息流显示群组消息、提及和活动。",
     "notifications_empty_title": "从 Q-Chat 群组开始",
     "open": "打开",

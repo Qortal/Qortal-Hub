@@ -19,6 +19,12 @@ import { vi } from 'vitest';
 export const qortalRequestsFactory = () => ({
   isRunningGateway: vi.fn(),
   getPermission: vi.fn(),
+  getNotificationPermissionKey: vi.fn(
+    (appName: unknown) =>
+      `qAPPNotification-Q-test-address:${String(appName ?? '')
+        .trim()
+        .toLowerCase()}`
+  ),
   setPermission: vi.fn(),
   setSessionPermissions: vi.fn(),
   hasSessionPermission: vi.fn(),
@@ -170,9 +176,9 @@ export function simulatePermission(accepted: boolean): void {
         window.dispatchEvent(
           new MessageEvent('message', {
             data: {
-            action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
-            requestId: event.data.requestId,
-            result: { accepted },
+              action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
+              requestId: event.data.requestId,
+              result: { accepted },
             },
             origin: window.location.origin,
             source: window,

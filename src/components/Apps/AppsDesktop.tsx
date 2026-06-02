@@ -73,7 +73,10 @@ import {
 import { publishEditTargetAtom } from '../../atoms/appsAtoms';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
+import {
+  TIME_MINUTES_2_IN_MILLISECONDS,
+  TIME_MINUTES_20_IN_MILLISECONDS,
+} from '../../constants/constants';
 import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 import { extractComponents } from '../Chat/MessageDisplay';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
@@ -90,6 +93,7 @@ import {
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
+const MIN_LIBRARY_APPS_BEFORE_SLOW_POLL = 10;
 /** Bounded MRU stack (tab ids only) for "last visited" after closing the active tab */
 const MAX_TAB_MRU_DEPTH = 64;
 
@@ -214,6 +218,7 @@ export const AppsDesktop = ({
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
   const [availableQapps, setAvailableQapps] = useState([]);
+  const availableQappsCountRef = useRef(0);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [tabs, setTabs] = useState([]);
@@ -554,7 +559,7 @@ export const AppsDesktop = ({
     try {
       let apps = [];
       let websites = [];
-      const url = `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
+      const url = `${getBaseApiReact()}/arbitrary/resources/search?service=APP&default=true&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -565,7 +570,7 @@ export const AppsDesktop = ({
 
       if (!response?.ok) return;
       const responseData = await response.json();
-      const urlWebsites = `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
+      const urlWebsites = `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&default=true&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
 
       const responseWebsites = await fetch(urlWebsites, {
         method: 'GET',
@@ -580,7 +585,9 @@ export const AppsDesktop = ({
       apps = responseData;
       websites = responseDataWebsites;
       const combine = [...apps, ...websites];
-      setAvailableQapps(combine);
+      const nextAvailableQapps = combine?.filter((res) => !res?.identifier);
+      availableQappsCountRef.current = nextAvailableQapps.length;
+      setAvailableQapps(nextAvailableQapps);
     } catch (error) {
       console.log(error);
     }
@@ -590,13 +597,37 @@ export const AppsDesktop = ({
   }, [getCategories]);
 
   useEffect(() => {
-    getQapps();
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const interval = setInterval(() => {
-      getQapps();
-    }, TIME_MINUTES_20_IN_MILLISECONDS);
+    const scheduleNextFetch = () => {
+      if (!isMounted) {
+        return;
+      }
 
-    return () => clearInterval(interval);
+      const delay =
+        availableQappsCountRef.current < MIN_LIBRARY_APPS_BEFORE_SLOW_POLL
+          ? TIME_MINUTES_2_IN_MILLISECONDS
+          : TIME_MINUTES_20_IN_MILLISECONDS;
+
+      timeoutId = setTimeout(() => {
+        void fetchAndSchedule();
+      }, delay);
+    };
+
+    const fetchAndSchedule = async () => {
+      await getQapps();
+      scheduleNextFetch();
+    };
+
+    void fetchAndSchedule();
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [getQapps]);
 
   const selectedAppInfoFunc = (e) => {
