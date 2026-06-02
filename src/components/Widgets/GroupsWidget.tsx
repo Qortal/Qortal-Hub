@@ -45,6 +45,7 @@ import {
   groupChatTimestampsAtom,
   groupInvitesCacheAtom,
   groupsOwnerNamesAtom,
+  groupsPropertiesAtom,
   joinRequestsCacheAtom,
   memberGroupsAtom,
   myGroupsWhereIAmAdminAtom,
@@ -79,6 +80,7 @@ type GroupNotificationItem = {
   groupName: string;
   id: string;
   isEncryptedLike: boolean;
+  isGenericMessage: boolean;
   isUnread: boolean;
   openedAt: number;
   senderLabel: string;
@@ -685,6 +687,10 @@ export const GroupsWidget = ({
     string,
     string | null
   >;
+  const groupsProperties = useAtomValue(groupsPropertiesAtom) as Record<
+    string,
+    { isOpen?: boolean } | undefined
+  >;
   const groupChatTimestamps = useAtomValue(groupChatTimestampsAtom) as Record<
     string,
     number | undefined
@@ -827,6 +833,9 @@ export const GroupsWidget = ({
               truncateAddress(
                 String(group.sender || t('groups_widget.unknown'))
               );
+        const isPublicGroup =
+          group?.isOpen === true || groupsProperties[groupId]?.isOpen === true;
+        const isEncryptedLike = isLikelyEncryptedSnippet(group.data);
         const isUnread =
           !!group.data &&
           !!groupChatTimestamps[groupId] &&
@@ -841,7 +850,8 @@ export const GroupsWidget = ({
           groupId,
           groupName,
           id: `${groupId}:${timestamp}:${group.sender ?? 'unknown'}`,
-          isEncryptedLike: isLikelyEncryptedSnippet(group.data),
+          isEncryptedLike: !isPublicGroup && isEncryptedLike,
+          isGenericMessage: isPublicGroup && isEncryptedLike,
           isUnread,
           openedAt: timestampEnterData[groupId] ?? 0,
           senderLabel,
@@ -855,6 +865,7 @@ export const GroupsWidget = ({
   }, [
     currentAddress,
     groupChatTimestamps,
+    groupsProperties,
     memberGroups,
     ownerNamesByGroupId,
     t,
@@ -2096,12 +2107,26 @@ export const GroupsWidget = ({
                     color: theme.palette.text.secondary,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: item.isEncryptedLike ? '4px' : 0,
+                    gap: item.isEncryptedLike || item.isGenericMessage ? '4px' : 0,
                     minWidth: 0,
-                    pb: item.isEncryptedLike ? '4px' : 0,
+                    pb: item.isEncryptedLike || item.isGenericMessage ? '4px' : 0,
                   }}
                 >
-                  {item.isEncryptedLike ? (
+                  {item.isGenericMessage ? (
+                    <Typography
+                      component="span"
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.82),
+                        fontSize: '0.68rem',
+                        fontWeight: 600,
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {t('groups_widget.new_message', {
+                        defaultValue: 'New message',
+                      })}
+                    </Typography>
+                  ) : item.isEncryptedLike ? (
                     <Box
                       sx={{
                         alignItems: 'baseline',

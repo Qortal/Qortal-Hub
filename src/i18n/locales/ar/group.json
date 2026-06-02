@@ -222,6 +222,7 @@
     "loading_requests": "جاري تحميل الطلبات",
     "members_count": "{{count}} أعضاء",
     "new_encrypted_message": "رسالة مشفّرة جديدة",
+    "new_message": "رسالة جديدة",
     "notifications_empty_message": "انضمّ إلى مجتمعات في Q-Chat لملء هذا الموجز برسائل المجموعة والإشارات والنشاط.",
     "notifications_empty_title": "ابدأ بمجموعات Q-Chat",
     "open": "فتح",

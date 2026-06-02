@@ -222,6 +222,7 @@
     "loading_requests": "Загрузка заявок",
     "members_count": "{{count}} участников",
     "new_encrypted_message": "Новое зашифрованное сообщение",
+    "new_message": "Новое сообщение",
     "notifications_empty_message": "Присоединяйтесь к сообществам в Q-Chat, чтобы этот поток наполнился групповыми сообщениями, упоминаниями и активностью.",
     "notifications_empty_title": "Начните с групп Q-Chat",
     "open": "Открыть",

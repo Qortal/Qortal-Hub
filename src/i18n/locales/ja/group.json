@@ -222,6 +222,7 @@
     "loading_requests": "リクエストを読み込み中",
     "members_count": "{{count}} 人のメンバー",
     "new_encrypted_message": "新しい暗号化メッセージ",
+    "new_message": "新しいメッセージ",
     "notifications_empty_message": "Q-Chat のコミュニティに参加すると、グループメッセージ・メンション・アクティビティがここに表示されます。",
     "notifications_empty_title": "Q-Chat グループから始めましょう",
     "open": "開く",
