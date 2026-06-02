@@ -105,7 +105,7 @@ export const AppsLibraryDesktop = ({
         status: 'all',
         search: debouncedSearchValue,
       });
-      console.log('combinedResults', combinedResults);
+
       return (
         <AppsWidthLimiter>
           <Box
