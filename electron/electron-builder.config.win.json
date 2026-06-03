@@ -35,6 +35,7 @@
   },
   "nsis": {
     "artifactName": "Qortal-Hub-Setup-win64.${ext}",
+    "include": "resources/installer.nsh",
     "allowElevation": true,
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
