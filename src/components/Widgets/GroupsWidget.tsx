@@ -53,6 +53,7 @@ import {
   userInfoAtom,
 } from '../../atoms/global';
 import { getFee } from '../../background/background';
+import { TIME_WEEKS_1_IN_MILLISECONDS } from '../../constants/constants';
 import { executeEvent } from '../../utils/events';
 import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 import { formatTimestamp } from '../../utils/time';
@@ -1117,12 +1118,14 @@ export const GroupsWidget = ({
         return;
       }
 
+      const oneWeekAgo = Date.now() - TIME_WEEKS_1_IN_MILLISECONDS;
       const promotionCandidates = resources
         .filter(
           (resource: any) =>
             resource?.identifier &&
             resource?.service === 'DOCUMENT' &&
             typeof resource?.created === 'number' &&
+            resource.created > oneWeekAgo &&
             (!resource?.size || resource.size < 260)
         )
         .slice(0, 18);
@@ -1153,6 +1156,7 @@ export const GroupsWidget = ({
             groupId,
             identifier: resource.identifier,
             name: resource.name,
+            promotionCreated: resource.created,
           };
         })
       );
@@ -1174,7 +1178,7 @@ export const GroupsWidget = ({
       const withGroupNames = await hydrateGroupsWithNames(normalized);
       setPromotions(
         withGroupNames.map((promotion: any) => ({
-          created: promotion.created,
+          created: promotion.promotionCreated,
           description: promotion.description,
           groupId: promotion.groupId,
           groupName:
