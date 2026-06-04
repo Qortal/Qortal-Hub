@@ -1404,7 +1404,13 @@ function rnsdExeName(): string {
 }
 
 function resolveFrozenRnsdPath(): string | null {
-  const p = path.join(getReticulumFrozenDir(), rnsdExeName());
+  const frozenDir = getReticulumFrozenDir();
+  const archSpecific =
+    process.platform === 'darwin'
+      ? path.join(frozenDir, `darwin-${process.arch}`, rnsdExeName())
+      : null;
+  if (archSpecific && fs.existsSync(archSpecific)) return archSpecific;
+  const p = path.join(frozenDir, rnsdExeName());
   return fs.existsSync(p) ? p : null;
 }
 

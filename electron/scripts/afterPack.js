@@ -9,6 +9,16 @@ module.exports = async function afterPack(context) {
   const plat = (electronPlatformName || '').toLowerCase();
 
   const reticulumDir = path.join(appOutDir, 'resources', 'reticulum');
+  const reticulumRuntimeDir = path.join(
+    appOutDir,
+    'resources',
+    'reticulum-runtime'
+  );
+  if (fs.existsSync(reticulumRuntimeDir)) {
+    log('🔧 Removing dev-only reticulum-runtime from packaged app…');
+    fs.rmSync(reticulumRuntimeDir, { recursive: true, force: true });
+  }
+
   const reticulumExecutables = ['rnsd', 'presence_bridge'];
   if (plat.includes('linux') || plat.includes('mac') || plat.includes('darwin')) {
     for (const name of reticulumExecutables) {

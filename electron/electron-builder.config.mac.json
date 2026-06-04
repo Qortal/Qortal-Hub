@@ -26,10 +26,6 @@
     {
       "from": "resources/reticulum",
       "to": "reticulum"
-    },
-    {
-      "from": "resources/reticulum-runtime",
-      "to": "reticulum-runtime"
     }
   ],
 
@@ -51,6 +47,7 @@
     "entitlementsInherit": "buildmac/entitlements.mac.plist",
     "category": "public.app-category.utilities",
     "asarUnpack": ["**/*.node", "build/src/ed25519-verify.worker.js"],
+    "x64ArchFiles": "Contents/Resources/reticulum/**/*",
     "target": ["dmg", "pkg"]
   },
 
