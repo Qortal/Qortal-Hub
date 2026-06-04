@@ -12,8 +12,7 @@ declare global {
       data?: unknown,
       timeout?: number,
       isExtension?: unknown,
-      appInfo?: unknown,
-      skipAuth?: unknown
+      appInfo?: unknown
     ) => Promise<unknown>;
     appStorage?: {
       get: (key: string) => Promise<unknown>;

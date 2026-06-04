@@ -556,7 +556,6 @@ function setupMessageListenerQortalRequest() {
     // Ensure the message is from a trusted source
     const isFromExtension = request?.isExtension;
     const appInfo = request?.appInfo;
-    const skipAuth = request?.skipAuth || false;
     if (request?.type !== 'backgroundMessage') return; // Only process messages of type 'backgroundMessage'
 
     // Handle actions based on the `request.action` value
@@ -566,7 +565,6 @@ function setupMessageListenerQortalRequest() {
           const res = await getUserAccount({
             isFromExtension,
             appInfo,
-            skipAuth,
           });
           event.source!.postMessage(
             {
@@ -596,7 +594,6 @@ function setupMessageListenerQortalRequest() {
           const res = await getNotificationPermission({
             isFromExtension,
             appInfo,
-            skipAuth,
           });
           event.source!.postMessage(
             {
@@ -625,7 +622,6 @@ function setupMessageListenerQortalRequest() {
         try {
           const res = await notificationHasPermission({
             appInfo,
-            skipAuth,
           });
           event.source!.postMessage(
             {
