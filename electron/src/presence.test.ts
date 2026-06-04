@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import nacl from 'tweetnacl';
 import {
+  deriveAddressFromPublicKey,
+  encodeBytesBase58,
   PresenceManager,
   RETICULUM_OVERLAY_MAX_NEIGHBORS,
   RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS,
@@ -25,6 +28,46 @@ function promoteVerifiedPeers(
 }
 
 describe('PresenceManager Reticulum overlay mesh slots', () => {
+  it('skips exact duplicate envelopes before signature verification', async () => {
+    const manager = new PresenceManager();
+    const verify = vi.fn(async () => true);
+    (manager as any).verifyPool = { verify };
+
+    const keyPair = nacl.sign.keyPair();
+    const publicKey = encodeBytesBase58(keyPair.publicKey);
+    const address = deriveAddressFromPublicKey(publicKey);
+    const envelope = {
+      id: 'duplicate-heartbeat',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: address,
+      timestamp: Date.now(),
+      payload: {
+        address,
+        publicKey,
+        sessionId: 'duplicate-session',
+        status: 'online',
+      },
+      signature: 'sig',
+    };
+
+    await expect(
+      manager.handleEnvelope(envelope, {
+        kind: 'reticulum',
+        destinationHash: 'origin-hash',
+      })
+    ).resolves.toBe(true);
+    await expect(
+      manager.handleEnvelope(envelope, {
+        kind: 'reticulum',
+        destinationHash: 'forwarder-hash',
+        viaDestinationHash: 'origin-hash',
+      })
+    ).resolves.toBe(false);
+
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(manager.isAddressOnline(address)).toBe(true);
+  });
+
   it('does not let an older offline envelope remove a newer live session', () => {
     vi.useFakeTimers();
     vi.setSystemTime(2_001);

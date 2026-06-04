@@ -20,10 +20,6 @@
     {
       "from": "resources/reticulum",
       "to": "reticulum"
-    },
-    {
-      "from": "resources/reticulum-runtime",
-      "to": "reticulum-runtime"
     }
   ],
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],

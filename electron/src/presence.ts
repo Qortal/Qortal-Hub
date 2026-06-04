@@ -27,6 +27,10 @@ const MAX_FUTURE_SKEW_MS = 30_000;
 const PRESENCE_CLEANUP_INTERVAL_MS = 15_000;
 const RETICULUM_ROUTE_TTL_MS = 45_000;
 const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
+const PRESENCE_RECENT_ACCEPTED_ENVELOPE_TTL_MS =
+  PRESENCE_SESSION_TIMEOUT_MS + PRESENCE_SKEW_ALLOWANCE_MS;
+const PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT = 4_096;
+const DEBUG_PRESENCE_HOT_PATH = process.env.QORTAL_DEBUG_PRESENCE === '1';
 export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
 /** Keep a verified overlay peer sticky across transient local link loss. */
 export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 30_000;
@@ -216,6 +220,12 @@ function describePresenceEnvelope(
   const status =
     typeof payload?.status === 'string' ? payload.status : 'n/a';
   return `id=${envelope?.id ?? 'unknown'} type=${envelope?.type ?? 'unknown'} address=${address ?? 'unknown'} sessionId=${sessionId} status=${status} timestamp=${typeof envelope?.timestamp === 'number' ? envelope.timestamp : 'unknown'}`;
+}
+
+function logPresenceHotPath(...args: unknown[]): void {
+  if (DEBUG_PRESENCE_HOT_PATH) {
+    loggerLog(...args);
+  }
 }
 
 interface PresenceAddressAggregate {
@@ -617,6 +627,9 @@ export class PresenceManager extends EventEmitter {
    */
   private latestTimestamp = new Map<string, number>();
 
+  /** Recently accepted envelope ids, used to skip exact duplicates before verification. */
+  private acceptedEnvelopeIds = new Map<string, number>();
+
   /**
    * The most recently accepted local ANNOUNCE or HEARTBEAT envelope.
    * Sent directly to each newly connected peer so they learn about the
@@ -726,9 +739,16 @@ export class PresenceManager extends EventEmitter {
   ): Promise<boolean> {
     const envelope = raw as PresenceEnvelope;
     const now = Date.now();
-    loggerLog(
+    logPresenceHotPath(
       `[Presence] Handling envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} age_ms=${typeof envelope?.timestamp === 'number' ? now - envelope.timestamp : 'unknown'}`
     );
+
+    if (this.hasRecentlyAcceptedEnvelope(envelope, now)) {
+      logPresenceHotPath(
+        `[Presence] Dropped already accepted envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+      );
+      return false;
+    }
 
     const result = validateEnvelopeSansSignature(envelope, now);
     if (result.ok === false) {
@@ -741,7 +761,7 @@ export class PresenceManager extends EventEmitter {
         if (typeof id === 'string' && id.length > 0) {
           const last = this.presenceTooOldLogAt.get(id) ?? 0;
           if (tnow - last < PRESENCE_TOO_OLD_LOG_MIN_MS) {
-            loggerLog(
+            logPresenceHotPath(
               `[Presence] Dropped stale envelope without repeat log ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
             );
             return false;
@@ -753,7 +773,7 @@ export class PresenceManager extends EventEmitter {
           }
         } else {
           if (tnow - this.presenceTooOldGlobalLogAt < PRESENCE_TOO_OLD_LOG_MIN_MS) {
-            loggerLog(
+            logPresenceHotPath(
               `[Presence] Dropped stale envelope without repeat log ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
             );
             return false;
@@ -768,6 +788,13 @@ export class PresenceManager extends EventEmitter {
     }
 
     const p = envelope.payload as PresenceAnnouncePayload;
+    if (this.hasNonIncreasingTimestamp(envelope, p)) {
+      logPresenceHotPath(
+        `[Presence] Dropped envelope before signature verify due to non-increasing timestamp ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+      );
+      return false;
+    }
+
     const publicKeyBase58 = p.publicKey;
     const sigOk = await this.verifyPool.verify({
       kind: 'presence',
@@ -788,7 +815,7 @@ export class PresenceManager extends EventEmitter {
       );
       return false;
     }
-    loggerLog(
+    logPresenceHotPath(
       `[Presence] Signature verified ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
     );
 
@@ -815,11 +842,11 @@ export class PresenceManager extends EventEmitter {
     const tsKey = `${address}:${sessionId}:${envelope.type}`;
     const prevTs = this.latestTimestamp.get(tsKey) ?? 0;
     if (envelope.timestamp <= prevTs) {
-      loggerLog(
+      logPresenceHotPath(
         `[Presence] Dropped envelope due to non-increasing timestamp ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} prev_ts=${prevTs}`
       );
       if (route.kind === 'reticulum') {
-        loggerLog(
+        logPresenceHotPath(
           `[Presence] target=presence-reticulum rx=drop_dup peer_addr=${address} sender_hash=${route.destinationHash} type=${envelope.type} env_ts=${envelope.timestamp} prev_ts=${prevTs} envelope_id=${envelope.id ?? 'n/a'}`
         );
       }
@@ -837,6 +864,7 @@ export class PresenceManager extends EventEmitter {
       return false;
     }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
+    this.rememberAcceptedEnvelope(envelope, now);
 
     if (route.kind === 'reticulum') {
       this.markReticulumOverlayPeerVerified(
@@ -970,6 +998,52 @@ export class PresenceManager extends EventEmitter {
 
   getRouteForAddress(address: string): PresenceRoute | null {
     return this.getAddressAggregate(address).route;
+  }
+
+  private hasRecentlyAcceptedEnvelope(
+    envelope: Partial<PresenceEnvelope> | null | undefined,
+    now: number
+  ): boolean {
+    const id = envelope?.id;
+    if (typeof id !== 'string' || id.length === 0) return false;
+    const acceptedAt = this.acceptedEnvelopeIds.get(id);
+    return (
+      acceptedAt !== undefined &&
+      now - acceptedAt <= PRESENCE_RECENT_ACCEPTED_ENVELOPE_TTL_MS
+    );
+  }
+
+  private rememberAcceptedEnvelope(envelope: PresenceEnvelope, now: number): void {
+    if (typeof envelope.id !== 'string' || envelope.id.length === 0) return;
+    this.acceptedEnvelopeIds.set(envelope.id, now);
+    if (
+      this.acceptedEnvelopeIds.size <= PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT
+    ) {
+      return;
+    }
+    const cutoff = now - PRESENCE_RECENT_ACCEPTED_ENVELOPE_TTL_MS;
+    for (const [id, acceptedAt] of this.acceptedEnvelopeIds) {
+      if (
+        acceptedAt < cutoff ||
+        this.acceptedEnvelopeIds.size > PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT
+      ) {
+        this.acceptedEnvelopeIds.delete(id);
+      }
+      if (
+        this.acceptedEnvelopeIds.size <= PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT
+      ) {
+        break;
+      }
+    }
+  }
+
+  private hasNonIncreasingTimestamp(
+    envelope: PresenceEnvelope,
+    payload: PresenceAnnouncePayload
+  ): boolean {
+    const tsKey = `${payload.address}:${payload.sessionId}:${envelope.type}`;
+    const prevTs = this.latestTimestamp.get(tsKey) ?? 0;
+    return envelope.timestamp <= prevTs;
   }
 
   /**

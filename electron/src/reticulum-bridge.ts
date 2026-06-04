@@ -724,8 +724,15 @@ function bridgeExeName(): string {
 }
 
 function getFrozenBridgePath(): string {
+  const exeName = bridgeExeName();
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'reticulum', bridgeExeName());
+    const base = path.join(process.resourcesPath, 'reticulum');
+    const archSpecific =
+      process.platform === 'darwin'
+        ? path.join(base, `darwin-${process.arch}`, exeName)
+        : null;
+    if (archSpecific && fs.existsSync(archSpecific)) return archSpecific;
+    return path.join(base, exeName);
   }
   return path.join(
     __dirname,
@@ -733,7 +740,7 @@ function getFrozenBridgePath(): string {
     '..',
     'resources',
     'reticulum',
-    bridgeExeName()
+    exeName
   );
 }
 
