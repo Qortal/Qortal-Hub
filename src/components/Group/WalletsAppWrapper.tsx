@@ -304,7 +304,6 @@ export const WalletsAppWrapper = () => {
                 isDevMode={false}
                 isSelected
                 ref={iframeRef}
-                skipAuth={true}
               />
             </Box>
 

@@ -37,8 +37,7 @@ export const sendMessageBackground = async (
   data = {},
   timeout = TIME_MINUTES_10_IN_MILLISECONDS,
   isExtension,
-  appInfo,
-  skipAuth
+  appInfo
 ) => {
   const response_2 = await new Promise((resolve, reject) => {
     const requestId = generateRequestId(); // Unique ID for each request
@@ -53,7 +52,6 @@ export const sendMessageBackground = async (
         payload: data,
         isExtension,
         appInfo,
-        skipAuth,
       },
       targetOrigin
     );
