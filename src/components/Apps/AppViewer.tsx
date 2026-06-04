@@ -392,16 +392,31 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         sx={{
           display: 'flex',
           flexDirection: 'column',
+          height: '100vh',
+          minHeight: 0,
+          overflow: 'hidden',
+          overflowAnchor: 'none',
+          overscrollBehavior: 'none',
+          width: '100%',
         }}
       >
         <iframe
           ref={iframeRef}
           style={{
-            height: `100vh`,
             border: 'none',
+            contain: 'layout paint style',
+            display: 'block',
+            flex: '0 0 auto',
+            height: '100vh',
+            isolation: 'isolate',
+            minHeight: 0,
+            overflow: 'hidden',
+            overflowAnchor: 'none',
+            overscrollBehavior: 'none',
             width: '100%',
           }}
           id="browser-iframe"
+          tabIndex={-1}
           src={defaultUrl}
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
           allow="fullscreen; clipboard-read; clipboard-write; screen-wake-lock"

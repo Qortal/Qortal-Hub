@@ -31,6 +31,11 @@ const AppViewerContainer = forwardRef<
                 margin: 0;
                 padding: 0;
                 overflow: hidden;
+                overscroll-behavior: none;
+                overflow-anchor: none;
+                position: fixed;
+                inset: 0;
+                width: 100%;
               }
               .frame-root,
               .frame-content {
@@ -39,10 +44,13 @@ const AppViewerContainer = forwardRef<
                 height: 100%;
                 min-height: 0;
                 overflow: hidden;
+                overscroll-behavior: none;
+                overflow-anchor: none;
                 width: 100%;
               }
               * {
-                msOverflowStyle: 'none', /* IE and Edge */
+                box-sizing: border-box;
+                -ms-overflow-style: none; /* IE and Edge */
                 scrollbar-width: none;  /* Firefox */
               }
               *::-webkit-scrollbar {
@@ -54,19 +62,23 @@ const AppViewerContainer = forwardRef<
       }
       style={{
         border: 'none',
+        contain: 'layout paint style',
         display: 'block',
         height: customHeight || `calc(100vh - ${appChromeOffsetPx})`,
+        isolation: 'isolate',
         left: isHidden ? '-200vw' : '0',
         minHeight: 0,
         overflow: 'hidden',
+        overflowAnchor: 'none',
+        overscrollBehavior: 'none',
         position: isHidden ? 'absolute' : 'relative',
         top: 0,
         width: '100%',
       }}
+      tabIndex={-1}
     >
       <AppViewer
         app={app}
-        customHeight={customHeight}
         hide={!isSelected || hide}
         isDevMode={isDevMode}
         ref={ref}
