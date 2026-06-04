@@ -9,13 +9,12 @@ type AppViewerContainerProps = {
   hide: boolean;
   isDevMode: boolean;
   customHeight?: string;
-  skipAuth?: boolean;
 };
 
 const AppViewerContainer = forwardRef<
   HTMLIFrameElement,
   AppViewerContainerProps
->(({ app, isSelected, hide, isDevMode, customHeight, skipAuth }, ref) => {
+>(({ app, isSelected, hide, isDevMode, customHeight }, ref) => {
   const isHidden = !isSelected || hide;
 
   return (
@@ -82,7 +81,6 @@ const AppViewerContainer = forwardRef<
         hide={!isSelected || hide}
         isDevMode={isDevMode}
         ref={ref}
-        skipAuth={skipAuth}
       />
     </Frame>
   );

@@ -553,8 +553,7 @@ export const useQortalMessageListener = (
   isDevMode,
   appName,
   appService,
-  appIdentifier,
-  skipAuth
+  appIdentifier
 ) => {
   const [path, setPath] = useState('');
   const [history, setHistory] = useState({
@@ -740,8 +739,7 @@ export const useQortalMessageListener = (
             name: appName,
             service: appService,
             tabId,
-          },
-          skipAuth
+          }
         );
 
         // Store the promise for deduplication

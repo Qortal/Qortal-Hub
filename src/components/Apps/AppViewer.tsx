@@ -13,11 +13,10 @@ type AppViewerProps = {
   app: any;
   hide: boolean;
   isDevMode: boolean;
-  skipAuth?: boolean;
 };
 
 export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
-  ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
+  ({ app, hide, isDevMode }, iframeRef) => {
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =
       useQortalMessageListener(
@@ -27,7 +26,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         isDevMode,
         isDevMode ? 'devapp' : app?.name,
         app?.service,
-        skipAuth
+        app?.identifier
       );
 
     const [url, setUrl] = useState('');
