@@ -8,7 +8,11 @@ import {
   useState,
 } from 'react';
 import { useAtomValue, useStore } from 'jotai';
-import { userInfoAtom, balanceAtom, blockedAddressesAtom } from '../../atoms/global';
+import {
+  userInfoAtom,
+  balanceAtom,
+  blockedAddressesAtom,
+} from '../../atoms/global';
 import {
   decodeBase64ForUIChatMessages,
   objectToBase64,
@@ -117,6 +121,8 @@ export const ChatGroup = ({
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const lastReadTimestamp = useRef(null);
   const handleUpdateRef = useRef(null);
+  const iframeRef = useRef(null);
+
   const { t } = useTranslation([
     'auth',
     'core',
@@ -230,13 +236,16 @@ export const ChatGroup = ({
     });
   };
 
-  const updateChatMessagesWithBlocksFunc = useCallback((e) => {
-    if (e.detail) {
-      setMessages((prev) =>
-        prev?.filter((item) => !isChatSenderBlocked(item))
-      );
-    }
-  }, [isChatSenderBlocked]);
+  const updateChatMessagesWithBlocksFunc = useCallback(
+    (e) => {
+      if (e.detail) {
+        setMessages((prev) =>
+          prev?.filter((item) => !isChatSenderBlocked(item))
+        );
+      }
+    },
+    [isChatSenderBlocked]
+  );
 
   useEffect(() => {
     subscribeToEvent(
@@ -1582,6 +1591,7 @@ export const ChatGroup = ({
                 tabId: '5558588',
               }}
               isSelected
+              ref={iframeRef}
             />
           </Box>
         </Box>
