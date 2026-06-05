@@ -395,6 +395,10 @@ export const _voteOnPoll = async (
 const fileRequestResolvers = new Map();
 
 const handleFileMessage = (event) => {
+  if (event.origin !== window.location.origin || event.source !== window) {
+    return;
+  }
+
   const { action, requestId, result, error } = event.data;
 
   if (

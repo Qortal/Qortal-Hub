@@ -673,7 +673,24 @@ export const useQortalMessageListener = (
     const listener = async (event) => {
       if (event?.data?.requestedHandler !== 'UI') return;
 
+      const appWindow = iframeRef.current?.contentWindow;
+      if (!appWindow || event.source !== appWindow) return;
+
+      let appOrigin = null;
+      try {
+        appOrigin = iframeRef.current?.src
+          ? new URL(iframeRef.current.src).origin
+          : null;
+      } catch {
+        return;
+      }
+      if (appOrigin && event.origin !== appOrigin) return;
+
+      const eventPort = event.ports?.[0];
+
       const sendMessageToRuntime = (message, eventPort) => {
+        if (!eventPort) return;
+
         let timeout: number = TIME_SECONDS_30_IN_MILLISECONDS;
         if (
           message?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' &&
@@ -793,9 +810,11 @@ export const useQortalMessageListener = (
             payload: event.data,
             isExtension: true,
           },
-          event.ports[0]
+          eventPort
         );
       } else if (event?.data?.action === 'SAVE_FILE') {
+        if (!eventPort) return;
+
         try {
           await saveFile(event.data, null, true, {
             openSnackGlobal,
@@ -803,12 +822,12 @@ export const useQortalMessageListener = (
             infoSnackCustom,
             setInfoSnackCustom,
           });
-          event.ports[0].postMessage({
+          eventPort.postMessage({
             result: true,
             error: null,
           });
         } catch (error) {
-          event.ports[0].postMessage({
+          eventPort.postMessage({
             result: null,
             error: error?.message || 'Failed to save file',
           });
@@ -830,10 +849,10 @@ export const useQortalMessageListener = (
               payload: data,
               isExtension: true,
             },
-            event.ports[0]
+            eventPort
           );
         } else {
-          event.ports[0].postMessage({
+          eventPort?.postMessage({
             result: null,
             error: 'Failed to prepare data for publishing',
           });
