@@ -1022,12 +1022,15 @@ export function setupContentSecurityPolicy(customScheme: string): void {
       const isHubShellRequest = requestUrl.startsWith(`${customScheme}://`);
       const inlineScriptSource = isHubShellRequest ? '' : " 'unsafe-inline'";
       const evalScriptSource = isHubShellRequest ? '' : " 'unsafe-eval'";
+      const wasmEvalScriptSource = isHubShellRequest
+        ? ''
+        : " 'wasm-unsafe-eval'";
 
       // Create the Content Security Policy (CSP) string
       const csp = `
     default-src 'self' ${frameSources.join(' ')};
     frame-src ${frameSources.join(' ')};
-    script-src 'self' 'wasm-unsafe-eval'${evalScriptSource}${inlineScriptSource} ${frameSources.join(' ')};
+    script-src 'self'${wasmEvalScriptSource}${evalScriptSource}${inlineScriptSource} ${frameSources.join(' ')};
     worker-src 'self' blob: data: ${frameSources.join(' ')};
     object-src 'self';
     connect-src 'self' blob: ${frameSources.join(' ')};
