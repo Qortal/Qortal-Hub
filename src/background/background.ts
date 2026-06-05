@@ -434,6 +434,10 @@ async function checkWebviewFocus() {
 
     // Listen for the response
     const handleMessage = (event) => {
+      if (event.origin !== window.location.origin || event.source !== window) {
+        return;
+      }
+
       if (event.data?.action === 'CHECK_FOCUS_RESPONSE') {
         clearTimeout(timeout);
         window.removeEventListener('message', handleMessage); // Clean up listener
