@@ -82,6 +82,7 @@ declare global {
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
         reticulumMeshUpnpEnabled?: boolean;
+        reticulumManagedConfigEnabled?: boolean;
       }>;
       setAppSettings?: (settings: {
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
@@ -89,12 +90,14 @@ declare global {
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
         reticulumMeshUpnpEnabled?: boolean;
+        reticulumManagedConfigEnabled?: boolean;
       }) => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
         disableStartupSound?: boolean;
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
         reticulumMeshUpnpEnabled?: boolean;
+        reticulumManagedConfigEnabled?: boolean;
       }>;
       /** Reticulum (rnsd) child process status from main process. */
       reticulumGetStatus?: () => Promise<{
@@ -114,6 +117,43 @@ declare global {
         overlayLinksConnected?: number;
         p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
+      }>;
+      reticulumGetConfigEditorInfo?: () => Promise<{
+        ok: boolean;
+        error?: string;
+        contents: string;
+        configPath: string;
+        configDir: string;
+        instanceIndex: number;
+        instanceLabel: string;
+        managedConfigEnabled: boolean;
+        sharedDaemon: boolean;
+        maxBytes: number;
+        updatedAt?: number;
+      }>;
+      reticulumSaveConfigEditorContents?: (contents: string) => Promise<{
+        ok: boolean;
+        error?: string;
+        contents: string;
+        configPath: string;
+        configDir: string;
+        instanceIndex: number;
+        instanceLabel: string;
+        managedConfigEnabled: boolean;
+        sharedDaemon: boolean;
+        maxBytes: number;
+        updatedAt?: number;
+      }>;
+      reticulumGetGeneratedDefaultConfig?: () => Promise<{
+        ok: boolean;
+        contents: string;
+        error?: string;
+      }>;
+      reticulumRevealConfigInFileExplorer?: () => Promise<{
+        ok: boolean;
+        error?: string;
+        configPath: string;
+        configDir: string;
       }>;
       onReticulumStatus?: (
         callback: (status: {
