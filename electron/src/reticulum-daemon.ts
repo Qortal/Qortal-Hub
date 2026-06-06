@@ -19,7 +19,14 @@ import {
   type ChildProcessWithoutNullStreams,
 } from 'child_process';
 import crypto from 'crypto';
-import { app, BrowserWindow, dialog, ipcMain, type WebContents } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  shell,
+  type WebContents,
+} from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
 import net from 'net';
@@ -62,6 +69,7 @@ const RETICULUM_CONTROL_BASE_PORT = 37429;
 const RETICULUM_CONFIG_FILENAME = 'config';
 const MANAGED_CONFIG_MARKER = '# Managed by Qortal Hub';
 const DEFAULT_CONFIG_SENTINEL = '# This is the default Reticulum config file.';
+const APP_SETTINGS_FILENAME = 'app-settings.json';
 const RETICULUM_SHARED_INSTANCE_NAME = 'qortal-hub-shared';
 const RETICULUM_SHARED_STATE_DIRNAME = 'qortal-shared';
 const RETICULUM_APP_INSTANCE_REGISTRY_FILENAME = 'reticulum-app-instances.json';
@@ -81,6 +89,7 @@ const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
 const RETICULUM_DAEMON_LOCK_STALE_MS = 120_000;
 const RETICULUM_DAEMON_LOCK_WAIT_MS = 2_000;
 const RETICULUM_DAEMON_LOCK_POLL_MS = 50;
+const RETICULUM_CONFIG_EDITOR_MAX_BYTES = 256 * 1024;
 const RETICULUM_PRIORITY_NICE_DEFAULT = -7;
 const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
 const QCHAT_FILE_OFFER_TTL_MS = 2 * 60 * 60 * 1000;
@@ -247,6 +256,24 @@ type ReticulumSharedDaemonState = {
 
 function getCanonicalQortalHubDataDir(): string {
   return path.join(app.getPath('appData'), 'qortal-hub');
+}
+
+function isManagedReticulumConfigEnabled(): boolean {
+  try {
+    const filePath = path.join(
+      getCanonicalQortalHubDataDir(),
+      APP_SETTINGS_FILENAME
+    );
+    if (!fs.existsSync(filePath)) {
+      return true;
+    }
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as {
+      reticulumManagedConfigEnabled?: unknown;
+    };
+    return parsed.reticulumManagedConfigEnabled !== false;
+  } catch {
+    return true;
+  }
 }
 
 export function getReticulumConfigDir(): string {
@@ -492,6 +519,78 @@ function sleepSync(ms: number): void {
   const waitMs = Math.max(0, Math.trunc(ms));
   if (waitMs <= 0) return;
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitMs);
+}
+
+function readProcText(pid: number, fileName: 'cmdline' | 'environ'): string {
+  try {
+    return fs
+      .readFileSync(path.join('/proc', String(pid), fileName))
+      .toString('utf8')
+      .replace(/\0/g, '\n');
+  } catch {
+    return '';
+  }
+}
+
+function readProcParentPid(pid: number): number | null {
+  try {
+    const status = fs.readFileSync(
+      path.join('/proc', String(pid), 'status'),
+      'utf8'
+    );
+    const match = status.match(/^PPid:\s+(\d+)$/m);
+    if (!match) return null;
+    const parentPid = Number(match[1]);
+    return Number.isInteger(parentPid) ? parentPid : null;
+  } catch {
+    return null;
+  }
+}
+
+function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
+  if (process.platform !== 'linux') return 0;
+  let entries: string[];
+  try {
+    entries = fs.readdirSync('/proc');
+  } catch {
+    return 0;
+  }
+
+  const configDir = getReticulumConfigDir();
+  let stopped = 0;
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
+    if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
+
+    const cmdline = readProcText(pid, 'cmdline');
+    if (!cmdline.includes('presence_bridge.py')) continue;
+    const environ = readProcText(pid, 'environ');
+    const usesSharedConfig =
+      environ.includes(`QORTAL_RETICULUM_CONFIG_DIR=${configDir}`) ||
+      cmdline.includes(`--config\n${configDir}`) ||
+      cmdline.includes(`--config ${configDir}`);
+    if (!usesSharedConfig) continue;
+
+    const parentPid = readProcParentPid(pid);
+    if (parentPid && parentPid > 1 && isPidAlive(parentPid)) continue;
+
+    if (
+      signalReticulumPid(
+        pid,
+        'SIGTERM',
+        'startup-recovery-orphan-bridge'
+      )
+    ) {
+      stopped += 1;
+    }
+  }
+  if (stopped > 0) {
+    loggerLog(
+      `[Reticulum] Stopped ${stopped} orphaned presence bridge process(es) for shared config ${configDir}`
+    );
+  }
+  return stopped;
 }
 
 function normalizeReticulumDaemonLockRecord(
@@ -952,6 +1051,7 @@ export function recoverReticulumStateForAppLaunch(
 function recoverReticulumStateForAppLaunchLocked(
   instanceIndex = reticulumInstanceIndex
 ): ReticulumAppLaunchRecovery {
+  cleanupOrphanedReticulumBridgeProcessesForConfig();
   const activeInstances = getReticulumActiveAppInstances();
   const state = readReticulumSharedDaemonState();
   let orphanedDaemonFound = false;
@@ -1014,6 +1114,141 @@ function getReticulumInstanceName(): string {
 
 function getReticulumConfigFilePath(): string {
   return path.join(getReticulumConfigDir(), RETICULUM_CONFIG_FILENAME);
+}
+
+function getReticulumInstanceLabel(): string {
+  return reticulumInstanceIndex === 0
+    ? 'Instance 1 (primary)'
+    : `Instance ${reticulumInstanceIndex + 1}`;
+}
+
+function readReticulumConfigEditorInfo(): ReticulumConfigEditorInfo {
+  const configPath = getReticulumConfigFilePath();
+  let contents = '';
+  let updatedAt: number | undefined;
+  try {
+    const stat = fs.statSync(configPath);
+    if (!stat.isFile()) {
+      throw new Error('Reticulum config path is not a file');
+    }
+    if (stat.size > RETICULUM_CONFIG_EDITOR_MAX_BYTES) {
+      throw new Error(
+        `Reticulum config is too large to edit in-app (${stat.size} bytes)`
+      );
+    }
+    contents = fs.readFileSync(configPath, 'utf8');
+    updatedAt = stat.mtimeMs;
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error &&
+      'code' in error &&
+      String((error as { code?: unknown }).code ?? '') === 'ENOENT'
+    ) {
+      contents = '';
+    } else {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        contents: '',
+        configPath,
+        configDir: getReticulumConfigDir(),
+        instanceIndex: reticulumInstanceIndex,
+        instanceLabel: getReticulumInstanceLabel(),
+        managedConfigEnabled: isManagedReticulumConfigEnabled(),
+        sharedDaemon: true,
+        maxBytes: RETICULUM_CONFIG_EDITOR_MAX_BYTES,
+      };
+    }
+  }
+  return {
+    ok: true,
+    contents,
+    configPath,
+    configDir: getReticulumConfigDir(),
+    instanceIndex: reticulumInstanceIndex,
+    instanceLabel: getReticulumInstanceLabel(),
+    managedConfigEnabled: isManagedReticulumConfigEnabled(),
+    sharedDaemon: true,
+    maxBytes: RETICULUM_CONFIG_EDITOR_MAX_BYTES,
+    updatedAt,
+  };
+}
+
+function writeReticulumConfigFromEditor(contents: string): ReticulumConfigEditorInfo {
+  if (isManagedReticulumConfigEnabled()) {
+    return {
+      ...readReticulumConfigEditorInfo(),
+      ok: false,
+      error: 'Disable managed Reticulum config before editing this file.',
+    };
+  }
+  if (typeof contents !== 'string') {
+    return {
+      ...readReticulumConfigEditorInfo(),
+      ok: false,
+      error: 'Invalid Reticulum config contents.',
+    };
+  }
+  const byteLength = Buffer.byteLength(contents, 'utf8');
+  if (byteLength > RETICULUM_CONFIG_EDITOR_MAX_BYTES) {
+    return {
+      ...readReticulumConfigEditorInfo(),
+      ok: false,
+      error: `Reticulum config is too large (${byteLength} bytes).`,
+    };
+  }
+  const configPath = getReticulumConfigFilePath();
+  const tempPath = `${configPath}.${process.pid}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(tempPath, contents, 'utf8');
+    fs.renameSync(tempPath, configPath);
+    loggerLog(`[Reticulum] User saved Reticulum config ${configPath}`);
+    return readReticulumConfigEditorInfo();
+  } catch (error) {
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {
+      /* ignore */
+    }
+    return {
+      ...readReticulumConfigEditorInfo(),
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function revealReticulumConfigInFileExplorer(): Promise<{
+  ok: boolean;
+  error?: string;
+  configPath: string;
+  configDir: string;
+}> {
+  const configPath = getReticulumConfigFilePath();
+  const configDir = getReticulumConfigDir();
+  try {
+    fs.mkdirSync(configDir, { recursive: true });
+    if (fs.existsSync(configPath)) {
+      shell.showItemInFolder(configPath);
+      return { ok: true, configPath, configDir };
+    }
+    const openError = await shell.openPath(configDir);
+    return {
+      ok: openError.length === 0,
+      error: openError || undefined,
+      configPath,
+      configDir,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      configPath,
+      configDir,
+    };
+  }
 }
 
 function renderManagedHubInterfaces(
@@ -1199,6 +1434,13 @@ export function computeManagedReticulumConfigFingerprint(): string {
 export function writeManagedReticulumConfigIfManaged(
   nextContents: string
 ): boolean {
+  if (!isManagedReticulumConfigEnabled()) {
+    loggerLog(
+      '[Reticulum] Managed config writes disabled by app settings; preserving existing config.'
+    );
+    return false;
+  }
+
   const configPath = getReticulumConfigFilePath();
   const currentContents = fs.existsSync(configPath)
     ? fs.readFileSync(configPath, 'utf8')
@@ -1230,6 +1472,13 @@ export function writeManagedReticulumConfigIfManaged(
 }
 
 function ensureManagedReticulumConfig(): void {
+  if (!isManagedReticulumConfigEnabled()) {
+    loggerLog(
+      '[Reticulum] Managed config writes disabled by app settings; skipping startup config generation.'
+    );
+    return;
+  }
+
   const id = ensureMeshNetworkIdentityIfNeeded();
   const passphrase = ensureMeshNetworkPassphraseIfNeeded();
   const state = loadReticulumMeshState();
@@ -1488,6 +1737,20 @@ export type ReticulumOverlayPeerStatus = {
   incoming?: boolean;
   address?: string;
   connectedAt: number;
+};
+
+export type ReticulumConfigEditorInfo = {
+  ok: boolean;
+  error?: string;
+  contents: string;
+  configPath: string;
+  configDir: string;
+  instanceIndex: number;
+  instanceLabel: string;
+  managedConfigEnabled: boolean;
+  sharedDaemon: boolean;
+  maxBytes: number;
+  updatedAt?: number;
 };
 
 export type ReticulumPythonLaunchPlan =
@@ -2596,6 +2859,51 @@ export function registerReticulumIpcHandlers(): void {
     'reticulum:getStatus',
     async (): Promise<ReticulumDaemonStatus> => {
       return collectReticulumStatusSnapshot();
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:getConfigEditorInfo',
+    async (): Promise<ReticulumConfigEditorInfo> => {
+      return readReticulumConfigEditorInfo();
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:saveConfigEditorContents',
+    async (_event, contents: string): Promise<ReticulumConfigEditorInfo> => {
+      return writeReticulumConfigFromEditor(contents);
+    }
+  );
+
+  ipcMain.handle('reticulum:getGeneratedDefaultConfig', async (): Promise<{
+    ok: boolean;
+    contents: string;
+    error?: string;
+  }> => {
+    try {
+      return {
+        ok: true,
+        contents: buildCurrentManagedReticulumConfig(),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        contents: '',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
+  ipcMain.handle(
+    'reticulum:revealConfigInFileExplorer',
+    async (): Promise<{
+      ok: boolean;
+      error?: string;
+      configPath: string;
+      configDir: string;
+    }> => {
+      return revealReticulumConfigInFileExplorer();
     }
   );
 

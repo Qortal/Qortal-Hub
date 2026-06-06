@@ -7,8 +7,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useAtomValue, useStore } from 'jotai';
-import { userInfoAtom, balanceAtom, blockedAddressesAtom } from '../../atoms/global';
+import { useAtom, useAtomValue, useStore } from 'jotai';
+import { Rnd } from 'react-rnd';
+import {
+  userInfoAtom,
+  balanceAtom,
+  blockedAddressesAtom,
+  groupQManagerPopupSizeAtom,
+} from '../../atoms/global';
 import {
   decodeBase64ForUIChatMessages,
   objectToBase64,
@@ -43,18 +49,19 @@ import {
 import {
   Box,
   ButtonBase,
-  Divider,
   IconButton,
+  Portal,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import ShortUniqueId from 'short-unique-id';
 import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
 import { getFee, isExtMsg } from '../../background/background.ts';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { appHeighOffset, appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
@@ -65,6 +72,11 @@ import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 5 });
 const uidImages = new ShortUniqueId({ length: 12 });
+const Q_MANAGER_DEFAULT_WIDTH = 400;
+const Q_MANAGER_DEFAULT_HEIGHT = 600;
+const Q_MANAGER_MIN_WIDTH = 360;
+const Q_MANAGER_MIN_HEIGHT = 420;
+const Q_MANAGER_HEADER_HEIGHT = 40;
 
 export const ChatGroup = ({
   selectedGroup,
@@ -82,6 +94,9 @@ export const ChatGroup = ({
 }) => {
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
+  const [qManagerPopupSize, setQManagerPopupSize] = useAtom(
+    groupQManagerPopupSizeAtom
+  );
   const myName = userInfo?.name;
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const jotaiStore = useStore();
@@ -117,6 +132,44 @@ export const ChatGroup = ({
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const lastReadTimestamp = useRef(null);
   const handleUpdateRef = useRef(null);
+  const iframeRef = useRef(null);
+  const [windowSize, setWindowSize] = useState(() =>
+    typeof window !== 'undefined'
+      ? {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }
+      : { width: 800, height: 600 }
+  );
+  const [qManagerSize, setQManagerSize] = useState(() => {
+    const maxWidth =
+      typeof window !== 'undefined'
+        ? Math.max(Q_MANAGER_MIN_WIDTH, window.innerWidth)
+        : 800;
+    const maxHeight =
+      typeof window !== 'undefined'
+        ? Math.max(Q_MANAGER_MIN_HEIGHT, window.innerHeight - appHeighOffset)
+        : 600;
+    return {
+      width: Math.min(
+        maxWidth,
+        Math.max(
+          Q_MANAGER_MIN_WIDTH,
+          qManagerPopupSize?.width ?? Q_MANAGER_DEFAULT_WIDTH
+        )
+      ),
+      height: Math.min(
+        maxHeight,
+        Math.max(
+          Q_MANAGER_MIN_HEIGHT,
+          qManagerPopupSize?.height ?? Q_MANAGER_DEFAULT_HEIGHT
+        )
+      ),
+    };
+  });
+  const [isResizingQManager, setIsResizingQManager] = useState(false);
+  const qManagerResizeInitialSizeRef = useRef(qManagerSize);
+
   const { t } = useTranslation([
     'auth',
     'core',
@@ -124,6 +177,97 @@ export const ChatGroup = ({
     'question',
     'tutorial',
   ]);
+
+  const maxQManagerWidth = Math.max(Q_MANAGER_MIN_WIDTH, windowSize.width);
+  const maxQManagerHeight = Math.max(
+    Q_MANAGER_MIN_HEIGHT,
+    windowSize.height - appHeighOffset
+  );
+
+  const clampQManagerSize = useCallback(
+    (size: { width: number; height: number }) => ({
+      width: Math.min(
+        maxQManagerWidth,
+        Math.max(Q_MANAGER_MIN_WIDTH, size.width)
+      ),
+      height: Math.min(
+        maxQManagerHeight,
+        Math.max(Q_MANAGER_MIN_HEIGHT, size.height)
+      ),
+    }),
+    [maxQManagerWidth, maxQManagerHeight]
+  );
+
+  const qManagerPosition = useMemo(
+    () => ({
+      x: Math.max(0, windowSize.width - qManagerSize.width),
+      y: Math.max(0, windowSize.height - qManagerSize.height),
+    }),
+    [
+      windowSize.width,
+      windowSize.height,
+      qManagerSize.width,
+      qManagerSize.height,
+    ]
+  );
+
+  useEffect(() => {
+    const onResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!qManagerPopupSize) return;
+    setQManagerSize(clampQManagerSize(qManagerPopupSize));
+  }, [qManagerPopupSize, clampQManagerSize]);
+
+  useEffect(() => {
+    setQManagerSize((current) => clampQManagerSize(current));
+  }, [clampQManagerSize]);
+
+  const handleQManagerResizeStart = useCallback(() => {
+    qManagerResizeInitialSizeRef.current = qManagerSize;
+    setIsResizingQManager(true);
+  }, [qManagerSize]);
+
+  const handleQManagerResize = useCallback(
+    (
+      _event,
+      _direction,
+      _elementRef,
+      delta: { width: number; height: number }
+    ) => {
+      const initialSize = qManagerResizeInitialSizeRef.current;
+      setQManagerSize(
+        clampQManagerSize({
+          width: initialSize.width + delta.width,
+          height: initialSize.height + delta.height,
+        })
+      );
+    },
+    [clampQManagerSize]
+  );
+
+  const handleQManagerResizeStop = useCallback(
+    (_event, _direction, elementRef: HTMLElement) => {
+      const nextSize = clampQManagerSize({
+        width: elementRef.offsetWidth,
+        height: elementRef.offsetHeight,
+      });
+
+      setQManagerSize(nextSize);
+      setQManagerPopupSize(nextSize);
+      setIsResizingQManager(false);
+    },
+    [clampQManagerSize, setQManagerPopupSize]
+  );
 
   const getTimestampEnterChat = async (selectedGroup) => {
     try {
@@ -230,13 +374,16 @@ export const ChatGroup = ({
     });
   };
 
-  const updateChatMessagesWithBlocksFunc = useCallback((e) => {
-    if (e.detail) {
-      setMessages((prev) =>
-        prev?.filter((item) => !isChatSenderBlocked(item))
-      );
-    }
-  }, [isChatSenderBlocked]);
+  const updateChatMessagesWithBlocksFunc = useCallback(
+    (e) => {
+      if (e.detail) {
+        setMessages((prev) =>
+          prev?.filter((item) => !isChatSenderBlocked(item))
+        );
+      }
+    },
+    [isChatSenderBlocked]
+  );
 
   useEffect(() => {
     subscribeToEvent(
@@ -1518,73 +1665,186 @@ export const ChatGroup = ({
         </Box>
       )}
 
-      {isOpenQManager !== null && (
-        <Box
-          sx={{
-            backgroundColor: theme.palette.background.default,
-            borderTopLeftRadius: '10px',
-            borderTopRightRadius: '10px',
-            bottom: 0,
-            boxShadow: 4,
-            display: hideView
-              ? 'none'
-              : isOpenQManager === true
-                ? 'block'
-                : 'none',
-            height: '600px',
-            maxHeight: `calc(100vh - ${appHeighOffsetPx})`,
-            maxWidth: '100vw',
-            overflow: 'hidden',
-            position: 'fixed',
-            right: 0,
-            width: '400px',
-            zIndex: 100,
-          }}
-        >
-          <Box
-            sx={{
-              height: '100%',
-              width: '100%',
-            }}
-          >
+      {(isResizingQManager || isOpenQManager !== null) && (
+        <Portal>
+          {isResizingQManager && (
             <Box
+              aria-hidden
               sx={{
-                alignItems: 'center',
-                display: 'flex',
-                height: '40px',
-                justifyContent: 'space-between',
-                padding: '5px',
+                backgroundColor: 'transparent',
+                inset: 0,
+                pointerEvents: 'auto',
+                position: 'fixed',
+                zIndex: 1399,
+              }}
+            />
+          )}
+
+          {isOpenQManager !== null && (
+            <Rnd
+              position={qManagerPosition}
+              size={qManagerSize}
+              minWidth={Q_MANAGER_MIN_WIDTH}
+              minHeight={Q_MANAGER_MIN_HEIGHT}
+              maxWidth={maxQManagerWidth}
+              maxHeight={maxQManagerHeight}
+              bounds="window"
+              disableDragging
+              enableResizing={
+                isOpenQManager === true && !hideView
+                  ? {
+                      top: true,
+                      left: true,
+                      topLeft: true,
+                      topRight: false,
+                      right: false,
+                      bottom: false,
+                      bottomLeft: false,
+                      bottomRight: false,
+                    }
+                  : false
+              }
+              resizeHandleStyles={{
+                top: { height: 24, top: -12, zIndex: 25, cursor: 'ns-resize' },
+                left: { width: 24, left: -12, zIndex: 25, cursor: 'ew-resize' },
+                topLeft: {
+                  width: 28,
+                  height: 28,
+                  left: -14,
+                  top: -14,
+                  zIndex: 25,
+                  cursor: 'nwse-resize',
+                },
+              }}
+              resizeHandleWrapperStyle={{ pointerEvents: 'auto' }}
+              onResizeStart={handleQManagerResizeStart}
+              onResize={handleQManagerResize}
+              onResizeStop={handleQManagerResizeStop}
+              style={{
+                display: hideView || isOpenQManager !== true ? 'none' : 'block',
+                position: 'fixed',
+                zIndex: 1400,
               }}
             >
-              <Typography>Q-Manager</Typography>
-
-              <ButtonBase
-                onClick={() => {
-                  setIsOpenQManager(false);
+              <Box
+                sx={{
+                  backgroundColor: theme.palette.background.surface,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.82)}`,
+                  borderBottom: 'none',
+                  borderRadius: '8px 8px 0 0',
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? `0 -18px 46px ${alpha(theme.palette.common.black, 0.46)}, 0 -1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+                      : `0 -14px 36px ${alpha(theme.palette.common.black, 0.16)}, 0 -1px 0 ${alpha(theme.palette.common.white, 0.72)}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: '100%',
+                  maxHeight: `calc(100vh - ${appHeighOffsetPx})`,
+                  maxWidth: '100vw',
+                  minHeight: Q_MANAGER_MIN_HEIGHT,
+                  minWidth: Q_MANAGER_MIN_WIDTH,
+                  overflow: 'hidden',
+                  position: 'relative',
+                  width: '100%',
                 }}
               >
-                <CloseIcon
+                <Box
                   sx={{
-                    color: theme.palette.text.primary,
+                    alignItems: 'center',
+                    backgroundColor:
+                      theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.background.default, 0.58)
+                        : alpha(theme.palette.background.paper, 0.72),
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.72)}`,
+                    display: 'flex',
+                    flex: `0 0 ${Q_MANAGER_HEADER_HEIGHT}px`,
+                    gap: 1,
+                    height: `${Q_MANAGER_HEADER_HEIGHT}px`,
+                    justifyContent: 'space-between',
+                    padding: '0 8px 0 12px',
                   }}
-                />
-              </ButtonBase>
-            </Box>
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    <Box
+                      aria-hidden
+                      sx={{
+                        backgroundColor: theme.palette.primary.main,
+                        borderRadius: '999px',
+                        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.16)}`,
+                        flexShrink: 0,
+                        height: 8,
+                        width: 8,
+                      }}
+                    />
+                    <Typography
+                      noWrap
+                      sx={{
+                        color: theme.palette.text.primary,
+                        fontFamily: 'Inter',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Q-Manager
+                    </Typography>
+                  </Box>
 
-            <Divider />
+                  <ButtonBase
+                    onClick={() => {
+                      setIsOpenQManager(false);
+                    }}
+                    sx={{
+                      alignItems: 'center',
+                      borderRadius: '8px',
+                      color: theme.palette.text.secondary,
+                      display: 'inline-flex',
+                      height: 30,
+                      justifyContent: 'center',
+                      transition:
+                        'background-color 0.18s ease, color 0.18s ease',
+                      width: 30,
+                      '&:hover': {
+                        backgroundColor: alpha(
+                          theme.palette.text.primary,
+                          0.08
+                        ),
+                        color: theme.palette.text.primary,
+                      },
+                    }}
+                  >
+                    <CloseIcon
+                      sx={{
+                        color: 'currentColor',
+                        fontSize: 20,
+                      }}
+                    />
+                  </ButtonBase>
+                </Box>
 
-            <AppViewerContainer
-              customHeight="560px"
-              app={{
-                name: 'Q-Manager',
-                path: `?groupId=${selectedGroup}`,
-                service: 'APP',
-                tabId: '5558588',
-              }}
-              isSelected
-            />
-          </Box>
-        </Box>
+                <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                  <AppViewerContainer
+                    customHeight="100%"
+                    app={{
+                      name: 'Q-Manager',
+                      path: `?groupId=${selectedGroup}`,
+                      service: 'APP',
+                      tabId: '5558588',
+                    }}
+                    isSelected
+                    ref={iframeRef}
+                  />
+                </Box>
+              </Box>
+            </Rnd>
+          )}
+        </Portal>
       )}
 
       <LoadingSnackbar
