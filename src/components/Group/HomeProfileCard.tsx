@@ -3050,6 +3050,7 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                                 }}
                               >
                                 <Typography
+                                  className={privacyBlurClassName}
                                   sx={{
                                     color: theme.palette.text.primary,
                                     fontSize: '0.8rem',
