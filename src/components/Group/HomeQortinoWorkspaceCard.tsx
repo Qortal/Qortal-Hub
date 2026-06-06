@@ -5381,7 +5381,9 @@ export const HomeQortinoWorkspaceCard = ({
                   >
                     <Typography
                       sx={{
-                        color: alpha('#FFFFFF', 0.98),
+                        color: isDarkMode
+                          ? alpha('#FFFFFF', 0.98)
+                          : alpha('#2A4F86', 0.95),
                         fontSize: '0.58rem',
                         fontWeight: 700,
                         letterSpacing: '0.02em',
