@@ -6,7 +6,6 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  alpha,
   useTheme,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -40,9 +39,9 @@ export function PaymentPublishDialog({
       aria-describedby="alert-dialog-description"
       PaperProps={{
         sx: {
-          background: '#121821',
+          background: theme.palette.background.paper,
           backgroundImage: 'none',
-          border: '1px solid rgba(169,188,216,0.18)',
+          border: `1px solid ${theme.palette.border.main}`,
           borderRadius: '18px',
           boxShadow: '0 26px 56px rgba(0,0,0,0.44)',
           color: theme.palette.text.primary,
@@ -55,7 +54,7 @@ export function PaymentPublishDialog({
       <DialogTitle
         id="alert-dialog-title"
         sx={{
-          borderBottom: '1px solid rgba(169,188,216,0.1)',
+          borderBottom: `1px solid ${theme.palette.divider}`,
           color: theme.palette.text.primary,
           fontSize: '1.04rem',
           fontWeight: 650,
@@ -80,7 +79,7 @@ export function PaymentPublishDialog({
         <DialogContentText
           id="alert-dialog-description"
           sx={{
-            color: 'rgba(232,236,244,0.92)',
+            color: theme.palette.text.primary,
             fontSize: '1rem',
             lineHeight: 1.6,
             mb: message?.paymentFee || message?.publishFee ? 1.65 : 0,
@@ -92,8 +91,8 @@ export function PaymentPublishDialog({
         {(message?.paymentFee || message?.publishFee) && (
           <Box
             sx={{
-              backgroundColor: alpha('#FFFFFF', 0.032),
-              border: '1px solid rgba(169,188,216,0.13)',
+              backgroundColor: theme.palette.action.hover,
+              border: `1px solid ${theme.palette.border.subtle}`,
               borderRadius: '12px',
               display: 'grid',
               gap: 0.55,
@@ -103,7 +102,7 @@ export function PaymentPublishDialog({
           >
             <DialogContentText
               sx={{
-                color: 'rgba(214,221,233,0.72)',
+                color: theme.palette.text.secondary,
                 fontSize: '0.78rem',
                 fontWeight: 650,
                 letterSpacing: '0.02em',
@@ -136,7 +135,7 @@ export function PaymentPublishDialog({
       </DialogContent>
       <DialogActions
         sx={{
-          borderTop: '1px solid rgba(169,188,216,0.1)',
+          borderTop: `1px solid ${theme.palette.divider}`,
           gap: 1.2,
           justifyContent: 'center',
           px: 3,
@@ -145,8 +144,8 @@ export function PaymentPublishDialog({
       >
         <Button
           sx={{
-            backgroundColor: alpha('#FFFFFF', 0.035),
-            border: '1px solid rgba(169,188,216,0.16)',
+            backgroundColor: theme.palette.action.hover,
+            border: `1px solid ${theme.palette.border.main}`,
             borderRadius: '11px',
             color: theme.palette.text.primary,
             fontSize: '0.9rem',
@@ -155,8 +154,8 @@ export function PaymentPublishDialog({
             minWidth: 112,
             px: 2.2,
             '&:hover': {
-              backgroundColor: alpha('#FFFFFF', 0.055),
-              borderColor: 'rgba(169,188,216,0.24)',
+              backgroundColor: theme.palette.action.selected,
+              borderColor: theme.palette.text.secondary,
             },
           }}
           variant="outlined"
