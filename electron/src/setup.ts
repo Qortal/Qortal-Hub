@@ -1421,6 +1421,8 @@ export interface AppSettings {
   legacyPublicStunFallback?: boolean;
   /** When false, skip UPnP for Reticulum hub mesh TCP listen port (default true). */
   reticulumMeshUpnpEnabled?: boolean;
+  /** When false, do not write/regenerate Qortal Hub's managed Reticulum config. */
+  reticulumManagedConfigEnabled?: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -1428,6 +1430,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   disableStartupSound: false,
   p2pEnabled: !isDisabledLegacy,
   reticulumMeshUpnpEnabled: true,
+  reticulumManagedConfigEnabled: true,
 };
 
 export async function readAppSettings(): Promise<AppSettings> {
@@ -1455,6 +1458,8 @@ export async function readAppSettings(): Promise<AppSettings> {
         : parsed.legacyPublicStunFallback === true,
       reticulumMeshUpnpEnabled:
         parsed.reticulumMeshUpnpEnabled === false ? false : true,
+      reticulumManagedConfigEnabled:
+        parsed.reticulumManagedConfigEnabled === false ? false : true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -2318,6 +2323,9 @@ const presenceUpdateSubscribers = new Set<Electron.WebContents>();
 const queuedPresenceUpdates = new Map<string, unknown>();
 let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let lateReticulumRecoveryCleanup: (() => void) | null = null;
+const RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000, 30_000];
+let reticulumOverlaySyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let reticulumOverlaySyncSequence = 0;
 
 function flushPresenceUpdates(): void {
   if (presenceUpdateFlushTimer) {
@@ -2370,10 +2378,15 @@ function broadcastPresenceUpdate(payload: unknown): void {
 }
 
 async function syncReticulumOverlayStateToBridge(
-  manager: NonNullable<ReturnType<typeof getPresenceManager>>
+  manager: NonNullable<ReturnType<typeof getPresenceManager>>,
+  attempt = 0,
+  sequence = ++reticulumOverlaySyncSequence
 ): Promise<void> {
   const bridge = getReticulumBridge();
-  if (!bridge || bridge.getState() !== 'ready') return;
+  if (!bridge || bridge.getState() !== 'ready') {
+    scheduleReticulumOverlayStateSyncRetry(manager, attempt, sequence);
+    return;
+  }
   const verifiedPeers: ReticulumOverlayVerifiedPeer[] = manager
     .getReticulumVerifiedPeers()
     .map((peer) => ({
@@ -2387,13 +2400,50 @@ async function syncReticulumOverlayStateToBridge(
       ? activeNeighborHashes
       : verifiedPeers.map((peer) => peer.destinationHash);
   try {
-    await bridge.syncOverlayState(verifiedPeers, overlayNeighborHashes);
+    const ok = await bridge.syncOverlayState(
+      verifiedPeers,
+      overlayNeighborHashes
+    );
+    if (!ok) {
+      scheduleReticulumOverlayStateSyncRetry(manager, attempt, sequence);
+      return;
+    }
+    if (
+      sequence === reticulumOverlaySyncSequence &&
+      reticulumOverlaySyncRetryTimer
+    ) {
+      clearTimeout(reticulumOverlaySyncRetryTimer);
+      reticulumOverlaySyncRetryTimer = null;
+    }
   } catch (err) {
     loggerWarn(
       '[ReticulumOverlay] Failed to sync overlay state to bridge:',
       err
     );
+    scheduleReticulumOverlayStateSyncRetry(manager, attempt, sequence);
   }
+}
+
+function scheduleReticulumOverlayStateSyncRetry(
+  manager: NonNullable<ReturnType<typeof getPresenceManager>>,
+  attempt: number,
+  sequence: number
+): void {
+  if (sequence !== reticulumOverlaySyncSequence) return;
+  if (reticulumOverlaySyncRetryTimer) {
+    clearTimeout(reticulumOverlaySyncRetryTimer);
+    reticulumOverlaySyncRetryTimer = null;
+  }
+  const delay =
+    RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS[
+      Math.min(attempt, RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS.length - 1)
+    ];
+  reticulumOverlaySyncRetryTimer = setTimeout(() => {
+    reticulumOverlaySyncRetryTimer = null;
+    if (sequence !== reticulumOverlaySyncSequence) return;
+    void syncReticulumOverlayStateToBridge(manager, attempt + 1, sequence);
+  }, delay);
+  reticulumOverlaySyncRetryTimer.unref?.();
 }
 
 export function attachPresenceListeners(

@@ -34,6 +34,7 @@ import {
   resolveReticulumDaemonStartupAction,
   setReticulumInstanceIndex,
   stopSharedReticulumDaemon,
+  writeManagedReticulumConfigIfManaged,
 } from './reticulum-daemon';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 
@@ -42,6 +43,14 @@ function sectionBody(config: string, header: string): string {
   expect(start).toBeGreaterThanOrEqual(0);
   const nextBlock = config.indexOf('[[', start + header.length);
   return nextBlock === -1 ? config.slice(start) : config.slice(start, nextBlock);
+}
+
+function getTestAppSettingsPath(): string {
+  return '/tmp/qortal-appdata/qortal-hub/app-settings.json';
+}
+
+function getTestReticulumConfigPath(): string {
+  return path.join(getReticulumConfigDir(), 'config');
 }
 
 describe('reticulum-daemon managed config', () => {
@@ -53,6 +62,8 @@ describe('reticulum-daemon managed config', () => {
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
       getReticulumSharedRpcKeyPath(),
+      getTestAppSettingsPath(),
+      getTestReticulumConfigPath(),
     ]) {
       try {
         fs.unlinkSync(filePath);
@@ -75,6 +86,8 @@ describe('reticulum-daemon managed config', () => {
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
       getReticulumSharedRpcKeyPath(),
+      getTestAppSettingsPath(),
+      getTestReticulumConfigPath(),
     ]) {
       try {
         fs.unlinkSync(filePath);
@@ -297,6 +310,23 @@ describe('reticulum-daemon managed config', () => {
     const fp = computeManagedReticulumConfigFingerprint();
     const expected = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
     expect(fp).toBe(expected);
+  });
+
+  it('does not write managed config when disabled in app settings', () => {
+    const settingsPath = getTestAppSettingsPath();
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({ reticulumManagedConfigEnabled: false }),
+      'utf8'
+    );
+
+    const wrote = writeManagedReticulumConfigIfManaged(
+      `${buildManagedReticulumConfig()}\n`
+    );
+
+    expect(wrote).toBe(false);
+    expect(fs.existsSync(getTestReticulumConfigPath())).toBe(false);
   });
 
   it('keeps the shared daemon running while other app instances remain active', () => {

@@ -115,6 +115,14 @@ export const globalChatWidgetBoundsAtom = atomWithStorage<{
   height: number;
 } | null>('qortal_chat_widget_bounds', null, undefined, { getOnInit: true });
 
+/** Persisted: group chat Q-Manager popup size. */
+export const groupQManagerPopupSizeAtom = atomWithStorage<{
+  width: number;
+  height: number;
+} | null>('qortal_group_q_manager_popup_size', null, undefined, {
+  getOnInit: true,
+});
+
 /** Persisted: default microphone / speaker for 1v1 and group voice calls (`null` = OS default). */
 export const CALL_AUDIO_DEVICES_STORAGE_KEY = 'qortal_call_audio_devices';
 export type CallAudioDevicePrefs = {

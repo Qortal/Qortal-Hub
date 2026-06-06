@@ -157,6 +157,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
+  const [reticulumManagedConfigEnabled, setReticulumManagedConfigEnabled] =
+    useState(true);
   const [platform, setPlatform] = useState<string>('');
   const [reticulumStatus, setReticulumStatus] =
     useState<ReticulumStatus | null>(null);
@@ -247,6 +249,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     if (typeof window.electronAPI?.getAppSettings !== 'function') return;
     const settings = await window.electronAPI.getAppSettings();
     if (settings?.closeAction) setCloseAction(settings.closeAction);
+    setReticulumManagedConfigEnabled(
+      settings?.reticulumManagedConfigEnabled === false ? false : true
+    );
     if (typeof window.electronAPI?.getPlatform === 'function') {
       const p = await window.electronAPI.getPlatform();
       setPlatform(p || '');
@@ -375,6 +380,33 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     }
   }, []);
 
+  const handleReticulumManagedConfigChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const enabled = event.target.checked;
+      const previous = reticulumManagedConfigEnabled;
+      setReticulumManagedConfigEnabled(enabled);
+      try {
+        if (typeof window.electronAPI?.setAppSettings === 'function') {
+          await window.electronAPI.setAppSettings({
+            reticulumManagedConfigEnabled: enabled,
+          });
+        }
+      } catch {
+        setReticulumManagedConfigEnabled(previous);
+        setInfoSnackCustom({
+          type: 'error',
+          message: 'Could not update Reticulum config setting.',
+        });
+        setOpenSnackGlobal(true);
+      }
+    },
+    [
+      reticulumManagedConfigEnabled,
+      setInfoSnackCustom,
+      setOpenSnackGlobal,
+    ]
+  );
+
   return (
     <Fragment>
       <Dialog
@@ -465,6 +497,23 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               >
                 <Box
                   sx={{
+                    px: 2,
+                    py: 1,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                    bgcolor: alpha(theme.palette.background.paper, 0.25),
+                  }}
+                >
+                  <Typography
+                    variant="overline"
+                    color="text.secondary"
+                    sx={{ letterSpacing: 0, fontWeight: 700 }}
+                  >
+                    System
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
@@ -512,6 +561,49 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     </Box>
                   </Box>
                 )}
+                <Box
+                  sx={{
+                    px: 2,
+                    py: 1,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                    bgcolor: alpha(theme.palette.background.paper, 0.18),
+                  }}
+                >
+                  <Typography
+                    variant="overline"
+                    color="text.secondary"
+                    sx={{ letterSpacing: 0, fontWeight: 700 }}
+                  >
+                    Reticulum
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 2,
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Managed Reticulum config
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled">
+                      Allow Qortal Hub to write its managed rnsd config on
+                      startup.
+                    </Typography>
+                  </Box>
+                  <LocalNodeSwitch
+                    checked={reticulumManagedConfigEnabled}
+                    onChange={handleReticulumManagedConfigChange}
+                  />
+                </Box>
                 <Box
                   sx={{
                     display: 'flex',

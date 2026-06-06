@@ -53,6 +53,12 @@ export const HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX =
   HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX;
 export const HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY =
   'home-dashboard-customizable-cards-layout-v1';
+export const HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT =
+  'home-dashboard-module-visibility-change';
+export const HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY =
+  'home-dashboard-module-group-activity-visible';
+export const HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY =
+  'home-dashboard-module-quitter-feed-visible';
 export const HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX = 60;
 export const HOME_DASHBOARD_WIDGET_HEIGHT_PX = 612;
 export const HOME_DASHBOARD_WIDGET_DISPLAY_MODE: WidgetDisplayMode = 'expanded';
