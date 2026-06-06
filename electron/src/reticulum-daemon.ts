@@ -84,13 +84,13 @@ const RETICULUM_RPC_KEY_BYTES = 32;
 const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
+const RETICULUM_DAEMON_FORCE_STOP_TIMEOUT_MS = 3_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
 const RETICULUM_DAEMON_LOCK_STALE_MS = 120_000;
 const RETICULUM_DAEMON_LOCK_WAIT_MS = 2_000;
 const RETICULUM_DAEMON_LOCK_POLL_MS = 50;
 const RETICULUM_CONFIG_EDITOR_MAX_BYTES = 256 * 1024;
-const RETICULUM_PRIORITY_NICE_DEFAULT = -7;
 const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
 const QCHAT_FILE_OFFER_TTL_MS = 2 * 60 * 60 * 1000;
 const QCHAT_FILE_COMPLETED_CACHE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -217,8 +217,9 @@ const qchatFileCompletedSends = new Map<string, number>();
 function parseReticulumPriorityNice(): number | null {
   const raw = String(process.env.QORTAL_RETICULUM_PRIORITY_NICE ?? '').trim();
   if (raw.toLowerCase() === 'off' || raw === '0') return null;
-  const requested = raw ? Number(raw) : RETICULUM_PRIORITY_NICE_DEFAULT;
-  if (!Number.isFinite(requested)) return RETICULUM_PRIORITY_NICE_DEFAULT;
+  if (!raw) return null;
+  const requested = Number(raw);
+  if (!Number.isFinite(requested)) return null;
   return Math.max(-20, Math.min(19, Math.trunc(requested)));
 }
 
@@ -2336,6 +2337,42 @@ function waitForChildExit(
   });
 }
 
+async function waitForPidExit(pid: number, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (!isPidAlive(pid)) {
+      return;
+    }
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    await sleep(Math.min(RETICULUM_DAEMON_LOCK_POLL_MS, remainingMs));
+  }
+  throw new Error(
+    `Timed out waiting for Reticulum daemon pid=${pid} to exit after ${timeoutMs}ms`
+  );
+}
+
+async function forceStopReticulumPidAndWait(
+  pid: number | undefined,
+  context: string
+): Promise<void> {
+  if (!Number.isInteger(pid) || Number(pid) <= 0) {
+    return;
+  }
+  const targetPid = Number(pid);
+  if (!isPidAlive(targetPid)) {
+    clearReticulumSharedDaemonState(targetPid);
+    return;
+  }
+  signalReticulumPid(
+    targetPid,
+    process.platform === 'win32' ? undefined : 'SIGKILL',
+    context
+  );
+  await waitForPidExit(targetPid, RETICULUM_DAEMON_FORCE_STOP_TIMEOUT_MS);
+  clearReticulumSharedDaemonState(targetPid);
+}
+
 function canConnectToSharedInstance(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = net.createConnection({
@@ -2400,7 +2437,8 @@ export async function waitForReticulumSharedInstanceReady(
 }
 
 export async function restartBundledReticulumDaemonAndWaitReady(
-  timeoutMs = RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS
+  timeoutMs = RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS,
+  options?: { forceKillOnStopTimeout?: boolean }
 ): Promise<void> {
   const releaseLock = acquireReticulumDaemonLock('restart');
   if (!releaseLock) {
@@ -2408,9 +2446,46 @@ export async function restartBundledReticulumDaemonAndWaitReady(
   }
   try {
     const subprocess = child;
+    const sharedState = readReticulumSharedDaemonState();
     stopBundledReticulumDaemonLocked();
     if (subprocess && subprocess.exitCode === null) {
-      await waitForChildExit(subprocess, RETICULUM_DAEMON_STOP_TIMEOUT_MS);
+      try {
+        await waitForChildExit(subprocess, RETICULUM_DAEMON_STOP_TIMEOUT_MS);
+      } catch (error) {
+        if (!options?.forceKillOnStopTimeout) {
+          throw error;
+        }
+        loggerError(
+          '[Reticulum] Daemon did not exit after SIGTERM; forcing stop before restart:',
+          error
+        );
+        await forceStopReticulumPidAndWait(
+          subprocess.pid,
+          'restart-force-stop-local'
+        );
+      }
+    } else if (sharedState && isPidAlive(sharedState.pid)) {
+      signalReticulumPid(
+        sharedState.pid,
+        process.platform === 'win32' ? undefined : 'SIGTERM',
+        'restart-shared-state'
+      );
+      try {
+        await waitForPidExit(sharedState.pid, RETICULUM_DAEMON_STOP_TIMEOUT_MS);
+        clearReticulumSharedDaemonState(sharedState.pid);
+      } catch (error) {
+        if (!options?.forceKillOnStopTimeout) {
+          throw error;
+        }
+        loggerError(
+          '[Reticulum] Shared daemon state pid did not exit after SIGTERM; forcing stop before restart:',
+          error
+        );
+        await forceStopReticulumPidAndWait(
+          sharedState.pid,
+          'restart-force-stop-shared-state'
+        );
+      }
     }
     fs.mkdirSync(getReticulumConfigDir(), { recursive: true });
     ensureManagedReticulumConfig();
