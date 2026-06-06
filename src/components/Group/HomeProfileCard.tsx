@@ -2765,9 +2765,7 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                       {td('private_key', 'Private key')}
                     </Typography>
                     <Typography
-                      className={
-                        revealedPrivateKey ? privacyBlurClassName : undefined
-                      }
+                      className={privacyBlurClassName}
                       sx={{
                         color: revealedPrivateKey
                           ? theme.palette.text.primary
@@ -2978,6 +2976,7 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                                 }}
                               >
                                 <Typography
+                                  className={privacyBlurClassName}
                                   sx={{
                                     color: theme.palette.text.primary,
                                     fontSize: '0.8rem',
