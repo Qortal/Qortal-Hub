@@ -120,6 +120,13 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('[[Default Interface]]');
     expect(config).toContain('type = AutoInterface');
     expect(config).toContain('enabled = yes');
+    const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
+    expect(autoInterfaceSection).toContain('ignored_devices =');
+    expect(autoInterfaceSection).toContain('utun4');
+    expect(autoInterfaceSection).toContain('tun0');
+    expect(autoInterfaceSection).toContain('tap0');
+    expect(autoInterfaceSection).toContain('wg0');
+    expect(autoInterfaceSection).toContain('tailscale0');
     expect(config).toMatch(/\nrpc_key = [0-9a-f]{64}\n/);
 
     for (const hub of DEFAULT_RETICULUM_HUBS) {

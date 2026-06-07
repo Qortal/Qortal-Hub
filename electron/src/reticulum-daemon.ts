@@ -83,6 +83,13 @@ const QCHAT_FILE_PENDING_SENDS_FILENAME = 'pending-sends.json';
 const RETICULUM_RPC_KEY_BYTES = 32;
 const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
+const RETICULUM_AUTO_INTERFACE_IGNORED_DEVICES = [
+  ...Array.from({ length: 32 }, (_, index) => `utun${index}`),
+  ...Array.from({ length: 32 }, (_, index) => `tun${index}`),
+  ...Array.from({ length: 32 }, (_, index) => `tap${index}`),
+  ...Array.from({ length: 32 }, (_, index) => `wg${index}`),
+  'tailscale0',
+];
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_DAEMON_FORCE_STOP_TIMEOUT_MS = 3_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
@@ -1280,9 +1287,11 @@ function renderDefaultAutoInterface(
   slice: ReticulumMeshConfigSlice | null | undefined
 ): string {
   void slice;
+  const ignoredDevices = RETICULUM_AUTO_INTERFACE_IGNORED_DEVICES.join(',');
   return `  [[Default Interface]]
   type = AutoInterface
   enabled = yes
+  ignored_devices = ${ignoredDevices}
 `;
 }
 
