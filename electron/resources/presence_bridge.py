@@ -81,8 +81,9 @@ _INBOUND_LINK_CLASSIFY_TIMEOUT_SEC = 5.0
 _pending_inbound_classify_link_ids: Set[int] = set()
 _inbound_classify_timers: Dict[int, threading.Timer] = {}
 
-# RNS Destination.announce: once after authenticated presence (first PRESENCE_ANNOUNCE),
-# then every RNS_ANNOUNCE_INTERVAL_SEC while session active; cancel on PRESENCE_OFFLINE / stop.
+# RNS Destination.announce: once after authenticated local presence activity
+# (PRESENCE_ANNOUNCE, or PRESENCE_HEARTBEAT after bridge recovery), then every
+# RNS_ANNOUNCE_INTERVAL_SEC while session active; cancel on PRESENCE_OFFLINE / stop.
 RNS_ANNOUNCE_INTERVAL_SEC = 15 * 60
 _rns_auth_announced: bool = False
 _rns_periodic_announce_timer: Optional[threading.Timer] = None
@@ -7876,6 +7877,12 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         elif env_type == "PRESENCE_ANNOUNCE":
             if not _rns_auth_announced:
                 announce_local_destination("authenticated_initial")
+                _rns_auth_announced = True
+                _schedule_rns_periodic_announce_timer()
+                _last_no_verified_peers_announce_at = time.time()
+        elif env_type == "PRESENCE_HEARTBEAT":
+            if not _rns_auth_announced:
+                announce_local_destination("authenticated_recovered_heartbeat")
                 _rns_auth_announced = True
                 _schedule_rns_periodic_announce_timer()
                 _last_no_verified_peers_announce_at = time.time()
