@@ -10,7 +10,11 @@
 
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
-import { log as loggerLog, error as loggerError } from './logger';
+import {
+  log as loggerLog,
+  error as loggerError,
+  warn as loggerWarn,
+} from './logger';
 import { runEd25519VerifySync } from './ed25519-verify-common';
 import { VerifyWorkerPool } from './verify-worker-pool';
 
@@ -33,8 +37,8 @@ const PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT = 4_096;
 const DEBUG_PRESENCE_HOT_PATH = process.env.QORTAL_DEBUG_PRESENCE === '1';
 export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
 /** Keep a verified overlay peer sticky across transient local link loss. */
-export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 30_000;
-const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 45_000;
+export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 2 * 60_000;
+const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 90_000;
 const RETICULUM_CANDIDATE_FAILURE_LIMIT = 2;
 
 // ── Message Types ─────────────────────────────────────────────────────────────
@@ -1540,7 +1544,15 @@ export class PresenceManager extends EventEmitter {
       const seen = new Set(nextVerified.map((hash) => hash.toLowerCase()));
       const waitingVerified = [...this.verifiedReticulumPeers.values()]
         .filter((peer) => !seen.has(peer.destinationHash.toLowerCase()))
-        .sort((a, b) => a.verifiedAt - b.verifiedAt || b.lastSeen - a.lastSeen);
+        .sort((a, b) => {
+          const aOpen = a.linkClosedAt === null ? 1 : 0;
+          const bOpen = b.linkClosedAt === null ? 1 : 0;
+          return (
+            bOpen - aOpen ||
+            b.lastSeen - a.lastSeen ||
+            b.verifiedAt - a.verifiedAt
+          );
+        });
       for (const peer of waitingVerified) {
         if (nextVerified.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
         if (this.isSelfReticulumHash(peer.destinationHash)) continue;
@@ -1641,7 +1653,13 @@ let presenceManager: PresenceManager | null = null;
 let presenceTransportUnsubscribers: Array<() => void> = [];
 
 function clearPresenceTransportSubscriptions(): void {
-  for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
+  for (const unsubscribe of presenceTransportUnsubscribers) {
+    try {
+      unsubscribe();
+    } catch (err) {
+      loggerWarn('[Presence] Failed to clear transport subscription:', err);
+    }
+  }
   presenceTransportUnsubscribers = [];
   activePresenceTransports = [];
 }

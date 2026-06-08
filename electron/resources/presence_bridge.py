@@ -64,8 +64,9 @@ _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
 _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
 _OVERLAY_MAX_NEIGHBORS = 16
+_OVERLAY_MIN_HEALTHY_FANOUT = 8
 _OVERLAY_NEIGHBOR_GRACE_SECONDS = 30.0
-_CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
+_CANDIDATE_PROOF_WINDOW_SECONDS = 90.0
 _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
 _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
@@ -3714,16 +3715,16 @@ def _overlay_bootstrap_peer_sort_key(peer_key: str) -> tuple[int, float, str]:
     return (2, 0.0, peer_key)
 
 
-def _bootstrap_overlay_neighbors_if_empty(reason: str) -> int:
+def _bootstrap_overlay_neighbors_if_degraded(reason: str) -> int:
     """
-    Recover from a drained overlay: if no TS-supplied active neighbors remain,
-    temporarily seed fanout from known Reticulum/Qortal presence destinations.
+    Recover from a drained or low-fanout overlay by temporarily seeding fanout
+    from known Reticulum/Qortal presence destinations.
 
     This only creates send targets. Peers still become verified solely through
     accepted signed Qortal presence or other validated overlay traffic.
     """
     global _active_overlay_neighbors
-    if _active_overlay_neighbors:
+    if len(_active_overlay_neighbors) >= _OVERLAY_MIN_HEALTHY_FANOUT:
         return 0
     local_hex = _local_presence_hash_hex()
     candidates: list[str] = []
@@ -3732,18 +3733,23 @@ def _bootstrap_overlay_neighbors_if_empty(reason: str) -> int:
             continue
         if local_hex and peer_key == local_hex:
             continue
+        if peer_key in _active_overlay_neighbors:
+            continue
         candidates.append(peer_key)
     if not candidates:
         return 0
     candidates.sort(key=_overlay_bootstrap_peer_sort_key)
     now = time.time()
-    selected = candidates[:_OVERLAY_BOOTSTRAP_MAX_NEIGHBORS]
-    _active_overlay_neighbors = {peer_key: now for peer_key in selected}
+    needed = max(0, _OVERLAY_BOOTSTRAP_MAX_NEIGHBORS - len(_active_overlay_neighbors))
+    selected = candidates[:needed]
+    for peer_key in selected:
+        _active_overlay_neighbors[peer_key] = now
     for peer_key in selected:
         _mark_candidate_peer(peer_key, f"bootstrap:{reason}")
     log(
         "[presence_bridge] target=presence-reticulum overlay_bootstrap "
-        f"reason={reason} selected={len(selected)} known_peers={len(_known_peers)} "
+        f"reason={reason} selected={len(selected)} total={len(_active_overlay_neighbors)} "
+        f"known_peers={len(_known_peers)} "
         f"fanout_hashes={','.join(selected)}"
     )
     return len(selected)
@@ -4998,7 +5004,7 @@ def _retry_pending_audio_connect_on_announce(peer_hash: str) -> None:
 
 def _sync_overlay_links() -> None:
     _maybe_prune_stale_overlay_links()
-    _bootstrap_overlay_neighbors_if_empty("sync")
+    _bootstrap_overlay_neighbors_if_degraded("sync")
     desired = set(_active_overlay_neighbors.keys())
     for peer_hash in desired:
         if peer_hash not in _known_peers:

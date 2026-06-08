@@ -700,7 +700,23 @@ type QueuedCommand = {
   priority: BridgeCmdPriority;
 };
 
-type BridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
+export type BridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
+
+export type ReticulumPresencePublishOptions = {
+  /** Bypass local heartbeat/announce dedup for explicit recovery replays. */
+  force?: boolean;
+  reason?: string;
+};
+
+export type ReticulumPresenceHealthSnapshot = {
+  bridgeState: BridgeState;
+  lastPresencePublishAt: number;
+  lastPresencePublishOkAt: number;
+  lastPresenceFanoutPeers: number | null;
+  lastInboundPresenceAt: number;
+  lastOverlayLinkClosedAt: number;
+  recentOverlayLinkTimeouts: number;
+};
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const CONTROL_PENDING_MAX = 512;
@@ -1029,6 +1045,12 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private lastHeartbeatSentAt = 0;
   private lastHeartbeatSemanticKey: string | null = null;
   private lastSemanticPresence = new Map<string, number>();
+  private lastPresencePublishAt = 0;
+  private lastPresencePublishOkAt = 0;
+  private lastPresenceFanoutPeers: number | null = null;
+  private lastInboundPresenceAt = 0;
+  private lastOverlayLinkClosedAt = 0;
+  private recentOverlayLinkTimeouts: number[] = [];
   private connectivitySnapshot: ReticulumConnectivitySnapshot = {
     bridgeState: 'stopped',
     reachability: 'disconnected',
@@ -2093,11 +2115,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     return dropped;
   }
 
-  async publish(envelope: PresenceEnvelope): Promise<boolean> {
+  async publish(
+    envelope: PresenceEnvelope,
+    options: ReticulumPresencePublishOptions = {}
+  ): Promise<boolean> {
     await this.start();
     if (this.state !== 'ready') return false;
 
-    if (envelope.type === 'PRESENCE_HEARTBEAT') {
+    if (!options.force && envelope.type === 'PRESENCE_HEARTBEAT') {
       const semanticKey = semanticPresenceKey(envelope);
       const now = Date.now();
       if (
@@ -2111,7 +2136,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       }
       this.lastHeartbeatSentAt = now;
       this.lastHeartbeatSemanticKey = semanticKey;
-    } else {
+    } else if (!options.force) {
       const semanticKey = semanticPresenceKey(envelope);
       const lastSentAt = this.lastSemanticPresence.get(semanticKey) ?? 0;
       const now = Date.now();
@@ -2125,8 +2150,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     }
 
     loggerLog(
-      `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}`
+      `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}${options.force ? ` force=yes reason=${options.reason ?? 'unspecified'}` : ''}`
     );
+    this.lastPresencePublishAt = Date.now();
     const pm = getPresenceManager();
     const activeOverlayNeighborHashes =
       pm?.getReticulumActiveNeighborHashes() ?? [];
@@ -2160,8 +2186,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         ? pl['localPresenceHash']
         : undefined;
     loggerLog(
-      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'} fanout_peers=${fanoutPeers ?? 'n/a'} fanout_hashes=${fanoutHashes ?? 'n/a'} local_presence_hash=${fanoutLocal ?? this.localPresenceDestinationHash ?? 'n/a'}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
+      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'} fanout_peers=${fanoutPeers ?? 'n/a'} fanout_hashes=${fanoutHashes ?? 'n/a'} local_presence_hash=${fanoutLocal ?? this.localPresenceDestinationHash ?? 'n/a'}${options.force ? ` force=yes reason=${options.reason ?? 'unspecified'}` : ''}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
     );
+    if (typeof fanoutPeers === 'number') {
+      this.lastPresenceFanoutPeers = fanoutPeers;
+    }
+    if (resp.ok) {
+      this.lastPresencePublishOkAt = Date.now();
+    }
     return resp.ok;
   }
 
@@ -2218,6 +2250,22 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       bridgeState: this.state,
       overlayLinksConnected: this.getEstablishedOverlayPeerCount(),
       ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
+    };
+  }
+
+  getPresenceHealthSnapshot(): ReticulumPresenceHealthSnapshot {
+    const cutoff = Date.now() - 5 * 60_000;
+    this.recentOverlayLinkTimeouts = this.recentOverlayLinkTimeouts.filter(
+      (at) => at >= cutoff
+    );
+    return {
+      bridgeState: this.state,
+      lastPresencePublishAt: this.lastPresencePublishAt,
+      lastPresencePublishOkAt: this.lastPresencePublishOkAt,
+      lastPresenceFanoutPeers: this.lastPresenceFanoutPeers,
+      lastInboundPresenceAt: this.lastInboundPresenceAt,
+      lastOverlayLinkClosedAt: this.lastOverlayLinkClosedAt,
+      recentOverlayLinkTimeouts: this.recentOverlayLinkTimeouts.length,
     };
   }
 
@@ -3039,6 +3087,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         const envelope = frame.payload?.envelope;
         const route = toPresenceRoute(frame.payload?.route);
         if (!envelope || !route || route.kind !== 'reticulum') return;
+        this.lastInboundPresenceAt = Date.now();
         const peerAddr =
           typeof (envelope.payload as { address?: string })?.address ===
           'string'
@@ -3550,6 +3599,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         } else {
           this.overlayEstablishedLinkIds.delete(linkId);
           this.overlayLinkSnapshots.delete(linkId);
+          this.lastOverlayLinkClosedAt = Date.now();
+          if (reason.toLowerCase().includes('timeout')) {
+            const now = Date.now();
+            this.recentOverlayLinkTimeouts.push(now);
+            const cutoff = now - 5 * 60_000;
+            this.recentOverlayLinkTimeouts =
+              this.recentOverlayLinkTimeouts.filter((at) => at >= cutoff);
+          }
         }
         if (
           frame.payload?.closedByReticulum === true &&

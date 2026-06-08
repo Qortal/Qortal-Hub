@@ -34,6 +34,7 @@ import {
   attachChatListeners,
   ensureReticulumManagersStarted,
   notifyPresenceTransportReady,
+  replayReticulumCachedPresence,
   setLastP2POptions,
   startDecentralizedStunAfterP2P,
 } from './setup';
@@ -271,6 +272,7 @@ async function recoverReticulumAfterWake(source: string): Promise<void> {
 
       await ensureReticulumManagersStarted();
       notifyPresenceTransportReady();
+      await replayReticulumCachedPresence(`wake:${source}`, true);
 
       const bridgeState = getReticulumBridge()?.getState() ?? 'stopped';
       loggerLog(
