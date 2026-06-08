@@ -555,8 +555,144 @@ function readProcParentPid(pid: number): number | null {
   }
 }
 
+type ReticulumBridgeProcessInfo = {
+  pid: number;
+  parentPid: number | null;
+  command: string;
+};
+
+function commandUsesReticulumConfig(command: string, configDir: string): boolean {
+  const commandForCompare =
+    process.platform === 'win32' ? command.toLowerCase() : command;
+  const configDirForCompare =
+    process.platform === 'win32' ? configDir.toLowerCase() : configDir;
+  return (
+    commandForCompare.includes('--config') &&
+    commandForCompare.includes(configDirForCompare)
+  );
+}
+
+function normalizeWindowsBridgeProcessInfo(
+  raw: unknown
+): ReticulumBridgeProcessInfo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as {
+    ProcessId?: unknown;
+    ParentProcessId?: unknown;
+    CommandLine?: unknown;
+  };
+  const pid = Number(record.ProcessId);
+  const parentPid = Number(record.ParentProcessId);
+  const command =
+    typeof record.CommandLine === 'string' ? record.CommandLine : '';
+  if (!Number.isInteger(pid) || pid <= 0 || !command) return null;
+  return {
+    pid,
+    parentPid: Number.isInteger(parentPid) ? parentPid : null,
+    command,
+  };
+}
+
+function readWindowsBridgeProcesses(): ReticulumBridgeProcessInfo[] {
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('presence_bridge') } | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress",
+  ].join('; ');
+  const result = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      script,
+    ],
+    {
+      encoding: 'utf8',
+      windowsHide: true,
+    }
+  );
+  if (result.error || result.status !== 0) return [];
+
+  const stdout = result.stdout.trim();
+  if (!stdout) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+
+  const records = Array.isArray(parsed) ? parsed : [parsed];
+  return records
+    .map(normalizeWindowsBridgeProcessInfo)
+    .filter((record): record is ReticulumBridgeProcessInfo => record !== null);
+}
+
 function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
-  if (process.platform !== 'linux') return 0;
+  const configDir = getReticulumConfigDir();
+  if (process.platform !== 'linux') {
+    if (process.platform === 'win32') {
+      let stopped = 0;
+      for (const processInfo of readWindowsBridgeProcesses()) {
+        const { pid, parentPid, command } = processInfo;
+        if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
+        if (!commandUsesReticulumConfig(command, configDir)) continue;
+        if (parentPid && parentPid > 0 && isPidAlive(parentPid)) continue;
+        if (
+          signalReticulumPid(
+            pid,
+            undefined,
+            'startup-recovery-orphan-bridge'
+          )
+        ) {
+          stopped += 1;
+        }
+      }
+      if (stopped > 0) {
+        loggerLog(
+          `[Reticulum] Stopped ${stopped} orphaned presence bridge process(es) for shared config ${configDir}`
+        );
+      }
+      return stopped;
+    }
+
+    const result = spawnSync('ps', ['-axo', 'pid=,ppid=,command='], {
+      encoding: 'utf8',
+    });
+    if (result.error || result.status !== 0) return 0;
+
+    let stopped = 0;
+    const lines = result.stdout.split(/\r?\n/);
+    for (const line of lines) {
+      const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/);
+      if (!match) continue;
+      const pid = Number(match[1]);
+      const parentPid = Number(match[2]);
+      const command = match[3] ?? '';
+      if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
+      if (parentPid !== 1) continue;
+      if (!command.includes('presence_bridge')) continue;
+      if (!commandUsesReticulumConfig(command, configDir)) continue;
+      if (
+        signalReticulumPid(
+          pid,
+          'SIGTERM',
+          'startup-recovery-orphan-bridge'
+        )
+      ) {
+        stopped += 1;
+      }
+    }
+    if (stopped > 0) {
+      loggerLog(
+        `[Reticulum] Stopped ${stopped} orphaned presence bridge process(es) for shared config ${configDir}`
+      );
+    }
+    return stopped;
+  }
   let entries: string[];
   try {
     entries = fs.readdirSync('/proc');
@@ -564,7 +700,6 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
     return 0;
   }
 
-  const configDir = getReticulumConfigDir();
   let stopped = 0;
   for (const entry of entries) {
     if (!/^\d+$/.test(entry)) continue;
@@ -1415,7 +1550,7 @@ export function buildManagedReticulumConfig(
   const ifaceBody = ifaceParts.join('\n\n');
   return `${renderReticulumHeader(slice)}
 [logging]
-loglevel = 4
+loglevel = 6
 
 [interfaces]
 ${ifaceBody}

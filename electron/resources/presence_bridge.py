@@ -56,6 +56,7 @@ _BASE58_MAP = {c: i for i, c in enumerate(_BASE58_ALPHABET)}
 _PEER_STALE_SECONDS = 4 * 3600
 _PEER_TS_SEED_LEASE_SECONDS = 300
 _MAX_KNOWN_PEERS = 256
+_OVERLAY_BOOTSTRAP_MAX_NEIGHBORS = 16
 _REQUEST_PATH_COOLDOWN_SECONDS = 30.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 8
 _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
@@ -3430,7 +3431,7 @@ def _register_peer(
     st = _peer_lifecycle[peer_key]
     if source in ("inbound", "announce", "wire_kr", "gcall_join"):
         st["last_seen_inbound"] = now
-    if source == "ts_seed":
+    if source in ("ts_seed", "recall"):
         st["ts_seed_until"] = now + _PEER_TS_SEED_LEASE_SECONDS
     if is_new:
         peers_sorted = sorted(_known_peers.keys())
@@ -3692,6 +3693,60 @@ def _maybe_prune_stale_peers() -> None:
         _known_peers.pop(pk, None)
         _peer_lifecycle.pop(pk, None)
         log(f"[presence_bridge] target=presence-reticulum peer_pruned_stale peer_hash={pk}")
+
+
+def _overlay_bootstrap_peer_sort_key(peer_key: str) -> tuple[int, float, str]:
+    st = _peer_lifecycle.get(peer_key) or {}
+    now = time.time()
+    lease = st.get("ts_seed_until")
+    last_in = st.get("last_seen_inbound")
+    last_ok = st.get("last_send_ok")
+    recent_ts = 0.0
+    if isinstance(last_in, (int, float)):
+        recent_ts = max(recent_ts, float(last_in))
+    if isinstance(last_ok, (int, float)):
+        recent_ts = max(recent_ts, float(last_ok))
+    if isinstance(lease, (int, float)) and float(lease) > now:
+        recent_ts = max(recent_ts, float(lease))
+        return (0, -recent_ts, peer_key)
+    if recent_ts > 0:
+        return (1, -recent_ts, peer_key)
+    return (2, 0.0, peer_key)
+
+
+def _bootstrap_overlay_neighbors_if_empty(reason: str) -> int:
+    """
+    Recover from a drained overlay: if no TS-supplied active neighbors remain,
+    temporarily seed fanout from known Reticulum/Qortal presence destinations.
+
+    This only creates send targets. Peers still become verified solely through
+    accepted signed Qortal presence or other validated overlay traffic.
+    """
+    global _active_overlay_neighbors
+    if _active_overlay_neighbors:
+        return 0
+    local_hex = _local_presence_hash_hex()
+    candidates: list[str] = []
+    for peer_key in list(_known_peers.keys()):
+        if not _valid_presence_destination_hash_hex(peer_key):
+            continue
+        if local_hex and peer_key == local_hex:
+            continue
+        candidates.append(peer_key)
+    if not candidates:
+        return 0
+    candidates.sort(key=_overlay_bootstrap_peer_sort_key)
+    now = time.time()
+    selected = candidates[:_OVERLAY_BOOTSTRAP_MAX_NEIGHBORS]
+    _active_overlay_neighbors = {peer_key: now for peer_key in selected}
+    for peer_key in selected:
+        _mark_candidate_peer(peer_key, f"bootstrap:{reason}")
+    log(
+        "[presence_bridge] target=presence-reticulum overlay_bootstrap "
+        f"reason={reason} selected={len(selected)} known_peers={len(_known_peers)} "
+        f"fanout_hashes={','.join(selected)}"
+    )
+    return len(selected)
 
 
 def _request_path_if_eligible(peer_key: str, h: bytes, nudge_budget: list[int]) -> None:
@@ -4943,6 +4998,7 @@ def _retry_pending_audio_connect_on_announce(peer_hash: str) -> None:
 
 def _sync_overlay_links() -> None:
     _maybe_prune_stale_overlay_links()
+    _bootstrap_overlay_neighbors_if_empty("sync")
     desired = set(_active_overlay_neighbors.keys())
     for peer_hash in desired:
         if peer_hash not in _known_peers:
