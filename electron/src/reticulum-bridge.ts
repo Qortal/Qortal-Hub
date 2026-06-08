@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, spawnSync } from 'child_process';
 import { app } from 'electron';
 import { EventEmitter } from 'events';
 import fs from 'fs';
@@ -800,6 +800,39 @@ function resolveBridgeLaunch(configDir: string):
   ]);
 }
 
+function killBridgeProcessTree(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(pid);
+      return true;
+    } catch (err) {
+      loggerWarn(`[ReticulumBridge] Failed to signal child pid=${pid}:`, err);
+      return false;
+    }
+  }
+
+  const result = spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error) {
+    loggerWarn(
+      `[ReticulumBridge] Failed to taskkill child tree pid=${pid}:`,
+      result.error
+    );
+    return false;
+  }
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout).trim();
+    loggerWarn(
+      `[ReticulumBridge] taskkill child tree pid=${pid} exited status=${result.status}${detail ? ` detail=${detail}` : ''}`
+    );
+    return false;
+  }
+  return true;
+}
+
 function toPresenceRoute(raw: unknown): PresenceRoute | null {
   if (!raw || typeof raw !== 'object') return null;
   const route = raw as {
@@ -1193,7 +1226,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     const child = this.child;
     this.child = null;
     if (child && child.exitCode === null && !child.killed) {
-      child.kill();
+      if (typeof child.pid === 'number') {
+        killBridgeProcessTree(child.pid);
+      } else {
+        child.kill();
+      }
     }
     this.localPresenceDestinationHash = undefined;
     this.launchConfigDir = null;
