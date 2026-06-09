@@ -22,9 +22,11 @@ from typing import IO, Any, Callable, Dict, Optional, Set, Tuple
 
 import RNS
 
-APP_NAMESPACE = "qortal-hub"
+# TODO: Restore to "qortal-hub" before release; temporary test-network isolation.
+APP_NAMESPACE = "qortal-hub-test"
 PRESENCE_ASPECT = "presence"
-PRESENCE_VERSION = "v1"
+# TODO: Restore to "v1" before release; temporary test-network isolation.
+PRESENCE_VERSION = "v1-test"
 IDENTITY_FILENAME = "presence-bridge.identity"
 
 _state_lock = threading.RLock()
