@@ -1149,7 +1149,20 @@ function signalReticulumPid(
 ): boolean {
   try {
     if (process.platform === 'win32') {
-      process.kill(pid);
+      const result = spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      if (result.error) {
+        throw result.error;
+      }
+      if (result.status !== 0 && isPidAlive(pid)) {
+        throw new Error(
+          `taskkill exited with status ${result.status}: ${(
+            result.stderr || result.stdout
+          ).trim()}`
+        );
+      }
     } else if (signal) {
       process.kill(pid, signal);
     } else {
@@ -2371,7 +2384,11 @@ function stopBundledReticulumDaemonLocked(): void {
   const childPid = child.pid;
   try {
     if (process.platform === 'win32') {
-      child.kill();
+      if (Number.isInteger(childPid) && Number(childPid) > 0) {
+        signalReticulumPid(Number(childPid), undefined, 'stop-local');
+      } else {
+        child.kill();
+      }
     } else {
       child.kill('SIGTERM');
     }
