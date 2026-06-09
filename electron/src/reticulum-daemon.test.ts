@@ -293,7 +293,7 @@ describe('reticulum-daemon managed config', () => {
         'network_identity = /tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity'
       );
       expect(config).toContain('discovery_name = Qortal Hub Mesh Listen');
-      expect(config).toContain('network_name = qortal-hub-test');
+      expect(config).toContain('network_name = qortal-hub');
       expect(config).toContain('passphrase = qortal-hub-community-mesh-v1');
       expect(config).toContain('reachable_on = 203.0.113.7');
       expect(config).toContain('announce_interval = 5');

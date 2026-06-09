@@ -84,8 +84,7 @@ const RETICULUM_PRESENCE_BRIDGE_IDENTITY_FILENAME = 'presence-bridge.identity';
 const QCHAT_FILE_PENDING_SENDS_DIRNAME = 'qchat-file-transfers';
 const QCHAT_FILE_PENDING_SENDS_FILENAME = 'pending-sends.json';
 const RETICULUM_RPC_KEY_BYTES = 32;
-// TODO: Restore to "qortal-hub" before release; temporary test-network isolation.
-const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub-test';
+const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_DAEMON_FORCE_STOP_TIMEOUT_MS = 3_000;
