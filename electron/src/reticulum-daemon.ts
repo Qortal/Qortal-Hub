@@ -48,7 +48,8 @@ import { runEd25519VerifySync } from './ed25519-verify-common';
 /**
  * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
  * RNS BackboneInterface is Linux-only; Windows/macOS use TCPServerInterface for the same section.
- * Bootstrap hubs as TCPClient rows; no AutoInterface discovery in managed configs.
+ * Bootstrap hubs as TCPClient rows; network interface discovery is enabled, but
+ * LAN AutoInterface discovery is not emitted in managed configs.
  */
 
 /** Mesh listen / private gateway: Backbone on Linux; TCPServer on Windows/macOS (no epoll). */
@@ -69,6 +70,7 @@ const RETICULUM_CONTROL_BASE_PORT = 37429;
 const RETICULUM_CONFIG_FILENAME = 'config';
 const MANAGED_CONFIG_MARKER = '# Managed by Qortal Hub';
 const DEFAULT_CONFIG_SENTINEL = '# This is the default Reticulum config file.';
+const RETICULUM_AUTOCONNECT_DISCOVERED_INTERFACES = 8;
 const APP_SETTINGS_FILENAME = 'app-settings.json';
 const RETICULUM_SHARED_INSTANCE_NAME = 'qortal-hub-shared';
 const RETICULUM_SHARED_STATE_DIRNAME = 'qortal-shared';
@@ -1503,6 +1505,8 @@ instance_name = ${getReticulumInstanceName()}
 shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
 rpc_key = ${rpcKeyHex}
+discover_interfaces = Yes
+autoconnect_discovered_interfaces = ${RETICULUM_AUTOCONNECT_DISCOVERED_INTERFACES}
 `;
   if (hasNetworkIdentity) {
     block += `network_identity = ${meshSlice.networkIdentityPath}

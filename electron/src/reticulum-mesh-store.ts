@@ -192,7 +192,7 @@ export type ReticulumMeshConfigSlice = {
   listenPort: number;
   /** Always empty — mesh TCP clients come only from bootstrap hubs in managed config, not gossip. */
   outbound: Array<{ sectionName: string; host: string; port: number }>;
-  /** Retained for state shape compatibility; managed configs no longer emit AutoInterface discovery. */
+  /** Retained for state shape compatibility; managed configs enable remote discovery, but never emit AutoInterface LAN discovery. */
   meshDiscoveryClient: boolean;
   autoconnectDiscoveredMax: number;
   /** Encrypted private gateway when both bundled mesh identity and passphrase exist. Discovery/publishing still requires `reachableOn`. */
@@ -241,8 +241,8 @@ export function meshConfigSliceFromState(
       host: p.host,
       port: p.port,
     })),
-    meshDiscoveryClient: false,
-    autoconnectDiscoveredMax: 0,
+    meshDiscoveryClient: true,
+    autoconnectDiscoveredMax: 8,
     meshPrivateGateway,
     networkIdentityPath: identityPath,
     networkPassphrase,

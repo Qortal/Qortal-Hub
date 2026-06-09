@@ -114,13 +114,13 @@ describe('reticulum-daemon managed config', () => {
     );
   });
 
-  it('omits AutoInterface discovery and includes the default public hubs', () => {
+  it('enables remote interface discovery without AutoInterface LAN discovery and includes the default public hubs', () => {
     const config = buildManagedReticulumConfig();
 
     expect(config).not.toContain('[[Default Interface]]');
     expect(config).not.toContain('type = AutoInterface');
-    expect(config).not.toContain('discover_interfaces = yes');
-    expect(config).not.toContain('autoconnect_discovered_interfaces =');
+    expect(config).toContain('discover_interfaces = Yes');
+    expect(config).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toMatch(/\nrpc_key = [0-9a-f]{64}\n/);
 
     for (const hub of DEFAULT_RETICULUM_HUBS) {
@@ -212,8 +212,8 @@ describe('reticulum-daemon managed config', () => {
       config.indexOf('[reticulum]'),
       config.indexOf('[logging]')
     );
-    expect(reticulumBlock).not.toContain('discover_interfaces = yes');
-    expect(reticulumBlock).not.toContain('autoconnect_discovered_interfaces =');
+    expect(reticulumBlock).toContain('discover_interfaces = Yes');
+    expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
     const meshListenType =
       process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';

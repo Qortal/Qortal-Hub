@@ -53,13 +53,14 @@ For automated cross-platform builds use the GitHub Actions workflow:
 
 The main process spawns `rnsd` with `--config` pointing at **`userData/reticulum`** (writable). The Reticulum bridge prefers the bundled `presence_bridge` executable and falls back to Python only in development. Logs also go to **`userData/logs/reticulum.log`**.
 
-The managed config ships a default list of public `TCPClientInterface` hubs so matching `qortal-hub` namespaces can discover each other across the Internet without manual config edits. It does not emit `AutoInterface` LAN discovery by default. When the private mesh gateway is enabled, the managed `Qortal Hub Mesh Listen` interface is emitted on the same `qortal-hub` Reticulum network segment and publishes IFAC details inside the encrypted discovery payload for trusted peers.
+The managed config ships a default list of public `TCPClientInterface` hubs so matching `qortal-hub` namespaces can discover each other across the Internet without manual config edits. It enables Reticulum remote interface discovery with a bounded autoconnect limit, but does not emit `AutoInterface` LAN discovery by default. When the private mesh gateway is enabled, the managed `Qortal Hub Mesh Listen` interface is emitted on the same `qortal-hub` Reticulum network segment and publishes IFAC details inside the encrypted discovery payload for trusted peers.
 
 ## Default WAN bootstrap
 
 The app now treats worldwide Reticulum reachability as a built-in feature:
 
 - WAN bootstrap uses one or more curated public TCP hubs from the managed config
+- Reticulum remote interface discovery is enabled with `autoconnect_discovered_interfaces = 8`
 - LAN `AutoInterface` discovery is intentionally disabled in the managed config
 - A custom Reticulum config under `userData/reticulum/config` is still preserved and overrides the managed default
 

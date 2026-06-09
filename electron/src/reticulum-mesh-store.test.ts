@@ -85,11 +85,11 @@ describe('meshConfigSliceFromState', () => {
     expect(s.outbound).toEqual([]);
   });
 
-  it('keeps AutoInterface discovery off when mesh listen is disabled', () => {
+  it('keeps remote discovery on when mesh listen is disabled', () => {
     const state = baseState({ meshListenEnabled: false });
     const s = meshConfigSliceFromState(state, []);
-    expect(s.meshDiscoveryClient).toBe(false);
-    expect(s.autoconnectDiscoveredMax).toBe(0);
+    expect(s.meshDiscoveryClient).toBe(true);
+    expect(s.autoconnectDiscoveredMax).toBe(8);
   });
 
   it('enables transport when mesh listen on (private gateway, reachable unknown)', () => {
