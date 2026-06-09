@@ -35,7 +35,11 @@ _announce_handler = None
 _known_peers: Dict[str, Any] = {}
 _candidate_peers: Dict[str, Dict[str, Any]] = {}
 _verified_overlay_peers: Dict[str, Dict[str, Any]] = {}
+# Outbound peers we chose for our presence overlay fanout.
 _active_overlay_neighbors: Dict[str, float] = {}
+# Inbound peers that chose us. They are included in publish fanout too, but
+# have their own cap so inbound reciprocity is not blocked by outbound fill.
+_inbound_overlay_neighbors: Dict[str, float] = {}
 # Per-peer metadata: last_seen_inbound, last_send_ok, last_request_path_at, ts_seed_until (epoch seconds).
 _peer_lifecycle: Dict[str, Dict[str, Any]] = {}
 # Recent presence senders (destination hash hex, lowercased) for recall retries on publish.
@@ -63,7 +67,9 @@ _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
 # Extra RNS announce while verified overlay peer count is below this (same cooldown as legacy "no peers" path).
 _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
-_OVERLAY_MAX_NEIGHBORS = 16
+_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 16
+_OVERLAY_MAX_INBOUND_NEIGHBORS = 16
+_OVERLAY_MAX_NEIGHBORS = _OVERLAY_MAX_OUTBOUND_NEIGHBORS
 _OVERLAY_MIN_HEALTHY_FANOUT = 8
 _OVERLAY_NEIGHBOR_GRACE_SECONDS = 30.0
 _CANDIDATE_PROOF_WINDOW_SECONDS = 90.0
@@ -71,10 +77,19 @@ _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
 _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
 _OVERLAY_LINK_PATH_AWAIT_SECONDS = 0.35
-# Presence heartbeats are expected every 25s and TS expires sessions after 70s.
+_PRESENCE_BRIDGE_VERBOSE_LOGS = (
+    os.environ.get("QORTAL_PRESENCE_BRIDGE_VERBOSE_LOGS", "").strip().lower()
+    in ("1", "true", "yes", "on")
+)
+# Presence heartbeats are expected every 25s and TS expires sessions after 95s.
 # Keep overlay links a little longer than that, but do not trust a link forever
 # when no inbound Qortal overlay traffic arrives after the remote app exits.
 _OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS = 95.0
+_CALL_RELAY_DEDUP_TTL_SECONDS = 90.0
+_CALL_RELAY_DEDUP_MAX = 4096
+_call_relay_dedup: Dict[str, float] = {}
+_call_relay_dedup_last_log_at: float = 0.0
+_call_relay_dedup_suppressed_since_log: int = 0
 _QCHAT_FILE_LINK_OPEN_PATH_AWAIT_SECONDS = 8.0
 _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS = 4
 _QCHAT_FILE_LINK_RETRY_DELAY_SECONDS = 2.0
@@ -320,6 +335,8 @@ _audio_rns_shared_frame_last_wall_ms_by_destination_hash: Dict[str, int] = {}
 _rns_link_receive_probe_installed = False
 _rns_transport_inbound_probe_installed = False
 _rns_shared_frame_probe_installed = False
+_rns_shared_rpc_failure_guard_installed = False
+_rns_shared_rpc_failure_last_log_by_method: Dict[str, float] = {}
 _rns_link_receive_probe_context = threading.local()
 _AUDIO_MEDIA_ROUTE_STATS_MAX = 64
 _AUDIO_LINK_RECEIVE_PROBE_MAX = 2048
@@ -1665,6 +1682,53 @@ def install_rns_transport_inbound_probe() -> None:
 
     setattr(RNS.Transport, "inbound", staticmethod(probed_inbound))
     _rns_transport_inbound_probe_installed = True
+
+
+def install_rns_shared_rpc_failure_guard() -> None:
+    """Keep shared-instance bookkeeping RPC failures from aborting inbound frames."""
+    global _rns_shared_rpc_failure_guard_installed
+    if _rns_shared_rpc_failure_guard_installed:
+        return
+
+    reticulum_cls = getattr(RNS, "Reticulum", None)
+    if reticulum_cls is None:
+        return
+
+    rpc_failure_types = (ConnectionResetError, BrokenPipeError, EOFError, OSError)
+    method_names = (
+        "_used_destination_data",
+        "_retain_destination_data",
+        "_unretain_destination_data",
+        "_retain_identity",
+    )
+
+    def make_guard(method_name: str, original):
+        def guarded(self, *args, **kwargs):
+            if not getattr(self, "is_connected_to_shared_instance", False):
+                return original(self, *args, **kwargs)
+            try:
+                return original(self, *args, **kwargs)
+            except rpc_failure_types as exc:
+                now = time.monotonic()
+                last = _rns_shared_rpc_failure_last_log_by_method.get(method_name, 0.0)
+                if now - last >= 30.0:
+                    _rns_shared_rpc_failure_last_log_by_method[method_name] = now
+                    log(
+                        "[presence_bridge] target=reticulum-shared-rpc "
+                        f"method={method_name} action=ignored_nonfatal err={type(exc).__name__}: {exc}"
+                    )
+                return False
+
+        return guarded
+
+    installed_any = False
+    for method_name in method_names:
+        original = getattr(reticulum_cls, method_name, None)
+        if callable(original):
+            setattr(reticulum_cls, method_name, make_guard(method_name, original))
+            installed_any = True
+
+    _rns_shared_rpc_failure_guard_installed = installed_any
 
 
 def _now_wall_ms() -> int:
@@ -3170,6 +3234,11 @@ def log(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
 
 
+def verbose_presence_log(message: str) -> None:
+    if _PRESENCE_BRIDGE_VERBOSE_LOGS:
+        log(message)
+
+
 def as_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
@@ -3542,11 +3611,15 @@ def _set_verified_overlay_peers(
         _candidate_peers.pop(peer_hash, None)
     _verified_overlay_peers = next_verified
     next_neighbors: Dict[str, float] = {}
-    for raw_hash in active_neighbor_hashes[:_OVERLAY_MAX_NEIGHBORS]:
+    for raw_hash in active_neighbor_hashes:
+        if len(next_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+            break
         peer_hash = str(raw_hash or "").strip().lower()
         if not peer_hash:
             continue
         if local_hex and peer_hash == local_hex:
+            continue
+        if not _should_initiate_overlay_link(peer_hash):
             continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
@@ -3562,6 +3635,8 @@ def _set_verified_overlay_peers(
             break
         if peer_hash in next_neighbors:
             continue
+        if not _should_initiate_overlay_link(peer_hash):
+            continue
         if not isinstance(seen_at, (int, float)):
             continue
         if now - float(seen_at) > _OVERLAY_NEIGHBOR_GRACE_SECONDS:
@@ -3576,15 +3651,59 @@ def _set_verified_overlay_peers(
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
         next_neighbors[peer_hash] = float(seen_at)
         retained_neighbors += 1
+    if len(next_neighbors) < _OVERLAY_MAX_NEIGHBORS:
+        candidates: list[tuple[float, str]] = []
+        for peer_hash, peer in next_verified.items():
+            peer_key = str(peer_hash or "").strip().lower()
+            if (
+                not peer_key
+                or peer_key in next_neighbors
+                or (local_hex and peer_key == local_hex)
+                or not _should_initiate_overlay_link(peer_key)
+            ):
+                continue
+            last_seen = peer.get("last_seen") if isinstance(peer, dict) else None
+            if not isinstance(last_seen, (int, float)):
+                last_seen = 0.0
+            candidates.append((float(last_seen), peer_key))
+        candidates.sort(key=lambda item: (-item[0], item[1]))
+        for _last_seen, peer_key in candidates:
+            if len(next_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+                break
+            if peer_key not in _known_peers:
+                ensure_known_peer_from_recall(peer_key, "ts_seed")
+            next_neighbors[peer_key] = now
     _active_overlay_neighbors = next_neighbors
-    log(
+    publish_fanout_count = len(set(_active_overlay_neighbors.keys()) | set(_inbound_overlay_neighbors.keys()))
+    verbose_presence_log(
         "[presence_bridge] target=presence-reticulum overlay_sync "
-        f"verified={len(_verified_overlay_peers)} publish_fanout={len(_active_overlay_neighbors)} "
+        f"verified={len(_verified_overlay_peers)} outbound_fanout={len(_active_overlay_neighbors)} "
+        f"inbound_fanout={len(_inbound_overlay_neighbors)} "
+        f"publish_fanout={publish_fanout_count} "
         f"retained={retained_neighbors}"
     )
 
 
-def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None) -> list[str]:
+def _overlay_peer_has_established_link(peer_hash: str) -> bool:
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
+        return False
+    with _state_lock:
+        link_id = _active_overlay_link_id_by_peer_hash.get(peer_key)
+        if not link_id:
+            return False
+        state = _overlay_links_by_id.get(link_id)
+        return bool(
+            state is not None
+            and state.get("established") is True
+            and state.get("link") is not None
+        )
+
+
+def _resolve_overlay_neighbor_hashes(
+    exclude_hashes: Optional[list[str]] = None,
+    established_only: bool = False,
+) -> list[str]:
     _prune_candidate_peers()
     exclude = {
         str(h).strip().lower() for h in (exclude_hashes or []) if str(h).strip()
@@ -3603,12 +3722,115 @@ def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None)
             continue
         if peer_hash not in _known_peers:
             continue
+        if established_only and not _overlay_peer_has_established_link(peer_hash):
+            continue
         # Refresh the active-neighbor lease on real fanout use. Overlay sync from
         # Electron is event-driven, so steady 25 s presence heartbeats must keep a
         # healthy neighbor from aging out after the 30 s grace window.
         _active_overlay_neighbors[peer_hash] = now
         out.append(peer_hash)
-    return out[:_OVERLAY_MAX_NEIGHBORS]
+    for peer_hash in list(_inbound_overlay_neighbors.keys()):
+        if peer_hash in exclude or peer_hash in out:
+            continue
+        if local_hex and peer_hash == local_hex:
+            continue
+        if peer_hash not in _known_peers:
+            continue
+        if established_only and not _overlay_peer_has_established_link(peer_hash):
+            continue
+        _inbound_overlay_neighbors[peer_hash] = now
+        out.append(peer_hash)
+    return out[:(_OVERLAY_MAX_OUTBOUND_NEIGHBORS + _OVERLAY_MAX_INBOUND_NEIGHBORS)]
+
+
+def _overlay_peer_is_admitted(peer_key: str) -> bool:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return False
+    return peer_key in _active_overlay_neighbors or peer_key in _inbound_overlay_neighbors
+
+
+def _overlay_peer_is_outbound(peer_key: str) -> bool:
+    peer_key = str(peer_key or "").strip().lower()
+    return bool(peer_key and peer_key in _active_overlay_neighbors)
+
+
+def _overlay_peer_is_inbound(peer_key: str) -> bool:
+    peer_key = str(peer_key or "").strip().lower()
+    return bool(peer_key and peer_key in _inbound_overlay_neighbors)
+
+
+def _promote_recent_verified_overlay_neighbors(
+    reason: str, exclude_hashes: Optional[Set[str]] = None
+) -> int:
+    global _active_overlay_neighbors
+    if len(_active_overlay_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+        return 0
+    exclude = {
+        str(h).strip().lower() for h in (exclude_hashes or set()) if str(h).strip()
+    }
+    local_hex = _local_presence_hash_hex()
+    candidates: list[tuple[float, str]] = []
+    for peer_hash, peer in _verified_overlay_peers.items():
+        peer_key = str(peer_hash or "").strip().lower()
+        if not peer_key:
+            continue
+        if local_hex and peer_key == local_hex:
+            continue
+        if not _should_initiate_overlay_link(peer_key):
+            continue
+        if (
+            peer_key in exclude
+            or peer_key in _active_overlay_neighbors
+            or peer_key in _inbound_overlay_neighbors
+        ):
+            continue
+        last_seen = peer.get("last_seen") if isinstance(peer, dict) else None
+        if not isinstance(last_seen, (int, float)):
+            last_seen = 0.0
+        candidates.append((float(last_seen), peer_key))
+    if not candidates:
+        return 0
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    now = time.time()
+    selected: list[str] = []
+    for _last_seen, peer_key in candidates:
+        if len(_active_overlay_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+            break
+        if peer_key not in _known_peers:
+            ensure_known_peer_from_recall(peer_key, "ts_seed")
+        if peer_key not in _known_peers:
+            continue
+        _active_overlay_neighbors[peer_key] = now
+        selected.append(peer_key)
+    if selected:
+        verbose_presence_log(
+            "[presence_bridge] target=presence-reticulum overlay_fanout_promote "
+            f"reason={reason} selected={len(selected)} total={len(_active_overlay_neighbors)} "
+            f"fanout_hashes={','.join(selected)}"
+        )
+    return len(selected)
+
+
+def _demote_overlay_fanout_peer(peer_hash: str, reason: str) -> bool:
+    global _active_overlay_neighbors, _inbound_overlay_neighbors
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
+        return False
+    was_outbound = peer_key in _active_overlay_neighbors
+    was_inbound = peer_key in _inbound_overlay_neighbors
+    if not was_outbound and not was_inbound:
+        return False
+    _active_overlay_neighbors.pop(peer_key, None)
+    _inbound_overlay_neighbors.pop(peer_key, None)
+    verbose_presence_log(
+        "[presence_bridge] target=presence-reticulum overlay_fanout_demote "
+        f"peer={peer_key} reason={reason} outbound={len(_active_overlay_neighbors)} "
+        f"inbound={len(_inbound_overlay_neighbors)}"
+    )
+    if was_outbound:
+        _promote_recent_verified_overlay_neighbors(reason, {peer_key})
+    return True
 
 
 def _get_group_audio_peer_identity(peer_hash: str):
@@ -3733,7 +3955,9 @@ def _bootstrap_overlay_neighbors_if_degraded(reason: str) -> int:
             continue
         if local_hex and peer_key == local_hex:
             continue
-        if peer_key in _active_overlay_neighbors:
+        if not _should_initiate_overlay_link(peer_key):
+            continue
+        if peer_key in _active_overlay_neighbors or peer_key in _inbound_overlay_neighbors:
             continue
         candidates.append(peer_key)
     if not candidates:
@@ -4675,11 +4899,76 @@ def _should_initiate_overlay_link(peer_key: str) -> bool:
     )
 
 
+def _overlay_teardown_should_demote(reason: str) -> bool:
+    # These are local management events, not proof that the peer cannot keep a
+    # usable fanout link. Demoting here causes sync churn and can prune good links.
+    if reason in {
+        "pruned",
+        "pruned_orphan",
+        "dedup_orphan",
+        "dedup_same_peer",
+        "announce_retry",
+        "initiator_closed",
+        "admission_rejected",
+        "pruned_unknown_full",
+    }:
+        return False
+    return True
+
+
+def _overlay_mesh_link_count_locked() -> int:
+    return len(_overlay_links_by_id)
+
+
+def _admit_overlay_peer_if_allowed(peer_key: str, reason: str, incoming: bool = False) -> bool:
+    """Admit a peer into the direction-specific presence overlay mesh budget."""
+    global _active_overlay_neighbors, _inbound_overlay_neighbors
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key or not _valid_presence_destination_hash_hex(peer_key):
+        return False
+    local_hex = _local_presence_hash_hex()
+    if local_hex and peer_key == local_hex:
+        return False
+    if not incoming and not _should_initiate_overlay_link(peer_key):
+        verbose_presence_log(
+            "[presence_bridge] target=presence-reticulum overlay_admission_reject "
+            f"peer={peer_key} direction=outbound reason={reason}:wait_incoming"
+        )
+        return False
+    target = _inbound_overlay_neighbors if incoming else _active_overlay_neighbors
+    direction = "inbound" if incoming else "outbound"
+    limit = _OVERLAY_MAX_INBOUND_NEIGHBORS if incoming else _OVERLAY_MAX_OUTBOUND_NEIGHBORS
+    if peer_key in target:
+        return True
+    if len(target) >= limit:
+        verbose_presence_log(
+            "[presence_bridge] target=presence-reticulum overlay_admission_reject "
+            f"peer={peer_key} direction={direction} reason={reason} active={len(target)}"
+        )
+        return False
+    target[peer_key] = time.time()
+    verbose_presence_log(
+        "[presence_bridge] target=presence-reticulum overlay_admission_accept "
+        f"peer={peer_key} direction={direction} reason={reason} active={len(target)}"
+    )
+    return True
+
+
+def _overlay_unknown_inbound_allowed() -> bool:
+    if len(_inbound_overlay_neighbors) >= _OVERLAY_MAX_INBOUND_NEIGHBORS:
+        return False
+    with _state_lock:
+        return _overlay_mesh_link_count_locked() < (
+            _OVERLAY_MAX_OUTBOUND_NEIGHBORS + _OVERLAY_MAX_INBOUND_NEIGHBORS
+        )
+
+
 def _teardown_overlay_link_id(link_id: str, reason: str) -> None:
     state = remove_overlay_link(link_id)
     if state is None:
         return
-    log(_overlay_close_debug_line(link_id, state, reason))
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    verbose_presence_log(_overlay_close_debug_line(link_id, state, reason))
     link = state.get("link")
     if link is not None:
         try:
@@ -4688,6 +4977,8 @@ def _teardown_overlay_link_id(link_id: str, reason: str) -> None:
             pass
     state["established"] = False
     emit_overlay_link_state(link_id, state, reason)
+    if peer_hash and _overlay_teardown_should_demote(reason):
+        _demote_overlay_fanout_peer(peer_hash, f"link_teardown:{reason}")
 
 
 def _maybe_prune_stale_overlay_links() -> None:
@@ -4697,12 +4988,16 @@ def _maybe_prune_stale_overlay_links() -> None:
         for link_id, state in list(_overlay_links_by_id.items()):
             if state.get("established") is not True:
                 continue
-            last_rx = state.get("last_rx_at")
-            if not isinstance(last_rx, (int, float)):
-                last_rx = state.get("established_at") or state.get("created_at")
-            if not isinstance(last_rx, (int, float)):
+            last_activity = state.get("last_activity_at")
+            if not isinstance(last_activity, (int, float)):
+                last_activity = state.get("last_rx_at")
+            if not isinstance(last_activity, (int, float)):
+                last_activity = state.get("last_send_ok_at")
+            if not isinstance(last_activity, (int, float)):
+                last_activity = state.get("established_at") or state.get("created_at")
+            if not isinstance(last_activity, (int, float)):
                 continue
-            if now - float(last_rx) > _OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS:
+            if now - float(last_activity) > _OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS:
                 stale_ids.append(link_id)
     for link_id in stale_ids:
         _teardown_overlay_link_id(link_id, "rx_idle_timeout")
@@ -4712,6 +5007,11 @@ def _register_active_overlay_for_peer(peer_key: str, link_id: str) -> Optional[D
     """One active overlay link per peer hash; teardown duplicate links."""
     peer_key = str(peer_key or "").strip().lower()
     if not peer_key or not _valid_presence_destination_hash_hex(peer_key):
+        return None
+    state_for_direction = get_overlay_link_state(link_id)
+    incoming = bool(state_for_direction and state_for_direction.get("incoming") is True)
+    if not _admit_overlay_peer_if_allowed(peer_key, "register_active", incoming=incoming):
+        _teardown_overlay_link_id(link_id, "admission_rejected")
         return None
     lose_id: Optional[str] = None
     with _state_lock:
@@ -4780,7 +5080,9 @@ def _flush_overlay_link_pending(link_id: str) -> None:
 
 
 def _ensure_overlay_link(
-    peer_hash: str, respect_dial_owner: bool = True
+    peer_hash: str,
+    respect_dial_owner: bool = True,
+    await_path: bool = True,
 ) -> Optional[Dict[str, Any]]:
     peer_key = str(peer_hash or "").strip().lower()
     if not peer_key:
@@ -4804,6 +5106,8 @@ def _ensure_overlay_link(
             "[presence_bridge] target=presence-reticulum overlay_link_wait_incoming "
             f"peer={peer_key}"
         )
+        return None
+    if not _admit_overlay_peer_if_allowed(peer_key, "outbound", incoming=False):
         return None
     link_id = ""
     state: Optional[Dict[str, Any]] = None
@@ -4836,13 +5140,14 @@ def _ensure_overlay_link(
             if not _nudge_overlay_link_path(
                 peer_key,
                 outbound.hash,
-                await_seconds=_OVERLAY_LINK_PATH_AWAIT_SECONDS,
+                await_seconds=_OVERLAY_LINK_PATH_AWAIT_SECONDS if await_path else 0.0,
             ):
-                log(
-                    "[presence_bridge] target=presence-reticulum "
-                    "overlay_link_deferred_no_path "
-                    f"peer={peer_key} await={_OVERLAY_LINK_PATH_AWAIT_SECONDS}"
-                )
+                if await_path:
+                    log(
+                        "[presence_bridge] target=presence-reticulum "
+                        "overlay_link_deferred_no_path "
+                        f"peer={peer_key} await={_OVERLAY_LINK_PATH_AWAIT_SECONDS}"
+                    )
                 return None
         with _state_lock:
             existing_link_id = _active_overlay_link_id_by_peer_hash.get(peer_key)
@@ -5005,11 +5310,25 @@ def _retry_pending_audio_connect_on_announce(peer_hash: str) -> None:
 def _sync_overlay_links() -> None:
     _maybe_prune_stale_overlay_links()
     _bootstrap_overlay_neighbors_if_degraded("sync")
-    desired = set(_active_overlay_neighbors.keys())
-    for peer_hash in desired:
+    desired_outbound = set(_active_overlay_neighbors.keys())
+    desired = desired_outbound | set(_inbound_overlay_neighbors.keys())
+    demoted: Set[str] = set()
+    for peer_hash in desired_outbound:
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
-        _ensure_overlay_link(peer_hash, respect_dial_owner=True)
+        state = _ensure_overlay_link(
+            peer_hash,
+            respect_dial_owner=True,
+            await_path=False,
+        )
+        if state is None:
+            if not _should_initiate_overlay_link(peer_hash):
+                continue
+            _demote_overlay_fanout_peer(peer_hash, "sync_no_link")
+            demoted.add(peer_hash)
+    if demoted:
+        desired_outbound = set(_active_overlay_neighbors.keys())
+        desired = desired_outbound | set(_inbound_overlay_neighbors.keys())
     for peer_hash, link_id in list(_active_overlay_link_id_by_peer_hash.items()):
         if peer_hash in desired:
             continue
@@ -5017,13 +5336,18 @@ def _sync_overlay_links() -> None:
         if state is None:
             _active_overlay_link_id_by_peer_hash.pop(peer_hash, None)
             continue
-        if state.get("incoming") is True:
-            continue
         _teardown_overlay_link_id(link_id, "pruned")
     for link_id, state in list(_overlay_links_by_id.items()):
-        if state.get("incoming") is True:
-            continue
         peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+        if not peer_hash:
+            if (
+                len(_inbound_overlay_neighbors) >= _OVERLAY_MAX_INBOUND_NEIGHBORS
+                or len(_overlay_links_by_id) > (
+                    _OVERLAY_MAX_OUTBOUND_NEIGHBORS + _OVERLAY_MAX_INBOUND_NEIGHBORS
+                )
+            ):
+                _teardown_overlay_link_id(link_id, "pruned_unknown_full")
+            continue
         active_link_id = _active_overlay_link_id_by_peer_hash.get(peer_hash)
         if active_link_id == link_id:
             continue
@@ -5151,7 +5475,7 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
             "route": route,
         },
     )
-    log(
+    verbose_presence_log(
         "[presence_bridge] received presence packet "
         f"sender={origin_peer_hash} via={sender_hash} "
         f"envelope_type={envelope.get('type')} size={len(_call_wire_json_bytes(message))}"
@@ -5191,6 +5515,67 @@ def _emit_call_bridge_message(
     return True
 
 
+def _call_relay_dedup_key(kind: str, message: Dict[str, Any], wire_bytes: bytes) -> str:
+    message_type = message.get("t")
+    type_key = message_type if isinstance(message_type, str) and message_type else "?"
+    overlay_id = message.get("X")
+    if isinstance(overlay_id, str) and overlay_id:
+        return f"{kind}:{type_key}:x:{overlay_id}"
+    digest = hashlib.sha256(wire_bytes).hexdigest()
+    return f"{kind}:{type_key}:h:{digest}"
+
+
+def _sweep_call_relay_dedup(now: float) -> None:
+    expired = [
+        key for key, expires_at in _call_relay_dedup.items()
+        if not isinstance(expires_at, (int, float)) or float(expires_at) <= now
+    ]
+    for key in expired:
+        _call_relay_dedup.pop(key, None)
+    overflow = len(_call_relay_dedup) - _CALL_RELAY_DEDUP_MAX
+    if overflow > 0:
+        for key in list(_call_relay_dedup.keys())[:overflow]:
+            _call_relay_dedup.pop(key, None)
+
+
+def _filter_new_call_relay_frames(
+    kind: str,
+    messages: list[Dict[str, Any]],
+    encoded_frames: list[bytes],
+    message_types: list[str],
+) -> tuple[list[Dict[str, Any]], list[bytes], list[str], int]:
+    global _call_relay_dedup_last_log_at, _call_relay_dedup_suppressed_since_log
+    now = time.time()
+    with _state_lock:
+        _sweep_call_relay_dedup(now)
+        next_messages: list[Dict[str, Any]] = []
+        next_frames: list[bytes] = []
+        next_types: list[str] = []
+        suppressed = 0
+        for index, message in enumerate(messages):
+            wire_bytes = encoded_frames[index]
+            key = _call_relay_dedup_key(kind, message, wire_bytes)
+            expires_at = _call_relay_dedup.get(key)
+            if isinstance(expires_at, (int, float)) and float(expires_at) > now:
+                suppressed += 1
+                continue
+            _call_relay_dedup[key] = now + _CALL_RELAY_DEDUP_TTL_SECONDS
+            next_messages.append(message)
+            next_frames.append(wire_bytes)
+            next_types.append(message_types[index])
+        if suppressed:
+            _call_relay_dedup_suppressed_since_log += suppressed
+            if now - _call_relay_dedup_last_log_at >= 10.0:
+                log(
+                    "[presence_bridge] target=reticulum-call-relay-dedup "
+                    f"kind={kind} suppressed={_call_relay_dedup_suppressed_since_log} "
+                    f"cache={len(_call_relay_dedup)}"
+                )
+                _call_relay_dedup_suppressed_since_log = 0
+                _call_relay_dedup_last_log_at = now
+        return next_messages, next_frames, next_types, suppressed
+
+
 def on_overlay_link_closed(link) -> None:
     link_id = get_overlay_link_id(link)
     if link_id is None:
@@ -5200,7 +5585,8 @@ def on_overlay_link_closed(link) -> None:
     state = remove_overlay_link(link_id)
     if state is None:
         return
-    log(_overlay_close_debug_line(link_id, state, reason))
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    verbose_presence_log(_overlay_close_debug_line(link_id, state, reason))
     state["established"] = False
     emit_overlay_link_state(
         link_id,
@@ -5208,6 +5594,8 @@ def on_overlay_link_closed(link) -> None:
         reason,
         closed_by_reticulum=True,
     )
+    if peer_hash and _overlay_teardown_should_demote(reason):
+        _demote_overlay_fanout_peer(peer_hash, f"link_closed:{reason}")
 
 
 def on_overlay_link_remote_identified(link, identity) -> None:
@@ -6584,6 +6972,7 @@ def _send_wire_to_overlay_peer(
     state = _ensure_overlay_link(
         peer_hash,
         respect_dial_owner=False,
+        await_path=False,
     )
     if state is None:
         log(
@@ -6603,6 +6992,8 @@ def _send_wire_to_overlay_peer(
             state["last_send_ok_at"] = now
         else:
             _queue_overlay_packet(state, traffic, wire_bytes)
+            emit_overlay_link_state(get_overlay_link_id(link) or "", state, traffic)
+            return False
         emit_overlay_link_state(get_overlay_link_id(link) or "", state, traffic)
         return True
     if queue_if_pending:
@@ -6750,18 +7141,18 @@ def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes)
         st = _peer_lifecycle[peer_hash]
         if result is False:
             st["last_send_ok"] = None
-            log(
+            verbose_presence_log(
                 f"[presence_bridge] target=presence-reticulum send_failed peer={peer_hash}"
             )
         else:
             st["last_send_ok"] = now
-            log(
+            verbose_presence_log(
                 f"[presence_bridge] target=presence-reticulum sent_presence peer={peer_hash}"
             )
     except Exception as exc:
         if peer_hash in _peer_lifecycle:
             _peer_lifecycle[peer_hash]["last_send_ok"] = None
-        log(
+        verbose_presence_log(
             f"[presence_bridge] target=presence-reticulum send_exception peer={peer_hash}: {exc}"
         )
 
@@ -7642,12 +8033,34 @@ def _cancel_inbound_classify_timer(link_key: int) -> None:
             pass
 
 
-def _register_incoming_overlay_link(link) -> str:
+def _register_incoming_overlay_link(link, peer_hash: str = "", reason: str = "incoming") -> str:
+    peer_key = str(peer_hash or "").strip().lower()
+    if peer_key:
+        if not _admit_overlay_peer_if_allowed(peer_key, f"inbound:{reason}", incoming=True):
+            verbose_presence_log(
+                "[presence_bridge] target=presence-reticulum overlay_inbound_rejected "
+                f"peer={peer_key} reason={reason}"
+            )
+            try:
+                link.teardown()
+            except Exception:
+                pass
+            return ""
+    elif not _overlay_unknown_inbound_allowed():
+        verbose_presence_log(
+            "[presence_bridge] target=presence-reticulum overlay_inbound_rejected "
+            f"peer=unknown reason={reason} active={len(_inbound_overlay_neighbors)}"
+        )
+        try:
+            link.teardown()
+        except Exception:
+            pass
+        return ""
     link_id = str(uuid.uuid4())
     now = time.time()
     state = {
         "link": link,
-        "peerPresenceHash": "",
+        "peerPresenceHash": peer_key,
         "incoming": True,
         "established": True,
         "established_at": now,
@@ -7659,6 +8072,8 @@ def _register_incoming_overlay_link(link) -> str:
     with _state_lock:
         _overlay_links_by_id[link_id] = state
     configure_overlay_link(link, link_id)
+    if peer_key:
+        _register_active_overlay_for_peer(peer_key, link_id)
     emit_overlay_link_state(link_id, state, "incoming")
     return link_id
 
@@ -7742,10 +8157,10 @@ def on_inbound_link_first_packet(message, packet) -> None:
         decoded = json.loads(message.decode("utf-8"))
     except Exception as exc:
         log(f"[presence_bridge] inbound_link_first_packet non-json err={exc}")
-        _register_incoming_overlay_link(link)
+        _register_incoming_overlay_link(link, reason="first_packet_non_json")
         return
     if not isinstance(decoded, dict):
-        _register_incoming_overlay_link(link)
+        _register_incoming_overlay_link(link, reason="first_packet_non_object")
         return
     if decoded.get("t") in _AUDIO_LINK_WIRE_TYPES:
         link_id = str(uuid.uuid4())
@@ -7775,8 +8190,16 @@ def on_inbound_link_first_packet(message, packet) -> None:
         )
         on_qchat_file_link_packet(message, packet)
         return
-    _register_incoming_overlay_link(link)
-    on_overlay_link_packet(message, packet)
+    peer_hash = ""
+    if isinstance(decoded.get("t"), str) and str(decoded.get("t")).startswith("PRESENCE_"):
+        peer_hash = str(decoded.get("r") or "").strip().lower()
+    link_id = _register_incoming_overlay_link(
+        link,
+        peer_hash if _valid_presence_destination_hash_hex(peer_hash) else "",
+        "first_packet",
+    )
+    if link_id:
+        on_overlay_link_packet(message, packet)
 
 
 def on_incoming_unified_link_established(link) -> None:
@@ -7871,6 +8294,7 @@ def ensure_started(config_dir: str):
             logdest=RNS.LOG_FILE,
             require_shared_instance=True,
         )
+        install_rns_shared_rpc_failure_guard()
         log(
             "[presence_bridge] connected_to_shared_instance="
             + str(getattr(_reticulum, "is_connected_to_shared_instance", None))
@@ -7960,7 +8384,7 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
                     ensure_known_peer_from_recall(h.strip().lower(), "ts_seed")
         _maybe_prune_stale_peers()
         _sync_overlay_links()
-        peer_hashes = _resolve_overlay_neighbor_hashes()
+        peer_hashes = _resolve_overlay_neighbor_hashes(established_only=True)
         nudge_budget = [_MAX_PATH_NUDGES_PER_PUBLISH]
         for peer_hash in peer_hashes:
             try:
@@ -7982,20 +8406,54 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         env_addr = ""
         if isinstance(env_payload, dict) and isinstance(env_payload.get("address"), str):
             env_addr = str(env_payload.get("address"))
-        log(
+        verbose_presence_log(
             "[presence_bridge] target=presence-reticulum publish_fanout "
             f"peers={len(peer_hashes)} local_presence_hash={local_hex} "
             f"type={env_type} peer_addr={env_addr} "
             f"fanout_hashes={','.join(peer_hashes)}"
         )
-        for peer_hash in peer_hashes:
-            _send_wire_to_overlay_peer(peer_hash, wire_bytes, "presence_publish")
+        attempted_peer_hashes: Set[str] = set()
+        sent_peer_hashes: list[str] = []
+        demoted_peer_hashes: Set[str] = set()
+        for peer_hash in list(peer_hashes):
+            attempted_peer_hashes.add(peer_hash)
+            if _send_wire_to_overlay_peer(
+                peer_hash,
+                wire_bytes,
+                "presence_publish",
+                queue_if_pending=False,
+            ):
+                sent_peer_hashes.append(peer_hash)
+            else:
+                if _demote_overlay_fanout_peer(peer_hash, "publish_no_link"):
+                    demoted_peer_hashes.add(peer_hash)
+        if demoted_peer_hashes:
+            replacement_hashes = [
+                h for h in _resolve_overlay_neighbor_hashes(established_only=True)
+                if h not in attempted_peer_hashes and h not in demoted_peer_hashes
+            ]
+            if replacement_hashes:
+                verbose_presence_log(
+                    "[presence_bridge] target=presence-reticulum publish_fanout_replacements "
+                    f"peers={len(replacement_hashes)} fanout_hashes={','.join(replacement_hashes)}"
+                )
+            for peer_hash in replacement_hashes:
+                attempted_peer_hashes.add(peer_hash)
+                if _send_wire_to_overlay_peer(
+                    peer_hash,
+                    wire_bytes,
+                    "presence_publish_replacement",
+                    queue_if_pending=False,
+                ):
+                    sent_peer_hashes.append(peer_hash)
+                else:
+                    _demote_overlay_fanout_peer(peer_hash, "publish_replacement_no_link")
         emit_resp(
             req_id,
             True,
             payload={
-                "fanoutPeers": len(peer_hashes),
-                "fanoutHashes": peer_hashes,
+                "fanoutPeers": len(sent_peer_hashes),
+                "fanoutHashes": sent_peer_hashes,
                 "localPresenceHash": local_hex,
             },
         )
@@ -8032,15 +8490,27 @@ def handle_forward_presence(req_id: str, payload: Dict[str, Any]) -> None:
             origin_sender_hash=origin_sender_hash,
         )
         _sync_overlay_links()
-        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        peer_hashes = _resolve_overlay_neighbor_hashes(
+            exclude_hashes,
+            established_only=True,
+        )
+        sent_peer_hashes: list[str] = []
         for peer_hash in peer_hashes:
-            _send_wire_to_overlay_peer(peer_hash, wire_bytes, "presence_forward")
+            if _send_wire_to_overlay_peer(
+                peer_hash,
+                wire_bytes,
+                "presence_forward",
+                queue_if_pending=False,
+            ):
+                sent_peer_hashes.append(peer_hash)
+            else:
+                _demote_overlay_fanout_peer(peer_hash, "presence_forward_no_link")
         emit_resp(
             req_id,
             True,
             payload={
-                "fanoutPeers": len(peer_hashes),
-                "fanoutHashes": peer_hashes,
+                "fanoutPeers": len(sent_peer_hashes),
+                "fanoutHashes": sent_peer_hashes,
             },
         )
     except Exception as exc:
@@ -8111,7 +8581,7 @@ def _prepare_group_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
     if peer_key not in _known_peers:
         _nudge_overlay_path_for_peer(peer_key)
         ensure_known_peer_from_recall(peer_key, "ts_seed")
-    if peer_key not in _active_overlay_neighbors:
+    if not _overlay_peer_is_admitted(peer_key):
         _ensure_overlay_link(peer_key)
     if peer_key not in _known_peers:
         return {
@@ -8122,7 +8592,13 @@ def _prepare_group_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
 
 
 def _send_group_signal_wire_to_peer(peer_hash: str, wire_bytes: bytes) -> Optional[Dict[str, Any]]:
-    if not _send_wire_to_overlay_peer(peer_hash, wire_bytes, "group_signal"):
+    if not _send_wire_to_overlay_peer(
+        peer_hash,
+        wire_bytes,
+        "group_signal",
+        queue_if_pending=False,
+    ):
+        _demote_overlay_fanout_peer(peer_hash, "group_signal_no_established_link")
         return {
             "payload": {"code": "packet_send_false"},
             "error": "Packet send returned False",
@@ -8166,7 +8642,7 @@ def _prepare_call_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
     if peer_key not in _known_peers:
         _nudge_overlay_path_for_peer(peer_key)
         ensure_known_peer_from_recall(peer_key, "ts_seed")
-    if peer_key not in _active_overlay_neighbors:
+    if not _overlay_peer_is_admitted(peer_key):
         _ensure_overlay_link(peer_key)
     if peer_key not in _known_peers:
         return {
@@ -8177,7 +8653,13 @@ def _prepare_call_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
 
 
 def _send_call_signal_wire_to_peer(peer_hash: str, wire_bytes: bytes) -> Optional[Dict[str, Any]]:
-    if not _send_wire_to_overlay_peer(peer_hash, wire_bytes, "call_signal"):
+    if not _send_wire_to_overlay_peer(
+        peer_hash,
+        wire_bytes,
+        "call_signal",
+        queue_if_pending=False,
+    ):
+        _demote_overlay_fanout_peer(peer_hash, "call_signal_no_established_link")
         return {
             "payload": {"code": "packet_send_false"},
             "error": "Packet send returned False",
@@ -8484,6 +8966,23 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
             message_type = encoded.get("message_type")
             message_types.append(message_type if isinstance(message_type, str) else "")
 
+        messages, encoded_frames, message_types, suppressed_relay_duplicates = (
+            _filter_new_call_relay_frames(
+                "call", messages, encoded_frames, message_types
+            )
+        )
+        if not encoded_frames:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "fanoutPeers": 0,
+                    "fanoutHashes": [],
+                    "suppressedDuplicateRelay": suppressed_relay_duplicates,
+                },
+            )
+            return
+
         extra = payload.get("overlayNeighborHashes")
         if isinstance(extra, list):
             for h in extra:
@@ -8492,7 +8991,10 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
 
         _maybe_prune_stale_peers()
         _sync_overlay_links()
-        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        peer_hashes = _resolve_overlay_neighbor_hashes(
+            exclude_hashes,
+            established_only=True,
+        )
         if not peer_hashes:
             emit_resp(
                 req_id,
@@ -8506,13 +9008,15 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
             "[presence_bridge] target=call-signal-reticulum fanout "
             f"peers={len(peer_hashes)} exclude_hashes={','.join(exclude_hashes)} "
             f"fanout_hashes={','.join(peer_hashes)} "
-            f"message_types={','.join(t or '?' for t in message_types)}"
+            f"message_types={','.join(t or '?' for t in message_types)} "
+            f"suppressed_duplicate_relay={suppressed_relay_duplicates}"
         )
 
         any_peer_full_delivery = False
         last_failure_payload = {"code": "packet_send_false"}
         last_failure_error = "Packet send returned False"
         saw_failure = False
+        delivered_peer_hashes: list[str] = []
 
         for peer_hash in peer_hashes:
             failure = _prepare_call_signal_peer(peer_hash)
@@ -8556,14 +9060,15 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
                     )
             if peer_delivered_all_frames:
                 any_peer_full_delivery = True
+                delivered_peer_hashes.append(peer_hash)
 
         if any_peer_full_delivery:
             emit_resp(
                 req_id,
                 True,
                 payload={
-                    "fanoutPeers": len(peer_hashes),
-                    "fanoutHashes": peer_hashes,
+                    "fanoutPeers": len(delivered_peer_hashes),
+                    "fanoutHashes": delivered_peer_hashes,
                 },
             )
             return
@@ -8680,6 +9185,23 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
             message_type = encoded.get("message_type")
             message_types.append(message_type if isinstance(message_type, str) else "")
 
+        messages, encoded_frames, message_types, suppressed_relay_duplicates = (
+            _filter_new_call_relay_frames(
+                "group", messages, encoded_frames, message_types
+            )
+        )
+        if not encoded_frames:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "fanoutPeers": 0,
+                    "fanoutHashes": [],
+                    "suppressedDuplicateRelay": suppressed_relay_duplicates,
+                },
+            )
+            return
+
         extra = payload.get("overlayNeighborHashes")
         if isinstance(extra, list):
             for h in extra:
@@ -8688,7 +9210,10 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
 
         _maybe_prune_stale_peers()
         _sync_overlay_links()
-        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        peer_hashes = _resolve_overlay_neighbor_hashes(
+            exclude_hashes,
+            established_only=True,
+        )
         if not peer_hashes:
             emit_resp(
                 req_id,
@@ -8702,13 +9227,15 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
             "[presence_bridge] target=group-signal-reticulum fanout "
             f"peers={len(peer_hashes)} exclude_hashes={','.join(exclude_hashes)} "
             f"fanout_hashes={','.join(peer_hashes)} "
-            f"message_types={','.join(t or '?' for t in message_types)}"
+            f"message_types={','.join(t or '?' for t in message_types)} "
+            f"suppressed_duplicate_relay={suppressed_relay_duplicates}"
         )
 
         any_peer_full_delivery = False
         last_failure_payload = {"code": "packet_send_false"}
         last_failure_error = "Packet send returned False"
         saw_failure = False
+        delivered_peer_hashes: list[str] = []
 
         for peer_hash in peer_hashes:
             failure = _prepare_group_signal_peer(peer_hash)
@@ -8752,14 +9279,15 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
                     )
             if peer_delivered_all_frames:
                 any_peer_full_delivery = True
+                delivered_peer_hashes.append(peer_hash)
 
         if any_peer_full_delivery:
             emit_resp(
                 req_id,
                 True,
                 payload={
-                    "fanoutPeers": len(peer_hashes),
-                    "fanoutHashes": peer_hashes,
+                    "fanoutPeers": len(delivered_peer_hashes),
+                    "fanoutHashes": delivered_peer_hashes,
                 },
             )
             return

@@ -114,19 +114,13 @@ describe('reticulum-daemon managed config', () => {
     );
   });
 
-  it('keeps LAN discovery and includes the default public hubs', () => {
+  it('omits AutoInterface discovery and includes the default public hubs', () => {
     const config = buildManagedReticulumConfig();
 
-    expect(config).toContain('[[Default Interface]]');
-    expect(config).toContain('type = AutoInterface');
-    expect(config).toContain('enabled = yes');
-    const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
-    expect(autoInterfaceSection).toContain('ignored_devices =');
-    expect(autoInterfaceSection).toContain('utun4');
-    expect(autoInterfaceSection).toContain('tun0');
-    expect(autoInterfaceSection).toContain('tap0');
-    expect(autoInterfaceSection).toContain('wg0');
-    expect(autoInterfaceSection).toContain('tailscale0');
+    expect(config).not.toContain('[[Default Interface]]');
+    expect(config).not.toContain('type = AutoInterface');
+    expect(config).not.toContain('discover_interfaces = yes');
+    expect(config).not.toContain('autoconnect_discovered_interfaces =');
     expect(config).toMatch(/\nrpc_key = [0-9a-f]{64}\n/);
 
     for (const hub of DEFAULT_RETICULUM_HUBS) {
@@ -203,8 +197,8 @@ describe('reticulum-daemon managed config', () => {
       outbound: [
         { sectionName: 'Mesh_deadbeef01', host: 'mesh.example', port: 4243 },
       ],
-      meshDiscoveryClient: true,
-      autoconnectDiscoveredMax: 8,
+      meshDiscoveryClient: false,
+      autoconnectDiscoveredMax: 0,
       meshPrivateGateway: false,
       networkIdentityPath:
         '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
@@ -218,8 +212,8 @@ describe('reticulum-daemon managed config', () => {
       config.indexOf('[reticulum]'),
       config.indexOf('[logging]')
     );
-    expect(reticulumBlock).toContain('discover_interfaces = yes');
-    expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
+    expect(reticulumBlock).not.toContain('discover_interfaces = yes');
+    expect(reticulumBlock).not.toContain('autoconnect_discovered_interfaces =');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
     const meshListenType =
       process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
@@ -235,8 +229,8 @@ describe('reticulum-daemon managed config', () => {
     }
     expect(meshListenSection).not.toContain('announce_interval =');
     expect(meshListenSection).not.toContain('network_name =');
-    const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
-    expect(autoInterfaceSection).not.toContain('discover_interfaces = yes');
+    expect(config).not.toContain('[[Default Interface]]');
+    expect(config).not.toContain('type = AutoInterface');
     expect(config).toContain('[[Mesh_deadbeef01]]');
     expect(config).toContain('target_host = mesh.example');
     expect(config).toContain('target_port = 4243');
@@ -250,8 +244,8 @@ describe('reticulum-daemon managed config', () => {
       listenEnabled: true,
       listenPort: 4243,
       outbound: [],
-      meshDiscoveryClient: true,
-      autoconnectDiscoveredMax: 8,
+      meshDiscoveryClient: false,
+      autoconnectDiscoveredMax: 0,
       meshPrivateGateway: true,
       networkIdentityPath:
         '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
@@ -283,8 +277,8 @@ describe('reticulum-daemon managed config', () => {
       listenEnabled: true,
       listenPort: 4243,
       outbound: [],
-      meshDiscoveryClient: true,
-      autoconnectDiscoveredMax: 8,
+      meshDiscoveryClient: false,
+      autoconnectDiscoveredMax: 0,
       meshPrivateGateway: true,
       networkIdentityPath:
         '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',

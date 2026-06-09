@@ -48,7 +48,7 @@ import { runEd25519VerifySync } from './ed25519-verify-common';
 /**
  * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
  * RNS BackboneInterface is Linux-only; Windows/macOS use TCPServerInterface for the same section.
- * Bootstrap hubs as TCPClient rows; AutoInterface discover/autoconnect (no gossip-driven outbound).
+ * Bootstrap hubs as TCPClient rows; no AutoInterface discovery in managed configs.
  */
 
 /** Mesh listen / private gateway: Backbone on Linux; TCPServer on Windows/macOS (no epoll). */
@@ -84,13 +84,6 @@ const QCHAT_FILE_PENDING_SENDS_FILENAME = 'pending-sends.json';
 const RETICULUM_RPC_KEY_BYTES = 32;
 const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
-const RETICULUM_AUTO_INTERFACE_IGNORED_DEVICES = [
-  ...Array.from({ length: 32 }, (_, index) => `utun${index}`),
-  ...Array.from({ length: 32 }, (_, index) => `tun${index}`),
-  ...Array.from({ length: 32 }, (_, index) => `tap${index}`),
-  ...Array.from({ length: 32 }, (_, index) => `wg${index}`),
-  'tailscale0',
-];
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_DAEMON_FORCE_STOP_TIMEOUT_MS = 3_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
@@ -1423,19 +1416,6 @@ function renderManagedHubInterfaces(
     .join('\n\n');
 }
 
-/** Keep local link discovery available on LANs; RNS interface discovery is configured in `[reticulum]`. */
-function renderDefaultAutoInterface(
-  slice: ReticulumMeshConfigSlice | null | undefined
-): string {
-  void slice;
-  const ignoredDevices = RETICULUM_AUTO_INTERFACE_IGNORED_DEVICES.join(',');
-  return `  [[Default Interface]]
-  type = AutoInterface
-  enabled = yes
-  ignored_devices = ${ignoredDevices}
-`;
-}
-
 function renderMeshInterfaces(
   slice: ReticulumMeshConfigSlice | null | undefined
 ): string {
@@ -1511,11 +1491,6 @@ shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
 rpc_key = ${rpcKeyHex}
 `;
-  if (meshSlice?.meshDiscoveryClient) {
-    block += `discover_interfaces = yes
-autoconnect_discovered_interfaces = ${meshSlice.autoconnectDiscoveredMax}
-`;
-  }
   if (hasNetworkIdentity) {
     block += `network_identity = ${meshSlice.networkIdentityPath}
 `;
@@ -1549,7 +1524,6 @@ export function buildManagedReticulumConfig(
 ): string {
   const slice = meshSlice ?? null;
   const ifaceParts = [
-    renderDefaultAutoInterface(slice),
     renderManagedHubInterfaces(hubs),
     renderMeshInterfaces(slice),
   ].filter((s) => s.length > 0);

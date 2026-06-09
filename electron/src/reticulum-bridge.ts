@@ -480,6 +480,7 @@ export type ReticulumOverlayLinkSnapshot = {
   incoming: boolean;
   connectedAt: number;
   lastRxAt: number;
+  lastActivityAt: number;
 };
 
 type BridgeEventFrame =
@@ -2332,12 +2333,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private pruneStaleOverlayLinkSnapshots(now = Date.now()): boolean {
     let pruned = false;
     for (const [linkId, snap] of this.overlayLinkSnapshots.entries()) {
-      if (now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
+      const lastActivityAt =
+        snap.lastActivityAt || snap.lastRxAt || snap.connectedAt || 0;
+      if (now - lastActivityAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
       pruned = true;
       this.overlayEstablishedLinkIds.delete(linkId);
       this.overlayLinkSnapshots.delete(linkId);
       loggerLog(
-        `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} rxIdleMs=${now - snap.lastRxAt}`
+        `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} idleMs=${now - lastActivityAt}`
       );
       this.emit('overlay-link-state', {
         linkId,
@@ -3588,6 +3591,15 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             Number.isFinite(frame.payload.lastRxAt)
               ? frame.payload.lastRxAt
               : (existing?.lastRxAt ?? Date.now());
+          const lastActivityAgeMs =
+            typeof frame.payload?.lastActivityAgeMs === 'number' &&
+            Number.isFinite(frame.payload.lastActivityAgeMs)
+              ? frame.payload.lastActivityAgeMs
+              : null;
+          const lastActivityAt =
+            lastActivityAgeMs !== null
+              ? Date.now() - lastActivityAgeMs
+              : (existing?.lastActivityAt ?? lastRxAt);
           this.overlayLinkSnapshots.set(linkId, {
             linkId,
             peerPresenceHash:
@@ -3595,6 +3607,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             incoming: frame.payload?.incoming === true,
             connectedAt: existing?.connectedAt ?? Date.now(),
             lastRxAt,
+            lastActivityAt,
           });
         } else {
           this.overlayEstablishedLinkIds.delete(linkId);
