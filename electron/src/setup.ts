@@ -161,7 +161,7 @@ function recordMainLoopStall(delayMs: number, nowMs = Date.now()): void {
     return;
   }
   mainLoopLastLogAtMs = nowMs;
-  loggerWarn(
+  loggerLog(
     `[GCall] target=reticulum-audio-ipc stage=main-event-loop-stall delay_ms=${Math.round(
       delayMs
     )} stall_count=${mainLoopStallCount} max_delay_ms=${Math.round(
@@ -235,7 +235,7 @@ function attachGroupAudioIpcTiming(
         rendererSendAtMs,
         mainIpcAtMs
       );
-      loggerWarn(
+      loggerLog(
         `[GCall] target=reticulum-audio-ipc stage=gcall-audio-ipc-handler-entry-delay channel=${
           context?.channel ?? 'unknown'
         } room=${context?.roomId ?? 'n/a'} target_count=${
