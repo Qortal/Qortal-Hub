@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "（您的奖励信息）",
       "rewards_info_subtitle_selected": "（所选锻造者 — 此密钥的奖励）",
       "network_details": "网络详情",
+      "rewardshares_loading": "正在检查奖励分享状态。请等待此请求完成。",
       "loading_spinner_aria": "加载中"
     }
   },

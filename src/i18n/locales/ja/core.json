@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "（自分の報酬情報）",
       "rewards_info_subtitle_selected": "（選択中のミンター — このキーの報酬）",
       "network_details": "ネットワーク詳細",
+      "rewardshares_loading": "リワードシェアの状態を確認しています。このリクエストが完了するまでお待ちください。",
       "loading_spinner_aria": "読み込み中"
     }
   },

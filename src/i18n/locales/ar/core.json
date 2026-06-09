@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "(معلومات مكافآتك)",
       "rewards_info_subtitle_selected": "(المعدّن المحدد — مكافآت هذا المفتاح)",
       "network_details": "تفاصيل الشبكة",
+      "rewardshares_loading": "جارٍ التحقق من حالة مشاركة المكافأة. يرجى الانتظار حتى ينتهي هذا الطلب.",
       "loading_spinner_aria": "جارٍ التحميل"
     }
   },

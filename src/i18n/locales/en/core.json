@@ -456,6 +456,7 @@
       "rewards_info_subtitle_own": "(your rewards info)",
       "rewards_info_subtitle_selected": "(selected minter — rewards for this key)",
       "network_details": "Network details",
+      "rewardshares_loading": "Checking reward-share status. Please wait until this request finishes.",
       "loading_spinner_aria": "Loading"
     }
   },

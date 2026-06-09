@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "(ваша информация о вознаграждениях)",
       "rewards_info_subtitle_selected": "(выбранный минтер — вознаграждения этого ключа)",
       "network_details": "Детали сети",
+      "rewardshares_loading": "Проверяется статус reward-share. Подождите, пока этот запрос завершится.",
       "loading_spinner_aria": "Загрузка"
     }
   },

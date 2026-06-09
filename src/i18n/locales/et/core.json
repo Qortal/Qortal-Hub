@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "(sinu preemiateave)",
       "rewards_info_subtitle_selected": "(valitud minter — selle võtme preemiad)",
       "network_details": "Võrgu üksikasjad",
+      "rewardshares_loading": "Kontrollin reward-share'i olekut. Palun oota, kuni see päring lõpeb.",
       "loading_spinner_aria": "Laadimine"
     }
   },

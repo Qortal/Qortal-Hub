@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "(informação das suas recompensas)",
       "rewards_info_subtitle_selected": "(minter selecionado — recompensas desta chave)",
       "network_details": "Detalhes da rede",
+      "rewardshares_loading": "A verificar o estado da partilha de recompensa. Aguarde até este pedido terminar.",
       "loading_spinner_aria": "A carregar"
     }
   },

@@ -416,6 +416,7 @@
       "rewards_info_subtitle_own": "(Ihre Belohnungsinfos)",
       "rewards_info_subtitle_selected": "(gewählter Minter — Belohnungen für diesen Schlüssel)",
       "network_details": "Netzwerkdetails",
+      "rewardshares_loading": "Reward-Share-Status wird geprüft. Bitte warte, bis diese Anfrage abgeschlossen ist.",
       "loading_spinner_aria": "Wird geladen"
     }
   },
