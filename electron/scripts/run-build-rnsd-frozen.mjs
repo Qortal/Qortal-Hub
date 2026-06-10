@@ -19,12 +19,19 @@ if (!fs.existsSync(script)) {
 
 /** @type {readonly (readonly string[])[]} */
 const attempts =
-  process.platform === 'win32'
+  process.env.QORTAL_RETICULUM_BUILD_ARCH === 'x64' && process.platform === 'darwin'
+    ? [['arch', '-x86_64', '/Applications/Xcode.app/Contents/Developer/usr/bin/python3']]
+    : process.platform === 'win32'
     ? [['py', '-3'], ['python3'], ['python']]
     : [['python3'], ['python']];
 
+const scriptArgs = [];
+if (process.env.QORTAL_RETICULUM_OUTPUT_DIR) {
+  scriptArgs.push('--output-dir', process.env.QORTAL_RETICULUM_OUTPUT_DIR);
+}
+
 for (const argv of attempts) {
-  const r = spawnSync(argv[0], [...argv.slice(1), script], {
+  const r = spawnSync(argv[0], [...argv.slice(1), script, ...scriptArgs], {
     stdio: 'inherit',
     cwd: electronRoot,
     env: process.env,

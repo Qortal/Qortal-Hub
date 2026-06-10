@@ -65,6 +65,7 @@ const MenuBar = memo(
     }
 
     const handleImageUpload = async (file) => {
+      if (!file?.type?.includes('image')) return;
       let compressedFile;
       await new Promise<void>((resolve) => {
         new Compressor(file, {
@@ -79,6 +80,7 @@ const MenuBar = memo(
           },
           error(err) {
             console.error('Image compression error:', err);
+            resolve();
           },
         });
       });
@@ -87,23 +89,28 @@ const MenuBar = memo(
         const reader = new FileReader();
         reader.onload = () => {
           const url = reader.result;
-          editor
-            .chain()
-            .focus()
-            .setImage({ src: url, style: 'width: auto' })
-            .run();
-          fileInputRef.current.value = '';
+          if (!editor.isDestroyed) {
+            editor
+              .chain()
+              .focus()
+              .setImage({ src: url, style: 'width: auto' })
+              .run();
+          }
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
         };
         reader.readAsDataURL(compressedFile);
       }
     };
 
     const triggerImageUpload = () => {
-      fileInputRef.current.click(); // Trigger the file input click
+      fileInputRef.current?.click(); // Trigger the file input click
     };
 
     const handlePaste = (event) => {
-      const items = event.clipboardData.items;
+      const items = event.clipboardData?.items;
+      if (!items) return;
       for (const item of items) {
         if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
@@ -437,7 +444,9 @@ const MenuBar = memo(
                 type="file"
                 ref={fileInputRef}
                 style={{ display: 'none' }}
-                onChange={(event) => handleImageUpload(event.target.files[0])}
+                onChange={(event) =>
+                  handleImageUpload(event.target.files?.[0])
+                }
                 accept="image/*"
               />
             </>
@@ -511,7 +520,8 @@ const Tiptap = ({
   const handleImageUpload = useCallback(
     async (file) => {
       try {
-        if (!file.type.includes('image')) return;
+        if (!file?.type?.includes('image')) return;
+        if (typeof insertImage !== 'function') return;
         let compressedFile = file;
         if (file.type !== 'image/gif') {
           await new Promise<void>((resolve) => {
@@ -525,6 +535,7 @@ const Tiptap = ({
               },
               error(err) {
                 console.error('Image compression error:', err);
+                resolve();
               },
             });
           });
@@ -532,7 +543,7 @@ const Tiptap = ({
 
         if (compressedFile) {
           const toBase64 = await fileToBase64(compressedFile);
-          insertImage(toBase64);
+          insertImage?.(toBase64);
         }
       } catch (error) {
         console.error(error);
@@ -545,10 +556,13 @@ const Tiptap = ({
     ? extensions.filter((item) => item?.name !== 'image')
     : extensions;
   const editorRef = useRef(null);
-  const setEditorRefFunc = useCallback((editorInstance) => {
-    editorRef.current = editorInstance;
-    setEditorRef(editorInstance);
-  }, []);
+  const setEditorRefFunc = useCallback(
+    (editorInstance) => {
+      editorRef.current = editorInstance;
+      setEditorRef?.(editorInstance);
+    },
+    [setEditorRef]
+  );
 
   const users = useMemo(() => {
     return (membersWithNames || [])?.map((item) => {
@@ -565,7 +579,7 @@ const Tiptap = ({
   }, [users]);
 
   const handleBlur = () => {
-    const htmlContent = editorRef.current.getHTML();
+    const htmlContent = editorRef.current?.getHTML();
     if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') {
       // Set focus state based on content
     }
@@ -612,6 +626,10 @@ const Tiptap = ({
               },
 
               onUpdate(props) {
+                if (!component || !popup?.[0]) {
+                  return;
+                }
+
                 component.updateProps(props);
 
                 if (!props.clientRect) {
@@ -625,17 +643,17 @@ const Tiptap = ({
 
               onKeyDown(props) {
                 if (props.event.key === 'Escape') {
-                  popup[0].hide();
+                  popup?.[0]?.hide();
 
                   return true;
                 }
 
-                return component.ref?.onKeyDown(props);
+                return component?.ref?.onKeyDown(props);
               },
 
               onExit() {
-                popup[0].destroy();
-                component.destroy();
+                popup?.[0]?.destroy();
+                component?.destroy();
               },
             };
           },
@@ -718,6 +736,7 @@ const Tiptap = ({
           },
           handlePaste(view, event) {
             if (!isChat) return false;
+            if (typeof insertImage !== 'function') return false;
             const items = event.clipboardData?.items;
             if (!items) return false;
 

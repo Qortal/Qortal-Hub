@@ -70,11 +70,21 @@ const INTERNAL_TAB_SERVICE = 'INTERNAL';
 
 type SelectedTab = {
   tabId: string;
-  name: string;
-  service: string;
+  name?: string;
+  service?: string;
   identifier?: string;
   path?: string;
   internal?: string;
+  isPrivate?: boolean;
+  isPreview?: boolean;
+  privateAppProperties?: {
+    appName?: string;
+    groupId?: number;
+    identifier?: string;
+    logo?: string | null;
+    name?: string;
+    service?: string;
+  };
   refreshFunc?: (tabId?: string) => void;
 } | null;
 
@@ -135,6 +145,27 @@ function formatQortBalance(balance: unknown) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   });
+}
+
+function isSamePinnedApp(item: any, candidate: any) {
+  if (!item || !candidate) return false;
+
+  if (candidate?.isPrivate) {
+    const itemProperties = item?.privateAppProperties;
+    const candidateProperties = candidate?.privateAppProperties;
+
+    return (
+      !!item?.isPrivate &&
+      itemProperties?.name === candidateProperties?.name &&
+      itemProperties?.service === candidateProperties?.service &&
+      itemProperties?.identifier === candidateProperties?.identifier
+    );
+  }
+
+  return (
+    item?.name?.toLowerCase() === candidate.name.toLowerCase() &&
+    item?.service?.toUpperCase() === candidate.service
+  );
 }
 
 function AuthenticatedUserAvatar({
@@ -720,6 +751,29 @@ export function GlobalQortalNavBar({
     };
   }, [currentLink, selectedTab]);
   const pinnedCandidate = useMemo(() => {
+    if (selectedTab?.isPrivate || selectedTab?.privateAppProperties) {
+      const privateAppProperties = selectedTab?.privateAppProperties || {};
+      const name = privateAppProperties.name || selectedTab?.name;
+      const service = privateAppProperties.service || selectedTab?.service;
+      const identifier =
+        privateAppProperties.identifier || selectedTab?.identifier;
+
+      if (!name || !service || !identifier) {
+        return null;
+      }
+
+      return {
+        isPrivate: true,
+        isPreview: selectedTab.isPreview ?? true,
+        privateAppProperties: {
+          ...privateAppProperties,
+          name,
+          service,
+          identifier,
+        },
+      };
+    }
+
     if (!bookmarkSelectedTab?.service || !bookmarkSelectedTab?.name) {
       return null;
     }
@@ -734,13 +788,11 @@ export function GlobalQortalNavBar({
       name: bookmarkSelectedTab.name,
       service: bookmarkSelectedTab.service.toUpperCase(),
     };
-  }, [bookmarkSelectedTab]);
+  }, [bookmarkSelectedTab, selectedTab]);
   const isCurrentAppPinned = useMemo(() => {
     if (!pinnedCandidate) return false;
-    return !!sortablePinnedApps?.some(
-      (item) =>
-        item?.name?.toLowerCase() === pinnedCandidate.name.toLowerCase() &&
-        item?.service?.toUpperCase() === pinnedCandidate.service
+    return !!sortablePinnedApps?.some((item) =>
+      isSamePinnedApp(item, pinnedCandidate)
     );
   }, [pinnedCandidate, sortablePinnedApps]);
 
@@ -781,7 +833,8 @@ export function GlobalQortalNavBar({
   }, [inputValue]);
 
   const canCopyCurrentLink = Boolean(currentLink);
-  const canPinCurrentApp = Boolean(pinnedCandidate);
+  const canPinCurrentApp =
+    desktopViewMode === 'apps' && Boolean(pinnedCandidate);
   const handleCopyCurrentLink = useCallback(() => {
     if (!currentLink) return;
     if (!navigator.clipboard?.writeText) {
@@ -828,20 +881,11 @@ export function GlobalQortalNavBar({
     if (!pinnedCandidate) return;
 
     setSortablePinnedApps((prev) => {
-      const isPinned = prev?.some(
-        (item) =>
-          item?.name?.toLowerCase() === pinnedCandidate.name.toLowerCase() &&
-          item?.service?.toUpperCase() === pinnedCandidate.service
+      const isPinned = prev?.some((item) =>
+        isSamePinnedApp(item, pinnedCandidate)
       );
       const updatedApps = isPinned
-        ? prev.filter(
-            (item) =>
-              !(
-                item?.name?.toLowerCase() ===
-                  pinnedCandidate.name.toLowerCase() &&
-                item?.service?.toUpperCase() === pinnedCandidate.service
-              )
-          )
+        ? prev.filter((item) => !isSamePinnedApp(item, pinnedCandidate))
         : [...prev, pinnedCandidate];
 
       saveToLocalStorage(
@@ -1126,93 +1170,119 @@ export function GlobalQortalNavBar({
               <ArrowBackIosNewRoundedIcon sx={{ fontSize: 15 }} />
             </ButtonBase>
 
-            <ButtonBase
-              disableRipple
-              onClick={() => {
-                if (isHomeMode) {
-                  executeEvent('open-apps-mode', {});
-                  return;
-                }
-                executeEvent('open-home-mode', {});
-              }}
-              sx={{
-                alignItems: 'center',
-                borderRadius: '9px',
-                color: theme.palette.text.primary,
-                display: 'flex',
-                height: 32,
-                justifyContent: 'center',
-                opacity: isHomeMode || isAppsMode || isDevMode ? 1 : 0.92,
-                transition:
-                  'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
-                width: 32,
-                backgroundColor:
-                  isHomeMode || isAppsMode || isDevMode
-                    ? buttonHoverBackground
-                    : 'transparent',
-                '&:hover': {
-                  backgroundColor: buttonHoverBackground,
-                  transform: 'translateY(-1px)',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                  boxShadow: 'none',
-                },
-                '&:focus-visible': {
-                  outline: `1px solid ${theme.palette.primary.main}`,
-                  outlineOffset: '2px',
-                },
-              }}
-            >
-              {isAppsMode || isDevMode ? (
-                <HomeRoundedIcon sx={{ fontSize: 19 }} />
-              ) : (
-                <QAppsNavIcon color={theme.palette.text.primary} />
+            <Tooltip
+              title={tooltipTitle(
+                isAppsMode || isDevMode
+                  ? t('core:home', { postProcess: 'capitalizeFirstChar' })
+                  : t('core:opened_apps', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
               )}
-            </ButtonBase>
-
-            <ButtonBase
-              disableRipple
-              onClick={() => {
-                if (!selectedTab?.tabId) return;
-                if (selectedTab?.refreshFunc) {
-                  selectedTab.refreshFunc(selectedTab?.tabId);
-                  return;
-                }
-                executeEvent('refreshApp', {
-                  tabId: selectedTab.tabId,
-                });
-              }}
-              disabled={!canRefresh}
-              sx={{
-                alignItems: 'center',
-                borderRadius: '9px',
-                color: theme.palette.text.primary,
-                display: 'flex',
-                height: 32,
-                justifyContent: 'center',
-                opacity: canRefresh ? 1 : 0.32,
-                transition:
-                  'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
-                width: 32,
-                '&:hover:not(.Mui-disabled)': {
-                  backgroundColor: buttonHoverBackground,
-                  transform: 'translateY(-1px)',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                },
-                '&:active:not(.Mui-disabled)': {
-                  transform: 'translateY(0)',
-                  boxShadow: 'none',
-                },
-                '&:focus-visible': {
-                  outline: `1px solid ${theme.palette.primary.main}`,
-                  outlineOffset: '2px',
-                },
-              }}
+              arrow
+              placement="bottom"
+              slotProps={tooltipSlotProps}
             >
-              <RefreshIcon sx={{ fontSize: 18 }} />
-            </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => {
+                  if (isHomeMode) {
+                    executeEvent('open-apps-mode', {});
+                    return;
+                  }
+                  executeEvent('open-home-mode', {});
+                }}
+                sx={{
+                  alignItems: 'center',
+                  borderRadius: '9px',
+                  color: theme.palette.text.primary,
+                  display: 'flex',
+                  height: 32,
+                  justifyContent: 'center',
+                  opacity: isHomeMode || isAppsMode || isDevMode ? 1 : 0.92,
+                  transition:
+                    'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                  width: 32,
+                  backgroundColor:
+                    isHomeMode || isAppsMode || isDevMode
+                      ? buttonHoverBackground
+                      : 'transparent',
+                  '&:hover': {
+                    backgroundColor: buttonHoverBackground,
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  },
+                  '&:active': {
+                    transform: 'translateY(0)',
+                    boxShadow: 'none',
+                  },
+                  '&:focus-visible': {
+                    outline: `1px solid ${theme.palette.primary.main}`,
+                    outlineOffset: '2px',
+                  },
+                }}
+              >
+                {isAppsMode || isDevMode ? (
+                  <HomeRoundedIcon sx={{ fontSize: 19 }} />
+                ) : (
+                  <QAppsNavIcon color={theme.palette.text.primary} />
+                )}
+              </ButtonBase>
+            </Tooltip>
+
+            <Tooltip
+              title={tooltipTitle(
+                t('core:action.reload_page', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+              )}
+              arrow
+              placement="bottom"
+              slotProps={tooltipSlotProps}
+            >
+              <span>
+                <ButtonBase
+                  disableRipple
+                  onClick={() => {
+                    if (!selectedTab?.tabId) return;
+                    if (selectedTab?.refreshFunc) {
+                      selectedTab.refreshFunc(selectedTab?.tabId);
+                      return;
+                    }
+                    executeEvent('refreshApp', {
+                      tabId: selectedTab.tabId,
+                    });
+                  }}
+                  disabled={!canRefresh}
+                  sx={{
+                    alignItems: 'center',
+                    borderRadius: '9px',
+                    color: theme.palette.text.primary,
+                    display: 'flex',
+                    height: 32,
+                    justifyContent: 'center',
+                    opacity: canRefresh ? 1 : 0.32,
+                    transition:
+                      'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                    width: 32,
+                    '&:hover:not(.Mui-disabled)': {
+                      backgroundColor: buttonHoverBackground,
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    },
+                    '&:active:not(.Mui-disabled)': {
+                      transform: 'translateY(0)',
+                      boxShadow: 'none',
+                    },
+                    '&:focus-visible': {
+                      outline: `1px solid ${theme.palette.primary.main}`,
+                      outlineOffset: '2px',
+                    },
+                  }}
+                >
+                  <RefreshIcon sx={{ fontSize: 18 }} />
+                </ButtonBase>
+              </span>
+            </Tooltip>
 
             <Box
               sx={{

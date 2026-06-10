@@ -1,6 +1,6 @@
 {
   "name": "qortal-hub",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A desktop app that gives you access to the Qortal network",
   "author": {
     "name": "",
@@ -32,6 +32,8 @@
     "electron:make-local": "node ./scripts/run-electron-package.mjs local",
     "electron:make-lin": "node ./scripts/run-electron-package.mjs lin",
     "electron:make-mac": "node ./scripts/run-electron-package.mjs mac",
+    "electron:make-mac-universal": "node ./scripts/run-electron-package.mjs mac-universal",
+    "electron:make-mac-universal-unsigned": "node ./scripts/run-electron-package.mjs mac-universal-unsigned",
     "electron:make-win": "node ./scripts/run-electron-package.mjs win",
     "electron:make-arm": "node ./scripts/run-electron-package.mjs arm",
     "electron:make-lin-docker": "bash ./scripts/run-linux-build-in-docker.sh",

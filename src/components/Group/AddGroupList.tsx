@@ -8,7 +8,6 @@ import {
   IconButton,
   ListItem,
   ListItemButton,
-  ListItemText,
   Skeleton,
   Stack,
   TextField,
@@ -20,12 +19,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import PersonIcon from '@mui/icons-material/Person';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  List,
-} from 'react-virtualized';
+import { AutoSizer, List } from 'react-virtualized';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background/background.ts';
@@ -37,10 +31,7 @@ import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { formatTimestamp } from '../../utils/time.ts';
 import { Spacer } from '../../common/Spacer.tsx';
 
-const cache = new CellMeasurerCache({
-  fixedWidth: true,
-  defaultHeight: 88,
-});
+const GROUP_ROW_HEIGHT = 104;
 
 export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -271,103 +262,99 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
     const createdDate = group?.created ? formatTimestamp(group.created) : '—';
 
     return (
-      <CellMeasurer
-        key={key}
-        cache={cache}
-        parent={parent}
-        columnIndex={0}
-        rowIndex={index}
-      >
-        {({ measure }) => (
-          <div style={style} onLoad={measure}>
-            <ListItem disablePadding sx={{ px: 0, py: 0.75 }}>
-              <ListItemButton
-                onClick={() => handleOpenDialog(group)}
+      <div key={key} style={style}>
+        <ListItem disablePadding sx={{ px: 0, py: 0.75 }}>
+          <ListItemButton
+            onClick={() => handleOpenDialog(group)}
+            sx={{
+              borderRadius: 2,
+              py: 1.5,
+              px: 2,
+              alignItems: 'flex-start',
+              minHeight: GROUP_ROW_HEIGHT - 12,
+              '&:hover': {
+                bgcolor: theme.palette.action.hover,
+              },
+            }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                flexShrink: 0,
+                mt: 0.25,
+                mr: 1.5,
+              }}
+            >
+              {group?.isOpen === false && (
+                <LockIcon
+                  sx={{
+                    color: theme.palette.other.positive,
+                    fontSize: 22,
+                  }}
+                />
+              )}
+              {group?.isOpen === true && (
+                <NoEncryptionGmailerrorredIcon
+                  sx={{
+                    color: theme.palette.other.danger,
+                    fontSize: 22,
+                  }}
+                />
+              )}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                variant="body1"
                 sx={{
-                  borderRadius: 2,
-                  py: 2,
-                  px: 2,
-                  alignItems: 'flex-start',
-                  '&:hover': {
-                    bgcolor: theme.palette.action.hover,
-                  },
+                  fontWeight: 600,
+                  color: theme.palette.text.primary,
+                  lineHeight: 1.35,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                <Box
+                {group?.groupName}
+              </Typography>
+              {group?.description && (
+                <Typography
+                  variant="body2"
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexShrink: 0,
-                    mt: 0.25,
-                    mr: 1.5,
+                    color: theme.palette.text.secondary,
+                    display: '-webkit-box',
+                    mt: 0.75,
+                    lineHeight: 1.45,
+                    overflow: 'hidden',
+                    overflowWrap: 'anywhere',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: 2,
                   }}
                 >
-                  {group?.isOpen === false && (
-                    <LockIcon
-                      sx={{
-                        color: theme.palette.other.positive,
-                        fontSize: 22,
-                      }}
-                    />
-                  )}
-                  {group?.isOpen === true && (
-                    <NoEncryptionGmailerrorredIcon
-                      sx={{
-                        color: theme.palette.other.danger,
-                        fontSize: 22,
-                      }}
-                    />
-                  )}
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography
-                    variant="body1"
-                    sx={{
-                      fontWeight: 600,
-                      color: theme.palette.text.primary,
-                      lineHeight: 1.35,
-                      display: 'block',
-                    }}
-                  >
-                    {group?.groupName}
-                  </Typography>
-                  {group?.description && (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        display: 'block',
-                        mt: 0.75,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {group.description}
-                    </Typography>
-                  )}
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: theme.palette.text.secondary,
-                      opacity: 0.85,
-                      display: 'block',
-                      mt: 1,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {memberCount}{' '}
-                    {t('group:group.member', { count: memberCount })}
-                    {' • '}
-                    {t('group:group.created', {
-                      postProcess: 'capitalizeFirstChar',
-                      date: createdDate,
-                    })}
-                  </Typography>
-                </Box>
-              </ListItemButton>
-            </ListItem>
-          </div>
-        )}
-      </CellMeasurer>
+                  {group.description}
+                </Typography>
+              )}
+              <Typography
+                variant="caption"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  opacity: 0.85,
+                  display: 'block',
+                  mt: 0.75,
+                  lineHeight: 1.4,
+                }}
+              >
+                {memberCount} {t('group:group.member', { count: memberCount })}
+                {' • '}
+                {t('group:group.created', {
+                  postProcess: 'capitalizeFirstChar',
+                  date: createdDate,
+                })}
+              </Typography>
+            </Box>
+          </ListItemButton>
+        </ListItem>
+      </div>
     );
   };
 
@@ -804,9 +791,8 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   width={width}
                   height={height}
                   rowCount={filteredItems.length}
-                  rowHeight={cache.rowHeight}
+                  rowHeight={GROUP_ROW_HEIGHT}
                   rowRenderer={rowRenderer}
-                  deferredMeasurementCache={cache}
                 />
               )}
             </AutoSizer>

@@ -13,11 +13,10 @@ type AppViewerProps = {
   app: any;
   hide: boolean;
   isDevMode: boolean;
-  skipAuth?: boolean;
 };
 
 export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
-  ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
+  ({ app, hide, isDevMode }, iframeRef) => {
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =
       useQortalMessageListener(
@@ -27,7 +26,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         isDevMode,
         isDevMode ? 'devapp' : app?.name,
         app?.service,
-        skipAuth
+        app?.identifier
       );
 
     const [url, setUrl] = useState('');
@@ -211,19 +210,19 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
     // Function to navigate back in iframe
     const navigateBackInIframe = async () => {
-      if (
-        iframeRef.current &&
-        iframeRef.current.contentWindow &&
-        history?.currentIndex > 0
-      ) {
+      const iframe = iframeRef.current;
+      if (iframe && iframe.contentWindow && history?.currentIndex > 0) {
         // Calculate the previous index and path
         const previousPageIndex = history.currentIndex - 1;
         const previousPath = history.customQDNHistoryPaths[previousPageIndex];
-        const targetOrigin = iframeRef.current
-          ? new URL(iframeRef.current.src).origin
-          : '*';
+        let targetOrigin;
+        try {
+          targetOrigin = new URL(iframe.src).origin;
+        } catch {
+          return;
+        }
         // Signal non-manual navigation
-        iframeRef.current.contentWindow.postMessage(
+        iframe.contentWindow.postMessage(
           { action: 'PERFORMING_NON_MANUAL', currentIndex: previousPageIndex },
           targetOrigin
         );
@@ -234,6 +233,8 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         const navigationPromise = new Promise((resolve, reject) => {
           function handleNavigationSuccess(event) {
             if (
+              event.source === iframe.contentWindow &&
+              event.origin === targetOrigin &&
               event.data?.action === 'NAVIGATION_SUCCESS' &&
               event.data.path === previousPath
             ) {
@@ -249,7 +250,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
           // Timeout after 200ms if no response
           setTimeout(() => {
-            window.removeEventListener('message', handleNavigationSuccess);
+            frameWindow.removeEventListener('message', handleNavigationSuccess);
             reject(
               new Error(
                 t('core:message.error.navigation_timeout', {
@@ -258,11 +259,8 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
               )
             );
           }, 200);
-          const targetOrigin = iframeRef.current
-            ? new URL(iframeRef.current.src).origin
-            : '*';
           // Send the navigation command after setting up the listener and timeout
-          iframeRef.current.contentWindow.postMessage(
+          iframe.contentWindow.postMessage(
             {
               action: 'NAVIGATE_TO_PATH',
               path: previousPath,
@@ -309,15 +307,21 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const navigateToPathFunc = useCallback(
       async (e) => {
         const { path: targetPath = '' } = e.detail;
-        if (!iframeRef.current?.contentWindow) return;
+        const iframe = iframeRef.current;
+        if (!iframe?.contentWindow) return;
 
-        const targetOrigin = iframeRef.current
-          ? new URL(iframeRef.current.src).origin
-          : '*';
+        let targetOrigin;
+        try {
+          targetOrigin = new URL(iframe.src).origin;
+        } catch {
+          return;
+        }
 
         const navigationPromise = new Promise((resolve, reject) => {
           function handleNavigationSuccess(event) {
             if (
+              event.source === iframe.contentWindow &&
+              event.origin === targetOrigin &&
               event.data?.action === 'NAVIGATION_SUCCESS' &&
               event.data.path === targetPath
             ) {
@@ -335,7 +339,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
             frameWindow.removeEventListener('message', handleNavigationSuccess);
             reject(new Error('navigation_timeout'));
           }, 250);
-          iframeRef.current.contentWindow.postMessage(
+          iframe.contentWindow.postMessage(
             {
               action: 'NAVIGATE_TO_PATH',
               path: targetPath,
@@ -392,16 +396,31 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         sx={{
           display: 'flex',
           flexDirection: 'column',
+          height: '100vh',
+          minHeight: 0,
+          overflow: 'hidden',
+          overflowAnchor: 'none',
+          overscrollBehavior: 'none',
+          width: '100%',
         }}
       >
         <iframe
           ref={iframeRef}
           style={{
-            height: `100vh`,
             border: 'none',
+            contain: 'layout paint style',
+            display: 'block',
+            flex: '0 0 auto',
+            height: '100vh',
+            isolation: 'isolate',
+            minHeight: 0,
+            overflow: 'hidden',
+            overflowAnchor: 'none',
+            overscrollBehavior: 'none',
             width: '100%',
           }}
           id="browser-iframe"
+          tabIndex={-1}
           src={defaultUrl}
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
           allow="fullscreen; clipboard-read; clipboard-write; screen-wake-lock"

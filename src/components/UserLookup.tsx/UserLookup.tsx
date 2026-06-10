@@ -1695,8 +1695,8 @@ export const UserLookup = ({
                     md: `1px solid ${dividerColor}`,
                   },
                   display: 'flex',
+                  flex: '1 1 auto',
                   flexDirection: 'column',
-                  flexShrink: 0,
                   gap: 1.55,
                   minHeight: 0,
                   overflow: { xs: 'visible', md: 'hidden' },
@@ -1714,6 +1714,7 @@ export const UserLookup = ({
                       xs: 'repeat(2, minmax(0, 1fr))',
                       md: 'repeat(4, minmax(0, 1fr))',
                     },
+                    flexShrink: 0,
                     overflow: 'hidden',
                   }}
                 >
@@ -1762,6 +1763,7 @@ export const UserLookup = ({
                     display: 'grid',
                     gap: 0,
                     gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    flexShrink: 0,
                     overflow: 'hidden',
                   }}
                 >
@@ -1843,7 +1845,7 @@ export const UserLookup = ({
                     border: `1px solid ${alpha(theme.palette.divider, 0.22)}`,
                     borderRadius: '12px',
                     display: 'flex',
-                    flex: '1 1 auto',
+                    flex: '1 1 0',
                     flexDirection: 'column',
                     minHeight: { xs: 280, md: 0 },
                     overflow: 'hidden',
@@ -1854,6 +1856,7 @@ export const UserLookup = ({
                     sx={{
                       alignItems: 'center',
                       display: 'flex',
+                      flexShrink: 0,
                       justifyContent: 'flex-start',
                       pb: 0.9,
                       px: 0.4,
@@ -1889,8 +1892,9 @@ export const UserLookup = ({
                     sx={{
                       border: `1px solid ${alpha(theme.palette.divider, 0.18)}`,
                       borderRadius: '10px',
-                      flex: '1 1 auto',
+                      flex: '1 1 0',
                       minHeight: 0,
+                      overflowY: 'auto',
                     }}
                   >
                     <Table
@@ -2170,6 +2174,7 @@ export const UserLookup = ({
                     }
                     sx={{
                       borderTop: `1px solid ${alpha(theme.palette.divider, 0.16)}`,
+                      flexShrink: 0,
                       mt: 1,
                       '& .MuiTablePagination-toolbar': {
                         minHeight: 42,

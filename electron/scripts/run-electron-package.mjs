@@ -60,6 +60,41 @@ const configs = {
       'zip',
     ],
   },
+  'mac-universal': {
+    description: 'macOS universal package',
+    allowed: [{ platform: 'darwin' }],
+    universal: true,
+    builderArgs: [
+      'build',
+      '-c',
+      './electron-builder.config.mac.json',
+      '--publish=never',
+      '--mac',
+      'dmg',
+      'pkg',
+      'zip',
+      '--universal',
+    ],
+  },
+  'mac-universal-unsigned': {
+    description: 'unsigned macOS universal package',
+    allowed: [{ platform: 'darwin' }],
+    universal: true,
+    builderEnv: {
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+    },
+    builderArgs: [
+      'build',
+      '-c',
+      './electron-builder.config.mac-unsigned.json',
+      '--publish=never',
+      '--mac',
+      'dmg',
+      'pkg',
+      'zip',
+      '--universal',
+    ],
+  },
 };
 
 function fail(message) {
@@ -78,6 +113,8 @@ if (!mode || mode === 'all') {
       '  npm run electron:make-arm   # on Linux arm64',
       '  npm run electron:make-win   # on Windows',
       '  npm run electron:make-mac   # on macOS',
+      '  npm run electron:make-mac-universal # on macOS, universal app',
+      '  npm run electron:make-mac-universal-unsigned # on macOS, unsigned universal app',
       '',
       'Or use the GitHub Actions workflow to build the supported OS matrix.',
     ].join('\n')
@@ -123,10 +160,36 @@ function run(cmd, args) {
   }
 }
 
+function runWithEnv(cmd, args, envExtra) {
+  const res = spawnSync(cmd, args, {
+    stdio: 'inherit',
+    env: { ...process.env, ...envExtra },
+    windowsHide: true,
+    ...(process.platform === 'win32' ? { shell: true } : {}),
+  });
+  if (res.error) {
+    console.error(`Failed to run ${cmd}:`, res.error.message);
+    process.exit(1);
+  }
+  if (res.status !== 0) {
+    process.exit(res.status ?? 1);
+  }
+}
+
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 run(npmCmd, ['run', 'build']);
-run(npmCmd, ['run', 'bundle:reticulum']);
+if (cfg.universal) {
+  runWithEnv(npmCmd, ['run', 'bundle:reticulum'], {
+    QORTAL_RETICULUM_OUTPUT_DIR: 'resources/reticulum/darwin-arm64',
+  });
+  runWithEnv(npmCmd, ['run', 'bundle:reticulum'], {
+    QORTAL_RETICULUM_BUILD_ARCH: 'x64',
+    QORTAL_RETICULUM_OUTPUT_DIR: 'resources/reticulum/darwin-x64',
+  });
+} else {
+  run(npmCmd, ['run', 'bundle:reticulum']);
+}
 
 const electronBuilderCmd = process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
-run(electronBuilderCmd, cfg.builderArgs);
+runWithEnv(electronBuilderCmd, cfg.builderArgs, cfg.builderEnv ?? {});

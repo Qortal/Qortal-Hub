@@ -395,6 +395,10 @@ export const _voteOnPoll = async (
 const fileRequestResolvers = new Map();
 
 const handleFileMessage = (event) => {
+  if (event.origin !== window.location.origin || event.source !== window) {
+    return;
+  }
+
   const { action, requestId, result, error } = event.data;
 
   if (
@@ -525,16 +529,12 @@ export const getWhichUI = async () => {
 export const getUserAccount = async ({
   isFromExtension,
   appInfo,
-  skipAuth,
 }) => {
   try {
     const value =
       (await getPermission(`qAPPAutoAuth-${appInfo?.name}`)) || false;
     let skip = false;
     if (value) {
-      skip = true;
-    }
-    if (skipAuth) {
       skip = true;
     }
     let hadSessionPermissions = false;
@@ -603,12 +603,12 @@ export const getUserAccount = async ({
   }
 };
 
-export const getNotificationPermission = async ({ appInfo, skipAuth }) => {
+export const getNotificationPermission = async ({ appInfo }) => {
   try {
     const stored =
       (await getPermission(getNotificationPermissionKey(appInfo?.name))) ||
       false;
-    let skip = !!stored || !!skipAuth;
+    let skip = !!stored;
     let hadSessionPermissions = false;
 
     if (
@@ -681,12 +681,9 @@ export const getNotificationPermission = async ({ appInfo, skipAuth }) => {
 
 export const notificationHasPermission = async ({
   appInfo,
-  skipAuth,
 }: {
   appInfo?: { name?: string; tabId?: number };
-  skipAuth?: boolean;
 }) => {
-  if (skipAuth) return true;
   if (!appInfo?.name) return false;
   const stored =
     (await getPermission(getNotificationPermissionKey(appInfo.name))) === true;

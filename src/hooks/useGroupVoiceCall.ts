@@ -12964,6 +12964,8 @@ export function useGroupVoiceCall(uiActive = false) {
           const p2pHealth = computeP2pHealth({
             onlineRemoteHubInterfaces: rs.onlineRemoteHubInterfaces ?? 0,
             p2pActiveOverlayPeers: rs.p2pActiveOverlayPeers ?? 0,
+            p2pOutboundOverlayPeers: rs.p2pOutboundOverlayPeers,
+            p2pInboundOverlayPeers: rs.p2pInboundOverlayPeers,
           });
           //TODO: PUT BACK
           if (p2pHealth !== 'good') {

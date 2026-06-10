@@ -1,58 +1,38 @@
-require('dotenv').config();
-const { spawnSync } = require('child_process');
+const path = require('path');
+require('dotenv').config({
+  path: path.join(__dirname, '..', '.env'),
+});
+
 const { notarize } = require('@electron/notarize');
-const { log, warn } = require('./logger');
 
-function hasDeveloperIdSignature(appPath) {
-  const result = spawnSync('codesign', ['-dv', '--verbose=4', appPath], {
-    encoding: 'utf8',
+module.exports = async function notarizeMac(context) {
+  const { electronPlatformName, appOutDir } = context;
+  if (electronPlatformName !== 'darwin') return;
+
+  const appName = context.packager.appInfo.productFilename;
+
+  console.log('Notarize env check (inside hook):', {
+    APPLEID: process.env.APPLEID,
+    APPLETEAMID: process.env.APPLETEAMID,
+    APPLEIDPASS_SET: !!process.env.APPLEIDPASS,
   });
 
-  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
-  if (result.status !== 0) {
-    warn(`Skipping macOS notarization: failed to inspect code signature for ${appPath}.`);
-    return false;
-  }
-
-  if (output.includes('Signature=adhoc')) {
-    log('Skipping macOS notarization: app is only ad-hoc signed.');
-    return false;
-  }
-
-  if (!output.includes('Authority=Developer ID Application:')) {
-    log('Skipping macOS notarization: app is not signed with a Developer ID Application certificate.');
-    return false;
-  }
-
-  return true;
-}
-
-exports.default = async function notarizing(context) {
-  const { electronPlatformName, appOutDir, packager } = context;
-
-  if (electronPlatformName !== 'darwin') {
+  if (!process.env.APPLEID || !process.env.APPLEIDPASS || !process.env.APPLETEAMID) {
+    console.warn('Notarization skipped: APPLEID / APPLEIDPASS / APPLETEAMID not set correctly');
     return;
   }
 
-  const { APPLEID, APPLEIDPASS, APPLETEAMID } = process.env;
-  if (!APPLEID || !APPLEIDPASS || !APPLETEAMID) {
-    log('Skipping macOS notarization: Apple notarization credentials are not configured.');
-    return;
-  }
+  console.log('Submitting Qortal Hub for notarization via notarytool...');
 
-  const appName = packager.appInfo.productFilename;
-  const appPath = `${appOutDir}/${appName}.app`;
-
-  if (!hasDeveloperIdSignature(appPath)) {
-    return;
-  }
-
-  return notarize({
-    appBundleId: packager.appInfo.id,
-    appPath,
+  await notarize({
     tool: 'notarytool',
-    teamId: APPLETEAMID,
-    appleId: APPLEID,
-    appleIdPassword: APPLEIDPASS,
+    appBundleId: 'org.qortal.Qortal-Hub',
+    appPath: `${appOutDir}/${appName}.app`,
+    teamId: process.env.APPLETEAMID,
+    appleId: process.env.APPLEID,
+    appleIdPassword: process.env.APPLEIDPASS,
   });
+
+  console.log('Notarization complete.');
 };
+

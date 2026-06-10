@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, spawnSync } from 'child_process';
 import { app } from 'electron';
 import { EventEmitter } from 'events';
 import fs from 'fs';
@@ -464,8 +464,12 @@ export type ReticulumConnectivitySnapshot = {
   reason?: string;
   /** Mesh listen section is online; RNS may report short or long interface names (presence_bridge matches substring). */
   meshListenOnline?: boolean;
-  /** Established RNS.Link sessions used for Reticulum presence/signaling overlay (not group audio). */
+  /** Recently receiving RNS.Link sessions used for Reticulum presence/signaling overlay (not group audio). */
   overlayLinksConnected?: number;
+  /** Established outbound overlay peers this node can send fanout to. */
+  overlayLinksOutboundConnected?: number;
+  /** Recently receiving inbound overlay peers feeding this node data. */
+  overlayLinksInboundConnected?: number;
 };
 
 export type ReticulumOverlayVerifiedPeer = {
@@ -480,6 +484,7 @@ export type ReticulumOverlayLinkSnapshot = {
   incoming: boolean;
   connectedAt: number;
   lastRxAt: number;
+  lastActivityAt: number;
 };
 
 type BridgeEventFrame =
@@ -700,7 +705,23 @@ type QueuedCommand = {
   priority: BridgeCmdPriority;
 };
 
-type BridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
+export type BridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
+
+export type ReticulumPresencePublishOptions = {
+  /** Bypass local heartbeat/announce dedup for explicit recovery replays. */
+  force?: boolean;
+  reason?: string;
+};
+
+export type ReticulumPresenceHealthSnapshot = {
+  bridgeState: BridgeState;
+  lastPresencePublishAt: number;
+  lastPresencePublishOkAt: number;
+  lastPresenceFanoutPeers: number | null;
+  lastInboundPresenceAt: number;
+  lastOverlayLinkClosedAt: number;
+  recentOverlayLinkTimeouts: number;
+};
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const CONTROL_PENDING_MAX = 512;
@@ -724,8 +745,15 @@ function bridgeExeName(): string {
 }
 
 function getFrozenBridgePath(): string {
+  const exeName = bridgeExeName();
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'reticulum', bridgeExeName());
+    const base = path.join(process.resourcesPath, 'reticulum');
+    const archSpecific =
+      process.platform === 'darwin'
+        ? path.join(base, `darwin-${process.arch}`, exeName)
+        : null;
+    if (archSpecific && fs.existsSync(archSpecific)) return archSpecific;
+    return path.join(base, exeName);
   }
   return path.join(
     __dirname,
@@ -733,7 +761,7 @@ function getFrozenBridgePath(): string {
     '..',
     'resources',
     'reticulum',
-    bridgeExeName()
+    exeName
   );
 }
 
@@ -775,6 +803,39 @@ function resolveBridgeLaunch(configDir: string):
     '--config',
     configDir,
   ]);
+}
+
+function killBridgeProcessTree(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(pid);
+      return true;
+    } catch (err) {
+      loggerWarn(`[ReticulumBridge] Failed to signal child pid=${pid}:`, err);
+      return false;
+    }
+  }
+
+  const result = spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error) {
+    loggerWarn(
+      `[ReticulumBridge] Failed to taskkill child tree pid=${pid}:`,
+      result.error
+    );
+    return false;
+  }
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout).trim();
+    loggerWarn(
+      `[ReticulumBridge] taskkill child tree pid=${pid} exited status=${result.status}${detail ? ` detail=${detail}` : ''}`
+    );
+    return false;
+  }
+  return true;
 }
 
 function toPresenceRoute(raw: unknown): PresenceRoute | null {
@@ -1022,6 +1083,12 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private lastHeartbeatSentAt = 0;
   private lastHeartbeatSemanticKey: string | null = null;
   private lastSemanticPresence = new Map<string, number>();
+  private lastPresencePublishAt = 0;
+  private lastPresencePublishOkAt = 0;
+  private lastPresenceFanoutPeers: number | null = null;
+  private lastInboundPresenceAt = 0;
+  private lastOverlayLinkClosedAt = 0;
+  private recentOverlayLinkTimeouts: number[] = [];
   private connectivitySnapshot: ReticulumConnectivitySnapshot = {
     bridgeState: 'stopped',
     reachability: 'disconnected',
@@ -1164,7 +1231,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     const child = this.child;
     this.child = null;
     if (child && child.exitCode === null && !child.killed) {
-      child.kill();
+      if (typeof child.pid === 'number') {
+        killBridgeProcessTree(child.pid);
+      } else {
+        child.kill();
+      }
     }
     this.localPresenceDestinationHash = undefined;
     this.launchConfigDir = null;
@@ -2086,11 +2157,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     return dropped;
   }
 
-  async publish(envelope: PresenceEnvelope): Promise<boolean> {
+  async publish(
+    envelope: PresenceEnvelope,
+    options: ReticulumPresencePublishOptions = {}
+  ): Promise<boolean> {
     await this.start();
     if (this.state !== 'ready') return false;
 
-    if (envelope.type === 'PRESENCE_HEARTBEAT') {
+    if (!options.force && envelope.type === 'PRESENCE_HEARTBEAT') {
       const semanticKey = semanticPresenceKey(envelope);
       const now = Date.now();
       if (
@@ -2104,7 +2178,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       }
       this.lastHeartbeatSentAt = now;
       this.lastHeartbeatSemanticKey = semanticKey;
-    } else {
+    } else if (!options.force) {
       const semanticKey = semanticPresenceKey(envelope);
       const lastSentAt = this.lastSemanticPresence.get(semanticKey) ?? 0;
       const now = Date.now();
@@ -2118,8 +2192,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     }
 
     loggerLog(
-      `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}`
+      `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}${options.force ? ` force=yes reason=${options.reason ?? 'unspecified'}` : ''}`
     );
+    this.lastPresencePublishAt = Date.now();
     const pm = getPresenceManager();
     const activeOverlayNeighborHashes =
       pm?.getReticulumActiveNeighborHashes() ?? [];
@@ -2153,8 +2228,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         ? pl['localPresenceHash']
         : undefined;
     loggerLog(
-      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'} fanout_peers=${fanoutPeers ?? 'n/a'} fanout_hashes=${fanoutHashes ?? 'n/a'} local_presence_hash=${fanoutLocal ?? this.localPresenceDestinationHash ?? 'n/a'}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
+      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'} fanout_peers=${fanoutPeers ?? 'n/a'} fanout_hashes=${fanoutHashes ?? 'n/a'} local_presence_hash=${fanoutLocal ?? this.localPresenceDestinationHash ?? 'n/a'}${options.force ? ` force=yes reason=${options.reason ?? 'unspecified'}` : ''}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
     );
+    if (typeof fanoutPeers === 'number') {
+      this.lastPresenceFanoutPeers = fanoutPeers;
+    }
+    if (resp.ok) {
+      this.lastPresencePublishOkAt = Date.now();
+    }
     return resp.ok;
   }
 
@@ -2206,20 +2287,57 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   }
 
   getConnectivitySnapshot(): ReticulumConnectivitySnapshot {
+    const directionCounts = this.getOverlayLinkDirectionCounts();
     return {
       ...this.connectivitySnapshot,
       bridgeState: this.state,
       overlayLinksConnected: this.getEstablishedOverlayPeerCount(),
+      overlayLinksOutboundConnected: directionCounts.outbound,
+      overlayLinksInboundConnected: directionCounts.inbound,
       ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
     };
   }
 
-  /** Unique overlay peers (by presence hash); links without hash yet count separately. */
+  getPresenceHealthSnapshot(): ReticulumPresenceHealthSnapshot {
+    const cutoff = Date.now() - 5 * 60_000;
+    this.recentOverlayLinkTimeouts = this.recentOverlayLinkTimeouts.filter(
+      (at) => at >= cutoff
+    );
+    return {
+      bridgeState: this.state,
+      lastPresencePublishAt: this.lastPresencePublishAt,
+      lastPresencePublishOkAt: this.lastPresencePublishOkAt,
+      lastPresenceFanoutPeers: this.lastPresenceFanoutPeers,
+      lastInboundPresenceAt: this.lastInboundPresenceAt,
+      lastOverlayLinkClosedAt: this.lastOverlayLinkClosedAt,
+      recentOverlayLinkTimeouts: this.recentOverlayLinkTimeouts.length,
+    };
+  }
+
+  private isOverlaySnapshotRecentlyLive(
+    snap: ReticulumOverlayLinkSnapshot,
+    now = Date.now()
+  ): boolean {
+    const lastActivityAt = snap.lastActivityAt || snap.lastRxAt;
+    if (!lastActivityAt) return false;
+    return now - lastActivityAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS;
+  }
+
+  private isOverlaySnapshotUsable(
+    snap: ReticulumOverlayLinkSnapshot,
+    now = Date.now()
+  ): boolean {
+    return snap.incoming ? this.isOverlaySnapshotRecentlyLive(snap, now) : true;
+  }
+
+  /** Unique live overlay peers (by presence hash); links without hash yet count separately. */
   private getEstablishedOverlayPeerCount(): number {
     this.pruneStaleOverlayLinkSnapshots();
+    const now = Date.now();
     const byPeer = new Set<string>();
     let noHash = 0;
     for (const snap of this.overlayLinkSnapshots.values()) {
+      if (!this.isOverlaySnapshotRecentlyLive(snap, now)) continue;
       const k = snap.peerPresenceHash.trim().toLowerCase();
       if (k) byPeer.add(k);
       else noHash += 1;
@@ -2227,11 +2345,30 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     return byPeer.size + noHash;
   }
 
+  getOverlayLinkDirectionCounts(): { outbound: number; inbound: number } {
+    this.pruneStaleOverlayLinkSnapshots();
+    const now = Date.now();
+    const outbound = new Set<string>();
+    const inbound = new Set<string>();
+    for (const snap of this.overlayLinkSnapshots.values()) {
+      const k = snap.peerPresenceHash.trim().toLowerCase();
+      if (!k) continue;
+      if (snap.incoming) {
+        if (this.isOverlaySnapshotRecentlyLive(snap, now)) inbound.add(k);
+      } else {
+        outbound.add(k);
+      }
+    }
+    return { outbound: outbound.size, inbound: inbound.size };
+  }
+
   getOverlayLinkSnapshots(): ReticulumOverlayLinkSnapshot[] {
     this.pruneStaleOverlayLinkSnapshots();
+    const now = Date.now();
     const byPeer = new Map<string, ReticulumOverlayLinkSnapshot>();
     const noHash: ReticulumOverlayLinkSnapshot[] = [];
     for (const snap of this.overlayLinkSnapshots.values()) {
+      if (!this.isOverlaySnapshotUsable(snap, now)) continue;
       const k = snap.peerPresenceHash.trim().toLowerCase();
       if (!k) {
         noHash.push(snap);
@@ -2277,12 +2414,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private pruneStaleOverlayLinkSnapshots(now = Date.now()): boolean {
     let pruned = false;
     for (const [linkId, snap] of this.overlayLinkSnapshots.entries()) {
-      if (now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
+      const lastActivityAt =
+        snap.lastActivityAt || snap.lastRxAt || snap.connectedAt || 0;
+      if (now - lastActivityAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS) continue;
       pruned = true;
       this.overlayEstablishedLinkIds.delete(linkId);
       this.overlayLinkSnapshots.delete(linkId);
       loggerLog(
-        `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} rxIdleMs=${now - snap.lastRxAt}`
+        `[ReticulumBridge] overlay-link pruned stale snapshot link_id=${linkId} peer=${snap.peerPresenceHash || 'unknown'} idleMs=${now - lastActivityAt}`
       );
       this.emit('overlay-link-state', {
         linkId,
@@ -2293,15 +2432,6 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         queuedPackets: 0,
         closedByReticulum: false,
       });
-      if (
-        snap.peerPresenceHash &&
-        !this.hasEstablishedOverlaySnapshotForPeer(snap.peerPresenceHash)
-      ) {
-        this.emit('overlay-link-closed', {
-          peerHash: snap.peerPresenceHash,
-          reason: 'rx_idle_timeout',
-        });
-      }
     }
     return pruned;
   }
@@ -3032,6 +3162,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         const envelope = frame.payload?.envelope;
         const route = toPresenceRoute(frame.payload?.route);
         if (!envelope || !route || route.kind !== 'reticulum') return;
+        this.lastInboundPresenceAt = Date.now();
         const peerAddr =
           typeof (envelope.payload as { address?: string })?.address ===
           'string'
@@ -3531,7 +3662,16 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             typeof frame.payload?.lastRxAt === 'number' &&
             Number.isFinite(frame.payload.lastRxAt)
               ? frame.payload.lastRxAt
-              : (existing?.lastRxAt ?? Date.now());
+              : (existing?.lastRxAt ?? 0);
+          const lastActivityAgeMs =
+            typeof frame.payload?.lastActivityAgeMs === 'number' &&
+            Number.isFinite(frame.payload.lastActivityAgeMs)
+              ? frame.payload.lastActivityAgeMs
+              : null;
+          const lastActivityAt =
+            lastActivityAgeMs !== null
+              ? Date.now() - lastActivityAgeMs
+              : (existing?.lastActivityAt ?? lastRxAt);
           this.overlayLinkSnapshots.set(linkId, {
             linkId,
             peerPresenceHash:
@@ -3539,10 +3679,19 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             incoming: frame.payload?.incoming === true,
             connectedAt: existing?.connectedAt ?? Date.now(),
             lastRxAt,
+            lastActivityAt,
           });
         } else {
           this.overlayEstablishedLinkIds.delete(linkId);
           this.overlayLinkSnapshots.delete(linkId);
+          this.lastOverlayLinkClosedAt = Date.now();
+          if (reason.toLowerCase().includes('timeout')) {
+            const now = Date.now();
+            this.recentOverlayLinkTimeouts.push(now);
+            const cutoff = now - 5 * 60_000;
+            this.recentOverlayLinkTimeouts =
+              this.recentOverlayLinkTimeouts.filter((at) => at >= cutoff);
+          }
         }
         if (
           frame.payload?.closedByReticulum === true &&

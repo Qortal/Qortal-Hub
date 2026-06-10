@@ -18,6 +18,40 @@ const nodeRequire = createRequire(__filename);
 
 const noop = (..._args: unknown[]) => {};
 
+export const DISABLE_DEV_LOGS = true;
+
+const IMPORTANT_LOG_PATTERNS = [
+  /\bfailed\b/i,
+  /\bfailure\b/i,
+  /\berror\b/i,
+  /\bexception\b/i,
+  /\btimeout\b/i,
+  /\btimed out\b/i,
+  /\bnot starting\b/i,
+  /\bdid not start\b/i,
+  /\btoo many instances\b/i,
+  /\bbridge missing\b/i,
+  /\bbridge startup\b/i,
+  /\bdegraded\b/i,
+  /\bshutdown\b/i,
+];
+
+function isImportantLog(args: readonly unknown[]): boolean {
+  const first = args[0];
+  if (typeof first !== 'string') return false;
+  return IMPORTANT_LOG_PATTERNS.some((pattern) => pattern.test(first));
+}
+
+function shouldEmitLog(
+  method: 'log' | 'error' | 'warn' | 'debug' | 'info',
+  args: readonly unknown[]
+): boolean {
+  if (method === 'error' || method === 'warn') return true;
+  if (process.type !== 'browser') return true;
+  if (!DISABLE_DEV_LOGS) return true;
+  return isImportantLog(args);
+}
+
 /** Stdio can be a closed pipe (AppImage, desktop launcher, detached parent). Ignore benign write failures. */
 function isBenignStdioWriteError(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException)?.code;
@@ -134,6 +168,7 @@ function makeLogger(
     const c = typeof console !== 'undefined' ? console : null;
     return c && typeof c[method] === 'function'
       ? (...args: unknown[]) => {
+          if (!shouldEmitLog(method, args)) return;
           emitToConsole(c, method, args);
           queueFileLine(fileLevel, args);
         }

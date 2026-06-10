@@ -1,0 +1,10 @@
+{
+  "extends": "./electron-builder.config.mac.json",
+  "afterSign": null,
+  "mac": {
+    "identity": null
+  },
+  "pkg": {
+    "identity": null
+  }
+}
