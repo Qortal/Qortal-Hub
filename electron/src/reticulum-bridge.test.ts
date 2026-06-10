@@ -687,6 +687,8 @@ describe('ReticulumBridge group audio support', () => {
       hubSummary: 'Hub A=online, Hub B=offline',
       meshListenOnline: false,
       overlayLinksConnected: 0,
+      overlayLinksOutboundConnected: 0,
+      overlayLinksInboundConnected: 0,
     });
     expect(seen).toEqual([
       {
@@ -700,6 +702,8 @@ describe('ReticulumBridge group audio support', () => {
         hubSummary: 'Hub A=online, Hub B=offline',
         meshListenOnline: false,
         overlayLinksConnected: 0,
+        overlayLinksOutboundConnected: 0,
+        overlayLinksInboundConnected: 0,
       },
     ]);
     expect(persistReticulumSharedTransportState).toHaveBeenCalledWith({
@@ -757,6 +761,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 2,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
 
@@ -768,6 +773,7 @@ describe('ReticulumBridge group audio support', () => {
         incoming: false,
         connectedAt: expect.any(Number),
         lastRxAt: expect.any(Number),
+        lastActivityAt: expect.any(Number),
       },
     ]);
 
@@ -810,7 +816,49 @@ describe('ReticulumBridge group audio support', () => {
     ]);
   });
 
-  it('prunes overlay snapshots when inbound traffic goes idle', () => {
+  it('keeps overlay snapshots alive when recent send activity is reported', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(200_000);
+    const seen: unknown[] = [];
+
+    bridge.on('overlay-link-closed', (payload) => {
+      seen.push(payload);
+    });
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: true,
+        established: true,
+        reason: 'presence_forward',
+        queuedPackets: 0,
+        closedByReticulum: false,
+        lastRxAt: 100_000,
+        lastActivityAgeMs: 1_000,
+      },
+    });
+
+    expect(bridge.getOverlayLinkSnapshots()).toEqual([
+      {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: true,
+        connectedAt: 200_000,
+        lastRxAt: 100_000,
+        lastActivityAt: 199_000,
+      },
+    ]);
+    expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(1);
+    expect(seen).toEqual([]);
+
+    nowSpy.mockRestore();
+  });
+
+  it('prunes idle overlay snapshots without closing the fanout peer', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(200_000);
@@ -837,9 +885,7 @@ describe('ReticulumBridge group audio support', () => {
 
     expect(bridge.getOverlayLinkSnapshots()).toEqual([]);
     expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(0);
-    expect(seen).toEqual([
-      { peerHash: 'peer-hash', reason: 'rx_idle_timeout' },
-    ]);
+    expect(seen).toEqual([]);
 
     nowSpy.mockRestore();
   });
@@ -919,6 +965,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     internal.handleFrame({
@@ -932,6 +979,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     internal.handleFrame({
@@ -968,6 +1016,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     internal.handleFrame({
@@ -981,6 +1030,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(1);
@@ -1001,6 +1051,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     const firstConnectedAt = bridge.getOverlayLinkSnapshots()[0]?.connectedAt;

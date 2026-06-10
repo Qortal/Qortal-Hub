@@ -23,6 +23,8 @@ import {
 
 type ReticulumStatusSnapshot = {
   onlineRemoteHubInterfaces?: number;
+  p2pOutboundOverlayPeers?: number;
+  p2pInboundOverlayPeers?: number;
   p2pActiveOverlayPeers?: number;
 };
 
@@ -37,7 +39,10 @@ export const CoreSyncStatus = ({
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setSharedP2pHealth = useSetAtom(p2pHealthAtom);
   const [coreInfos, setCoreInfos] = useState({});
-  const [p2pActiveOverlayPeers, setP2pActiveOverlayPeers] = useState<
+  const [p2pOutboundOverlayPeers, setP2pOutboundOverlayPeers] = useState<
+    number | null
+  >(null);
+  const [p2pInboundOverlayPeers, setP2pInboundOverlayPeers] = useState<
     number | null
   >(null);
   const [connectedRemoteInterfaces, setConnectedRemoteInterfaces] = useState<
@@ -58,11 +63,16 @@ export const CoreSyncStatus = ({
 
   const applyReticulumStatus = useCallback(
     (status: ReticulumStatusSnapshot | null | undefined) => {
-      const active =
-        typeof status?.p2pActiveOverlayPeers === 'number'
-          ? status.p2pActiveOverlayPeers
-          : null;
-      setP2pActiveOverlayPeers(active);
+      setP2pOutboundOverlayPeers(
+        typeof status?.p2pOutboundOverlayPeers === 'number'
+          ? status.p2pOutboundOverlayPeers
+          : null
+      );
+      setP2pInboundOverlayPeers(
+        typeof status?.p2pInboundOverlayPeers === 'number'
+          ? status.p2pInboundOverlayPeers
+          : null
+      );
       setConnectedRemoteInterfaces(
         typeof status?.onlineRemoteHubInterfaces === 'number'
           ? status.onlineRemoteHubInterfaces
@@ -77,6 +87,8 @@ export const CoreSyncStatus = ({
       const nextP2pHealth = computeP2pHealth({
         onlineRemoteHubInterfaces: hubs,
         p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
+        p2pOutboundOverlayPeers: status.p2pOutboundOverlayPeers,
+        p2pInboundOverlayPeers: status.p2pInboundOverlayPeers,
       });
       setP2pHealth(nextP2pHealth);
       setSharedP2pHealth(nextP2pHealth);
@@ -261,12 +273,15 @@ export const CoreSyncStatus = ({
           </h4>
         )}
 
-        {p2pActiveOverlayPeers !== null && (
+        {(p2pOutboundOverlayPeers !== null || p2pInboundOverlayPeers !== null) && (
           <h4 className="lineHeight">
             {t('core:core.p2p_active_overlay_peers', {
               postProcess: 'capitalizeFirstChar',
-            })}
-            : <span style={{ color: '#03a9f4' }}>{p2pActiveOverlayPeers}</span>
+            })}{' '}
+            (out/in):{' '}
+            <span style={{ color: '#03a9f4' }}>
+              {p2pOutboundOverlayPeers ?? 0}/{p2pInboundOverlayPeers ?? 0}
+            </span>
           </h4>
         )}
 

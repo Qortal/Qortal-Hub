@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "(información de tus recompensas)",
       "rewards_info_subtitle_selected": "(minter seleccionado — recompensas de esta clave)",
       "network_details": "Detalles de la red",
+      "rewardshares_loading": "Comprobando el estado del reward-share. Espera hasta que esta solicitud termine.",
       "loading_spinner_aria": "Cargando"
     }
   },
@@ -734,5 +735,6 @@
     "more": "Más",
     "delete_folder_title": "¿Eliminar carpeta?",
     "delete_folder_message": "Los marcadores de esta carpeta se moverán al nivel superior."
-  }
+  },
+  "group_call_p2p_health_not_good": "Las llamadas de voz grupales necesitan una conexión P2P más estable. Espera un momento y revisa la información del Core si no mejora."
 }

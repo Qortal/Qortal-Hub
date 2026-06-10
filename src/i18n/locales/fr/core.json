@@ -417,6 +417,7 @@
       "rewards_info_subtitle_own": "(vos infos sur les récompenses)",
       "rewards_info_subtitle_selected": "(minter sélectionné — récompenses pour cette clé)",
       "network_details": "Détails du réseau",
+      "rewardshares_loading": "Vérification du statut du reward-share. Veuillez patienter jusqu'à la fin de cette requête.",
       "loading_spinner_aria": "Chargement"
     }
   },
@@ -734,5 +735,6 @@
     "more": "Plus",
     "delete_folder_title": "Supprimer le dossier ?",
     "delete_folder_message": "Les favoris de ce dossier seront déplacés au niveau supérieur."
-  }
+  },
+  "group_call_p2p_health_not_good": "Les appels vocaux de groupe nécessitent une connexion P2P plus stable. Attendez un moment, puis consultez les informations du Core si cela ne s'améliore pas."
 }

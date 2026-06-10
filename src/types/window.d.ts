@@ -115,6 +115,8 @@ declare global {
         onlineRemoteHubInterfaces?: number;
         hubSummary?: string;
         overlayLinksConnected?: number;
+        p2pOutboundOverlayPeers?: number;
+        p2pInboundOverlayPeers?: number;
         p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
       }>;
@@ -175,6 +177,8 @@ declare global {
           onlineRemoteHubInterfaces?: number;
           hubSummary?: string;
           overlayLinksConnected?: number;
+          p2pOutboundOverlayPeers?: number;
+          p2pInboundOverlayPeers?: number;
           p2pActiveOverlayPeers?: number;
           verifiedOverlayPeerCount?: number;
         }) => void

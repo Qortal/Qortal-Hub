@@ -10,7 +10,11 @@
 
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
-import { log as loggerLog, error as loggerError } from './logger';
+import {
+  log as loggerLog,
+  error as loggerError,
+  warn as loggerWarn,
+} from './logger';
 import { runEd25519VerifySync } from './ed25519-verify-common';
 import { VerifyWorkerPool } from './verify-worker-pool';
 
@@ -19,7 +23,7 @@ import { VerifyWorkerPool } from './verify-worker-pool';
 const ADDRESS_VERSION = 58;
 
 export const PRESENCE_HEARTBEAT_INTERVAL_MS = 25_000;
-export const PRESENCE_SESSION_TIMEOUT_MS = 70_000;
+export const PRESENCE_SESSION_TIMEOUT_MS = 95_000;
 const MAX_PRESENCE_AGE_MS = 60_000;
 /** Extra slack for honest clock skew vs GC_JOIN policy (same tradeoff). */
 const PRESENCE_SKEW_ALLOWANCE_MS = 60_000;
@@ -31,10 +35,12 @@ const PRESENCE_RECENT_ACCEPTED_ENVELOPE_TTL_MS =
   PRESENCE_SESSION_TIMEOUT_MS + PRESENCE_SKEW_ALLOWANCE_MS;
 const PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT = 4_096;
 const DEBUG_PRESENCE_HOT_PATH = process.env.QORTAL_DEBUG_PRESENCE === '1';
-export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
-/** Keep a verified overlay peer sticky across transient local link loss. */
-export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 30_000;
-const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 45_000;
+export const RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 12;
+export const RETICULUM_OVERLAY_MAX_NEIGHBORS =
+  RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS;
+/** Keep a verified overlay peer around briefly after link loss while retrying fanout. */
+export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 2 * 60_000;
+const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 90_000;
 const RETICULUM_CANDIDATE_FAILURE_LIMIT = 2;
 
 // ── Message Types ─────────────────────────────────────────────────────────────
@@ -143,7 +149,10 @@ export interface PresenceSession {
   address: string;
   publicKey: string;
   sessionId: string;
+  /** Sender-signed envelope timestamp, used for ordering and display. */
   lastSeen: number;
+  /** Local accept time, used for liveness so delayed valid heartbeats do not immediately expire. */
+  receivedAt: number;
   firstSeen: number;
   originNodeId: string;
   viaPeerId: string;
@@ -593,6 +602,16 @@ function isRouteFresh(session: PresenceSession, now: number): boolean {
   return session.routeExpiresAt === null || now <= session.routeExpiresAt;
 }
 
+function getSessionLivenessAt(session: PresenceSession): number {
+  return typeof session.receivedAt === 'number' && Number.isFinite(session.receivedAt)
+    ? session.receivedAt
+    : session.lastSeen;
+}
+
+function isSessionLive(session: PresenceSession, now: number): boolean {
+  return now - getSessionLivenessAt(session) <= PRESENCE_SESSION_TIMEOUT_MS;
+}
+
 function shouldPreferAggregateRoute(
   candidate: PresenceSession,
   current: PresenceSession | null,
@@ -644,11 +663,11 @@ export class PresenceManager extends EventEmitter {
   private presenceTooOldGlobalLogAt = 0;
   private reticulumCandidates = new Map<string, ReticulumCandidatePeer>();
   private verifiedReticulumPeers = new Map<string, VerifiedReticulumPeer>();
-  /** Verified overlay peers admitted into the 16-slot mesh. */
+  /** Verified overlay peers admitted into the outbound fanout set. */
   private activeReticulumNeighborHashes: string[] = [];
   /**
    * Reticulum publish/forward fanout: verified neighbors first, then candidate
-   * backfill up to {@link RETICULUM_OVERLAY_MAX_NEIGHBORS} for bootstrap.
+   * backfill up to {@link RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS} for bootstrap.
    */
   private activeReticulumPublishHashes: string[] = [];
 
@@ -893,6 +912,7 @@ export class PresenceManager extends EventEmitter {
         sessionId,
         firstSeen: existing?.firstSeen ?? now,
         lastSeen: envelope.timestamp,
+        receivedAt: now,
         originNodeId: legacyPeerIds.originNodeId,
         viaPeerId: legacyPeerIds.viaPeerId,
         route,
@@ -942,7 +962,7 @@ export class PresenceManager extends EventEmitter {
       for (const key of keys) {
         const session = this.sessions.get(key);
         if (!session) continue;
-        if (now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS) {
+        if (isSessionLive(session, now)) {
           active.push(session);
         }
       }
@@ -964,10 +984,7 @@ export class PresenceManager extends EventEmitter {
       if (this.getAddressAggregate(address, now).liveSessionCount === 0) continue;
       for (const key of keys) {
         const session = this.sessions.get(key);
-        if (
-          session &&
-          now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS
-        ) {
+        if (session && isSessionLive(session, now)) {
           result.push(session);
         }
       }
@@ -1056,7 +1073,7 @@ export class PresenceManager extends EventEmitter {
     const out: string[] = [];
     for (const session of this.sessions.values()) {
       if (session.route.kind !== 'reticulum') continue;
-      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
+      if (!isSessionLive(session, now)) continue;
       const h = session.route.destinationHash;
       if (typeof h !== 'string' || h.length === 0 || seen.has(h)) continue;
       if (this.isSelfReticulumHash(h)) continue;
@@ -1121,16 +1138,21 @@ export class PresenceManager extends EventEmitter {
     const wasVerified = Boolean(existingVerified);
     const wasActive = this.activeReticulumNeighborHashes.includes(hash);
     if (!wasVerified && !wasActive) return;
+    this.activeReticulumNeighborHashes = this.activeReticulumNeighborHashes.filter(
+      (activeHash) => activeHash !== hash
+    );
+    this.activeReticulumPublishHashes = this.activeReticulumPublishHashes.filter(
+      (activeHash) => activeHash !== hash
+    );
     if (existingVerified) {
       this.verifiedReticulumPeers.set(hash, {
         ...existingVerified,
-        lastSeen: Math.max(existingVerified.lastSeen, now),
+        lastSeen: existingVerified.lastSeen,
         linkClosedAt: now,
       });
-      this.noteReticulumCandidateDiscovered(hash, 'overlay-link-closed', now);
     }
     loggerLog(
-      `[Presence] Reticulum overlay peer closed sender_hash=${hash}${reason ? ` reason=${reason}` : ''}${wasVerified ? ' retained=yes' : ''}`
+      `[Presence] Reticulum overlay fanout peer removed sender_hash=${hash}${reason ? ` reason=${reason}` : ''}${wasVerified ? ' verified_retained=yes' : ''}`
     );
     const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
     if (wasVerified || wasActive || neighborsChanged) {
@@ -1243,17 +1265,18 @@ export class PresenceManager extends EventEmitter {
     let expiredSessions = 0;
 
     for (const [key, session] of this.sessions.entries()) {
-      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) {
+      const livenessAt = getSessionLivenessAt(session);
+      if (now - livenessAt > PRESENCE_SESSION_TIMEOUT_MS) {
         this.sessions.delete(key);
         this.removeSessionKey(session.address, key);
         changedAddresses.add(session.address);
         expiredSessions++;
         loggerLog(
-          `[Presence] Expired session address=${session.address} sessionId=${session.sessionId} lastSeen=${session.lastSeen} age_ms=${now - session.lastSeen} route=${describePresenceRoute(session.route)}`
+          `[Presence] Expired session address=${session.address} sessionId=${session.sessionId} lastSeen=${session.lastSeen} receivedAt=${livenessAt} age_ms=${now - livenessAt} route=${describePresenceRoute(session.route)}`
         );
         if (session.route.kind === 'reticulum') {
           loggerLog(
-            `[Presence] target=presence-reticulum session_expired peer_addr=${session.address} sender_hash=${session.route.destinationHash} lastSeen=${session.lastSeen} age_ms=${now - session.lastSeen}`
+            `[Presence] target=presence-reticulum session_expired peer_addr=${session.address} sender_hash=${session.route.destinationHash} lastSeen=${session.lastSeen} receivedAt=${livenessAt} age_ms=${now - livenessAt}`
           );
         }
       }
@@ -1400,8 +1423,8 @@ export class PresenceManager extends EventEmitter {
         if (lastSeen === null || session.lastSeen > lastSeen) {
           lastSeen = session.lastSeen;
         }
-        const expiryAt = session.lastSeen + PRESENCE_SESSION_TIMEOUT_MS;
-        if (now > expiryAt) continue;
+        const expiryAt = getSessionLivenessAt(session) + PRESENCE_SESSION_TIMEOUT_MS;
+        if (!isSessionLive(session, now)) continue;
 
         liveSessionCount++;
         if (nextExpiryAt === null || expiryAt < nextExpiryAt) {
@@ -1467,8 +1490,8 @@ export class PresenceManager extends EventEmitter {
   /**
    * Marks a Reticulum sender as a verified Qortal overlay peer after valid signed
    * presence. Latches once per destination hash: further envelopes on the same link do
-   * not re-run mesh recompute or bridge sync — the overlay identity stays sticky across
-   * brief link churn until {@link noteReticulumOverlayLinkClosed} ages out.
+   * not re-run mesh recompute or bridge sync. Link failures remove a peer from active
+   * fanout but keep this verified record available for later fresh traffic.
    */
   private promoteVerifiedReticulumPeer(
     destinationHash: string,
@@ -1482,6 +1505,7 @@ export class PresenceManager extends EventEmitter {
     this.reticulumCandidates.delete(hash);
     const existing = this.verifiedReticulumPeers.get(hash);
     if (existing) {
+      const wasClosed = existing.linkClosedAt !== null;
       this.verifiedReticulumPeers.set(hash, {
         destinationHash: hash,
         address: existing.address || address,
@@ -1489,6 +1513,10 @@ export class PresenceManager extends EventEmitter {
         verifiedAt: existing.verifiedAt,
         linkClosedAt: null,
       });
+      if (wasClosed) {
+        this.recomputeReticulumActiveNeighbors(now);
+        this.emitReticulumOverlayChanged();
+      }
       return;
     }
     this.verifiedReticulumPeers.set(hash, {
@@ -1536,13 +1564,21 @@ export class PresenceManager extends EventEmitter {
       (hash) =>
         !this.isSelfReticulumHash(hash) && this.verifiedReticulumPeers.has(hash)
     );
-    if (nextVerified.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
+    if (nextVerified.length < RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) {
       const seen = new Set(nextVerified.map((hash) => hash.toLowerCase()));
       const waitingVerified = [...this.verifiedReticulumPeers.values()]
-        .filter((peer) => !seen.has(peer.destinationHash.toLowerCase()))
-        .sort((a, b) => a.verifiedAt - b.verifiedAt || b.lastSeen - a.lastSeen);
+        .filter(
+          (peer) =>
+            !seen.has(peer.destinationHash.toLowerCase())
+        )
+        .sort((a, b) => {
+          return (
+            b.lastSeen - a.lastSeen ||
+            b.verifiedAt - a.verifiedAt
+          );
+        });
       for (const peer of waitingVerified) {
-        if (nextVerified.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        if (nextVerified.length >= RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) break;
         if (this.isSelfReticulumHash(peer.destinationHash)) continue;
         nextVerified.push(peer.destinationHash);
         seen.add(peer.destinationHash.toLowerCase());
@@ -1560,7 +1596,7 @@ export class PresenceManager extends EventEmitter {
 
     const seen = new Set(nextVerified.map((h) => h.toLowerCase()));
     const publish: string[] = [...nextVerified];
-    if (publish.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
+    if (publish.length < RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) {
       const cand = [...this.reticulumCandidates.values()]
         .filter(
           (c) =>
@@ -1570,7 +1606,7 @@ export class PresenceManager extends EventEmitter {
         )
         .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
       for (const c of cand) {
-        if (publish.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        if (publish.length >= RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) break;
         publish.push(c.destinationHash);
         seen.add(c.destinationHash.toLowerCase());
       }
@@ -1641,7 +1677,13 @@ let presenceManager: PresenceManager | null = null;
 let presenceTransportUnsubscribers: Array<() => void> = [];
 
 function clearPresenceTransportSubscriptions(): void {
-  for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
+  for (const unsubscribe of presenceTransportUnsubscribers) {
+    try {
+      unsubscribe();
+    } catch (err) {
+      loggerWarn('[Presence] Failed to clear transport subscription:', err);
+    }
+  }
   presenceTransportUnsubscribers = [];
   activePresenceTransports = [];
 }

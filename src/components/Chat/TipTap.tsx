@@ -545,10 +545,13 @@ const Tiptap = ({
     ? extensions.filter((item) => item?.name !== 'image')
     : extensions;
   const editorRef = useRef(null);
-  const setEditorRefFunc = useCallback((editorInstance) => {
-    editorRef.current = editorInstance;
-    setEditorRef(editorInstance);
-  }, []);
+  const setEditorRefFunc = useCallback(
+    (editorInstance) => {
+      editorRef.current = editorInstance;
+      setEditorRef?.(editorInstance);
+    },
+    [setEditorRef]
+  );
 
   const users = useMemo(() => {
     return (membersWithNames || [])?.map((item) => {
@@ -565,7 +568,7 @@ const Tiptap = ({
   }, [users]);
 
   const handleBlur = () => {
-    const htmlContent = editorRef.current.getHTML();
+    const htmlContent = editorRef.current?.getHTML();
     if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') {
       // Set focus state based on content
     }
@@ -612,6 +615,10 @@ const Tiptap = ({
               },
 
               onUpdate(props) {
+                if (!component || !popup?.[0]) {
+                  return;
+                }
+
                 component.updateProps(props);
 
                 if (!props.clientRect) {
@@ -625,17 +632,17 @@ const Tiptap = ({
 
               onKeyDown(props) {
                 if (props.event.key === 'Escape') {
-                  popup[0].hide();
+                  popup?.[0]?.hide();
 
                   return true;
                 }
 
-                return component.ref?.onKeyDown(props);
+                return component?.ref?.onKeyDown(props);
               },
 
               onExit() {
-                popup[0].destroy();
-                component.destroy();
+                popup?.[0]?.destroy();
+                component?.destroy();
               },
             };
           },

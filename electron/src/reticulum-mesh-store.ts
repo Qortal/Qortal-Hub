@@ -6,10 +6,7 @@ import * as crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
-import {
-  DEFAULT_RETICULUM_MESH_LISTEN_PORT,
-  MAX_MESH_OUTBOUND_PEERS,
-} from './reticulum-mesh-constants';
+import { DEFAULT_RETICULUM_MESH_LISTEN_PORT } from './reticulum-mesh-constants';
 
 export const RETICULUM_MESH_STATE_VERSION = 2 as const;
 
@@ -195,7 +192,7 @@ export type ReticulumMeshConfigSlice = {
   listenPort: number;
   /** Always empty — mesh TCP clients come only from bootstrap hubs in managed config, not gossip. */
   outbound: Array<{ sectionName: string; host: string; port: number }>;
-  /** AutoInterface: discover community interfaces (LXMF shipped with Hub Reticulum runtime). Independent of mesh listen. */
+  /** Retained for state shape compatibility; managed configs enable remote discovery, but never emit AutoInterface LAN discovery. */
   meshDiscoveryClient: boolean;
   autoconnectDiscoveredMax: number;
   /** Encrypted private gateway when both bundled mesh identity and passphrase exist. Discovery/publishing still requires `reachableOn`. */
@@ -245,7 +242,7 @@ export function meshConfigSliceFromState(
       port: p.port,
     })),
     meshDiscoveryClient: true,
-    autoconnectDiscoveredMax: MAX_MESH_OUTBOUND_PEERS,
+    autoconnectDiscoveredMax: 8,
     meshPrivateGateway,
     networkIdentityPath: identityPath,
     networkPassphrase,
