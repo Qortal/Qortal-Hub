@@ -3594,6 +3594,7 @@ def _overlay_failure_should_suppress(reason: str) -> bool:
             "timeout",
             "no_link",
             "no_established_link",
+            "destination_closed",
             "rx_idle_timeout",
         )
     )
