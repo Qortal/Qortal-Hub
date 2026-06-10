@@ -46,6 +46,7 @@ import {
 import { startChatManager, flushChatStore } from './chat';
 import { readAppSettings } from './setup';
 import {
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   planReticulumAppQuit,
   recoverReticulumStateForAppLaunch,
   registerReticulumAppInstance,
@@ -244,24 +245,30 @@ async function recoverReticulumAfterWake(source: string): Promise<void> {
           error
         );
 
-        try {
-          await restartBundledReticulumDaemonAndWaitReady(
-            RETICULUM_WAKE_RECOVERY_SHARED_READY_WAIT_MS,
-            {
-              forceKillOnStopTimeout: true,
-            }
+        if (isReticulumSharedDaemonOwnedByAnotherLiveInstance()) {
+          loggerLog(
+            '[Reticulum] Wake recovery skipped shared daemon restart because another app instance is active; retrying bridge attach only'
           );
-        } catch (restartError) {
-          if (isReticulumSharedInstanceProbeTimeout(restartError)) {
-            loggerLog(
-              '[Reticulum] Wake recovery shared TCP probe timed out; continuing with bridge attach readiness'
+        } else {
+          try {
+            await restartBundledReticulumDaemonAndWaitReady(
+              RETICULUM_WAKE_RECOVERY_SHARED_READY_WAIT_MS,
+              {
+                forceKillOnStopTimeout: true,
+              }
             );
-          } else if (!isReticulumDaemonRestartLockError(restartError)) {
-            throw restartError;
-          } else {
-            loggerLog(
-              '[Reticulum] Wake recovery restart lock held by another instance; waiting through bridge attach readiness'
-            );
+          } catch (restartError) {
+            if (isReticulumSharedInstanceProbeTimeout(restartError)) {
+              loggerLog(
+                '[Reticulum] Wake recovery shared TCP probe timed out; continuing with bridge attach readiness'
+              );
+            } else if (!isReticulumDaemonRestartLockError(restartError)) {
+              throw restartError;
+            } else {
+              loggerLog(
+                '[Reticulum] Wake recovery restart lock held by another instance; waiting through bridge attach readiness'
+              );
+            }
           }
         }
 

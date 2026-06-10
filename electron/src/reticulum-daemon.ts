@@ -1125,16 +1125,20 @@ function readReticulumSharedDaemonState(): ReticulumSharedDaemonState | null {
 }
 
 export function isReticulumSharedDaemonOwnedByAnotherLiveInstance(): boolean {
-  const state = readReticulumSharedDaemonState();
-  if (!state || !isPidAlive(state.pid)) {
-    return false;
-  }
-  if (state.ownerAppPid === process.pid) {
-    return false;
-  }
-  return getReticulumActiveAppInstances().some(
-    (entry) => entry.appPid === state.ownerAppPid
+  const anotherLiveAppInstance = getReticulumActiveAppInstances().some(
+    (entry) => entry.appPid !== process.pid
   );
+  const state = readReticulumSharedDaemonState();
+  if (!state) {
+    return anotherLiveAppInstance;
+  }
+  if (!isPidAlive(state.pid)) {
+    return anotherLiveAppInstance;
+  }
+  if (state.ownerAppPid !== process.pid && isPidAlive(state.ownerAppPid)) {
+    return true;
+  }
+  return anotherLiveAppInstance;
 }
 
 function clearReticulumSharedDaemonState(expectedPid?: number): void {
