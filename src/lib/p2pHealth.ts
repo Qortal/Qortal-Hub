@@ -19,14 +19,10 @@ export function computeP2pHealth(metrics: {
     p2pOutboundOverlayPeers !== undefined || p2pInboundOverlayPeers !== undefined
       ? outboundPeers + inboundPeers
       : p2pActiveOverlayPeers;
-  if (
-    onlineRemoteHubInterfaces === 0 ||
-    sendablePeers === 0 ||
-    inboundPeers === 0
-  ) {
+  if (onlineRemoteHubInterfaces === 0 || sendablePeers === 0) {
     return 'bad';
   }
-  if (onlineRemoteHubInterfaces >= 2 && sendablePeers >= 2 && inboundPeers >= 1) {
+  if (onlineRemoteHubInterfaces >= 2 && sendablePeers >= 2) {
     return 'good';
   }
   return 'low';
