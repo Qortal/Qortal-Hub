@@ -28,11 +28,14 @@ import { startReticulumForAppLaunch } from './reticulum-launch';
 describe('startReticulumForAppLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(restartBundledReticulumDaemonAndWaitReady).mockResolvedValue(
+      undefined
+    );
     vi.mocked(waitForReticulumSharedInstanceReady).mockResolvedValue(undefined);
     vi.mocked(startReticulumBridge).mockResolvedValue({} as never);
   });
 
-  it('starts the daemon and waits for shared-port readiness before bridge startup', async () => {
+  it('starts the daemon and waits for shared-port readiness before starting the bridge', async () => {
     vi.mocked(getReticulumDaemonStatus).mockReturnValue({
       running: true,
       pid: 123,
@@ -45,12 +48,14 @@ describe('startReticulumForAppLaunch', () => {
 
     expect(startBundledReticulumDaemon).toHaveBeenCalledTimes(1);
     expect(waitForReticulumSharedInstanceReady).toHaveBeenCalledWith(1_234);
-    expect(startReticulumBridge).not.toHaveBeenCalled();
+    expect(startReticulumBridge).toHaveBeenCalledTimes(1);
     expect(restartBundledReticulumDaemonAndWaitReady).not.toHaveBeenCalled();
   });
 
-  it('uses bridge readiness instead of restarting when the raw shared-port probe times out', async () => {
-    const timeoutError = new Error('Timed out waiting for Reticulum shared instance');
+  it('restarts rnsd before bridge startup when the shared-port probe times out', async () => {
+    const timeoutError = new Error(
+      'Timed out waiting for Reticulum shared instance'
+    );
     vi.mocked(getReticulumDaemonStatus).mockReturnValue({
       running: true,
       pid: 456,
@@ -58,20 +63,29 @@ describe('startReticulumForAppLaunch', () => {
       configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
-    vi.mocked(waitForReticulumSharedInstanceReady).mockRejectedValueOnce(timeoutError);
-    vi.mocked(startReticulumBridge).mockResolvedValueOnce({} as never);
+    vi.mocked(waitForReticulumSharedInstanceReady)
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValueOnce(undefined);
 
     await startReticulumForAppLaunch(2_345);
 
     expect(waitForReticulumSharedInstanceReady).toHaveBeenCalledWith(2_345);
     expect(startReticulumBridge).toHaveBeenCalledTimes(1);
-    expect(loggerError).not.toHaveBeenCalled();
-    expect(restartBundledReticulumDaemonAndWaitReady).not.toHaveBeenCalled();
+    expect(loggerError).toHaveBeenCalledWith(
+      '[Reticulum] Shared instance readiness failed during launch; restarting rnsd:',
+      timeoutError
+    );
+    expect(restartBundledReticulumDaemonAndWaitReady).toHaveBeenCalledWith(
+      2_345,
+      { forceKillOnStopTimeout: true }
+    );
   });
 
-  it('does not restart the shared daemon when both readiness checks fail', async () => {
-    const timeoutError = new Error('Timed out waiting for Reticulum shared instance');
-    const bridgeError = new Error('Bridge failed');
+  it('surfaces launch readiness failure when restart cannot restore the shared port', async () => {
+    const timeoutError = new Error(
+      'Timed out waiting for Reticulum shared instance'
+    );
+    const restartError = new Error('Still not ready');
     vi.mocked(getReticulumDaemonStatus).mockReturnValue({
       running: true,
       pid: 456,
@@ -79,17 +93,26 @@ describe('startReticulumForAppLaunch', () => {
       configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
-    vi.mocked(waitForReticulumSharedInstanceReady).mockRejectedValueOnce(timeoutError);
-    vi.mocked(startReticulumBridge).mockRejectedValueOnce(bridgeError);
+    vi.mocked(waitForReticulumSharedInstanceReady)
+      .mockRejectedValueOnce(timeoutError)
+      .mockRejectedValueOnce(restartError);
 
     await startReticulumForAppLaunch(2_345);
 
     expect(loggerError).toHaveBeenCalledWith(
-      '[Reticulum] Launch readiness wait failed; continuing with bridge startup:',
+      '[Reticulum] Shared instance readiness failed during launch; restarting rnsd:',
       timeoutError
     );
-    expect(startReticulumBridge).toHaveBeenCalledTimes(1);
-    expect(restartBundledReticulumDaemonAndWaitReady).not.toHaveBeenCalled();
+    expect(loggerError).toHaveBeenCalledWith(
+      '[Reticulum] Shared instance readiness failed after launch restart:',
+      restartError
+    );
+    expect(loggerError).toHaveBeenCalledWith(
+      '[Reticulum] Launch readiness wait failed; continuing with bridge startup:',
+      restartError
+    );
+    expect(startReticulumBridge).not.toHaveBeenCalled();
+    expect(restartBundledReticulumDaemonAndWaitReady).toHaveBeenCalledTimes(1);
   });
 
   it('skips the wait when no shared daemon is running', async () => {

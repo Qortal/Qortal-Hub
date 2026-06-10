@@ -1,6 +1,7 @@
 import { error as loggerError } from './logger';
 import {
   getReticulumDaemonStatus,
+  restartBundledReticulumDaemonAndWaitReady,
   startBundledReticulumDaemon,
   waitForReticulumSharedInstanceReady,
 } from './reticulum-daemon';
@@ -9,15 +10,25 @@ import { startReticulumBridge } from './reticulum-bridge';
 async function waitForAnyReticulumReadiness(timeoutMs?: number): Promise<void> {
   try {
     await waitForReticulumSharedInstanceReady(timeoutMs);
-    return;
   } catch (sharedError) {
+    loggerError(
+      '[Reticulum] Shared instance readiness failed during launch; restarting rnsd:',
+      sharedError
+    );
+    await restartBundledReticulumDaemonAndWaitReady(timeoutMs, {
+      forceKillOnStopTimeout: true,
+    });
     try {
-      await startReticulumBridge();
-      return;
-    } catch {
-      throw sharedError;
+      await waitForReticulumSharedInstanceReady(timeoutMs);
+    } catch (restartError) {
+      loggerError(
+        '[Reticulum] Shared instance readiness failed after launch restart:',
+        restartError
+      );
+      throw restartError;
     }
   }
+  await startReticulumBridge();
 }
 
 export async function startReticulumForAppLaunch(

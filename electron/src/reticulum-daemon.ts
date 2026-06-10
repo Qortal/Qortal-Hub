@@ -13,11 +13,7 @@
  * @see https://reticulum.network/manual/using.html
  */
 
-import {
-  spawn,
-  spawnSync,
-  type ChildProcessWithoutNullStreams,
-} from 'child_process';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import crypto from 'crypto';
 import {
   app,
@@ -195,7 +191,7 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
     },
   ]);
 
-let child: ChildProcessWithoutNullStreams | null = null;
+let child: ChildProcess | null = null;
 let lastStartMode: ReticulumDaemonMode = null;
 let reticulumInstanceIndex = 0;
 let qchatFileAttachedBridge: unknown = null;
@@ -636,7 +632,9 @@ function readWindowsBridgeProcesses(): ReticulumBridgeProcessInfo[] {
     .filter((record): record is ReticulumBridgeProcessInfo => record !== null);
 }
 
-function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
+function cleanupOrphanedReticulumBridgeProcessesForConfig(
+  activeAppPids = new Set<number>()
+): number {
   const configDir = getReticulumConfigDir();
   if (process.platform !== 'linux') {
     if (process.platform === 'win32') {
@@ -645,7 +643,7 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
         const { pid, parentPid, command } = processInfo;
         if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
         if (!commandUsesReticulumConfig(command, configDir)) continue;
-        if (parentPid && parentPid > 0 && isPidAlive(parentPid)) continue;
+        if (parentPid && activeAppPids.has(parentPid)) continue;
         if (
           signalReticulumPid(pid, undefined, 'startup-recovery-orphan-bridge')
         ) {
@@ -674,9 +672,9 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
       const parentPid = Number(match[2]);
       const command = match[3] ?? '';
       if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
-      if (parentPid !== 1) continue;
       if (!command.includes('presence_bridge')) continue;
       if (!commandUsesReticulumConfig(command, configDir)) continue;
+      if (activeAppPids.has(parentPid)) continue;
       if (
         signalReticulumPid(pid, 'SIGTERM', 'startup-recovery-orphan-bridge')
       ) {
@@ -713,7 +711,7 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(): number {
     if (!usesSharedConfig) continue;
 
     const parentPid = readProcParentPid(pid);
-    if (parentPid && parentPid > 1 && isPidAlive(parentPid)) continue;
+    if (parentPid && activeAppPids.has(parentPid)) continue;
 
     if (signalReticulumPid(pid, 'SIGTERM', 'startup-recovery-orphan-bridge')) {
       stopped += 1;
@@ -1151,10 +1149,14 @@ function signalReticulumPid(
 ): boolean {
   try {
     if (process.platform === 'win32') {
-      const result = spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
-        encoding: 'utf8',
-        windowsHide: true,
-      });
+      const result = spawnSync(
+        'taskkill.exe',
+        ['/PID', String(pid), '/T', '/F'],
+        {
+          encoding: 'utf8',
+          windowsHide: true,
+        }
+      );
       if (result.error) {
         throw result.error;
       }
@@ -1206,8 +1208,10 @@ export function recoverReticulumStateForAppLaunch(
 function recoverReticulumStateForAppLaunchLocked(
   instanceIndex = reticulumInstanceIndex
 ): ReticulumAppLaunchRecovery {
-  cleanupOrphanedReticulumBridgeProcessesForConfig();
   const activeInstances = getReticulumActiveAppInstances();
+  cleanupOrphanedReticulumBridgeProcessesForConfig(
+    new Set(activeInstances.map((entry) => entry.appPid))
+  );
   const state = readReticulumSharedDaemonState();
   let orphanedDaemonFound = false;
   let orphanedDaemonStopped = false;
@@ -1761,14 +1765,6 @@ function appendReticulumFileLog(line: string): void {
   } catch {
     // ignore
   }
-}
-
-function emitReticulumLog(source: 'stdout' | 'stderr', chunk: Buffer): void {
-  const text = chunk.toString().replace(/\r?\n$/, '');
-  if (!text) return;
-  const prefixed = `[Reticulum/${source}] ${text}`;
-  loggerLog(prefixed);
-  appendReticulumFileLog(prefixed);
 }
 
 /** Directory containing the frozen PyInstaller rnsd binary. */
@@ -2446,7 +2442,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 function waitForChildExit(
-  subprocess: ChildProcessWithoutNullStreams,
+  subprocess: ChildProcess,
   timeoutMs: number
 ): Promise<void> {
   if (subprocess.exitCode !== null) {
@@ -2726,18 +2722,18 @@ function startBundledReticulumDaemonLocked(): void {
     const subprocess = spawn(plan.cmd, plan.args, {
       cwd: plan.cwd,
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+      stdio: 'ignore',
       windowsHide: true,
     });
     child = subprocess;
+    subprocess.unref();
     lastStartMode = plan.mode;
     if (typeof subprocess.pid === 'number') {
       persistReticulumSharedDaemonState(subprocess.pid);
       tryRaiseReticulumProcessPriority(subprocess.pid);
     }
 
-    subprocess.stdout.on('data', (d) => emitReticulumLog('stdout', d));
-    subprocess.stderr.on('data', (d) => emitReticulumLog('stderr', d));
     subprocess.on('error', (err) => {
       loggerError('[Reticulum] Process error:', err);
       appendReticulumFileLog(`Process error: ${String(err)}`);

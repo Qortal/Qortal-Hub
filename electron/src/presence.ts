@@ -36,7 +36,7 @@ const PRESENCE_RECENT_ACCEPTED_ENVELOPE_TTL_MS =
 const PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT = 4_096;
 const DEBUG_PRESENCE_HOT_PATH = process.env.QORTAL_DEBUG_PRESENCE === '1';
 export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
-/** Keep a verified overlay peer around briefly after link loss without keeping it in fanout. */
+/** Keep a verified overlay peer around briefly after link loss while retrying fanout. */
 export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 2 * 60_000;
 const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 90_000;
 const RETICULUM_CANDIDATE_FAILURE_LIMIT = 2;
@@ -1567,7 +1567,6 @@ export class PresenceManager extends EventEmitter {
       const waitingVerified = [...this.verifiedReticulumPeers.values()]
         .filter(
           (peer) =>
-            peer.linkClosedAt === null &&
             !seen.has(peer.destinationHash.toLowerCase())
         )
         .sort((a, b) => {

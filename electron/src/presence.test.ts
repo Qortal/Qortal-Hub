@@ -308,7 +308,7 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     );
   });
 
-  it('replaces a recently closed verified fanout slot without deleting the verified peer', () => {
+  it('keeps a recently closed verified fanout peer active for retry', () => {
     const manager = new PresenceManager();
     const hashes = promoteVerifiedPeers(manager, RETICULUM_OVERLAY_MAX_NEIGHBORS + 1);
 
@@ -319,10 +319,9 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
       hashes
     );
-    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual([
-      ...hashes.slice(1, RETICULUM_OVERLAY_MAX_NEIGHBORS),
-      hashes[RETICULUM_OVERLAY_MAX_NEIGHBORS],
-    ]);
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(
+      hashes.slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
+    );
 
     vi.useRealTimers();
   });
@@ -361,10 +360,9 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
       hashes
     );
-    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual([
-      ...hashes.slice(1, RETICULUM_OVERLAY_MAX_NEIGHBORS),
-      hashes[RETICULUM_OVERLAY_MAX_NEIGHBORS],
-    ]);
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(
+      hashes.slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
+    );
 
     vi.useRealTimers();
   });

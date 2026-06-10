@@ -18,7 +18,7 @@ import time
 import traceback
 import urllib.parse
 import uuid
-from typing import IO, Any, Callable, Dict, Optional, Set, Tuple
+from typing import IO, Any, Callable, Dict, List, Optional, Set, Tuple
 
 import RNS
 
@@ -5140,6 +5140,73 @@ def _register_active_overlay_for_peer(peer_key: str, link_id: str) -> Optional[D
     return keep_state
 
 
+def _dedup_overlay_links_for_peer(
+    peer_key: str,
+    preferred_link_id: str = "",
+    reason: str = "dedup_same_peer",
+) -> Optional[Dict[str, Any]]:
+    """Collapse all live overlay links for a peer down to one canonical link."""
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key or not _valid_presence_destination_hash_hex(peer_key):
+        return None
+    preferred_link_id = str(preferred_link_id or "")
+    lose_ids: List[str] = []
+    keep_id = ""
+    keep_state: Optional[Dict[str, Any]] = None
+    with _state_lock:
+        candidates = [
+            (link_id, state)
+            for link_id, state in _overlay_links_by_id.items()
+            if state.get("established") is True
+            and str(state.get("peerPresenceHash") or "").strip().lower() == peer_key
+        ]
+        if not candidates:
+            if _active_overlay_link_id_by_peer_hash.get(peer_key):
+                _active_overlay_link_id_by_peer_hash.pop(peer_key, None)
+            return None
+        if len(candidates) == 1:
+            keep_id, keep_state = candidates[0]
+            _active_overlay_link_id_by_peer_hash[peer_key] = keep_id
+            return keep_state
+
+        preferred = next(
+            ((link_id, state) for link_id, state in candidates if link_id == preferred_link_id),
+            None,
+        )
+        active_link_id = _active_overlay_link_id_by_peer_hash.get(peer_key) or ""
+        active = next(
+            ((link_id, state) for link_id, state in candidates if link_id == active_link_id),
+            None,
+        )
+        keep_id, keep_state = preferred or active or candidates[0]
+        for candidate_id, candidate_state in candidates:
+            if candidate_id == keep_id:
+                continue
+            next_keep_id, next_lose_id = _dedup_pick_keep_link(
+                peer_key,
+                keep_id,
+                keep_state,
+                candidate_id,
+                candidate_state,
+            )
+            if next_keep_id == candidate_id:
+                lose_ids.append(keep_id)
+                keep_id = candidate_id
+                keep_state = candidate_state
+            else:
+                lose_ids.append(next_lose_id)
+        _active_overlay_link_id_by_peer_hash[peer_key] = keep_id
+        keep_state = _overlay_links_by_id.get(keep_id)
+
+    for lose_id in dict.fromkeys(lose_ids):
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_link_duplicate_teardown "
+            f"peer={peer_key} keep={keep_id} teardown={lose_id}"
+        )
+        _teardown_overlay_link_id(lose_id, reason)
+    return keep_state
+
+
 def _flush_overlay_link_pending(link_id: str) -> None:
     state = get_overlay_link_state(link_id)
     if state is None or state.get("established") is not True:
@@ -5425,6 +5492,8 @@ def _sync_overlay_links() -> None:
             _active_overlay_link_id_by_peer_hash.pop(peer_hash, None)
             continue
         _teardown_overlay_link_id(link_id, "pruned")
+    for peer_hash in list(desired):
+        _dedup_overlay_links_for_peer(peer_hash, reason="dedup_same_peer")
     for link_id, state in list(_overlay_links_by_id.items()):
         peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
         if not peer_hash:
@@ -5737,6 +5806,7 @@ def on_overlay_link_remote_identified(link, identity) -> None:
     if ph_reg and _valid_presence_destination_hash_hex(ph_reg):
         _note_overlay_peer_alive(ph_reg, "remote_identified")
         _register_active_overlay_for_peer(ph_reg, link_id)
+        _dedup_overlay_links_for_peer(ph_reg, preferred_link_id=link_id)
 
 
 def on_overlay_link_packet(message, packet) -> None:
@@ -5761,10 +5831,17 @@ def on_overlay_link_packet(message, packet) -> None:
         if _emit_presence_message(decoded, link_id):
             peer_hash = str(decoded.get("r") or "").strip().lower()
             if peer_hash:
+                previous_peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
                 state["peerPresenceHash"] = peer_hash
                 _note_overlay_peer_alive(peer_hash, "rx_presence")
                 _register_active_overlay_for_peer(peer_hash, link_id)
-                emit_overlay_link_state(link_id, state, "rx_presence")
+                emit_reason = (
+                    "rx_presence_identified"
+                    if not previous_peer_hash and previous_peer_hash != peer_hash
+                    else "rx_presence"
+                )
+                emit_overlay_link_state(link_id, state, emit_reason)
+                _dedup_overlay_links_for_peer(peer_hash, preferred_link_id=link_id)
         return
     _emit_call_bridge_message(
         decoded,
