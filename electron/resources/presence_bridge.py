@@ -67,7 +67,7 @@ _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
 # Extra RNS announce while verified overlay peer count is below this (same cooldown as legacy "no peers" path).
 _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
-_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 8
+_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 12
 _OVERLAY_MAX_INBOUND_NEIGHBORS = 8
 _OVERLAY_BOOTSTRAP_MAX_OUTBOUND_NEIGHBORS = _OVERLAY_MAX_OUTBOUND_NEIGHBORS
 _OVERLAY_MIN_HEALTHY_FANOUT = 8
@@ -3594,6 +3594,7 @@ def _overlay_failure_should_suppress(reason: str) -> bool:
             "timeout",
             "no_link",
             "no_established_link",
+            "destination_closed",
             "rx_idle_timeout",
         )
     )
