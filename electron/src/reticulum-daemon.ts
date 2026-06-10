@@ -84,6 +84,8 @@ const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
 const RETICULUM_DAEMON_FORCE_STOP_TIMEOUT_MS = 3_000;
+const RETICULUM_ORPHAN_BRIDGE_STOP_TIMEOUT_MS = 1_000;
+const RETICULUM_ORPHAN_BRIDGE_FORCE_STOP_TIMEOUT_MS = 1_000;
 const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
 const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
 const RETICULUM_DAEMON_LOCK_STALE_MS = 120_000;
@@ -573,6 +575,74 @@ function commandUsesReticulumConfig(
   );
 }
 
+function waitForPidExitSync(pid: number, timeoutMs: number): boolean {
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  while (Date.now() <= deadline) {
+    if (!isPidAlive(pid)) {
+      return true;
+    }
+    sleepSync(Math.min(RETICULUM_DAEMON_LOCK_POLL_MS, deadline - Date.now()));
+  }
+  return !isPidAlive(pid);
+}
+
+function stopOrphanedReticulumBridgeProcess(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) {
+    return false;
+  }
+  if (!isPidAlive(pid)) {
+    return true;
+  }
+
+  const stopSignal = process.platform === 'win32' ? undefined : 'SIGTERM';
+  if (
+    signalReticulumPid(pid, stopSignal, 'startup-recovery-orphan-bridge') &&
+    waitForPidExitSync(pid, RETICULUM_ORPHAN_BRIDGE_STOP_TIMEOUT_MS)
+  ) {
+    return true;
+  }
+  if (!isPidAlive(pid)) {
+    return true;
+  }
+
+  loggerLog(
+    `[Reticulum] Orphaned presence bridge pid=${pid} survived graceful stop; forcing stop`
+  );
+  const forceSignal = process.platform === 'win32' ? undefined : 'SIGKILL';
+  if (
+    signalReticulumPid(
+      pid,
+      forceSignal,
+      'startup-recovery-orphan-bridge-force'
+    ) &&
+    waitForPidExitSync(pid, RETICULUM_ORPHAN_BRIDGE_FORCE_STOP_TIMEOUT_MS)
+  ) {
+    return true;
+  }
+
+  loggerError(
+    `[Reticulum] Orphaned presence bridge pid=${pid} did not exit after force stop`
+  );
+  return false;
+}
+
+function processHasActiveAncestor(
+  pid: number,
+  parentPidByPid: Map<number, number | null>,
+  activeAppPids: Set<number>
+): boolean {
+  let current = parentPidByPid.get(pid) ?? null;
+  const seen = new Set<number>([pid]);
+  while (current && current > 1 && !seen.has(current)) {
+    if (activeAppPids.has(current)) {
+      return true;
+    }
+    seen.add(current);
+    current = parentPidByPid.get(current) ?? null;
+  }
+  return false;
+}
+
 function normalizeWindowsBridgeProcessInfo(
   raw: unknown
 ): ReticulumBridgeProcessInfo | null {
@@ -639,14 +709,21 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(
   if (process.platform !== 'linux') {
     if (process.platform === 'win32') {
       let stopped = 0;
-      for (const processInfo of readWindowsBridgeProcesses()) {
+      const processInfos = readWindowsBridgeProcesses();
+      const parentPidByPid = new Map(
+        processInfos.map((info) => [info.pid, info.parentPid])
+      );
+      for (const processInfo of processInfos) {
         const { pid, parentPid, command } = processInfo;
         if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
         if (!commandUsesReticulumConfig(command, configDir)) continue;
-        if (parentPid && activeAppPids.has(parentPid)) continue;
         if (
-          signalReticulumPid(pid, undefined, 'startup-recovery-orphan-bridge')
+          (parentPid && activeAppPids.has(parentPid)) ||
+          processHasActiveAncestor(pid, parentPidByPid, activeAppPids)
         ) {
+          continue;
+        }
+        if (stopOrphanedReticulumBridgeProcess(pid)) {
           stopped += 1;
         }
       }
@@ -665,6 +742,15 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(
 
     let stopped = 0;
     const lines = result.stdout.split(/\r?\n/);
+    const parentPidByPid = new Map<number, number | null>();
+    for (const line of lines) {
+      const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/);
+      if (!match) continue;
+      const pid = Number(match[1]);
+      const parentPid = Number(match[2]);
+      if (!Number.isInteger(pid) || pid <= 0) continue;
+      parentPidByPid.set(pid, Number.isInteger(parentPid) ? parentPid : null);
+    }
     for (const line of lines) {
       const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/);
       if (!match) continue;
@@ -674,10 +760,13 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(
       if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) continue;
       if (!command.includes('presence_bridge')) continue;
       if (!commandUsesReticulumConfig(command, configDir)) continue;
-      if (activeAppPids.has(parentPid)) continue;
       if (
-        signalReticulumPid(pid, 'SIGTERM', 'startup-recovery-orphan-bridge')
+        activeAppPids.has(parentPid) ||
+        processHasActiveAncestor(pid, parentPidByPid, activeAppPids)
       ) {
+        continue;
+      }
+      if (stopOrphanedReticulumBridgeProcess(pid)) {
         stopped += 1;
       }
     }
@@ -693,6 +782,14 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(
     entries = fs.readdirSync('/proc');
   } catch {
     return 0;
+  }
+
+  const parentPidByPid = new Map<number, number | null>();
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
+    if (!Number.isInteger(pid) || pid <= 0) continue;
+    parentPidByPid.set(pid, readProcParentPid(pid));
   }
 
   let stopped = 0;
@@ -711,9 +808,14 @@ function cleanupOrphanedReticulumBridgeProcessesForConfig(
     if (!usesSharedConfig) continue;
 
     const parentPid = readProcParentPid(pid);
-    if (parentPid && activeAppPids.has(parentPid)) continue;
+    if (
+      (parentPid && activeAppPids.has(parentPid)) ||
+      processHasActiveAncestor(pid, parentPidByPid, activeAppPids)
+    ) {
+      continue;
+    }
 
-    if (signalReticulumPid(pid, 'SIGTERM', 'startup-recovery-orphan-bridge')) {
+    if (stopOrphanedReticulumBridgeProcess(pid)) {
       stopped += 1;
     }
   }
