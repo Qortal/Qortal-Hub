@@ -735,5 +735,6 @@
     "more": "更多",
     "delete_folder_title": "删除文件夹？",
     "delete_folder_message": "此文件夹中的书签将移至顶层。"
-  }
+  },
+  "group_call_p2p_health_not_good": "群组语音通话需要更稳定的 P2P 连接。请稍等片刻，如果没有改善，请查看核心信息。"
 }

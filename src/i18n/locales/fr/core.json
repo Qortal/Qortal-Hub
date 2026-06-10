@@ -735,5 +735,6 @@
     "more": "Plus",
     "delete_folder_title": "Supprimer le dossier ?",
     "delete_folder_message": "Les favoris de ce dossier seront déplacés au niveau supérieur."
-  }
+  },
+  "group_call_p2p_health_not_good": "Les appels vocaux de groupe nécessitent une connexion P2P plus stable. Attendez un moment, puis consultez les informations du Core si cela ne s'améliore pas."
 }

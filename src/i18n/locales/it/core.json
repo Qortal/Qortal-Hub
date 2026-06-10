@@ -735,5 +735,6 @@
     "more": "Altro",
     "delete_folder_title": "Eliminare la cartella?",
     "delete_folder_message": "I segnalibri in questa cartella verranno spostati al livello principale."
-  }
+  },
+  "group_call_p2p_health_not_good": "Le chiamate vocali di gruppo richiedono una connessione P2P più stabile. Attendi un momento, poi controlla le informazioni del Core se non migliora."
 }

@@ -737,5 +737,6 @@
     "more": "Veel",
     "delete_folder_title": "Kustuta kaust?",
     "delete_folder_message": "Selles kaustas olevad järjehoidjad teisaldatakse ülemisele tasemele."
-  }
+  },
+  "group_call_p2p_health_not_good": "Grupi häälkõned vajavad stabiilsemat P2P-ühendust. Oota hetk ja kui olukord ei parane, vaata Core'i teavet."
 }

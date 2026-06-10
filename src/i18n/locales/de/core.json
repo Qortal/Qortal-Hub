@@ -734,5 +734,6 @@
     "more": "Mehr",
     "delete_folder_title": "Ordner löschen?",
     "delete_folder_message": "Lesezeichen in diesem Ordner werden auf die oberste Ebene verschoben."
-  }
+  },
+  "group_call_p2p_health_not_good": "Gruppen-Sprachanrufe benötigen eine stabilere P2P-Verbindung. Warte einen Moment und prüfe dann die Core-Informationen, falls es nicht besser wird."
 }

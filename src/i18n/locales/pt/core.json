@@ -737,5 +737,6 @@
     "more": "Mais",
     "delete_folder_title": "Eliminar pasta?",
     "delete_folder_message": "Os marcadores nesta pasta serão movidos para o nível superior."
-  }
+  },
+  "group_call_p2p_health_not_good": "As chamadas de voz em grupo precisam de uma conexão P2P mais estável. Aguarde um momento e, se não melhorar, verifique as informações do Core."
 }

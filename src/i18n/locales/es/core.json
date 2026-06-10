@@ -735,5 +735,6 @@
     "more": "Más",
     "delete_folder_title": "¿Eliminar carpeta?",
     "delete_folder_message": "Los marcadores de esta carpeta se moverán al nivel superior."
-  }
+  },
+  "group_call_p2p_health_not_good": "Las llamadas de voz grupales necesitan una conexión P2P más estable. Espera un momento y revisa la información del Core si no mejora."
 }

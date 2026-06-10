@@ -26,7 +26,7 @@ export function computeP2pHealth(metrics: {
   ) {
     return 'bad';
   }
-  if (onlineRemoteHubInterfaces >= 2 && sendablePeers >= 2 && inboundPeers >= 2) {
+  if (onlineRemoteHubInterfaces >= 2 && sendablePeers >= 2 && inboundPeers >= 1) {
     return 'good';
   }
   return 'low';

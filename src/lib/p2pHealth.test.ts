@@ -43,7 +43,7 @@ describe('computeP2pHealth', () => {
     ).toBe('low');
   });
 
-  it('good when at least 2 hubs, 2 sendable peers, and 2 inbound peers', () => {
+  it('good when at least 2 hubs, 2 sendable peers, and 1 inbound peer', () => {
     expect(
       computeP2pHealth({
         onlineRemoteHubInterfaces: 2,
@@ -63,6 +63,13 @@ describe('computeP2pHealth', () => {
         onlineRemoteHubInterfaces: 2,
         p2pOutboundOverlayPeers: 0,
         p2pInboundOverlayPeers: 4,
+      })
+    ).toBe('good');
+    expect(
+      computeP2pHealth({
+        onlineRemoteHubInterfaces: 2,
+        p2pOutboundOverlayPeers: 2,
+        p2pInboundOverlayPeers: 1,
       })
     ).toBe('good');
   });

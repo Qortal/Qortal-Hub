@@ -676,5 +676,6 @@
     "more": "Lisää",
     "delete_folder_title": "Poistetaanko kansio?",
     "delete_folder_message": "Tämän kansion kirjanmerkit siirretään ylimmälle tasolle."
-  }
+  },
+  "group_call_p2p_health_not_good": "Ryhmäpuhelut tarvitsevat vakaamman P2P-yhteyden. Odota hetki ja tarkista Core-tiedot, jos tilanne ei parane."
 }
