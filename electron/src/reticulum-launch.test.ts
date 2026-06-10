@@ -31,7 +31,7 @@ import { startReticulumForAppLaunch } from './reticulum-launch';
 
 describe('startReticulumForAppLaunch', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(restartBundledReticulumDaemonAndWaitReady).mockResolvedValue(
       undefined
     );

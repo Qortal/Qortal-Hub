@@ -2318,8 +2318,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     snap: ReticulumOverlayLinkSnapshot,
     now = Date.now()
   ): boolean {
-    if (!snap.lastRxAt) return false;
-    return now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS;
+    const lastActivityAt = snap.lastActivityAt || snap.lastRxAt;
+    if (!lastActivityAt) return false;
+    return now - lastActivityAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS;
   }
 
   private isOverlaySnapshotUsable(

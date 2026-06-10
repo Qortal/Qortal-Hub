@@ -319,9 +319,10 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
       hashes
     );
-    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(
-      hashes.slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
-    );
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual([
+      ...hashes.slice(1, RETICULUM_OVERLAY_MAX_NEIGHBORS),
+      hashes[RETICULUM_OVERLAY_MAX_NEIGHBORS],
+    ]);
 
     vi.useRealTimers();
   });
@@ -360,9 +361,10 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
       hashes
     );
-    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(
-      hashes.slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
-    );
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual([
+      ...hashes.slice(1, RETICULUM_OVERLAY_MAX_NEIGHBORS),
+      hashes[RETICULUM_OVERLAY_MAX_NEIGHBORS],
+    ]);
 
     vi.useRealTimers();
   });

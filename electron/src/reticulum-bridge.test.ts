@@ -687,6 +687,8 @@ describe('ReticulumBridge group audio support', () => {
       hubSummary: 'Hub A=online, Hub B=offline',
       meshListenOnline: false,
       overlayLinksConnected: 0,
+      overlayLinksOutboundConnected: 0,
+      overlayLinksInboundConnected: 0,
     });
     expect(seen).toEqual([
       {
@@ -700,6 +702,8 @@ describe('ReticulumBridge group audio support', () => {
         hubSummary: 'Hub A=online, Hub B=offline',
         meshListenOnline: false,
         overlayLinksConnected: 0,
+        overlayLinksOutboundConnected: 0,
+        overlayLinksInboundConnected: 0,
       },
     ]);
     expect(persistReticulumSharedTransportState).toHaveBeenCalledWith({
@@ -757,6 +761,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 2,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
 
@@ -960,6 +965,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     internal.handleFrame({
@@ -973,6 +979,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     internal.handleFrame({
@@ -1009,6 +1016,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     internal.handleFrame({
@@ -1022,6 +1030,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(1);
@@ -1042,6 +1051,7 @@ describe('ReticulumBridge group audio support', () => {
         reason: 'established',
         queuedPackets: 0,
         closedByReticulum: false,
+        lastRxAt: Date.now(),
       },
     });
     const firstConnectedAt = bridge.getOverlayLinkSnapshots()[0]?.connectedAt;
