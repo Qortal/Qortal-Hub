@@ -191,6 +191,27 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
       interfaceType: 'BackboneInterface',
       networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
     },
+    {
+      name: 'Crowetic Reticulum Hub 3',
+      host: 'reticulum3.qortal.link',
+      port: 4444,
+      interfaceType: 'BackboneInterface',
+      networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
+    },
+    {
+      name: 'Crowetic Reticulum Hub 4',
+      host: 'reticulum4.qortal.link',
+      port: 4444,
+      interfaceType: 'BackboneInterface',
+      networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
+    },
+    {
+      name: 'Crowetic Reticulum Hub 5',
+      host: 'reticulum5.qortal.link',
+      port: 4444,
+      interfaceType: 'BackboneInterface',
+      networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
+    },
   ]);
 
 let child: ChildProcess | null = null;
