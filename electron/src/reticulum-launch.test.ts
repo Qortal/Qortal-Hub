@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./logger', () => ({
   error: vi.fn(),
+  log: vi.fn(),
 }));
 
 vi.mock('./reticulum-daemon', () => ({
   getReticulumDaemonStatus: vi.fn(),
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance: vi.fn(),
   restartBundledReticulumDaemonAndWaitReady: vi.fn(),
   startBundledReticulumDaemon: vi.fn(),
   waitForReticulumSharedInstanceReady: vi.fn(),
@@ -15,9 +17,10 @@ vi.mock('./reticulum-bridge', () => ({
   startReticulumBridge: vi.fn(),
 }));
 
-import { error as loggerError } from './logger';
+import { error as loggerError, log as loggerLog } from './logger';
 import {
   getReticulumDaemonStatus,
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   restartBundledReticulumDaemonAndWaitReady,
   startBundledReticulumDaemon,
   waitForReticulumSharedInstanceReady,
@@ -32,6 +35,9 @@ describe('startReticulumForAppLaunch', () => {
       undefined
     );
     vi.mocked(waitForReticulumSharedInstanceReady).mockResolvedValue(undefined);
+    vi.mocked(
+      isReticulumSharedDaemonOwnedByAnotherLiveInstance
+    ).mockReturnValue(false);
     vi.mocked(startReticulumBridge).mockResolvedValue({} as never);
   });
 
@@ -79,6 +85,35 @@ describe('startReticulumForAppLaunch', () => {
       2_345,
       { forceKillOnStopTimeout: true }
     );
+  });
+
+  it('does not restart shared rnsd when another live app instance owns it', async () => {
+    const timeoutError = new Error(
+      'Timed out waiting for Reticulum shared instance'
+    );
+    vi.mocked(getReticulumDaemonStatus).mockReturnValue({
+      running: true,
+      pid: 456,
+      mode: 'system',
+      configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
+      reachability: 'unknown',
+    });
+    vi.mocked(waitForReticulumSharedInstanceReady).mockRejectedValueOnce(
+      timeoutError
+    );
+    vi.mocked(
+      isReticulumSharedDaemonOwnedByAnotherLiveInstance
+    ).mockReturnValue(true);
+
+    await startReticulumForAppLaunch(2_345);
+
+    expect(waitForReticulumSharedInstanceReady).toHaveBeenCalledWith(2_345);
+    expect(loggerLog).toHaveBeenCalledWith(
+      '[Reticulum] Shared instance readiness failed during launch, but another live app instance owns rnsd; starting bridge without restarting daemon:',
+      timeoutError
+    );
+    expect(restartBundledReticulumDaemonAndWaitReady).not.toHaveBeenCalled();
+    expect(startReticulumBridge).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces launch readiness failure when restart cannot restore the shared port', async () => {

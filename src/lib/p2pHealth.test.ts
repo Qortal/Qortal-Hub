@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeP2pHealth } from './p2pHealth';
 
 describe('computeP2pHealth', () => {
-  it('bad when no remote hubs or no active overlay peers', () => {
+  it('bad when no remote hubs, no sendable peers, or no inbound feed', () => {
     expect(
       computeP2pHealth({
         onlineRemoteHubInterfaces: 0,
@@ -14,7 +14,7 @@ describe('computeP2pHealth', () => {
       computeP2pHealth({
         onlineRemoteHubInterfaces: 2,
         p2pOutboundOverlayPeers: 0,
-        p2pInboundOverlayPeers: 2,
+        p2pInboundOverlayPeers: 0,
       })
     ).toBe('bad');
     expect(
@@ -37,20 +37,13 @@ describe('computeP2pHealth', () => {
     expect(
       computeP2pHealth({
         onlineRemoteHubInterfaces: 2,
-        p2pOutboundOverlayPeers: 1,
-        p2pInboundOverlayPeers: 2,
-      })
-    ).toBe('low');
-    expect(
-      computeP2pHealth({
-        onlineRemoteHubInterfaces: 2,
-        p2pOutboundOverlayPeers: 2,
+        p2pOutboundOverlayPeers: 0,
         p2pInboundOverlayPeers: 1,
       })
     ).toBe('low');
   });
 
-  it('good when at least 2 hubs, 2 outbound peers, and 2 inbound peers', () => {
+  it('good when at least 2 hubs, 2 sendable peers, and 2 inbound peers', () => {
     expect(
       computeP2pHealth({
         onlineRemoteHubInterfaces: 2,
@@ -62,6 +55,13 @@ describe('computeP2pHealth', () => {
       computeP2pHealth({
         onlineRemoteHubInterfaces: 3,
         p2pOutboundOverlayPeers: 5,
+        p2pInboundOverlayPeers: 4,
+      })
+    ).toBe('good');
+    expect(
+      computeP2pHealth({
+        onlineRemoteHubInterfaces: 2,
+        p2pOutboundOverlayPeers: 0,
         p2pInboundOverlayPeers: 4,
       })
     ).toBe('good');

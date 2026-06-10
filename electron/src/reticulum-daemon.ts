@@ -1022,6 +1022,19 @@ function readReticulumSharedDaemonState(): ReticulumSharedDaemonState | null {
   );
 }
 
+export function isReticulumSharedDaemonOwnedByAnotherLiveInstance(): boolean {
+  const state = readReticulumSharedDaemonState();
+  if (!state || !isPidAlive(state.pid)) {
+    return false;
+  }
+  if (state.ownerAppPid !== process.pid && isPidAlive(state.ownerAppPid)) {
+    return true;
+  }
+  return getReticulumActiveAppInstances().some(
+    (entry) => entry.appPid !== process.pid
+  );
+}
+
 function clearReticulumSharedDaemonState(expectedPid?: number): void {
   const filePath = getReticulumSharedDaemonStatePath();
   if (typeof expectedPid === 'number') {
@@ -1209,9 +1222,13 @@ function recoverReticulumStateForAppLaunchLocked(
   instanceIndex = reticulumInstanceIndex
 ): ReticulumAppLaunchRecovery {
   const activeInstances = getReticulumActiveAppInstances();
-  cleanupOrphanedReticulumBridgeProcessesForConfig(
-    new Set(activeInstances.map((entry) => entry.appPid))
-  );
+  if (activeInstances.length === 0) {
+    cleanupOrphanedReticulumBridgeProcessesForConfig();
+  } else {
+    loggerLog(
+      `[Reticulum] Skipping orphaned bridge cleanup because ${activeInstances.length} app instance(s) are active.`
+    );
+  }
   const state = readReticulumSharedDaemonState();
   let orphanedDaemonFound = false;
   let orphanedDaemonStopped = false;

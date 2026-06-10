@@ -1,6 +1,7 @@
-import { error as loggerError } from './logger';
+import { error as loggerError, log as loggerLog } from './logger';
 import {
   getReticulumDaemonStatus,
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   restartBundledReticulumDaemonAndWaitReady,
   startBundledReticulumDaemon,
   waitForReticulumSharedInstanceReady,
@@ -11,6 +12,14 @@ async function waitForAnyReticulumReadiness(timeoutMs?: number): Promise<void> {
   try {
     await waitForReticulumSharedInstanceReady(timeoutMs);
   } catch (sharedError) {
+    if (isReticulumSharedDaemonOwnedByAnotherLiveInstance()) {
+      loggerLog(
+        '[Reticulum] Shared instance readiness failed during launch, but another live app instance owns rnsd; starting bridge without restarting daemon:',
+        sharedError
+      );
+      await startReticulumBridge();
+      return;
+    }
     loggerError(
       '[Reticulum] Shared instance readiness failed during launch; restarting rnsd:',
       sharedError

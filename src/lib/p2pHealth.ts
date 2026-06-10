@@ -15,10 +15,18 @@ export function computeP2pHealth(metrics: {
   } = metrics;
   const outboundPeers = p2pOutboundOverlayPeers ?? p2pActiveOverlayPeers;
   const inboundPeers = p2pInboundOverlayPeers ?? p2pActiveOverlayPeers;
-  if (onlineRemoteHubInterfaces === 0 || outboundPeers === 0 || inboundPeers === 0) {
+  const sendablePeers =
+    p2pOutboundOverlayPeers !== undefined || p2pInboundOverlayPeers !== undefined
+      ? outboundPeers + inboundPeers
+      : p2pActiveOverlayPeers;
+  if (
+    onlineRemoteHubInterfaces === 0 ||
+    sendablePeers === 0 ||
+    inboundPeers === 0
+  ) {
     return 'bad';
   }
-  if (onlineRemoteHubInterfaces >= 2 && outboundPeers >= 2 && inboundPeers >= 2) {
+  if (onlineRemoteHubInterfaces >= 2 && sendablePeers >= 2 && inboundPeers >= 2) {
     return 'good';
   }
   return 'low';
