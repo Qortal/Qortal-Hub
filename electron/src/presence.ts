@@ -35,7 +35,9 @@ const PRESENCE_RECENT_ACCEPTED_ENVELOPE_TTL_MS =
   PRESENCE_SESSION_TIMEOUT_MS + PRESENCE_SKEW_ALLOWANCE_MS;
 const PRESENCE_RECENT_ACCEPTED_ENVELOPE_LIMIT = 4_096;
 const DEBUG_PRESENCE_HOT_PATH = process.env.QORTAL_DEBUG_PRESENCE === '1';
-export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
+export const RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 8;
+export const RETICULUM_OVERLAY_MAX_NEIGHBORS =
+  RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS;
 /** Keep a verified overlay peer around briefly after link loss while retrying fanout. */
 export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 2 * 60_000;
 const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 90_000;
@@ -661,11 +663,11 @@ export class PresenceManager extends EventEmitter {
   private presenceTooOldGlobalLogAt = 0;
   private reticulumCandidates = new Map<string, ReticulumCandidatePeer>();
   private verifiedReticulumPeers = new Map<string, VerifiedReticulumPeer>();
-  /** Verified overlay peers admitted into the 16-slot mesh. */
+  /** Verified overlay peers admitted into the outbound fanout set. */
   private activeReticulumNeighborHashes: string[] = [];
   /**
    * Reticulum publish/forward fanout: verified neighbors first, then candidate
-   * backfill up to {@link RETICULUM_OVERLAY_MAX_NEIGHBORS} for bootstrap.
+   * backfill up to {@link RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS} for bootstrap.
    */
   private activeReticulumPublishHashes: string[] = [];
 
@@ -1145,7 +1147,7 @@ export class PresenceManager extends EventEmitter {
     if (existingVerified) {
       this.verifiedReticulumPeers.set(hash, {
         ...existingVerified,
-        lastSeen: Math.max(existingVerified.lastSeen, now),
+        lastSeen: existingVerified.lastSeen,
         linkClosedAt: now,
       });
     }
@@ -1562,7 +1564,7 @@ export class PresenceManager extends EventEmitter {
       (hash) =>
         !this.isSelfReticulumHash(hash) && this.verifiedReticulumPeers.has(hash)
     );
-    if (nextVerified.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
+    if (nextVerified.length < RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) {
       const seen = new Set(nextVerified.map((hash) => hash.toLowerCase()));
       const waitingVerified = [...this.verifiedReticulumPeers.values()]
         .filter(
@@ -1576,7 +1578,7 @@ export class PresenceManager extends EventEmitter {
           );
         });
       for (const peer of waitingVerified) {
-        if (nextVerified.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        if (nextVerified.length >= RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) break;
         if (this.isSelfReticulumHash(peer.destinationHash)) continue;
         nextVerified.push(peer.destinationHash);
         seen.add(peer.destinationHash.toLowerCase());
@@ -1594,7 +1596,7 @@ export class PresenceManager extends EventEmitter {
 
     const seen = new Set(nextVerified.map((h) => h.toLowerCase()));
     const publish: string[] = [...nextVerified];
-    if (publish.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
+    if (publish.length < RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) {
       const cand = [...this.reticulumCandidates.values()]
         .filter(
           (c) =>
@@ -1604,7 +1606,7 @@ export class PresenceManager extends EventEmitter {
         )
         .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
       for (const c of cand) {
-        if (publish.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        if (publish.length >= RETICULUM_OVERLAY_MAX_OUTBOUND_NEIGHBORS) break;
         publish.push(c.destinationHash);
         seen.add(c.destinationHash.toLowerCase());
       }

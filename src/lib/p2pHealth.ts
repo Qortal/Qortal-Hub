@@ -3,13 +3,22 @@ export type P2pHealthLevel = 'bad' | 'low' | 'good';
 /** Remote hubs online + overlay peer counts — used for core popover P2P health and group-call gate. */
 export function computeP2pHealth(metrics: {
   onlineRemoteHubInterfaces: number;
-  p2pActiveOverlayPeers: number;
+  p2pActiveOverlayPeers?: number;
+  p2pOutboundOverlayPeers?: number;
+  p2pInboundOverlayPeers?: number;
 }): P2pHealthLevel {
-  const { onlineRemoteHubInterfaces, p2pActiveOverlayPeers } = metrics;
-  if (onlineRemoteHubInterfaces === 0 || p2pActiveOverlayPeers === 0) {
+  const {
+    onlineRemoteHubInterfaces,
+    p2pActiveOverlayPeers = 0,
+    p2pOutboundOverlayPeers,
+    p2pInboundOverlayPeers,
+  } = metrics;
+  const outboundPeers = p2pOutboundOverlayPeers ?? p2pActiveOverlayPeers;
+  const inboundPeers = p2pInboundOverlayPeers ?? p2pActiveOverlayPeers;
+  if (onlineRemoteHubInterfaces === 0 || outboundPeers === 0 || inboundPeers === 0) {
     return 'bad';
   }
-  if (onlineRemoteHubInterfaces >= 2 && p2pActiveOverlayPeers >= 3) {
+  if (onlineRemoteHubInterfaces >= 2 && outboundPeers >= 2 && inboundPeers >= 2) {
     return 'good';
   }
   return 'low';

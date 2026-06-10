@@ -1859,6 +1859,10 @@ export type ReticulumDaemonStatus = {
   hubSummary?: string;
   /** Established overlay (presence/signaling) RNS.Link count from the Python bridge. */
   overlayLinksConnected?: number;
+  /** Established outbound overlay peers this node can send fanout to. */
+  p2pOutboundOverlayPeers?: number;
+  /** Recently receiving inbound overlay peers feeding this node data. */
+  p2pInboundOverlayPeers?: number;
   /** Distinct peers with an established overlay link (deduped). */
   p2pActiveOverlayPeers?: number;
   /** Identity-verified Reticulum overlay peers (signed presence). */
@@ -2227,6 +2231,10 @@ export async function collectReticulumStatusSnapshot(): Promise<ReticulumDaemonS
       activePeerHashes.add(peerKey);
     }
     const p2pActiveOverlayPeers = activePeerHashes.size;
+    const p2pOutboundOverlayPeers =
+      bridgeStatus.overlayLinksOutboundConnected ?? 0;
+    const p2pInboundOverlayPeers =
+      bridgeStatus.overlayLinksInboundConnected ?? 0;
     const transportFallback =
       getReticulumInstanceIndex() > 0 &&
       shouldFallbackToSharedTransportState({
@@ -2262,6 +2270,8 @@ export async function collectReticulumStatusSnapshot(): Promise<ReticulumDaemonS
         bridgeStatus.onlineRemoteHubInterfaces,
       hubSummary: transportFallback?.hubSummary ?? bridgeStatus.hubSummary,
       verifiedOverlayPeerCount,
+      p2pOutboundOverlayPeers,
+      p2pInboundOverlayPeers,
       p2pActiveOverlayPeers,
       ...(typeof bridgeStatus.overlayLinksConnected === 'number'
         ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }

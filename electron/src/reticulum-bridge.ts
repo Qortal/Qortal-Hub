@@ -464,8 +464,12 @@ export type ReticulumConnectivitySnapshot = {
   reason?: string;
   /** Mesh listen section is online; RNS may report short or long interface names (presence_bridge matches substring). */
   meshListenOnline?: boolean;
-  /** Established RNS.Link sessions used for Reticulum presence/signaling overlay (not group audio). */
+  /** Recently receiving RNS.Link sessions used for Reticulum presence/signaling overlay (not group audio). */
   overlayLinksConnected?: number;
+  /** Established outbound overlay peers this node can send fanout to. */
+  overlayLinksOutboundConnected?: number;
+  /** Recently receiving inbound overlay peers feeding this node data. */
+  overlayLinksInboundConnected?: number;
 };
 
 export type ReticulumOverlayVerifiedPeer = {
@@ -2283,10 +2287,13 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   }
 
   getConnectivitySnapshot(): ReticulumConnectivitySnapshot {
+    const directionCounts = this.getOverlayLinkDirectionCounts();
     return {
       ...this.connectivitySnapshot,
       bridgeState: this.state,
       overlayLinksConnected: this.getEstablishedOverlayPeerCount(),
+      overlayLinksOutboundConnected: directionCounts.outbound,
+      overlayLinksInboundConnected: directionCounts.inbound,
       ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
     };
   }
@@ -2307,12 +2314,29 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     };
   }
 
-  /** Unique overlay peers (by presence hash); links without hash yet count separately. */
+  private isOverlaySnapshotRecentlyLive(
+    snap: ReticulumOverlayLinkSnapshot,
+    now = Date.now()
+  ): boolean {
+    if (!snap.lastRxAt) return false;
+    return now - snap.lastRxAt <= OVERLAY_LINK_RX_IDLE_TIMEOUT_MS;
+  }
+
+  private isOverlaySnapshotUsable(
+    snap: ReticulumOverlayLinkSnapshot,
+    now = Date.now()
+  ): boolean {
+    return snap.incoming ? this.isOverlaySnapshotRecentlyLive(snap, now) : true;
+  }
+
+  /** Unique live overlay peers (by presence hash); links without hash yet count separately. */
   private getEstablishedOverlayPeerCount(): number {
     this.pruneStaleOverlayLinkSnapshots();
+    const now = Date.now();
     const byPeer = new Set<string>();
     let noHash = 0;
     for (const snap of this.overlayLinkSnapshots.values()) {
+      if (!this.isOverlaySnapshotRecentlyLive(snap, now)) continue;
       const k = snap.peerPresenceHash.trim().toLowerCase();
       if (k) byPeer.add(k);
       else noHash += 1;
@@ -2320,11 +2344,30 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     return byPeer.size + noHash;
   }
 
+  getOverlayLinkDirectionCounts(): { outbound: number; inbound: number } {
+    this.pruneStaleOverlayLinkSnapshots();
+    const now = Date.now();
+    const outbound = new Set<string>();
+    const inbound = new Set<string>();
+    for (const snap of this.overlayLinkSnapshots.values()) {
+      const k = snap.peerPresenceHash.trim().toLowerCase();
+      if (!k) continue;
+      if (snap.incoming) {
+        if (this.isOverlaySnapshotRecentlyLive(snap, now)) inbound.add(k);
+      } else {
+        outbound.add(k);
+      }
+    }
+    return { outbound: outbound.size, inbound: inbound.size };
+  }
+
   getOverlayLinkSnapshots(): ReticulumOverlayLinkSnapshot[] {
     this.pruneStaleOverlayLinkSnapshots();
+    const now = Date.now();
     const byPeer = new Map<string, ReticulumOverlayLinkSnapshot>();
     const noHash: ReticulumOverlayLinkSnapshot[] = [];
     for (const snap of this.overlayLinkSnapshots.values()) {
+      if (!this.isOverlaySnapshotUsable(snap, now)) continue;
       const k = snap.peerPresenceHash.trim().toLowerCase();
       if (!k) {
         noHash.push(snap);
@@ -3618,7 +3661,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             typeof frame.payload?.lastRxAt === 'number' &&
             Number.isFinite(frame.payload.lastRxAt)
               ? frame.payload.lastRxAt
-              : (existing?.lastRxAt ?? Date.now());
+              : (existing?.lastRxAt ?? 0);
           const lastActivityAgeMs =
             typeof frame.payload?.lastActivityAgeMs === 'number' &&
             Number.isFinite(frame.payload.lastActivityAgeMs)

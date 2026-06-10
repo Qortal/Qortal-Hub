@@ -94,6 +94,8 @@ type ReticulumStatus = {
   onlineRemoteHubInterfaces?: number;
   hubSummary?: string;
   overlayLinksConnected?: number;
+  p2pOutboundOverlayPeers?: number;
+  p2pInboundOverlayPeers?: number;
 };
 
 type ReticulumOverlayPeerStatus = {
@@ -700,6 +702,11 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                       : ''}
                     {typeof reticulumStatus?.overlayLinksConnected === 'number'
                       ? ` · Overlay links ${reticulumStatus.overlayLinksConnected}`
+                      : ''}
+                    {typeof reticulumStatus?.p2pOutboundOverlayPeers ===
+                      'number' ||
+                    typeof reticulumStatus?.p2pInboundOverlayPeers === 'number'
+                      ? ` · Overlay out/in ${reticulumStatus.p2pOutboundOverlayPeers ?? 0}/${reticulumStatus.p2pInboundOverlayPeers ?? 0}`
                       : ''}
                     {reticulumStatus?.pid
                       ? ` · PID ${reticulumStatus.pid}`

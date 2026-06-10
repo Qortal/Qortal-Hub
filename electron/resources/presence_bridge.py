@@ -61,7 +61,6 @@ _BASE58_MAP = {c: i for i, c in enumerate(_BASE58_ALPHABET)}
 _PEER_STALE_SECONDS = 4 * 3600
 _PEER_TS_SEED_LEASE_SECONDS = 300
 _MAX_KNOWN_PEERS = 256
-_OVERLAY_BOOTSTRAP_MAX_NEIGHBORS = 16
 _REQUEST_PATH_COOLDOWN_SECONDS = 30.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 8
 _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
@@ -70,7 +69,7 @@ _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
 _OVERLAY_MAX_OUTBOUND_NEIGHBORS = 8
 _OVERLAY_MAX_INBOUND_NEIGHBORS = 8
-_OVERLAY_MAX_NEIGHBORS = _OVERLAY_MAX_OUTBOUND_NEIGHBORS
+_OVERLAY_BOOTSTRAP_MAX_OUTBOUND_NEIGHBORS = _OVERLAY_MAX_OUTBOUND_NEIGHBORS
 _OVERLAY_MIN_HEALTHY_FANOUT = 8
 _OVERLAY_NEIGHBOR_GRACE_SECONDS = 90.0
 _CANDIDATE_PROOF_WINDOW_SECONDS = 90.0
@@ -3682,6 +3681,20 @@ def _set_verified_overlay_peers(
             continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
+        last_seen_seconds = _coerce_epoch_seconds(last_seen)
+        if last_seen_seconds is not None:
+            st = _peer_lifecycle.setdefault(
+                peer_hash,
+                {
+                    "last_seen_inbound": None,
+                    "last_send_ok": None,
+                    "last_request_path_at": None,
+                    "ts_seed_until": None,
+                },
+            )
+            prev_seen = st.get("last_seen_inbound")
+            if not isinstance(prev_seen, (int, float)) or last_seen_seconds > float(prev_seen):
+                st["last_seen_inbound"] = last_seen_seconds
         next_verified[peer_hash] = {
             "address": address,
             "last_seen": float(last_seen),
@@ -3690,7 +3703,7 @@ def _set_verified_overlay_peers(
     _verified_overlay_peers = next_verified
     next_neighbors: Dict[str, float] = {}
     for raw_hash in active_neighbor_hashes:
-        if len(next_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+        if len(next_neighbors) >= _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
             break
         peer_hash = str(raw_hash or "").strip().lower()
         if not peer_hash:
@@ -3711,7 +3724,7 @@ def _set_verified_overlay_peers(
         next_neighbors[peer_hash] = now
     retained_neighbors = 0
     for peer_hash, seen_at in prev_neighbors.items():
-        if len(next_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+        if len(next_neighbors) >= _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
             break
         if peer_hash in next_neighbors:
             continue
@@ -3733,7 +3746,7 @@ def _set_verified_overlay_peers(
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
         next_neighbors[peer_hash] = float(seen_at)
         retained_neighbors += 1
-    if len(next_neighbors) < _OVERLAY_MAX_NEIGHBORS:
+    if len(next_neighbors) < _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
         candidates: list[tuple[float, str]] = []
         for peer_hash, peer in next_verified.items():
             peer_key = str(peer_hash or "").strip().lower()
@@ -3751,7 +3764,7 @@ def _set_verified_overlay_peers(
             candidates.append((float(last_seen), peer_key))
         candidates.sort(key=lambda item: (-item[0], item[1]))
         for _last_seen, peer_key in candidates:
-            if len(next_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+            if len(next_neighbors) >= _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
                 break
             if peer_key not in _known_peers:
                 ensure_known_peer_from_recall(peer_key, "ts_seed")
@@ -3781,6 +3794,32 @@ def _overlay_peer_has_established_link(peer_hash: str) -> bool:
             and state.get("established") is True
             and state.get("link") is not None
         )
+
+
+def _coerce_epoch_seconds(value: Any) -> Optional[float]:
+    if not isinstance(value, (int, float)):
+        return None
+    ts = float(value)
+    if ts <= 0:
+        return None
+    # Electron sends epoch milliseconds; Python-side timestamps are seconds.
+    if ts > 10_000_000_000:
+        ts = ts / 1000.0
+    return ts
+
+
+def _overlay_peer_recently_rx_active(peer_hash: str, now: Optional[float] = None) -> bool:
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
+        return False
+    st = _peer_lifecycle.get(peer_key) or {}
+    last_in = st.get("last_seen_inbound")
+    last_in_seconds = _coerce_epoch_seconds(last_in)
+    if last_in_seconds is None:
+        return False
+    if now is None:
+        now = time.time()
+    return (float(now) - last_in_seconds) <= _OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS
 
 
 def _resolve_overlay_neighbor_hashes(
@@ -3821,6 +3860,9 @@ def _resolve_overlay_neighbor_hashes(
             continue
         if established_only and not _overlay_peer_has_established_link(peer_hash):
             continue
+        if not _overlay_peer_recently_rx_active(peer_hash, now):
+            _inbound_overlay_neighbors.pop(peer_hash, None)
+            continue
         _inbound_overlay_neighbors[peer_hash] = now
         out.append(peer_hash)
     return out[:(_OVERLAY_MAX_OUTBOUND_NEIGHBORS + _OVERLAY_MAX_INBOUND_NEIGHBORS)]
@@ -3847,7 +3889,7 @@ def _promote_recent_verified_overlay_neighbors(
     reason: str, exclude_hashes: Optional[Set[str]] = None
 ) -> int:
     global _active_overlay_neighbors
-    if len(_active_overlay_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+    if len(_active_overlay_neighbors) >= _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
         return 0
     exclude = {
         str(h).strip().lower() for h in (exclude_hashes or set()) if str(h).strip()
@@ -3880,7 +3922,7 @@ def _promote_recent_verified_overlay_neighbors(
     now = time.time()
     selected: list[str] = []
     for _last_seen, peer_key in candidates:
-        if len(_active_overlay_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+        if len(_active_overlay_neighbors) >= _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
             break
         if peer_key not in _known_peers:
             ensure_known_peer_from_recall(peer_key, "ts_seed")
@@ -4052,7 +4094,7 @@ def _bootstrap_overlay_neighbors_if_degraded(reason: str) -> int:
         return 0
     candidates.sort(key=_overlay_bootstrap_peer_sort_key)
     now = time.time()
-    needed = max(0, _OVERLAY_BOOTSTRAP_MAX_NEIGHBORS - len(_active_overlay_neighbors))
+    needed = max(0, _OVERLAY_BOOTSTRAP_MAX_OUTBOUND_NEIGHBORS - len(_active_overlay_neighbors))
     selected = candidates[:needed]
     for peer_key in selected:
         _active_overlay_neighbors[peer_key] = now
@@ -7115,7 +7157,6 @@ def on_outgoing_overlay_link_established(link) -> None:
     state["established"] = True
     state["established_at"] = now
     state["last_activity_at"] = now
-    state.setdefault("last_rx_at", now)
     try:
         if _identity is not None:
             link.identify(_identity)
@@ -8236,7 +8277,7 @@ def _register_incoming_overlay_link(link, peer_hash: str = "", reason: str = "in
         "created_at": now,
         "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
         "last_activity_at": now,
-        "last_rx_at": now,
+        "last_rx_at": None,
     }
     with _state_lock:
         _overlay_links_by_id[link_id] = state
