@@ -46,14 +46,17 @@ import {
   HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS,
   HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
   HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX,
+  HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
   HOME_DASHBOARD_VERTICAL_GAP_PX,
   HOME_DASHBOARD_WIDGET_DISPLAY_MODE,
   HOME_DASHBOARD_WIDGET_HEIGHT_PX,
   HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX,
   HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX,
+  HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY,
   HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX,
   HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS,
   HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS,
+  HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
   HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES,
   HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES,
   HOME_QUITTER_WIDGET_SEARCH_LIMITS,
@@ -73,6 +76,17 @@ import {
   measureHomeLayoutDebugMetric,
   parseHomeCustomizableCardsLayout,
 } from './utils';
+
+const readStoredDashboardModuleVisible = (key: string): boolean => {
+  if (typeof window === 'undefined') return true;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return true;
+    return JSON.parse(raw) !== false;
+  } catch {
+    return true;
+  }
+};
 
 export const HomeDesktop = ({
   myAddress,
@@ -106,6 +120,13 @@ export const HomeDesktop = ({
         localStorage.getItem(HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY)
       )
     );
+  const [isGroupActivityModuleVisible, setIsGroupActivityModuleVisible] =
+    useState(() =>
+      readStoredDashboardModuleVisible(HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY)
+    );
+  const [isQuitterFeedModuleVisible, setIsQuitterFeedModuleVisible] = useState(
+    () => readStoredDashboardModuleVisible(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)
+  );
   const [groupWidgetRefreshToken, setGroupWidgetRefreshToken] = useState(0);
   const [isGroupWidgetRefreshing, setIsGroupWidgetRefreshing] = useState(false);
   const [quitterWidgetRefreshToken, setQuitterWidgetRefreshToken] = useState(0);
@@ -184,6 +205,32 @@ export const HomeDesktop = ({
       JSON.stringify(customizableCardsLayout)
     );
   }, [customizableCardsLayout]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncModuleVisibility = () => {
+      setIsGroupActivityModuleVisible(
+        readStoredDashboardModuleVisible(HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY)
+      );
+      setIsQuitterFeedModuleVisible(
+        readStoredDashboardModuleVisible(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)
+      );
+    };
+
+    window.addEventListener(
+      HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
+      syncModuleVisibility
+    );
+    window.addEventListener('storage', syncModuleVisibility);
+    return () => {
+      window.removeEventListener(
+        HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
+        syncModuleVisibility
+      );
+      window.removeEventListener('storage', syncModuleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     setCustomizableCardsLayout((currentLayout) => {
@@ -519,6 +566,8 @@ export const HomeDesktop = ({
     ];
   const quitterWidgetSearchLimit =
     HOME_QUITTER_WIDGET_SEARCH_LIMITS[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
+  const areBothDashboardModulesVisible =
+    isGroupActivityModuleVisible && isQuitterFeedModuleVisible;
   return (
     <LazyMotion features={domAnimation}>
       {desktopViewMode !== 'home' ? <QortinoMusicPlaybackController /> : null}
@@ -910,66 +959,84 @@ export const HomeDesktop = ({
                 </Box>
               </Box>
 
-              <Box
-                sx={{
-                  alignItems: 'start',
-                  display: 'grid',
-                  gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                  gridTemplateColumns: '1fr',
-                  width: '100%',
-                  [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
-                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                  },
-                }}
-              >
-                <DashboardWidgetFrame
-                  actionIcon={<ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />}
-                  actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
-                  height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                  onAction={handleOpenGroupsWidget}
-                  onRefresh={handleRefreshGroupActivity}
-                  onSwap={handleSwapDashboardWidgets}
-                  order={groupActivityCardOrder}
-                  panelRef={assignGroupActivityPanelNode}
-                  refreshing={isGroupWidgetRefreshing}
-                  title={t('tutorial:home.group_activity', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                  widgetId="groups"
+              {isGroupActivityModuleVisible || isQuitterFeedModuleVisible ? (
+                <Box
+                  sx={{
+                    alignItems: 'start',
+                    display: 'grid',
+                    gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                    gridTemplateColumns: '1fr',
+                    width: '100%',
+                    [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
+                      gridTemplateColumns: areBothDashboardModulesVisible
+                        ? 'repeat(2, minmax(0, 1fr))'
+                        : '1fr',
+                    },
+                  }}
                 >
-                  <GroupsWidget
-                    displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
-                    myAddress={myAddress}
-                    onRefreshStateChange={setIsGroupWidgetRefreshing}
-                    refreshToken={groupWidgetRefreshToken}
-                  />
-                </DashboardWidgetFrame>
+                  {isGroupActivityModuleVisible ? (
+                    <DashboardWidgetFrame
+                      actionIcon={
+                        <ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />
+                      }
+                      actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
+                      height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                      onAction={handleOpenGroupsWidget}
+                      onRefresh={handleRefreshGroupActivity}
+                      onSwap={
+                        areBothDashboardModulesVisible
+                          ? handleSwapDashboardWidgets
+                          : undefined
+                      }
+                      order={groupActivityCardOrder}
+                      panelRef={assignGroupActivityPanelNode}
+                      refreshing={isGroupWidgetRefreshing}
+                      title={t('tutorial:home.group_activity', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                      widgetId="groups"
+                    >
+                      <GroupsWidget
+                        displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                        myAddress={myAddress}
+                        onRefreshStateChange={setIsGroupWidgetRefreshing}
+                        refreshToken={groupWidgetRefreshToken}
+                      />
+                    </DashboardWidgetFrame>
+                  ) : null}
 
-                <DashboardWidgetFrame
-                  actionIcon={
-                    <OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />
-                  }
-                  actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
-                  height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                  onAction={handleOpenEmbeddedQuitter}
-                  onRefresh={handleRefreshQuitterWidget}
-                  onSwap={handleSwapDashboardWidgets}
-                  order={quitterCardOrder}
-                  panelRef={quitterCardHeightRef}
-                  refreshing={isQuitterWidgetRefreshing}
-                  title={td('quitter_feed', 'Quitter Feed')}
-                  widgetId="quitter"
-                >
-                  <QuitterFeedWidget
-                    batchSize={quitterWidgetLoadMoreBatchSize}
-                    displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
-                    initialBatchSize={quitterWidgetInitialBatchSize}
-                    onRefreshStateChange={setIsQuitterWidgetRefreshing}
-                    refreshToken={quitterWidgetRefreshToken}
-                    searchLimit={quitterWidgetSearchLimit}
-                  />
-                </DashboardWidgetFrame>
-              </Box>
+                  {isQuitterFeedModuleVisible ? (
+                    <DashboardWidgetFrame
+                      actionIcon={
+                        <OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />
+                      }
+                      actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
+                      height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                      onAction={handleOpenEmbeddedQuitter}
+                      onRefresh={handleRefreshQuitterWidget}
+                      onSwap={
+                        areBothDashboardModulesVisible
+                          ? handleSwapDashboardWidgets
+                          : undefined
+                      }
+                      order={quitterCardOrder}
+                      panelRef={quitterCardHeightRef}
+                      refreshing={isQuitterWidgetRefreshing}
+                      title={td('quitter_feed', 'Quitter Feed')}
+                      widgetId="quitter"
+                    >
+                      <QuitterFeedWidget
+                        batchSize={quitterWidgetLoadMoreBatchSize}
+                        displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                        initialBatchSize={quitterWidgetInitialBatchSize}
+                        onRefreshStateChange={setIsQuitterWidgetRefreshing}
+                        refreshToken={quitterWidgetRefreshToken}
+                        searchLimit={quitterWidgetSearchLimit}
+                      />
+                    </DashboardWidgetFrame>
+                  ) : null}
+                </Box>
+              ) : null}
             </Box>
             <Spacer height="120px" />
           </motion.div>

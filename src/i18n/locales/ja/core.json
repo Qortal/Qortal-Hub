@@ -70,6 +70,7 @@
     "publish_app": "アプリを公開します",
     "publish_comment": "コメントを公開します",
     "refresh": "リフレッシュします",
+    "reload_page": "ページを再読み込み",
     "register_name": "登録名",
     "remove": "取り除く",
     "remove_reaction": "反応を取り除きます",
@@ -416,6 +417,7 @@
       "rewards_info_subtitle_own": "（自分の報酬情報）",
       "rewards_info_subtitle_selected": "（選択中のミンター — このキーの報酬）",
       "network_details": "ネットワーク詳細",
+      "rewardshares_loading": "リワードシェアの状態を確認しています。このリクエストが完了するまでお待ちください。",
       "loading_spinner_aria": "読み込み中"
     }
   },
@@ -733,5 +735,6 @@
     "more": "その他",
     "delete_folder_title": "フォルダーを削除しますか？",
     "delete_folder_message": "このフォルダー内のブックマークはトップレベルに移動されます。"
-  }
+  },
+  "group_call_p2p_health_not_good": "グループ音声通話には、より安定したP2P接続が必要です。少し待って、改善しない場合はコア情報を確認してください。"
 }

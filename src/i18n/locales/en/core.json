@@ -70,6 +70,7 @@
     "publish_app": "publish your app",
     "publish_comment": "publish comment",
     "refresh": "refresh",
+    "reload_page": "reload page",
     "register_name": "register name",
     "remove": "remove",
     "remove_reaction": "remove reaction",
@@ -125,7 +126,7 @@
   "group_call_join_failed_generic": "Could not join the call ({{code}}).",
   "group_call_presence_offline": "Switch your status to online to join a group voice call.",
   "group_call_reticulum_not_ready": "Reticulum is not ready yet. Wait a moment and try joining again.",
-  "group_call_p2p_health_not_good": "Group voice calls need good P2P health: at least two remote interfaces online, and at least three inbound and three outbound overlay peers. Check Core information for details.",
+  "group_call_p2p_health_not_good": "Group voice calls need a healthier P2P connection. Wait a moment, then check Core information if it does not improve.",
   "group_call_stage_title": "Group voice call",
   "group_call_participants": "Participants",
   "group_call_chat_sidebar": "Chat",
@@ -212,6 +213,7 @@
   "close_minimize_to_dock": "Minimize to dock",
   "close_quit_completely": "Quit completely",
   "home": "home",
+  "opened_apps": "opened apps",
   "identifier": "identifier",
   "image_embed": "image embed",
   "last_height": "last height",
@@ -454,6 +456,7 @@
       "rewards_info_subtitle_own": "(your rewards info)",
       "rewards_info_subtitle_selected": "(selected minter — rewards for this key)",
       "network_details": "Network details",
+      "rewardshares_loading": "Checking reward-share status. Please wait until this request finishes.",
       "loading_spinner_aria": "Loading"
     }
   },

@@ -28,12 +28,14 @@ import {
   getReticulumAppInstanceRegistryPath,
   getReticulumSharedDaemonStatePath,
   getReticulumSharedRpcKeyPath,
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   planReticulumAppQuit,
   recoverReticulumStateForAppLaunch,
   registerReticulumAppInstance,
   resolveReticulumDaemonStartupAction,
   setReticulumInstanceIndex,
   stopSharedReticulumDaemon,
+  writeManagedReticulumConfigIfManaged,
 } from './reticulum-daemon';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 
@@ -42,6 +44,14 @@ function sectionBody(config: string, header: string): string {
   expect(start).toBeGreaterThanOrEqual(0);
   const nextBlock = config.indexOf('[[', start + header.length);
   return nextBlock === -1 ? config.slice(start) : config.slice(start, nextBlock);
+}
+
+function getTestAppSettingsPath(): string {
+  return '/tmp/qortal-appdata/qortal-hub/app-settings.json';
+}
+
+function getTestReticulumConfigPath(): string {
+  return path.join(getReticulumConfigDir(), 'config');
 }
 
 describe('reticulum-daemon managed config', () => {
@@ -53,6 +63,8 @@ describe('reticulum-daemon managed config', () => {
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
       getReticulumSharedRpcKeyPath(),
+      getTestAppSettingsPath(),
+      getTestReticulumConfigPath(),
     ]) {
       try {
         fs.unlinkSync(filePath);
@@ -75,6 +87,8 @@ describe('reticulum-daemon managed config', () => {
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
       getReticulumSharedRpcKeyPath(),
+      getTestAppSettingsPath(),
+      getTestReticulumConfigPath(),
     ]) {
       try {
         fs.unlinkSync(filePath);
@@ -101,12 +115,13 @@ describe('reticulum-daemon managed config', () => {
     );
   });
 
-  it('keeps LAN discovery and includes the default public hubs', () => {
+  it('enables remote interface discovery without AutoInterface LAN discovery and includes the default public hubs', () => {
     const config = buildManagedReticulumConfig();
 
-    expect(config).toContain('[[Default Interface]]');
-    expect(config).toContain('type = AutoInterface');
-    expect(config).toContain('enabled = yes');
+    expect(config).not.toContain('[[Default Interface]]');
+    expect(config).not.toContain('type = AutoInterface');
+    expect(config).toContain('discover_interfaces = Yes');
+    expect(config).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toMatch(/\nrpc_key = [0-9a-f]{64}\n/);
 
     for (const hub of DEFAULT_RETICULUM_HUBS) {
@@ -183,8 +198,8 @@ describe('reticulum-daemon managed config', () => {
       outbound: [
         { sectionName: 'Mesh_deadbeef01', host: 'mesh.example', port: 4243 },
       ],
-      meshDiscoveryClient: true,
-      autoconnectDiscoveredMax: 8,
+      meshDiscoveryClient: false,
+      autoconnectDiscoveredMax: 0,
       meshPrivateGateway: false,
       networkIdentityPath:
         '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
@@ -198,7 +213,7 @@ describe('reticulum-daemon managed config', () => {
       config.indexOf('[reticulum]'),
       config.indexOf('[logging]')
     );
-    expect(reticulumBlock).toContain('discover_interfaces = yes');
+    expect(reticulumBlock).toContain('discover_interfaces = Yes');
     expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
     const meshListenType =
@@ -215,8 +230,8 @@ describe('reticulum-daemon managed config', () => {
     }
     expect(meshListenSection).not.toContain('announce_interval =');
     expect(meshListenSection).not.toContain('network_name =');
-    const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
-    expect(autoInterfaceSection).not.toContain('discover_interfaces = yes');
+    expect(config).not.toContain('[[Default Interface]]');
+    expect(config).not.toContain('type = AutoInterface');
     expect(config).toContain('[[Mesh_deadbeef01]]');
     expect(config).toContain('target_host = mesh.example');
     expect(config).toContain('target_port = 4243');
@@ -230,8 +245,8 @@ describe('reticulum-daemon managed config', () => {
       listenEnabled: true,
       listenPort: 4243,
       outbound: [],
-      meshDiscoveryClient: true,
-      autoconnectDiscoveredMax: 8,
+      meshDiscoveryClient: false,
+      autoconnectDiscoveredMax: 0,
       meshPrivateGateway: true,
       networkIdentityPath:
         '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
@@ -263,8 +278,8 @@ describe('reticulum-daemon managed config', () => {
       listenEnabled: true,
       listenPort: 4243,
       outbound: [],
-      meshDiscoveryClient: true,
-      autoconnectDiscoveredMax: 8,
+      meshDiscoveryClient: false,
+      autoconnectDiscoveredMax: 0,
       meshPrivateGateway: true,
       networkIdentityPath:
         '/tmp/qortal-appdata/qortal-hub/reticulum/mesh-network.identity',
@@ -297,6 +312,23 @@ describe('reticulum-daemon managed config', () => {
     const fp = computeManagedReticulumConfigFingerprint();
     const expected = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
     expect(fp).toBe(expected);
+  });
+
+  it('does not write managed config when disabled in app settings', () => {
+    const settingsPath = getTestAppSettingsPath();
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({ reticulumManagedConfigEnabled: false }),
+      'utf8'
+    );
+
+    const wrote = writeManagedReticulumConfigIfManaged(
+      `${buildManagedReticulumConfig()}\n`
+    );
+
+    expect(wrote).toBe(false);
+    expect(fs.existsSync(getTestReticulumConfigPath())).toBe(false);
   });
 
   it('keeps the shared daemon running while other app instances remain active', () => {
@@ -492,6 +524,96 @@ describe('reticulum-daemon managed config', () => {
       configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
       reachability: 'unknown',
     });
+    expect(killSpy).toHaveBeenCalledWith(999, 0);
+  });
+
+  it('detects a shared daemon owned by another live app instance', () => {
+    const alivePids = new Set([101, 999]);
+    vi.spyOn(process, 'kill').mockImplementation(
+      ((pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0 || typeof signal === 'undefined') {
+          if (alivePids.has(pid)) return true;
+          const err = new Error('ESRCH') as Error & { code?: string };
+          err.code = 'ESRCH';
+          throw err;
+        }
+        return true;
+      }) as typeof process.kill
+    );
+
+    registerReticulumAppInstance(0, 101);
+    fs.mkdirSync(path.dirname(getReticulumSharedDaemonStatePath()), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      getReticulumSharedDaemonStatePath(),
+      JSON.stringify({
+        pid: 999,
+        ownerAppPid: 101,
+        ownerInstanceIndex: 0,
+        startedAt: Date.now(),
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
+        mode: 'system',
+      }),
+      'utf8'
+    );
+
+    expect(isReticulumSharedDaemonOwnedByAnotherLiveInstance()).toBe(true);
+  });
+
+  it('uses another live app instance as restart protection even without daemon metadata', () => {
+    const alivePids = new Set([202]);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(
+      ((pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0 || typeof signal === 'undefined') {
+          if (alivePids.has(pid)) return true;
+          const err = new Error('ESRCH') as Error & { code?: string };
+          err.code = 'ESRCH';
+          throw err;
+        }
+        return true;
+      }) as typeof process.kill
+    );
+
+    registerReticulumAppInstance(1, 202);
+
+    expect(isReticulumSharedDaemonOwnedByAnotherLiveInstance()).toBe(true);
+    expect(killSpy).toHaveBeenCalledWith(202, 0);
+  });
+
+  it('uses another live app instance as restart protection when owner metadata is stale', () => {
+    const alivePids = new Set([202, 999]);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(
+      ((pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0 || typeof signal === 'undefined') {
+          if (alivePids.has(pid)) return true;
+          const err = new Error('ESRCH') as Error & { code?: string };
+          err.code = 'ESRCH';
+          throw err;
+        }
+        return true;
+      }) as typeof process.kill
+    );
+
+    registerReticulumAppInstance(1, 202);
+    fs.mkdirSync(path.dirname(getReticulumSharedDaemonStatePath()), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      getReticulumSharedDaemonStatePath(),
+      JSON.stringify({
+        pid: 999,
+        ownerAppPid: 101,
+        ownerInstanceIndex: 0,
+        startedAt: Date.now(),
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
+        mode: 'system',
+      }),
+      'utf8'
+    );
+
+    expect(isReticulumSharedDaemonOwnedByAnotherLiveInstance()).toBe(true);
+    expect(killSpy).toHaveBeenCalledWith(202, 0);
     expect(killSpy).toHaveBeenCalledWith(999, 0);
   });
 

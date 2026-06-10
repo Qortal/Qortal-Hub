@@ -76,6 +76,25 @@ const configs = {
       '--universal',
     ],
   },
+  'mac-universal-unsigned': {
+    description: 'unsigned macOS universal package',
+    allowed: [{ platform: 'darwin' }],
+    universal: true,
+    builderEnv: {
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+    },
+    builderArgs: [
+      'build',
+      '-c',
+      './electron-builder.config.mac-unsigned.json',
+      '--publish=never',
+      '--mac',
+      'dmg',
+      'pkg',
+      'zip',
+      '--universal',
+    ],
+  },
 };
 
 function fail(message) {
@@ -95,6 +114,7 @@ if (!mode || mode === 'all') {
       '  npm run electron:make-win   # on Windows',
       '  npm run electron:make-mac   # on macOS',
       '  npm run electron:make-mac-universal # on macOS, universal app',
+      '  npm run electron:make-mac-universal-unsigned # on macOS, unsigned universal app',
       '',
       'Or use the GitHub Actions workflow to build the supported OS matrix.',
     ].join('\n')
@@ -172,4 +192,4 @@ if (cfg.universal) {
 }
 
 const electronBuilderCmd = process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
-run(electronBuilderCmd, cfg.builderArgs);
+runWithEnv(electronBuilderCmd, cfg.builderArgs, cfg.builderEnv ?? {});

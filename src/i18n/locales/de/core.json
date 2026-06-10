@@ -70,6 +70,7 @@
     "publish_app": "Veröffentlichen Sie Ihre App",
     "publish_comment": "Kommentar veröffentlichen",
     "refresh": "Aktualisieren",
+    "reload_page": "Seite neu laden",
     "register_name": "Registrieren Sie den Namen",
     "remove": "entfernen",
     "remove_reaction": "Reaktion entfernen",
@@ -415,6 +416,7 @@
       "rewards_info_subtitle_own": "(Ihre Belohnungsinfos)",
       "rewards_info_subtitle_selected": "(gewählter Minter — Belohnungen für diesen Schlüssel)",
       "network_details": "Netzwerkdetails",
+      "rewardshares_loading": "Reward-Share-Status wird geprüft. Bitte warte, bis diese Anfrage abgeschlossen ist.",
       "loading_spinner_aria": "Wird geladen"
     }
   },
@@ -732,5 +734,6 @@
     "more": "Mehr",
     "delete_folder_title": "Ordner löschen?",
     "delete_folder_message": "Lesezeichen in diesem Ordner werden auf die oberste Ebene verschoben."
-  }
+  },
+  "group_call_p2p_health_not_good": "Gruppen-Sprachanrufe benötigen eine stabilere P2P-Verbindung. Warte einen Moment und prüfe dann die Core-Informationen, falls es nicht besser wird."
 }

@@ -33,14 +33,22 @@ export function UnsavedChangesDialog({
       onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
+      slotProps={{
+        backdrop: {
+          sx: {
+            backdropFilter: 'blur(3px)',
+            backgroundColor: alpha('#000', isDark ? 0.66 : 0.42),
+          },
+        },
+      }}
       PaperProps={{
         sx: isDark
           ? {
-              bgcolor: '#111820',
+              bgcolor: '#1A2530',
               backgroundImage: 'none',
-              border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+              border: `1px solid ${alpha('#A9BCD8', 0.32)}`,
               borderRadius: '18px',
-              boxShadow: `0 24px 58px ${alpha('#000', 0.42)}`,
+              boxShadow: `0 24px 64px ${alpha('#000', 0.6)}`,
               maxWidth: 360,
               width: 'calc(100% - 40px)',
             }
@@ -49,7 +57,7 @@ export function UnsavedChangesDialog({
               backgroundImage: 'none',
               border: `1px solid ${theme.palette.border.subtle}`,
               borderRadius: '18px',
-              boxShadow: `0 22px 48px ${alpha('#000', 0.09)}, 0 0 0 1px ${alpha(theme.palette.divider, 0.45)}`,
+              boxShadow: `0 22px 48px ${alpha('#000', 0.18)}, 0 0 0 1px ${alpha(theme.palette.divider, 0.6)}`,
               maxWidth: 360,
               width: 'calc(100% - 40px)',
               color: theme.palette.text.primary,

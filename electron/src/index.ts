@@ -34,6 +34,7 @@ import {
   attachChatListeners,
   ensureReticulumManagersStarted,
   notifyPresenceTransportReady,
+  replayReticulumCachedPresence,
   setLastP2POptions,
   startDecentralizedStunAfterP2P,
 } from './setup';
@@ -45,6 +46,7 @@ import {
 import { startChatManager, flushChatStore } from './chat';
 import { readAppSettings } from './setup';
 import {
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   planReticulumAppQuit,
   recoverReticulumStateForAppLaunch,
   registerReticulumAppInstance,
@@ -60,7 +62,11 @@ import {
 } from './reticulum-mesh';
 import { startReticulumForAppLaunch } from './reticulum-launch';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
-import { getReticulumBridge, stopReticulumBridge } from './reticulum-bridge';
+import {
+  getReticulumBridge,
+  startReticulumBridge,
+  stopReticulumBridge,
+} from './reticulum-bridge';
 import { getPresenceManager } from './presence';
 import { isDisabledLegacy } from './feature-flags';
 import { buildAudioSurfaceScheme } from './audio-window-policy';
@@ -94,6 +100,87 @@ let reticulumWakeRecovery: Promise<void> | null = null;
 let lastReticulumWakeRecoveryAt = 0;
 
 const RETICULUM_WAKE_RECOVERY_DEBOUNCE_MS = 15_000;
+const RETICULUM_WAKE_RECOVERY_BRIDGE_ATTACH_WAIT_MS = 20_000;
+const RETICULUM_WAKE_RECOVERY_SHARED_READY_WAIT_MS = 60_000;
+const RETICULUM_WAKE_RECOVERY_BRIDGE_RETRY_MS = 1_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isReticulumDaemonRestartLockError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message === 'Timed out waiting for Reticulum daemon restart lock'
+  );
+}
+
+function isReticulumSharedInstanceProbeTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith('Timed out waiting for Reticulum shared instance')
+  );
+}
+
+async function waitForReticulumBridgeReady(timeoutMs: number): Promise<void> {
+  const bridge = getReticulumBridge();
+  if (!bridge) {
+    throw new Error('Reticulum bridge is not started');
+  }
+  if (bridge.getState() === 'ready') {
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      bridge.off('ready', onReady);
+      reject(
+        new Error(
+          `Timed out waiting for Reticulum bridge ready after ${timeoutMs}ms`
+        )
+      );
+    }, timeoutMs);
+    const onReady = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    bridge.once('ready', onReady);
+  });
+}
+
+async function restartReticulumBridgeAndWaitReady(
+  timeoutMs: number
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown = null;
+
+  stopReticulumBridge();
+
+  while (Date.now() <= deadline) {
+    try {
+      await startReticulumBridge();
+      await waitForReticulumBridgeReady(Math.max(1, deadline - Date.now()));
+      return;
+    } catch (error) {
+      lastError = error;
+      stopReticulumBridge();
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        break;
+      }
+      await delay(
+        Math.min(RETICULUM_WAKE_RECOVERY_BRIDGE_RETRY_MS, remainingMs)
+      );
+    }
+  }
+
+  const message =
+    lastError instanceof Error
+      ? lastError.message
+      : String(lastError ?? 'unknown');
+  throw new Error(
+    `Timed out waiting for Reticulum bridge attach readiness after ${timeoutMs}ms: ${message}`
+  );
+}
 
 function performAppShutdown(reason: string): void {
   if (shutdownHandled) {
@@ -145,19 +232,54 @@ async function recoverReticulumAfterWake(source: string): Promise<void> {
     );
 
     try {
-      stopReticulumBridge();
-
       try {
-        await restartBundledReticulumDaemonAndWaitReady();
+        await restartReticulumBridgeAndWaitReady(
+          RETICULUM_WAKE_RECOVERY_BRIDGE_ATTACH_WAIT_MS
+        );
+        loggerLog(
+          '[Reticulum] Wake recovery bridge attach succeeded without daemon restart'
+        );
       } catch (error) {
         loggerError(
-          '[Reticulum] Wake recovery daemon restart failed; retrying bridge startup anyway:',
+          '[Reticulum] Wake recovery bridge attach failed; escalating to shared daemon restart:',
           error
+        );
+
+        if (isReticulumSharedDaemonOwnedByAnotherLiveInstance()) {
+          loggerLog(
+            '[Reticulum] Wake recovery skipped shared daemon restart because another app instance is active; retrying bridge attach only'
+          );
+        } else {
+          try {
+            await restartBundledReticulumDaemonAndWaitReady(
+              RETICULUM_WAKE_RECOVERY_SHARED_READY_WAIT_MS,
+              {
+                forceKillOnStopTimeout: true,
+              }
+            );
+          } catch (restartError) {
+            if (isReticulumSharedInstanceProbeTimeout(restartError)) {
+              loggerLog(
+                '[Reticulum] Wake recovery shared TCP probe timed out; continuing with bridge attach readiness'
+              );
+            } else if (!isReticulumDaemonRestartLockError(restartError)) {
+              throw restartError;
+            } else {
+              loggerLog(
+                '[Reticulum] Wake recovery restart lock held by another instance; waiting through bridge attach readiness'
+              );
+            }
+          }
+        }
+
+        await restartReticulumBridgeAndWaitReady(
+          RETICULUM_WAKE_RECOVERY_SHARED_READY_WAIT_MS
         );
       }
 
       await ensureReticulumManagersStarted();
       notifyPresenceTransportReady();
+      await replayReticulumCachedPresence(`wake:${source}`, true);
 
       const bridgeState = getReticulumBridge()?.getState() ?? 'stopped';
       loggerLog(

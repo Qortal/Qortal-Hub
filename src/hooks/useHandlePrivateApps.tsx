@@ -107,7 +107,6 @@ export const useHandlePrivateApps = () => {
       }
 
       let decryptedData;
-      // eslint-disable-next-line no-useless-catch
       try {
         decryptedData = await window.sendMessage('DECRYPT_QORTAL_GROUP_DATA', {
           base64: data,
@@ -202,6 +201,9 @@ export const useHandlePrivateApps = () => {
             : null;
 
           const dataBody = {
+            identifier: privateAppProperties?.identifier,
+            name: privateAppProperties?.name,
+            service: privateAppProperties?.service,
             url: await createEndpoint(previewPath),
             isPreview: true,
             isPrivate: true,

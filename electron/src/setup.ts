@@ -161,7 +161,7 @@ function recordMainLoopStall(delayMs: number, nowMs = Date.now()): void {
     return;
   }
   mainLoopLastLogAtMs = nowMs;
-  loggerWarn(
+  loggerLog(
     `[GCall] target=reticulum-audio-ipc stage=main-event-loop-stall delay_ms=${Math.round(
       delayMs
     )} stall_count=${mainLoopStallCount} max_delay_ms=${Math.round(
@@ -235,7 +235,7 @@ function attachGroupAudioIpcTiming(
         rendererSendAtMs,
         mainIpcAtMs
       );
-      loggerWarn(
+      loggerLog(
         `[GCall] target=reticulum-audio-ipc stage=gcall-audio-ipc-handler-entry-delay channel=${
           context?.channel ?? 'unknown'
         } room=${context?.roomId ?? 'n/a'} target_count=${
@@ -1421,6 +1421,8 @@ export interface AppSettings {
   legacyPublicStunFallback?: boolean;
   /** When false, skip UPnP for Reticulum hub mesh TCP listen port (default true). */
   reticulumMeshUpnpEnabled?: boolean;
+  /** When false, do not write/regenerate Qortal Hub's managed Reticulum config. */
+  reticulumManagedConfigEnabled?: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -1428,6 +1430,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   disableStartupSound: false,
   p2pEnabled: !isDisabledLegacy,
   reticulumMeshUpnpEnabled: true,
+  reticulumManagedConfigEnabled: true,
 };
 
 export async function readAppSettings(): Promise<AppSettings> {
@@ -1455,6 +1458,8 @@ export async function readAppSettings(): Promise<AppSettings> {
         : parsed.legacyPublicStunFallback === true,
       reticulumMeshUpnpEnabled:
         parsed.reticulumMeshUpnpEnabled === false ? false : true,
+      reticulumManagedConfigEnabled:
+        parsed.reticulumManagedConfigEnabled === false ? false : true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -2184,6 +2189,7 @@ export async function ensureReticulumManagersStarted(): Promise<void> {
     pm = startPresenceManager(transports);
     attachPresenceListeners(pm);
   }
+  startReticulumPresenceHealthWatchdog();
 
   const callMgr = getCallManager();
   if (callMgr) {
@@ -2318,6 +2324,21 @@ const presenceUpdateSubscribers = new Set<Electron.WebContents>();
 const queuedPresenceUpdates = new Map<string, unknown>();
 let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let lateReticulumRecoveryCleanup: (() => void) | null = null;
+const RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000, 30_000];
+const RETICULUM_HEALTH_CHECK_MS = 30_000;
+const RETICULUM_HEALTH_STALE_INBOUND_MS = 2 * 60_000;
+const RETICULUM_HEALTH_BRIDGE_RESTART_MS = 5 * 60_000;
+const RETICULUM_HEALTH_SOFT_COOLDOWN_MS = 2 * 60_000;
+const RETICULUM_HEALTH_BRIDGE_RESTART_COOLDOWN_MS = 5 * 60_000;
+const RETICULUM_HEALTH_TIMEOUT_THRESHOLD = 3;
+const RETICULUM_HEALTH_MIN_FANOUT = 8;
+const RETICULUM_HEALTH_MIN_VERIFIED = 3;
+let reticulumOverlaySyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let reticulumOverlaySyncSequence = 0;
+let reticulumHealthTimer: ReturnType<typeof setInterval> | null = null;
+let reticulumHealthRecoveryInFlight = false;
+let reticulumHealthLastSoftRecoveryAt = 0;
+let reticulumHealthLastBridgeRestartAt = 0;
 
 function flushPresenceUpdates(): void {
   if (presenceUpdateFlushTimer) {
@@ -2370,10 +2391,15 @@ function broadcastPresenceUpdate(payload: unknown): void {
 }
 
 async function syncReticulumOverlayStateToBridge(
-  manager: NonNullable<ReturnType<typeof getPresenceManager>>
+  manager: NonNullable<ReturnType<typeof getPresenceManager>>,
+  attempt = 0,
+  sequence = ++reticulumOverlaySyncSequence
 ): Promise<void> {
   const bridge = getReticulumBridge();
-  if (!bridge || bridge.getState() !== 'ready') return;
+  if (!bridge || bridge.getState() !== 'ready') {
+    scheduleReticulumOverlayStateSyncRetry(manager, attempt, sequence);
+    return;
+  }
   const verifiedPeers: ReticulumOverlayVerifiedPeer[] = manager
     .getReticulumVerifiedPeers()
     .map((peer) => ({
@@ -2387,13 +2413,199 @@ async function syncReticulumOverlayStateToBridge(
       ? activeNeighborHashes
       : verifiedPeers.map((peer) => peer.destinationHash);
   try {
-    await bridge.syncOverlayState(verifiedPeers, overlayNeighborHashes);
+    const ok = await bridge.syncOverlayState(
+      verifiedPeers,
+      overlayNeighborHashes
+    );
+    if (!ok) {
+      scheduleReticulumOverlayStateSyncRetry(manager, attempt, sequence);
+      return;
+    }
+    if (
+      sequence === reticulumOverlaySyncSequence &&
+      reticulumOverlaySyncRetryTimer
+    ) {
+      clearTimeout(reticulumOverlaySyncRetryTimer);
+      reticulumOverlaySyncRetryTimer = null;
+    }
   } catch (err) {
     loggerWarn(
       '[ReticulumOverlay] Failed to sync overlay state to bridge:',
       err
     );
+    scheduleReticulumOverlayStateSyncRetry(manager, attempt, sequence);
   }
+}
+
+function scheduleReticulumOverlayStateSyncRetry(
+  manager: NonNullable<ReturnType<typeof getPresenceManager>>,
+  attempt: number,
+  sequence: number
+): void {
+  if (sequence !== reticulumOverlaySyncSequence) return;
+  if (reticulumOverlaySyncRetryTimer) {
+    clearTimeout(reticulumOverlaySyncRetryTimer);
+    reticulumOverlaySyncRetryTimer = null;
+  }
+  const delay =
+    RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS[
+      Math.min(attempt, RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS.length - 1)
+    ];
+  reticulumOverlaySyncRetryTimer = setTimeout(() => {
+    reticulumOverlaySyncRetryTimer = null;
+    if (sequence !== reticulumOverlaySyncSequence) return;
+    void syncReticulumOverlayStateToBridge(manager, attempt + 1, sequence);
+  }, delay);
+  reticulumOverlaySyncRetryTimer.unref?.();
+}
+
+export async function replayReticulumCachedPresence(
+  reason: string,
+  scheduleFollowup = false
+): Promise<boolean> {
+  const manager = getPresenceManager();
+  const bridge = getReticulumBridge();
+  if (!manager || !bridge || bridge.getState() !== 'ready') {
+    loggerLog(
+      `[ReticulumRecovery] Cached presence replay skipped reason=${reason} manager=${manager ? 'yes' : 'no'} bridge_state=${bridge?.getState() ?? 'missing'}`
+    );
+    return false;
+  }
+
+  const cached = manager.getLastLocalEnvelope();
+  if (!cached) {
+    loggerLog(
+      `[ReticulumRecovery] Cached presence replay skipped reason=${reason} cached_presence=no`
+    );
+    return false;
+  }
+
+  await syncReticulumOverlayStateToBridge(manager);
+  const ok = await bridge.publish(cached, {
+    force: true,
+    reason,
+  });
+  const address =
+    typeof (cached.payload as { address?: string })?.address === 'string'
+      ? (cached.payload as { address: string }).address
+      : 'unknown';
+  loggerLog(
+    `[ReticulumRecovery] Cached presence replay reason=${reason} ok=${ok ? 'yes' : 'no'} type=${cached.type} peer_addr=${address} envelope_id=${cached.id ?? 'n/a'}`
+  );
+
+  if (scheduleFollowup) {
+    const followup = setTimeout(() => {
+      void replayReticulumCachedPresence(`${reason}:followup`, false).catch(
+        (err) => {
+          loggerWarn(
+            `[ReticulumRecovery] Cached presence followup failed reason=${reason}:`,
+            err
+          );
+        }
+      );
+    }, 10_000);
+    followup.unref?.();
+  }
+
+  return ok;
+}
+
+function startReticulumPresenceHealthWatchdog(): void {
+  if (reticulumHealthTimer) return;
+  reticulumHealthTimer = setInterval(() => {
+    void checkReticulumPresenceHealth().catch((err) => {
+      loggerWarn('[ReticulumHealth] Watchdog check failed:', err);
+    });
+  }, RETICULUM_HEALTH_CHECK_MS);
+  reticulumHealthTimer.unref?.();
+  loggerLog('[ReticulumHealth] Presence watchdog started');
+}
+
+async function checkReticulumPresenceHealth(): Promise<void> {
+  if (isQuitting || reticulumHealthRecoveryInFlight) return;
+  const manager = getPresenceManager();
+  const bridge = getReticulumBridge();
+  if (!manager || !bridge || bridge.getState() !== 'ready') return;
+  if (!manager.getLastLocalEnvelope()) return;
+
+  const now = Date.now();
+  const health = bridge.getPresenceHealthSnapshot();
+  const verifiedCount = manager.getReticulumVerifiedPeers().length;
+  const fanoutCount = manager.getReticulumActiveNeighborHashes().length;
+  const inboundAge =
+    health.lastInboundPresenceAt > 0
+      ? now - health.lastInboundPresenceAt
+      : Number.POSITIVE_INFINITY;
+  const publishOkAge =
+    health.lastPresencePublishOkAt > 0
+      ? now - health.lastPresencePublishOkAt
+      : Number.POSITIVE_INFINITY;
+  const staleInbound = inboundAge >= RETICULUM_HEALTH_STALE_INBOUND_MS;
+  const zeroFanout =
+    health.lastPresenceFanoutPeers === 0 ||
+    (verifiedCount > 0 && fanoutCount === 0);
+  const observedFanout =
+    typeof health.lastPresenceFanoutPeers === 'number'
+      ? health.lastPresenceFanoutPeers
+      : fanoutCount;
+  const lowFanout =
+    observedFanout > 0 && observedFanout < RETICULUM_HEALTH_MIN_FANOUT;
+  const lowVerified = verifiedCount < RETICULUM_HEALTH_MIN_VERIFIED;
+  const degradedOverlay = zeroFanout || lowFanout || (lowVerified && lowFanout);
+  const repeatedTimeouts =
+    health.recentOverlayLinkTimeouts >= RETICULUM_HEALTH_TIMEOUT_THRESHOLD;
+  const neverPublished = health.lastPresencePublishOkAt <= 0;
+  const needsSoftRecovery =
+    neverPublished ||
+    degradedOverlay ||
+    (repeatedTimeouts && (degradedOverlay || staleInbound)) ||
+    (staleInbound && health.lastPresenceFanoutPeers === null);
+
+  if (!needsSoftRecovery) return;
+
+  const hardStale =
+    staleInbound &&
+    (degradedOverlay || repeatedTimeouts) &&
+    publishOkAge >= RETICULUM_HEALTH_BRIDGE_RESTART_MS;
+
+  if (
+    hardStale &&
+    now - reticulumHealthLastBridgeRestartAt >=
+      RETICULUM_HEALTH_BRIDGE_RESTART_COOLDOWN_MS &&
+    now - reticulumHealthLastSoftRecoveryAt >= 60_000
+  ) {
+    reticulumHealthLastBridgeRestartAt = now;
+    reticulumHealthRecoveryInFlight = true;
+    loggerWarn(
+      `[ReticulumHealth] Restarting local bridge stale_inbound_ms=${Number.isFinite(inboundAge) ? inboundAge : 'never'} publish_ok_ms=${Number.isFinite(publishOkAge) ? publishOkAge : 'never'} fanout_peers=${health.lastPresenceFanoutPeers ?? 'n/a'} verified=${verifiedCount} active_fanout=${fanoutCount} low_fanout=${lowFanout ? 'yes' : 'no'} low_verified=${lowVerified ? 'yes' : 'no'} link_timeouts=${health.recentOverlayLinkTimeouts}`
+    );
+    try {
+      stopReticulumBridge();
+      const restarted = await startReticulumBridge();
+      attachReticulumStatusBridgeEvents(restarted);
+      await ensureReticulumManagersStarted();
+      await replayReticulumCachedPresence('health:bridge-restart', true);
+    } catch (err) {
+      loggerWarn('[ReticulumHealth] Local bridge restart failed:', err);
+      registerLateReticulumBridgeRecovery();
+    } finally {
+      reticulumHealthRecoveryInFlight = false;
+    }
+    return;
+  }
+
+  if (
+    now - reticulumHealthLastSoftRecoveryAt <
+    RETICULUM_HEALTH_SOFT_COOLDOWN_MS
+  ) {
+    return;
+  }
+
+  reticulumHealthLastSoftRecoveryAt = now;
+  loggerLog(
+    `[ReticulumHealth] Soft replay stale_inbound_ms=${Number.isFinite(inboundAge) ? inboundAge : 'never'} fanout_peers=${health.lastPresenceFanoutPeers ?? 'n/a'} verified=${verifiedCount} active_fanout=${fanoutCount} low_fanout=${lowFanout ? 'yes' : 'no'} low_verified=${lowVerified ? 'yes' : 'no'} link_timeouts=${health.recentOverlayLinkTimeouts}`
+  );
+  await replayReticulumCachedPresence('health:soft', true);
 }
 
 export function attachPresenceListeners(
@@ -2481,28 +2693,60 @@ export function registerLateReticulumBridgeRecovery(): void {
     loggerLog(
       '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and rebinding call/group-call managers'
     );
+    startReticulumPresenceHealthWatchdog();
+
     let pm = getPresenceManager();
-    if (pm) {
-      setPresenceManagerTransports([currentBridge]);
-      void syncReticulumOverlayStateToBridge(pm);
-    } else {
-      pm = startPresenceManager([currentBridge]);
-      attachPresenceListeners(pm);
+    try {
+      if (pm) {
+        setPresenceManagerTransports([currentBridge]);
+        void syncReticulumOverlayStateToBridge(pm);
+      } else {
+        pm = startPresenceManager([currentBridge]);
+        attachPresenceListeners(pm);
+      }
+    } catch (err) {
+      loggerWarn('[ReticulumBridge] Late recovery presence rebind failed:', err);
     }
-    const callMgr = getCallManager();
-    if (callMgr) {
-      callMgr.setReticulumBridge(currentBridge);
+    if (!pm) {
+      pm = getPresenceManager();
+    }
+    if (pm) {
+      void replayReticulumCachedPresence('late-ready', true);
     } else {
-      attachCallListeners(startCallManager(pm, currentBridge));
+      loggerWarn(
+        '[ReticulumBridge] Late recovery could not start presence manager; skipping cached presence replay'
+      );
+    }
+
+    const callMgr = getCallManager();
+    try {
+      if (callMgr) {
+        callMgr.setReticulumBridge(currentBridge);
+      } else if (pm) {
+        attachCallListeners(startCallManager(pm, currentBridge));
+      }
+    } catch (err) {
+      loggerWarn('[ReticulumBridge] Late recovery call rebind failed:', err);
     }
     const gcallMgr = getGroupCallManager();
-    if (gcallMgr) {
-      gcallMgr.setReticulumBridge(currentBridge);
-    } else {
-      attachGroupCallListeners(startGroupCallManager(pm, currentBridge));
+    try {
+      if (gcallMgr) {
+        gcallMgr.setReticulumBridge(currentBridge);
+      } else if (pm) {
+        attachGroupCallListeners(startGroupCallManager(pm, currentBridge));
+      }
+    } catch (err) {
+      loggerWarn(
+        '[ReticulumBridge] Late recovery group-call rebind failed:',
+        err
+      );
     }
-    stopReticulumMeshCoordinator();
-    startReticulumMeshCoordinator(currentBridge);
+    try {
+      stopReticulumMeshCoordinator();
+      startReticulumMeshCoordinator(currentBridge);
+    } catch (err) {
+      loggerWarn('[ReticulumBridge] Late recovery mesh rebind failed:', err);
+    }
     // Mirror the normal startup signal so an already-authenticated renderer can
     // retry its initial presence announce after late Reticulum readiness.
     notifyPresenceTransportReady();

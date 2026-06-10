@@ -27,7 +27,10 @@ export const ReactionPicker = ({ onReaction }) => {
     if (showPicker) {
       setShowPicker(false);
     } else {
-      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const button = buttonRef.current;
+      if (!button) return;
+
+      const buttonRect = button.getBoundingClientRect();
       const pickerWidth = 350;
       const pickerHeight = 400; // Match Picker height prop
 

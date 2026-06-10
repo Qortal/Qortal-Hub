@@ -360,6 +360,7 @@ try {
       p2pEnabled?: boolean;
       legacyPublicStunFallback?: boolean;
       reticulumMeshUpnpEnabled?: boolean;
+      reticulumManagedConfigEnabled?: boolean;
     }) => ipcRenderer.invoke('appSettings:set', settings),
     reticulumGetStatus: () =>
       ipcRenderer.invoke('reticulum:getStatus') as Promise<{
@@ -377,8 +378,54 @@ try {
         onlineRemoteHubInterfaces?: number;
         hubSummary?: string;
         overlayLinksConnected?: number;
+        p2pOutboundOverlayPeers?: number;
+        p2pInboundOverlayPeers?: number;
         p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
+      }>,
+    reticulumGetConfigEditorInfo: () =>
+      ipcRenderer.invoke('reticulum:getConfigEditorInfo') as Promise<{
+        ok: boolean;
+        error?: string;
+        contents: string;
+        configPath: string;
+        configDir: string;
+        instanceIndex: number;
+        instanceLabel: string;
+        managedConfigEnabled: boolean;
+        sharedDaemon: boolean;
+        maxBytes: number;
+        updatedAt?: number;
+      }>,
+    reticulumSaveConfigEditorContents: (contents: string) =>
+      ipcRenderer.invoke(
+        'reticulum:saveConfigEditorContents',
+        contents
+      ) as Promise<{
+        ok: boolean;
+        error?: string;
+        contents: string;
+        configPath: string;
+        configDir: string;
+        instanceIndex: number;
+        instanceLabel: string;
+        managedConfigEnabled: boolean;
+        sharedDaemon: boolean;
+        maxBytes: number;
+        updatedAt?: number;
+      }>,
+    reticulumGetGeneratedDefaultConfig: () =>
+      ipcRenderer.invoke('reticulum:getGeneratedDefaultConfig') as Promise<{
+        ok: boolean;
+        contents: string;
+        error?: string;
+      }>,
+    reticulumRevealConfigInFileExplorer: () =>
+      ipcRenderer.invoke('reticulum:revealConfigInFileExplorer') as Promise<{
+        ok: boolean;
+        error?: string;
+        configPath: string;
+        configDir: string;
       }>,
     onReticulumStatus: (
       callback: (status: {
@@ -396,6 +443,8 @@ try {
         onlineRemoteHubInterfaces?: number;
         hubSummary?: string;
         overlayLinksConnected?: number;
+        p2pOutboundOverlayPeers?: number;
+        p2pInboundOverlayPeers?: number;
         p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
       }) => void

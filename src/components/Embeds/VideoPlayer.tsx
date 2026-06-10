@@ -168,7 +168,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
 
   const increaseSpeed = (wrapOverflow = true) => {
     const changedSpeed = playbackRate + speedChange;
-    let newSpeed = wrapOverflow
+    const newSpeed = wrapOverflow
       ? changedSpeed
       : Math.min(changedSpeed, maxSpeed);
 
@@ -183,6 +183,30 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
     }
   };
 
+  const playVideo = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return false;
+
+    try {
+      await video.play();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const interruptedPlayRequest =
+        error instanceof DOMException &&
+        (error.name === 'AbortError' || error.name === 'NotAllowedError');
+
+      if (
+        !interruptedPlayRequest &&
+        !message.includes('play() request was interrupted')
+      ) {
+        console.error('Failed to play video', error);
+      }
+
+      return false;
+    }
+  }, []);
+
   const togglePlay = async () => {
     if (!videoRef.current) return;
     setStartPlay(true);
@@ -191,13 +215,15 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
         setIsLoading(true);
       });
       getSrc();
+      setPlaying(false);
+      return;
     }
     if (playing) {
       videoRef.current.pause();
+      setPlaying(false);
     } else {
-      videoRef.current.play();
+      setPlaying(await playVideo());
     }
-    setPlaying(!playing);
   };
 
   const onVolumeChange = (_: any, value: number | number[]) => {
@@ -207,13 +233,12 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
     setIsMuted(false);
   };
 
-  const onProgressChange = (_: any, value: number | number[]) => {
+  const onProgressChange = async (_: any, value: number | number[]) => {
     if (!videoRef.current) return;
     videoRef.current.currentTime = value as number;
     setProgress(value as number);
     if (!playing) {
-      videoRef.current.play();
-      setPlaying(true);
+      setPlaying(await playVideo());
     }
   };
 
@@ -261,6 +286,14 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
     setCanPlay(true);
   };
 
+  const handlePlay = () => {
+    setPlaying(true);
+  };
+
+  const handlePause = () => {
+    setPlaying(false);
+  };
+
   const getSrc = useCallback(async () => {
     if (!name || !identifier || !service) return;
     try {
@@ -276,7 +309,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
 
   function formatTime(seconds: number): string {
     seconds = Math.floor(seconds);
-    let minutes: number | string = Math.floor(seconds / 60);
+    const minutes: number | string = Math.floor(seconds / 60);
     let hours: number | string = Math.floor(minutes / 60);
 
     let remainingSeconds: number | string = seconds % 60;
@@ -306,7 +339,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
     videoRef.current.load();
     videoRef.current.currentTime = currentTime;
     if (playing) {
-      videoRef.current.play();
+      void playVideo();
     }
   };
 
@@ -644,6 +677,8 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
           onClick={togglePlay}
           onEnded={handleEnded}
           onCanPlay={handleCanPlay}
+          onPlay={handlePlay}
+          onPause={handlePause}
           preload="metadata"
           style={{
             width: '100%',
