@@ -6,7 +6,7 @@ import {
   startBundledReticulumDaemon,
   waitForReticulumSharedInstanceReady,
 } from './reticulum-daemon';
-import { startReticulumBridge } from './reticulum-bridge';
+import { startReticulumBridge, stopReticulumBridge } from './reticulum-bridge';
 
 async function waitForAnyReticulumReadiness(timeoutMs?: number): Promise<void> {
   try {
@@ -20,10 +20,20 @@ async function waitForAnyReticulumReadiness(timeoutMs?: number): Promise<void> {
       await startReticulumBridge();
       return;
     }
-    loggerError(
-      '[Reticulum] Shared instance readiness failed during launch; restarting rnsd:',
-      sharedError
-    );
+    try {
+      loggerLog(
+        '[Reticulum] Shared instance readiness failed during launch; trying bridge before restarting rnsd:',
+        sharedError
+      );
+      await startReticulumBridge();
+      return;
+    } catch (bridgeError) {
+      loggerError(
+        '[Reticulum] Bridge startup failed after shared readiness timeout; restarting rnsd:',
+        bridgeError
+      );
+      stopReticulumBridge();
+    }
     await restartBundledReticulumDaemonAndWaitReady(timeoutMs, {
       forceKillOnStopTimeout: true,
     });
