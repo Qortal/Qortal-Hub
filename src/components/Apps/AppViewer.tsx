@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
@@ -31,6 +32,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
     const [url, setUrl] = useState('');
     const { themeMode } = useThemeContext();
+    const muiTheme = useTheme();
     const { i18n, t } = useTranslation([
       'auth',
       'core',
@@ -39,29 +41,112 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       'tutorial',
     ]);
     const currentLang = i18n.language;
+    const resolvedPalette = useMemo(() => {
+      try {
+        return JSON.parse(JSON.stringify(muiTheme.palette));
+      } catch (err) {
+        console.error('Failed to serialize theme palette for iframe:', err);
+        return null;
+      }
+    }, [muiTheme]);
+    const encodedThemePalette = useMemo(() => {
+      if (!resolvedPalette) return null;
+      try {
+        return encodeURIComponent(JSON.stringify(resolvedPalette));
+      } catch (err) {
+        console.error('Failed to encode theme palette for iframe URL:', err);
+        return null;
+      }
+    }, [resolvedPalette]);
+
+    const appendThemeQueryParams = useCallback(
+      (
+        baseUrl: string,
+        extraParams: Record<string, string | number | boolean | null | undefined> = {}
+      ) => {
+        const serializedParams = [
+          `theme=${themeMode}`,
+          `lang=${currentLang}`,
+          ...(encodedThemePalette
+            ? [`themePalette=${encodedThemePalette}`]
+            : []),
+          ...Object.entries(extraParams)
+            .filter(([, value]) => value !== null && value !== undefined)
+            .map(([key, value]) => `${key}=${value}`),
+        ];
+
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        return `${baseUrl}${separator}${serializedParams.join('&')}`;
+      },
+      [themeMode, currentLang, encodedThemePalette]
+    );
+
+    const postMessageToIframe = useCallback(
+      (payload) => {
+        const iframe = iframeRef?.current;
+        if (!iframe || !iframe?.src) return;
+
+        try {
+          const targetOrigin = new URL(iframe.src).origin;
+          iframe.contentWindow?.postMessage(payload, targetOrigin);
+        } catch (err) {
+          console.error('Failed to send message to iframe:', err);
+        }
+      },
+      [iframeRef]
+    );
+
+    const sendThemeToIframe = useCallback(() => {
+      postMessageToIframe({
+        action: 'THEME_CHANGED',
+        theme: themeMode,
+        palette: resolvedPalette,
+        requestedHandler: 'UI',
+      });
+    }, [postMessageToIframe, themeMode, resolvedPalette]);
+
+    const sendLanguageToIframe = useCallback(() => {
+      postMessageToIframe({
+        action: 'LANGUAGE_CHANGED',
+        language: currentLang,
+        requestedHandler: 'UI',
+      });
+    }, [postMessageToIframe, currentLang]);
 
     useEffect(() => {
       if (app?.isPreview) return;
       if (isDevMode) {
-        setUrl(app?.url + `?theme=${themeMode}&lang=${currentLang}`);
+        if (!app?.url) return;
+        setUrl(appendThemeQueryParams(app?.url));
         return;
-      }
-      let hasQueryParam = false;
-      if (app?.path && app.path.includes('?')) {
-        hasQueryParam = true;
       }
 
       setUrl(
-        `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
+        appendThemeQueryParams(
+          `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}`,
+          {
+            identifier:
+              app?.identifier != null && app?.identifier != 'null'
+                ? app?.identifier
+                : '',
+          }
+        )
       );
-    }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview]);
+    }, [
+      app?.service,
+      app?.name,
+      app?.identifier,
+      app?.path,
+      app?.isPreview,
+      appendThemeQueryParams,
+    ]);
 
     useEffect(() => {
       if (app?.isPreview && app?.url) {
         resetHistory();
-        setUrl(app.url + `&theme=${themeMode}&lang=${currentLang}`);
+        setUrl(appendThemeQueryParams(app.url));
       }
-    }, [app?.url, app?.isPreview]);
+    }, [app?.url, app?.isPreview, appendThemeQueryParams]);
 
     const defaultUrl = useMemo(() => {
       return url;
@@ -73,14 +158,18 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         if (isDevMode) {
           resetHistory();
           if (!app?.isPreview || app?.isPrivate) {
-            setUrl(
-              app?.url +
-                `?time=${Date.now()}&theme=${themeMode}&lang=${currentLang}`
-            );
+            if (!app?.url) return;
+            setUrl(appendThemeQueryParams(app?.url, { time: Date.now() }));
           }
           return;
         }
-        const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
+        const constructUrl = appendThemeQueryParams(
+          `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}`,
+          {
+            identifier: app?.identifier != null ? app?.identifier : '',
+            time: new Date().getMilliseconds(),
+          }
+        );
         setUrl(constructUrl);
       }
     };
@@ -91,41 +180,15 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       return () => {
         unsubscribeFromEvent('refreshApp', refreshAppFunc);
       };
-    }, [app, path, isDevMode, themeMode, currentLang]);
+    }, [app, path, isDevMode, themeMode, currentLang, appendThemeQueryParams]);
 
     useEffect(() => {
-      const iframe = iframeRef?.current;
-      if (!iframe || !iframe?.src) return;
-
-      try {
-        const targetOrigin = new URL(iframe.src).origin;
-        iframe.contentWindow?.postMessage(
-          { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' },
-          targetOrigin
-        );
-      } catch (err) {
-        console.error('Failed to send theme change to iframe:', err);
-      }
-    }, [themeMode]);
+      sendThemeToIframe();
+    }, [sendThemeToIframe]);
 
     useEffect(() => {
-      const iframe = iframeRef?.current;
-      if (!iframe || !iframe?.src) return;
-
-      try {
-        const targetOrigin = new URL(iframe.src).origin;
-        iframe.contentWindow?.postMessage(
-          {
-            action: 'LANGUAGE_CHANGED',
-            language: currentLang,
-            requestedHandler: 'UI',
-          },
-          targetOrigin
-        );
-      } catch (err) {
-        console.error('Failed to send language change to iframe:', err);
-      }
-    }, [currentLang]);
+      sendLanguageToIframe();
+    }, [sendLanguageToIframe]);
 
     const removeTrailingSlash = (str) => str.replace(/\/$/, '');
 
@@ -276,12 +339,25 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         } catch (error) {
           if (isDevMode) {
             setUrl(
-              `${url}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+              appendThemeQueryParams(`${url}${previousPath != null ? previousPath : ''}`, {
+                time: new Date().getMilliseconds(),
+                isManualNavigation: false,
+              })
             );
             return;
           }
           setUrl(
-            `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            appendThemeQueryParams(
+              `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}`,
+              {
+                identifier:
+                  app?.identifier != null && app?.identifier != 'null'
+                    ? app?.identifier
+                    : '',
+                time: new Date().getMilliseconds(),
+                isManualNavigation: false,
+              }
+            )
           );
           // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
         }
@@ -291,6 +367,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const navigateBackAppFunc = (e) => {
       navigateBackInIframe();
     };
+
+    const handleIframeLoad = useCallback(() => {
+      sendThemeToIframe();
+      sendLanguageToIframe();
+    }, [sendThemeToIframe, sendLanguageToIframe]);
 
     useEffect(() => {
       if (!app?.tabId) return;
@@ -302,7 +383,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           navigateBackAppFunc
         );
       };
-    }, [app, history, themeMode, currentLang]);
+    }, [app, history, themeMode, currentLang, appendThemeQueryParams]);
 
     const navigateToPathFunc = useCallback(
       async (e) => {
@@ -422,6 +503,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           id="browser-iframe"
           tabIndex={-1}
           src={defaultUrl}
+          onLoad={handleIframeLoad}
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
           allow="fullscreen; clipboard-read; clipboard-write; screen-wake-lock"
         ></iframe>
