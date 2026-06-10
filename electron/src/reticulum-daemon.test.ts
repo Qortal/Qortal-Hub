@@ -28,6 +28,7 @@ import {
   getReticulumAppInstanceRegistryPath,
   getReticulumSharedDaemonStatePath,
   getReticulumSharedRpcKeyPath,
+  isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   planReticulumAppQuit,
   recoverReticulumStateForAppLaunch,
   registerReticulumAppInstance,
@@ -524,6 +525,74 @@ describe('reticulum-daemon managed config', () => {
       reachability: 'unknown',
     });
     expect(killSpy).toHaveBeenCalledWith(999, 0);
+  });
+
+  it('detects a shared daemon owned by another live app instance', () => {
+    const alivePids = new Set([101, 999]);
+    vi.spyOn(process, 'kill').mockImplementation(
+      ((pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0 || typeof signal === 'undefined') {
+          if (alivePids.has(pid)) return true;
+          const err = new Error('ESRCH') as Error & { code?: string };
+          err.code = 'ESRCH';
+          throw err;
+        }
+        return true;
+      }) as typeof process.kill
+    );
+
+    registerReticulumAppInstance(0, 101);
+    fs.mkdirSync(path.dirname(getReticulumSharedDaemonStatePath()), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      getReticulumSharedDaemonStatePath(),
+      JSON.stringify({
+        pid: 999,
+        ownerAppPid: 101,
+        ownerInstanceIndex: 0,
+        startedAt: Date.now(),
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
+        mode: 'system',
+      }),
+      'utf8'
+    );
+
+    expect(isReticulumSharedDaemonOwnedByAnotherLiveInstance()).toBe(true);
+  });
+
+  it('does not treat dead owner metadata as another live daemon owner', () => {
+    const alivePids = new Set([202, 999]);
+    vi.spyOn(process, 'kill').mockImplementation(
+      ((pid: number, signal?: number | NodeJS.Signals) => {
+        if (signal === 0 || typeof signal === 'undefined') {
+          if (alivePids.has(pid)) return true;
+          const err = new Error('ESRCH') as Error & { code?: string };
+          err.code = 'ESRCH';
+          throw err;
+        }
+        return true;
+      }) as typeof process.kill
+    );
+
+    registerReticulumAppInstance(1, 202);
+    fs.mkdirSync(path.dirname(getReticulumSharedDaemonStatePath()), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      getReticulumSharedDaemonStatePath(),
+      JSON.stringify({
+        pid: 999,
+        ownerAppPid: 101,
+        ownerInstanceIndex: 0,
+        startedAt: Date.now(),
+        configDir: '/tmp/qortal-appdata/qortal-hub/reticulum',
+        mode: 'system',
+      }),
+      'utf8'
+    );
+
+    expect(isReticulumSharedDaemonOwnedByAnotherLiveInstance()).toBe(false);
   });
 
   it('lets a secondary instance take daemon ownership when no shared daemon is alive', () => {

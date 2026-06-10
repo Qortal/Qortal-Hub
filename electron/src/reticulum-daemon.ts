@@ -1129,11 +1129,11 @@ export function isReticulumSharedDaemonOwnedByAnotherLiveInstance(): boolean {
   if (!state || !isPidAlive(state.pid)) {
     return false;
   }
-  if (state.ownerAppPid !== process.pid && isPidAlive(state.ownerAppPid)) {
-    return true;
+  if (state.ownerAppPid === process.pid) {
+    return false;
   }
   return getReticulumActiveAppInstances().some(
-    (entry) => entry.appPid !== process.pid
+    (entry) => entry.appPid === state.ownerAppPid
   );
 }
 
