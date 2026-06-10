@@ -853,7 +853,7 @@ describe('ReticulumBridge group audio support', () => {
     nowSpy.mockRestore();
   });
 
-  it('prunes overlay snapshots when all link activity goes idle', () => {
+  it('prunes idle overlay snapshots without closing the fanout peer', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(200_000);
@@ -880,9 +880,7 @@ describe('ReticulumBridge group audio support', () => {
 
     expect(bridge.getOverlayLinkSnapshots()).toEqual([]);
     expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(0);
-    expect(seen).toEqual([
-      { peerHash: 'peer-hash', reason: 'rx_idle_timeout' },
-    ]);
+    expect(seen).toEqual([]);
 
     nowSpy.mockRestore();
   });

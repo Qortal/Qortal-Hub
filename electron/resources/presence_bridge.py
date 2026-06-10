@@ -22,9 +22,9 @@ from typing import IO, Any, Callable, Dict, Optional, Set, Tuple
 
 import RNS
 
-APP_NAMESPACE = "qortal-hub"
+APP_NAMESPACE = "qortal-hub-test"
 PRESENCE_ASPECT = "presence"
-PRESENCE_VERSION = "v1"
+PRESENCE_VERSION = "v1-test"
 IDENTITY_FILENAME = "presence-bridge.identity"
 
 _state_lock = threading.RLock()
@@ -35,6 +35,7 @@ _announce_handler = None
 _known_peers: Dict[str, Any] = {}
 _candidate_peers: Dict[str, Dict[str, Any]] = {}
 _verified_overlay_peers: Dict[str, Dict[str, Any]] = {}
+_overlay_peer_failures: Dict[str, Dict[str, Any]] = {}
 # Outbound peers we chose for our presence overlay fanout.
 _active_overlay_neighbors: Dict[str, float] = {}
 # Inbound peers that chose us. They are included in publish fanout too, but
@@ -67,16 +68,18 @@ _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
 # Extra RNS announce while verified overlay peer count is below this (same cooldown as legacy "no peers" path).
 _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
-_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 16
-_OVERLAY_MAX_INBOUND_NEIGHBORS = 16
+_OVERLAY_MAX_OUTBOUND_NEIGHBORS = 8
+_OVERLAY_MAX_INBOUND_NEIGHBORS = 8
 _OVERLAY_MAX_NEIGHBORS = _OVERLAY_MAX_OUTBOUND_NEIGHBORS
 _OVERLAY_MIN_HEALTHY_FANOUT = 8
-_OVERLAY_NEIGHBOR_GRACE_SECONDS = 30.0
+_OVERLAY_NEIGHBOR_GRACE_SECONDS = 90.0
 _CANDIDATE_PROOF_WINDOW_SECONDS = 90.0
 _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
 _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
 _OVERLAY_LINK_PATH_AWAIT_SECONDS = 0.35
+_OVERLAY_LINK_FAILURE_SUPPRESS_LIMIT = 2
+_OVERLAY_LINK_FAILURE_SUPPRESS_SECONDS = 3 * 60.0
 _PRESENCE_BRIDGE_VERBOSE_LOGS = (
     os.environ.get("QORTAL_PRESENCE_BRIDGE_VERBOSE_LOGS", "").strip().lower()
     in ("1", "true", "yes", "on")
@@ -3501,6 +3504,7 @@ def _register_peer(
     st = _peer_lifecycle[peer_key]
     if source in ("inbound", "announce", "wire_kr", "gcall_join"):
         st["last_seen_inbound"] = now
+        _note_overlay_peer_alive(peer_key, source)
     if source in ("ts_seed", "recall"):
         st["ts_seed_until"] = now + _PEER_TS_SEED_LEASE_SECONDS
     if is_new:
@@ -3583,6 +3587,80 @@ def _prune_candidate_peers() -> None:
             )
 
 
+def _overlay_failure_should_suppress(reason: str) -> bool:
+    reason_key = str(reason or "").strip().lower()
+    return any(
+        token in reason_key
+        for token in (
+            "timeout",
+            "no_link",
+            "no_established_link",
+            "rx_idle_timeout",
+        )
+    )
+
+
+def _overlay_peer_suppressed_until(peer_key: str) -> float:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return 0.0
+    state = _overlay_peer_failures.get(peer_key)
+    if not isinstance(state, dict):
+        return 0.0
+    until = state.get("suppress_until")
+    if not isinstance(until, (int, float)):
+        return 0.0
+    now = time.time()
+    if float(until) <= now:
+        _overlay_peer_failures.pop(peer_key, None)
+        return 0.0
+    return float(until)
+
+
+def _overlay_peer_is_suppressed(peer_key: str) -> bool:
+    return _overlay_peer_suppressed_until(peer_key) > time.time()
+
+
+def _note_overlay_peer_alive(peer_key: str, source: str) -> None:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return
+    if _overlay_peer_failures.pop(peer_key, None) is not None:
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_peer_failure_reset "
+            f"peer={peer_key} source={source}"
+        )
+
+
+def _note_overlay_peer_failure(peer_key: str, reason: str) -> None:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key or not _overlay_failure_should_suppress(reason):
+        return
+    now = time.time()
+    state = _overlay_peer_failures.get(peer_key) or {}
+    count = int(state.get("count") or 0) + 1
+    suppress_until = state.get("suppress_until")
+    if count >= _OVERLAY_LINK_FAILURE_SUPPRESS_LIMIT:
+        suppress_until = now + _OVERLAY_LINK_FAILURE_SUPPRESS_SECONDS
+    _overlay_peer_failures[peer_key] = {
+        "count": count,
+        "last_reason": reason,
+        "last_failure_at": now,
+        "suppress_until": suppress_until if isinstance(suppress_until, (int, float)) else None,
+    }
+    if isinstance(suppress_until, (int, float)) and float(suppress_until) > now:
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_peer_suppressed "
+            f"peer={peer_key} reason={reason} failures={count} "
+            f"suppress_seconds={int(float(suppress_until) - now)}"
+        )
+    else:
+        verbose_presence_log(
+            "[presence_bridge] target=presence-reticulum overlay_peer_failure "
+            f"peer={peer_key} reason={reason} failures={count}"
+        )
+
+
 def _set_verified_overlay_peers(
     verified_peers: list[Dict[str, Any]], active_neighbor_hashes: list[str]
 ) -> None:
@@ -3621,6 +3699,8 @@ def _set_verified_overlay_peers(
             continue
         if not _should_initiate_overlay_link(peer_hash):
             continue
+        if _overlay_peer_is_suppressed(peer_hash):
+            continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
         # Fanout list from TS: verified neighbors plus candidate backfill
@@ -3636,6 +3716,8 @@ def _set_verified_overlay_peers(
         if peer_hash in next_neighbors:
             continue
         if not _should_initiate_overlay_link(peer_hash):
+            continue
+        if _overlay_peer_is_suppressed(peer_hash):
             continue
         if not isinstance(seen_at, (int, float)):
             continue
@@ -3660,6 +3742,7 @@ def _set_verified_overlay_peers(
                 or peer_key in next_neighbors
                 or (local_hex and peer_key == local_hex)
                 or not _should_initiate_overlay_link(peer_key)
+                or _overlay_peer_is_suppressed(peer_key)
             ):
                 continue
             last_seen = peer.get("last_seen") if isinstance(peer, dict) else None
@@ -3779,6 +3862,8 @@ def _promote_recent_verified_overlay_neighbors(
             continue
         if not _should_initiate_overlay_link(peer_key):
             continue
+        if _overlay_peer_is_suppressed(peer_key):
+            continue
         if (
             peer_key in exclude
             or peer_key in _active_overlay_neighbors
@@ -3823,6 +3908,7 @@ def _demote_overlay_fanout_peer(peer_hash: str, reason: str) -> bool:
         return False
     _active_overlay_neighbors.pop(peer_key, None)
     _inbound_overlay_neighbors.pop(peer_key, None)
+    _note_overlay_peer_failure(peer_key, reason)
     verbose_presence_log(
         "[presence_bridge] target=presence-reticulum overlay_fanout_demote "
         f"peer={peer_key} reason={reason} outbound={len(_active_overlay_neighbors)} "
@@ -3956,6 +4042,8 @@ def _bootstrap_overlay_neighbors_if_degraded(reason: str) -> int:
         if local_hex and peer_key == local_hex:
             continue
         if not _should_initiate_overlay_link(peer_key):
+            continue
+        if _overlay_peer_is_suppressed(peer_key):
             continue
         if peer_key in _active_overlay_neighbors or peer_key in _inbound_overlay_neighbors:
             continue
@@ -5322,10 +5410,10 @@ def _sync_overlay_links() -> None:
             await_path=False,
         )
         if state is None:
-            if not _should_initiate_overlay_link(peer_hash):
-                continue
-            _demote_overlay_fanout_peer(peer_hash, "sync_no_link")
-            demoted.add(peer_hash)
+            # A sync pass can run while Reticulum is still resolving recall/path
+            # state. Keep the fanout lease and let explicit closes or real send
+            # failures decide whether the peer is dead.
+            continue
     if demoted:
         desired_outbound = set(_active_overlay_neighbors.keys())
         desired = desired_outbound | set(_inbound_overlay_neighbors.keys())
@@ -5439,6 +5527,7 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
     if origin_peer_hash not in _known_peers:
         ensure_known_peer_from_wire_kr(public_key, origin_peer_hash)
     if origin_peer_hash in _known_peers:
+        _note_overlay_peer_alive(origin_peer_hash, "presence")
         st = _peer_lifecycle.setdefault(
             origin_peer_hash,
             {
@@ -5646,6 +5735,7 @@ def on_overlay_link_remote_identified(link, identity) -> None:
     emit_overlay_link_state(link_id, state, "identified")
     ph_reg = str(state.get("peerPresenceHash") or "").strip().lower()
     if ph_reg and _valid_presence_destination_hash_hex(ph_reg):
+        _note_overlay_peer_alive(ph_reg, "remote_identified")
         _register_active_overlay_for_peer(ph_reg, link_id)
 
 
@@ -5672,6 +5762,7 @@ def on_overlay_link_packet(message, packet) -> None:
             peer_hash = str(decoded.get("r") or "").strip().lower()
             if peer_hash:
                 state["peerPresenceHash"] = peer_hash
+                _note_overlay_peer_alive(peer_hash, "rx_presence")
                 _register_active_overlay_for_peer(peer_hash, link_id)
                 emit_overlay_link_state(link_id, state, "rx_presence")
         return
@@ -6958,6 +7049,7 @@ def on_outgoing_overlay_link_established(link) -> None:
     emit_overlay_link_state(link_id, state, "established")
     ph_out = str(state.get("peerPresenceHash") or "").strip().lower()
     if ph_out and _valid_presence_destination_hash_hex(ph_out):
+        _note_overlay_peer_alive(ph_out, "link_established")
         _register_active_overlay_for_peer(ph_out, link_id)
     if not _overlay_link_is_current(link_id, link):
         return

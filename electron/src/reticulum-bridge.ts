@@ -2388,15 +2388,6 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         queuedPackets: 0,
         closedByReticulum: false,
       });
-      if (
-        snap.peerPresenceHash &&
-        !this.hasEstablishedOverlaySnapshotForPeer(snap.peerPresenceHash)
-      ) {
-        this.emit('overlay-link-closed', {
-          peerHash: snap.peerPresenceHash,
-          reason: 'rx_idle_timeout',
-        });
-      }
     }
     return pruned;
   }
