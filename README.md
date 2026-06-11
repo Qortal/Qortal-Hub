@@ -1,40 +1,58 @@
-# Qortal Hub - Desktop Interface for Qortal
+# Qortal Hub
 
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/Qortal/Qortal-Hub?label=latest%20version)
 [![GitHub Releases](https://img.shields.io/github/downloads/Qortal/Qortal-Hub/latest/total)](https://github.com/Qortal/Qortal-Hub/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](https://opensource.org/licenses/GPL-3.0)
 [![Qortal Discord Invite](https://img.shields.io/discord/745037351163527189?color=%237289DA&label=Chat&logo=discord&logoColor=white)](https://discord.com/invite/54UyhB7)
 
-Qortal Hub is the newest interface for Qortal, part of the 'Qortal Trifecta' series of new User Interfaces for the platform/network.
+Qortal Hub is the primary interface for Qortal. It brings together the desktop app, and the new real-time reticulum based communication features.
 
-It is likely that Qortal Hub will become the new 'primary interface' for Qortal, and that the primary development focus surrounding Qortal Interface development, will be focused here instead of the previous 'qortal-ui' repo.
+Qortal 2.0 introduced Reticulum-based voice calling, including beta Q-call group calls with up to 7 participants.
 
-## Hosted access links
+For the best experience, run a local Qortal Core. If you just want to explore first or use Qortal without installing anything, hosted (public node, and hosted hub) access is available.
 
-Without installing any application on you computer or mobile phone, you can use the hosted-access [Qortal Hub](https://hub.qortal.link/) or [Qortal Go, the mobile version](https://go.qortal.link)
+## Highlights
 
-## Qortal Hub - Next-Level Secure Communications and More
+- Primary interface for Qortal users and ongoing UI development
+- Reticulum-based direct voice calls and group voice calls
+- Beta Q-call group calling with up to 7 participants
+- Hosted access for quick entry without a local install
+- Local node support for the full Qortal experience
+- Built-in support for internationalization and multiple languages
 
-Qortal Hub came along with the new Group Encryption methodologies applied, which provide **encrypted chat in Q-Chat for private groups.** Qortal Hub was the first to implement the new method of group encryption, which allows new users to see previously published data, unlike the previous group encryption methodology of things like 'threads' in Q-Mail.
+## Hosted Access
 
-Allowing new users to view older messages also comes along with a massive boost to the usability of the group encryption, and as such has been leveraged in multiple places inside Qortal Hub, Qortal Extension, and Qortal Go.
+You can use Qortal Hub without installing anything on your computer or mobile device.
+(NOTE: The hosted access version is still on 1.x.x version of Hub for the time being. New version is local only at the moment.)
 
-## Ease of Use Expanded
+- [Qortal Hub](https://hub.qortal.link/)
+- [Qortal Go, the mobile version](https://go.qortal.link/)
 
-Qortal Hub has a focus on ease of use for new users. Providing both the ability to utlilize Qortal without needing to run a local node (though running a local node is still the recommended method to access Qortal), and multiple built-in (QDN-published) walk-thru videos (by Qortal Justin) that explain the various basics of any given section of the application. This allows new users to 'jump right in' to utilizing Qortal Hub, and Qortal overall, in a much more streamlined fashion than that which was previously required by the 'legacy UI' (qortal-ui).
+## Getting Started
 
-Leveraging a redundant set of publicly accessible nodes provided by crowetic, Qortal Hub, Qortal Go, and Qortal Extension, all allow the use of Qortal without running a node, making it very simple to 'install and go' and start making use of the extensive functionality provided within the Qortal Ecosystem.
+1. Download the [latest release](https://github.com/Qortal/Qortal-Hub/releases/latest) or use hosted access.
+2. Install and launch Qortal Hub.
+3. If you want the full node-backed experience, install and run Qortal Core locally.
+4. Once Core is ready, use the chat, wallet, publishing, and voice features from Hub.
 
-Many additional details and a fully featured wiki will be created over time. Reach out on the chat on https://qortal.dev or in any of the community locations for Qortal, if you have any issues. Thank you!
+## Documentation
 
-## Internationalization (i18n)
+- [Reticulum integration](./docs/reticulum.md)
+- [Group audio calls](./docs/group-audio-calls.md)
+- [Development setup](./docs/development.md)
+- [Internationalization guidelines](./docs/i18n_languages.md)
+- [Contribution guide](./docs/contribution.md)
 
-Qortal-Hub supports internationalization (i18n) using [i18next](https://www.i18next.com/), allowing seamless translation of UI text into multiple languages.
-The setup includes modularized translation files, language detection, context and runtime language switching.
-Files with translation are in `src/i18n/locales/<locale>` folder.
+## Why Qortal Hub
 
-See [guidelines](./docs/i18n_languages.md).
+Qortal Hub is the place where the modern Qortal user experience is centered. It makes it easier for new users to get started while still supporting the local-node workflow that power users prefer.
 
-## Developer contribution
+The app is also the home for newer network-facing features, including Reticulum-powered communication and the evolving Q-call voice experience.
+
+## Need Help?
+
+If you hit a snag, join the community on [Discord](https://discord.com/invite/54UyhB7), join the Qortal private cloud chat (no registration required) - [Qortal Cloud Chat](https://cloud.qortal.org/call/iiip9ufk)   visit [qortal.dev](https://qortal.dev).
+
+## Development
 
 See the dedicated page for [development](./docs/development.md).
