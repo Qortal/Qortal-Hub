@@ -3711,8 +3711,6 @@ def _set_verified_overlay_peers(
             continue
         if local_hex and peer_hash == local_hex:
             continue
-        if not _should_initiate_overlay_link(peer_hash):
-            continue
         if _overlay_peer_is_suppressed(peer_hash):
             continue
         if peer_hash not in _known_peers:
@@ -3728,8 +3726,6 @@ def _set_verified_overlay_peers(
         if len(next_neighbors) >= _OVERLAY_MAX_OUTBOUND_NEIGHBORS:
             break
         if peer_hash in next_neighbors:
-            continue
-        if not _should_initiate_overlay_link(peer_hash):
             continue
         if _overlay_peer_is_suppressed(peer_hash):
             continue
@@ -3755,7 +3751,6 @@ def _set_verified_overlay_peers(
                 not peer_key
                 or peer_key in next_neighbors
                 or (local_hex and peer_key == local_hex)
-                or not _should_initiate_overlay_link(peer_key)
                 or _overlay_peer_is_suppressed(peer_key)
             ):
                 continue
@@ -3902,8 +3897,6 @@ def _promote_recent_verified_overlay_neighbors(
         if not peer_key:
             continue
         if local_hex and peer_key == local_hex:
-            continue
-        if not _should_initiate_overlay_link(peer_key):
             continue
         if _overlay_peer_is_suppressed(peer_key):
             continue
@@ -4083,8 +4076,6 @@ def _bootstrap_overlay_neighbors_if_degraded(reason: str) -> int:
         if not _valid_presence_destination_hash_hex(peer_key):
             continue
         if local_hex and peer_key == local_hex:
-            continue
-        if not _should_initiate_overlay_link(peer_key):
             continue
         if _overlay_peer_is_suppressed(peer_key):
             continue
@@ -5021,15 +5012,6 @@ def _dedup_pick_keep_link(
     return (link_id_a, link_id_b) if link_id_a < link_id_b else (link_id_b, link_id_a)
 
 
-def _should_initiate_overlay_link(peer_key: str) -> bool:
-    local_hex = _local_presence_hash_hex()
-    return not (
-        local_hex
-        and _valid_presence_destination_hash_hex(peer_key)
-        and local_hex > peer_key
-    )
-
-
 def _overlay_teardown_should_demote(reason: str) -> bool:
     # These are local management events, not proof that the peer cannot keep a
     # usable fanout link. Demoting here causes sync churn and can prune good links.
@@ -5059,12 +5041,6 @@ def _admit_overlay_peer_if_allowed(peer_key: str, reason: str, incoming: bool = 
         return False
     local_hex = _local_presence_hash_hex()
     if local_hex and peer_key == local_hex:
-        return False
-    if not incoming and not _should_initiate_overlay_link(peer_key):
-        verbose_presence_log(
-            "[presence_bridge] target=presence-reticulum overlay_admission_reject "
-            f"peer={peer_key} direction=outbound reason={reason}:wait_incoming"
-        )
         return False
     target = _inbound_overlay_neighbors if incoming else _active_overlay_neighbors
     direction = "inbound" if incoming else "outbound"
@@ -5279,7 +5255,6 @@ def _flush_overlay_link_pending(link_id: str) -> None:
 
 def _ensure_overlay_link(
     peer_hash: str,
-    respect_dial_owner: bool = True,
     await_path: bool = True,
 ) -> Optional[Dict[str, Any]]:
     peer_key = str(peer_hash or "").strip().lower()
@@ -5299,12 +5274,6 @@ def _ensure_overlay_link(
             if existing is not None:
                 return existing
             _active_overlay_link_id_by_peer_hash.pop(peer_key, None)
-    if respect_dial_owner and not _should_initiate_overlay_link(peer_key):
-        log(
-            "[presence_bridge] target=presence-reticulum overlay_link_wait_incoming "
-            f"peer={peer_key}"
-        )
-        return None
     if not _admit_overlay_peer_if_allowed(peer_key, "outbound", incoming=False):
         return None
     link_id = ""
@@ -5413,8 +5382,6 @@ def _retry_pending_overlay_connect_on_announce(peer_hash: str) -> None:
     local_hex = _local_presence_hash_hex()
     if local_hex and peer_key == local_hex:
         return
-    if not _should_initiate_overlay_link(peer_key):
-        return
     link = None
     existing_link_id = ""
     stale_state: Optional[Dict[str, Any]] = None
@@ -5510,13 +5477,11 @@ def _sync_overlay_links() -> None:
     _bootstrap_overlay_neighbors_if_degraded("sync")
     desired_outbound = set(_active_overlay_neighbors.keys())
     desired = desired_outbound | set(_inbound_overlay_neighbors.keys())
-    demoted: Set[str] = set()
     for peer_hash in desired_outbound:
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
         state = _ensure_overlay_link(
             peer_hash,
-            respect_dial_owner=True,
             await_path=False,
         )
         if state is None:
@@ -5524,9 +5489,6 @@ def _sync_overlay_links() -> None:
             # state. Keep the fanout lease and let explicit closes or real send
             # failures decide whether the peer is dead.
             continue
-    if demoted:
-        desired_outbound = set(_active_overlay_neighbors.keys())
-        desired = desired_outbound | set(_inbound_overlay_neighbors.keys())
     for peer_hash, link_id in list(_active_overlay_link_id_by_peer_hash.items()):
         if peer_hash in desired:
             continue
@@ -7178,11 +7140,8 @@ def on_outgoing_overlay_link_established(link) -> None:
 def _send_wire_to_overlay_peer(
     peer_hash: str, wire_bytes: bytes, traffic: str, queue_if_pending: bool = True
 ) -> bool:
-    # Background sync avoids duplicate dials, but send-on-demand must be able to
-    # recover when the expected incoming link is absent or stale.
     state = _ensure_overlay_link(
         peer_hash,
-        respect_dial_owner=False,
         await_path=False,
     )
     if state is None:
