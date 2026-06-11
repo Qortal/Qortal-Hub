@@ -2227,6 +2227,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       envelope,
       overlayNeighborHashes,
     });
+    if (!resp.ok && this.isBridgeCommandBacklogResponse(resp)) {
+      throw new Error(
+        resp.error ?? 'Reticulum bridge command backlog: publish_presence'
+      );
+    }
     const pubAddr =
       typeof (envelope.payload as { address?: string })?.address === 'string'
         ? (envelope.payload as { address: string }).address
@@ -2285,6 +2290,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       verifiedPeers,
       activeNeighborHashes,
     });
+    if (!resp.ok && this.isBridgeCommandBacklogResponse(resp)) {
+      throw new Error(
+        resp.error ?? 'Reticulum bridge command backlog: overlay_sync_state'
+      );
+    }
     return resp.ok;
   }
 
@@ -2737,6 +2747,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       },
       error: `Reticulum bridge queue overloaded: ${action}`,
     };
+  }
+
+  private isBridgeCommandBacklogResponse(frame: BridgeRespFrame): boolean {
+    const code = frame.payload?.code;
+    return code === 'bridge_command_queue_full' || code === 'scheduler_queue_full';
   }
 
   private countPendingRequestsByPriority(priority: BridgeCmdPriority): number {

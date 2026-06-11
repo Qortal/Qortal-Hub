@@ -198,6 +198,7 @@ AUDIO_MAX_ROOM_ID_LEN = 255
 AUDIO_MAX_HASH_LEN = 128
 
 _CMD_QUEUE_MAX = 256
+_CMD_DRAIN_BATCH_MAX = 16 if os.name == "nt" else 8
 _AUDIO_DECODED_QUEUE_MAX = 96
 _JSON_RESP_OUT_QUEUE_MAX = 512
 _JSON_EVENT_OUT_QUEUE_MAX = 2048
@@ -3133,6 +3134,31 @@ def _handle_rns_command_message(
     return True
 
 
+def _drain_rns_command_pass(
+    first_message: Optional[Dict[str, Any]] = None,
+    audio_queued_at_start_override: Optional[int] = None,
+) -> bool:
+    drained = 0
+    if first_message is not None:
+        if not _handle_rns_command_message(
+            first_message,
+            audio_queued_at_start_override,
+        ):
+            return False
+        drained += 1
+
+    while drained < _CMD_DRAIN_BATCH_MAX:
+        try:
+            message = _cmd_queue_bounded.get_nowait()
+        except queue.Empty:
+            break
+        audio_queued_at_start = _audio_decoded_queue.qsize()
+        if not _handle_rns_command_message(message, audio_queued_at_start):
+            return False
+        drained += 1
+    return True
+
+
 def _scheduler_lane_for_command(action: Any) -> str:
     action_name = str(action or "")
     if action_name in {"clear_group_audio_diagnostics"}:
@@ -3201,7 +3227,7 @@ def _rns_executor_loop() -> None:
                 except queue.Empty:
                     time.sleep(0.002)
                     continue
-                if not _handle_rns_command_message(message, 0):
+                if not _drain_rns_command_pass(message, 0):
                     return
                 next_lane = "audio"
                 queued_before_gap = _audio_decoded_queue.qsize()
@@ -3223,13 +3249,7 @@ def _rns_executor_loop() -> None:
             continue
 
         if cmd_ready:
-            try:
-                message = _cmd_queue_bounded.get_nowait()
-            except queue.Empty:
-                queued_before_gap = _audio_decoded_queue.qsize()
-                continue
-            audio_queued_at_start = _audio_decoded_queue.qsize()
-            if not _handle_rns_command_message(message, audio_queued_at_start):
+            if not _drain_rns_command_pass():
                 return
             next_lane = "audio"
             queued_before_gap = _audio_decoded_queue.qsize()
@@ -9912,10 +9932,33 @@ def stdin_loop() -> None:
             )
             continue
 
-        _cmd_queue_bounded.put(message)
-        _notify_rns_work_available()
+        req_id = str(message.get("id") or "")
+        action = str(message.get("action") or "")
+        try:
+            _cmd_queue_bounded.put_nowait(message)
+            _notify_rns_work_available()
+        except queue.Full:
+            if req_id:
+                emit_resp(
+                    req_id,
+                    False,
+                    payload={"code": "bridge_command_queue_full", "action": action},
+                    error=f"Reticulum bridge command queue is full: {action}",
+                )
+            else:
+                emit_event(
+                    "error",
+                    {
+                        "code": "bridge_command_queue_full",
+                        "message": "Reticulum bridge command queue is full",
+                        "action": action,
+                    },
+                )
 
-    _cmd_queue_bounded.put(None)
+    try:
+        _cmd_queue_bounded.put_nowait(None)
+    except queue.Full:
+        pass
     _notify_rns_work_available()
 
 

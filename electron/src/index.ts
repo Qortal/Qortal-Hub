@@ -22,7 +22,12 @@ import {
   installLocalNodeHttpsBlock,
   loadPersistedLocalNodeCa,
 } from './local-https-cert';
-import { log as loggerLog, error as loggerError } from './logger';
+import {
+  log as loggerLog,
+  error as loggerError,
+  warn as loggerWarn,
+  debug as loggerDebug,
+} from './logger';
 import {
   ElectronCapacitorApp,
   flushMiscPersistentStore,
@@ -77,6 +82,35 @@ import * as net from 'net';
 registerReticulumIpcHandlers();
 registerReticulumMeshIpcHandlers();
 
+function isBenignStdioWriteError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  return (
+    code === 'EPIPE' ||
+    code === 'EIO' ||
+    code === 'ENOTCONN' ||
+    code === 'EBADF'
+  );
+}
+
+function installStdioErrorGuards(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error) => {
+      if (!isBenignStdioWriteError(error)) {
+        throw error;
+      }
+    });
+  }
+}
+
+installStdioErrorGuards();
+
+autoUpdater.logger = {
+  info: (...args: unknown[]) => loggerLog('[Updater]', ...args),
+  warn: (...args: unknown[]) => loggerWarn('[Updater]', ...args),
+  error: (...args: unknown[]) => loggerError('[Updater]', ...args),
+  debug: (...args: unknown[]) => loggerDebug('[Updater]', ...args),
+};
+
 app.commandLine.appendSwitch(
   'disable-features',
   'BlockInsecurePrivateNetworkRequests'
@@ -84,8 +118,12 @@ app.commandLine.appendSwitch(
 
 // app.commandLine.appendSwitch('ignore-certificate-errors');
 
-// Graceful handling of unhandled errors.
-unhandled();
+// Graceful handling of unhandled errors. Route electron-unhandled logging
+// through our guarded logger so closed AppImage stdio pipes cannot crash while
+// reporting the original error.
+unhandled({
+  logger: (error) => loggerError('[Unhandled]', error),
+});
 
 // Flag to track if the app is quitting
 export let isQuitting = false;
