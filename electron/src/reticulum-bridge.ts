@@ -809,11 +809,30 @@ function killBridgeProcessTree(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   if (process.platform !== 'win32') {
     try {
-      process.kill(pid);
+      process.kill(-pid, 'SIGTERM');
       return true;
     } catch (err) {
-      loggerWarn(`[ReticulumBridge] Failed to signal child pid=${pid}:`, err);
-      return false;
+      const code =
+        typeof err === 'object' && err && 'code' in err
+          ? String((err as { code?: unknown }).code ?? '')
+          : '';
+      if (code !== 'ESRCH') {
+        loggerWarn(
+          `[ReticulumBridge] Failed to signal child process group pid=${pid}:`,
+          err
+        );
+        return false;
+      }
+      try {
+        process.kill(pid, 'SIGTERM');
+        return true;
+      } catch (pidErr) {
+        loggerWarn(
+          `[ReticulumBridge] Failed to signal child pid=${pid}:`,
+          pidErr
+        );
+        return false;
+      }
     }
   }
 
@@ -2553,6 +2572,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     const child = spawn(launch.cmd, launch.args, {
       cwd: launch.cwd,
       env,
+      detached: process.platform !== 'win32',
       stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });

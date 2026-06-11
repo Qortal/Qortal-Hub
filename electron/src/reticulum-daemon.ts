@@ -607,6 +607,25 @@ function waitForPidExitSync(pid: number, timeoutMs: number): boolean {
   return !isPidAlive(pid);
 }
 
+function signalReticulumUnixProcessGroupOrPid(
+  pid: number,
+  signal: NodeJS.Signals | undefined
+): void {
+  const effectiveSignal = signal ?? 'SIGTERM';
+  try {
+    process.kill(-pid, effectiveSignal);
+  } catch (groupError) {
+    const code =
+      typeof groupError === 'object' && groupError && 'code' in groupError
+        ? String((groupError as { code?: unknown }).code ?? '')
+        : '';
+    if (code !== 'ESRCH') {
+      throw groupError;
+    }
+    process.kill(pid, effectiveSignal);
+  }
+}
+
 function stopOrphanedReticulumBridgeProcess(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) {
     return false;
@@ -1307,10 +1326,8 @@ function signalReticulumPid(
           ).trim()}`
         );
       }
-    } else if (signal) {
-      process.kill(pid, signal);
     } else {
-      process.kill(pid);
+      signalReticulumUnixProcessGroupOrPid(pid, signal);
     }
     loggerLog(`[Reticulum] Signaled rnsd pid=${pid} context=${context}`);
     return true;
@@ -2544,7 +2561,11 @@ function stopBundledReticulumDaemonLocked(): void {
         child.kill();
       }
     } else {
-      child.kill('SIGTERM');
+      if (Number.isInteger(childPid) && Number(childPid) > 0) {
+        signalReticulumPid(Number(childPid), 'SIGTERM', 'stop-local');
+      } else {
+        child.kill('SIGTERM');
+      }
     }
   } catch (e) {
     loggerError('[Reticulum] Failed to signal child:', e);
