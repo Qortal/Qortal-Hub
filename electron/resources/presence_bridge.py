@@ -88,6 +88,11 @@ _PRESENCE_BRIDGE_VERBOSE_LOGS = (
 # Keep overlay links a little longer than that, but do not trust a link forever
 # when no inbound Qortal overlay traffic arrives after the remote app exits.
 _OVERLAY_LINK_RX_IDLE_TIMEOUT_SECONDS = 95.0
+_CALL_RELAY_DEDUP_TTL_SECONDS = 90.0
+_CALL_RELAY_DEDUP_MAX = 4096
+_call_relay_dedup: Dict[str, float] = {}
+_call_relay_dedup_last_log_at: float = 0.0
+_call_relay_dedup_suppressed_since_log: int = 0
 _QCHAT_FILE_LINK_OPEN_PATH_AWAIT_SECONDS = 8.0
 _QCHAT_FILE_LINK_MAX_OPEN_ATTEMPTS = 4
 _QCHAT_FILE_LINK_RETRY_DELAY_SECONDS = 2.0
@@ -5718,6 +5723,67 @@ def _emit_call_bridge_message(
     return True
 
 
+def _call_relay_dedup_key(kind: str, message: Dict[str, Any], wire_bytes: bytes) -> str:
+    message_type = message.get("t")
+    type_key = message_type if isinstance(message_type, str) and message_type else "?"
+    overlay_id = message.get("X")
+    if isinstance(overlay_id, str) and overlay_id:
+        return f"{kind}:{type_key}:x:{overlay_id}"
+    digest = hashlib.sha256(wire_bytes).hexdigest()
+    return f"{kind}:{type_key}:h:{digest}"
+
+
+def _sweep_call_relay_dedup(now: float) -> None:
+    expired = [
+        key for key, expires_at in _call_relay_dedup.items()
+        if not isinstance(expires_at, (int, float)) or float(expires_at) <= now
+    ]
+    for key in expired:
+        _call_relay_dedup.pop(key, None)
+    overflow = len(_call_relay_dedup) - _CALL_RELAY_DEDUP_MAX
+    if overflow > 0:
+        for key in list(_call_relay_dedup.keys())[:overflow]:
+            _call_relay_dedup.pop(key, None)
+
+
+def _filter_new_call_relay_frames(
+    kind: str,
+    messages: list[Dict[str, Any]],
+    encoded_frames: list[bytes],
+    message_types: list[str],
+) -> tuple[list[Dict[str, Any]], list[bytes], list[str], int]:
+    global _call_relay_dedup_last_log_at, _call_relay_dedup_suppressed_since_log
+    now = time.time()
+    with _state_lock:
+        _sweep_call_relay_dedup(now)
+        next_messages: list[Dict[str, Any]] = []
+        next_frames: list[bytes] = []
+        next_types: list[str] = []
+        suppressed = 0
+        for index, message in enumerate(messages):
+            wire_bytes = encoded_frames[index]
+            key = _call_relay_dedup_key(kind, message, wire_bytes)
+            expires_at = _call_relay_dedup.get(key)
+            if isinstance(expires_at, (int, float)) and float(expires_at) > now:
+                suppressed += 1
+                continue
+            _call_relay_dedup[key] = now + _CALL_RELAY_DEDUP_TTL_SECONDS
+            next_messages.append(message)
+            next_frames.append(wire_bytes)
+            next_types.append(message_types[index])
+        if suppressed:
+            _call_relay_dedup_suppressed_since_log += suppressed
+            if now - _call_relay_dedup_last_log_at >= 10.0:
+                log(
+                    "[presence_bridge] target=reticulum-call-relay-dedup "
+                    f"kind={kind} suppressed={_call_relay_dedup_suppressed_since_log} "
+                    f"cache={len(_call_relay_dedup)}"
+                )
+                _call_relay_dedup_suppressed_since_log = 0
+                _call_relay_dedup_last_log_at = now
+        return next_messages, next_frames, next_types, suppressed
+
+
 def on_overlay_link_closed(link) -> None:
     link_id = get_overlay_link_id(link)
     if link_id is None:
@@ -8751,7 +8817,13 @@ def _prepare_group_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
 
 
 def _send_group_signal_wire_to_peer(peer_hash: str, wire_bytes: bytes) -> Optional[Dict[str, Any]]:
-    if not _send_wire_to_overlay_peer(peer_hash, wire_bytes, "group_signal"):
+    if not _send_wire_to_overlay_peer(
+        peer_hash,
+        wire_bytes,
+        "group_signal",
+        queue_if_pending=False,
+    ):
+        _demote_overlay_fanout_peer(peer_hash, "group_signal_no_established_link")
         return {
             "payload": {"code": "packet_send_false"},
             "error": "Packet send returned False",
@@ -8806,7 +8878,13 @@ def _prepare_call_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
 
 
 def _send_call_signal_wire_to_peer(peer_hash: str, wire_bytes: bytes) -> Optional[Dict[str, Any]]:
-    if not _send_wire_to_overlay_peer(peer_hash, wire_bytes, "call_signal"):
+    if not _send_wire_to_overlay_peer(
+        peer_hash,
+        wire_bytes,
+        "call_signal",
+        queue_if_pending=False,
+    ):
+        _demote_overlay_fanout_peer(peer_hash, "call_signal_no_established_link")
         return {
             "payload": {"code": "packet_send_false"},
             "error": "Packet send returned False",
@@ -9113,6 +9191,23 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
             message_type = encoded.get("message_type")
             message_types.append(message_type if isinstance(message_type, str) else "")
 
+        messages, encoded_frames, message_types, suppressed_relay_duplicates = (
+            _filter_new_call_relay_frames(
+                "call", messages, encoded_frames, message_types
+            )
+        )
+        if not encoded_frames:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "fanoutPeers": 0,
+                    "fanoutHashes": [],
+                    "suppressedDuplicateRelay": suppressed_relay_duplicates,
+                },
+            )
+            return
+
         extra = payload.get("overlayNeighborHashes")
         if isinstance(extra, list):
             for h in extra:
@@ -9121,7 +9216,10 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
 
         _maybe_prune_stale_peers()
         _sync_overlay_links()
-        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        peer_hashes = _resolve_overlay_neighbor_hashes(
+            exclude_hashes,
+            established_only=True,
+        )
         if not peer_hashes:
             emit_resp(
                 req_id,
@@ -9135,13 +9233,15 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
             "[presence_bridge] target=call-signal-reticulum fanout "
             f"peers={len(peer_hashes)} exclude_hashes={','.join(exclude_hashes)} "
             f"fanout_hashes={','.join(peer_hashes)} "
-            f"message_types={','.join(t or '?' for t in message_types)}"
+            f"message_types={','.join(t or '?' for t in message_types)} "
+            f"suppressed_duplicate_relay={suppressed_relay_duplicates}"
         )
 
         any_peer_full_delivery = False
         last_failure_payload = {"code": "packet_send_false"}
         last_failure_error = "Packet send returned False"
         saw_failure = False
+        delivered_peer_hashes: list[str] = []
 
         for peer_hash in peer_hashes:
             failure = _prepare_call_signal_peer(peer_hash)
@@ -9185,14 +9285,15 @@ def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
                     )
             if peer_delivered_all_frames:
                 any_peer_full_delivery = True
+                delivered_peer_hashes.append(peer_hash)
 
         if any_peer_full_delivery:
             emit_resp(
                 req_id,
                 True,
                 payload={
-                    "fanoutPeers": len(peer_hashes),
-                    "fanoutHashes": peer_hashes,
+                    "fanoutPeers": len(delivered_peer_hashes),
+                    "fanoutHashes": delivered_peer_hashes,
                 },
             )
             return
@@ -9309,6 +9410,23 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
             message_type = encoded.get("message_type")
             message_types.append(message_type if isinstance(message_type, str) else "")
 
+        messages, encoded_frames, message_types, suppressed_relay_duplicates = (
+            _filter_new_call_relay_frames(
+                "group", messages, encoded_frames, message_types
+            )
+        )
+        if not encoded_frames:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "fanoutPeers": 0,
+                    "fanoutHashes": [],
+                    "suppressedDuplicateRelay": suppressed_relay_duplicates,
+                },
+            )
+            return
+
         extra = payload.get("overlayNeighborHashes")
         if isinstance(extra, list):
             for h in extra:
@@ -9317,7 +9435,10 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
 
         _maybe_prune_stale_peers()
         _sync_overlay_links()
-        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        peer_hashes = _resolve_overlay_neighbor_hashes(
+            exclude_hashes,
+            established_only=True,
+        )
         if not peer_hashes:
             emit_resp(
                 req_id,
@@ -9331,13 +9452,15 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
             "[presence_bridge] target=group-signal-reticulum fanout "
             f"peers={len(peer_hashes)} exclude_hashes={','.join(exclude_hashes)} "
             f"fanout_hashes={','.join(peer_hashes)} "
-            f"message_types={','.join(t or '?' for t in message_types)}"
+            f"message_types={','.join(t or '?' for t in message_types)} "
+            f"suppressed_duplicate_relay={suppressed_relay_duplicates}"
         )
 
         any_peer_full_delivery = False
         last_failure_payload = {"code": "packet_send_false"}
         last_failure_error = "Packet send returned False"
         saw_failure = False
+        delivered_peer_hashes: list[str] = []
 
         for peer_hash in peer_hashes:
             failure = _prepare_group_signal_peer(peer_hash)
@@ -9381,14 +9504,15 @@ def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
                     )
             if peer_delivered_all_frames:
                 any_peer_full_delivery = True
+                delivered_peer_hashes.append(peer_hash)
 
         if any_peer_full_delivery:
             emit_resp(
                 req_id,
                 True,
                 payload={
-                    "fanoutPeers": len(peer_hashes),
-                    "fanoutHashes": peer_hashes,
+                    "fanoutPeers": len(delivered_peer_hashes),
+                    "fanoutHashes": delivered_peer_hashes,
                 },
             )
             return
