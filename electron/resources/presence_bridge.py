@@ -79,6 +79,7 @@ _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
 _OVERLAY_LINK_PATH_AWAIT_SECONDS = 0.35
 _OVERLAY_LINK_FAILURE_SUPPRESS_LIMIT = 2
 _OVERLAY_LINK_FAILURE_SUPPRESS_SECONDS = 3 * 60.0
+_OVERLAY_LINK_TIMEOUT_RECENT_ACTIVITY_GRACE_SECONDS = 30.0
 _PRESENCE_BRIDGE_VERBOSE_LOGS = (
     os.environ.get("QORTAL_PRESENCE_BRIDGE_VERBOSE_LOGS", "").strip().lower()
     in ("1", "true", "yes", "on")
@@ -5053,6 +5054,27 @@ def _overlay_teardown_should_demote(reason: str) -> bool:
     return True
 
 
+def _overlay_link_recent_activity_age_seconds(state: Dict[str, Any], now: float) -> Optional[float]:
+    recent_at = 0.0
+    for key in ("last_send_ok_at", "last_rx_at", "last_activity_at"):
+        value = state.get(key)
+        if isinstance(value, (int, float)):
+            recent_at = max(recent_at, float(value))
+    if recent_at <= 0.0:
+        return None
+    return max(0.0, now - recent_at)
+
+
+def _overlay_timeout_close_should_keep_peer(state: Dict[str, Any], reason: str, now: float) -> bool:
+    if str(reason or "").strip().lower() != "timeout":
+        return False
+    age = _overlay_link_recent_activity_age_seconds(state, now)
+    return (
+        age is not None
+        and age <= _OVERLAY_LINK_TIMEOUT_RECENT_ACTIVITY_GRACE_SECONDS
+    )
+
+
 def _overlay_mesh_link_count_locked() -> int:
     return len(_overlay_links_by_id)
 
@@ -5200,8 +5222,7 @@ def _dedup_overlay_links_for_peer(
         candidates = [
             (link_id, state)
             for link_id, state in _overlay_links_by_id.items()
-            if state.get("established") is True
-            and str(state.get("peerPresenceHash") or "").strip().lower() == peer_key
+            if str(state.get("peerPresenceHash") or "").strip().lower() == peer_key
         ]
         if not candidates:
             if _active_overlay_link_id_by_peer_hash.get(peer_key):
@@ -5769,6 +5790,7 @@ def on_overlay_link_closed(link) -> None:
         return
     teardown_reason = getattr(link, "teardown_reason", None)
     reason = _overlay_teardown_reason_name(teardown_reason)
+    now = time.time()
     state = remove_overlay_link(link_id)
     if state is None:
         return
@@ -5781,6 +5803,14 @@ def on_overlay_link_closed(link) -> None:
         reason,
         closed_by_reticulum=True,
     )
+    if peer_hash and _overlay_timeout_close_should_keep_peer(state, reason, now):
+        age = _overlay_link_recent_activity_age_seconds(state, now)
+        _note_overlay_peer_alive(peer_hash, "recent_timeout_activity")
+        verbose_presence_log(
+            "[presence_bridge] target=presence-reticulum overlay_timeout_kept_peer "
+            f"peer={peer_hash} recent_activity_age_ms={int((age or 0.0) * 1000.0)}"
+        )
+        return
     if peer_hash and _overlay_teardown_should_demote(reason):
         _demote_overlay_fanout_peer(peer_hash, f"link_closed:{reason}")
 
