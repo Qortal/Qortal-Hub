@@ -22,9 +22,9 @@ from typing import IO, Any, Callable, Dict, List, Optional, Set, Tuple
 
 import RNS
 
-APP_NAMESPACE = "qortal-hub-test"
+APP_NAMESPACE = "qortal-hub"
 PRESENCE_ASPECT = "presence"
-PRESENCE_VERSION = "v1-test"
+PRESENCE_VERSION = "v1"
 IDENTITY_FILENAME = "presence-bridge.identity"
 
 _state_lock = threading.RLock()
@@ -446,6 +446,10 @@ def emit_event(event: str, payload: Optional[Dict[str, Any]] = None) -> None:
     if payload is not None:
         frame["payload"] = payload
     _queue_json_event_line(frame)
+
+
+def _log_clock_time() -> str:
+    return time.strftime("%H:%M:%S", time.localtime())
 
 
 def _mark_audio_queue_state_dirty() -> None:
@@ -7221,6 +7225,7 @@ def announce_local_destination(reason: str = "unspecified") -> None:
     _destination.announce(app_data=b"presence")
     log(
         "[presence_bridge] rns destination announce "
+        f"at={_log_clock_time()} "
         f"reason={reason} "
         + destination_hash_hex(_destination.hash)
     )
