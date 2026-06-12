@@ -2194,6 +2194,7 @@ export async function ensureReticulumManagersStarted(): Promise<void> {
     attachPresenceListeners(pm);
   }
   startReticulumPresenceHealthWatchdog();
+  startReticulumOverlayMaintenanceSync();
 
   const callMgr = getCallManager();
   if (callMgr) {
@@ -2329,6 +2330,7 @@ const queuedPresenceUpdates = new Map<string, unknown>();
 let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let lateReticulumRecoveryCleanup: (() => void) | null = null;
 const RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000, 30_000];
+const RETICULUM_OVERLAY_MAINTENANCE_SYNC_MS = 25_000;
 const RETICULUM_HEALTH_CHECK_MS = 30_000;
 const RETICULUM_HEALTH_STALE_INBOUND_MS = 2 * 60_000;
 const RETICULUM_HEALTH_BRIDGE_RESTART_MS = 5 * 60_000;
@@ -2344,6 +2346,7 @@ let reticulumOverlaySyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let reticulumOverlaySyncSequence = 0;
 let reticulumOverlaySyncInFlight = false;
 let reticulumOverlaySyncPending = false;
+let reticulumOverlayMaintenanceTimer: ReturnType<typeof setInterval> | null = null;
 let reticulumHealthTimer: ReturnType<typeof setInterval> | null = null;
 let reticulumHealthRecoveryInFlight = false;
 let reticulumHealthLastSoftRecoveryAt = 0;
@@ -2493,6 +2496,21 @@ function scheduleReticulumOverlayStateSyncRetry(
     void syncReticulumOverlayStateToBridge(manager, attempt + 1, sequence);
   }, delay);
   reticulumOverlaySyncRetryTimer.unref?.();
+}
+
+function startReticulumOverlayMaintenanceSync(): void {
+  if (reticulumOverlayMaintenanceTimer) return;
+  reticulumOverlayMaintenanceTimer = setInterval(() => {
+    if (isQuitting) return;
+    const manager = getPresenceManager();
+    const bridge = getReticulumBridge();
+    if (!manager || !bridge || bridge.getState() !== 'ready') return;
+    void syncReticulumOverlayStateToBridge(manager);
+  }, RETICULUM_OVERLAY_MAINTENANCE_SYNC_MS);
+  reticulumOverlayMaintenanceTimer.unref?.();
+  loggerLog(
+    `[ReticulumOverlay] Maintenance sync started interval_ms=${RETICULUM_OVERLAY_MAINTENANCE_SYNC_MS}`
+  );
 }
 
 export async function replayReticulumCachedPresence(
@@ -2826,6 +2844,7 @@ export function registerLateReticulumBridgeRecovery(): void {
       '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and rebinding call/group-call managers'
     );
     startReticulumPresenceHealthWatchdog();
+    startReticulumOverlayMaintenanceSync();
 
     let pm = getPresenceManager();
     try {

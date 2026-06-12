@@ -1333,14 +1333,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         error: 'No Reticulum frames fit encrypted wire limit',
       };
     }
-    const pm = getPresenceManager();
-    const overlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes(excludePeerPresenceHashes) ??
-      pm?.getReticulumFanoutDestinationHashes() ??
-      [];
     return this.sendDetailed('fanout_call', {
       messages,
-      overlayNeighborHashes,
       excludePeerPresenceHashes,
     });
   }
@@ -1374,14 +1368,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         error: 'No Reticulum frames fit encrypted wire limit',
       };
     }
-    const pm = getPresenceManager();
-    const overlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes(excludePeerPresenceHashes) ??
-      pm?.getReticulumFanoutDestinationHashes() ??
-      [];
     return this.sendDetailed('fanout_group_call', {
       messages,
-      overlayNeighborHashes,
       excludePeerPresenceHashes,
     });
   }
@@ -2214,18 +2202,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}${options.force ? ` force=yes reason=${options.reason ?? 'unspecified'}` : ''}`
     );
     this.lastPresencePublishAt = Date.now();
-    const pm = getPresenceManager();
-    const activeOverlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes() ?? [];
-    const overlayNeighborHashes =
-      activeOverlayNeighborHashes.length > 0
-        ? activeOverlayNeighborHashes
-        : (pm?.getReticulumVerifiedNeighborHashes() ??
-          pm?.getReticulumFanoutDestinationHashes() ??
-          []);
     const resp = await this.sendCommand('publish_presence', {
       envelope,
-      overlayNeighborHashes,
     });
     if (!resp.ok && this.isBridgeCommandBacklogResponse(resp)) {
       throw new Error(
@@ -2639,7 +2617,13 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     child.stderr.on('data', (chunk: string) => {
       if (this.child !== child) return;
       const text = chunk.trim();
-      if (text) loggerLog(`[ReticulumBridge/stderr] ${text}`);
+      if (!text) return;
+      const message = `[ReticulumBridge/stderr] ${text}`;
+      if (text.includes('bridge_pressure') || text.includes('presence_pressure')) {
+        loggerWarn(message);
+      } else {
+        loggerLog(message);
+      }
     });
     child.stdin.on('drain', () => {
       if (this.child !== child) return;
