@@ -303,11 +303,13 @@ _audio_executor_command_ms_max = 0.0
 _audio_executor_command_while_queued_ms_max = 0.0
 _audio_executor_command_slow_count = 0
 _audio_rns_callback_scheduler_gap_ms_max = 0.0
+_audio_rns_callback_scheduler_gap_ms_window = 0.0
 _audio_rns_callback_scheduler_gap_over_100_count = 0
 _audio_rns_callback_scheduler_gap_over_250_count = 0
 _audio_rns_callback_scheduler_gap_over_500_count = 0
 _audio_rns_callback_scheduler_gap_over_1000_count = 0
 _audio_rns_raw_inbound_gap_ms_max = 0.0
+_audio_rns_raw_inbound_gap_ms_window = 0.0
 _audio_rns_raw_inbound_gap_over_80_count = 0
 _audio_rns_raw_inbound_gap_over_160_count = 0
 _audio_rns_raw_inbound_gap_over_320_count = 0
@@ -323,6 +325,7 @@ _audio_rns_raw_inbound_to_link_receive_samples = 0
 _audio_rns_raw_inbound_interface_last = ""
 _audio_rns_raw_inbound_interface_worst = ""
 _audio_rns_shared_frame_gap_ms_max = 0.0
+_audio_rns_shared_frame_gap_ms_window = 0.0
 _audio_rns_shared_frame_gap_over_80_count = 0
 _audio_rns_shared_frame_gap_over_160_count = 0
 _audio_rns_shared_frame_gap_over_320_count = 0
@@ -359,13 +362,15 @@ _AUDIO_SLOW_RNS_SEND_LOG_THRESHOLD_MS = 40.0
 _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80.0
 _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320.0
 _AUDIO_TIMING_LOG_THROTTLE_SECONDS = 2.0
+_AUDIO_PATH_PRESSURE_LOG_INTERVAL_MS = 5000
 _AUDIO_EXECUTOR_STALL_LOG_THRESHOLD_MS = 120.0
 _AUDIO_PROCESS_BATCH_LOG_THRESHOLD_MS = 80.0
 _AUDIO_EXECUTOR_COMMAND_LOG_THRESHOLD_MS = 80.0
 _audio_queue_state_last_emit = 0.0
 _audio_queue_state_dirty = False
 _bridge_pressure_last_log_at = 0.0
-_bridge_pressure_last_rns_gap_ms = 0.0
+_rns_interface_pressure_last_log_at = 0.0
+_RNS_INTERFACE_PRESSURE_LOG_INTERVAL_SECONDS = 15.0
 _presence_pressure_window_started_at = time.monotonic()
 _presence_pressure_counts: Dict[str, int] = {}
 _callback_slow_last_log_by_name: Dict[str, float] = {}
@@ -517,7 +522,10 @@ def _format_bridge_pressure_counts(counts: Dict[str, int]) -> str:
 
 
 def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False) -> None:
-    global _bridge_pressure_last_log_at, _bridge_pressure_last_rns_gap_ms
+    global _bridge_pressure_last_log_at
+    global _audio_rns_callback_scheduler_gap_ms_window
+    global _audio_rns_raw_inbound_gap_ms_window
+    global _audio_rns_shared_frame_gap_ms_window
     if now is None:
         now = time.monotonic()
     if not force and now - _bridge_pressure_last_log_at < _BRIDGE_PRESSURE_LOG_INTERVAL_SECONDS:
@@ -541,13 +549,20 @@ def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False)
         audio_links = len(_audio_links_by_id)
         file_links = len(_qchat_file_links_by_id)
 
-    rns_scheduler_gap_ms = float(_audio_rns_callback_scheduler_gap_ms_max or 0.0)
-    rns_raw_gap_ms = float(_audio_rns_raw_inbound_gap_ms_max or 0.0)
-    rns_shared_gap_ms = float(_audio_rns_shared_frame_gap_ms_max or 0.0)
-    rns_gap_ms = max(rns_scheduler_gap_ms, rns_raw_gap_ms, rns_shared_gap_ms)
+    rns_scheduler_gap_ms_max = float(_audio_rns_callback_scheduler_gap_ms_max or 0.0)
+    rns_raw_gap_ms_max = float(_audio_rns_raw_inbound_gap_ms_max or 0.0)
+    rns_shared_gap_ms_max = float(_audio_rns_shared_frame_gap_ms_max or 0.0)
+    rns_gap_ms_max = max(rns_scheduler_gap_ms_max, rns_raw_gap_ms_max, rns_shared_gap_ms_max)
+    rns_scheduler_gap_ms_window = float(_audio_rns_callback_scheduler_gap_ms_window or 0.0)
+    rns_raw_gap_ms_window = float(_audio_rns_raw_inbound_gap_ms_window or 0.0)
+    rns_shared_gap_ms_window = float(_audio_rns_shared_frame_gap_ms_window or 0.0)
+    rns_gap_ms_window = max(
+        rns_scheduler_gap_ms_window,
+        rns_raw_gap_ms_window,
+        rns_shared_gap_ms_window,
+    )
     rns_gap_pressure = (
-        rns_gap_ms >= _BRIDGE_PRESSURE_RNS_GAP_THRESHOLD_MS
-        and rns_gap_ms > _bridge_pressure_last_rns_gap_ms
+        rns_gap_ms_window >= _BRIDGE_PRESSURE_RNS_GAP_THRESHOLD_MS
     )
     has_pressure = (
         cmd_q > 0
@@ -561,7 +576,6 @@ def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False)
         return
 
     _bridge_pressure_last_log_at = now
-    _bridge_pressure_last_rns_gap_ms = max(_bridge_pressure_last_rns_gap_ms, rns_gap_ms)
     lanes_text = _format_bridge_pressure_counts(lane_depths)
     slow_text = _format_bridge_pressure_counts(slow_counts)
     log(
@@ -569,10 +583,22 @@ def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False)
         f"cmd_q={cmd_q} resp_q={resp_q} event_q={event_q} "
         f"lanes={lanes_text} "
         f"links=overlay:{overlay_links},audio:{audio_links},file:{file_links} "
-        f"scheduler_slow={slow_text} rns_gap_ms={int(rns_gap_ms)} "
-        f"rns_gap_parts=scheduler:{int(rns_scheduler_gap_ms)},raw:{int(rns_raw_gap_ms)},"
-        f"shared:{int(rns_shared_gap_ms)}"
+        f"scheduler_slow={slow_text} rns_gap_ms_window={int(rns_gap_ms_window)} "
+        f"rns_gap_ms_max={int(rns_gap_ms_max)} "
+        f"rns_gap_window_parts=scheduler:{int(rns_scheduler_gap_ms_window)},"
+        f"raw:{int(rns_raw_gap_ms_window)},shared:{int(rns_shared_gap_ms_window)} "
+        f"rns_gap_max_parts=scheduler:{int(rns_scheduler_gap_ms_max)},"
+        f"raw:{int(rns_raw_gap_ms_max)},shared:{int(rns_shared_gap_ms_max)}"
     )
+    if rns_gap_ms_window >= _BRIDGE_PRESSURE_RNS_GAP_THRESHOLD_MS:
+        _maybe_log_rns_interface_pressure(
+            rns_gap_ms_window,
+            reason="bridge_pressure",
+            now=now,
+        )
+    _audio_rns_callback_scheduler_gap_ms_window = 0.0
+    _audio_rns_raw_inbound_gap_ms_window = 0.0
+    _audio_rns_shared_frame_gap_ms_window = 0.0
 
 
 def _note_presence_pressure(kind: str, message_type: str = "") -> None:
@@ -877,6 +903,11 @@ def _get_audio_route_stats(
             "lastFd4EnqueueAtMs": 0,
             "lastActivityAtMs": 0,
             "lastRoomId": "",
+            "pressureWindowStartedAtMs": 0,
+            "pressureWindowFrames": 0,
+            "pressureWindowBytes": 0,
+            "pressureWindowReceiveGapMsMax": 0,
+            "pressureWindowFd4DelayMsMax": 0,
             "sendGapMsMax": 0,
             "receiveGapMsMax": 0,
             "sendGapOver80Count": 0,
@@ -981,6 +1012,46 @@ def _note_audio_route_bucketed_duration(
         if duration >= bucket_ms:
             key = f"{bucket_prefix}Over{bucket_ms}Count"
             stats[key] = int(stats.get(key) or 0) + 1
+
+
+def _maybe_log_audio_path_pressure(
+    stats: Dict[str, Any],
+    *,
+    transport: str,
+    route_key: str,
+    room_id: str,
+    peer_presence_hash: str,
+    peer_destination_hash: str,
+    now_ms: int,
+) -> None:
+    window_started_at_ms = int(stats.get("pressureWindowStartedAtMs") or 0)
+    if window_started_at_ms <= 0:
+        stats["pressureWindowStartedAtMs"] = now_ms
+        return
+    elapsed_ms = max(0, now_ms - window_started_at_ms)
+    if elapsed_ms < _AUDIO_PATH_PRESSURE_LOG_INTERVAL_MS:
+        return
+    frames = int(stats.get("pressureWindowFrames") or 0)
+    if frames <= 0:
+        stats["pressureWindowStartedAtMs"] = now_ms
+        return
+    bytes_count = int(stats.get("pressureWindowBytes") or 0)
+    receive_gap_ms = int(stats.get("pressureWindowReceiveGapMsMax") or 0)
+    fd4_delay_ms = int(stats.get("pressureWindowFd4DelayMsMax") or 0)
+    log(
+        f"[presence_bridge] audio_path_pressure side=python_rx "
+        f"window_ms={elapsed_ms} room={room_id or 'n/a'} transport={transport} "
+        f"route={_short_route(route_key)} link={_short_route(route_key) if transport == 'link' else 'n/a'} "
+        f"peer={_short_route(peer_presence_hash)} dest={_short_route(peer_destination_hash)} "
+        f"packets={frames} bytes={bytes_count} rx_gap_ms={receive_gap_ms} "
+        f"fd4_enqueue_delay_ms={fd4_delay_ms} fd4_enqueued={int(stats.get('fd4EnqueuedFrames') or 0)} "
+        f"fd4_failures={int(stats.get('fd4EnqueueFailures') or 0)}"
+    )
+    stats["pressureWindowStartedAtMs"] = now_ms
+    stats["pressureWindowFrames"] = 0
+    stats["pressureWindowBytes"] = 0
+    stats["pressureWindowReceiveGapMsMax"] = 0
+    stats["pressureWindowFd4DelayMsMax"] = 0
 
 
 def _interface_label(interface: Any) -> str:
@@ -1454,6 +1525,7 @@ def _prune_rns_raw_inbound_probe_cache() -> None:
 def _record_rns_shared_frame_probe(raw: Any, interface: Any) -> None:
     global _audio_rns_shared_frame_gap_ms_max, _audio_rns_shared_frame_interface_last
     global _audio_rns_shared_frame_interface_worst
+    global _audio_rns_shared_frame_gap_ms_window
     if not isinstance(raw, (bytes, bytearray)) or len(raw) < 4:
         return
     try:
@@ -1483,6 +1555,8 @@ def _record_rns_shared_frame_probe(raw: Any, interface: Any) -> None:
                 if frame_gap_ms > _audio_rns_shared_frame_gap_ms_max:
                     _audio_rns_shared_frame_gap_ms_max = float(frame_gap_ms)
                     _audio_rns_shared_frame_interface_worst = interface_name
+                if frame_gap_ms > _audio_rns_shared_frame_gap_ms_window:
+                    _audio_rns_shared_frame_gap_ms_window = float(frame_gap_ms)
                 _increment_shared_frame_gap_buckets(float(frame_gap_ms))
                 if frame_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
                     _log_audio_timing_anomaly(
@@ -1509,6 +1583,7 @@ def _record_rns_shared_frame_probe(raw: Any, interface: Any) -> None:
 def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
     global _audio_rns_raw_inbound_gap_ms_max, _audio_rns_raw_inbound_interface_last
     global _audio_rns_raw_inbound_interface_worst
+    global _audio_rns_raw_inbound_gap_ms_window
     global _audio_rns_shared_frame_to_transport_inbound_ms_max
     global _audio_rns_shared_frame_to_transport_inbound_samples
     global _audio_rns_shared_frame_interface_last, _audio_rns_shared_frame_interface_worst
@@ -1571,6 +1646,8 @@ def _record_rns_raw_inbound_probe(raw: Any, interface: Any) -> None:
                 if raw_gap_ms > _audio_rns_raw_inbound_gap_ms_max:
                     _audio_rns_raw_inbound_gap_ms_max = float(raw_gap_ms)
                     _audio_rns_raw_inbound_interface_worst = interface_name
+                if raw_gap_ms > _audio_rns_raw_inbound_gap_ms_window:
+                    _audio_rns_raw_inbound_gap_ms_window = float(raw_gap_ms)
                 _increment_raw_gap_buckets(float(raw_gap_ms))
                 if raw_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
                     _log_audio_timing_anomaly(
@@ -2017,6 +2094,7 @@ def _note_audio_route_receive(
             else _now_wall_ms()
         )
         previous_receive_ms = int(stats.get("lastReceiveAtMs") or 0)
+        receive_gap_ms = 0
         if previous_receive_ms > 0:
             receive_gap_ms = max(0, now_ms - previous_receive_ms)
             if receive_gap_ms >= _AUDIO_TIMING_GAP_LOG_THRESHOLD_MS:
@@ -2037,6 +2115,10 @@ def _note_audio_route_receive(
         )
         stats["receivedFrames"] = int(stats.get("receivedFrames") or 0) + 1
         stats["receivedBytes"] = int(stats.get("receivedBytes") or 0) + max(0, int(byte_count or 0))
+        stats["pressureWindowFrames"] = int(stats.get("pressureWindowFrames") or 0) + 1
+        stats["pressureWindowBytes"] = int(stats.get("pressureWindowBytes") or 0) + max(0, int(byte_count or 0))
+        if receive_gap_ms > int(stats.get("pressureWindowReceiveGapMsMax") or 0):
+            stats["pressureWindowReceiveGapMsMax"] = receive_gap_ms
         stats["lastReceiveAtMs"] = now_ms
         stats["lastActivityAtMs"] = now_ms
         stats["lastRoomId"] = str(room_id or "")
@@ -2051,6 +2133,8 @@ def _note_audio_route_receive(
             enqueue_delay_ms = max(0, fd4_ms - now_ms)
             if enqueue_delay_ms > int(stats.get("receiveToFd4EnqueueMsMax") or 0):
                 stats["receiveToFd4EnqueueMsMax"] = enqueue_delay_ms
+            if enqueue_delay_ms > int(stats.get("pressureWindowFd4DelayMsMax") or 0):
+                stats["pressureWindowFd4DelayMsMax"] = enqueue_delay_ms
             if enqueue_delay_ms >= _AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS:
                 _log_audio_timing_anomaly(
                     "rns-audio-fd4-enqueue-delay",
@@ -2062,6 +2146,15 @@ def _note_audio_route_receive(
                 )
         elif fd4_enqueued is False:
             stats["fd4EnqueueFailures"] = int(stats.get("fd4EnqueueFailures") or 0) + 1
+        _maybe_log_audio_path_pressure(
+            stats,
+            transport=transport,
+            route_key=route_key,
+            room_id=room_id,
+            peer_presence_hash=peer_presence_hash,
+            peer_destination_hash=peer_destination_hash,
+            now_ms=now_ms,
+        )
         _mark_audio_queue_state_dirty()
 
 
@@ -2187,11 +2280,13 @@ def _emit_audio_queue_state(force: bool = False) -> None:
             "executorCommandMsMax": _audio_executor_command_ms_max,
             "executorCommandWhileQueuedMsMax": _audio_executor_command_while_queued_ms_max,
             "executorCommandSlowCount": _audio_executor_command_slow_count,
+            "rnsCallbackSchedulerGapMsWindow": _audio_rns_callback_scheduler_gap_ms_window,
             "rnsCallbackSchedulerGapMsMax": _audio_rns_callback_scheduler_gap_ms_max,
             "rnsCallbackSchedulerGapOver100Count": _audio_rns_callback_scheduler_gap_over_100_count,
             "rnsCallbackSchedulerGapOver250Count": _audio_rns_callback_scheduler_gap_over_250_count,
             "rnsCallbackSchedulerGapOver500Count": _audio_rns_callback_scheduler_gap_over_500_count,
             "rnsCallbackSchedulerGapOver1000Count": _audio_rns_callback_scheduler_gap_over_1000_count,
+            "rnsRawInboundGapMsWindow": _audio_rns_raw_inbound_gap_ms_window,
             "rnsRawInboundGapMsMax": _audio_rns_raw_inbound_gap_ms_max,
             "rnsRawInboundGapOver80Count": _audio_rns_raw_inbound_gap_over_80_count,
             "rnsRawInboundGapOver160Count": _audio_rns_raw_inbound_gap_over_160_count,
@@ -2207,6 +2302,7 @@ def _emit_audio_queue_state(force: bool = False) -> None:
             "rnsRawInboundToLinkReceiveSamples": _audio_rns_raw_inbound_to_link_receive_samples,
             "rnsRawInboundInterfaceLast": _audio_rns_raw_inbound_interface_last,
             "rnsRawInboundInterfaceWorst": _audio_rns_raw_inbound_interface_worst,
+            "rnsSharedFrameGapMsWindow": _audio_rns_shared_frame_gap_ms_window,
             "rnsSharedFrameGapMsMax": _audio_rns_shared_frame_gap_ms_max,
             "rnsSharedFrameGapOver80Count": _audio_rns_shared_frame_gap_over_80_count,
             "rnsSharedFrameGapOver160Count": _audio_rns_shared_frame_gap_over_160_count,
@@ -3436,6 +3532,97 @@ def as_bool(value: Any) -> bool:
     return False
 
 
+def _compact_interface_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (int, float)):
+        if isinstance(value, float):
+            return f"{value:.3f}".rstrip("0").rstrip(".")
+        return str(value)
+    return str(value or "").replace(",", "_").replace(" ", "_")[:80]
+
+
+def _compact_interface_detail(item: Dict[str, Any]) -> str:
+    name = str(item.get("name") or item.get("short_name") or item.get("ifac_name") or "")
+    interface_type = str(item.get("type") or item.get("ifac_type") or "")
+    online = as_bool(item.get("status"))
+    parts = [
+        f"name={name.replace(',', '_')[:80] or 'unknown'}",
+        f"type={interface_type.replace(',', '_')[:48] or 'unknown'}",
+        f"online={'yes' if online else 'no'}",
+    ]
+    wanted_keys = (
+        "rxb",
+        "txb",
+        "rxs",
+        "txs",
+        "rx",
+        "tx",
+        "rx_bytes",
+        "tx_bytes",
+        "rx_bitrate",
+        "tx_bitrate",
+        "bitrate",
+        "clients",
+        "peers",
+        "held_announces",
+        "announces",
+    )
+    for key in wanted_keys:
+        if key in item:
+            parts.append(f"{key}={_compact_interface_value(item.get(key))}")
+    return "{" + ";".join(parts) + "}"
+
+
+def _collect_rns_interface_pressure_summary(max_interfaces: int = 12) -> str:
+    if _reticulum is None:
+        return "reticulum=not-started"
+    try:
+        stats = _reticulum.get_interface_stats() or {}
+    except Exception as exc:
+        return f"error={str(exc).replace(' ', '_')[:120]}"
+    interfaces = stats.get("interfaces")
+    if not isinstance(interfaces, list):
+        interfaces = []
+    details = [
+        _compact_interface_detail(item)
+        for item in interfaces[:max_interfaces]
+        if isinstance(item, dict)
+    ]
+    omitted = max(0, len(interfaces) - len(details))
+    top_parts = [
+        f"transport={'on' if 'transport_id' in stats else 'off'}",
+        f"interfaces={len(interfaces)}",
+    ]
+    for key in ("transport_id", "rss", "ifac_size", "path_table_size", "link_count"):
+        if key in stats:
+            top_parts.append(f"{key}={_compact_interface_value(stats.get(key))}")
+    if omitted > 0:
+        top_parts.append(f"omitted={omitted}")
+    return " ".join(top_parts) + " details=" + "|".join(details)
+
+
+def _maybe_log_rns_interface_pressure(
+    gap_ms: float,
+    *,
+    reason: str,
+    now: Optional[float] = None,
+) -> None:
+    global _rns_interface_pressure_last_log_at
+    if gap_ms < _BRIDGE_PRESSURE_RNS_GAP_THRESHOLD_MS:
+        return
+    if now is None:
+        now = time.monotonic()
+    if now - _rns_interface_pressure_last_log_at < _RNS_INTERFACE_PRESSURE_LOG_INTERVAL_SECONDS:
+        return
+    _rns_interface_pressure_last_log_at = now
+    log(
+        "[presence_bridge] rns_interface_pressure "
+        f"reason={reason} gap_ms={int(gap_ms)} "
+        f"{_collect_rns_interface_pressure_summary()}"
+    )
+
+
 def _is_qortal_mesh_listen_name(name: str) -> bool:
     """Match managed-config section title; RNS may use a short or long display name."""
     n = (name or "").strip()
@@ -3610,6 +3797,7 @@ def ensure_transport_monitor_started() -> None:
 
 def rns_callback_scheduler_monitor_loop() -> None:
     global _audio_rns_callback_scheduler_gap_ms_max
+    global _audio_rns_callback_scheduler_gap_ms_window
     global _audio_rns_callback_scheduler_gap_over_100_count
     global _audio_rns_callback_scheduler_gap_over_250_count
     global _audio_rns_callback_scheduler_gap_over_500_count
@@ -3623,6 +3811,8 @@ def rns_callback_scheduler_monitor_loop() -> None:
         last_at = now
         if elapsed_ms > _audio_rns_callback_scheduler_gap_ms_max:
             _audio_rns_callback_scheduler_gap_ms_max = elapsed_ms
+        if elapsed_ms > _audio_rns_callback_scheduler_gap_ms_window:
+            _audio_rns_callback_scheduler_gap_ms_window = elapsed_ms
         if elapsed_ms >= 100.0:
             _audio_rns_callback_scheduler_gap_over_100_count += 1
             if elapsed_ms >= 250.0:

@@ -285,6 +285,7 @@ const GC_RETICULUM_AUDIO_FLUSH_RETRY_DELAY_MS = 5;
 const GC_RETICULUM_AUDIO_RECOVERY_HOLD_MS = 160;
 const GC_RETICULUM_AUDIO_RECOVERY_BUFFER_MAX_AGE_MS = 200;
 const GC_RETICULUM_AUDIO_RECOVERY_ACTION_COOLDOWN_MS = 1_000;
+const GC_RETICULUM_AUDIO_STALE_ROUTE_HOLD_MS = 5_000;
 /** Give GC_LEAVE link-control frames one short flush window before link teardown. */
 const GC_RETICULUM_LEAVE_LINK_DRAIN_MS = 350;
 /** Local duplicate/reset closes can race later bridge/auth callbacks for the same Reticulum link id. */
@@ -5385,6 +5386,54 @@ export class GroupCallManager extends EventEmitter {
     return Math.max(0, now - pending[0]!.enqueuedAtMs);
   }
 
+  private isReticulumAudioRouteRecovering(
+    state: ReticulumAudioPeerState,
+    now = Date.now()
+  ): boolean {
+    return state.recoveryHoldUntilMs > now;
+  }
+
+  private canQueueLiveReticulumAudio(
+    state: ReticulumAudioPeerState,
+    now = Date.now()
+  ): boolean {
+    if (this.isReticulumAudioRouteRecovering(state, now)) {
+      if (
+        state.transport === 'link' &&
+        this.hasEstablishedReticulumAudioLink(state)
+      ) {
+        state.recoveryHoldUntilMs = 0;
+        state.recoveryReason = '';
+      } else {
+        return false;
+      }
+    }
+    if (state.transport === 'link') {
+      return this.hasEstablishedReticulumAudioLink(state);
+    }
+    return true;
+  }
+
+  private holdReticulumAudioRouteRecovery(
+    address: string,
+    state: ReticulumAudioPeerState,
+    reason: string,
+    holdMs = GC_RETICULUM_AUDIO_STALE_ROUTE_HOLD_MS
+  ): void {
+    const now = Date.now();
+    state.recoveryHoldUntilMs = Math.max(
+      state.recoveryHoldUntilMs,
+      now + holdMs
+    );
+    state.recoveryReason = reason;
+    state.pending = [];
+    this.logReticulumFailureThrottled(
+      `audio-route-recovery:${address}:${reason}`,
+      `[GCall] Reticulum audio route recovering address=${address} reason=${reason} holdMs=${holdMs}`
+    );
+    this.scheduleReticulumAudioFlush(holdMs);
+  }
+
   private shortReticulumAudioRoute(routeKey: string): string {
     return routeKey.length > 16 ? routeKey.slice(0, 16) : routeKey;
   }
@@ -6090,6 +6139,8 @@ export class GroupCallManager extends EventEmitter {
     state.lastLinkUnreadyReason = '';
     state.lastLinkUnreadyAtMs = 0;
     state.lastLinkUnreadyLinkId = '';
+    state.recoveryHoldUntilMs = 0;
+    state.recoveryReason = '';
     state.opening = false;
     this.clearReticulumAudioOpenDefer(address);
     this.reticulumAudioAddressByLinkId.set(linkId, address);
@@ -7777,13 +7828,26 @@ export class GroupCallManager extends EventEmitter {
         code === 'exception')
     ) {
       const state = this.reticulumAudioPeersByAddress.get(address);
-      if (state?.linkId === payload.linkId) {
-        this.markReticulumAudioLinkUnready(
-          address,
-          payload.linkId,
-          `send-failed:${payload.code || payload.reason}`
-        );
-        void this.openReticulumAudioLinkForAddress(address);
+      if (state) {
+        const reason = `send-failed:${payload.code || payload.reason}`;
+        if (payload.code === 'unknown_link_id') {
+          this.reticulumAudioAddressByLinkId.delete(payload.linkId);
+        }
+        const failedCurrentLink = state.linkId === payload.linkId;
+        const hasHealthyReplacementLink =
+          state.transport === 'link' &&
+          state.established &&
+          Boolean(state.linkId) &&
+          state.linkId !== payload.linkId;
+        if (failedCurrentLink) {
+          this.markReticulumAudioLinkUnready(address, payload.linkId, reason);
+        }
+        if (!hasHealthyReplacementLink) {
+          this.holdReticulumAudioRouteRecovery(address, state, reason);
+        }
+        if (!hasHealthyReplacementLink && !state.linkId && !state.opening) {
+          void this.openReticulumAudioLinkForAddress(address);
+        }
       }
     }
     if ((payload.transport ?? 'link') === 'packet') {
@@ -8063,6 +8127,33 @@ export class GroupCallManager extends EventEmitter {
         },
       };
     }
+    const now = Date.now();
+    if (!this.canQueueLiveReticulumAudio(state, now)) {
+      if (state.transport === 'link' && !state.opening) {
+        void this.openReticulumAudioLinkForAddress(toAddress);
+      }
+      const recoveryReason =
+        state.recoveryHoldUntilMs > now
+          ? state.recoveryReason || 'route-recovering'
+          : 'link-not-established';
+      this.logReticulumFailureThrottled(
+        `audio-drop-unready:${roomId}:${toAddress}:${recoveryReason}`,
+        `[GCall] sendAudio dropped: Reticulum route not ready room=${roomId} target=${toAddress} reason=${recoveryReason}`
+      );
+      return {
+        success: true,
+        diagnostics: this.buildReticulumAudioSendDiagnostics(
+          state,
+          toAddress,
+          {
+            queuePressureDrops: 0,
+            staleDrops: 0,
+            linkUnreadyDrops: 1,
+            packetSendFailures: 0,
+          }
+        ),
+      };
+    }
     const enqueueStats = this.enqueuePendingReticulumAudio(state, roomId, data);
     this.scheduleReticulumAudioFlush();
     if (this.hasEstablishedReticulumAudioLink(state)) {
@@ -8104,19 +8195,37 @@ export class GroupCallManager extends EventEmitter {
       return { ok: false, reason: 'bridge-unavailable' };
     }
     const routes: ReticulumAudioDataPlaneRoute[] = [];
+    let skippedRecoveringRoutes = 0;
+    let skippedUnreadyRoutes = 0;
     for (const rawAddress of toAddresses) {
       const address = rawAddress.trim();
       if (!address || this.localAddresses.has(address)) continue;
       const state = this.ensureReticulumAudioPeerState(roomId, address);
       if (!state) {
-        loggerLog(
+        this.logReticulumFailureThrottled(
+          `audio-session-route-missing:${roomId}:${address}`,
           `[GCall] target=gcall-audio-data-plane stage=route-missing room=${roomId} target=${address}`
         );
         continue;
       }
-      if (state.transport === 'link' && (!state.linkId || !state.established)) {
-        loggerLog(
-          `[GCall] target=gcall-audio-data-plane stage=route-unready room=${roomId} target=${address} reason=link-not-established`
+      const now = Date.now();
+      if (!this.canQueueLiveReticulumAudio(state, now)) {
+        const recoveryReason =
+          state.recoveryHoldUntilMs > now
+            ? state.recoveryReason || 'route-recovering'
+            : 'link-not-established';
+        if (state.transport === 'link' && !state.opening) {
+          void this.openReticulumAudioLinkForAddress(address);
+        }
+        const recovering = state.recoveryHoldUntilMs > now;
+        if (recovering) {
+          skippedRecoveringRoutes++;
+        } else {
+          skippedUnreadyRoutes++;
+        }
+        this.logReticulumFailureThrottled(
+          `audio-session-route-${recovering ? 'recovering' : 'unready'}:${roomId}:${address}:${recoveryReason}`,
+          `[GCall] target=gcall-audio-data-plane stage=route-${recovering ? 'recovering' : 'unready'} room=${roomId} target=${address} reason=${recoveryReason}`
         );
         continue;
       }
@@ -8129,8 +8238,15 @@ export class GroupCallManager extends EventEmitter {
       });
     }
     if (routes.length === 0) {
-      loggerLog(
-        `[GCall] target=gcall-audio-data-plane stage=session-fallback room=${roomId} reason=no-routes targets=${toAddresses.length}`
+      const reason =
+        skippedRecoveringRoutes > 0
+          ? 'routes-recovering'
+          : skippedUnreadyRoutes > 0
+            ? 'routes-unready'
+            : 'no-routes';
+      this.logReticulumFailureThrottled(
+        `audio-session-fallback:${roomId}:${reason}:${toAddresses.length}`,
+        `[GCall] target=gcall-audio-data-plane stage=session-fallback room=${roomId} reason=${reason} targets=${toAddresses.length}`
       );
       return { ok: false, reason: 'no-route' };
     }
@@ -8224,6 +8340,34 @@ export class GroupCallManager extends EventEmitter {
           targetAddress: toAddress,
           recoveryReason: 'awaiting-reticulum-identity',
         };
+        merged = merged
+          ? mergeGcReticulumAudioSendDiagnostics(merged, diagnostics)
+          : diagnostics;
+        continue;
+      }
+      const now = Date.now();
+      if (!this.canQueueLiveReticulumAudio(state, now)) {
+        if (state.transport === 'link' && !state.opening) {
+          void this.openReticulumAudioLinkForAddress(toAddress);
+        }
+        const recoveryReason =
+          state.recoveryHoldUntilMs > now
+            ? state.recoveryReason || 'route-recovering'
+            : 'link-not-established';
+        this.logReticulumFailureThrottled(
+          `audio-batch-drop-unready:${roomId}:${toAddress}:${recoveryReason}`,
+          `[GCall] sendAudioBatch dropped: Reticulum route not ready room=${roomId} target=${toAddress} reason=${recoveryReason}`
+        );
+        const diagnostics = this.buildReticulumAudioSendDiagnostics(
+          state,
+          toAddress,
+          {
+            queuePressureDrops: 0,
+            staleDrops: 0,
+            linkUnreadyDrops: 1,
+            packetSendFailures: 0,
+          }
+        );
         merged = merged
           ? mergeGcReticulumAudioSendDiagnostics(merged, diagnostics)
           : diagnostics;

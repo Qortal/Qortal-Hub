@@ -737,6 +737,7 @@ const RETICULUM_AUDIO_IPC_LOG = 'target=reticulum-audio-ipc';
 const RETICULUM_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
 const RETICULUM_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320;
 const RETICULUM_AUDIO_TIMING_LOG_THROTTLE_MS = 2_000;
+const RETICULUM_AUDIO_PATH_PRESSURE_LOG_INTERVAL_MS = 5_000;
 
 function bridgeExeName(): string {
   return process.platform === 'win32'
@@ -1092,6 +1093,17 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private audioIpcFd4FirstMessageLogged = false;
   /** Bytes arrived on fd4 before framing (proves Python wrote something). */
   private audioIpcFd4FirstRawChunkLogged = false;
+  private audioPathPressureByRoute = new Map<
+    string,
+    {
+      windowStartedAtMs: number;
+      frames: number;
+      bytes: number;
+      fd4DecodeGapMsMax: number;
+      pythonToElectronMsMax: number;
+      lastDecodedAtMs: number;
+    }
+  >();
   /** First JSON `group_audio_send_failed` per `code` (RNS path). */
   private audioIpcSendFailedCodesLogged = new Set<string>();
   private pending = new Map<string, PendingRequest>();
@@ -2619,7 +2631,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       const text = chunk.trim();
       if (!text) return;
       const message = `[ReticulumBridge/stderr] ${text}`;
-      if (text.includes('bridge_pressure') || text.includes('presence_pressure')) {
+      if (
+        text.includes('bridge_pressure') ||
+        text.includes('presence_pressure') ||
+        text.includes('audio_path_pressure')
+      ) {
         loggerWarn(message);
       } else {
         loggerLog(message);
@@ -3045,6 +3061,54 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     }
   }
 
+  private noteFd4AudioPathPressure(frame: ReticulumAudioFrame, routeKey: string): void {
+    const nowMs = Date.now();
+    const key = `${frame.roomId || 'n/a'}:${routeKey}`;
+    let stats = this.audioPathPressureByRoute.get(key);
+    if (!stats) {
+      stats = {
+        windowStartedAtMs: nowMs,
+        frames: 0,
+        bytes: 0,
+        fd4DecodeGapMsMax: 0,
+        pythonToElectronMsMax: 0,
+        lastDecodedAtMs: 0,
+      };
+      this.audioPathPressureByRoute.set(key, stats);
+    }
+    if (stats.lastDecodedAtMs > 0) {
+      stats.fd4DecodeGapMsMax = Math.max(
+        stats.fd4DecodeGapMsMax,
+        nowMs - stats.lastDecodedAtMs
+      );
+    }
+    stats.lastDecodedAtMs = nowMs;
+    stats.frames += 1;
+    stats.bytes += frame.payload?.length ?? 0;
+    if (frame.receivedAtWallMs && frame.receivedAtWallMs > 0) {
+      stats.pythonToElectronMsMax = Math.max(
+        stats.pythonToElectronMsMax,
+        Math.max(0, nowMs - frame.receivedAtWallMs)
+      );
+    }
+
+    const elapsedMs = nowMs - stats.windowStartedAtMs;
+    if (
+      elapsedMs < RETICULUM_AUDIO_PATH_PRESSURE_LOG_INTERVAL_MS ||
+      stats.frames <= 0
+    ) {
+      return;
+    }
+    loggerWarn(
+      `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} audio_path_pressure side=electron_fd4 window_ms=${elapsedMs} room=${frame.roomId || 'n/a'} transport=${frame.linkId ? 'link' : 'packet'} route=${routeKey.slice(0, 16)} link=${frame.linkId ? frame.linkId.slice(0, 16) : 'n/a'} peer=${(frame.peerPresenceHash || '').slice(0, 16) || 'n/a'} dest=${(frame.peerDestinationHash || '').slice(0, 16) || 'n/a'} packets=${stats.frames} bytes=${stats.bytes} fd4_decode_gap_ms=${stats.fd4DecodeGapMsMax} python_to_electron_ms=${stats.pythonToElectronMsMax}`
+    );
+    stats.windowStartedAtMs = nowMs;
+    stats.frames = 0;
+    stats.bytes = 0;
+    stats.fd4DecodeGapMsMax = 0;
+    stats.pythonToElectronMsMax = 0;
+  }
+
   private appendAudioInData(chunk: Buffer): void {
     this.audioInBuffer = Buffer.concat([this.audioInBuffer, chunk]);
     for (;;) {
@@ -3091,6 +3155,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             transport === 'link'
               ? f.linkId
               : `packet:${(f.peerPresenceHash || f.peerDestinationHash || 'unknown').trim().toLowerCase()}`;
+          this.noteFd4AudioPathPressure(f, routeKey);
           const pkt: ReticulumGroupAudioPacketPayload = {
             linkId: f.linkId,
             routeKey,
