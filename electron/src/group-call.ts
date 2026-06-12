@@ -1610,6 +1610,10 @@ export class GroupCallManager extends EventEmitter {
     string,
     ReturnType<typeof setTimeout>
   >();
+  private reticulumAudioTopologyGraceTimersByAddress = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private reticulumAudioFlushScheduled = false;
   private reticulumAudioFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private reticulumAudioTimingLogLastByKey = new Map<string, number>();
@@ -2415,6 +2419,10 @@ export class GroupCallManager extends EventEmitter {
       clearTimeout(timer);
     }
     this.reticulumAudioDeferredCloseTimersByLinkId.clear();
+    for (const timer of this.reticulumAudioTopologyGraceTimersByAddress.values()) {
+      clearTimeout(timer);
+    }
+    this.reticulumAudioTopologyGraceTimersByAddress.clear();
     this.reticulumAudioFlushScheduled = false;
     if (this.reticulumAudioFlushTimer) {
       clearTimeout(this.reticulumAudioFlushTimer);
@@ -4958,6 +4966,81 @@ export class GroupCallManager extends EventEmitter {
     return null;
   }
 
+  private getActiveReticulumAudioParticipantRooms(address: string): Set<string> {
+    const rooms = new Set<string>();
+    if (!address || this.localAddresses.has(address)) return rooms;
+    for (const [roomId, room] of this.rooms) {
+      if (!room.participants.has(address)) continue;
+      for (const localAddress of this.localAddresses) {
+        if (room.participants.has(localAddress)) {
+          rooms.add(roomId);
+          break;
+        }
+      }
+    }
+    return rooms;
+  }
+
+  private getReticulumAudioTopologyGraceUntilMs(
+    state: ReticulumAudioPeerState
+  ): number {
+    let untilMs =
+      (state.createdAtMs || 0) +
+      GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS;
+    if (state.linkEstablishedAtMs > 0) {
+      untilMs = Math.max(
+        untilMs,
+        state.linkEstablishedAtMs +
+          GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS
+      );
+    }
+    if (
+      (state.linkId || state.opening) &&
+      state.linkEstablishLastAttemptAtMs >= 0
+    ) {
+      untilMs = Math.max(
+        untilMs,
+        state.linkEstablishLastAttemptAtMs +
+          GC_RETICULUM_AUDIO_LINK_ESTABLISH_INITIAL_STALE_MS
+      );
+    }
+    return untilMs;
+  }
+
+  private shouldRetainReticulumAudioLinkForTopologyGrace(
+    state: ReticulumAudioPeerState,
+    participantRooms: ReadonlySet<string>,
+    now: number
+  ): boolean {
+    if (participantRooms.size === 0) return false;
+    return this.getReticulumAudioTopologyGraceUntilMs(state) > now;
+  }
+
+  private clearReticulumAudioTopologyGraceTimer(address: string): void {
+    const timer = this.reticulumAudioTopologyGraceTimersByAddress.get(address);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.reticulumAudioTopologyGraceTimersByAddress.delete(address);
+  }
+
+  private scheduleReticulumAudioTopologyGraceSync(
+    address: string,
+    state: ReticulumAudioPeerState,
+    now: number
+  ): void {
+    if (this.reticulumAudioTopologyGraceTimersByAddress.has(address)) return;
+    const delayMs = Math.max(
+      1,
+      this.getReticulumAudioTopologyGraceUntilMs(state) - now + 25
+    );
+    const timer = setTimeout(() => {
+      this.reticulumAudioTopologyGraceTimersByAddress.delete(address);
+      this.syncReticulumAudioLinks();
+    }, delayMs);
+    timer.unref?.();
+    this.reticulumAudioTopologyGraceTimersByAddress.set(address, timer);
+  }
+
   private isOnlyRemoteParticipantInRoom(
     roomId: string,
     address: string
@@ -5261,6 +5344,7 @@ export class GroupCallManager extends EventEmitter {
     }
     this.reticulumAudioPeersByAddress.delete(address);
     this.clearReticulumAudioOpenDefer(address);
+    this.clearReticulumAudioTopologyGraceTimer(address);
     if (linkId) {
       this.closeReticulumAudioLinkQuietly(
         linkId,
@@ -6780,6 +6864,7 @@ export class GroupCallManager extends EventEmitter {
       );
       this.reticulumAudioAddressByLinkId.delete(state.routeKey);
       this.reticulumAudioPeersByAddress.delete(address);
+      this.clearReticulumAudioTopologyGraceTimer(address);
       state = undefined;
     }
     if (!state) {
@@ -7886,6 +7971,7 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private syncReticulumAudioLinks(): void {
+    const now = Date.now();
     const desiredByAddress = new Map<
       string,
       { peerPresenceHash: string; rooms: Set<string> }
@@ -7909,11 +7995,32 @@ export class GroupCallManager extends EventEmitter {
     for (const [address, state] of [...this.reticulumAudioPeersByAddress]) {
       const desired = desiredByAddress.get(address);
       if (!desired) {
+        const participantRooms =
+          this.getActiveReticulumAudioParticipantRooms(address);
+        if (
+          this.shouldRetainReticulumAudioLinkForTopologyGrace(
+            state,
+            participantRooms,
+            now
+          )
+        ) {
+          state.rooms = new Set(participantRooms);
+          this.scheduleReticulumAudioTopologyGraceSync(address, state, now);
+          this.logReticulumFailureThrottled(
+            `audio-topology-grace:${address}`,
+            `[GCall] Retaining Reticulum audio link during topology grace address=${address} link=${state.linkId ?? 'n/a'} rooms=${participantRooms.size} opening=${state.opening} established=${state.established} ageMs=${Math.max(0, now - state.createdAtMs)} reason=sync-topology-not-desired`
+          );
+          if (this.shouldMaintainReticulumAudioLink(state)) {
+            void this.openReticulumAudioLinkForAddress(address);
+          }
+          continue;
+        }
         const linkId = state.linkId;
         const peerPresenceHash = state.peerPresenceHash;
         this.reticulumAudioAddressByLinkId.delete(state.routeKey);
         this.reticulumAudioPeersByAddress.delete(address);
         this.clearReticulumAudioOpenDefer(address);
+        this.clearReticulumAudioTopologyGraceTimer(address);
         if (linkId) {
           this.reticulumAudioAddressByLinkId.delete(linkId);
           this.closeReticulumAudioLinkQuietly(linkId, 'sync-no-longer-desired');
@@ -7924,6 +8031,7 @@ export class GroupCallManager extends EventEmitter {
         );
         continue;
       }
+      this.clearReticulumAudioTopologyGraceTimer(address);
       state.peerPresenceHash = desired.peerPresenceHash;
       if (this.getReticulumAudioTransportKind() !== 'packet') {
         state.packetTransportFallback = false;
