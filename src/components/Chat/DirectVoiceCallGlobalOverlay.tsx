@@ -105,12 +105,7 @@ export function DirectVoiceCallGlobalOverlay() {
   return (
     <Dialog
       open={open}
-      onClose={(_e, reason) => {
-        if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
-          stopRing();
-          void rejectCall();
-        }
-      }}
+      disableEscapeKeyDown
       slotProps={{
         root: { sx: { zIndex: 2000 } },
         backdrop: {
