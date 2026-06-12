@@ -228,6 +228,7 @@ _PACKET_PATH_AWAIT_SECONDS = 0.12
 _PACKET_PATH_IDLE_AWAIT_SECONDS = 0.02
 _AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS = 2.0
 _AUDIO_LINK_ESTABLISH_TIMEOUT_SECONDS = 12.0
+_AUDIO_LINK_MAX_ESTABLISH_ATTEMPTS = 4
 _AUDIO_LINK_RETRY_MIN_SECONDS = 1.0
 _AUDIO_LINK_RETRY_MAX_SECONDS = 20.0
 _PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING = 2
@@ -6316,6 +6317,137 @@ def on_overlay_link_remote_identified(link, identity) -> None:
         _dedup_overlay_links_for_peer(ph_reg, preferred_link_id=link_id)
 
 
+def _audio_overlay_promotion_allowed(peer_key: str) -> bool:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return False
+    with _state_lock:
+        active_id = _active_audio_link_id_by_peer_hash.get(peer_key) or ""
+        if active_id and active_id in _audio_links_by_id:
+            return True
+        outgoing_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key) or ""
+        if outgoing_id and outgoing_id in _audio_links_by_id:
+            return True
+        desired = _audio_link_desired_by_peer_hash.get(peer_key)
+        return bool(desired and desired.get("desired") is True)
+
+
+def _promote_misclassified_overlay_link_to_audio(
+    link,
+    overlay_link_id: str,
+    peer_key: str,
+    sender_destination_hash: str,
+) -> str:
+    if link is None or not overlay_link_id:
+        return ""
+    peer_key = str(peer_key or "").strip().lower()
+    if not _audio_overlay_promotion_allowed(peer_key):
+        return ""
+    state = get_overlay_link_state(overlay_link_id)
+    if state is None or state.get("incoming") is not True:
+        return ""
+    overlay_peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    removed = remove_overlay_link(overlay_link_id)
+    if removed is None:
+        return ""
+    if overlay_peer_hash and removed.get("_was_active_overlay") is True:
+        with _state_lock:
+            _active_overlay_neighbors.pop(overlay_peer_hash, None)
+            _inbound_overlay_neighbors.pop(overlay_peer_hash, None)
+    link_id = str(uuid.uuid4())
+    now = time.time()
+    created_at = removed.get("created_at")
+    audio_state = {
+        "link": link,
+        "peerPresenceHash": peer_key,
+        "peerDestinationHash": str(sender_destination_hash or "").strip().lower(),
+        "incoming": True,
+        "established": True,
+        "established_at": now,
+        "created_at": created_at if isinstance(created_at, (int, float)) else now,
+        "last_activity_at": now,
+        "last_rx_at": now,
+        "promoted_from_overlay_link_id": overlay_link_id,
+    }
+    _ensure_audio_link_lifecycle_fields(audio_state)
+    with _state_lock:
+        _audio_links_by_id[link_id] = audio_state
+    configure_audio_link(link, link_id)
+    log(
+        "[presence_bridge] target=reticulum-audio-link overlay_link_promoted_to_audio "
+        f"overlay_link={overlay_link_id} audio_link={link_id} peer={peer_key}"
+    )
+    return link_id
+
+
+def _promote_overlay_audio_sender_if_allowed(
+    link,
+    overlay_link_id: str,
+    sender_destination_hash: str,
+) -> str:
+    peer_key = _resolve_sender_peer_destination_hash(sender_destination_hash)
+    return _promote_misclassified_overlay_link_to_audio(
+        link,
+        overlay_link_id,
+        peer_key,
+        sender_destination_hash,
+    )
+
+
+def _qchat_file_overlay_promotion_peer_hash(decoded: Dict[str, Any]) -> str:
+    peer_hash = str(
+        decoded.get("downloaderReticulumDestinationHash") or ""
+    ).strip().lower()
+    return peer_hash if _valid_presence_destination_hash_hex(peer_hash) else ""
+
+
+def _qchat_file_overlay_promotion_allowed(
+    transfer_id: str,
+    peer_hash: str,
+) -> bool:
+    transfer_id = str(transfer_id or "").strip()
+    peer_hash = str(peer_hash or "").strip().lower()
+    if not transfer_id or not _valid_presence_destination_hash_hex(peer_hash):
+        return False
+    with _state_lock:
+        pending = _qchat_file_pending_sends_by_transfer.get(transfer_id)
+    if not isinstance(pending, dict):
+        return False
+    return float(pending.get("expires_at") or 0) >= time.time()
+
+
+def _promote_misclassified_overlay_link_to_qchat_file(
+    link,
+    overlay_link_id: str,
+    transfer_id: str,
+    peer_hash: str,
+) -> str:
+    if link is None or not overlay_link_id:
+        return ""
+    transfer_id = str(transfer_id or "").strip()
+    peer_hash = str(peer_hash or "").strip().lower()
+    if not _qchat_file_overlay_promotion_allowed(transfer_id, peer_hash):
+        return ""
+    state = get_overlay_link_state(overlay_link_id)
+    if state is None or state.get("incoming") is not True:
+        return ""
+    overlay_peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    removed = remove_overlay_link(overlay_link_id)
+    if removed is None:
+        return ""
+    if overlay_peer_hash and removed.get("_was_active_overlay") is True:
+        with _state_lock:
+            _active_overlay_neighbors.pop(overlay_peer_hash, None)
+            _inbound_overlay_neighbors.pop(overlay_peer_hash, None)
+    link_id = _register_incoming_qchat_file_link(link, peer_hash, transfer_id)
+    if link_id:
+        log(
+            "[presence_bridge] target=qchat-file-reticulum overlay_link_promoted_to_qchat_file "
+            f"overlay_link={overlay_link_id} file_link={link_id} peer={peer_hash} transfer={transfer_id}"
+        )
+    return link_id
+
+
 def _handle_overlay_link_packet(message, packet) -> None:
     link = getattr(packet, "link", None)
     link_id = get_overlay_link_id(link) if link is not None else None
@@ -6324,12 +6456,45 @@ def _handle_overlay_link_packet(message, packet) -> None:
     state = get_overlay_link_state(link_id)
     if state is None:
         return
+    decoded_audio = _decode_group_audio_wire(message)
+    if decoded_audio is not None:
+        _room_id, sender_destination_hash, _raw_audio = decoded_audio
+        audio_link_id = _promote_overlay_audio_sender_if_allowed(
+            link,
+            link_id,
+            sender_destination_hash,
+        )
+        if audio_link_id:
+            on_audio_link_packet(message, packet)
+        return
     try:
         decoded = json.loads(message.decode("utf-8"))
     except Exception as exc:
         log(f"[presence_bridge] invalid overlay link payload: {exc}")
         return
     if not isinstance(decoded, dict):
+        return
+    if decoded.get("t") == _GROUP_AUDIO_HEARTBEAT_WIRE_TYPE:
+        sender_destination_hash = str(decoded.get("r") or "").strip().lower()
+        audio_link_id = _promote_overlay_audio_sender_if_allowed(
+            link,
+            link_id,
+            sender_destination_hash,
+        )
+        if audio_link_id:
+            on_audio_link_packet(message, packet)
+        return
+    if decoded.get("type") == "QCHAT_FILE_LINK_AUTH":
+        transfer_id = str(decoded.get("transferId") or "").strip()
+        peer_hash = _qchat_file_overlay_promotion_peer_hash(decoded)
+        file_link_id = _promote_misclassified_overlay_link_to_qchat_file(
+            link,
+            link_id,
+            transfer_id,
+            peer_hash,
+        )
+        if file_link_id:
+            on_qchat_file_link_packet(message, packet)
         return
     _note_presence_pressure("source:overlay")
     state["last_activity_at"] = time.time()
@@ -8084,6 +8249,40 @@ def _canonical_audio_link_id_for_peer(peer_key: str) -> str:
     return ""
 
 
+def _best_established_audio_link_id_for_peer(peer_key: str) -> str:
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return ""
+    best_link_id = ""
+    best_state: Optional[Dict[str, Any]] = None
+    with _state_lock:
+        for candidate_link_id, state in list(_audio_links_by_id.items()):
+            if str(state.get("peerPresenceHash") or "").strip().lower() != peer_key:
+                continue
+            if state.get("closing") is True or state.get("link") is None:
+                continue
+            if state.get("established") is not True:
+                continue
+            if not best_link_id or best_state is None:
+                best_link_id = candidate_link_id
+                best_state = state
+                continue
+            keep_id, _lose_id = _audio_link_pick_keep(
+                peer_key,
+                best_link_id,
+                best_state,
+                candidate_link_id,
+                state,
+            )
+            if keep_id == candidate_link_id:
+                best_link_id = candidate_link_id
+                best_state = state
+        if best_link_id:
+            _active_audio_link_id_by_peer_hash[peer_key] = best_link_id
+            _outgoing_audio_link_id_by_peer_hash[peer_key] = best_link_id
+    return best_link_id
+
+
 def _snapshot_audio_link_for_send(
     link_id: str,
     peer_key_hint: str = "",
@@ -8092,7 +8291,9 @@ def _snapshot_audio_link_for_send(
         state = _audio_links_by_id.get(link_id)
         peer_key_hint = str(peer_key_hint or "").strip().lower()
         if state is None:
-            canonical_id = _active_audio_link_id_by_peer_hash.get(peer_key_hint) if peer_key_hint else ""
+            canonical_id = _best_established_audio_link_id_for_peer(peer_key_hint)
+            if not canonical_id:
+                canonical_id = _active_audio_link_id_by_peer_hash.get(peer_key_hint) if peer_key_hint else ""
             if not canonical_id:
                 canonical_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key_hint) if peer_key_hint else ""
             if not canonical_id:
@@ -8103,15 +8304,36 @@ def _snapshot_audio_link_for_send(
             link_id = canonical_id
         _ensure_audio_link_lifecycle_fields(state)
         if state.get("closing") is True:
-            return None
+            fallback_peer_key = str(state.get("peerPresenceHash") or peer_key_hint).strip().lower()
+            fallback_id = _best_established_audio_link_id_for_peer(fallback_peer_key)
+            if not fallback_id or fallback_id == link_id:
+                return None
+            fallback_state = _audio_links_by_id.get(fallback_id)
+            if fallback_state is None:
+                return None
+            state = fallback_state
+            link_id = fallback_id
+            _ensure_audio_link_lifecycle_fields(state)
         peer_key = str(state.get("peerPresenceHash") or peer_key_hint).strip().lower()
         canonical_id = _active_audio_link_id_by_peer_hash.get(peer_key) if peer_key else ""
         if canonical_id and canonical_id != link_id:
             canonical_state = _audio_links_by_id.get(canonical_id)
-            if canonical_state is not None and canonical_state.get("closing") is not True:
+            if (
+                canonical_state is not None
+                and canonical_state.get("closing") is not True
+                and canonical_state.get("established") is True
+            ):
                 state = canonical_state
                 link_id = canonical_id
                 _ensure_audio_link_lifecycle_fields(state)
+        if state.get("established") is not True:
+            fallback_id = _best_established_audio_link_id_for_peer(peer_key)
+            if fallback_id and fallback_id != link_id:
+                fallback_state = _audio_links_by_id.get(fallback_id)
+                if fallback_state is not None:
+                    state = fallback_state
+                    link_id = fallback_id
+                    _ensure_audio_link_lifecycle_fields(state)
         if state.get("established") is not True:
             return {
                 "ready": False,
@@ -8183,6 +8405,7 @@ def _get_audio_link_desired_state(peer_key: str) -> Dict[str, Any]:
             "retry_timer": None,
             "last_open_attempt_at": None,
             "last_failure_reason": "",
+            "max_attempts_emitted": False,
         }
         _audio_link_desired_by_peer_hash[peer_key] = state
         return state
@@ -8207,11 +8430,51 @@ def _cancel_audio_link_retry_timer(peer_key: str) -> None:
 def _set_audio_link_desired(peer_key: str, desired: bool) -> Dict[str, Any]:
     state = _get_audio_link_desired_state(peer_key)
     with _state_lock:
+        was_desired = state.get("desired") is True
         state["desired"] = desired
+        if desired and not was_desired:
+            state["max_attempts_emitted"] = False
+        elif not desired:
+            state["attempts"] = 0
+            state["retry_delay"] = _AUDIO_LINK_RETRY_MIN_SECONDS
+            state["last_failure_reason"] = ""
+            state["max_attempts_emitted"] = False
     if desired:
         return state
     _cancel_audio_link_retry_timer(peer_key)
     return state
+
+
+def _audio_link_attempts_exhausted(desired: Optional[Dict[str, Any]]) -> bool:
+    if desired is None:
+        return False
+    return int(desired.get("attempts") or 0) >= _AUDIO_LINK_MAX_ESTABLISH_ATTEMPTS
+
+
+def _emit_audio_link_attempts_exhausted(peer_key: str, reason: str, desired: Dict[str, Any]) -> None:
+    attempts = int(desired.get("attempts") or 0)
+    with _state_lock:
+        if desired.get("max_attempts_emitted") is True:
+            return
+        desired["last_failure_reason"] = "max_establish_attempts"
+        desired["retry_timer"] = None
+        desired["max_attempts_emitted"] = True
+    log(
+        "[presence_bridge] target=reticulum-audio-link audio_link_max_establish_attempts "
+        f"peer={peer_key} attempts={attempts} max={_AUDIO_LINK_MAX_ESTABLISH_ATTEMPTS} reason={reason}"
+    )
+    emit_event(
+        "group_audio_send_failed",
+        {
+            "linkId": "",
+            "peerPresenceHash": peer_key,
+            "reason": "max_establish_attempts",
+            "code": "max_establish_attempts",
+            "transport": "link",
+            "attempts": attempts,
+            "maxAttempts": _AUDIO_LINK_MAX_ESTABLISH_ATTEMPTS,
+        },
+    )
 
 
 def _has_viable_audio_link_for_peer(peer_key: str, excluding_link_id: str = "") -> bool:
@@ -8289,6 +8552,9 @@ def _schedule_audio_link_retry(peer_key: str, reason: str, immediate: bool = Fal
         desired = _audio_link_desired_by_peer_hash.get(peer_key)
     if desired is None or desired.get("desired") is not True:
         return
+    if _audio_link_attempts_exhausted(desired):
+        _emit_audio_link_attempts_exhausted(peer_key, reason, desired)
+        return
     if _has_viable_audio_link_for_peer(peer_key):
         return
     if desired.get("retry_timer") is not None:
@@ -8307,6 +8573,9 @@ def _schedule_audio_link_retry(peer_key: str, reason: str, immediate: bool = Fal
         with _state_lock:
             desired_state["retry_timer"] = None
         if desired_state.get("desired") is not True:
+            return
+        if _audio_link_attempts_exhausted(desired_state):
+            _emit_audio_link_attempts_exhausted(peer_key, reason, desired_state)
             return
         if _has_viable_audio_link_for_peer(peer_key):
             return
@@ -8417,6 +8686,13 @@ def _open_group_audio_link_for_peer(
             "linkId": viable_link_id,
             "established": existing.get("established") is True if existing is not None else False,
         }, ""
+    if _audio_link_attempts_exhausted(desired):
+        _emit_audio_link_attempts_exhausted(peer_key, retry_reason, desired)
+        return False, {
+            "code": "max_establish_attempts",
+            "attempts": int(desired.get("attempts") or 0),
+            "maxAttempts": _AUDIO_LINK_MAX_ESTABLISH_ATTEMPTS,
+        }, "Max group audio link establish attempts reached"
     peer_identity = _get_group_audio_peer_identity(peer_key)
     if peer_identity is None:
         return False, {"code": "unknown_peer_presence_hash"}, "Unknown peer presence hash"
@@ -8748,8 +9024,10 @@ def on_outgoing_audio_link_established(link) -> None:
     if desired is not None:
         _cancel_audio_link_retry_timer(peer_key)
         with _state_lock:
+            desired["attempts"] = 0
             desired["retry_delay"] = _AUDIO_LINK_RETRY_MIN_SECONDS
             desired["last_failure_reason"] = ""
+            desired["max_attempts_emitted"] = False
     try:
         if _identity is not None:
             link.identify(_identity)
@@ -10198,23 +10476,44 @@ def handle_send_group_audio_link_heartbeat(req_id: str, payload: Dict[str, Any])
     resolved_link_id = link_id
     if resolved_link_id:
         state = get_audio_link_state(resolved_link_id)
+        fallback_peer_key = str(
+            (state or {}).get("peerPresenceHash") or peer_key
+        ).strip().lower()
+        if (
+            state is None
+            or state.get("established") is not True
+            or state.get("link") is None
+        ):
+            fallback_id = _best_established_audio_link_id_for_peer(fallback_peer_key)
+            if fallback_id and fallback_id != resolved_link_id:
+                fallback_state = get_audio_link_state(fallback_id)
+                if fallback_state is not None:
+                    state = fallback_state
+                    resolved_link_id = fallback_id
         if state is None:
+            code = "audio_link_not_ready" if fallback_peer_key else "unknown_link_id"
             emit_resp(
                 req_id,
                 False,
-                payload={"code": "unknown_link_id"},
-                error="Unknown audio link id",
+                payload={"code": code},
+                error=(
+                    "Audio link not ready"
+                    if code == "audio_link_not_ready"
+                    else "Unknown audio link id"
+                ),
             )
             return
     else:
         if not peer_key:
             emit_resp(req_id, False, error="Missing linkId or peerPresenceHash")
             return
-        with _state_lock:
-            candidate = (
-                _active_audio_link_id_by_peer_hash.get(peer_key)
-                or _outgoing_audio_link_id_by_peer_hash.get(peer_key)
-            )
+        candidate = _best_established_audio_link_id_for_peer(peer_key)
+        if not candidate:
+            with _state_lock:
+                candidate = (
+                    _active_audio_link_id_by_peer_hash.get(peer_key)
+                    or _outgoing_audio_link_id_by_peer_hash.get(peer_key)
+                )
         if candidate:
             state = get_audio_link_state(candidate)
             resolved_link_id = candidate

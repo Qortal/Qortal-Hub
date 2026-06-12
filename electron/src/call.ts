@@ -788,14 +788,14 @@ export class CallManager extends EventEmitter {
       if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) return;
       this.rememberReticulumOverlayId(overlayMeta.overlayId);
       const targetIsLocal = this.localAddresses.has(overlayMeta.targetAddress);
+      if (overlayMeta.hopsRemaining > 0) {
+        const forwarded = {
+          ...wire,
+          L: overlayMeta.hopsRemaining - 1,
+        };
+        this.broadcastReticulumOverlayWire(forwarded, [peerPresenceHash]);
+      }
       if (!targetIsLocal) {
-        if (overlayMeta.hopsRemaining > 0) {
-          const forwarded = {
-            ...wire,
-            L: overlayMeta.hopsRemaining - 1,
-          };
-          this.broadcastReticulumOverlayWire(forwarded, [peerPresenceHash]);
-        }
         if (this.localAddresses.size > 0) {
           return;
         }
