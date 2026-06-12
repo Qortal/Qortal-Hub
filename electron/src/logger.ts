@@ -18,7 +18,7 @@ const nodeRequire = createRequire(__filename);
 
 const noop = (..._args: unknown[]) => {};
 
-export const DISABLE_DEV_LOGS = false;
+export const DISABLE_DEV_LOGS = true;
 
 const IMPORTANT_LOG_PATTERNS = [
   /\bfailed\b/i,

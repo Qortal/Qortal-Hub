@@ -2631,15 +2631,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       const text = chunk.trim();
       if (!text) return;
       const message = `[ReticulumBridge/stderr] ${text}`;
-      if (
-        text.includes('bridge_pressure') ||
-        text.includes('presence_pressure') ||
-        text.includes('audio_path_pressure')
-      ) {
-        loggerWarn(message);
-      } else {
-        loggerLog(message);
-      }
+      loggerLog(message);
     });
     child.stdin.on('drain', () => {
       if (this.child !== child) return;
@@ -3099,7 +3091,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     ) {
       return;
     }
-    loggerWarn(
+    loggerLog(
       `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} audio_path_pressure side=electron_fd4 window_ms=${elapsedMs} room=${frame.roomId || 'n/a'} transport=${frame.linkId ? 'link' : 'packet'} route=${routeKey.slice(0, 16)} link=${frame.linkId ? frame.linkId.slice(0, 16) : 'n/a'} peer=${(frame.peerPresenceHash || '').slice(0, 16) || 'n/a'} dest=${(frame.peerDestinationHash || '').slice(0, 16) || 'n/a'} packets=${stats.frames} bytes=${stats.bytes} fd4_decode_gap_ms=${stats.fd4DecodeGapMsMax} python_to_electron_ms=${stats.pythonToElectronMsMax}`
     );
     stats.windowStartedAtMs = nowMs;

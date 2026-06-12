@@ -3012,7 +3012,7 @@ export function registerReticulumIpcHandlers(): void {
       let changed = false;
       let hadError = false;
       const records = loadQchatFilePendingSendRecords();
-      loggerWarn(
+      loggerLog(
         `[Reticulum] qchat file hydration start pending=${records.length}`
       );
       for (const record of records) {
@@ -3044,7 +3044,7 @@ export function registerReticulumIpcHandlers(): void {
             );
             hadError = true;
           } else {
-            loggerWarn(
+            loggerLog(
               `[Reticulum] qchat file hydration registered transfer=${record.transferId} size=${record.size}`
             );
           }
@@ -3065,7 +3065,7 @@ export function registerReticulumIpcHandlers(): void {
         return;
       }
       qchatFileHydratedBridge = bridge;
-      loggerWarn(
+      loggerLog(
         `[Reticulum] qchat file hydration complete pending=${qchatFilePendingSends.size}`
       );
     })();
@@ -3304,7 +3304,7 @@ export function registerReticulumIpcHandlers(): void {
       broadcastQchatFileTransfer(payload);
     });
     qchatFileAttachedBridge = bridge;
-    loggerWarn('[Reticulum] qchat file bridge events attached');
+    loggerLog('[Reticulum] qchat file bridge events attached');
     void hydrateQchatFilePendingSends(bridge).catch((error) => {
       loggerWarn('[Reticulum] qchat file hydration failed:', error);
       scheduleQchatFileBridgeAttachRetry();
