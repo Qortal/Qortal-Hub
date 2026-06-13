@@ -66,7 +66,7 @@ def has_pip(pyexe: str) -> bool:
     return result.returncode == 0
 
 
-def ensure_pip(pyexe: str) -> None:
+def ensure_pip(pyexe: str, *, user: bool = True) -> None:
     if has_pip(pyexe):
         return
     print("pip not found; bootstrapping with get-pip.py …")
@@ -75,7 +75,9 @@ def ensure_pip(pyexe: str) -> None:
     try:
         with urllib.request.urlopen(GET_PIP_URL) as response:
             tmp.write_bytes(response.read())
-        if os.name == "nt":
+        if not user:
+            run([pyexe, str(tmp)], env_extra=PIP_ENV)
+        elif os.name == "nt":
             run([pyexe, str(tmp), "--user"], env_extra=PIP_ENV)
         else:
             try:
@@ -91,18 +93,28 @@ def ensure_pip(pyexe: str) -> None:
         sys.exit("Failed to bootstrap pip for the current Python.")
 
 
-def pip_install(pyexe: str, packages: list[str], *, upgrade: bool = False, force_reinstall: bool = False) -> None:
-    flags = []
+def pip_install(
+    pyexe: str,
+    packages: list[str],
+    *,
+    upgrade: bool = False,
+    force_reinstall: bool = False,
+    user: bool = True,
+) -> None:
+    flags = ["--prefer-binary"]
     if upgrade:
         flags.append("--upgrade")
     if force_reinstall:
         flags.append("--force-reinstall")
-    attempts = (
-        [["-m", "pip", "install", "--user", "--break-system-packages", *flags, *packages],
-         ["-m", "pip", "install", "--user", *flags, *packages]]
-        if os.name != "nt"
-        else [["-m", "pip", "install", "--user", *flags, *packages]]
-    )
+    if not user:
+        attempts = [["-m", "pip", "install", *flags, *packages]]
+    elif os.name != "nt":
+        attempts = [
+            ["-m", "pip", "install", "--user", "--break-system-packages", *flags, *packages],
+            ["-m", "pip", "install", "--user", *flags, *packages],
+        ]
+    else:
+        attempts = [["-m", "pip", "install", "--user", *flags, *packages]]
     for args in attempts:
         try:
             run([pyexe, *args], env_extra=PIP_ENV)
@@ -110,6 +122,25 @@ def pip_install(pyexe: str, packages: list[str], *, upgrade: bool = False, force
         except subprocess.CalledProcessError:
             continue
     sys.exit(f"Failed to install {' '.join(packages)} with pip.")
+
+
+def venv_python(venv_dir: Path) -> Path:
+    if os.name == "nt":
+        return venv_dir / "Scripts" / "python.exe"
+    return venv_dir / "bin" / "python"
+
+
+def create_build_python(pyexe: str, build_root: Path) -> tuple[str, bool]:
+    """Create an arch-local build Python, falling back to user site packages."""
+    venv_dir = build_root / "venv"
+    try:
+        run([pyexe, "-m", "venv", str(venv_dir)])
+        venv_py = venv_python(venv_dir)
+        if venv_py.is_file():
+            return str(venv_py), False
+    except Exception as exc:
+        print(f"Could not create isolated build venv, falling back to user site-packages: {exc}")
+    return pyexe, True
 
 
 def resolve_rnsd_entry(pyexe: str) -> str:
@@ -228,13 +259,13 @@ def main() -> None:
         shutil.rmtree(build_root)
     build_root.mkdir(parents=True)
 
-    pyexe = sys.executable
-    ensure_pip(pyexe)
-    pip_install(pyexe, [RETICULUM_PIP_PACKAGE], upgrade=True, force_reinstall=True)
+    pyexe, use_user_install = create_build_python(sys.executable, build_root)
+    ensure_pip(pyexe, user=use_user_install)
+    pip_install(pyexe, [RETICULUM_PIP_PACKAGE], upgrade=True, user=use_user_install)
     if not has_module(pyexe, "LXMF"):
-        pip_install(pyexe, ["lxmf"])
+        pip_install(pyexe, ["lxmf"], user=use_user_install)
     if not has_module(pyexe, "PyInstaller"):
-        pip_install(pyexe, ["pyinstaller"])
+        pip_install(pyexe, ["pyinstaller"], user=use_user_install)
     for target in BUILD_TARGETS:
         entry_script = target["entry_resolver"](pyexe, electron_root)
         freeze_target(
