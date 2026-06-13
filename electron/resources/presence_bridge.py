@@ -1950,7 +1950,7 @@ def install_rns_transport_inbound_probe() -> None:
 
 
 def install_rns_shared_rpc_failure_guard() -> None:
-    """Keep shared-instance bookkeeping RPC failures from aborting inbound frames."""
+    """Keep shared-instance helper RPC failures from aborting inbound frames."""
     global _rns_shared_rpc_failure_guard_installed
     if _rns_shared_rpc_failure_guard_installed:
         return
@@ -1960,12 +1960,14 @@ def install_rns_shared_rpc_failure_guard() -> None:
         return
 
     rpc_failure_types = (ConnectionResetError, BrokenPipeError, EOFError, OSError)
-    method_names = (
-        "_used_destination_data",
-        "_retain_destination_data",
-        "_unretain_destination_data",
-        "_retain_identity",
-    )
+    safe_return_factories = {
+        "_used_destination_data": lambda: False,
+        "_retain_destination_data": lambda: False,
+        "_unretain_destination_data": lambda: False,
+        "_retain_identity": lambda: False,
+        "get_blackholed_identities": list,
+        "is_blackholed": lambda: False,
+    }
 
     def make_guard(method_name: str, original):
         def guarded(self, *args, **kwargs):
@@ -1980,14 +1982,16 @@ def install_rns_shared_rpc_failure_guard() -> None:
                     _rns_shared_rpc_failure_last_log_by_method[method_name] = now
                     log(
                         "[presence_bridge] target=reticulum-shared-rpc "
-                        f"method={method_name} action=ignored_nonfatal err={type(exc).__name__}: {exc}"
+                        f"method={method_name} action=ignored_nonfatal "
+                        f"return={safe_return_factories[method_name]()!r} "
+                        f"err={type(exc).__name__}: {exc}"
                     )
-                return False
+                return safe_return_factories[method_name]()
 
         return guarded
 
     installed_any = False
-    for method_name in method_names:
+    for method_name in safe_return_factories:
         original = getattr(reticulum_cls, method_name, None)
         if callable(original):
             setattr(reticulum_cls, method_name, make_guard(method_name, original))
