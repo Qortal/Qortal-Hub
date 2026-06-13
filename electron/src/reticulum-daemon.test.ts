@@ -373,7 +373,7 @@ describe('reticulum-daemon managed config', () => {
     const killSpy = vi
       .spyOn(process, 'kill')
       .mockImplementation(((pid: number, signal?: number | NodeJS.Signals) => {
-        if (pid !== 999) {
+        if (pid !== 999 && pid !== -999) {
           const err = new Error('ESRCH') as Error & { code?: string };
           err.code = 'ESRCH';
           throw err;
@@ -403,7 +403,7 @@ describe('reticulum-daemon managed config', () => {
     stopSharedReticulumDaemon();
 
     expect(killSpy).toHaveBeenNthCalledWith(1, 999, 0);
-    expect(killSpy).toHaveBeenNthCalledWith(2, 999, 'SIGTERM');
+    expect(killSpy).toHaveBeenNthCalledWith(2, -999, 'SIGTERM');
     expect(fs.existsSync(getReticulumSharedDaemonStatePath())).toBe(false);
   });
 
@@ -411,7 +411,7 @@ describe('reticulum-daemon managed config', () => {
     const killSpy = vi
       .spyOn(process, 'kill')
       .mockImplementation(((pid: number, signal?: number | NodeJS.Signals) => {
-        if (pid !== 999) {
+        if (pid !== 999 && pid !== -999) {
           const err = new Error('ESRCH') as Error & { code?: string };
           err.code = 'ESRCH';
           throw err;
@@ -447,7 +447,7 @@ describe('reticulum-daemon managed config', () => {
       daemonStateCleared: true,
     });
     expect(killSpy).toHaveBeenNthCalledWith(1, 999, 0);
-    expect(killSpy).toHaveBeenNthCalledWith(2, 999, 'SIGTERM');
+    expect(killSpy).toHaveBeenNthCalledWith(2, -999, 'SIGTERM');
     expect(fs.existsSync(getReticulumSharedDaemonStatePath())).toBe(false);
   });
 

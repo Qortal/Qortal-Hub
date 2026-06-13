@@ -910,6 +910,7 @@ export function QortalGroupVoiceCallStage() {
                     postProcess: 'capitalizeFirstChar',
                   })
             }
+            slotProps={topBarTooltipSlotProps}
           >
             <IconButton
               onClick={toggleHearCall}

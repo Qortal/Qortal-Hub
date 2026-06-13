@@ -737,6 +737,7 @@ const RETICULUM_AUDIO_IPC_LOG = 'target=reticulum-audio-ipc';
 const RETICULUM_AUDIO_TIMING_DELAY_LOG_THRESHOLD_MS = 80;
 const RETICULUM_AUDIO_TIMING_GAP_LOG_THRESHOLD_MS = 320;
 const RETICULUM_AUDIO_TIMING_LOG_THROTTLE_MS = 2_000;
+const RETICULUM_AUDIO_PATH_PRESSURE_LOG_INTERVAL_MS = 5_000;
 
 function bridgeExeName(): string {
   return process.platform === 'win32'
@@ -809,11 +810,30 @@ function killBridgeProcessTree(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   if (process.platform !== 'win32') {
     try {
-      process.kill(pid);
+      process.kill(-pid, 'SIGTERM');
       return true;
     } catch (err) {
-      loggerWarn(`[ReticulumBridge] Failed to signal child pid=${pid}:`, err);
-      return false;
+      const code =
+        typeof err === 'object' && err && 'code' in err
+          ? String((err as { code?: unknown }).code ?? '')
+          : '';
+      if (code !== 'ESRCH') {
+        loggerWarn(
+          `[ReticulumBridge] Failed to signal child process group pid=${pid}:`,
+          err
+        );
+        return false;
+      }
+      try {
+        process.kill(pid, 'SIGTERM');
+        return true;
+      } catch (pidErr) {
+        loggerWarn(
+          `[ReticulumBridge] Failed to signal child pid=${pid}:`,
+          pidErr
+        );
+        return false;
+      }
     }
   }
 
@@ -1073,6 +1093,17 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
   private audioIpcFd4FirstMessageLogged = false;
   /** Bytes arrived on fd4 before framing (proves Python wrote something). */
   private audioIpcFd4FirstRawChunkLogged = false;
+  private audioPathPressureByRoute = new Map<
+    string,
+    {
+      windowStartedAtMs: number;
+      frames: number;
+      bytes: number;
+      fd4DecodeGapMsMax: number;
+      pythonToElectronMsMax: number;
+      lastDecodedAtMs: number;
+    }
+  >();
   /** First JSON `group_audio_send_failed` per `code` (RNS path). */
   private audioIpcSendFailedCodesLogged = new Set<string>();
   private pending = new Map<string, PendingRequest>();
@@ -1314,14 +1345,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         error: 'No Reticulum frames fit encrypted wire limit',
       };
     }
-    const pm = getPresenceManager();
-    const overlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes(excludePeerPresenceHashes) ??
-      pm?.getReticulumFanoutDestinationHashes() ??
-      [];
     return this.sendDetailed('fanout_call', {
       messages,
-      overlayNeighborHashes,
       excludePeerPresenceHashes,
     });
   }
@@ -1355,14 +1380,8 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         error: 'No Reticulum frames fit encrypted wire limit',
       };
     }
-    const pm = getPresenceManager();
-    const overlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes(excludePeerPresenceHashes) ??
-      pm?.getReticulumFanoutDestinationHashes() ??
-      [];
     return this.sendDetailed('fanout_group_call', {
       messages,
-      overlayNeighborHashes,
       excludePeerPresenceHashes,
     });
   }
@@ -2195,19 +2214,14 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}${options.force ? ` force=yes reason=${options.reason ?? 'unspecified'}` : ''}`
     );
     this.lastPresencePublishAt = Date.now();
-    const pm = getPresenceManager();
-    const activeOverlayNeighborHashes =
-      pm?.getReticulumActiveNeighborHashes() ?? [];
-    const overlayNeighborHashes =
-      activeOverlayNeighborHashes.length > 0
-        ? activeOverlayNeighborHashes
-        : (pm?.getReticulumVerifiedNeighborHashes() ??
-          pm?.getReticulumFanoutDestinationHashes() ??
-          []);
     const resp = await this.sendCommand('publish_presence', {
       envelope,
-      overlayNeighborHashes,
     });
+    if (!resp.ok && this.isBridgeCommandBacklogResponse(resp)) {
+      throw new Error(
+        resp.error ?? 'Reticulum bridge command backlog: publish_presence'
+      );
+    }
     const pubAddr =
       typeof (envelope.payload as { address?: string })?.address === 'string'
         ? (envelope.payload as { address: string }).address
@@ -2266,6 +2280,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       verifiedPeers,
       activeNeighborHashes,
     });
+    if (!resp.ok && this.isBridgeCommandBacklogResponse(resp)) {
+      throw new Error(
+        resp.error ?? 'Reticulum bridge command backlog: overlay_sync_state'
+      );
+    }
     return resp.ok;
   }
 
@@ -2553,6 +2572,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     const child = spawn(launch.cmd, launch.args, {
       cwd: launch.cwd,
       env,
+      detached: process.platform !== 'win32',
       stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -2609,7 +2629,9 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     child.stderr.on('data', (chunk: string) => {
       if (this.child !== child) return;
       const text = chunk.trim();
-      if (text) loggerLog(`[ReticulumBridge/stderr] ${text}`);
+      if (!text) return;
+      const message = `[ReticulumBridge/stderr] ${text}`;
+      loggerLog(message);
     });
     child.stdin.on('drain', () => {
       if (this.child !== child) return;
@@ -2717,6 +2739,11 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       },
       error: `Reticulum bridge queue overloaded: ${action}`,
     };
+  }
+
+  private isBridgeCommandBacklogResponse(frame: BridgeRespFrame): boolean {
+    const code = frame.payload?.code;
+    return code === 'bridge_command_queue_full' || code === 'scheduler_queue_full';
   }
 
   private countPendingRequestsByPriority(priority: BridgeCmdPriority): number {
@@ -3026,6 +3053,54 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     }
   }
 
+  private noteFd4AudioPathPressure(frame: ReticulumAudioFrame, routeKey: string): void {
+    const nowMs = Date.now();
+    const key = `${frame.roomId || 'n/a'}:${routeKey}`;
+    let stats = this.audioPathPressureByRoute.get(key);
+    if (!stats) {
+      stats = {
+        windowStartedAtMs: nowMs,
+        frames: 0,
+        bytes: 0,
+        fd4DecodeGapMsMax: 0,
+        pythonToElectronMsMax: 0,
+        lastDecodedAtMs: 0,
+      };
+      this.audioPathPressureByRoute.set(key, stats);
+    }
+    if (stats.lastDecodedAtMs > 0) {
+      stats.fd4DecodeGapMsMax = Math.max(
+        stats.fd4DecodeGapMsMax,
+        nowMs - stats.lastDecodedAtMs
+      );
+    }
+    stats.lastDecodedAtMs = nowMs;
+    stats.frames += 1;
+    stats.bytes += frame.payload?.length ?? 0;
+    if (frame.receivedAtWallMs && frame.receivedAtWallMs > 0) {
+      stats.pythonToElectronMsMax = Math.max(
+        stats.pythonToElectronMsMax,
+        Math.max(0, nowMs - frame.receivedAtWallMs)
+      );
+    }
+
+    const elapsedMs = nowMs - stats.windowStartedAtMs;
+    if (
+      elapsedMs < RETICULUM_AUDIO_PATH_PRESSURE_LOG_INTERVAL_MS ||
+      stats.frames <= 0
+    ) {
+      return;
+    }
+    loggerLog(
+      `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} audio_path_pressure side=electron_fd4 window_ms=${elapsedMs} room=${frame.roomId || 'n/a'} transport=${frame.linkId ? 'link' : 'packet'} route=${routeKey.slice(0, 16)} link=${frame.linkId ? frame.linkId.slice(0, 16) : 'n/a'} peer=${(frame.peerPresenceHash || '').slice(0, 16) || 'n/a'} dest=${(frame.peerDestinationHash || '').slice(0, 16) || 'n/a'} packets=${stats.frames} bytes=${stats.bytes} fd4_decode_gap_ms=${stats.fd4DecodeGapMsMax} python_to_electron_ms=${stats.pythonToElectronMsMax}`
+    );
+    stats.windowStartedAtMs = nowMs;
+    stats.frames = 0;
+    stats.bytes = 0;
+    stats.fd4DecodeGapMsMax = 0;
+    stats.pythonToElectronMsMax = 0;
+  }
+
   private appendAudioInData(chunk: Buffer): void {
     this.audioInBuffer = Buffer.concat([this.audioInBuffer, chunk]);
     for (;;) {
@@ -3072,6 +3147,7 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
             transport === 'link'
               ? f.linkId
               : `packet:${(f.peerPresenceHash || f.peerDestinationHash || 'unknown').trim().toLowerCase()}`;
+          this.noteFd4AudioPathPressure(f, routeKey);
           const pkt: ReticulumGroupAudioPacketPayload = {
             linkId: f.linkId,
             routeKey,

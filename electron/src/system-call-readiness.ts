@@ -17,9 +17,9 @@ export type SystemCallReadinessSnapshot = {
 
 const SAMPLE_INTERVAL_MS = 15_000;
 const LIVE_SAMPLE_INTERVAL_MS = 250;
-const CPU_WARNING_LOAD = 0.5;
+const CPU_WARNING_LOAD = 0.65;
 const CPU_BLOCKED_LOAD = 0.85;
-const EVENT_LOOP_WARNING_LAG_MS = 100;
+const EVENT_LOOP_WARNING_LAG_MS = 200;
 const EVENT_LOOP_BLOCKED_LAG_MS = 250;
 
 let snapshot: SystemCallReadinessSnapshot = {
