@@ -109,6 +109,7 @@ export function AppBookmarksButton({
   const [hasLoaded, setHasLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState<BookmarkFormState | null>(null);
+  const [bookmarkNameError, setBookmarkNameError] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [renamingFolder, setRenamingFolder] =
@@ -226,6 +227,17 @@ export function AppBookmarksButton({
           ? 'rgba(130, 185, 255, 0.42)'
           : 'rgba(41, 121, 218, 0.32)',
     },
+    '& .MuiOutlinedInput-root.Mui-error .MuiOutlinedInput-notchedOutline': {
+      borderColor: theme.palette.error.main,
+    },
+    '& .MuiOutlinedInput-root.Mui-error:hover .MuiOutlinedInput-notchedOutline':
+      {
+        borderColor: theme.palette.error.main,
+      },
+    '& .MuiOutlinedInput-root.Mui-error.Mui-focused .MuiOutlinedInput-notchedOutline':
+      {
+        borderColor: theme.palette.error.main,
+      },
   } as const;
   const bookmarkFieldLabelSx = {
     color: theme.palette.text.secondary,
@@ -248,6 +260,7 @@ export function AppBookmarksButton({
     if (!address) return;
     setViewByAddress((prev) => ({ ...prev, [address]: folderId }));
     setForm(null);
+    setBookmarkNameError(false);
     setShowCreateFolder(false);
     setRenamingFolder(null);
   };
@@ -275,6 +288,7 @@ export function AppBookmarksButton({
         candidate
       );
       if (candidate && !nextExisting) {
+        setBookmarkNameError(false);
         setForm({
           name: '',
           link: candidate.link,
@@ -289,6 +303,7 @@ export function AppBookmarksButton({
   const closePopover = () => {
     setAnchorEl(null);
     setForm(null);
+    setBookmarkNameError(false);
     setFolderName('');
     setShowCreateFolder(false);
     setRenamingFolder(null);
@@ -313,6 +328,7 @@ export function AppBookmarksButton({
 
   const startAddCurrent = () => {
     if (!candidate) return;
+    setBookmarkNameError(false);
     setForm({
       name: '',
       link: candidate.link,
@@ -321,6 +337,7 @@ export function AppBookmarksButton({
   };
 
   const startEdit = (bookmark: AppBookmark) => {
+    setBookmarkNameError(false);
     setForm({
       id: bookmark.id,
       name: bookmark.name,
@@ -334,7 +351,11 @@ export function AppBookmarksButton({
     if (!form) return;
 
     const parsed = parseBookmarkLink(form.link);
-    if (!form.name.trim() || !parsed) return;
+    if (!form.name.trim()) {
+      setBookmarkNameError(true);
+      return;
+    }
+    if (!parsed) return;
 
     const now = Date.now();
     const bookmark: AppBookmark = {
@@ -352,11 +373,15 @@ export function AppBookmarksButton({
 
     await persist(upsertBookmark(data, bookmark));
     setForm(null);
+    setBookmarkNameError(false);
   };
 
   const removeBookmarkById = async (bookmarkId: string) => {
     await persist(removeBookmark(data, bookmarkId));
-    if (form?.id === bookmarkId) setForm(null);
+    if (form?.id === bookmarkId) {
+      setForm(null);
+      setBookmarkNameError(false);
+    }
   };
 
   const saveFolder = async () => {
@@ -805,12 +830,16 @@ export function AppBookmarksButton({
                   {t('core:bookmarks.name')}
                 </Typography>
                 <TextField
+                  error={bookmarkNameError}
                   fullWidth
                   placeholder={t('core:bookmarks.bookmark_name_placeholder')}
                   size="small"
                   sx={bookmarkTextFieldSx}
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => {
+                    if (e.target.value.trim()) setBookmarkNameError(false);
+                    setForm({ ...form, name: e.target.value });
+                  }}
                 />
               </Box>
 
@@ -912,7 +941,10 @@ export function AppBookmarksButton({
                   </Button>
                 )}
                 <Button
-                  onClick={() => setForm(null)}
+                  onClick={() => {
+                    setForm(null);
+                    setBookmarkNameError(false);
+                  }}
                   size="small"
                   sx={{
                     borderRadius: '8px',

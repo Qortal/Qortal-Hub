@@ -333,6 +333,65 @@ describe('Reticulum manager late bridge binding', () => {
     manager.stop();
   });
 
+  it('relays inbound direct call overlays even when the target address is local', () => {
+    vi.useFakeTimers();
+    const bridge = new CallBridgeStub();
+    const manager = new CallManager(presenceStub() as any, bridge as any);
+    const callId = '123e4567-e89b-12d3-a456-426614174002';
+    const caller = `Q${'c'.repeat(33)}`;
+    const local = `Q${'a'.repeat(33)}`;
+    const publicKey = 'pub-caller';
+    const signature = 'sig-caller';
+    const timestamp = Date.now();
+    const handleRequestSpy = vi
+      .spyOn(manager as any, 'handleRequestReticulum')
+      .mockImplementation(() => {});
+
+    manager.setLocalAddresses([local]);
+    manager.start();
+
+    bridge.emit(
+      'call-message',
+      {
+        t: 'CR',
+        c: callId,
+        a: caller,
+        k: publicKey,
+        g: signature,
+        m: timestamp,
+        U: local,
+        L: 4,
+        X: 'overlay-cr-target-local',
+      },
+      'sender-hash',
+      'sender-peer-hash'
+    );
+
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledTimes(1);
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          t: 'CR',
+          c: callId,
+          U: local,
+          L: 3,
+          X: 'overlay-cr-target-local',
+        }),
+      ],
+      ['sender-peer-hash']
+    );
+    expect(handleRequestSpy).toHaveBeenCalledWith(
+      'sender-hash',
+      expect.objectContaining({
+        type: 'CALL_REQUEST',
+        callId,
+        fromAddress: caller,
+        chatId: `direct:${[local, caller].sort().join(':')}`,
+      })
+    );
+    manager.stop();
+  });
+
   it('restores registered call local addresses after CallManager restart', () => {
     const presence = presenceStub();
     const firstBridge = new CallBridgeStub();

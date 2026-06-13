@@ -1182,7 +1182,7 @@ describe('ReticulumBridge publish_presence payload', () => {
     );
   });
 
-  it('sends overlayNeighborHashes from PresenceManager (empty when null)', async () => {
+  it('publishes presence without overlay maintenance hints', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     internal.state = 'ready';
@@ -1213,116 +1213,10 @@ describe('ReticulumBridge publish_presence payload', () => {
 
     expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
       envelope,
-      overlayNeighborHashes: [],
     });
   });
 
-  it('sends active overlay neighbor hashes from PresenceManager', async () => {
-    vi.mocked(getPresenceManager).mockReturnValue({
-      getReticulumActiveNeighborHashes: () => [
-        'aa112233445566778899aabbccddeeff',
-        'bb00112233445566778899aabbccddee',
-      ],
-    } as any);
-
-    const bridge = new ReticulumBridge();
-    const internal = bridge as any;
-    internal.state = 'ready';
-    internal.start = vi.fn(async () => {});
-    internal.sendCommand = vi.fn(async () => ({
-      type: 'resp',
-      id: '1',
-      ok: true,
-      payload: {},
-    }));
-
-    const envelope: PresenceEnvelope = {
-      id: 'e2',
-      type: 'PRESENCE_ANNOUNCE',
-      senderAddress: 'addr2',
-      timestamp: Date.now(),
-      payload: {
-        address: 'addr2',
-        publicKey: 'pk2',
-        sessionId: 'sid2',
-        status: 'online',
-        clientVersion: '1',
-      },
-      signature: 'sig2',
-    };
-
-    await bridge.publish(envelope);
-
-    expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
-      envelope,
-      overlayNeighborHashes: [
-        'aa112233445566778899aabbccddeeff',
-        'bb00112233445566778899aabbccddee',
-      ],
-    });
-  });
-
-  it('falls back to verified overlay neighbors when active publish fanout is empty', async () => {
-    vi.mocked(getPresenceManager).mockReturnValue({
-      getReticulumActiveNeighborHashes: () => [],
-      getReticulumVerifiedNeighborHashes: () => [
-        'aa112233445566778899aabbccddeeff',
-        'bb00112233445566778899aabbccddee',
-      ],
-    } as any);
-
-    const bridge = new ReticulumBridge();
-    const internal = bridge as any;
-    internal.state = 'ready';
-    internal.start = vi.fn(async () => {});
-    internal.sendCommand = vi.fn(async () => ({
-      type: 'resp',
-      id: '1',
-      ok: true,
-      payload: {},
-    }));
-
-    const envelope: PresenceEnvelope = {
-      id: 'e-fallback',
-      type: 'PRESENCE_HEARTBEAT',
-      senderAddress: 'addr-fallback',
-      timestamp: Date.now(),
-      payload: {
-        address: 'addr-fallback',
-        publicKey: 'pk-fallback',
-        sessionId: 'sid-fallback',
-        status: 'online',
-      },
-      signature: 'sig-fallback',
-    };
-
-    await bridge.publish(envelope);
-
-    expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
-      envelope,
-      overlayNeighborHashes: [
-        'aa112233445566778899aabbccddeeff',
-        'bb00112233445566778899aabbccddee',
-      ],
-    });
-  });
-
-  it('sends bridge-owned call fanout with active overlay neighbor hashes and exclusions', async () => {
-    vi.mocked(getPresenceManager).mockReturnValue({
-      getReticulumActiveNeighborHashes: (
-        excludePeerPresenceHashes?: string[]
-      ) =>
-        excludePeerPresenceHashes?.length
-          ? [
-              'aa112233445566778899aabbccddeeff',
-              'cc112233445566778899aabbccddeeff',
-            ]
-          : [
-              'aa112233445566778899aabbccddeeff',
-              'bb00112233445566778899aabbccddee',
-            ],
-    } as any);
-
+  it('sends bridge-owned call fanout without overlay maintenance hints', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     internal.state = 'ready';
@@ -1341,30 +1235,11 @@ describe('ReticulumBridge publish_presence payload', () => {
 
     expect(internal.sendCommand).toHaveBeenCalledWith('fanout_call', {
       messages: [{ t: 'CR', c: 'call-1', a: 'Q-local' }],
-      overlayNeighborHashes: [
-        'aa112233445566778899aabbccddeeff',
-        'cc112233445566778899aabbccddeeff',
-      ],
       excludePeerPresenceHashes: ['bb00112233445566778899aabbccddee'],
     });
   });
 
-  it('sends bridge-owned group-call fanout with active overlay neighbor hashes and exclusions', async () => {
-    vi.mocked(getPresenceManager).mockReturnValue({
-      getReticulumActiveNeighborHashes: (
-        excludePeerPresenceHashes?: string[]
-      ) =>
-        excludePeerPresenceHashes?.length
-          ? [
-              'aa112233445566778899aabbccddeeff',
-              'cc112233445566778899aabbccddeeff',
-            ]
-          : [
-              'aa112233445566778899aabbccddeeff',
-              'bb00112233445566778899aabbccddee',
-            ],
-    } as any);
-
+  it('sends bridge-owned group-call fanout without overlay maintenance hints', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     internal.state = 'ready';
@@ -1383,10 +1258,6 @@ describe('ReticulumBridge publish_presence payload', () => {
 
     expect(internal.sendCommand).toHaveBeenCalledWith('fanout_group_call', {
       messages: [{ t: 'GJ', R: 'room-1' }],
-      overlayNeighborHashes: [
-        'aa112233445566778899aabbccddeeff',
-        'cc112233445566778899aabbccddeeff',
-      ],
       excludePeerPresenceHashes: ['bb00112233445566778899aabbccddee'],
     });
   });
