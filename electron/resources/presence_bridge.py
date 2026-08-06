@@ -268,7 +268,17 @@ _RESOURCE_SESSION_REQUEST_TIMEOUT_SECONDS = 60.0
 _RESOURCE_SESSION_PROVIDER_AUTH_TIMEOUT_SECONDS = 10.0
 _RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS = 2 * 60.0
 _RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS = 30.0
-_RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS = 60.0
+# Providers must not expire an incoming session before its requester-side
+# lease. Otherwise the requester can keep reusing a locally active Link after
+# the provider has already discarded its matching state. Normal requester
+# teardown still closes overflow sessions promptly on both ends.
+_RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS = 3 * 60.0
+# READY packets from older bridges did not advertise their provider lease and
+# those bridges expired incoming sessions after 60 seconds. Close our side a
+# little earlier when no lease is advertised so mixed-version peers cannot
+# create a half-open reuse window during rollout.
+_RESOURCE_SESSION_LEGACY_PROVIDER_IDLE_TIMEOUT_SECONDS = 60.0
+_RESOURCE_SESSION_PROVIDER_IDLE_GUARD_SECONDS = 5.0
 _RESOURCE_SESSION_PATH_WAIT_TIMEOUT_SECONDS = 30.0
 _RESOURCE_SESSION_PATH_POLL_SECONDS = 1.0
 _RESOURCE_SESSION_MAX_QUEUE_PER_LANE = 64
@@ -13556,6 +13566,16 @@ def _handle_qchat_file_link_packet(message, packet) -> None:
         with _state_lock:
             if state.get("closing") is True or state.get("remote_ready") is True:
                 return
+            try:
+                provider_idle_ms = float(decoded.get("providerIdleMs") or 0)
+            except Exception:
+                provider_idle_ms = 0.0
+            if math.isfinite(provider_idle_ms) and provider_idle_ms >= 1000:
+                state["remote_provider_idle_seconds"] = provider_idle_ms / 1000.0
+            else:
+                state["remote_provider_idle_seconds"] = (
+                    _RESOURCE_SESSION_LEGACY_PROVIDER_IDLE_TIMEOUT_SECONDS
+                )
             state["remote_ready"] = True
             state["last_used_at"] = time.time()
             state["activity_generation"] = int(
@@ -13773,6 +13793,7 @@ def _resource_session_maybe_send_provider_ready(state: Dict[str, Any]) -> bool:
         "type": _RESOURCE_SESSION_READY_TYPE,
         "r": destination_hash_hex(_destination.hash) if _destination is not None else "",
         "lane": state.get("sessionLane") or "fast",
+        "providerIdleMs": int(_RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS * 1000),
     }
     sent = _send_packet_on_link(
         link,
@@ -14167,8 +14188,27 @@ def _qchat_file_cancel_transfer(transfer_id: str, peer_hash: str = "", reason: s
             reason="deduplicated_resource_cancelled",
         )
         if session is not None and session.get("closing") is not True:
-            _resource_session_dispatch_pending(session)
-            _resource_session_schedule_idle_close(session)
+            # An authorization timeout occurs only after link.request() was
+            # dispatched. Receiving no response means this particular
+            # requester/provider session can be half-open even when Reticulum
+            # still reports it active locally. Do not feed the retry (or the
+            # next queued job) back into the same suspect Link. Other pooled
+            # sessions stay available and queued jobs are rehomed by
+            # _resource_session_fail_state(). Ordinary user cancellation does
+            # not imply a bad Link and continues to reuse the session.
+            retire_session = (
+                reason == "resource_authorization_timeout"
+                and receipt is not None
+            )
+            if retire_session:
+                _resource_session_fail_state(
+                    session,
+                    "resource_authorization_timeout",
+                )
+                closed += 1
+            else:
+                _resource_session_dispatch_pending(session)
+                _resource_session_schedule_idle_close(session)
     with _state_lock:
         receive_pending = _qchat_file_accepts_by_transfer.get(transfer_key)
         if receive_pending is not None:
@@ -20013,9 +20053,25 @@ def _resource_session_total_queue_depth() -> int:
 def _resource_session_idle_timeout_seconds(state: Dict[str, Any]) -> float:
     if state.get("incoming") is True:
         return _RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS
-    if state.get("sessionLane") == "bulk" and int(state.get("sessionSlot") or 0) > 0:
-        return _RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS
-    return _RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS
+    local_timeout = (
+        _RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS
+        if state.get("sessionLane") == "bulk"
+        and int(state.get("sessionSlot") or 0) > 0
+        else _RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS
+    )
+    try:
+        provider_timeout = float(
+            state.get("remote_provider_idle_seconds")
+            or _RESOURCE_SESSION_LEGACY_PROVIDER_IDLE_TIMEOUT_SECONDS
+        )
+    except Exception:
+        provider_timeout = _RESOURCE_SESSION_LEGACY_PROVIDER_IDLE_TIMEOUT_SECONDS
+    if not math.isfinite(provider_timeout) or provider_timeout <= 0:
+        provider_timeout = _RESOURCE_SESSION_LEGACY_PROVIDER_IDLE_TIMEOUT_SECONDS
+    return min(
+        local_timeout,
+        max(1.0, provider_timeout - _RESOURCE_SESSION_PROVIDER_IDLE_GUARD_SECONDS),
+    )
 
 
 def _resource_session_cancel_timer(state: Dict[str, Any], key: str) -> None:

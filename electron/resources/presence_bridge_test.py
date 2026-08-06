@@ -3886,12 +3886,14 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
                         "type": self.bridge._RESOURCE_SESSION_READY_TYPE,
                         "r": self.peer_hash,
                         "lane": "fast",
+                        "providerIdleMs": 180000,
                     }
                 ).encode("utf-8"),
                 FakePacket(link),
             )
 
         self.assertTrue(state["remote_ready"])
+        self.assertEqual(state["remote_provider_idle_seconds"], 180.0)
         emit_event.assert_any_call(
             "reticulum_resource_session",
             {
@@ -3945,6 +3947,14 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
             self.assertEqual(state["peerPresenceHash"], self.peer_hash)
             self.assertTrue(state["provider_ready_sent"])
             send_packet.assert_called_once()
+            ready_wire = json.loads(send_packet.call_args.args[1].decode("utf-8"))
+            self.assertEqual(
+                ready_wire["providerIdleMs"],
+                int(
+                    self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS
+                    * 1000
+                ),
+            )
 
             link.closed_callback(link)
 
@@ -4186,11 +4196,17 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
         self.assertNotIn(failed["sessionKey"], self.bridge._resource_sessions_by_key)
         self.assertFalse(failed_link.teardown_called)
 
-    def test_overflow_and_incoming_sessions_have_shorter_idle_lifetimes(self):
+    def test_provider_session_outlives_requester_idle_leases(self):
         primary, _ = self.session(lane="bulk", slot=0)
         overflow, _ = self.session(lane="bulk", slot=1)
         incoming = dict(primary)
         incoming["incoming"] = True
+        primary["remote_provider_idle_seconds"] = (
+            self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS
+        )
+        overflow["remote_provider_idle_seconds"] = (
+            self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS
+        )
 
         self.assertEqual(
             self.bridge._resource_session_idle_timeout_seconds(primary),
@@ -4203,6 +4219,28 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
         self.assertEqual(
             self.bridge._resource_session_idle_timeout_seconds(incoming),
             self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS,
+        )
+        self.assertGreater(
+            self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS,
+            self.bridge._RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS,
+        )
+        self.assertGreater(
+            self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS,
+            self.bridge._RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS,
+        )
+
+    def test_legacy_provider_session_closes_before_its_unadvertised_lease(self):
+        primary, _ = self.session(lane="bulk", slot=0)
+        overflow, _ = self.session(lane="bulk", slot=1)
+
+        self.assertEqual(
+            self.bridge._resource_session_idle_timeout_seconds(primary),
+            self.bridge._RESOURCE_SESSION_LEGACY_PROVIDER_IDLE_TIMEOUT_SECONDS
+            - self.bridge._RESOURCE_SESSION_PROVIDER_IDLE_GUARD_SECONDS,
+        )
+        self.assertEqual(
+            self.bridge._resource_session_idle_timeout_seconds(overflow),
+            self.bridge._RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS,
         )
 
     def test_provider_request_waits_for_existing_electron_authorization(self):
@@ -5229,6 +5267,77 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
         )
         self.assertIn(state["sessionKey"], self.bridge._resource_sessions_by_key)
         self.assertTrue(job["completed"])
+
+    def test_authorization_timeout_retires_only_the_suspect_session(self):
+        state, link = self.session(lane="bulk", slot=0)
+        surviving, surviving_link = self.session(lane="bulk", slot=1)
+        pending = self.pending(
+            "authorization-timeout",
+            resource_type="reticulum_group_resource_range",
+        )
+        receipt = FakeSessionReceipt()
+        receipt.resource = mock.Mock()
+        job = {
+            "pending": pending,
+            "created_at": time.time(),
+            "followers": [],
+            "session": state,
+            "semanticKey": "authorization-timeout-key",
+            "receipt": receipt,
+        }
+        queued = {
+            "pending": self.pending(
+                "queued-after-timeout",
+                resource_type="reticulum_group_resource_range",
+            ),
+            "created_at": time.time(),
+            "followers": [],
+            "session": state,
+            "semanticKey": "queued-after-timeout-key",
+        }
+        state["active_requests"]["authorization-timeout"] = job
+        state["pending_jobs"].append(queued)
+        self.bridge._resource_session_jobs_by_transfer["authorization-timeout"] = job
+        self.bridge._resource_session_jobs_by_transfer["queued-after-timeout"] = queued
+        self.bridge._resource_session_jobs_by_semantic_key[
+            "authorization-timeout-key"
+        ] = job
+        self.bridge._resource_session_jobs_by_semantic_key[
+            "queued-after-timeout-key"
+        ] = queued
+        self.bridge._qchat_file_store_pending_receive(self.peer_hash, pending)
+
+        with mock.patch.object(
+            self.bridge,
+            "_qchat_file_emit",
+        ), mock.patch.object(
+            self.bridge,
+            "_send_packet_on_link",
+            return_value=True,
+        ), mock.patch.object(
+            self.bridge,
+            "_teardown_reticulum_link_bounded",
+        ) as teardown:
+            closed = self.bridge._qchat_file_cancel_transfer(
+                "authorization-timeout",
+                self.peer_hash,
+                "resource_authorization_timeout",
+            )
+
+        self.assertEqual(closed, 1)
+        self.assertTrue(state["closing"])
+        self.assertNotIn(state["sessionKey"], self.bridge._resource_sessions_by_key)
+        teardown.assert_called_once()
+        self.assertIs(teardown.call_args.args[0], link)
+        receipt.resource.cancel.assert_called_once_with()
+        self.assertEqual(receipt.status, FakeSessionReceipt.FAILED)
+        self.assertFalse(surviving.get("closing", False))
+        self.assertFalse(surviving_link.teardown_called)
+        self.assertIs(queued.get("session"), surviving)
+        self.assertIs(
+            surviving["active_requests"].get("queued-after-timeout"),
+            queued,
+        )
 
     def test_cancel_during_request_handoff_cancels_late_receipt(self):
         state, link = self.session()
