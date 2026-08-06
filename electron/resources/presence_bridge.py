@@ -273,12 +273,15 @@ _RESOURCE_SESSION_PATH_WAIT_TIMEOUT_SECONDS = 30.0
 _RESOURCE_SESSION_PATH_POLL_SECONDS = 1.0
 _RESOURCE_SESSION_MAX_QUEUE_PER_LANE = 64
 _RESOURCE_SESSION_MAX_QUEUE_TOTAL = 256
-_RESOURCE_SESSION_FAST_CONCURRENCY = 4
-_RESOURCE_SESSION_BULK_POOL_SIZE = 2
-_RESOURCE_SESSION_BULK_CONCURRENCY = 3
-# Five attachment ranges retain their existing parallelism. The sixth bulk
-# request slot remains available for history or metadata so a large download
-# cannot stall chat synchronization with the same peer.
+_RESOURCE_SESSION_FAST_CONCURRENCY = 1
+# Reticulum serialises outgoing Resources on each Link. Use independent Links
+# for real wire-level parallelism instead of dispatching several requests onto
+# one Link where they would wait invisibly inside Reticulum.
+_RESOURCE_SESSION_BULK_POOL_SIZE = 6
+_RESOURCE_SESSION_BULK_CONCURRENCY = 1
+# Five attachment ranges retain their existing parallelism across five bulk
+# Links. The sixth bulk Link remains available for history or metadata so a
+# large download cannot stall chat synchronization with the same peer.
 _RESOURCE_SESSION_BULK_ATTACHMENT_CONCURRENCY_PER_PEER = 5
 # Authorization is admitted separately so slow membership checks cannot occupy
 # response capacity. The nested response ceilings preserve one slot for live
@@ -21267,6 +21270,12 @@ def _resource_session_response_generator(
                 or transfer_id in _resource_session_provider_inflight_transfers
             ):
                 return {"ok": False, "reason": "duplicate_resource_request"}
+            # RNS.Resource only advertises one outgoing Resource per Link. Do
+            # not allow a second response to become an unobservable Reticulum
+            # queue entry, since its receiver-side authorization deadline
+            # would run while no bytes can possibly move.
+            if int(state.get("provider_active") or 0) > 0:
+                return {"ok": False, "reason": "resource_session_busy"}
             peer_pending_auth = int(
                 _resource_session_provider_pending_auth_by_peer.get(
                     identified_peer_hash,

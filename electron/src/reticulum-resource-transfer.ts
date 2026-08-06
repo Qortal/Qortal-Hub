@@ -23,6 +23,7 @@ export const RETICULUM_RESOURCE_TRANSFER_IN_FLIGHT_STALE_MS = 180_000;
 export const RETICULUM_RESOURCE_TRANSFER_RESPONSE_TIMEOUT_MS = 45_000;
 export const RETICULUM_RESOURCE_TRANSFER_OVERLAY_STALE_THROTTLE_MS = 30_000;
 export const RETICULUM_RESOURCE_TRANSFER_OVERLAY_THROTTLE_RETRY_MS = 5_000;
+export const RETICULUM_RESOURCE_TRANSFER_SESSION_BUSY_RETRY_MS = 1_000;
 const RETICULUM_RESOURCE_TRANSFER_ACCEPT_STALE_MS = 180_000;
 const RETICULUM_RESOURCE_TRANSFER_SPEED_LOG_MS = 5_000;
 // Session preparation completes before a range request is opened. These
@@ -567,6 +568,17 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   private handleProviderFailure(transferId: string, reason: string): void {
+    if (reason === 'resource_session_busy') {
+      // A cancelled response can remain active remotely for a brief moment
+      // after the local request has been released. Avoid immediately
+      // selecting the same peer/link again while that teardown completes.
+      this.temporarilyThrottleProvider(
+        transferId,
+        reason,
+        RETICULUM_RESOURCE_TRANSFER_SESSION_BUSY_RETRY_MS
+      );
+      return;
+    }
     if (
       reason === 'resource_request_start_timeout' ||
       reason === 'resource_request_queue_timeout' ||
@@ -605,14 +617,17 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     }
   }
 
-  private temporarilyThrottleProvider(transferId: string, reason: string): void {
+  private temporarilyThrottleProvider(
+    transferId: string,
+    reason: string,
+    retryMs = RETICULUM_RESOURCE_TRANSFER_OVERLAY_THROTTLE_RETRY_MS
+  ): void {
     const offer = this.offers.get(transferId);
     if (!offer?.sourcePeerHash) return;
     const state = this.downloads.get(offer.fileHash);
     if (!state) return;
     const peerKey = offer.sourcePeerHash.trim().toLowerCase();
     if (!peerKey || !state.peerHashes.has(peerKey)) return;
-    const retryMs = RETICULUM_RESOURCE_TRANSFER_OVERLAY_THROTTLE_RETRY_MS;
     const throttledUntil = this.now() + retryMs;
     state.peerBulkThrottleUntil.set(
       peerKey,

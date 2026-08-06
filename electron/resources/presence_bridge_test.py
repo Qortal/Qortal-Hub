@@ -3806,33 +3806,25 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
 
         self.assertEqual(len(self.bridge._resource_sessions_by_key), 24)
 
-    def test_bulk_pool_multiplexes_five_attachments_and_reserves_history(self):
-        first, first_link = self.session(lane="bulk", slot=0)
-        second, second_link = self.session(lane="bulk", slot=1)
-        first["pending_jobs"] = [
-            {
-                "pending": self.pending(
-                    f"range-a-{index}",
-                    resource_type="reticulum_group_resource_range",
-                ),
-                "created_at": time.time() + index / 1000,
-                "followers": [],
-            }
-            for index in range(3)
+    def test_bulk_pool_uses_one_resource_per_link_and_reserves_history(self):
+        sessions = [
+            self.session(lane="bulk", slot=index)
+            for index in range(self.bridge._RESOURCE_SESSION_BULK_POOL_SIZE)
         ]
+        for index, (state, _link) in enumerate(sessions[:5]):
+            state["pending_jobs"] = [
+                {
+                    "pending": self.pending(
+                        f"range-{index}",
+                        resource_type="reticulum_group_resource_range",
+                    ),
+                    "created_at": time.time() + index / 1000,
+                    "followers": [],
+                }
+            ]
         history = self.pending("visible-history")
         history["metadata"]["logicalResourceType"] = "reticulum_chat_history_page"
-        second["pending_jobs"] = [
-            {
-                "pending": self.pending(
-                    f"range-b-{index}",
-                    resource_type="reticulum_group_resource_range",
-                ),
-                "created_at": time.time() + index / 1000,
-                "followers": [],
-            }
-            for index in range(3)
-        ] + [
+        sessions[5][0]["pending_jobs"] = [
             {
                 "pending": history,
                 "created_at": time.time() + 1,
@@ -3840,13 +3832,16 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
             }
         ]
 
-        self.bridge._resource_session_dispatch_pending(first)
-        self.bridge._resource_session_dispatch_pending(second)
+        for state, _link in sessions:
+            self.bridge._resource_session_dispatch_pending(state)
 
-        active = list(first["active_requests"].values()) + list(
-            second["active_requests"].values()
-        )
-        self.assertEqual(len(first_link.requests) + len(second_link.requests), 6)
+        active = [
+            job
+            for state, _link in sessions
+            for job in state["active_requests"].values()
+        ]
+        self.assertEqual(sum(len(link.requests) for _state, link in sessions), 6)
+        self.assertTrue(all(len(link.requests) == 1 for _state, link in sessions))
         self.assertEqual(
             sum(
                 self.bridge._resource_session_job_class(job) == "attachment"
@@ -4323,6 +4318,34 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
 
         self.assertEqual(response["reason"], "resource_session_unavailable")
         self.assertEqual(state["provider_active"], 0)
+        emit.assert_not_called()
+
+    def test_provider_rejects_a_second_resource_on_the_same_link(self):
+        state, link = self.session()
+        state["incoming"] = True
+        state["provider_active"] = 1
+        with mock.patch.object(
+            self.bridge,
+            "_destination_hash_for_identity",
+            return_value=self.peer_hash,
+        ), mock.patch.object(self.bridge, "_qchat_file_emit") as emit:
+            response = self.bridge._resource_session_response_generator(
+                self.bridge._RESOURCE_SESSION_REQUEST_PATH,
+                {
+                    "version": 1,
+                    "transferId": "same-link-second-resource",
+                    "resourceType": self.bridge._RETICULUM_CHAT_RESOURCE_TYPE,
+                    "metadata": {"eventId": "event-second-resource"},
+                    "authMessage": {"type": "RCR"},
+                },
+                b"request",
+                link.link_id,
+                object(),
+                time.time(),
+            )
+
+        self.assertEqual(response["reason"], "resource_session_busy")
+        self.assertEqual(state["provider_active"], 1)
         emit.assert_not_called()
 
     def test_provider_pending_auth_limit_rejects_without_emitting_auth(self):
