@@ -1081,8 +1081,34 @@ const Tiptap = ({
               minWidth: 0,
               mt: '5px',
               opacity: readOnly ? 0.68 : 1,
+              position: 'relative',
+              '& .tiptap p.is-editor-empty:first-child::before': {
+                display: readOnly ? 'none' : undefined,
+              },
             }}
           >
+            {readOnly && (
+              <Typography
+                aria-hidden="true"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: 15,
+                  left: 10,
+                  lineHeight: 1.4,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  right: 10,
+                  textOverflow: 'ellipsis',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  whiteSpace: 'nowrap',
+                  zIndex: 2,
+                }}
+              >
+                Only group admins can write in this channel
+              </Typography>
+            )}
             {editorProvider}
           </Box>
         </Box>
