@@ -3332,14 +3332,15 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
             "authMessage": auth,
         }
 
-    def session(self, lane="fast", established=True):
-        session_id = f"session-{lane}"
+    def session(self, lane="fast", established=True, slot=0):
+        session_id = f"session-{lane}-{slot}"
         link = FakeSessionLink()
         state = {
             "linkId": session_id,
             "manager_kind": "resource_session",
-            "sessionKey": self.bridge._resource_session_key(self.peer_hash, lane),
+            "sessionKey": self.bridge._resource_session_key(self.peer_hash, lane, slot),
             "sessionLane": lane,
+            "sessionSlot": slot,
             "peerPresenceHash": self.peer_hash,
             "incoming": False,
             "established": established,
@@ -3791,22 +3792,74 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
         self.assertEqual(parsed_identity.get_public_key(), peer_identity.get_public_key())
         emit_resp.assert_called_once_with("req", True, payload=mock.ANY)
 
-    def test_capacity_does_not_evict_a_connecting_session(self):
-        state, link = self.session(established=False)
-        with mock.patch.object(
-            self.bridge,
-            "_RESOURCE_SESSION_MAX_TOTAL",
-            1,
-        ), mock.patch.object(
-            self.bridge,
-            "_teardown_reticulum_link_bounded",
-        ) as teardown:
-            available = self.bridge._resource_session_evict_idle_for_capacity()
+    def test_sessions_are_bounded_per_peer_without_a_global_connection_cap(self):
+        with mock.patch.object(self.bridge, "_resource_session_poll_path"):
+            for index in range(24):
+                peer_hash = f"{index + 1:032x}"
+                state, reason = self.bridge._resource_session_get_or_create(
+                    peer_hash,
+                    object(),
+                    "fast",
+                )
+                self.assertEqual(reason, "")
+                self.assertIsInstance(state, dict)
 
-        self.assertFalse(available)
-        self.assertIn(state["sessionKey"], self.bridge._resource_sessions_by_key)
-        self.assertFalse(link.teardown_called)
-        teardown.assert_not_called()
+        self.assertEqual(len(self.bridge._resource_sessions_by_key), 24)
+
+    def test_bulk_pool_multiplexes_five_attachments_and_reserves_history(self):
+        first, first_link = self.session(lane="bulk", slot=0)
+        second, second_link = self.session(lane="bulk", slot=1)
+        first["pending_jobs"] = [
+            {
+                "pending": self.pending(
+                    f"range-a-{index}",
+                    resource_type="reticulum_group_resource_range",
+                ),
+                "created_at": time.time() + index / 1000,
+                "followers": [],
+            }
+            for index in range(3)
+        ]
+        history = self.pending("visible-history")
+        history["metadata"]["logicalResourceType"] = "reticulum_chat_history_page"
+        second["pending_jobs"] = [
+            {
+                "pending": self.pending(
+                    f"range-b-{index}",
+                    resource_type="reticulum_group_resource_range",
+                ),
+                "created_at": time.time() + index / 1000,
+                "followers": [],
+            }
+            for index in range(3)
+        ] + [
+            {
+                "pending": history,
+                "created_at": time.time() + 1,
+                "followers": [],
+            }
+        ]
+
+        self.bridge._resource_session_dispatch_pending(first)
+        self.bridge._resource_session_dispatch_pending(second)
+
+        active = list(first["active_requests"].values()) + list(
+            second["active_requests"].values()
+        )
+        self.assertEqual(len(first_link.requests) + len(second_link.requests), 6)
+        self.assertEqual(
+            sum(
+                self.bridge._resource_session_job_class(job) == "attachment"
+                for job in active
+            ),
+            5,
+        )
+        self.assertTrue(
+            any(
+                job["pending"]["transferId"] == "visible-history"
+                for job in active
+            )
+        )
 
     def test_session_waits_for_provider_ready_before_dispatch(self):
         state, link = self.session(established=False)
@@ -3902,6 +3955,30 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
 
         self.assertIsNone(self.bridge.get_qchat_file_link_id(link))
         self.assertNotIn(link_id, self.bridge._qchat_file_links_by_id)
+
+    def test_unidentified_incoming_resource_session_gets_idle_cleanup(self):
+        link = FakeSessionLink()
+        link.remote_identity = None
+
+        with mock.patch.object(
+            self.bridge,
+            "_resource_session_schedule_idle_close",
+        ) as schedule_idle, mock.patch.object(
+            self.bridge,
+            "_send_packet_on_link",
+        ) as send_packet:
+            link_id = self.bridge._register_incoming_resource_session(
+                link,
+                self.peer_hash,
+                "bulk",
+            )
+
+        self.assertIsInstance(link_id, str)
+        state = self.bridge.get_qchat_file_link_state(link_id)
+        self.assertIsInstance(state, dict)
+        self.assertFalse(state.get("provider_ready_sent", False))
+        send_packet.assert_not_called()
+        schedule_idle.assert_called_once_with(state)
 
     def test_parallel_dispatch_never_exceeds_lane_limit(self):
         for lane, limit in (
@@ -4081,6 +4158,57 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
             2,
         )
         self.assertNotIn(state["sessionKey"], self.bridge._resource_sessions_by_key)
+
+    def test_session_failure_requeues_jobs_that_were_never_dispatched(self):
+        failed, failed_link = self.session(lane="bulk", slot=0)
+        surviving, _surviving_link = self.session(lane="bulk", slot=1)
+        job = {
+            "pending": self.pending(
+                "queued-range",
+                resource_type="reticulum_group_resource_range",
+            ),
+            "created_at": time.time(),
+            "followers": [],
+            "session": failed,
+        }
+        failed["pending_jobs"] = [job]
+
+        with mock.patch.object(
+            self.bridge,
+            "_teardown_reticulum_link_bounded",
+        ), mock.patch.object(self.bridge, "_qchat_file_emit") as emit:
+            self.bridge._resource_session_fail_state(
+                failed,
+                "resource_session_link_closed",
+            )
+
+        self.assertFalse(job.get("completed", False))
+        self.assertIs(job.get("session"), surviving)
+        self.assertIs(surviving["active_requests"].get("queued-range"), job)
+        self.assertFalse(
+            any(call.args and call.args[0] == "failed" for call in emit.call_args_list)
+        )
+        self.assertNotIn(failed["sessionKey"], self.bridge._resource_sessions_by_key)
+        self.assertFalse(failed_link.teardown_called)
+
+    def test_overflow_and_incoming_sessions_have_shorter_idle_lifetimes(self):
+        primary, _ = self.session(lane="bulk", slot=0)
+        overflow, _ = self.session(lane="bulk", slot=1)
+        incoming = dict(primary)
+        incoming["incoming"] = True
+
+        self.assertEqual(
+            self.bridge._resource_session_idle_timeout_seconds(primary),
+            self.bridge._RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            self.bridge._resource_session_idle_timeout_seconds(overflow),
+            self.bridge._RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            self.bridge._resource_session_idle_timeout_seconds(incoming),
+            self.bridge._RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS,
+        )
 
     def test_provider_request_waits_for_existing_electron_authorization(self):
         state, link = self.session()

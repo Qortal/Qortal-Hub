@@ -277,6 +277,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   private readonly transferProgressWatch = new Map<string, TransferProgressWatch>();
   private downloadTimer: ReturnType<typeof setTimeout> | null = null;
   private schedulerActive = false;
+  private closed = false;
 
   constructor(options: ReticulumResourceTransferOptions<TRequestWire>) {
     super();
@@ -299,6 +300,8 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     if (this.downloadTimer) {
       clearTimeout(this.downloadTimer);
       this.downloadTimer = null;
@@ -320,6 +323,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
 
   getDownloadStatus(fileHash: string): ReticulumResourceDownloadRuntimeStatus {
     const blobId = String(fileHash || '').trim().toLowerCase();
+    if (this.closed) return this.emptyDownloadStatus();
     const state = this.downloads.get(blobId);
     if (!state) {
       return this.emptyDownloadStatus(blobId);
@@ -391,6 +395,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     candidatePeers?: string[];
     featureData?: Record<string, unknown>;
   }): void {
+    if (this.closed) return;
     const blobId = options.manifest.fileHash.toLowerCase();
     const manifest: ReticulumResourceManifest = {
       ...options.manifest,
@@ -434,6 +439,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   addCandidatePeers(fileHash: string, peerHashes: string[]): boolean {
+    if (this.closed) return false;
     const blobId = String(fileHash || '').trim().toLowerCase();
     if (!blobId || peerHashes.length === 0) return false;
     this.rememberCandidatePeers(blobId, peerHashes);
@@ -455,6 +461,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   async cancelResource(fileHash: string, reason = 'user_cancelled'): Promise<boolean> {
+    if (this.closed) return false;
     const blobId = String(fileHash || '').trim().toLowerCase();
     if (!blobId) return false;
     const state = this.downloads.get(blobId);
@@ -524,6 +531,12 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   handleResourceEvent(payload: ReticulumResourceTransferPayload): void {
+    if (this.closed) {
+      if (payload?.status === 'received' && payload.path) {
+        void fs.promises.unlink(payload.path).catch(() => undefined);
+      }
+      return;
+    }
     if (payload?.status === 'auth' && payload.linkId && payload.transferId) {
       void this.handleAuth(payload);
       return;
@@ -779,6 +792,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   private scheduleDownload(delayMs = RETICULUM_RESOURCE_TRANSFER_RETRY_MS): void {
+    if (this.closed) return;
     if (this.downloadTimer) {
       if (delayMs > 0) return;
       clearTimeout(this.downloadTimer);
@@ -792,7 +806,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   private async processDownloads(): Promise<void> {
-    if (this.schedulerActive) return;
+    if (this.closed || this.schedulerActive) return;
     this.schedulerActive = true;
     try {
       this.retryNoProgressTransfers();
@@ -800,6 +814,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       const now = this.now();
       let nextDelay: number | null = null;
       for (const state of this.downloads.values()) {
+        if (this.closed) return;
         if (state.waitingForProvider) continue;
         try {
           this.ensureStorageProtection(state);
@@ -819,6 +834,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
           continue;
         }
         await this.dispatchRequests(state);
+        if (this.closed) return;
       }
       const hasRunnableDownloads = [...this.downloads.values()].some((state) => !state.waitingForProvider);
       if (hasRunnableDownloads || this.activeAccepts.size > 0) {
@@ -838,14 +854,17 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   private async dispatchRequests(state: ReticulumResourceDownloadState<TRequestWire>): Promise<void> {
+    if (this.closed) return;
     this.releaseStaleInFlightRanges(state);
     if (state.missingRanges.size === 0) {
       try {
         await this.resourceStore.assembleResourceAsync(state.fileHash);
+        if (this.closed) return;
         this.emitProgress(state, true);
         this.releaseStorageProtection(state);
         this.downloads.delete(state.fileHash);
       } catch (error) {
+        if (this.closed) return;
         if (!(await this.recoverInvalidAssembly(state, error))) {
           this.emitProgress(state);
         }
@@ -918,6 +937,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
         peerKey,
         state
       );
+      if (this.closed) return;
       if (!preparedSession.result.ok) {
         const failed = preparedSession.result as Exclude<
           ReticulumSendResult,
@@ -941,6 +961,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
         if (!requestRange) break;
         assigned.add(rangeKey(requestRange));
         const requests = await this.buildRequestPayloads(state, [requestRange]);
+        if (this.closed) return;
         if (requests.length === 0) {
           loggerWarn(
             `[${this.loggerPrefix}] Could not build targeted range request fileHash=${state.fileHash} peer=${peerKey}`
@@ -974,6 +995,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
             request,
             preparedSession.reticulumIdentityPublicKeyBase64
           );
+          if (this.closed) return;
           if (result.ok) {
             delivered = true;
             requestedRanges.push(requestRange);
@@ -1238,6 +1260,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     failed = false,
     failureReason?: ReticulumResourceTransferProgress['failureReason']
   ): void {
+    if (this.closed) return;
     const totalBytes = Math.max(0, Math.floor(Number(state.manifest.sizeBytes) || 0));
     const completedBytes = this.resourceStore.getCompletedBytes(state.fileHash);
     const activeBytes =
@@ -1379,6 +1402,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   private async handleAuth(payload: ReticulumResourceTransferPayload): Promise<void> {
+    if (this.closed) return;
     const transferId = typeof payload.transferId === 'string' ? payload.transferId : '';
     if (!transferId || !this.bridge) return;
     const auth = payload.auth && typeof payload.auth === 'object' ? payload.auth : {};
@@ -1399,6 +1423,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       const pendingServe = this.pendingLinkedRangeServes.get(transferId);
       if (pendingServe) {
         await pendingServe;
+        if (this.closed) return;
         const preparedOffer = this.offers.get(transferId);
         if (preparedOffer?.temporaryPath && !preparedOffer.receiveTemporaryPath) {
           await this.authorizeProvidedOffer(
@@ -1433,6 +1458,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     auth: Record<string, unknown>,
     offer: ReticulumResourceTransferOffer
   ): Promise<void> {
+    if (this.closed) return;
     const transferId = offer.transferId;
     const authRanges = Array.isArray(auth.byteRanges)
       ? auth.byteRanges
@@ -1465,6 +1491,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     auth: Record<string, unknown>,
     offer: ReticulumResourceTransferOffer
   ): Promise<void> {
+    if (this.closed) return;
     const transferId = offer.transferId;
     const authRanges = Array.isArray(auth.byteRanges)
       ? auth.byteRanges
@@ -1508,7 +1535,13 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     payload: ReticulumResourceTransferPayload,
     auth: Record<string, unknown>
   ): Promise<void> {
-    if (!this.bridge || !payload.linkId || !payload.transferId || !this.parseAuthRequest) return;
+    if (
+      this.closed ||
+      !this.bridge ||
+      !payload.linkId ||
+      !payload.transferId ||
+      !this.parseAuthRequest
+    ) return;
     const contextId = Number(
       (this.contextMetadataKey ? auth[this.contextMetadataKey] : undefined) ??
         auth.contextId ??
@@ -1518,6 +1551,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       typeof auth.requesterPeerHash === 'string' ? auth.requesterPeerHash : '';
     const peerHash = String(payload.peerPresenceHash || authPeerHash || '').trim().toLowerCase();
     const request = await this.parseAuthRequest(contextId, auth, peerHash);
+    if (this.closed) return;
     const transferId = payload.transferId;
     if (!request || !Number.isInteger(contextId) || contextId <= 0) {
       await this.bridge.rejectReticulumResourceDetailed?.({
@@ -1538,6 +1572,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     }
     if (this.canServeRequest) {
       const allowed = await this.canServeRequest(contextId, request, manifest);
+      if (this.closed) return;
       if (!allowed) {
         await this.bridge.rejectReticulumResourceDetailed?.({
           linkId: payload.linkId,
@@ -1583,6 +1618,10 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       });
       return;
     }
+    if (this.closed) {
+      this.cleanupTemporaryPath(rangePayload.path);
+      return;
+    }
     const registered = await this.bridge.sendReticulumResourceDetailed({
       allowedRecipientAddress: requesterPeerHash,
       transferId,
@@ -1605,6 +1644,17 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       },
       expiresAt: this.now() + RETICULUM_RESOURCE_TRANSFER_TTL_MS,
     });
+    if (this.closed) {
+      this.cleanupTemporaryPath(rangePayload.path);
+      if (registered.ok) {
+        await this.bridge.rejectReticulumResourceDetailed?.({
+          linkId: payload.linkId,
+          transferId,
+          reason: 'resource_manager_closed',
+        });
+      }
+      return;
+    }
     if (!registered.ok) {
       this.cleanupTemporaryPath(rangePayload.path);
       const failed = registered as Exclude<ReticulumSendResult, { ok: true }>;
@@ -1655,6 +1705,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     }
     try {
       const { bytes, hash: actualHash } = await this.resourceStore.readAndHashFile(payload.path);
+      if (this.closed) return;
       const expectedPayloadHash =
         typeof offer.payloadHash === 'string' && /^[0-9a-f]{64}$/i.test(offer.payloadHash)
           ? offer.payloadHash.toLowerCase()
@@ -1695,6 +1746,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
         range.endByteExclusive,
         bytes
       );
+      if (this.closed) return;
       const state = this.downloads.get(offer.fileHash);
       if (state) {
         this.ensureStorageProtection(state);
@@ -1775,6 +1827,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }
 
   private async handleReceivedRange(offer: ReticulumResourceTransferOffer): Promise<void> {
+    if (this.closed) return;
     const state = this.downloads.get(offer.fileHash);
     if (!state) return;
     for (const range of offer.ranges) {
@@ -1784,6 +1837,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     this.releaseOfferRangesInFlight(state, offer);
     try {
       await this.resourceStore.assembleResourceAsync(offer.fileHash);
+      if (this.closed) return;
       loggerLog(
         `[${this.loggerPrefix}] resource_session_completed fileHash=${offer.fileHash} ` +
           `transfer=${offer.transferId} mode=byte-range`
@@ -1793,6 +1847,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       this.downloads.delete(offer.fileHash);
       return;
     } catch (error) {
+      if (this.closed) return;
       if (!(await this.recoverInvalidAssembly(state, error))) {
         this.emitProgress(state);
         state.nextRequestAt = 0;
@@ -1814,6 +1869,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     state: ReticulumResourceDownloadState<TRequestWire>,
     error: unknown
   ): Promise<boolean> {
+    if (this.closed) return false;
     if (!this.isAssemblyIntegrityError(error)) return false;
     if (state.integrityRecoveryPromise) {
       await state.integrityRecoveryPromise;
@@ -1832,6 +1888,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       state.inFlightRanges.clear();
       this.clearRequestedResourcesForFile(state.fileHash);
       await this.resourceStore.discardResourceDataAsync(state.fileHash);
+      if (this.closed) return;
       if (this.downloads.get(state.fileHash) !== state) return;
 
       state.missingRanges = this.buildMissingRangeMap(state.manifest);

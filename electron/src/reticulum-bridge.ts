@@ -1644,15 +1644,16 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     logicalResourceType?: string;
   }): Promise<ReticulumSendResult> {
     const peerPresenceHash = payload.peerPresenceHash.trim().toLowerCase();
+    const logicalResourceType = payload.logicalResourceType ?? '';
     const lane =
-      ![
+      logicalResourceType === 'reticulum_chat_dm_page' ||
+      (![
         'reticulum_chat_history_page',
-        'reticulum_chat_dm_page',
         'reticulum_chat_metadata_snapshot',
         'reticulum_chat_event_page',
         'reticulum_chat_calendar',
-      ].includes(payload.logicalResourceType ?? '') &&
-      payload.resourceType === 'reticulum_chat_event'
+      ].includes(logicalResourceType) &&
+        payload.resourceType === 'reticulum_chat_event')
         ? 'fast'
         : 'bulk';
     if (!peerPresenceHash) {

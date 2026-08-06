@@ -266,15 +266,20 @@ _RESOURCE_SESSION_REQUEST_TIMEOUT_SECONDS = 60.0
 # milliseconds. Bound a wedged provider quickly; receivers retain a longer
 # compatibility deadline for older bridges that still use 30 seconds.
 _RESOURCE_SESSION_PROVIDER_AUTH_TIMEOUT_SECONDS = 10.0
-_RESOURCE_SESSION_IDLE_TIMEOUT_SECONDS = 5 * 60.0
+_RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS = 2 * 60.0
+_RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS = 30.0
+_RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS = 60.0
 _RESOURCE_SESSION_PATH_WAIT_TIMEOUT_SECONDS = 30.0
 _RESOURCE_SESSION_PATH_POLL_SECONDS = 1.0
-_RESOURCE_SESSION_MAX_TOTAL = 16
 _RESOURCE_SESSION_MAX_QUEUE_PER_LANE = 64
 _RESOURCE_SESSION_MAX_QUEUE_TOTAL = 256
 _RESOURCE_SESSION_FAST_CONCURRENCY = 4
-_RESOURCE_SESSION_BULK_POOL_SIZE = 5
-_RESOURCE_SESSION_BULK_CONCURRENCY = 1
+_RESOURCE_SESSION_BULK_POOL_SIZE = 2
+_RESOURCE_SESSION_BULK_CONCURRENCY = 3
+# Five attachment ranges retain their existing parallelism. The sixth bulk
+# request slot remains available for history or metadata so a large download
+# cannot stall chat synchronization with the same peer.
+_RESOURCE_SESSION_BULK_ATTACHMENT_CONCURRENCY_PER_PEER = 5
 # Authorization is admitted separately so slow membership checks cannot occupy
 # response capacity. The nested response ceilings preserve one slot for live
 # events and two slots that attachment ranges cannot consume.
@@ -13555,7 +13560,10 @@ def _handle_qchat_file_link_packet(message, packet) -> None:
             ) + 1
         _resource_session_cancel_timer(state, "establish_timer")
         _resource_session_emit_status(state, "ready")
-        _resource_session_dispatch_pending(state)
+        _resource_session_dispatch_peer_pending(
+            expected_peer_hash,
+            str(state.get("sessionLane") or "fast"),
+        )
         _resource_session_schedule_idle_close(state)
         return
     if decoded.get("type") == "QCHAT_FILE_CHUNK_ACK":
@@ -13840,7 +13848,12 @@ def _register_incoming_resource_session(
         "[presence_bridge] resource_session_incoming "
         f"peer={peer_hash[:16] or 'unknown'} lane={state.get('sessionLane')} link={link_id}"
     )
-    _resource_session_maybe_send_provider_ready(state)
+    if not _resource_session_maybe_send_provider_ready(state):
+        # Remote identity callbacks can arrive after the hello packet. Ensure
+        # a peer which never identifies cannot leave a half-open session in
+        # memory indefinitely now that sessions are bounded per peer rather
+        # than by one process-wide connection ceiling.
+        _resource_session_schedule_idle_close(state)
     return link_id
 
 
@@ -19833,6 +19846,82 @@ def _resource_session_job_priority(job: Dict[str, Any]) -> int:
     return 3
 
 
+def _resource_session_job_class(job: Dict[str, Any]) -> str:
+    pending = job.get("pending") if isinstance(job.get("pending"), dict) else {}
+    metadata = pending.get("metadata") if isinstance(pending.get("metadata"), dict) else {}
+    return _resource_session_provider_class(
+        str(pending.get("resourceType") or ""),
+        str(metadata.get("logicalResourceType") or ""),
+    )
+
+
+def _resource_session_job_fairness_group(job: Dict[str, Any]) -> str:
+    pending = job.get("pending") if isinstance(job.get("pending"), dict) else {}
+    metadata = pending.get("metadata") if isinstance(pending.get("metadata"), dict) else {}
+    file_hash = str(metadata.get("fileHash") or pending.get("sha256") or "").strip().lower()
+    if file_hash:
+        return f"file:{file_hash}"
+    return str(job.get("semanticKey") or pending.get("transferId") or "")
+
+
+def _resource_session_active_attachment_count_locked(peer_hash: str) -> int:
+    peer_key = str(peer_hash or "").strip().lower()
+    total = 0
+    for state in _qchat_file_links_by_id.values():
+        if (
+            not isinstance(state, dict)
+            or state.get("manager_kind") != "resource_session"
+            or state.get("incoming") is True
+            or state.get("closing") is True
+            or str(state.get("peerPresenceHash") or "").strip().lower() != peer_key
+        ):
+            continue
+        for active_job in (state.get("active_requests") or {}).values():
+            if isinstance(active_job, dict) and _resource_session_job_class(active_job) == "attachment":
+                total += 1
+    return total
+
+
+def _resource_session_pop_next_job_locked(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    pending_jobs = state.get("pending_jobs")
+    if not isinstance(pending_jobs, list) or not pending_jobs:
+        return None
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    attachment_capacity = (
+        _resource_session_active_attachment_count_locked(peer_hash)
+        < _RESOURCE_SESSION_BULK_ATTACHMENT_CONCURRENCY_PER_PEER
+    )
+    eligible = [
+        (index, job)
+        for index, job in enumerate(pending_jobs)
+        if isinstance(job, dict)
+        and job.get("completed") is not True
+        and (attachment_capacity or _resource_session_job_class(job) != "attachment")
+    ]
+    if not eligible:
+        return None
+    best_priority = min(_resource_session_job_priority(job) for _, job in eligible)
+    priority_jobs = [
+        (index, job)
+        for index, job in eligible
+        if _resource_session_job_priority(job) == best_priority
+    ]
+    last_group = str(state.get("last_dispatched_fairness_group") or "")
+    selected_index, selected_job = next(
+        (
+            (index, job)
+            for index, job in priority_jobs
+            if _resource_session_job_fairness_group(job) != last_group
+        ),
+        priority_jobs[0],
+    )
+    pending_jobs.pop(selected_index)
+    state["last_dispatched_fairness_group"] = _resource_session_job_fairness_group(
+        selected_job
+    )
+    return selected_job
+
+
 def _resource_session_semantic_key(pending: Dict[str, Any]) -> str:
     metadata = pending.get("metadata") if isinstance(pending.get("metadata"), dict) else {}
     auth = pending.get("authMessage") if isinstance(pending.get("authMessage"), dict) else {}
@@ -19898,8 +19987,10 @@ def _resource_session_queue_counts() -> Tuple[int, int, int, float]:
     oldest_age = 0.0
     now = time.time()
     with _state_lock:
-        for session_id in list(_resource_sessions_by_key.values()):
-            state = _qchat_file_links_by_id.get(session_id)
+        # Include provider-side incoming sessions as well as locally opened
+        # sessions. The old counter only covered the latter and hid the actual
+        # number of live Reticulum resource links under load.
+        for state in list(_qchat_file_links_by_id.values()):
             if not isinstance(state, dict) or state.get("manager_kind") != "resource_session":
                 continue
             sessions += 1
@@ -19914,6 +20005,14 @@ def _resource_session_queue_counts() -> Tuple[int, int, int, float]:
 
 def _resource_session_total_queue_depth() -> int:
     return _resource_session_queue_counts()[2]
+
+
+def _resource_session_idle_timeout_seconds(state: Dict[str, Any]) -> float:
+    if state.get("incoming") is True:
+        return _RESOURCE_SESSION_INCOMING_IDLE_TIMEOUT_SECONDS
+    if state.get("sessionLane") == "bulk" and int(state.get("sessionSlot") or 0) > 0:
+        return _RESOURCE_SESSION_OVERFLOW_IDLE_TIMEOUT_SECONDS
+    return _RESOURCE_SESSION_PRIMARY_IDLE_TIMEOUT_SECONDS
 
 
 def _resource_session_cancel_timer(state: Dict[str, Any], key: str) -> None:
@@ -20026,6 +20125,27 @@ def _resource_session_finish_followers(
             _resource_session_emit_failure(follower, "deduplicated_save_failed", str(exc))
 
 
+def _resource_session_dispatch_peer_pending(peer_hash: str, lane: str) -> None:
+    peer_key = str(peer_hash or "").strip().lower()
+    session_lane = "bulk" if lane == "bulk" else "fast"
+    with _state_lock:
+        states = [
+            state
+            for state in _qchat_file_links_by_id.values()
+            if isinstance(state, dict)
+            and state.get("manager_kind") == "resource_session"
+            and state.get("incoming") is not True
+            and state.get("closing") is not True
+            and str(state.get("peerPresenceHash") or "").strip().lower() == peer_key
+            and state.get("sessionLane") == session_lane
+        ]
+    for state in sorted(
+        states,
+        key=lambda item: int(item.get("sessionSlot") or 0),
+    ):
+        _resource_session_dispatch_pending(state)
+
+
 def _resource_session_schedule_idle_close(state: Dict[str, Any]) -> None:
     with _state_lock:
         _resource_session_cancel_timer(state, "idle_timer")
@@ -20038,7 +20158,8 @@ def _resource_session_schedule_idle_close(state: Dict[str, Any]) -> None:
             return
         generation = int(state.get("activity_generation") or 0)
         idle_age = max(0.0, time.time() - float(state.get("last_used_at") or 0))
-        delay = max(0.1, _RESOURCE_SESSION_IDLE_TIMEOUT_SECONDS - idle_age)
+        idle_timeout = _resource_session_idle_timeout_seconds(state)
+        delay = max(0.1, idle_timeout - idle_age)
 
     def close_idle() -> None:
         reschedule = False
@@ -20053,12 +20174,12 @@ def _resource_session_schedule_idle_close(state: Dict[str, Any]) -> None:
                 or int(state.get("provider_active") or 0) > 0
             ):
                 return
-            elif time.time() - float(
-                state.get("last_used_at") or 0
-            ) < _RESOURCE_SESSION_IDLE_TIMEOUT_SECONDS:
-                reschedule = True
             else:
-                state["closing"] = True
+                idle_timeout = _resource_session_idle_timeout_seconds(state)
+                if time.time() - float(state.get("last_used_at") or 0) < idle_timeout:
+                    reschedule = True
+                else:
+                    state["closing"] = True
         if reschedule:
             _resource_session_schedule_idle_close(state)
             return
@@ -20121,7 +20242,10 @@ def _resource_session_finish_job(
         reason=reason,
     )
     if session is not None and session.get("closing") is not True:
-        _resource_session_dispatch_pending(session)
+        _resource_session_dispatch_peer_pending(
+            str(session.get("peerPresenceHash") or ""),
+            str(session.get("sessionLane") or "fast"),
+        )
         _resource_session_schedule_idle_close(session)
 
 
@@ -20335,10 +20459,9 @@ def _resource_session_dispatch_pending(state: Dict[str, Any]) -> None:
             active_requests = state.setdefault("active_requests", {})
             if len(active_requests) >= limit:
                 return
-            pending_jobs = state.get("pending_jobs")
-            if not isinstance(pending_jobs, list) or not pending_jobs:
+            job = _resource_session_pop_next_job_locked(state)
+            if job is None:
                 break
-            job = pending_jobs.pop(0)
             if not isinstance(job, dict) or job.get("completed") is True:
                 continue
             pending = job.get("pending") if isinstance(job.get("pending"), dict) else {}
@@ -20414,9 +20537,37 @@ def _resource_session_fail_state(
     _resource_session_note_failure(state, reason)
     _resource_session_emit_status(state, "failed", reason)
     _resource_session_remove_state(state)
-    for job in active_jobs + pending_jobs:
+    # Requests already handed to Reticulum are failed so their receipt cannot
+    # race a replacement request. Higher layers retain completed byte ranges
+    # and retry those in-flight jobs normally. Jobs which never left our queue
+    # are safe to move to another pooled session without surfacing a failure.
+    for job in active_jobs:
         if isinstance(job, dict):
             _resource_session_finish_job(job, False, reason=reason)
+    requeued = 0
+    for job in pending_jobs:
+        if not isinstance(job, dict):
+            continue
+        attempts = int(job.get("sessionRequeues") or 0)
+        can_requeue = (
+            reason != "resource_session_stopped"
+            and attempts < 2
+            and time.time() - _resource_session_auth_timestamp_seconds(job)
+            < _RESOURCE_SESSION_AUTH_MAX_QUEUE_SECONDS
+        )
+        if can_requeue:
+            job["sessionRequeues"] = attempts + 1
+            job.pop("session", None)
+            queued, _queue_reason = _resource_session_enqueue_job(job)
+            if queued:
+                requeued += 1
+                continue
+        _resource_session_finish_job(job, False, reason=reason)
+    if requeued:
+        log(
+            "[presence_bridge] resource_session_jobs_requeued "
+            f"peer={peer_hash[:16]} lane={state.get('sessionLane')} jobs={requeued} reason={reason}"
+        )
     if refresh_path and peer_hash:
         try:
             _force_overlay_peer_path_refresh(
@@ -20537,44 +20688,6 @@ def _resource_session_poll_path(state: Dict[str, Any]) -> None:
     timer.start()
 
 
-def _resource_session_evict_idle_for_capacity() -> bool:
-    oldest: Optional[Dict[str, Any]] = None
-    with _state_lock:
-        session_count = len(_resource_sessions_by_key)
-        if session_count < _RESOURCE_SESSION_MAX_TOTAL:
-            return True
-        candidates: List[Dict[str, Any]] = []
-        for session_id in list(_resource_sessions_by_key.values()):
-            state = _qchat_file_links_by_id.get(session_id)
-            if (
-                isinstance(state, dict)
-                and state.get("manager_kind") == "resource_session"
-                and state.get("established") is True
-                and state.get("closing") is not True
-                and not state.get("active_requests")
-                and not state.get("pending_jobs")
-                and int(state.get("provider_active") or 0) <= 0
-            ):
-                candidates.append(state)
-        if not candidates:
-            return False
-        oldest = min(
-            candidates,
-            key=lambda item: float(
-                item.get("last_used_at") or item.get("created_at") or 0
-            ),
-        )
-        oldest["closing"] = True
-        _resource_session_remove_state(oldest)
-    link = oldest.get("link")
-    if link is not None:
-        _teardown_reticulum_link_bounded(
-            link,
-            "target=qchat-file-reticulum resource_session_lru_evict",
-        )
-    return True
-
-
 def _resource_session_get_or_create(
     peer_hash: str,
     peer_identity,
@@ -20631,10 +20744,6 @@ def _resource_session_get_or_create(
         return None, "resource_session_backoff"
     session_slot = available_slots[0]
     session_key = _resource_session_key(peer_key, session_lane, session_slot)
-    if not _resource_session_evict_idle_for_capacity():
-        if isinstance(least_loaded, dict):
-            return least_loaded, ""
-        return None, "resource_session_capacity"
     session_id = str(uuid.uuid4())
     state = {
         "linkId": session_id,
@@ -20662,8 +20771,6 @@ def _resource_session_get_or_create(
         existing = _qchat_file_links_by_id.get(existing_id) if existing_id else None
         if isinstance(existing, dict) and existing.get("closing") is not True:
             return existing, ""
-        if len(_resource_sessions_by_key) >= _RESOURCE_SESSION_MAX_TOTAL:
-            return None, "resource_session_capacity"
         _qchat_file_links_by_id[session_id] = state
         _resource_sessions_by_key[session_key] = session_id
     _resource_session_poll_path(state)
@@ -20716,7 +20823,7 @@ def _resource_session_enqueue_job(job: Dict[str, Any]) -> Tuple[bool, str]:
             )
         )
     if state.get("remote_ready") is True:
-        _resource_session_dispatch_pending(state)
+        _resource_session_dispatch_peer_pending(peer_hash, lane)
     return True, ""
 
 

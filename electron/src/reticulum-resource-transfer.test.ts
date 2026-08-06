@@ -23,6 +23,37 @@ describe('reticulum resource transfer storage protection', () => {
     while (stores.length) stores.pop()?.close();
   });
 
+  it('does not touch resource storage after the transfer manager closes', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-transfer-test-'));
+    const store = new ReticulumResourceStore({
+      dbPath: path.join(dir, 'resources.db'),
+      rootDir: path.join(dir, 'resources'),
+    });
+    stores.push(store);
+    const transfer = new ReticulumResourceTransferManager<Record<string, never>>({
+      resourceStore: store,
+      buildRequestPayloads: async () => [],
+    });
+    transfers.push(transfer);
+    const completedBytes = vi.spyOn(store, 'getCompletedBytes');
+    const state = {
+      contextId: 716,
+      manifest: {
+        fileHash: 'f'.repeat(64),
+        sizeBytes: 128,
+      },
+      sourcePeerHashes: new Set<string>(),
+    };
+
+    transfer.close();
+    expect(() => (transfer as any).emitProgress(state)).not.toThrow();
+    expect(completedBytes).not.toHaveBeenCalled();
+    expect(transfer.getDownloadStatus('f'.repeat(64)).active).toBe(false);
+    expect(completedBytes).not.toHaveBeenCalled();
+    expect(transfer.addCandidatePeers('f'.repeat(64), ['peer-a'])).toBe(false);
+    await expect(transfer.cancelResource('f'.repeat(64))).resolves.toBe(false);
+  });
+
   it('recreates expired leases and reservations when a provider appears later', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-transfer-test-'));
     let now = 100_000;

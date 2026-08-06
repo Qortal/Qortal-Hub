@@ -1714,6 +1714,56 @@ describe('ReticulumBridge chat forwarding support', () => {
     });
   });
 
+  it('prepares DM pages on the same fast lane used by the Python bridge', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'prepare-dm-page',
+      ok: true,
+      payload: {
+        status: 'pending',
+        linkId: 'dm-page-fast-link',
+        lane: 'fast',
+      },
+    }));
+
+    const preparation = bridge.ensureReticulumResourceSessionDetailed({
+      peerPresenceHash: 'c'.repeat(32),
+      reticulumIdentityPublicKeyBase64: 'identity',
+      resourceType: 'reticulum_chat_event',
+      logicalResourceType: 'reticulum_chat_dm_page',
+    });
+    await vi.waitFor(() => {
+      expect(internal.sendCommand).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      internal.resourceSessionPreparations.has(`${'c'.repeat(32)}:fast`)
+    ).toBe(true);
+    internal.handleFrame({
+      type: 'event',
+      event: 'reticulum_resource_session',
+      payload: {
+        status: 'ready',
+        peerPresenceHash: 'c'.repeat(32),
+        lane: 'fast',
+        linkId: 'dm-page-fast-link',
+      },
+    });
+    await expect(preparation).resolves.toEqual({ ok: true });
+
+    expect(internal.sendCommand).toHaveBeenCalledWith(
+      'prepare_reticulum_resource_session',
+      expect.objectContaining({
+        peerPresenceHash: 'c'.repeat(32),
+        logicalResourceType: 'reticulum_chat_dm_page',
+      })
+    );
+    expect(internal.resourceSessionPreparations.size).toBe(0);
+  });
+
   it('emits the Land forwarding revision with a fast-forwarded state', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
