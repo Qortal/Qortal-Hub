@@ -4358,7 +4358,224 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
         self.assertEqual(state["provider_active"], 0)
         emit.assert_not_called()
 
-    def test_provider_rejects_a_second_resource_on_the_same_link(self):
+    def test_provider_waits_for_previous_resource_before_reusing_link(self):
+        state, _link = self.session()
+        state["incoming"] = True
+        state["provider_active"] = 1
+        result = {}
+
+        def acquire():
+            result["reason"] = (
+                self.bridge._resource_session_provider_acquire_link_slot(
+                    state,
+                    "next-resource",
+                    self.peer_hash,
+                )
+            )
+
+        thread = threading.Thread(target=acquire)
+        thread.start()
+        deadline = time.time() + 1
+        while (
+            state.get("provider_link_waiter_transfer") != "next-resource"
+            and time.time() < deadline
+        ):
+            time.sleep(0.01)
+        self.assertEqual(
+            state.get("provider_link_waiter_transfer"),
+            "next-resource",
+        )
+
+        with self.bridge._resource_session_provider_capacity_condition:
+            state["provider_active"] = 0
+            self.bridge._resource_session_provider_capacity_condition.notify_all()
+        thread.join(timeout=1)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(result["reason"], "")
+        self.assertEqual(state["provider_active"], 1)
+        self.assertEqual(state["provider_link_handoffs"], 1)
+        self.assertNotIn("provider_link_waiter_transfer", state)
+
+    def test_provider_response_waits_for_link_handoff_then_starts_resource(self):
+        state, link = self.session()
+        state["incoming"] = True
+        state["provider_active"] = 1
+        transfer_id = "handoff-response"
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file.write(b"handoff-resource")
+            file_path = temp_file.name
+        self.bridge._qchat_file_pending_sends_by_transfer[transfer_id] = {
+            "allowedRecipientAddress": self.peer_hash,
+            "transferId": transfer_id,
+            "filePath": file_path,
+            "fileName": "handoff.bin",
+            "size": len(b"handoff-resource"),
+            "sha256": "",
+            "resourceType": self.bridge._RETICULUM_CHAT_RESOURCE_TYPE,
+            "metadata": {"eventId": "event-handoff"},
+            "expires_at": time.time() + 60,
+        }
+        auth_emitted = threading.Event()
+        result = {}
+
+        def authorize_on_event(status, _payload):
+            if status != "auth":
+                return
+            waiter_key = self.bridge._resource_session_waiter_key(
+                state["linkId"],
+                transfer_id,
+            )
+            waiter = self.bridge._resource_session_provider_waiters[waiter_key]
+            waiter["authorized"] = True
+            waiter["event"].set()
+            auth_emitted.set()
+
+        def request():
+            result["response"] = self.bridge._resource_session_response_generator(
+                self.bridge._RESOURCE_SESSION_REQUEST_PATH,
+                {
+                    "version": 1,
+                    "transferId": transfer_id,
+                    "resourceType": self.bridge._RETICULUM_CHAT_RESOURCE_TYPE,
+                    "metadata": {"eventId": "event-handoff"},
+                    "authMessage": {"type": "RCR"},
+                },
+                b"request",
+                link.link_id,
+                object(),
+                time.time(),
+            )
+
+        try:
+            with mock.patch.object(
+                self.bridge,
+                "_destination_hash_for_identity",
+                return_value=self.peer_hash,
+            ), mock.patch.object(
+                self.bridge,
+                "_qchat_file_emit",
+                side_effect=authorize_on_event,
+            ), mock.patch.object(
+                self.bridge,
+                "_resource_session_watch_provider_file",
+            ):
+                thread = threading.Thread(target=request)
+                thread.start()
+                deadline = time.time() + 1
+                while (
+                    state.get("provider_link_waiter_transfer") != transfer_id
+                    and time.time() < deadline
+                ):
+                    time.sleep(0.01)
+                self.assertEqual(
+                    state.get("provider_link_waiter_transfer"),
+                    transfer_id,
+                )
+                self.assertFalse(auth_emitted.is_set())
+
+                with self.bridge._resource_session_provider_capacity_condition:
+                    state["provider_active"] = 0
+                    self.bridge._resource_session_provider_capacity_condition.notify_all()
+                thread.join(timeout=1)
+
+            self.assertFalse(thread.is_alive())
+            self.assertTrue(auth_emitted.is_set())
+            response = result["response"]
+            self.assertIsInstance(response, tuple)
+            self.assertEqual(response[1]["transferId"], transfer_id)
+            self.assertEqual(response[0].read(), b"handoff-resource")
+            response[0].close()
+            self.assertEqual(state["provider_active"], 1)
+            self.assertEqual(state["provider_link_handoffs"], 1)
+        finally:
+            Path(file_path).unlink(missing_ok=True)
+
+    def test_provider_allows_only_one_waiting_link_handoff(self):
+        state, _link = self.session()
+        state["incoming"] = True
+        state["provider_active"] = 1
+        result = {}
+
+        def acquire():
+            result["reason"] = (
+                self.bridge._resource_session_provider_acquire_link_slot(
+                    state,
+                    "first-waiter",
+                    self.peer_hash,
+                )
+            )
+
+        thread = threading.Thread(target=acquire)
+        thread.start()
+        deadline = time.time() + 1
+        while (
+            state.get("provider_link_waiter_transfer") != "first-waiter"
+            and time.time() < deadline
+        ):
+            time.sleep(0.01)
+
+        self.assertEqual(
+            self.bridge._resource_session_provider_acquire_link_slot(
+                state,
+                "first-waiter",
+                self.peer_hash,
+            ),
+            "duplicate_resource_request",
+        )
+        self.assertEqual(
+            self.bridge._resource_session_provider_acquire_link_slot(
+                state,
+                "second-waiter",
+                self.peer_hash,
+            ),
+            "resource_session_busy",
+        )
+
+        with self.bridge._resource_session_provider_capacity_condition:
+            state["provider_active"] = 0
+            self.bridge._resource_session_provider_capacity_condition.notify_all()
+        thread.join(timeout=1)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(result["reason"], "")
+        self.assertEqual(state["provider_active"], 1)
+
+    def test_provider_cancel_wakes_waiting_link_handoff(self):
+        state, _link = self.session()
+        state["incoming"] = True
+        state["provider_active"] = 1
+        result = {}
+
+        def acquire():
+            result["reason"] = (
+                self.bridge._resource_session_provider_acquire_link_slot(
+                    state,
+                    "cancelled-waiter",
+                    self.peer_hash,
+                )
+            )
+
+        thread = threading.Thread(target=acquire)
+        thread.start()
+        deadline = time.time() + 1
+        while (
+            state.get("provider_link_waiter_transfer") != "cancelled-waiter"
+            and time.time() < deadline
+        ):
+            time.sleep(0.01)
+
+        self.bridge._resource_session_cancel_provider_transfer(
+            state,
+            "cancelled-waiter",
+        )
+        thread.join(timeout=1)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(result["reason"], "resource_requester_cancelled")
+        self.assertEqual(state["provider_active"], 1)
+        self.assertNotIn("provider_link_waiter_transfer", state)
+
+    def test_provider_times_out_when_previous_resource_never_releases(self):
         state, link = self.session()
         state["incoming"] = True
         state["provider_active"] = 1
@@ -4366,6 +4583,10 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
             self.bridge,
             "_destination_hash_for_identity",
             return_value=self.peer_hash,
+        ), mock.patch.object(
+            self.bridge,
+            "_RESOURCE_SESSION_PROVIDER_LINK_HANDOFF_WAIT_SECONDS",
+            0.02,
         ), mock.patch.object(self.bridge, "_qchat_file_emit") as emit:
             response = self.bridge._resource_session_response_generator(
                 self.bridge._RESOURCE_SESSION_REQUEST_PATH,
@@ -4384,6 +4605,7 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
 
         self.assertEqual(response["reason"], "resource_session_busy")
         self.assertEqual(state["provider_active"], 1)
+        self.assertNotIn("provider_link_waiter_transfer", state)
         emit.assert_not_called()
 
     def test_provider_pending_auth_limit_rejects_without_emitting_auth(self):
@@ -4415,6 +4637,26 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
         self.assertEqual(response["reason"], "resource_provider_busy")
         self.assertEqual(state["provider_active"], 0)
         emit.assert_not_called()
+
+    def test_provider_handoff_shares_pending_authorization_limit(self):
+        state, _link = self.session()
+        state["incoming"] = True
+        state["provider_active"] = 1
+        for index in range(self.bridge._RESOURCE_SESSION_PROVIDER_PENDING_AUTH_MAX):
+            self.bridge._resource_session_provider_waiters[f"existing:{index}"] = {
+                "peerPresenceHash": f"{index:032x}",
+            }
+
+        self.assertEqual(
+            self.bridge._resource_session_provider_acquire_link_slot(
+                state,
+                "bounded-handoff",
+                self.peer_hash,
+            ),
+            "resource_provider_busy",
+        )
+        self.assertEqual(state["provider_active"], 1)
+        self.assertNotIn("provider_link_waiter_transfer", state)
 
     def test_provider_waiting_for_auth_does_not_consume_transfer_capacity(self):
         state, link = self.session()
@@ -5034,7 +5276,13 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
                 second.progress = 1.0
                 second.status = RNS.Resource.COMPLETE
                 deadline = time.time() + 2
-                while state["provider_active"] > 0 and time.time() < deadline:
+                while time.time() < deadline:
+                    sent = any(
+                        call.args[0] == "sent"
+                        for call in emit.call_args_list
+                    )
+                    if state["provider_active"] == 0 and sent:
+                        break
                     time.sleep(0.02)
 
             self.assertEqual(state["provider_active"], 0)

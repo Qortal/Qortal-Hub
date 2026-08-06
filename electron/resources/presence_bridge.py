@@ -307,6 +307,13 @@ _RESOURCE_SESSION_PROVIDER_PENDING_AUTH_MAX_PER_PEER = 8
 _RESOURCE_SESSION_PROVIDER_CAPACITY_QUEUE_MAX = 24
 _RESOURCE_SESSION_PROVIDER_CAPACITY_QUEUE_MAX_PER_PEER = 6
 _RESOURCE_SESSION_PROVIDER_CAPACITY_WAIT_SECONDS = 15.0
+# A requester can finish assembling a response just before the provider
+# receives the final Resource proof and releases that Link. Allow exactly one
+# next request to wait for that short hand-off instead of rejecting it as
+# resource_session_busy. Link request handlers run on independent Reticulum
+# threads, so this does not block packet processing or transfers on other
+# Links. The bound remains short enough to expose a genuinely wedged Resource.
+_RESOURCE_SESSION_PROVIDER_LINK_HANDOFF_WAIT_SECONDS = 5.0
 _RESOURCE_SESSION_PROVIDER_RESPONSE_START_GRACE_SECONDS = 2.0
 _RESOURCE_SESSION_PROVIDER_CANCEL_TTL_SECONDS = 2 * 60.0
 _RESOURCE_SESSION_PROVIDER_CANCEL_MAX = 4096
@@ -1273,6 +1280,21 @@ def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False)
             _resource_session_provider_active_by_class
         )
         provider_active_peers = len(_resource_session_provider_active_by_peer)
+        provider_link_handoff_waiting = sum(
+            1
+            for state in _qchat_file_links_by_id.values()
+            if isinstance(state, dict)
+            and state.get("manager_kind") == "resource_session"
+            and state.get("incoming") is True
+            and state.get("provider_link_waiter_transfer")
+        )
+        provider_link_handoffs = sum(
+            int(state.get("provider_link_handoffs") or 0)
+            for state in _qchat_file_links_by_id.values()
+            if isinstance(state, dict)
+            and state.get("manager_kind") == "resource_session"
+            and state.get("incoming") is True
+        )
         raw_gap_sample_count = int(_audio_rns_raw_inbound_gap_sample_count or 0)
         shared_gap_sample_count = int(_audio_rns_shared_frame_gap_sample_count or 0)
         raw_gap_median_ms = _estimate_gap_median_ms(
@@ -1311,6 +1333,7 @@ def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False)
         or resource_session_queued > 0
         or provider_pending_auth > 0
         or provider_inflight > 0
+        or provider_link_handoff_waiting > 0
         or any(count > 0 for count in provider_capacity_waiters.values())
         or any(count > 0 for count in provider_active_by_class.values())
         or rns_gap_pressure
@@ -1333,6 +1356,8 @@ def _maybe_log_bridge_pressure(now: Optional[float] = None, force: bool = False)
         f"resource_queued={resource_session_queued} resource_oldest_ms={int(resource_session_oldest_age * 1000)} "
         f"provider_auth_pending={provider_pending_auth} "
         f"provider_inflight={provider_inflight} "
+        f"provider_link_handoff_waiting={provider_link_handoff_waiting} "
+        f"provider_link_handoffs={provider_link_handoffs} "
         f"provider_waiting={_format_bridge_pressure_counts(provider_capacity_waiters)} "
         f"provider_waiting_peers={provider_waiting_peers} "
         f"provider_active={_format_bridge_pressure_counts(provider_active_by_class)} "
@@ -19836,6 +19861,159 @@ def _resource_session_provider_release_auth_admission(
                 _resource_session_provider_pending_auth_by_peer.pop(peer_hash, None)
 
 
+def _resource_session_provider_acquire_link_slot(
+    state: Dict[str, Any],
+    transfer_id: str,
+    peer_hash: str,
+) -> str:
+    """Reserve a provider Link after its previous Resource fully concludes.
+
+    The receiver can invoke its response callback before the sender has
+    processed the final Resource proof. That makes immediate Link reuse race
+    the provider's completion watcher. Keep one bounded successor waiting on
+    the provider's own completion condition and reserve the slot atomically
+    when it becomes free. A non-empty return value is the rejection reason.
+    """
+    transfer_key = str(transfer_id or "").strip()
+    peer_key = str(peer_hash or "").strip().lower()
+    deadline = (
+        time.monotonic()
+        + _RESOURCE_SESSION_PROVIDER_LINK_HANDOFF_WAIT_SECONDS
+    )
+    waited = False
+    owns_waiter = False
+    with _resource_session_provider_capacity_condition:
+        link_id = str(state.get("linkId") or "")
+        if (
+            state.get("incoming") is not True
+            or state.get("closing") is True
+            or state.get("provider_ready_sent") is not True
+            or _qchat_file_links_by_id.get(link_id) is not state
+        ):
+            return "resource_session_unavailable"
+        if _resource_session_provider_was_cancelled_locked(
+            peer_key,
+            transfer_key,
+        ):
+            return "resource_requester_cancelled"
+        existing_waiter = str(
+            state.get("provider_link_waiter_transfer") or ""
+        ).strip()
+        if existing_waiter:
+            return (
+                "duplicate_resource_request"
+                if existing_waiter == transfer_key
+                else "resource_session_busy"
+            )
+        while int(state.get("provider_active") or 0) > 0:
+            existing_waiter = str(
+                state.get("provider_link_waiter_transfer") or ""
+            ).strip()
+            if existing_waiter and not owns_waiter:
+                return (
+                    "duplicate_resource_request"
+                    if existing_waiter == transfer_key
+                    else "resource_session_busy"
+                )
+            if not owns_waiter:
+                handoff_waiters = [
+                    item
+                    for item in _qchat_file_links_by_id.values()
+                    if isinstance(item, dict)
+                    and item.get("manager_kind") == "resource_session"
+                    and item.get("incoming") is True
+                    and item.get("provider_link_waiter_transfer")
+                ]
+                peer_handoff_waiters = sum(
+                    1
+                    for item in handoff_waiters
+                    if str(
+                        item.get("peerPresenceHash") or ""
+                    ).strip().lower() == peer_key
+                )
+                pending_auth_total = len(
+                    _resource_session_provider_waiters
+                )
+                peer_pending_auth = int(
+                    _resource_session_provider_pending_auth_by_peer.get(
+                        peer_key,
+                        0,
+                    )
+                    or 0
+                )
+                if (
+                    pending_auth_total + len(handoff_waiters)
+                    >= _RESOURCE_SESSION_PROVIDER_PENDING_AUTH_MAX
+                    or peer_pending_auth + peer_handoff_waiters
+                    >= _RESOURCE_SESSION_PROVIDER_PENDING_AUTH_MAX_PER_PEER
+                ):
+                    return "resource_provider_busy"
+                state["provider_link_waiter_transfer"] = transfer_key
+                owns_waiter = True
+            waited = True
+            if state.get("closing") is True or _shutdown.is_set():
+                if (
+                    owns_waiter
+                    and state.get("provider_link_waiter_transfer") == transfer_key
+                ):
+                    state.pop("provider_link_waiter_transfer", None)
+                return "resource_session_unavailable"
+            if _resource_session_provider_was_cancelled_locked(
+                peer_key,
+                transfer_key,
+            ):
+                if (
+                    owns_waiter
+                    and state.get("provider_link_waiter_transfer") == transfer_key
+                ):
+                    state.pop("provider_link_waiter_transfer", None)
+                return "resource_requester_cancelled"
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                if (
+                    owns_waiter
+                    and state.get("provider_link_waiter_transfer") == transfer_key
+                ):
+                    state.pop("provider_link_waiter_transfer", None)
+                log(
+                    "[presence_bridge] resource_session_link_handoff_timeout "
+                    f"transfer={transfer_key} peer={peer_key[:16]}"
+                )
+                return "resource_session_busy"
+            _resource_session_provider_capacity_condition.wait(
+                timeout=min(0.1, remaining)
+            )
+        if (
+            owns_waiter
+            and state.get("provider_link_waiter_transfer") == transfer_key
+        ):
+            state.pop("provider_link_waiter_transfer", None)
+        if (
+            state.get("closing") is True
+            or _shutdown.is_set()
+            or _qchat_file_links_by_id.get(link_id) is not state
+        ):
+            return "resource_session_unavailable"
+        if _resource_session_provider_was_cancelled_locked(
+            peer_key,
+            transfer_key,
+        ):
+            return "resource_requester_cancelled"
+        # Reservation and the zero-to-one transition are atomic under the
+        # shared condition lock, so two request threads cannot both start an
+        # outgoing Resource on this Link.
+        state["provider_active"] = 1
+        state["last_used_at"] = time.time()
+        state["activity_generation"] = int(
+            state.get("activity_generation") or 0
+        ) + 1
+        if waited:
+            state["provider_link_handoffs"] = int(
+                state.get("provider_link_handoffs") or 0
+            ) + 1
+        return ""
+
+
 def _resource_session_provider_cancel_key(peer_hash: str, transfer_id: str) -> str:
     return f"{str(peer_hash or '').strip().lower()}:{str(transfer_id or '').strip()}"
 
@@ -21214,6 +21392,7 @@ def _resource_session_watch_provider_file(
                 state["activity_generation"] = int(
                     state.get("activity_generation") or 0
                 ) + 1
+                _resource_session_provider_capacity_condition.notify_all()
             _resource_session_provider_release_capacity(
                 provider_class,
                 peer_hash,
@@ -21290,6 +21469,14 @@ def _resource_session_response_generator(
         claimed_peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
         if claimed_peer_hash and claimed_peer_hash != identified_peer_hash:
             return {"ok": False, "reason": "resource_peer_identity_mismatch"}
+        link_slot_reason = _resource_session_provider_acquire_link_slot(
+            state,
+            transfer_id,
+            identified_peer_hash,
+        )
+        if link_slot_reason:
+            return {"ok": False, "reason": link_slot_reason}
+        provider_session_active = True
         waiter_key = _resource_session_waiter_key(
             str(state.get("linkId") or ""),
             transfer_id,
@@ -21326,12 +21513,6 @@ def _resource_session_response_generator(
                 or transfer_id in _resource_session_provider_inflight_transfers
             ):
                 return {"ok": False, "reason": "duplicate_resource_request"}
-            # RNS.Resource only advertises one outgoing Resource per Link. Do
-            # not allow a second response to become an unobservable Reticulum
-            # queue entry, since its receiver-side authorization deadline
-            # would run while no bytes can possibly move.
-            if int(state.get("provider_active") or 0) > 0:
-                return {"ok": False, "reason": "resource_session_busy"}
             peer_pending_auth = int(
                 _resource_session_provider_pending_auth_by_peer.get(
                     identified_peer_hash,
@@ -21348,12 +21529,6 @@ def _resource_session_response_generator(
                 return {"ok": False, "reason": "resource_provider_busy"}
             state["peerPresenceHash"] = identified_peer_hash
             state["peerDestinationHash"] = identified_peer_hash
-            state["provider_active"] = int(state.get("provider_active") or 0) + 1
-            provider_session_active = True
-            state["last_used_at"] = time.time()
-            state["activity_generation"] = int(
-                state.get("activity_generation") or 0
-            ) + 1
             _resource_session_provider_waiters[waiter_key] = waiter
             _resource_session_provider_inflight_transfers.add(transfer_id)
             _resource_session_provider_pending_auth_by_peer[identified_peer_hash] = (
@@ -21485,6 +21660,7 @@ def _resource_session_response_generator(
                 state["activity_generation"] = int(
                     state.get("activity_generation") or 0
                 ) + 1
+                _resource_session_provider_capacity_condition.notify_all()
             _resource_session_schedule_idle_close(state)
         if provider_capacity_acquired and not provider_capacity_transferred:
             _resource_session_provider_release_capacity(
