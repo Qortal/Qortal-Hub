@@ -100,6 +100,7 @@ export const ManageMembers = ({
   ]);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
+  const canManageMembers = Boolean(isAdmin || isOwner);
   const canReviewJoinRequests =
     reticulumSidebar && isPrivate && (isAdmin || isOwner);
 
@@ -210,10 +211,13 @@ export const ManageMembers = ({
   }, []);
 
   useEffect(() => {
-    if (!canReviewJoinRequests && value === 4) {
+    if (
+      (!canManageMembers && value !== 0) ||
+      (!canReviewJoinRequests && value === 4)
+    ) {
       setValue(0);
     }
-  }, [canReviewJoinRequests, value]);
+  }, [canManageMembers, canReviewJoinRequests, value]);
 
   if (inline && reticulumSidebar) {
     const iconTabs = [
@@ -269,7 +273,7 @@ export const ManageMembers = ({
           width: '100%',
         }}
       >
-        <Tabs
+        {canManageMembers && <Tabs
           value={value}
           onChange={handleChange}
           variant="fullWidth"
@@ -326,7 +330,7 @@ export const ManageMembers = ({
               {...a11yProps(index)}
             />
           ))}
-        </Tabs>
+        </Tabs>}
 
         <Box sx={panelContentSx}>
           {value === 0 && (
@@ -343,7 +347,7 @@ export const ManageMembers = ({
               reticulumUserCards
             />
           )}
-          {value === 1 && (
+          {canManageMembers && value === 1 && (
             <InviteMember
               show={show}
               groupId={selectedGroup?.groupId}
@@ -351,7 +355,7 @@ export const ManageMembers = ({
               setInfoSnack={setInfoSnack}
             />
           )}
-          {value === 2 && (
+          {canManageMembers && value === 2 && (
             <ListOfInvites
               compact
               show={show}
@@ -360,7 +364,7 @@ export const ManageMembers = ({
               setInfoSnack={setInfoSnack}
             />
           )}
-          {value === 3 && (
+          {canManageMembers && value === 3 && (
             <ListOfBans
               compact
               show={show}
@@ -369,7 +373,7 @@ export const ManageMembers = ({
               setInfoSnack={setInfoSnack}
             />
           )}
-          {value === 4 && (
+          {canManageMembers && value === 4 && (
             <ListOfJoinRequests
               compact
               show={show}

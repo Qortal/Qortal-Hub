@@ -504,6 +504,7 @@ type TiptapProps = {
   onKeyDown?: (event: KeyboardEvent, editor: Editor) => boolean | void;
   onContentUpdate?: (editor: Editor) => void;
   disableEnter?: boolean;
+  readOnly?: boolean;
   isChat?: boolean;
   /** Use chat-style composer (single bar, minimal border) without chat-only behavior (e.g. announcements keep image) */
   composerStyle?: boolean;
@@ -543,6 +544,7 @@ const Tiptap = ({
   onKeyDown,
   onContentUpdate,
   disableEnter = false,
+  readOnly = false,
   isChat = false,
   composerStyle = false,
   maxHeightOffset,
@@ -619,6 +621,7 @@ const Tiptap = ({
           i18n.t('core:action.start_typing', {
             postProcess: 'capitalizeFirstChar',
           }),
+        showOnlyWhenEditable: false,
       }),
     [placeholder]
   );
@@ -630,6 +633,16 @@ const Tiptap = ({
     },
     [setEditorRef]
   );
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(!readOnly);
+    if (readOnly) {
+      editor.commands.clearContent();
+      editor.commands.blur();
+    }
+  }, [readOnly]);
 
   const users = useMemo(() => {
     if (mentionSuggestions) return mentionSuggestions;
@@ -814,11 +827,17 @@ const Tiptap = ({
   );
   const editorProvider = (
     <EditorProvider
+      editable={!readOnly}
       slotBefore={slotBefore}
       extensions={[...extensionsFiltered, placeholderExtension, ...additionalExtensions]}
       content={content}
       onCreate={({ editor }) => {
         setEditorRefFunc(editor);
+        editor.setEditable(!readOnly);
+        if (readOnly) {
+          editor.commands.clearContent();
+          editor.commands.blur();
+        }
         editor.on('blur', handleBlur); // Listen for blur event
       }}
       onUpdate={({ editor }) => {
@@ -995,7 +1014,7 @@ const Tiptap = ({
           <Tooltip title="Add attachment">
             <span>
               <IconButton
-                disabled={disableEnter || typeof insertFiles !== 'function'}
+                disabled={readOnly || disableEnter || typeof insertFiles !== 'function'}
                 onClick={() => compactFileInputRef.current?.click()}
                 size="small"
                 sx={{
@@ -1028,6 +1047,7 @@ const Tiptap = ({
           />
           <Tooltip title="Formatting">
             <IconButton
+              disabled={readOnly}
               onClick={() => setShowFormattingTray((show) => !show)}
               size="small"
               sx={{
@@ -1052,7 +1072,19 @@ const Tiptap = ({
             </IconButton>
           </Tooltip>
           {compactActions}
-          <Box sx={{ flex: 1, minWidth: 0, mt: '5px' }}>{editorProvider}</Box>
+          <Box
+            aria-disabled={readOnly}
+            sx={{
+              cursor: readOnly ? 'not-allowed' : undefined,
+              flex: 1,
+              pointerEvents: readOnly ? 'none' : undefined,
+              minWidth: 0,
+              mt: '5px',
+              opacity: readOnly ? 0.68 : 1,
+            }}
+          >
+            {editorProvider}
+          </Box>
         </Box>
       </Box>
     );

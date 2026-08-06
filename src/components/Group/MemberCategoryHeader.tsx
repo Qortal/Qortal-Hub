@@ -169,6 +169,7 @@ export const MemberCategoryHeader = ({
         borderRadius: '7px',
         boxSizing: 'border-box',
         cursor: 'pointer',
+        contain: 'paint',
         display: 'flex',
         height: first ? '100%' : 'calc(100% - 6px)',
         isolation: 'isolate',
@@ -215,7 +216,7 @@ export const MemberCategoryHeader = ({
           transform: 'scale(1.18)',
           transformOrigin: 'center right',
           transition: 'opacity 160ms ease',
-          zIndex: -1,
+          zIndex: 0,
           '& svg': {
             display: 'block',
             height: '100%',
@@ -237,7 +238,7 @@ export const MemberCategoryHeader = ({
           inset: 0,
           pointerEvents: 'none',
           position: 'absolute',
-          zIndex: -1,
+          zIndex: 0,
         }}
       />
 
@@ -249,6 +250,8 @@ export const MemberCategoryHeader = ({
           flexShrink: 0,
           fontSize: 17,
           mr: 0.75,
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         {icon}
@@ -260,7 +263,9 @@ export const MemberCategoryHeader = ({
           fontWeight: 750,
           letterSpacing: '0.06em',
           minWidth: 0,
+          position: 'relative',
           textTransform: 'uppercase',
+          zIndex: 1,
         }}
       >
         {label}
@@ -271,6 +276,8 @@ export const MemberCategoryHeader = ({
           flexShrink: 0,
           fontSize: 11,
           mr: 0.25,
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         {totalCount == null ? count : `${count}/${totalCount}`}
@@ -283,8 +290,10 @@ export const MemberCategoryHeader = ({
           flexShrink: 0,
           p: 0.25,
           pointerEvents: 'none',
+          position: 'relative',
           transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
           transition: 'transform 140ms ease',
+          zIndex: 1,
         }}
       >
         <ExpandMoreRoundedIcon sx={{ fontSize: 18 }} />

@@ -6487,6 +6487,7 @@ export const ChatGroup = ({
 
   const onReply = useCallback(
     (message) => {
+      if (!canWriteSelectedReticulumChannel) return;
       if (onEditMessage) {
         clearEditorContent();
       }
@@ -6496,7 +6497,7 @@ export const ChatGroup = ({
       setChatImagesToSave([]);
       editorRef?.current?.chain().focus();
     },
-    [onEditMessage]
+    [canWriteSelectedReticulumChannel, onEditMessage]
   );
 
   const onEdit = useCallback((message) => {
@@ -6584,14 +6585,21 @@ export const ChatGroup = ({
 
   const handleComposerKeyDown = useCallback(
     (event, editor) => {
-      if (event.key === 'Escape' && reticulumChatEnabled && onEditMessage) {
-        event.preventDefault();
-        setOnEditMessage(null);
-        setIsDeleteImage(false);
-        setChatImagesToSave([]);
-        clearPendingReticulumFiles();
-        clearEditorContent();
-        return true;
+      if (event.key === 'Escape' && reticulumChatEnabled) {
+        if (replyMessage) {
+          event.preventDefault();
+          setReplyMessage(null);
+          return true;
+        }
+        if (onEditMessage) {
+          event.preventDefault();
+          setOnEditMessage(null);
+          setIsDeleteImage(false);
+          setChatImagesToSave([]);
+          clearPendingReticulumFiles();
+          clearEditorContent();
+          return true;
+        }
       }
       if (event.key !== 'ArrowUp') return false;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
@@ -9890,29 +9898,50 @@ export const ChatGroup = ({
                     {replyMessage && (
                       <Box
                         sx={{
-                          alignItems: 'flex-start',
+                          alignItems: 'center',
+                          backgroundColor: alpha(theme.palette.text.primary, 0.07),
+                          border: `1px solid ${theme.palette.divider}`,
+                          borderBottom: 0,
+                          borderRadius: '8px 8px 0 0',
+                          boxSizing: 'border-box',
                           display: 'flex',
                           gap: '5px',
+                          minHeight: '34px',
+                          px: 1.25,
+                          py: 0.5,
                           width: '100%',
                         }}
                       >
-                        <ReplyPreview
-                          message={replyMessage}
-                          reticulumOnlyContent={reticulumChatEnabled}
-                        />
-
-                        <ButtonBase
-                          onClick={() => {
-                            setReplyMessage(null);
-
-                            setOnEditMessage(null);
-                            setIsDeleteImage(false);
-                            setChatImagesToSave([]);
-                            clearPendingReticulumFiles();
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '12px',
+                            lineHeight: 1.3,
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
-                          <ExitIcon />
-                        </ButtonBase>
+                          Replying to{' '}
+                          <Box
+                            component="span"
+                            sx={{ color: 'text.primary', fontWeight: 700 }}
+                          >
+                            {replyMessage?.senderName ||
+                              replyMessage?.sender ||
+                              'Unknown'}
+                          </Box>
+                        </Typography>
+
+                        <IconButton
+                          aria-label="Cancel reply"
+                          onClick={() => setReplyMessage(null)}
+                          size="small"
+                          sx={{ color: 'text.secondary', ml: 'auto' }}
+                        >
+                          <CloseIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
                       </Box>
                     )}
 
@@ -9962,6 +9991,7 @@ export const ChatGroup = ({
                         );
                       }}
                       isChat
+                      readOnly={!canWriteSelectedReticulumChannel}
                       disableEnter={!canWriteSelectedReticulumChannel}
                       isFocusedParent={isFocusedParent}
                       setIsFocusedParent={setIsFocusedParent}
@@ -9971,19 +10001,13 @@ export const ChatGroup = ({
                       compactChat={reticulumChatEnabled}
                       collapseFormattingTraySignal={formattingTrayResetKey}
                       placeholder={
-                        reticulumChatEnabled ? 'Message channel...' : undefined
+                        reticulumChatEnabled
+                          ? canWriteSelectedReticulumChannel
+                            ? 'Message channel...'
+                            : 'Only group admins can write in this channel'
+                          : undefined
                       }
                     />
-                    {!canWriteSelectedReticulumChannel && (
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          fontSize: '12px',
-                        }}
-                      >
-                        Only group admins can write in this channel.
-                      </Typography>
-                    )}
                     {messageSize >= 3200 && (
                       <Box
                         sx={{

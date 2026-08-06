@@ -29,6 +29,8 @@ export type ReactionsMap = {
   [reactionType: string]: ReactionItem[];
 };
 
+const RETICULUM_BOTTOM_PIN_THRESHOLD_PX = 16;
+
 const getReactionLayoutSignature = (reactions: ReactionsMap | null) => {
   if (!reactions) return '';
   const visibleReactions = Object.entries(reactions)
@@ -734,7 +736,7 @@ export const ChatList = ({
         scrollElement.scrollHeight -
           scrollElement.scrollTop -
           scrollElement.clientHeight <=
-        1;
+        RETICULUM_BOTTOM_PIN_THRESHOLD_PX;
       const previousMetrics = lastScrollMetricsRef.current;
       const contentSizeChanged =
         previousMetrics.scrollHeight !== 0 &&
