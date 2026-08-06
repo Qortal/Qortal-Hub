@@ -185,15 +185,9 @@ export const MemberCategoryHeader = ({
             theme.palette.mode === 'dark' ? 0.04 : 0.032
           ),
           borderColor: alpha(theme.palette.divider, 0.9),
-          '& .member-category-motif': {
-            opacity: Math.min(graphicOpacity + 0.025, 0.145),
-          },
         },
         '@media (prefers-reduced-motion: reduce)': {
           transition: 'none',
-          '& .member-category-motif': {
-            transition: 'none',
-          },
         },
       }}
     >
@@ -204,18 +198,11 @@ export const MemberCategoryHeader = ({
           bottom: 0,
           color: accentByType[type],
           left: '48%',
-          maskImage:
-            'linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.28) 20%, #000 48%, #000 100%)',
-          WebkitMaskImage:
-            'linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.28) 20%, #000 48%, #000 100%)',
           opacity: graphicOpacity,
           pointerEvents: 'none',
           position: 'absolute',
-          right: -12,
+          right: 0,
           top: 0,
-          transform: 'scale(1.18)',
-          transformOrigin: 'center right',
-          transition: 'opacity 160ms ease',
           zIndex: 0,
           '& svg': {
             display: 'block',
@@ -224,7 +211,7 @@ export const MemberCategoryHeader = ({
           },
         }}
       >
-        <CategoryMotif type={type} />
+        <CategoryMotif key={type} type={type} />
       </Box>
 
       <Box

@@ -633,6 +633,12 @@ const ListOfMembers = ({
 
   const rowRenderer = ({ index, key, style }) => {
     const row = categorizedRows[index];
+    const semanticRowKey =
+      row?.type === 'section'
+        ? `member-section-${row.section}`
+        : row?.member?.member
+          ? `member-${row.member.member}`
+          : key;
     if (row?.type === 'section') {
       const expanded = Boolean(row.expanded);
       const SectionIcon =
@@ -646,7 +652,7 @@ const ListOfMembers = ({
                 ? BedtimeRoundedIcon
                 : Groups2RoundedIcon;
       return (
-        <div key={key} style={style}>
+        <div key={semanticRowKey} style={style}>
           <MemberCategoryHeader
             count={row.count}
             totalCount={row.totalCount}
@@ -815,7 +821,7 @@ const ListOfMembers = ({
     );
 
     return (
-      <div key={key} style={style}>
+      <div key={semanticRowKey} style={style}>
         {isOwner && (
           <Popover
             open={openPopoverIndex === index}
