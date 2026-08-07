@@ -36,8 +36,8 @@ const PROFILE_COOLDOWN_MS = readNumberEnv(
   'QORTAL_MAIN_PRESSURE_PROFILE_COOLDOWN_MS',
   60_000
 );
-const PROFILER_ENABLED = !['0', 'false', 'no', 'off'].includes(
-  String(process.env.QORTAL_MAIN_PRESSURE_PROFILER ?? '1').trim().toLowerCase()
+const PROFILER_ENABLED = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.QORTAL_MAIN_PRESSURE_PROFILER ?? '0').trim().toLowerCase()
 );
 const RECENT_SLOW_LIMIT = 12;
 
