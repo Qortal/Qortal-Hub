@@ -18405,34 +18405,7 @@ export class ReticulumChatManager extends EventEmitter {
         `dm-notify:${requestId}:${hop + 1}`
       );
     } else {
-      // This is relay-only fanout. A leaf commonly has no eligible neighbor
-      // after excluding the inbound/source peers, which is an expected
-      // topology outcome rather than a delivery failure. Suppress only that
-      // result; transient bridge/send failures still enter the normal retry
-      // queue. Locally originated notifies retain their existing behavior.
-      void this.fanoutOnce(forwarded, exclude)
-        .then((result) => {
-          if (
-            result.ok === false &&
-            result.reason !== 'no-route' &&
-            this.shouldRetryControlSend(forwarded, result.reason)
-          ) {
-            this.enqueueControlRetry({
-              wire: forwarded,
-              excludePeerPresenceHashes: exclude,
-              dropIfNoRoute: true,
-            });
-          }
-        })
-        .catch(() => {
-          // Match the normal fanout path's bridge-exception recovery without
-          // turning an unexpected rejected Promise into an unhandled error.
-          this.enqueueControlRetry({
-            wire: forwarded,
-            excludePeerPresenceHashes: exclude,
-            dropIfNoRoute: true,
-          });
-        });
+      this.fanoutRelayedDmDiscovery(forwarded, exclude);
     }
   }
 
@@ -18578,7 +18551,7 @@ export class ReticulumChatManager extends EventEmitter {
         `dm-probe:${requestId}:${hop + 1}`
       );
     } else {
-      void this.fanout(forwarded, exclude);
+      this.fanoutRelayedDmDiscovery(forwarded, exclude);
     }
   }
 
@@ -37441,6 +37414,40 @@ export class ReticulumChatManager extends EventEmitter {
     excludePeerPresenceHashes: string[] = []
   ): Promise<ReticulumSendResult> {
     return this.fanoutManyOnce([wire], excludePeerPresenceHashes);
+  }
+
+  private fanoutRelayedDmDiscovery(
+    wire: Extract<ReticulumChatWire, { k: 'dm_notify' | 'dm_probe' }>,
+    excludePeerPresenceHashes: string[]
+  ): void {
+    // A leaf commonly has no eligible neighbor after excluding the peer that
+    // delivered a discovery message. That ends this relay branch normally;
+    // it does not mean the overlay link is down. Suppress only that outcome.
+    // Transient bridge/send failures still enter the normal retry queue, and
+    // locally originated probes/notifies continue to use retrying fanout.
+    void this.fanoutOnce(wire, excludePeerPresenceHashes)
+      .then((result) => {
+        if (
+          result.ok === false &&
+          result.reason !== 'no-route' &&
+          this.shouldRetryControlSend(wire, result.reason)
+        ) {
+          this.enqueueControlRetry({
+            wire,
+            excludePeerPresenceHashes,
+            dropIfNoRoute: true,
+          });
+        }
+      })
+      .catch(() => {
+        // Match normal fanout's bridge-exception recovery without creating an
+        // unhandled rejected Promise.
+        this.enqueueControlRetry({
+          wire,
+          excludePeerPresenceHashes,
+          dropIfNoRoute: true,
+        });
+      });
   }
 
   private async fanoutDiscoveryOnce(

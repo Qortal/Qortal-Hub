@@ -8105,6 +8105,63 @@ describe('reticulum chat manager', () => {
     provider.close();
   });
 
+  it('does not retry a relayed DM probe when exclusions leave no overlay route', async () => {
+    const requester = createDmIdentity();
+    const local = createDmIdentity();
+    const localPeerHash = 'a'.repeat(32);
+    const inboundPeerHash = 'b'.repeat(32);
+    const fanoutReticulumChatDetailed = vi.fn(async () => ({
+      ok: false as const,
+      reason: 'no-route' as const,
+      error: 'No overlay route',
+    }));
+    const bridge = Object.assign(new EventEmitter(), {
+      getLocalDestinationHash: () => localPeerHash,
+      fanoutReticulumChatDetailed,
+    });
+    const relay = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(local),
+      bridge: bridge as any,
+    });
+    relay.setLocalDmAddresses([local.address]);
+    await flushAsyncWork();
+    fanoutReticulumChatDetailed.mockClear();
+
+    const requestId = '2'.repeat(8);
+    const timestamp = Date.now();
+    const signedFields = buildReticulumDmProbeSignedFields({
+      requestId,
+      maxHops: 5,
+      authorAddress: requester.address,
+      authorPublicKey: requester.publicKey,
+      timestamp,
+    });
+    await (relay as any).handleDirectProbe(
+      {
+        t: 'RCHAT',
+        k: 'dm_probe',
+        q: {
+          q: requestId,
+          p: requester.publicKey,
+          n: timestamp,
+          z: base58Encode(
+            nacl.sign.detached(
+              new Uint8Array(canonicalizeForSigning(signedFields)),
+              requester.secretKey
+            )
+          ),
+        },
+      },
+      inboundPeerHash
+    );
+    await flushAsyncWork();
+
+    expect(fanoutReticulumChatDetailed).toHaveBeenCalledTimes(1);
+    expect((relay as any).controlRetryQueue.size).toBe(0);
+    relay.close();
+  });
+
   it('publishes durable events as bounded digest when no peers are subscribed', async () => {
     const sent: Record<string, unknown>[] = [];
     const bridge = {
