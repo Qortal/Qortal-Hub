@@ -18507,23 +18507,62 @@ export class ReticulumChatManager extends EventEmitter {
     if (!verifyReticulumDmNotifyAck(ack, this.now())) return;
     const requestId = normalizeReticulumControlRequestId(ack.q);
     const pending = this.pendingDmNotifyDeliveries.get(requestId);
-    if (!pending) return;
     const authorAddress = deriveReticulumControlAuthor(ack.p);
     const sourcePeerHash =
       this.routePeerHash(ack.sp) ?? this.normalizeResourcePeerHash(ack.sp);
     const inboundPeerHash =
       this.routePeerHash(peerHash) ?? this.normalizeResourcePeerHash(peerHash);
+    if (!sourcePeerHash || !inboundPeerHash || !authorAddress) {
+      return;
+    }
+    if (pending) {
+      if (
+        authorAddress !== pending.recipientAddress ||
+        ack.b !== pending.senderAddress ||
+        (pending.latestCursor && ack.lc !== pending.latestCursor)
+      ) {
+        return;
+      }
+      // The recipient signs both the random request ID and its own endpoint.
+      // The ACK may legitimately arrive through the recorded reverse relay
+      // path, so its immediate inbound hop does not need to equal that signed
+      // endpoint.
+      this.completePendingDmNotify(requestId, true);
+      return;
+    }
+    this.pruneDmDiscoveryRoutes();
+    const route = this.dmNotifyRoutes.get(requestId);
     if (
-      authorAddress !== pending.recipientAddress ||
-      ack.b !== pending.senderAddress ||
-      (pending.latestCursor && ack.lc !== pending.latestCursor) ||
-      !sourcePeerHash ||
-      !inboundPeerHash ||
-      sourcePeerHash !== inboundPeerHash
+      !route ||
+      route.expiresAt <= this.now() ||
+      route.conversationId !==
+        reticulumDmConversationId(authorAddress, String(ack.b || '').trim()) ||
+      route.reversePeerHash === inboundPeerHash
     ) {
       return;
     }
-    this.completePendingDmNotify(requestId, true);
+    const recentKey = `notify-ack:${requestId}:${sourcePeerHash}`;
+    if ((this.recentDmDiscoveryKeys.get(recentKey) ?? 0) > this.now()) return;
+    this.recentDmDiscoveryKeys.set(
+      recentKey,
+      Math.min(
+        ack.n + RETICULUM_CHAT_DM_NOTIFY_TTL_MS,
+        this.now() + RETICULUM_CHAT_DM_DISCOVERY_ROUTE_TTL_MS
+      )
+    );
+    // A relay learned this reverse route from the authenticated notification.
+    // Forward the signed ACK only on that route; never fan it out.
+    void this.sendToPeerOnce(route.reversePeerHash, wire)
+      .then((result) => {
+        if (result.ok === false) {
+          // Do not let one transient reverse-hop failure suppress the
+          // recipient's next bounded ACK attempt.
+          this.recentDmDiscoveryKeys.delete(recentKey);
+        }
+      })
+      .catch(() => {
+        this.recentDmDiscoveryKeys.delete(recentKey);
+      });
   }
 
   private async handleDirectProbe(
@@ -25761,7 +25800,24 @@ export class ReticulumChatManager extends EventEmitter {
       d: { ...pending.wire.d },
     };
     delete wire.d.fw;
-    await this.fanout(wire, pending.excludePeerHashes);
+    const result = await this.fanoutOnce(wire, pending.excludePeerHashes);
+    // Keep this retry tied to the ACK-aware pending lifecycle. An ACK can
+    // arrive while fanout is in flight; generic fanout used to enqueue stale
+    // work after that race had already completed delivery.
+    if (
+      result.ok === false &&
+      this.pendingDmNotifyDeliveries.has(requestId) &&
+      this.shouldRetryControlSend(wire, result.reason)
+    ) {
+      this.enqueueControlRetry({
+        wire,
+        excludePeerPresenceHashes: pending.excludePeerHashes,
+        // A leaf can have no alternate peer after excluding the direct or
+        // inbound route. The retry remains useful, but exhausting that branch
+        // is normal and should not emit a misleading delivery warning.
+        dropIfNoRoute: true,
+      });
+    }
   }
 
   private completePendingDmNotify(
@@ -37830,6 +37886,19 @@ export class ReticulumChatManager extends EventEmitter {
       const now = this.now();
       for (const item of [...this.controlRetryQueue.values()]) {
         if (item.nextAttemptAt > now) continue;
+        if (
+          item.wire.k === 'dm_notify' &&
+          item.dropIfNoRoute !== true &&
+          !this.pendingDmNotifyDeliveries.has(
+            normalizeReticulumControlRequestId(item.wire.d.q)
+          )
+        ) {
+          // Defensive cleanup for an ACK/cleanup racing an older generic
+          // enqueue. Relayed notifications use dropIfNoRoute and do not own a
+          // pending-delivery record, so they are intentionally excluded here.
+          this.controlRetryQueue.delete(item.key);
+          continue;
+        }
         if (
           item.wire.k === 'group_state_digest_v3' &&
           (!this.canExchangeSubscribedGroupState(item.wire.g) ||

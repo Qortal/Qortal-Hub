@@ -7033,13 +7033,14 @@ describe('reticulum chat manager', () => {
     manager.close();
   });
 
-  it('does not fanout a direct DM notify after the destination acknowledges it', async () => {
+  it('accepts a signed DM notify acknowledgment through a relay hop', async () => {
     vi.useFakeTimers();
     try {
       const sender = createDmIdentity();
       const recipient = createDmIdentity();
       const senderPeerHash = 'a'.repeat(32);
       const recipientPeerHash = 'b'.repeat(32);
+      const relayPeerHash = 'c'.repeat(32);
       const sent: Array<{ peer: string; wire: ReticulumChatWire }> = [];
       const fanout: ReticulumChatWire[] = [];
       const manager = new ReticulumChatManager({
@@ -7119,7 +7120,7 @@ describe('reticulum chat manager', () => {
             ),
           },
         },
-        recipientPeerHash
+        relayPeerHash
       );
 
       await vi.advanceTimersByTimeAsync(4_000);
@@ -7128,6 +7129,128 @@ describe('reticulum chat manager', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('forwards a signed DM notify acknowledgment only along its reverse route', async () => {
+    const sender = createDmIdentity();
+    const recipient = createDmIdentity();
+    const senderHopHash = 'a'.repeat(32);
+    const recipientPeerHash = 'b'.repeat(32);
+    const recipientHopHash = 'c'.repeat(32);
+    const sent: Array<{ peer: string; wire: ReticulumChatWire }> = [];
+    const manager = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => 'd'.repeat(32),
+        sendReticulumChatDetailed: async (
+          peer: string,
+          wire: ReticulumChatWire
+        ) => {
+          sent.push({ peer, wire });
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    await flushAsyncWork();
+    sent.length = 0;
+    const requestId = '1234567890abcdef';
+    const conversationId = reticulumDmConversationId(
+      sender.address,
+      recipient.address
+    );
+    (manager as any).dmNotifyRoutes.set(requestId, {
+      reversePeerHash: senderHopHash,
+      conversationId,
+      sourcePeerHash: senderHopHash,
+      expiresAt: Date.now() + 30_000,
+    });
+    const timestamp = Date.now();
+    const signedFields = buildReticulumDmNotifyAckSignedFields({
+      notifyRequestId: requestId,
+      latestCursor: '',
+      peerAddress: sender.address,
+      sourcePeerHash: recipientPeerHash,
+      authorAddress: recipient.address,
+      authorPublicKey: recipient.publicKey,
+      timestamp,
+    });
+    const ack: Extract<ReticulumChatWire, { k: 'dm_notify_ack' }> = {
+      t: 'RCHAT',
+      k: 'dm_notify_ack',
+      d: {
+        q: requestId,
+        b: sender.address,
+        sp: recipientPeerHash,
+        p: recipient.publicKey,
+        n: timestamp,
+        z: base58Encode(
+          nacl.sign.detached(
+            new Uint8Array(canonicalizeForSigning(signedFields)),
+            recipient.secretKey
+          )
+        ),
+      },
+    };
+
+    manager.handleWire(ack, recipientHopHash);
+    await flushAsyncWork();
+
+    expect(sent).toEqual([{ peer: senderHopHash, wire: ack }]);
+    manager.close();
+  });
+
+  it('does not recreate a DM notify retry when its fallback loses an ACK race', async () => {
+    const sender = createDmIdentity();
+    const recipient = createDmIdentity();
+    let resolveFanout!: (result: {
+      ok: false;
+      reason: 'no-route';
+    }) => void;
+    const fanoutResult = new Promise<{
+      ok: false;
+      reason: 'no-route';
+    }>((resolve) => {
+      resolveFanout = resolve;
+    });
+    const manager = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(sender),
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => 'a'.repeat(32),
+        fanoutReticulumChatDetailed: async () => fanoutResult,
+      } as any,
+    });
+    manager.setLocalDmAddresses([sender.address]);
+    await flushAsyncWork();
+    const event = signedDmEvent({
+      sender,
+      recipient,
+      eventId: 'dm-notify-fallback-ack-race',
+      senderSeq: Date.now() * 1000,
+      timestamp: Date.now(),
+      payload: 'hello',
+    });
+    const notify = await (manager as any).buildSignedDirectNotifyWire(
+      sender.address,
+      recipient.address,
+      event
+    );
+    (manager as any).registerPendingDmNotifyDelivery(event, notify);
+
+    const fallback = (manager as any).sendPendingDmNotifyFullFallback(
+      notify.d.q
+    );
+    (manager as any).completePendingDmNotify(notify.d.q, true);
+    resolveFanout({ ok: false, reason: 'no-route' });
+    await fallback;
+
+    expect((manager as any).pendingDmNotifyDeliveries.size).toBe(0);
+    expect((manager as any).controlRetryQueue.size).toBe(0);
+    manager.close();
   });
 
   it('registers a pending DM notify before a fast acknowledgment can return', async () => {
