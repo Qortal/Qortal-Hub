@@ -2495,6 +2495,8 @@ const RETICULUM_CHAT_DM_NOTIFY_GOSSIP_DELAY_MS = 750;
 const RETICULUM_CHAT_DM_NOTIFY_FULL_FALLBACK_MS = 3_000;
 const RETICULUM_CHAT_DM_NOTIFY_PENDING_TTL_MS = 2 * 60_000;
 const RETICULUM_CHAT_DM_NOTIFY_PENDING_MAX = 4096;
+const RETICULUM_CHAT_DM_NOTIFY_ACK_MAX_ATTEMPTS = 3;
+const RETICULUM_CHAT_DM_NOTIFY_ACK_RETRY_MS = 250;
 // Probes are the cheap periodic anti-entropy path. Full per-conversation
 // summaries are only a slower compatibility/safety net; live messages use the
 // immediate targeted notify path above.
@@ -18448,9 +18450,51 @@ export class ReticulumChatManager extends EventEmitter {
       },
     };
     if (!verifyReticulumDmNotifyAck(ack.d, timestamp)) return;
-    const direct = await this.sendToPeerOnce(sourcePeerHash, ack);
-    if (!direct.ok && reversePeerHash !== sourcePeerHash) {
-      void this.sendToPeerOnce(reversePeerHash, ack);
+    const targets = [
+      ...new Set(
+        [sourcePeerHash, reversePeerHash]
+          .map((peerHash) => this.normalizeResourcePeerHash(peerHash))
+          .filter((peerHash): peerHash is string => !!peerHash)
+      ),
+    ];
+    let lastFailure = '';
+    for (
+      let attempt = 1;
+      attempt <= RETICULUM_CHAT_DM_NOTIFY_ACK_MAX_ATTEMPTS;
+      attempt += 1
+    ) {
+      for (const target of targets) {
+        let result: ReticulumSendResult;
+        try {
+          result = await this.sendToPeerOnce(target, ack);
+        } catch (err) {
+          result = {
+            ok: false,
+            reason: 'bridge-exception',
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+        if (result.ok) return;
+        lastFailure = reticulumResultReason(result);
+      }
+      if (
+        attempt >= RETICULUM_CHAT_DM_NOTIFY_ACK_MAX_ATTEMPTS ||
+        this.isClosed
+      ) {
+        break;
+      }
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(
+          resolve,
+          RETICULUM_CHAT_DM_NOTIFY_ACK_RETRY_MS * attempt
+        );
+        timer.unref?.();
+      });
+    }
+    if (!this.isClosed && targets.length > 0) {
+      loggerWarn(
+        `[ReticulumChat] dm_notify_ack_failed rid=${notify.q.slice(0, 12)} attempts=${RETICULUM_CHAT_DM_NOTIFY_ACK_MAX_ATTEMPTS} reason=${lastFailure || 'no-route'}`
+      );
     }
   }
 
@@ -25540,12 +25584,16 @@ export class ReticulumChatManager extends EventEmitter {
           .filter((peerHash): peerHash is string => !!peerHash)
       ),
     ];
+    // Register before the first packet leaves. A fast peer can return its ACK
+    // before the bridge resolves the send command; registering afterwards
+    // loses that ACK and starts unnecessary gossip/fallback retries.
+    this.registerPendingDmNotifyDelivery(event, notify);
     const directResults = await Promise.all(
       directPeers.map(async (peerHash) => {
         try {
           return {
             peerHash,
-            result: await this.sendToPeer(peerHash, notify),
+            result: await this.sendToPeerOnce(peerHash, notify),
           };
         } catch (err) {
           return {
@@ -25559,6 +25607,20 @@ export class ReticulumChatManager extends EventEmitter {
         }
       })
     );
+    // This notify has its own ACK-aware delivery lifecycle. Keep direct retry
+    // reliability, but only queue retries while the ACK is still outstanding;
+    // the generic send helper cannot make that correlation and can otherwise
+    // enqueue stale work after a fast ACK arrives.
+    if (this.pendingDmNotifyDeliveries.has(notify.d.q)) {
+      for (const { peerHash, result } of directResults) {
+        if (
+          result.ok === false &&
+          this.shouldRetryControlSend(notify, result.reason)
+        ) {
+          this.enqueueControlRetry({ peerHash, wire: notify });
+        }
+      }
+    }
     const deliveredDirectPeers = directResults
       .filter(({ result }) => result.ok)
       .map(({ peerHash }) => peerHash);
@@ -25567,7 +25629,8 @@ export class ReticulumChatManager extends EventEmitter {
       ...deliveredDirectPeers,
       ...(localPeerHash ? [localPeerHash] : []),
     ];
-    this.trackPendingDmNotifyDelivery(event, notify, exclude);
+    if (!this.pendingDmNotifyDeliveries.has(notify.d.q)) return;
+    this.armPendingDmNotifyDelivery(notify.d.q, exclude);
     if (deliveredDirectPeers.length === 0) {
       const pending = this.pendingDmNotifyDeliveries.get(notify.d.q);
       if (pending?.gossipTimer) {
@@ -25582,10 +25645,9 @@ export class ReticulumChatManager extends EventEmitter {
     }
   }
 
-  private trackPendingDmNotifyDelivery(
+  private registerPendingDmNotifyDelivery(
     event: ReticulumDmEvent,
-    wire: Extract<ReticulumChatWire, { k: 'dm_notify' }>,
-    excludePeerHashes: string[]
+    wire: Extract<ReticulumChatWire, { k: 'dm_notify' }>
   ): void {
     const requestId = normalizeReticulumControlRequestId(wire.d.q);
     if (!requestId) return;
@@ -25596,12 +25658,34 @@ export class ReticulumChatManager extends EventEmitter {
       recipientAddress: event.recipientAddress,
       latestCursor: wire.d.lc ?? '',
       wire,
-      excludePeerHashes: [...new Set(excludePeerHashes)],
+      excludePeerHashes: [],
       createdAt: this.now(),
       gossipTimer: null,
       fallbackTimer: null,
       cleanupTimer: null,
     };
+    while (
+      this.pendingDmNotifyDeliveries.size >=
+      RETICULUM_CHAT_DM_NOTIFY_PENDING_MAX
+    ) {
+      const oldestRequestId = this.pendingDmNotifyDeliveries.keys().next()
+        .value as string | undefined;
+      if (!oldestRequestId) break;
+      this.completePendingDmNotify(oldestRequestId, false);
+    }
+    this.pendingDmNotifyDeliveries.set(requestId, pending);
+  }
+
+  private armPendingDmNotifyDelivery(
+    requestId: string,
+    excludePeerHashes: string[]
+  ): void {
+    const pending = this.pendingDmNotifyDeliveries.get(requestId);
+    if (!pending || this.isClosed) return;
+    if (pending.gossipTimer) clearTimeout(pending.gossipTimer);
+    if (pending.fallbackTimer) clearTimeout(pending.fallbackTimer);
+    if (pending.cleanupTimer) clearTimeout(pending.cleanupTimer);
+    pending.excludePeerHashes = [...new Set(excludePeerHashes)];
     pending.gossipTimer = setTimeout(() => {
       pending.gossipTimer = null;
       void this.sendPendingDmNotifyGossip(requestId).catch((err) => {
@@ -25625,16 +25709,6 @@ export class ReticulumChatManager extends EventEmitter {
       this.completePendingDmNotify(requestId, false);
     }, RETICULUM_CHAT_DM_NOTIFY_PENDING_TTL_MS);
     pending.cleanupTimer.unref?.();
-    while (
-      this.pendingDmNotifyDeliveries.size >=
-      RETICULUM_CHAT_DM_NOTIFY_PENDING_MAX
-    ) {
-      const oldestRequestId = this.pendingDmNotifyDeliveries.keys().next()
-        .value as string | undefined;
-      if (!oldestRequestId) break;
-      this.completePendingDmNotify(oldestRequestId, false);
-    }
-    this.pendingDmNotifyDeliveries.set(requestId, pending);
   }
 
   private async sendPendingDmNotifyGossip(requestId: string): Promise<void> {
@@ -25686,9 +25760,24 @@ export class ReticulumChatManager extends EventEmitter {
     if (pending.cleanupTimer) clearTimeout(pending.cleanupTimer);
     this.pendingDmNotifyDeliveries.delete(requestId);
     if (delivered) {
+      this.clearDmNotifyControlRetries(requestId);
       const event = this.db.getDirectEvent(pending.eventId);
       if (event && event.localDeliveryStatus !== 'sent') {
         this.markDirectEventSent(event);
+      }
+    }
+  }
+
+  private clearDmNotifyControlRetries(requestId: string): void {
+    const normalizedRequestId = normalizeReticulumControlRequestId(requestId);
+    if (!normalizedRequestId) return;
+    for (const [key, queued] of this.controlRetryQueue) {
+      if (
+        queued.wire.k === 'dm_notify' &&
+        normalizeReticulumControlRequestId(queued.wire.d.q) ===
+          normalizedRequestId
+      ) {
+        this.controlRetryQueue.delete(key);
       }
     }
   }

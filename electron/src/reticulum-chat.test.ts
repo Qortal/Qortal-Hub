@@ -482,6 +482,23 @@ function createDmSigner(
         authorPublicKey: identity.publicKey,
         timestamp: fullFields.timestamp,
       });
+    } else if (
+      fullFields.type === 'RCHAT_DM_NOTIFY_ACK' &&
+      typeof fullFields.notifyRequestId === 'string' &&
+      typeof fullFields.latestCursor === 'string' &&
+      typeof fullFields.peerAddress === 'string' &&
+      typeof fullFields.sourcePeerHash === 'string' &&
+      typeof fullFields.timestamp === 'number'
+    ) {
+      signedFields = buildReticulumDmNotifyAckSignedFields({
+        notifyRequestId: fullFields.notifyRequestId,
+        latestCursor: fullFields.latestCursor,
+        peerAddress: fullFields.peerAddress,
+        sourcePeerHash: fullFields.sourcePeerHash,
+        authorAddress: identity.address,
+        authorPublicKey: identity.publicKey,
+        timestamp: fullFields.timestamp,
+      });
     }
     return {
       authorAddress: identity.address,
@@ -7107,6 +7124,179 @@ describe('reticulum chat manager', () => {
 
       await vi.advanceTimersByTimeAsync(4_000);
       expect(fanout.some((wire) => wire.k === 'dm_notify')).toBe(false);
+      manager.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('registers a pending DM notify before a fast acknowledgment can return', async () => {
+    vi.useFakeTimers();
+    try {
+      const sender = createDmIdentity();
+      const recipient = createDmIdentity();
+      const senderPeerHash = 'a'.repeat(32);
+      const recipientPeerHash = 'b'.repeat(32);
+      const fanout: ReticulumChatWire[] = [];
+      let notifySent = false;
+      let manager!: ReticulumChatManager;
+      const bridge = {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => senderPeerHash,
+        sendReticulumChatDetailed: async (
+          peer: string,
+          wire: ReticulumChatWire
+        ) => {
+          if (peer === recipientPeerHash && wire.k === 'dm_notify') {
+            notifySent = true;
+            const timestamp = Date.now();
+            const signedFields = buildReticulumDmNotifyAckSignedFields({
+              notifyRequestId: wire.d.q,
+              latestCursor: wire.d.lc,
+              peerAddress: sender.address,
+              sourcePeerHash: recipientPeerHash,
+              authorAddress: recipient.address,
+              authorPublicKey: recipient.publicKey,
+              timestamp,
+            });
+            manager.handleWire(
+              {
+                t: 'RCHAT',
+                k: 'dm_notify_ack',
+                d: {
+                  q: wire.d.q,
+                  ...(wire.d.lc ? { lc: wire.d.lc } : {}),
+                  b: sender.address,
+                  sp: recipientPeerHash,
+                  p: recipient.publicKey,
+                  n: timestamp,
+                  z: base58Encode(
+                    nacl.sign.detached(
+                      new Uint8Array(canonicalizeForSigning(signedFields)),
+                      recipient.secretKey
+                    )
+                  ),
+                },
+              },
+              recipientPeerHash
+            );
+            // Simulate the bridge reporting a stale route after the remote ACK
+            // has already arrived. This must not enqueue a 30-second retry.
+            return { ok: false as const, reason: 'no-route' as const };
+          }
+          return { ok: true as const };
+        },
+        fanoutReticulumChatDetailed: async (
+          messages: ReticulumChatWire[]
+        ) => {
+          fanout.push(...messages);
+          return { ok: true as const };
+        },
+      };
+      manager = new ReticulumChatManager({
+        dbPath: tempDbPath(),
+        signLocalFields: createDmSigner(sender),
+        getVerifiedReticulumPeers: () => [
+          {
+            destinationHash: recipientPeerHash,
+            address: recipient.address,
+            lastSeenAt: Date.now(),
+          },
+        ],
+        bridge: bridge as any,
+      });
+      manager.setLocalDmAddresses([sender.address]);
+      await flushAsyncWork();
+      fanout.length = 0;
+
+      const event = signedDmEvent({
+        sender,
+        recipient,
+        eventId: 'dm-notify-fast-ack-event',
+        senderSeq: Date.now() * 1000,
+        timestamp: Date.now(),
+        payload: 'hello',
+      });
+      await manager.publishDirectEvent(event);
+
+      expect(notifySent).toBe(true);
+      expect((manager as any).pendingDmNotifyDeliveries.size).toBe(0);
+      expect(
+        [...(manager as any).controlRetryQueue.values()].some(
+          (queued: { wire: ReticulumChatWire }) =>
+            queued.wire.k === 'dm_notify'
+        )
+      ).toBe(false);
+      await vi.advanceTimersByTimeAsync(35_000);
+      expect(fanout.some((wire) => wire.k === 'dm_notify')).toBe(false);
+      manager.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a DM notify acknowledgment directly without fanout', async () => {
+    vi.useFakeTimers();
+    try {
+      const sender = createDmIdentity();
+      const recipient = createDmIdentity();
+      const senderPeerHash = 'a'.repeat(32);
+      const recipientPeerHash = 'b'.repeat(32);
+      const direct = vi.fn();
+      const fanout = vi.fn(async () => ({ ok: true as const }));
+      const manager = new ReticulumChatManager({
+        dbPath: tempDbPath(),
+        signLocalFields: createDmSigner(recipient),
+        bridge: {
+          on: () => undefined,
+          off: () => undefined,
+          getLocalDestinationHash: () => recipientPeerHash,
+          sendReticulumChatDetailed: direct,
+          fanoutReticulumChatDetailed: fanout,
+        } as any,
+      });
+      manager.setLocalDmAddresses([recipient.address]);
+      await flushAsyncWork();
+      direct.mockClear();
+      fanout.mockClear();
+      direct
+        .mockResolvedValueOnce({
+          ok: false as const,
+          reason: 'packet-send-false' as const,
+        })
+        .mockResolvedValueOnce({
+          ok: false as const,
+          reason: 'no-route' as const,
+        })
+        .mockResolvedValueOnce({ ok: true as const });
+      const notify: ReticulumDmNotifyWire = {
+        b: recipient.address,
+        sp: senderPeerHash,
+        q: '0123456789abcdef',
+        p: sender.publicKey,
+        n: Date.now(),
+        z: 'unused-by-ack-builder',
+      };
+
+      const ackPromise = (manager as any).sendDirectNotifyAck(
+        notify,
+        senderPeerHash,
+        senderPeerHash
+      );
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await ackPromise;
+
+      expect(direct).toHaveBeenCalledTimes(3);
+      expect(
+        direct.mock.calls.every(
+          ([peer, wire]) =>
+            peer === senderPeerHash &&
+            (wire as ReticulumChatWire).k === 'dm_notify_ack'
+        )
+      ).toBe(true);
+      expect(fanout).not.toHaveBeenCalled();
       manager.close();
     } finally {
       vi.useRealTimers();

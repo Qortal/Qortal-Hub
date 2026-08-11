@@ -4805,6 +4805,281 @@ class PresenceBridgeReusableResourceSessionTest(unittest.TestCase):
             1,
         )
 
+    def test_reinstalled_same_route_timestamp_is_not_alternative_path(self):
+        destination_hash = bytes.fromhex(self.peer_hash)
+        lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)
+        route = {
+            "has_path": True,
+            "hops": 4,
+            "next_hop": "11" * 16,
+            "interface": "backbone",
+            "timestamp": time.time(),
+            "packet": "same-announce",
+        }
+        lifecycle.update(
+            {
+                "resource_session_path_failure_generation": 1,
+                "resource_session_path_refresh_generation": 1,
+                "resource_session_path_refresh_started_at": time.time(),
+                "resource_session_path_refresh_before": dict(route),
+                "resource_session_path_refresh_last_request_at": time.time(),
+            }
+        )
+        reinstalled = {**route, "timestamp": time.time() + 1}
+
+        with mock.patch.object(
+            self.bridge,
+            "_reticulum_path_snapshot",
+            return_value=reinstalled,
+        ), mock.patch.object(
+            self.bridge.RNS.Transport,
+            "request_path",
+        ) as request_path:
+            self.assertFalse(
+                self.bridge._resource_session_failed_path_ready(
+                    destination_hash,
+                    self.peer_hash,
+                )
+            )
+
+        request_path.assert_not_called()
+        self.assertNotIn(
+            "resource_session_path_recovered_generation",
+            lifecycle,
+        )
+
+    def test_same_route_can_be_retried_after_bounded_recovery_wait(self):
+        destination_hash = bytes.fromhex(self.peer_hash)
+        lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)
+        route = {
+            "has_path": True,
+            "hops": 4,
+            "next_hop": "11" * 16,
+            "interface": "backbone",
+            "timestamp": time.time(),
+            "packet": "same-announce",
+        }
+        lifecycle.update(
+            {
+                "resource_session_path_failure_generation": 1,
+                "resource_session_path_refresh_generation": 1,
+                "resource_session_path_refresh_started_at": (
+                    time.time()
+                    - self.bridge._RESOURCE_SESSION_SAME_PATH_RETRY_SECONDS
+                    - 0.1
+                ),
+                "resource_session_path_refresh_before": dict(route),
+                "resource_session_path_refresh_last_request_at": time.time(),
+            }
+        )
+
+        with mock.patch.object(
+            self.bridge,
+            "_reticulum_path_snapshot",
+            return_value={**route, "timestamp": time.time() + 1},
+        ):
+            self.assertTrue(
+                self.bridge._resource_session_failed_path_ready(
+                    destination_hash,
+                    self.peer_hash,
+                )
+            )
+
+        self.assertEqual(
+            lifecycle["resource_session_path_recovered_generation"],
+            1,
+        )
+
+    def test_slow_link_switches_only_to_a_different_route(self):
+        state, old_link = self.session(established=False)
+        state["link_attempt_generation"] = 1
+        state["slow_path_probe_attempted"] = True
+        original = {
+            "has_path": True,
+            "hops": 4,
+            "next_hop": "11" * 16,
+            "interface": "old-route",
+            "timestamp": time.time(),
+            "packet": "old-announce",
+        }
+        replacement = {
+            **original,
+            "hops": 2,
+            "next_hop": "22" * 16,
+            "interface": "new-route",
+            "packet": "new-announce",
+        }
+        state["slow_path_probe_before"] = original
+        lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)
+        lifecycle["resource_session_slow_probe_owner"] = state["linkId"]
+        lifecycle["resource_session_slow_probe_deadline"] = time.time() + 5
+        outbound = mock.Mock(hash=bytes.fromhex(self.peer_hash))
+
+        with mock.patch.object(
+            self.bridge,
+            "_reticulum_path_snapshot",
+            return_value=replacement,
+        ), mock.patch.object(
+            self.bridge,
+            "_teardown_reticulum_link_bounded",
+        ) as teardown, mock.patch.object(
+            self.bridge,
+            "_resource_session_create_link",
+        ) as create_link:
+            self.bridge._resource_session_poll_slow_path_probe(
+                state,
+                outbound,
+                1,
+            )
+
+        self.assertIsNone(state["link"])
+        self.assertNotIn(id(old_link), self.bridge._qchat_file_link_ids_by_object)
+        teardown.assert_called_once_with(old_link, mock.ANY)
+        create_link.assert_called_once_with(state, outbound)
+        self.assertNotIn("resource_session_slow_probe_owner", lifecycle)
+
+    def test_slow_link_retries_refreshed_only_route_once_after_probe_window(self):
+        state, old_link = self.session(established=False)
+        state["link_attempt_generation"] = 1
+        state["slow_path_probe_attempted"] = True
+        original = {
+            "has_path": True,
+            "hops": 2,
+            "next_hop": "11" * 16,
+            "interface": "only-route",
+            "timestamp": time.time() - 10,
+            "packet": "same-announce",
+        }
+        refreshed = {**original, "timestamp": time.time()}
+        state["slow_path_probe_before"] = original
+        lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)
+        lifecycle.update(
+            {
+                "resource_session_slow_probe_owner": state["linkId"],
+                "resource_session_slow_probe_started_at": time.time() - 6,
+                "resource_session_slow_probe_deadline": time.time() - 1,
+            }
+        )
+        outbound = mock.Mock(hash=bytes.fromhex(self.peer_hash))
+
+        with mock.patch.object(
+            self.bridge,
+            "_reticulum_path_snapshot",
+            return_value=refreshed,
+        ), mock.patch.object(
+            self.bridge,
+            "_teardown_reticulum_link_bounded",
+        ) as teardown, mock.patch.object(
+            self.bridge,
+            "_resource_session_create_link",
+        ) as create_link:
+            self.bridge._resource_session_poll_slow_path_probe(
+                state,
+                outbound,
+                1,
+            )
+
+        self.assertIsNone(state["link"])
+        teardown.assert_called_once_with(old_link, mock.ANY)
+        create_link.assert_called_once_with(state, outbound)
+        self.assertTrue(state["slow_path_probe_attempted"])
+
+    def test_parallel_session_observes_peer_probe_without_duplicate_request(self):
+        owner, _owner_link = self.session(lane="bulk", slot=0, established=False)
+        observer, _observer_link = self.session(
+            lane="bulk",
+            slot=1,
+            established=False,
+        )
+        observer["link_attempt_generation"] = 1
+        observer["link_route_snapshot"] = {
+            "has_path": True,
+            "hops": 4,
+            "next_hop": "11" * 16,
+            "interface": "old-route",
+            "packet": "old-announce",
+        }
+        lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)
+        lifecycle["resource_session_slow_probe_owner"] = owner["linkId"]
+        lifecycle["resource_session_slow_probe_deadline"] = time.time() + 5
+        outbound = mock.Mock(hash=bytes.fromhex(self.peer_hash))
+
+        with mock.patch.object(
+            self.bridge,
+            "_drop_reticulum_path",
+        ) as drop_path, mock.patch.object(
+            self.bridge.RNS.Transport,
+            "request_path",
+        ) as request_path, mock.patch.object(
+            self.bridge,
+            "_resource_session_poll_slow_path_probe",
+        ) as poll_probe:
+            self.bridge._resource_session_start_slow_path_probe(
+                observer,
+                outbound,
+                1,
+            )
+
+        drop_path.assert_not_called()
+        request_path.assert_not_called()
+        poll_probe.assert_called_once_with(observer, outbound, 1)
+
+    def test_new_route_clears_all_peer_session_backoff_once(self):
+        lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)
+        lifecycle.update(
+            {
+                "resource_session_path_failure_generation": 3,
+                "resource_session_path_proven_generation": 2,
+                "resource_session_path_failed_snapshot": {
+                    "has_path": True,
+                    "hops": 4,
+                    "next_hop": "11" * 16,
+                    "interface": "old-route",
+                    "packet": "old-announce",
+                },
+            }
+        )
+        self.bridge._resource_session_failures_by_key.update(
+            {
+                self.bridge._resource_session_key(self.peer_hash, "fast", 0): {
+                    "backoff_until": time.time() + 60,
+                },
+                self.bridge._resource_session_key(self.peer_hash, "bulk", 0): {
+                    "backoff_until": time.time() + 60,
+                },
+            }
+        )
+        current = {
+            "has_path": True,
+            "hops": 2,
+            "next_hop": "22" * 16,
+            "interface": "new-route",
+            "packet": "new-announce",
+        }
+
+        with mock.patch.object(
+            self.bridge,
+            "_reticulum_path_snapshot",
+            return_value=current,
+        ) as snapshot:
+            self.assertTrue(
+                self.bridge._resource_session_clear_backoff_for_new_route(
+                    self.peer_hash
+                )
+            )
+            self.assertFalse(
+                self.bridge._resource_session_clear_backoff_for_new_route(
+                    self.peer_hash
+                )
+            )
+
+        self.assertEqual(snapshot.call_count, 1)
+        self.assertEqual(self.bridge._resource_session_failures_by_key, {})
+        self.assertEqual(
+            lifecycle["resource_session_path_recovered_generation"],
+            3,
+        )
+
     def test_unresolved_fresh_path_discovery_retries_once_per_interval(self):
         destination_hash = bytes.fromhex(self.peer_hash)
         lifecycle = self.bridge._lifecycle_state_for_peer(self.peer_hash)

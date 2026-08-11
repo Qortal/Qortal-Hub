@@ -346,6 +346,14 @@ _RESOURCE_SESSION_PROVIDER_IDLE_GUARD_SECONDS = 5.0
 _RESOURCE_SESSION_PATH_WAIT_TIMEOUT_SECONDS = 30.0
 _RESOURCE_SESSION_PATH_POLL_SECONDS = 1.0
 _RESOURCE_SESSION_PATH_REFRESH_RETRY_SECONDS = 5.0
+# A normal cached route remains the zero-delay fast path. Only a Link which is
+# still unestablished after this grace period asks Reticulum to discover a
+# different route. The probe is peer-scoped so parallel resource lanes do not
+# broadcast duplicate path requests.
+_RESOURCE_SESSION_SLOW_LINK_PROBE_SECONDS = 3.0
+_RESOURCE_SESSION_SLOW_LINK_PROBE_WINDOW_SECONDS = 5.0
+_RESOURCE_SESSION_SLOW_LINK_PROBE_POLL_SECONDS = 0.5
+_RESOURCE_SESSION_SAME_PATH_RETRY_SECONDS = 5.0
 _RESOURCE_SESSION_MAX_QUEUE_PER_LANE = 64
 _RESOURCE_SESSION_MAX_QUEUE_TOTAL = 256
 _RESOURCE_SESSION_FAST_CONCURRENCY = 1
@@ -7252,6 +7260,29 @@ def _path_snapshot_is_fresh(
     ):
         return True
     return False
+
+
+def _reticulum_path_fingerprint(info: Any) -> Optional[tuple]:
+    """Return the route identity without volatile path-table timestamps."""
+    if not isinstance(info, dict) or info.get("has_path") is not True:
+        return None
+    return (
+        str(info.get("next_hop") or ""),
+        str(info.get("interface") or ""),
+        str(info.get("packet") or ""),
+        int(info.get("hops")) if isinstance(info.get("hops"), int) else None,
+    )
+
+
+def _reticulum_path_is_different(
+    before: Any,
+    after: Any,
+) -> bool:
+    after_fingerprint = _reticulum_path_fingerprint(after)
+    if after_fingerprint is None:
+        return False
+    before_fingerprint = _reticulum_path_fingerprint(before)
+    return before_fingerprint is None or after_fingerprint != before_fingerprint
 
 
 def _await_fresh_destination_path(
@@ -20980,7 +21011,9 @@ def _resource_session_remove_state(state: Dict[str, Any]) -> None:
     link = state.get("link")
     _resource_session_cancel_timer(state, "path_timer")
     _resource_session_cancel_timer(state, "establish_timer")
+    _resource_session_cancel_timer(state, "slow_path_probe_timer")
     _resource_session_cancel_timer(state, "idle_timer")
+    _resource_session_release_slow_path_probe(state)
     with _state_lock:
         session_id = str(state.get("linkId") or "")
         if not session_id and link is not None:
@@ -21537,7 +21570,14 @@ def _resource_session_fail_state(
         )
 
 
-def _resource_session_open_timeout(state: Dict[str, Any]) -> None:
+def _resource_session_open_timeout(
+    state: Dict[str, Any],
+    expected_attempt: Optional[int] = None,
+) -> None:
+    if expected_attempt is not None and int(
+        state.get("link_attempt_generation") or 0
+    ) != expected_attempt:
+        return
     if state.get("remote_ready") is True or state.get("closing") is True:
         return
     log(
@@ -21574,6 +21614,11 @@ def _resource_session_note_failed_link_path(
     lifecycle = _lifecycle_state_for_peer(peer_hash)
     if lifecycle is None:
         return
+    failed_snapshot = (
+        dict(state.get("link_route_snapshot"))
+        if isinstance(state.get("link_route_snapshot"), dict)
+        else _reticulum_path_snapshot(bytes.fromhex(peer_hash))
+    )
     with _state_lock:
         generation = int(
             lifecycle.get("resource_session_path_failure_generation") or 0
@@ -21581,6 +21626,7 @@ def _resource_session_note_failed_link_path(
         lifecycle["resource_session_path_failure_generation"] = generation
         lifecycle["resource_session_path_failure_at"] = time.time()
         lifecycle["resource_session_path_failure_reason"] = reason
+        lifecycle["resource_session_path_failed_snapshot"] = failed_snapshot
         for key in (
             "resource_session_path_refresh_generation",
             "resource_session_path_refresh_started_at",
@@ -21693,11 +21739,13 @@ def _resource_session_failed_path_ready(
         return False
 
     after = _reticulum_path_snapshot(destination_hash)
-    if not _path_snapshot_is_fresh(
-        before,
-        after,
-        float(refresh_started_at),
-    ):
+    route_changed = _reticulum_path_is_different(before, after)
+    same_route_retry_ready = (
+        after.get("has_path") is True
+        and time.time() - float(refresh_started_at)
+        >= _RESOURCE_SESSION_SAME_PATH_RETRY_SECONDS
+    )
+    if not route_changed and not same_route_retry_ready:
         retry_request = False
         now = time.time()
         with _state_lock:
@@ -21750,7 +21798,241 @@ def _resource_session_failed_path_ready(
         "[presence_bridge] target=qchat-file-reticulum "
         "resource_session_fresh_path_resolved "
         f"peer={peer_hash} generation={failure_generation} "
+        f"route_changed={str(route_changed).lower()} "
         f"after={_format_reticulum_path_snapshot(after)}"
+    )
+    return True
+
+
+def _resource_session_release_slow_path_probe(state: Dict[str, Any]) -> None:
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    if not peer_hash:
+        return
+    lifecycle = _lifecycle_state_for_peer(peer_hash)
+    if lifecycle is None:
+        return
+    link_id = str(state.get("linkId") or "")
+    with _state_lock:
+        if lifecycle.get("resource_session_slow_probe_owner") == link_id:
+            for key in (
+                "resource_session_slow_probe_owner",
+                "resource_session_slow_probe_started_at",
+                "resource_session_slow_probe_deadline",
+            ):
+                lifecycle.pop(key, None)
+
+
+def _resource_session_replace_pending_route(
+    state: Dict[str, Any],
+    outbound: Any,
+    expected_attempt: int,
+    before: Dict[str, Any],
+    after: Dict[str, Any],
+    *,
+    route_changed: bool,
+) -> bool:
+    old_link = state.get("link")
+    if old_link is None:
+        return False
+    with _state_lock:
+        if (
+            state.get("link") is not old_link
+            or state.get("closing") is True
+            or state.get("established") is True
+            or int(state.get("link_attempt_generation") or 0) != expected_attempt
+        ):
+            return False
+        _qchat_file_link_ids_by_object.pop(id(old_link), None)
+        _incoming_unified_peer_hash_by_object.pop(id(old_link), None)
+        state["link"] = None
+    _resource_session_cancel_timer(state, "establish_timer")
+    _resource_session_cancel_timer(state, "slow_path_probe_timer")
+    _resource_session_release_slow_path_probe(state)
+    log(
+        "[presence_bridge] resource_session_route_replaced "
+        f"peer={str(state.get('peerPresenceHash') or '')[:16]} "
+        f"lane={state.get('sessionLane')} "
+        f"route_changed={str(route_changed).lower()} "
+        f"before={_format_reticulum_path_snapshot(before)} "
+        f"after={_format_reticulum_path_snapshot(after)}"
+    )
+    _teardown_reticulum_link_bounded(
+        old_link,
+        "target=qchat-file-reticulum replace_slow_resource_route",
+    )
+    _resource_session_create_link(state, outbound)
+    return True
+
+
+def _resource_session_poll_slow_path_probe(
+    state: Dict[str, Any],
+    outbound: Any,
+    expected_attempt: int,
+) -> None:
+    if (
+        state.get("closing") is True
+        or state.get("established") is True
+        or int(state.get("link_attempt_generation") or 0) != expected_attempt
+    ):
+        _resource_session_release_slow_path_probe(state)
+        return
+    original = state.get("slow_path_probe_before")
+    after = _reticulum_path_snapshot(outbound.hash)
+    if _reticulum_path_is_different(original, after):
+        _resource_session_replace_pending_route(
+            state,
+            outbound,
+            expected_attempt,
+            original,
+            after,
+            route_changed=True,
+        )
+        return
+    lifecycle = _lifecycle_state_for_peer(
+        str(state.get("peerPresenceHash") or "").strip().lower()
+    )
+    deadline = (
+        float((lifecycle or {}).get("resource_session_slow_probe_deadline") or 0)
+        if lifecycle is not None
+        else 0
+    )
+    if time.time() >= deadline:
+        probe_started_at = float(
+            (lifecycle or {}).get("resource_session_slow_probe_started_at") or 0
+        )
+        # If this peer has only one route, one freshly rediscovered copy of
+        # that route gets a new Link handshake after the bounded probe window.
+        # This is deliberately limited to one replacement per session; a new
+        # timestamp is not treated as proof that the route itself changed.
+        if (
+            after.get("has_path") is True
+            and probe_started_at > 0
+            and _path_snapshot_is_fresh(original, after, probe_started_at)
+        ):
+            _resource_session_replace_pending_route(
+                state,
+                outbound,
+                expected_attempt,
+                original,
+                after,
+                route_changed=False,
+            )
+            return
+        _resource_session_release_slow_path_probe(state)
+        return
+    timer = threading.Timer(
+        _RESOURCE_SESSION_SLOW_LINK_PROBE_POLL_SECONDS,
+        _resource_session_poll_slow_path_probe,
+        args=(state, outbound, expected_attempt),
+    )
+    timer.daemon = True
+    with _state_lock:
+        if (
+            state.get("closing") is True
+            or state.get("established") is True
+            or int(state.get("link_attempt_generation") or 0) != expected_attempt
+        ):
+            return
+        state["slow_path_probe_timer"] = timer
+    timer.start()
+
+
+def _resource_session_start_slow_path_probe(
+    state: Dict[str, Any],
+    outbound: Any,
+    expected_attempt: int,
+) -> None:
+    state.pop("slow_path_probe_timer", None)
+    if (
+        state.get("closing") is True
+        or state.get("established") is True
+        or int(state.get("link_attempt_generation") or 0) != expected_attempt
+        or state.get("slow_path_probe_attempted") is True
+    ):
+        return
+    state["slow_path_probe_attempted"] = True
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    lifecycle = _lifecycle_state_for_peer(peer_hash)
+    if lifecycle is None:
+        return
+    now = time.time()
+    link_id = str(state.get("linkId") or "")
+    observe_existing_probe = False
+    with _state_lock:
+        owner = str(lifecycle.get("resource_session_slow_probe_owner") or "")
+        deadline = float(lifecycle.get("resource_session_slow_probe_deadline") or 0)
+        if owner and owner != link_id and deadline > now:
+            observe_existing_probe = True
+        else:
+            lifecycle["resource_session_slow_probe_owner"] = link_id
+            lifecycle["resource_session_slow_probe_started_at"] = now
+            lifecycle["resource_session_slow_probe_deadline"] = (
+                now + _RESOURCE_SESSION_SLOW_LINK_PROBE_WINDOW_SECONDS
+            )
+    before = state.get("link_route_snapshot")
+    if not isinstance(before, dict):
+        before = _reticulum_path_snapshot(outbound.hash)
+    state["slow_path_probe_before"] = before
+    if observe_existing_probe:
+        _resource_session_poll_slow_path_probe(state, outbound, expected_attempt)
+        return
+    dropped = _drop_reticulum_path(outbound.hash)
+    try:
+        RNS.Transport.request_path(outbound.hash)
+        log(
+            "[presence_bridge] resource_session_alternative_path_requested "
+            f"peer={peer_hash[:16]} lane={state.get('sessionLane')} "
+            f"dropped={str(dropped).lower()} "
+            f"before={_format_reticulum_path_snapshot(before)}"
+        )
+    except Exception as exc:
+        _resource_session_release_slow_path_probe(state)
+        log(
+            "[presence_bridge] resource_session_alternative_path_request_failed "
+            f"peer={peer_hash[:16]} err={exc}"
+        )
+        return
+    _resource_session_poll_slow_path_probe(state, outbound, expected_attempt)
+
+
+def _resource_session_clear_backoff_for_new_route(peer_hash: str) -> bool:
+    lifecycle = _lifecycle_state_for_peer(peer_hash)
+    if lifecycle is None:
+        return False
+    with _state_lock:
+        failure_generation = int(
+            lifecycle.get("resource_session_path_failure_generation") or 0
+        )
+        proven_generation = int(
+            lifecycle.get("resource_session_path_proven_generation") or 0
+        )
+        recovered_generation = int(
+            lifecycle.get("resource_session_path_recovered_generation") or 0
+        )
+        failed_snapshot = lifecycle.get("resource_session_path_failed_snapshot")
+    if failure_generation <= max(
+        proven_generation,
+        recovered_generation,
+    ) or not isinstance(failed_snapshot, dict):
+        return False
+    try:
+        current = _reticulum_path_snapshot(bytes.fromhex(peer_hash))
+    except (TypeError, ValueError):
+        return False
+    if not _reticulum_path_is_different(failed_snapshot, current):
+        return False
+    with _state_lock:
+        if int(
+            lifecycle.get("resource_session_path_failure_generation") or 0
+        ) != failure_generation:
+            return False
+        lifecycle["resource_session_path_recovered_generation"] = failure_generation
+        for key in list(_resource_session_failures_by_key):
+            if key.startswith(f"{peer_hash}:"):
+                _resource_session_failures_by_key.pop(key, None)
+    log(
+        "[presence_bridge] resource_session_backoff_cleared_new_route "
+        f"peer={peer_hash[:16]} after={_format_reticulum_path_snapshot(current)}"
     )
     return True
 
@@ -21759,6 +22041,9 @@ def _resource_session_create_link(state: Dict[str, Any], outbound) -> None:
     if state.get("closing") is True or state.get("link") is not None:
         return
     try:
+        state["link_route_snapshot"] = _reticulum_path_snapshot(outbound.hash)
+        attempt = int(state.get("link_attempt_generation") or 0) + 1
+        state["link_attempt_generation"] = attempt
         link = RNS.Link(
             outbound,
             established_callback=on_outgoing_resource_session_established,
@@ -21777,11 +22062,28 @@ def _resource_session_create_link(state: Dict[str, Any], outbound) -> None:
         timer = threading.Timer(
             remaining_establish_seconds,
             _resource_session_open_timeout,
-            args=(state,),
+            args=(state, attempt),
         )
         timer.daemon = True
         state["establish_timer"] = timer
         timer.start()
+        if state.get("slow_path_probe_attempted") is not True:
+            probe_timer = threading.Timer(
+                _RESOURCE_SESSION_SLOW_LINK_PROBE_SECONDS,
+                _resource_session_start_slow_path_probe,
+                args=(state, outbound, attempt),
+            )
+            probe_timer.daemon = True
+            start_probe_timer = False
+            with _state_lock:
+                if (
+                    state.get("established") is not True
+                    and state.get("closing") is not True
+                ):
+                    state["slow_path_probe_timer"] = probe_timer
+                    start_probe_timer = True
+            if start_probe_timer:
+                probe_timer.start()
         log(
             "[presence_bridge] resource_session_connecting "
             f"peer={str(state.get('peerPresenceHash') or '')[:16]} lane={state.get('sessionLane')}"
@@ -21852,6 +22154,7 @@ def _resource_session_get_or_create(
     session_lane = "bulk" if lane == "bulk" else "fast"
     if not _valid_presence_destination_hash_hex(peer_key):
         return None, "unknown_peer_presence_hash"
+    _resource_session_clear_backoff_for_new_route(peer_key)
     pool_size = _RESOURCE_SESSION_BULK_POOL_SIZE if session_lane == "bulk" else 1
     now = time.time()
     existing_states: List[Dict[str, Any]] = []
@@ -22092,6 +22395,8 @@ def on_outgoing_resource_session_established(link) -> None:
     if not isinstance(state, dict) or state.get("manager_kind") != "resource_session":
         return
     configure_qchat_file_link(link, str(link_id))
+    _resource_session_cancel_timer(state, "slow_path_probe_timer")
+    _resource_session_release_slow_path_probe(state)
     link.set_remote_identified_callback(on_qchat_file_link_remote_identified)
     with _state_lock:
         state["established"] = True
