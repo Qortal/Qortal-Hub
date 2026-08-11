@@ -13953,15 +13953,11 @@ def on_qchat_file_link_closed(link) -> None:
             getattr(link, "teardown_reason", None)
         )
         was_established = existing_state.get("established") is True
-        path_failed = (
-            existing_state.get("incoming") is not True
-            and (not was_established or reason == "timeout")
-        )
-        if path_failed:
+        outgoing = existing_state.get("incoming") is not True
+        if outgoing and not was_established:
             _resource_session_note_failed_link_path(
                 existing_state,
                 f"resource_session_link_closed:{reason}",
-                allow_established_timeout=(was_established and reason == "timeout"),
             )
         with _state_lock:
             _qchat_file_link_ids_by_object.pop(id(link), None)
@@ -13989,6 +13985,17 @@ def on_qchat_file_link_closed(link) -> None:
             # so a job queued concurrently with the close is still failed and
             # rehomed normally.
             record_failure=None if was_established else True,
+            # TIMEOUT is also Reticulum's normal retirement reason for an
+            # established pooled Link. Only poison the shared peer route when
+            # that timeout interrupted real work. The decision is made under
+            # the same lock that closes the state, so a concurrently queued
+            # request cannot fall through the gap.
+            mark_path_failure_reason=(
+                f"resource_session_link_closed:{reason}"
+                if outgoing and was_established and reason == "timeout"
+                else None
+            ),
+            allow_established_timeout=True,
         )
         return
     state = remove_qchat_file_link(link_id)
@@ -21507,6 +21514,8 @@ def _resource_session_fail_state(
     reason: str,
     *,
     record_failure: Optional[bool] = True,
+    mark_path_failure_reason: Optional[str] = None,
+    allow_established_timeout: bool = False,
 ) -> None:
     with _state_lock:
         if state.get("closing") is True:
@@ -21527,6 +21536,12 @@ def _resource_session_fail_state(
         state["pending_jobs"] = []
         state["active_requests"] = {}
         _resource_session_provider_capacity_condition.notify_all()
+    if mark_path_failure_reason and should_record_failure:
+        _resource_session_note_failed_link_path(
+            state,
+            mark_path_failure_reason,
+            allow_established_timeout=allow_established_timeout,
+        )
     if should_record_failure:
         _resource_session_note_failure(state, reason)
         _resource_session_emit_status(state, "failed", reason)
@@ -22067,7 +22082,10 @@ def _resource_session_create_link(state: Dict[str, Any], outbound) -> None:
         timer.daemon = True
         state["establish_timer"] = timer
         timer.start()
-        if state.get("slow_path_probe_attempted") is not True:
+        if (
+            state.get("slow_path_probe_attempted") is not True
+            and state.get("recovered_path_generation") is None
+        ):
             probe_timer = threading.Timer(
                 _RESOURCE_SESSION_SLOW_LINK_PROBE_SECONDS,
                 _resource_session_start_slow_path_probe,
@@ -22118,6 +22136,32 @@ def _resource_session_poll_path(state: Dict[str, Any]) -> None:
                 allow_failed_path_refresh=True,
             )
         )
+        if path_ready and failed_path_ready is True:
+            lifecycle = _lifecycle_state_for_peer(peer_hash)
+            with _state_lock:
+                failure_generation = int(
+                    (lifecycle or {}).get(
+                        "resource_session_path_failure_generation"
+                    )
+                    or 0
+                )
+                recovered_generation = int(
+                    (lifecycle or {}).get(
+                        "resource_session_path_recovered_generation"
+                    )
+                    or 0
+                )
+                if failure_generation > recovered_generation:
+                    # Another Link failed after the readiness check completed.
+                    # Do not open on the route that the newer generation has
+                    # just invalidated; the next poll will run its recovery.
+                    path_ready = False
+                elif failure_generation > 0:
+                    # This route has already completed the stricter failed-
+                    # path recovery. Do not let the generic three-second
+                    # slow-Link probe immediately drop it a second time while
+                    # its replacement handshake is in flight.
+                    state["recovered_path_generation"] = failure_generation
         if path_ready:
             state.pop("path_timer", None)
             _resource_session_create_link(state, outbound)

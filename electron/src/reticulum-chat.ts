@@ -838,6 +838,7 @@ type ReticulumPendingDmNotifyDelivery = {
   eventId: string;
   senderAddress: string;
   recipientAddress: string;
+  markEventDelivered: boolean;
   latestCursor: string;
   wire: Extract<ReticulumChatWire, { k: 'dm_notify' }>;
   excludePeerHashes: string[];
@@ -25650,12 +25651,26 @@ export class ReticulumChatManager extends EventEmitter {
     wire: Extract<ReticulumChatWire, { k: 'dm_notify' }>
   ): void {
     const requestId = normalizeReticulumControlRequestId(wire.d.q);
-    if (!requestId) return;
+    const notificationSenderAddress = deriveReticulumControlAuthor(wire.d.p);
+    const notificationRecipientAddress = String(wire.d.b || '').trim();
+    if (
+      !requestId ||
+      !notificationSenderAddress ||
+      !notificationRecipientAddress
+    ) {
+      return;
+    }
     this.completePendingDmNotify(requestId, false);
     const pending: ReticulumPendingDmNotifyDelivery = {
       eventId: event.eventId,
-      senderAddress: event.senderAddress,
-      recipientAddress: event.recipientAddress,
+      // A recovery summary may advertise an event originally sent by the
+      // remote account. ACK validation must follow this notification's signed
+      // direction, not the stored event's original sender/recipient direction.
+      senderAddress: notificationSenderAddress,
+      recipientAddress: notificationRecipientAddress,
+      markEventDelivered:
+        event.senderAddress === notificationSenderAddress &&
+        event.recipientAddress === notificationRecipientAddress,
       latestCursor: wire.d.lc ?? '',
       wire,
       excludePeerHashes: [],
@@ -25761,6 +25776,8 @@ export class ReticulumChatManager extends EventEmitter {
     this.pendingDmNotifyDeliveries.delete(requestId);
     if (delivered) {
       this.clearDmNotifyControlRetries(requestId);
+    }
+    if (delivered && pending.markEventDelivered) {
       const event = this.db.getDirectEvent(pending.eventId);
       if (event && event.localDeliveryStatus !== 'sent') {
         this.markDirectEventSent(event);

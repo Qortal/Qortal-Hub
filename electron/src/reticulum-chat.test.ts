@@ -7236,6 +7236,94 @@ describe('reticulum chat manager', () => {
     }
   });
 
+  it('accepts an acknowledgment for a recovery summary of a received DM', async () => {
+    const local = createDmIdentity();
+    const remote = createDmIdentity();
+    const localPeerHash = 'a'.repeat(32);
+    const remotePeerHash = 'b'.repeat(32);
+    const sent: ReticulumChatWire[] = [];
+    const manager = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(local),
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => localPeerHash,
+        sendReticulumChatDetailed: async (
+          _peer: string,
+          wire: ReticulumChatWire
+        ) => {
+          sent.push(wire);
+          return { ok: false as const, reason: 'no-route' as const };
+        },
+        fanoutReticulumChatDetailed: async () => ({ ok: true as const }),
+      } as any,
+    });
+    manager.setLocalDmAddresses([local.address]);
+    await flushAsyncWork();
+    sent.length = 0;
+
+    const event = signedDmEvent({
+      sender: remote,
+      recipient: local,
+      eventId: 'dm-received-summary-ack-event',
+      senderSeq: Date.now() * 1000,
+      timestamp: Date.now(),
+      payload: 'received message',
+    });
+    expect((manager as any).acceptDirectEvent(event, false)).toBe(true);
+    await (manager as any).announceDirectNotifyForEvent(
+      event,
+      [],
+      [remotePeerHash]
+    );
+    const notify = sent.find(
+      (wire): wire is Extract<ReticulumChatWire, { k: 'dm_notify' }> =>
+        wire.k === 'dm_notify'
+    );
+    expect(notify).toBeDefined();
+    expect((manager as any).pendingDmNotifyDeliveries.size).toBe(1);
+
+    const timestamp = Date.now();
+    const signedFields = buildReticulumDmNotifyAckSignedFields({
+      notifyRequestId: notify!.d.q,
+      latestCursor: notify!.d.lc,
+      peerAddress: local.address,
+      sourcePeerHash: remotePeerHash,
+      authorAddress: remote.address,
+      authorPublicKey: remote.publicKey,
+      timestamp,
+    });
+    manager.handleWire(
+      {
+        t: 'RCHAT',
+        k: 'dm_notify_ack',
+        d: {
+          q: notify!.d.q,
+          ...(notify!.d.lc ? { lc: notify!.d.lc } : {}),
+          b: local.address,
+          sp: remotePeerHash,
+          p: remote.publicKey,
+          n: timestamp,
+          z: base58Encode(
+            nacl.sign.detached(
+              new Uint8Array(canonicalizeForSigning(signedFields)),
+              remote.secretKey
+            )
+          ),
+        },
+      },
+      remotePeerHash
+    );
+
+    expect((manager as any).pendingDmNotifyDeliveries.size).toBe(0);
+    expect((manager as any).controlRetryQueue.size).toBe(0);
+    expect((manager as any).db.getDirectEvent(event.eventId)).toMatchObject({
+      localDeliveryStatus: 'received',
+    });
+    manager.close();
+  });
+
   it('retries a DM notify acknowledgment directly without fanout', async () => {
     vi.useFakeTimers();
     try {
