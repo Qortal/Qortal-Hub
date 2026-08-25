@@ -790,10 +790,26 @@ export const processTransactionVersion2 = async (body: any) => {
       body, // Convert body to JSON string
     });
 
-    // if (!response.ok) {
-    //   // If the response is not successful (status code is not 2xx)
-    //   throw new Error(`HTTP error! Status: ${response.status}`);
-    // }
+    // Check if the response is not successful (status code is not 2xx)
+    if (!response.ok) {
+      // Try to parse error from response
+      let errorMessage = `HTTP error! Status: ${response.status}`;
+      try {
+        const json = await response.clone().json();
+        if (json?.message) {
+          errorMessage = json.message;
+        } else if (json?.error) {
+          errorMessage = json.error;
+        } else {
+          const text = await response.text();
+          if (text) errorMessage = text;
+        }
+      } catch {
+        const text = await response.text();
+        if (text) errorMessage = text;
+      }
+      throw new Error(errorMessage);
+    }
 
     try {
       const json = await response.clone().json();
@@ -2881,15 +2897,16 @@ export async function notifyAdminRegenerateSecretKey({
 
 function setupMessageListener() {
   window.addEventListener('message', async (event) => {
-    if (event.origin !== window.location.origin || event.source !== window) {
-      return;
-    }
-    const request = event.data;
+    try {
+      if (event.origin !== window.location.origin || event.source !== window) {
+        return;
+      }
+      const request = event.data;
 
-    // Check if the message is intended for this listener
-    if (request?.type !== 'backgroundMessage') return; // Only process messages of type 'backgroundMessage'
+      // Check if the message is intended for this listener
+      if (request?.type !== 'backgroundMessage') return; // Only process messages of type 'backgroundMessage'
 
-    switch (request.action) {
+      switch (request.action) {
       case 'version':
         versionCase(request, event);
         break;
@@ -3167,6 +3184,9 @@ function setupMessageListener() {
         break;
       default:
         break;
+    }
+    } catch (error) {
+      console.error('Error in background message listener:', error);
     }
   });
 }

@@ -398,49 +398,50 @@ const ListOfMembers = ({
       });
 
       setIsLoadingKick(true);
-      new Promise((res, rej) => {
-        window
-          .sendMessage('kickFromGroup', {
-            groupId,
-            qortalAddress: address,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              setInfoSnack({
-                type: 'success',
-                message: t('group:message.success.group_kick', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-              });
-              setOpenSnack(true);
-              handlePopoverClose();
-              res(response);
-              return;
-            }
-            setInfoSnack({
-              type: 'error',
-              message: response?.error,
-            });
-            setOpenSnack(true);
-            rej(response.error);
-          })
-          .catch((error) => {
-            setInfoSnack({
-              type: 'error',
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-            setOpenSnack(true);
-            rej(error);
-          });
+      const response = await window.sendMessage('kickFromGroup', {
+        groupId,
+        qortalAddress: address,
       });
-    } catch (error) {
-      console.log(error);
-    } finally {
+      if (!response?.error) {
+        setInfoSnack({
+          type: 'success',
+          message: t('group:message.success.group_kick', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+        handlePopoverClose();
+        setIsLoadingKick(false);
+        return;
+      }
       setIsLoadingKick(false);
+      setInfoSnack({
+        type: 'error',
+        message:
+          response?.message ||
+          response?.error ||
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
+    } catch (error) {
+      console.error('Kick error:', error);
+      setIsLoadingKick(false);
+      // If user cancelled the modal, don't show an error
+      if (error?.isCanceled) {
+        return;
+      }
+      setInfoSnack({
+        type: 'error',
+        message:
+          error?.message ||
+          String(error) ||
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
     }
   };
 
@@ -458,50 +459,51 @@ const ListOfMembers = ({
 
       setIsLoadingBan(true);
 
-      await new Promise((res, rej) => {
-        window
-          .sendMessage('banFromGroup', {
-            groupId,
-            qortalAddress: address,
-            rBanTime: 0,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              setInfoSnack({
-                type: 'success',
-                message: t('group:message.success.group_ban', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-              });
-              setOpenSnack(true);
-              handlePopoverClose();
-              res(response);
-              return;
-            }
-            setInfoSnack({
-              type: 'error',
-              message: response?.error,
-            });
-            setOpenSnack(true);
-            rej(response.error);
-          })
-          .catch((error) => {
-            setInfoSnack({
-              type: 'error',
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-            setOpenSnack(true);
-            rej(error);
-          });
+      const response = await window.sendMessage('banFromGroup', {
+        groupId,
+        qortalAddress: address,
+        rBanTime: 0,
       });
-    } catch (error) {
-      console.log(error);
-    } finally {
+      if (!response?.error) {
+        setInfoSnack({
+          type: 'success',
+          message: t('group:message.success.group_ban', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+        handlePopoverClose();
+        setIsLoadingBan(false);
+        return;
+      }
       setIsLoadingBan(false);
+      setInfoSnack({
+        type: 'error',
+        message:
+          response?.message ||
+          response?.error ||
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
+    } catch (error) {
+      console.error('Ban error:', error);
+      setIsLoadingBan(false);
+      // If user cancelled the modal, don't show an error
+      if (error?.isCanceled) {
+        return;
+      }
+      setInfoSnack({
+        type: 'error',
+        message:
+          error?.message ||
+          String(error) ||
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
     }
   };
 
@@ -825,9 +827,8 @@ const ListOfMembers = ({
       </>
     );
 
-    return (
-      <div key={semanticRowKey} style={style}>
-        {isOwner && (
+    return ( <div key={semanticRowKey} style={style}>
+        {((isOwner || isAdmin) && !member?.isAdmin && member?.member !== ownerAddress || isOwner && member?.isAdmin && member?.member !== ownerAddress) && (
           <Popover
             open={openPopoverIndex === index}
             anchorEl={popoverAnchor}
@@ -862,7 +863,7 @@ const ListOfMembers = ({
                 p: 0.5,
               }}
             >
-              {isOwner && (
+              {(isOwner || isAdmin) && !member?.isAdmin && member?.member !== ownerAddress && (
                 <>
                   <LoadingButton
                     fullWidth
@@ -901,44 +902,52 @@ const ListOfMembers = ({
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </LoadingButton>
+                </>
+              )}
 
-                  <LoadingButton
-                    fullWidth
-                    loading={isLoadingMakeAdmin}
-                    loadingPosition="start"
-                    onClick={() => makeAdmin(member?.member)}
-                    sx={{
-                      borderRadius: '6px',
-                      color: 'text.primary',
-                      justifyContent: 'flex-start',
-                      px: 1.25,
-                      textTransform: 'none',
-                    }}
-                    variant="text"
-                  >
-                    {t('group:action.make_admin', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </LoadingButton>
+              {isOwner && member?.member !== ownerAddress && (
+                <>
+                  {!member?.isAdmin && (
+                    <LoadingButton
+                      fullWidth
+                      loading={isLoadingMakeAdmin}
+                      loadingPosition="start"
+                      onClick={() => makeAdmin(member?.member)}
+                      sx={{
+                        borderRadius: '6px',
+                        color: 'text.primary',
+                        justifyContent: 'flex-start',
+                        px: 1.25,
+                        textTransform: 'none',
+                      }}
+                      variant="text"
+                    >
+                      {t('group:action.make_admin', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </LoadingButton>
+                  )}
 
-                  <LoadingButton
-                    fullWidth
-                    loading={isLoadingRemoveAdmin}
-                    loadingPosition="start"
-                    onClick={() => removeAdmin(member?.member)}
-                    sx={{
-                      borderRadius: '6px',
-                      color: 'text.primary',
-                      justifyContent: 'flex-start',
-                      px: 1.25,
-                      textTransform: 'none',
-                    }}
-                    variant="text"
-                  >
-                    {t('group:action.remove_admin', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </LoadingButton>
+                  {member?.isAdmin && (
+                    <LoadingButton
+                      fullWidth
+                      loading={isLoadingRemoveAdmin}
+                      loadingPosition="start"
+                      onClick={() => removeAdmin(member?.member)}
+                      sx={{
+                        borderRadius: '6px',
+                        color: 'text.primary',
+                        justifyContent: 'flex-start',
+                        px: 1.25,
+                        textTransform: 'none',
+                      }}
+                      variant="text"
+                    >
+                      {t('group:action.remove_admin', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </LoadingButton>
+                  )}
                 </>
               )}
             </Box>
@@ -956,7 +965,7 @@ const ListOfMembers = ({
             >
               <ListItemButton
                 onContextMenu={
-                  isOwner
+                  (isOwner || isAdmin)
                     ? (event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -985,11 +994,11 @@ const ListOfMembers = ({
           ) : (
             <ListItemButton
               onClick={
-                isOwner ? (event) => handlePopoverOpen(event, index) : undefined
+                (isOwner || isAdmin) ? (event) => handlePopoverOpen(event, index) : undefined
               }
               sx={{
                 borderRadius: compact ? '6px' : undefined,
-                cursor: isOwner ? 'pointer' : 'default',
+                cursor: (isOwner || isAdmin) ? 'pointer' : 'default',
                 minHeight:
                   compact && reticulumUserCards
                     ? compactRowHeight
