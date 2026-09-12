@@ -128,6 +128,10 @@ func (r *unboundedReader) ReadByte() (byte, error) {
 // its remaining budget, otherwise the buffer grows in capped chunks so that a
 // bogus length allocates only what actually arrives.
 func readBytes(r messageReader, n uint64) ([]byte, error) {
+	// Bound allocations even on non-length-delimited subgroup streams.
+	if n > 1024*1024 {
+		return nil, errors.New("wire field exceeds size limit")
+	}
 	if n == 0 {
 		return nil, nil
 	}

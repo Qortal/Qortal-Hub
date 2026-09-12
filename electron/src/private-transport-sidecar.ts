@@ -5,8 +5,9 @@ import { EventEmitter } from 'events';
 import path from 'path';
 
 export const PRIVATE_TRANSPORT_PROTOCOL_VERSION = 2;
-export const PRIVATE_TRANSPORT_SIDECAR_VERSION = '0.10.1';
+export const PRIVATE_TRANSPORT_SIDECAR_VERSION = '0.11.0';
 export const MAX_MOQ_OBJECT_BYTES = 1024;
+export const MAX_MOQ_RELIABLE_OBJECT_BYTES = 1024 * 1024;
 export type PreparedRelay = {
   handle: string;
   ready: boolean;
@@ -458,13 +459,35 @@ export class PrivateTransportSidecar extends EventEmitter {
     payload: Uint8Array,
     trackName?: string,
     batch?: readonly Uint8Array[],
-    delivery?: { priority: number; maxQueueAgeMillis: number }
+    delivery?: {
+      priority: number;
+      maxQueueAgeMillis: number;
+      groupId?: number;
+      objectId?: number;
+    }
   ): Promise<void> {
-    if (payload.byteLength < 1 || payload.byteLength > MAX_MOQ_OBJECT_BYTES) {
+    const reliable =
+      delivery?.groupId !== undefined || delivery?.objectId !== undefined;
+    const limit = reliable
+      ? MAX_MOQ_RELIABLE_OBJECT_BYTES
+      : MAX_MOQ_OBJECT_BYTES;
+    if (
+      reliable &&
+      (!Number.isSafeInteger(delivery?.groupId) ||
+        delivery!.groupId! < 0 ||
+        !Number.isSafeInteger(delivery?.objectId) ||
+        delivery!.objectId! < 0 ||
+        !trackName ||
+        !MOQ_NAME.test(trackName) ||
+        batch?.length !== 1)
+    ) {
+      throw new PrivateTransportSidecarError('INVALID_MOQ_CONFIG');
+    }
+    if (payload.byteLength < 1 || payload.byteLength > limit) {
       throw new PrivateTransportSidecarError('MOQ_OBJECT_TOO_LARGE');
     }
     let binary = payload;
-    if (batch) {
+    if (batch && !reliable) {
       if (
         !batch.length ||
         batch.length > 8 ||
@@ -486,8 +509,18 @@ export class PrivateTransportSidecar extends EventEmitter {
       {
         moqSessionId,
         ...(trackName ? { trackName } : {}),
-        ...(batch ? { batched: true } : {}),
-        ...(delivery ? { delivery } : {}),
+        ...(batch && !reliable ? { batched: true } : {}),
+        ...(delivery
+          ? {
+              delivery: {
+                priority: delivery.priority,
+                maxQueueAgeMillis: delivery.maxQueueAgeMillis,
+              },
+            }
+          : {}),
+        ...(reliable
+          ? { groupId: delivery!.groupId, objectId: delivery!.objectId }
+          : {}),
       },
       undefined,
       binary

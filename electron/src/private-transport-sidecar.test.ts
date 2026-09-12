@@ -125,7 +125,7 @@ describeIntegration('private transport sidecar integration', () => {
     await sidecar.start();
     expect(await sidecar.health()).toEqual({
       service: 'qortal-private-transport',
-      sidecarVersion: '0.10.1',
+      sidecarVersion: '0.11.0',
       protocolVersion: 2,
       innerAlpn: 'qortal-private/1',
       moqAlpn: 'moqt-18',
@@ -216,7 +216,7 @@ describeIntegration('private transport sidecar integration', () => {
       let count = 0;
       readline.createInterface({ input: process.stdin }).on('line', (line) => {
         const request = JSON.parse(line);
-        if (count++ === 0) process.stdout.write(JSON.stringify({version:2,type:'response',requestId:request.requestId,ok:true,result:{service:'qortal-private-transport',sidecarVersion:'0.10.1',protocolVersion:2,innerAlpn:'qortal-private/1',moqAlpn:'moqt-18'}}) + '\\n');
+        if (count++ === 0) process.stdout.write(JSON.stringify({version:2,type:'response',requestId:request.requestId,ok:true,result:{service:'qortal-private-transport',sidecarVersion:'0.11.0',protocolVersion:2,innerAlpn:'qortal-private/1',moqAlpn:'moqt-18'}}) + '\\n');
         else process.stdout.write('{not-json\\n');
       });
     `;

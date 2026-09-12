@@ -1,5 +1,15 @@
 # Local MoQT dependency
 
+Complete-object delivery adds real subgroup FIN/reset, cancellable group leases,
+monotonic object IDs, per-track/session byte limits and session-wide receive
+budgets. Expiry or stream cancellation does not close the media connection.
+Wire fields are bounded before allocation, including unbound track aliases.
+The unidirectional reader cancels its local watcher before waiting for it, so
+finished subgroup streams do not retain goroutines until session shutdown.
+Run group_delivery_test.go, reader_test.go and the race detector as well as the
+parent integration tests. Group/object payloads remain application-opaque;
+this is a bounded single-object-subgroup API, not a complete MoQ implementation.
+
 Upstream: https://github.com/mengelbart/moqtransport
 Revision: 9eaf40a4dedd549b6838cba1a900f9b382d722e8
 Wire profile: moqt-18, the profile implemented by that revision.

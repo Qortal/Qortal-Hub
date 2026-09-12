@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"github.com/mengelbart/moqtransport/internal/wire"
 	"github.com/mengelbart/moqtransport/varint"
@@ -65,6 +66,9 @@ type Session struct {
 	tracksLock    sync.Mutex
 	tracks        map[uint64]*trackEntry
 	pendingTracks int
+	pendingBytes  int
+	receiveBytes  atomic.Int64
+	reliableBytes atomic.Int64
 }
 
 // NewSession creates a session on conn. It never closes conn: if NewSession
@@ -254,10 +258,9 @@ func (s *Session) handleUniStream(stream ReceiveStream) {
 	s.logger.Debug("accepted new uni stream", "streamID", stream.StreamID())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	var wg sync.WaitGroup
-	defer wg.Wait()
+	defer func() { cancel(); wg.Wait() }()
 	wg.Go(func() {
 		select {
 		case <-ctx.Done():
@@ -301,6 +304,10 @@ func (s *Session) handleUniStream(stream ReceiveStream) {
 	msg, err := parser.Read()
 	if err != nil {
 		s.logger.Error("error while reading message", "streamID", stream.StreamID(), "error", err, "typ", typ)
+		if streamType == wire.StreamTypeData {
+			stream.Stop(uint32(StreamResetErrorCodeInternal))
+			return
+		}
 		s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: fmt.Sprintf("failed to parse message: %v", err), Remote: false})
 		return
 	}
@@ -318,6 +325,7 @@ func (s *Session) handleUniStream(stream ReceiveStream) {
 		}
 		rcs.readMessages()
 	case *wire.SubgroupHeader:
+		defer stream.Stop(uint32(StreamResetErrorCodeInternal))
 		s.readDataStream(m, parser)
 	case *wire.Padding:
 		if _, err := io.Copy(io.Discard, br); err != nil {
@@ -429,9 +437,8 @@ func (s *Session) readDataStream(header *wire.SubgroupHeader, parser messageRead
 	for {
 		m, err := parser.Read()
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				s.handleReaderError(err)
-			}
+			// Expiry/reset of a data subgroup is local to that subgroup, not
+			// a control-plane failure. Keep other tracks and the session alive.
 			return
 		}
 		o, ok := m.(*wire.SubgroupObject)

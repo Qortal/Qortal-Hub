@@ -31,6 +31,12 @@ func TestBoundedReaderBudget(t *testing.T) {
 	assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
 
+func TestOversizedFieldRejectedBeforeReadingOrAllocating(t *testing.T) {
+	value, err := readBytes(nil, 1<<40)
+	require.Error(t, err)
+	require.Nil(t, value)
+}
+
 func TestBoundedReaderReadTruncatesToBudget(t *testing.T) {
 	r := newTestBoundedReader(t, []byte("abcdef"), 2)
 

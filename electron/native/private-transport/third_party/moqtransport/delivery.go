@@ -24,6 +24,8 @@ var ErrDeliveryPolicy = errors.New("INVALID_MOQ_CONFIG")
 var ErrDeliveryExpired = errors.New("MOQ_OBJECT_EXPIRED")
 
 type DeliveryMetrics struct {
+	ReliableLeasedBytes  int64  `json:"reliableLeasedBytes"`
+	ReceiveQueuedBytes   int64  `json:"receiveQueuedBytes"`
 	QueuedBytes          int    `json:"deliveryQueuedBytes"`
 	Sent                 uint64 `json:"deliverySent"`
 	Expired              uint64 `json:"deliveryExpired"`
@@ -310,4 +312,9 @@ func (s *Session) scheduler() *deliveryScheduler {
 	})
 	return s.delivery
 }
-func (s *Session) DeliveryMetrics() DeliveryMetrics { return s.scheduler().snapshot() }
+func (s *Session) DeliveryMetrics() DeliveryMetrics {
+	m := s.scheduler().snapshot()
+	m.ReliableLeasedBytes = s.reliableBytes.Load()
+	m.ReceiveQueuedBytes = s.receiveBytes.Load()
+	return m
+}

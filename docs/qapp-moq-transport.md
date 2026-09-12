@@ -1,5 +1,45 @@
 # Generic multi-track Q-App transport
 
+## Complete reliable objects (sidecar 0.11.0)
+
+`MOQ_OBJECT_PUBLISH` accepts one opaque reliable object using:
+
+```js
+payload: {
+  trackName: 'live',
+  objects: [bytes],
+  delivery: { priority: 1, maxQueueAgeMillis: 1500, groupId: 7, objectId: 1 }
+}
+```
+
+Both IDs must be nonnegative safe integers. The batch contains exactly one object,
+at most 1 MiB. Omitting both IDs selects datagrams, still limited to 1 KiB per
+object and eight objects per batch. Mixed/missing IDs are rejected, not downgraded.
+The authenticated bootstrap must advertise `moqtReliableGroups: true`; otherwise
+session opening fails with `UNSUPPORTED_MOQ_TRANSPORT`.
+
+Each complete object has its own reliable subgroup, with subgroup ID equal to
+object ID. IDs strictly increase within a group. A newer group replaces older
+dependencies on that publication; late objects from old groups are rejected.
+Applications, not Hub, decide what groups mean and authenticate metadata.
+
+Native delivery sends real FIN and resets outstanding retransmissions on expiry
+or group replacement. Write completion acknowledges QUIC admission, not remote
+receipt. Bounds: 64 leases / 2 MiB per publication, 4 MiB leased per session;
+incoming bound-track queues share 2 MiB plus 64 KiB reserved for small objects,
+and unknown aliases share 2 MiB. Wire fields are capped before allocation.
+Cancelled data streams are isolated; they do not close unrelated tracks.
+
+`reliableLeasedBytes` measures unexpired leases, not actual unacknowledged QUIC
+bytes. `receiveQueuedBytes`, inner RTT/minimum RTT and packet sent/lost counters
+support diagnosis. Datagram pacing is not a bandwidth estimate for streams.
+Publisher-priority headers are not a guarantee of QUIC stream priority; bounded
+admission and separate datagram delivery limit interference but cannot reserve
+physical bandwidth. Capture, codecs and payload encryption remain Q-App-owned.
+
+Update the backend bootstrap and media service together with Hub and the QApp.
+The relay needs no change. No fallback to fragmented delivery is provided.
+
 ## Bounded tunnel receive buffering (sidecar 0.10.1)
 
 Hub and the standalone relay use documented local quic-go v0.62.0 / masque-go

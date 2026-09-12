@@ -74,6 +74,9 @@ type Metrics struct {
 	OuterReceiveDroppedBudget   uint64 `json:"outerReceiveDroppedBudget"`
 	OuterReceiveDroppedExpired  uint64 `json:"outerReceiveDroppedExpired"`
 	InnerRTTMillis              int64  `json:"innerRttMillis"`
+	InnerMinRTTMillis           int64  `json:"innerMinRttMillis"`
+	InnerPacketsSent            uint64 `json:"innerPacketsSent"`
+	InnerPacketsLost            uint64 `json:"innerPacketsLost"`
 	ObjectsSent                 uint64 `json:"objectsSent"`
 	ObjectsRead                 uint64 `json:"objectsReceived"`
 	BytesSent                   uint64 `json:"bytesSent"`
@@ -375,6 +378,30 @@ func (s *Session) PublishTrackBatch(track string, objects [][]byte, policy moqtr
 	return nil
 }
 
+func (s *Session) PublishGroupObject(track string, groupID, objectID uint64, payload []byte, policy moqtransport.DeliveryPolicy) error {
+	if s.closed.Load() {
+		return errors.New("MOQ_SESSION_CLOSED")
+	}
+	if groupID > maxSafeJSONInteger || objectID > maxSafeJSONInteger || !policy.Valid() {
+		return errors.New("INVALID_MOQ_CONFIG")
+	}
+	if len(payload) == 0 || len(payload) > moqtransport.MaxReliableObjectBytes {
+		return errors.New("MOQ_OBJECT_TOO_LARGE")
+	}
+	publication := s.publications[track]
+	if publication == nil {
+		return errors.New("INVALID_MOQ_CONFIG")
+	}
+	err := publication.SendGroupObject(moqtransport.Object{GroupID: groupID, ObjectID: objectID, Payload: payload}, policy)
+	if err != nil {
+		s.objectErrors.Add(1)
+		return fmt.Errorf("MOQ_SEND_FAILED: %w", err)
+	}
+	s.objectsSent.Add(1)
+	s.bytesSent.Add(uint64(len(payload)))
+	return nil
+}
+
 func (s *Session) queueTrackObject(track string, payload []byte, policy moqtransport.DeliveryPolicy) (<-chan error, error) {
 	if s.closed.Load() {
 		return nil, errors.New("MOQ_SESSION_CLOSED")
@@ -412,7 +439,11 @@ func (s *Session) readSubscription(subscriptionID string, entry subscription) {
 			}
 			return
 		}
-		if len(object.Payload) == 0 || len(object.Payload) > MaxObjectBytes ||
+		limit := MaxObjectBytes
+		if object.ForwardingPreference == moqtransport.ObjectForwardingPreferenceSubgroup {
+			limit = moqtransport.MaxReliableObjectBytes
+		}
+		if len(object.Payload) == 0 || len(object.Payload) > limit ||
 			object.GroupID > maxSafeJSONInteger || object.ObjectID > maxSafeJSONInteger {
 			s.objectErrors.Add(1)
 			continue
@@ -431,9 +462,12 @@ func (s *Session) readSubscription(subscriptionID string, entry subscription) {
 func (s *Session) Metrics() Metrics {
 	stats := s.conn.ConnectionStats()
 	m := Metrics{
-		DeliveryMetrics: s.moq.DeliveryMetrics(),
-		InnerRTTMillis:  stats.SmoothedRTT.Milliseconds(),
-		ObjectsSent:     s.objectsSent.Load(), ObjectsRead: s.objectsRead.Load(),
+		DeliveryMetrics:   s.moq.DeliveryMetrics(),
+		InnerRTTMillis:    stats.SmoothedRTT.Milliseconds(),
+		InnerMinRTTMillis: stats.MinRTT.Milliseconds(),
+		InnerPacketsSent:  stats.PacketsSent,
+		InnerPacketsLost:  stats.PacketsLost,
+		ObjectsSent:       s.objectsSent.Load(), ObjectsRead: s.objectsRead.Load(),
 		BytesSent: s.bytesSent.Load(), BytesRead: s.bytesRead.Load(),
 		ObjectErrors: s.objectErrors.Load(),
 	}

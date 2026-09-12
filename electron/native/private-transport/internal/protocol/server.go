@@ -23,7 +23,7 @@ import (
 
 const (
 	Version                 = 2
-	SidecarVersion          = "0.10.1"
+	SidecarVersion          = "0.11.0"
 	MaxControlMessageBytes  = 64 * 1024
 	MaxBinaryMessageBytes   = innerquic.MaxReliablePayloadBytes
 	maxRememberedRequestIDs = 4096
@@ -43,6 +43,8 @@ type moqPublishParams struct {
 	TrackName    string                       `json:"trackName"`
 	Batched      bool                         `json:"batched"`
 	Delivery     *moqtransport.DeliveryPolicy `json:"delivery"`
+	GroupID      *uint64                      `json:"groupId"`
+	ObjectID     *uint64                      `json:"objectId"`
 }
 
 type Request struct {
@@ -445,7 +447,16 @@ func (s *Server) publishMoqObject(req Request, binary []byte) Response {
 	if policy.MaxQueueAgeMillis < 10 {
 		return failure(req.RequestID, "MOQ_OBJECT_EXPIRED", "publication deadline exceeded")
 	}
-	if err := session.PublishTrackBatch(p.TrackName, objects, policy); err != nil {
+	var err error
+	if p.GroupID != nil || p.ObjectID != nil {
+		if p.GroupID == nil || p.ObjectID == nil || p.Batched {
+			return failure(req.RequestID, "INVALID_MOQ_CONFIG", "invalid reliable object")
+		}
+		err = session.PublishGroupObject(p.TrackName, *p.GroupID, *p.ObjectID, binary, policy)
+	} else {
+		err = session.PublishTrackBatch(p.TrackName, objects, policy)
+	}
+	if err != nil {
 		return failure(req.RequestID, moqErrorCode(err), "MOQT object publish failed")
 	}
 	return success(req.RequestID, map[string]interface{}{

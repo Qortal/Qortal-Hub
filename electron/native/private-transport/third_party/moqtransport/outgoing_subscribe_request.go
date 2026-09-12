@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/mengelbart/moqtransport/internal/wire"
 )
@@ -19,6 +20,8 @@ type OutgoingSubscribeRequest struct {
 	streamWriter messageWriter
 	streamReader messageReader
 	buffer       chan *Object
+	bufferMu     sync.Mutex
+	bufferBytes  int
 }
 
 func newOutgoingSubscribeRequest(
@@ -89,9 +92,31 @@ func (r *OutgoingSubscribeRequest) readMessages() {
 }
 
 func (t *OutgoingSubscribeRequest) push(o *Object) {
+	t.bufferMu.Lock()
+	defer t.bufferMu.Unlock()
+	if t.bufferBytes+len(o.Payload) > maxGroupBytes {
+		return
+	}
+	// Session-wide byte accounting prevents many subscribed tracks from
+	// multiplying the large-object budget. Reserve room for small objects.
+	limit := int64(maxGroupBytes)
+	if len(o.Payload) <= 1024 {
+		limit += 64 * 1024
+	}
+	for {
+		queued := t.session.receiveBytes.Load()
+		if queued+int64(len(o.Payload)) > limit {
+			return
+		}
+		if t.session.receiveBytes.CompareAndSwap(queued, queued+int64(len(o.Payload))) {
+			break
+		}
+	}
 	select {
 	case t.buffer <- o:
+		t.bufferBytes += len(o.Payload)
 	default:
+		t.session.receiveBytes.Add(-int64(len(o.Payload)))
 		t.logger.Info("buffer overflow: dropping incoming object")
 	}
 }
@@ -99,7 +124,17 @@ func (t *OutgoingSubscribeRequest) push(o *Object) {
 func (r *OutgoingSubscribeRequest) Close() error {
 	// TODO: Send a message to the peer to stop the subscription.
 	r.session.removeReceiver(r)
-	return nil
+	r.bufferMu.Lock()
+	defer r.bufferMu.Unlock()
+	for {
+		select {
+		case obj := <-r.buffer:
+			r.bufferBytes -= len(obj.Payload)
+			r.session.receiveBytes.Add(-int64(len(obj.Payload)))
+		default:
+			return nil
+		}
+	}
 }
 
 func (r *OutgoingSubscribeRequest) ReadObject(ctx context.Context) (*Object, error) {
@@ -109,6 +144,10 @@ func (r *OutgoingSubscribeRequest) ReadObject(ctx context.Context) (*Object, err
 	case <-ctx.Done():
 		return nil, context.Cause(ctx)
 	case obj := <-r.buffer:
+		r.bufferMu.Lock()
+		r.bufferBytes -= len(obj.Payload)
+		r.session.receiveBytes.Add(-int64(len(obj.Payload)))
+		r.bufferMu.Unlock()
 		return obj, nil
 	}
 }

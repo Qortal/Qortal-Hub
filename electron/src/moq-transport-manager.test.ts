@@ -42,6 +42,61 @@ async function open(manager: QAppMoqTransportManager) {
 }
 
 describe('Q-App generic MOQT manager', () => {
+  it('admits bounded reliable objects without relaxing datagram limits', async () => {
+    const { manager, transports } = setup();
+    const opened = await manager.open(
+      owner,
+      'rns-1',
+      ['opaque'],
+      ['objects', 'urgent']
+    );
+    const objects = [new Uint8Array(128 * 1024)];
+    const delivery = {
+      priority: 1,
+      maxQueueAgeMillis: 1500,
+      groupId: 7,
+      objectId: 1,
+    };
+    await expect(
+      manager.publish(owner, opened.sessionId, {
+        trackName: 'objects',
+        objects,
+        delivery,
+      })
+    ).resolves.toMatchObject({ accepted: true });
+    expect(transports[0].publish).toHaveBeenCalledWith(
+      objects[0],
+      'objects',
+      objects,
+      delivery
+    );
+    await expect(
+      manager.publish(owner, opened.sessionId, {
+        trackName: 'objects',
+        objects,
+      })
+    ).rejects.toMatchObject({ code: 'MOQ_OBJECT_TOO_LARGE' });
+    for (const bad of [
+      { ...delivery, groupId: -1 },
+      { ...delivery, objectId: undefined },
+      { ...delivery, groupId: Infinity },
+    ]) {
+      await expect(
+        manager.publish(owner, opened.sessionId, {
+          trackName: 'objects',
+          objects,
+          delivery: bad,
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_MOQ_CONFIG' });
+    }
+    await expect(
+      manager.publish(owner, opened.sessionId, {
+        trackName: 'objects',
+        objects: [new Uint8Array(1024 * 1024 + 1)],
+        delivery,
+      })
+    ).rejects.toMatchObject({ code: 'MOQ_OBJECT_TOO_LARGE' });
+  });
   it('validates opaque delivery policy before admission and forwards it unchanged', async () => {
     const { manager, transports } = setup();
     const opened = await manager.open(owner, 'rns-1', ['opaque'], ['live']);

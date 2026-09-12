@@ -2,6 +2,7 @@ import type { PrivateChannelBootstrapProvider } from './private-channel-bootstra
 import type { PrivateTransportContext } from './private-channel-manager';
 import {
   MAX_MOQ_OBJECT_BYTES,
+  MAX_MOQ_RELIABLE_OBJECT_BYTES,
   PrivateTransportSidecar,
   PrivateTransportSidecarError,
   type PrivateTransportSidecarEvent,
@@ -132,7 +133,8 @@ export class MoqMasqueTransport {
       bootstrap = await this.bootstrapProvider.getBootstrap(bootstrapContext);
     if (
       bootstrap.applicationProtocol !== 'moqt-18' ||
-      bootstrap.supportedFeatures.moqt !== true
+      bootstrap.supportedFeatures.moqt !== true ||
+      bootstrap.supportedFeatures.moqtReliableGroups !== true
     ) {
       throw new PrivateTransportSidecarError('UNSUPPORTED_MOQ_TRANSPORT');
     }
@@ -234,9 +236,18 @@ export class MoqMasqueTransport {
     payload: Uint8Array,
     trackName?: string,
     batch?: readonly Uint8Array[],
-    delivery?: { priority: number; maxQueueAgeMillis: number }
+    delivery?: {
+      priority: number;
+      maxQueueAgeMillis: number;
+      groupId?: number;
+      objectId?: number;
+    }
   ): Promise<void> {
-    if (payload.byteLength < 1 || payload.byteLength > MAX_MOQ_OBJECT_BYTES) {
+    const limit =
+      delivery?.groupId !== undefined
+        ? MAX_MOQ_RELIABLE_OBJECT_BYTES
+        : MAX_MOQ_OBJECT_BYTES;
+    if (payload.byteLength < 1 || payload.byteLength > limit) {
       throw new PrivateTransportSidecarError('MOQ_OBJECT_TOO_LARGE');
     }
     try {
@@ -332,7 +343,7 @@ export class MoqMasqueTransport {
       !Number.isSafeInteger(event.groupId) ||
       !Number.isSafeInteger(event.objectId) ||
       event.data.length < 1 ||
-      event.data.length > MAX_MOQ_OBJECT_BYTES
+      event.data.length > MAX_MOQ_RELIABLE_OBJECT_BYTES
     ) {
       this.emit({ kind: 'error', code: 'MOQ_PROTOCOL_MISMATCH' });
       return;

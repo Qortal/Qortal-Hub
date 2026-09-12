@@ -26,7 +26,12 @@ const descriptor: PrivateBootstrapDescriptor = {
   nonce: 'n'.repeat(32),
   ownerBindingHash: 'ef'.repeat(32),
   applicationProtocol: 'moqt-18',
-  supportedFeatures: { reliable: true, datagrams: true, moqt: true },
+  supportedFeatures: {
+    reliable: true,
+    datagrams: true,
+    moqt: true,
+    moqtReliableGroups: true,
+  },
 };
 
 class FakeSidecar extends EventEmitter {
@@ -217,6 +222,25 @@ describe('generic trusted MOQT transport', () => {
     ]);
     await transport.close();
     expect(sidecar.closeMoqSession).toHaveBeenCalledWith('moq-session');
+  });
+
+  it('does not reconnect the media connection when one reliable object expires', async () => {
+    const { sidecar, transport } = setup();
+    await transport.open(context);
+    sidecar.publishMoqObject.mockRejectedValueOnce(
+      new PrivateTransportSidecarError('MOQ_OBJECT_EXPIRED')
+    );
+    const payload = new Uint8Array(2000);
+    await expect(
+      transport.publish(payload, 'events', [payload], {
+        priority: 1,
+        maxQueueAgeMillis: 1500,
+        groupId: 1,
+        objectId: 1,
+      })
+    ).rejects.toMatchObject({ code: 'MOQ_OBJECT_EXPIRED' });
+    expect(sidecar.openMoqSession).toHaveBeenCalledTimes(1);
+    await transport.close();
   });
 
   it('does not retry an attach failure as a direct connection', async () => {

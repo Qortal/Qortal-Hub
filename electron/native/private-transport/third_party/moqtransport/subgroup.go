@@ -2,12 +2,17 @@ package moqtransport
 
 import (
 	"fmt"
+	"io"
+	"sync"
 
 	"github.com/mengelbart/moqtransport/internal/wire"
 )
 
 type Subgroup struct {
-	stream messageWriter
+	stream    messageWriter
+	sender    SendStream
+	closeOnce sync.Once
+	closeErr  error
 
 	firstObject  bool
 	lastObjectID uint64
@@ -47,6 +52,20 @@ func (s *Subgroup) WriteObject(objectID uint64, payload []byte) (int, error) {
 
 // Close closes the subgroup.
 func (s *Subgroup) Close() error {
-	// TODO
-	return nil
+	s.closeOnce.Do(func() {
+		if s.sender != nil {
+			s.closeErr = s.sender.Close()
+		}
+	})
+	return s.closeErr
 }
+
+// Reset abandons outstanding retransmissions, including after Close sent FIN.
+// It may be called concurrently with a blocked WriteObject.
+func (s *Subgroup) Reset(code uint32) {
+	if s.sender != nil {
+		s.sender.Reset(code)
+	}
+}
+
+var _ io.Closer = (*Subgroup)(nil)

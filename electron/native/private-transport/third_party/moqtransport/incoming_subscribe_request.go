@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync"
 
 	"github.com/mengelbart/moqtransport/internal/wire"
 )
@@ -18,7 +19,14 @@ type IncomingSubscribeRequest struct {
 	namespace [][]byte
 	name      []byte
 
-	trackAlias uint64
+	trackAlias         uint64
+	groupMu            sync.Mutex
+	groupID            uint64
+	groupStarted       bool
+	groupObjectStarted bool
+	groupObjectID      uint64
+	groupLeases        map[*objectLease]struct{}
+	groupBytes         int
 }
 
 func newIncomingSubscribeRequest(msg *wire.Subscribe, session *Session, streamWriter messageWriter, streamReader messageReader) *IncomingSubscribeRequest {
@@ -146,7 +154,13 @@ func (r *IncomingSubscribeRequest) OpenSubgroup(groupID, subgroupID uint64, prio
 		return nil, err
 	}
 	appender := wire.NewAppender(stream, r.session.version)
-	return newSubgroup(appender, r.trackAlias, groupID, subgroupID, priority)
+	subgroup, err := newSubgroup(appender, r.trackAlias, groupID, subgroupID, priority)
+	if err != nil {
+		stream.Reset(uint32(StreamResetErrorCodeInternal))
+		return nil, err
+	}
+	subgroup.sender = stream
+	return subgroup, nil
 }
 
 func (r *IncomingSubscribeRequest) Close() error {

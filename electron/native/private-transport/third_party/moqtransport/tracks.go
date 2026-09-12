@@ -49,12 +49,16 @@ func (s *Session) pushObject(trackAlias uint64, o *Object) {
 		s.logger.Info("pending object buffer overflow: dropping incoming object", "trackAlias", trackAlias)
 		return
 	}
+	if s.pendingBytes+len(o.Payload) > maxGroupBytes {
+		return
+	}
 	if !ok {
 		entry = &trackEntry{}
 		s.tracks[trackAlias] = entry
 		s.pendingTracks++
 	}
 	entry.pending = append(entry.pending, o)
+	s.pendingBytes += len(o.Payload)
 }
 
 // bindTrackAlias attaches r to trackAlias and hands it the objects that
@@ -74,6 +78,7 @@ func (s *Session) bindTrackAlias(trackAlias uint64, r objectReceiver) error {
 	entry.receiver = r
 	s.pendingTracks--
 	for _, o := range entry.pending {
+		s.pendingBytes -= len(o.Payload)
 		r.push(o)
 	}
 	entry.pending = nil

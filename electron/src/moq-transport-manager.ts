@@ -15,7 +15,8 @@ export const QAPP_MOQ_LIMITS = Object.freeze({
   maxBatchObjects: 8,
   maxQueuedBytesPerTrack: 16 * 1024,
   maxObjectBytes: 1024,
-  maxQueuedBytesPerSession: 64 * 1024,
+  maxReliableObjectBytes: 1024 * 1024,
+  maxQueuedBytesPerSession: 2 * 1024 * 1024 + 64 * 1024,
 });
 
 const MOQ_NAME = /^[A-Za-z0-9._-]{1,128}$/;
@@ -32,6 +33,8 @@ export class QAppMoqError extends Error {
 export type MoqDeliveryPolicy = Readonly<{
   priority: number;
   maxQueueAgeMillis: number;
+  groupId?: number;
+  objectId?: number;
 }>;
 
 export interface ManagedMoqTransport {
@@ -234,10 +237,27 @@ export class QAppMoqTransportManager extends EventEmitter {
         batchRequest.objects.length > QAPP_MOQ_LIMITS.maxBatchObjects)
     )
       throw new QAppMoqError('MOQ_OBJECT_TOO_LARGE');
-    const objects = batchRequest
-      ? (batchRequest.objects as unknown[]).map(requirePayload)
-      : [requirePayload(payloadValue)];
     const delivery = batchRequest?.delivery as MoqDeliveryPolicy | undefined;
+    const reliable =
+      delivery?.groupId !== undefined || delivery?.objectId !== undefined;
+    if (
+      reliable &&
+      (!Number.isSafeInteger(delivery?.groupId) ||
+        delivery!.groupId! < 0 ||
+        !Number.isSafeInteger(delivery?.objectId) ||
+        delivery!.objectId! < 0 ||
+        !Array.isArray(batchRequest?.objects) ||
+        batchRequest.objects.length !== 1)
+    )
+      throw new QAppMoqError('INVALID_MOQ_CONFIG');
+    const limit = reliable
+      ? QAPP_MOQ_LIMITS.maxReliableObjectBytes
+      : QAPP_MOQ_LIMITS.maxObjectBytes;
+    const objects = batchRequest
+      ? (batchRequest.objects as unknown[]).map((value) =>
+          requirePayload(value, limit)
+        )
+      : [requirePayload(payloadValue)];
     if (
       delivery !== undefined &&
       (!delivery ||
@@ -254,7 +274,9 @@ export class QAppMoqTransportManager extends EventEmitter {
     if (
       session.queuedBytes + bytes > QAPP_MOQ_LIMITS.maxQueuedBytesPerSession ||
       (session.queuedByTrack.get(track) ?? 0) + bytes >
-        QAPP_MOQ_LIMITS.maxQueuedBytesPerTrack
+        (reliable
+          ? QAPP_MOQ_LIMITS.maxReliableObjectBytes
+          : QAPP_MOQ_LIMITS.maxQueuedBytesPerTrack)
     ) {
       throw new QAppMoqError('MOQ_QUEUE_LIMIT');
     }
@@ -476,19 +498,18 @@ function requireNamespace(value: unknown, code: string): string[] {
   return [...value];
 }
 
-function requirePayload(value: unknown): Uint8Array {
-  let payload: Uint8Array;
-  if (value instanceof Uint8Array) payload = Uint8Array.from(value);
-  else if (value instanceof ArrayBuffer)
-    payload = new Uint8Array(value.slice(0));
-  else throw new QAppMoqError('INVALID_MOQ_OBJECT');
-  if (
-    payload.byteLength < 1 ||
-    payload.byteLength > QAPP_MOQ_LIMITS.maxObjectBytes
-  ) {
+function requirePayload(
+  value: unknown,
+  limit: number = QAPP_MOQ_LIMITS.maxObjectBytes
+): Uint8Array {
+  if (!(value instanceof Uint8Array) && !(value instanceof ArrayBuffer))
+    throw new QAppMoqError('INVALID_MOQ_OBJECT');
+  if (value.byteLength < 1 || value.byteLength > limit) {
     throw new QAppMoqError('MOQ_OBJECT_TOO_LARGE');
   }
-  return payload;
+  return value instanceof Uint8Array
+    ? Uint8Array.from(value)
+    : new Uint8Array(value.slice(0));
 }
 
 function normalizeError(error: unknown, fallback: string): QAppMoqError {

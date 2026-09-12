@@ -26,7 +26,12 @@ export type PrivateBootstrapDescriptor = Readonly<{
   nonce: string;
   ownerBindingHash: string;
   applicationProtocol?: string;
-  supportedFeatures: { reliable: true; datagrams: true; moqt?: boolean };
+  supportedFeatures: {
+    reliable: true;
+    datagrams: true;
+    moqt?: boolean;
+    moqtReliableGroups?: boolean;
+  };
 }>;
 
 export interface PrivateChannelBootstrapProvider {
