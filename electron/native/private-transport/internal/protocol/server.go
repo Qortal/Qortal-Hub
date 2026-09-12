@@ -23,7 +23,7 @@ import (
 
 const (
 	Version                 = 2
-	SidecarVersion          = "0.9.1"
+	SidecarVersion          = "0.10.1"
 	MaxControlMessageBytes  = 64 * 1024
 	MaxBinaryMessageBytes   = innerquic.MaxReliablePayloadBytes
 	maxRememberedRequestIDs = 4096
@@ -105,7 +105,7 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	defer func() { cancel(); preparations.Wait(); masqueclient.CloseAllRelays() }()
 	reader := bufio.NewReaderSize(input, 4096)
 	s.emit = func(event Event, binary []byte) { s.write(output, event, binary) }
-	var reliableSends reliableDispatcher
+	reliableSends := reliableDispatcher{maxQueueAge: 6 * time.Second}
 	var moqSends reliableDispatcher
 	defer moqSends.workers.Wait()
 	defer reliableSends.workers.Wait()
@@ -163,7 +163,7 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			if !reliableSends.submit(p.SessionID+"\x00"+p.StreamKey, len(binary), func(ready bool) {
 				if !ready {
-					s.write(output, failure(req.RequestID, "RELIABLE_STREAM_FAILED", "stream queue timed out"), nil)
+					s.write(output, failure(req.RequestID, "RELIABLE_SEND_NOT_STARTED", "send expired before writing"), nil)
 					return
 				}
 				response, _ := s.handleRequest(ctx, req, binary)
@@ -584,10 +584,20 @@ func (s *Server) sendPrivate(req Request, binary []byte, reliable bool) Response
 	}
 	var err error
 	if reliable {
+		// Queueing and writing share one budget, below the seven-second IPC
+		// timeout. Never restart a full write timeout after a long queue wait.
+		budget := 5 * time.Second
+		if !req.receivedAt.IsZero() {
+			remaining := time.Until(req.receivedAt.Add(6 * time.Second))
+			if remaining <= 0 {
+				return failure(req.RequestID, "RELIABLE_SEND_NOT_STARTED", "send expired before writing")
+			}
+			budget = min(budget, remaining)
+		}
 		if p.StreamKey != "" {
-			err = session.SendReliableStream(p.StreamKey, p.MessageID, binary, p.EndStream)
+			err = session.SendReliableStreamWithTimeout(p.StreamKey, p.MessageID, binary, p.EndStream, budget)
 		} else {
-			err = session.SendReliable(p.MessageID, binary)
+			err = session.SendReliableWithTimeout(p.MessageID, binary, budget)
 		}
 	} else {
 		err = session.SendDatagram(p.MessageID, binary)

@@ -33,7 +33,7 @@ export type TrustedRelayProvider = (
 const RECOVERY_DELAYS_MS = [0, 500, 2_000] as const;
 const FAILED_RELAY_COOLDOWN_MS = 60_000;
 
-const MAX_RELIABLE_BINARY_BYTES = 64 * 1024;
+const MAX_RELIABLE_BINARY_BYTES = 1024 * 1024;
 const MAX_DATAGRAM_BINARY_BYTES = 1024;
 
 export class QuicMasqueTransport implements PrivateTransport {
@@ -385,6 +385,7 @@ function translateSidecarError(error: unknown): PrivateChannelError {
   const allowed = new Set([
     'STREAM_LIMIT_REACHED',
     'RELIABLE_STREAM_FAILED',
+    'RELIABLE_SEND_NOT_STARTED',
     'RELIABLE_STREAMS_UNSUPPORTED',
     'TRANSPORT_ALREADY_ATTACHED',
     'RELAY_NO_ELIGIBLE_RELAY',

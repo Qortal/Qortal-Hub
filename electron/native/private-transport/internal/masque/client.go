@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	masque "github.com/quic-go/masque-go"
@@ -46,13 +47,58 @@ type Config struct {
 }
 
 type Tunnel struct {
-	conn      net.PacketConn
-	onClose   func()
-	closeOnce sync.Once
+	conn        net.PacketConn
+	outer       *quic.Conn
+	writes      atomic.Uint64
+	writeNanos  atomic.Uint64
+	writeErrors atomic.Uint64
+	onClose     func()
+	closeOnce   sync.Once
 }
 
 // PacketConn is the only packet path exposed to the inner QUIC transport.
-func (t *Tunnel) PacketConn() net.PacketConn { return t.conn }
+func (t *Tunnel) PacketConn() net.PacketConn {
+	return &measuredPacketConn{PacketConn: t.conn, tunnel: t}
+}
+
+type measuredPacketConn struct {
+	net.PacketConn
+	tunnel *Tunnel
+}
+
+func (c *measuredPacketConn) WriteTo(data []byte, addr net.Addr) (int, error) {
+	start := time.Now()
+	n, err := c.PacketConn.WriteTo(data, addr)
+	c.tunnel.writes.Add(1)
+	c.tunnel.writeNanos.Add(uint64(time.Since(start)))
+	if err != nil {
+		c.tunnel.writeErrors.Add(1)
+	}
+	return n, err
+}
+
+// Outer counters cover the pooled relay connection, potentially shared by
+// multiple tunnels. Write timing covers only this tunnel's packet submission.
+func (t *Tunnel) TransportMetrics() (quic.ConnectionStats, uint64, uint64, uint64) {
+	var stats quic.ConnectionStats
+	if t.outer != nil {
+		stats = t.outer.ConnectionStats()
+	}
+	return stats, t.writes.Load(), t.writeNanos.Load() / uint64(time.Microsecond), t.writeErrors.Load()
+}
+
+func (t *Tunnel) ReceiveBufferMetrics() (quic.DatagramReceiveBufferStats, quic.DatagramReceiveBufferStats) {
+	var httpStats, quicStats quic.DatagramReceiveBufferStats
+	if c, ok := t.conn.(interface {
+		DatagramReceiveBufferStats() quic.DatagramReceiveBufferStats
+	}); ok {
+		httpStats = c.DatagramReceiveBufferStats()
+	}
+	if t.outer != nil {
+		quicStats = t.outer.DatagramReceiveBufferStats()
+	}
+	return httpStats, quicStats
+}
 
 // RemoteAddr is the logical backend endpoint represented by CONNECT-UDP.
 func (t *Tunnel) RemoteAddr() net.Addr {
@@ -123,6 +169,7 @@ func Open(ctx context.Context, cfg Config) (*Tunnel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create CONNECT-UDP request: %w", err)
 	}
+	var outer *quic.Conn
 	transport := masque.Transport{
 		TLSClientConfig: tlsConfig,
 		QUICConfig:      tunnelQUICConfig(),
@@ -132,7 +179,9 @@ func Open(ctx context.Context, cfg Config) (*Tunnel, error) {
 			if addr != relayAddress {
 				return nil, fmt.Errorf("unexpected relay address %q", addr)
 			}
-			return quic.DialAddr(dialCtx, relayAddress, tlsConf, quicConf)
+			var err error
+			outer, err = quic.DialAddr(dialCtx, relayAddress, tlsConf, quicConf)
+			return outer, err
 		},
 	}
 	conn, response, err := transport.Dial(req)
@@ -142,7 +191,9 @@ func Open(ctx context.Context, cfg Config) (*Tunnel, error) {
 		}
 		return nil, fmt.Errorf("open CONNECT-UDP tunnel: %w", err)
 	}
-	return &Tunnel{conn: conn}, nil
+	conn.EnableDatagramReceiveBuffer()
+	outer.EnableDatagramReceiveBuffer()
+	return &Tunnel{conn: conn, outer: outer}, nil
 }
 
 func parseLiteralAddrPort(name, value string) (netip.AddrPort, error) {

@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 
 export const PRIVATE_TRANSPORT_PROTOCOL_VERSION = 2;
-export const PRIVATE_TRANSPORT_SIDECAR_VERSION = '0.9.1';
+export const PRIVATE_TRANSPORT_SIDECAR_VERSION = '0.10.1';
 export const MAX_MOQ_OBJECT_BYTES = 1024;
 export type PreparedRelay = {
   handle: string;
@@ -670,7 +670,7 @@ export class PrivateTransportSidecar extends EventEmitter {
           (response.binaryLength !== undefined &&
             (!Number.isInteger(response.binaryLength) ||
               (response.binaryLength as number) < 0 ||
-              (response.binaryLength as number) > 64 * 1024))
+              (response.binaryLength as number) > 1024 * 1024))
         ) {
           this.failMalformed(child);
           return;

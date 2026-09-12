@@ -6,6 +6,7 @@ import {
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import dgram from 'node:dgram';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   PrivateChannelManager,
@@ -30,6 +31,7 @@ type Startup = PrivateSessionConfig & {
   transport: 'quic-masque-inner-v1';
 };
 type Stats = {
+  receiveBuffers: Record<string, number>;
   backendSource: string;
   relayEgress: string;
   reliableCount: number;
@@ -50,12 +52,14 @@ class Fixture {
   private buffer = '';
   private lines: string[] = [];
   private waiters: Array<(line: string) => void> = [];
-  constructor(wrongAlpn = false) {
+  constructor(wrongAlpn = false, bulk = false, ackOnly = false) {
     this.child = spawn(fixtureBinary, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
         QORTAL_STEP3_TEST_WRONG_ALPN: wrongAlpn ? '1' : '0',
+        QORTAL_STEP3_TEST_BULK: bulk ? '1' : '0',
+        QORTAL_STEP3_TEST_ACK_ONLY: ackOnly ? '1' : '0',
       },
     });
     this.child.stdout.setEncoding('utf8');
@@ -92,6 +96,121 @@ class Fixture {
 }
 
 integration('Step 3 inner QUIC through MASQUE', () => {
+  it.runIf(process.env.QORTAL_BULK_BENCH === '1').each([0, 60])(
+    'diagnoses binary upload over MASQUE with %i ms one-way simulated delay',
+    async (delay) => {
+      const fixture = new Fixture(false, true, true);
+      const config = await fixture.next<Startup>();
+      const targetPort = Number(config.relayAddress.split(':').at(-1));
+      const proxy = dgram.createSocket('udp4');
+      await new Promise<void>((r) => proxy.bind(0, '127.0.0.1', r));
+      proxy.setRecvBufferSize(8 * 1024 * 1024);
+      let clientPort = 0,
+        dropped = 0,
+        next = 0,
+        acknowledgements = 0;
+      const timers = new Set<ReturnType<typeof setTimeout>>();
+      proxy.on('message', (data, peer) => {
+        const fromRelay = peer.port === targetPort;
+        if (!fromRelay) clientPort = peer.port;
+        const port = fromRelay ? clientPort : targetPort;
+        if (!port || timers.size >= 8192) {
+          dropped++;
+          return;
+        }
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          proxy.send(data, port, '127.0.0.1');
+        }, delay);
+        timers.add(timer);
+      });
+      const sidecar = new PrivateTransportSidecar({ command: sidecarBinary });
+      let realtimeTimer: ReturnType<typeof setInterval> | undefined;
+      try {
+        await sidecar.start();
+        const opened = await sidecar.openPrivateSession({
+          ...sessionConfig(config),
+          relayAddress: `127.0.0.1:${(proxy.address() as import('node:net').AddressInfo).port}`,
+        });
+        const count = process.env.QORTAL_BULK_BENCH_LARGE === '1' ? 256 : 64,
+          payload = Buffer.alloc(524886, 42);
+        let resolveAll!: () => void;
+        const all = new Promise<void>((r) => {
+          resolveAll = r;
+        });
+        const realtimePending = new Map<string, number>();
+        const realtimeRtts: number[] = [];
+        let realtimeSent = 0;
+        sidecar.on('event', (e: PrivateTransportSidecarEvent) => {
+          const sent = realtimePending.get(e.messageId);
+          if (sent !== undefined) {
+            realtimeRtts.push(performance.now() - sent);
+            realtimePending.delete(e.messageId);
+          }
+          if (
+            e.sessionId === opened.sessionId &&
+            e.event === 'reliableMessage' &&
+            ++acknowledgements === count
+          )
+            resolveAll();
+        });
+        const start = performance.now();
+        realtimeTimer = setInterval(() => {
+          for (const [id, at] of realtimePending)
+            if (performance.now() - at > 2000) realtimePending.delete(id);
+          if (realtimePending.size >= 64) return;
+          const id = `live-${realtimeSent++}`;
+          realtimePending.set(id, performance.now());
+          void sidecar
+            .sendPrivateDatagram(opened.sessionId, id, Buffer.alloc(160))
+            .catch(() => realtimePending.delete(id));
+        }, 20);
+        await Promise.all(
+          Array.from({ length: 2 }, async () => {
+            while (next < count) {
+              const i = next++;
+              await sidecar.sendPrivateReliable(
+                opened.sessionId,
+                `bench-${i}`,
+                payload,
+                'bulk'
+              );
+            }
+          })
+        );
+        await all;
+        clearInterval(realtimeTimer);
+        const seconds = (performance.now() - start) / 1000;
+        await new Promise((r) => setTimeout(r, 400));
+        realtimeRtts.sort((a, b) => a - b);
+        const p95 = realtimeRtts[Math.floor(realtimeRtts.length * 0.95)];
+        console.info('[BulkPathBenchmark]', {
+          delay,
+          bytes: count * payload.length,
+          seconds,
+          proxyDrops: dropped,
+          receiveBuffers: (await fixture.command<Stats>('stats'))
+            .receiveBuffers,
+          realtimeSent,
+          realtimeReceived: realtimeRtts.length,
+          realtimeP95Millis: p95,
+          metrics: await sidecar.sessionMetrics(opened.sessionId),
+        });
+        expect(dropped).toBe(0);
+        expect(acknowledgements).toBe(count);
+        expect(realtimeRtts.length).toBeGreaterThan(0);
+        expect(realtimeRtts.length / realtimeSent).toBeGreaterThanOrEqual(0.95);
+        expect(p95).toBeLessThan(500);
+      } finally {
+        clearInterval(realtimeTimer);
+        await sidecar.shutdown();
+        timers.forEach(clearTimeout);
+        proxy.close();
+        await fixture.close();
+      }
+    },
+    120000
+  );
   beforeAll(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-step3-test-'));
     sidecarBinary = path.join(tempDir, 'sidecar');
@@ -185,6 +304,51 @@ integration('Step 3 inner QUIC through MASQUE', () => {
     await sidecar.closePrivateSession(opened.sessionId);
     await sidecar.shutdown();
     await fixture.close();
+  }, 20_000);
+
+  it('carries a large opaque binary message through IPC and MASQUE on a keyed stream', async () => {
+    const fixture = new Fixture(false, true);
+    const config = await fixture.next<Startup>();
+    const sidecar = new PrivateTransportSidecar({ command: sidecarBinary });
+    try {
+      await sidecar.start();
+      const opened = await sidecar.openPrivateSession(sessionConfig(config));
+      const payload = Buffer.alloc(525000);
+      for (let i = 0; i < payload.length; i++) payload[i] = i % 251;
+      const received = new Promise<PrivateTransportSidecarEvent>((resolve) => {
+        sidecar.on('event', (event: PrivateTransportSidecarEvent) => {
+          if (
+            event.sessionId === opened.sessionId &&
+            event.messageId === 'bulk'
+          )
+            resolve(event);
+        });
+      });
+      await sidecar.sendPrivateReliable(
+        opened.sessionId,
+        'bulk',
+        payload,
+        'opaque-bulk',
+        true
+      );
+      expect((await received).data.equals(payload)).toBe(true);
+      const stats = await fixture.command<Stats>('stats');
+      expect(stats.backendSource).toBe(stats.relayEgress);
+      expect(stats.reliableCount).toBe(1);
+      const metrics = await sidecar.sessionMetrics(opened.sessionId);
+      expect(metrics.innerPacketsSent).toBeGreaterThan(0);
+      expect(metrics.outerPacketsSent).toBeGreaterThan(0);
+      expect(metrics.innerWireBytesSent).toBeGreaterThan(payload.length);
+      expect(metrics.outerWireBytesSent).toBeGreaterThan(payload.length);
+      expect(metrics.tunnelWrites).toBeGreaterThan(0);
+      expect(metrics.tunnelWriteMicros).toBeGreaterThan(0);
+      expect(metrics.tunnelWriteErrors).toBe(0);
+      expect(metrics.innerPacketsLost).toBeGreaterThanOrEqual(0);
+      expect(metrics.outerPacketsLost).toBeGreaterThanOrEqual(0);
+    } finally {
+      await sidecar.shutdown();
+      await fixture.close();
+    }
   }, 20_000);
 
   it('fails closed on backend identity mismatch before attach', async () => {
@@ -446,15 +610,19 @@ integration('Step 3 inner QUIC through MASQUE', () => {
     const cpuStart = process.cpuUsage();
     const heapStart = process.memoryUsage().heapUsed;
     const sendStart = Date.now();
-    await Promise.all(
-      Array.from({ length: 100 }, (_, i) =>
-        sidecar.sendPrivateReliable(
-          opened.sessionId,
-          `bench-${i}`,
-          Buffer.from('small-message')
+    // This is a bounded throughput sanity check, not a queue-overflow test.
+    // Sending 100 simultaneous IPC requests races the native admission cap.
+    for (let start = 0; start < 100; start += 8) {
+      await Promise.all(
+        Array.from({ length: Math.min(8, 100 - start) }, (_, i) =>
+          sidecar.sendPrivateReliable(
+            opened.sessionId,
+            `bench-${start + i}`,
+            Buffer.from('small-message')
+          )
         )
-      )
-    );
+      );
+    }
     await done;
     const elapsedMs = Date.now() - sendStart;
     const cpu = process.cpuUsage(cpuStart);

@@ -157,7 +157,7 @@ func TestOversizedControlMessageFailsWithoutPanic(t *testing.T) {
 func TestMalformedAndOversizedBinaryFramesFailClosed(t *testing.T) {
 	for _, input := range []string{
 		`{"version":2,"requestId":"truncated","operation":"sendPrivateReliable","params":{},"binaryLength":5}` + "\nxx",
-		`{"version":2,"requestId":"oversized","operation":"sendPrivateReliable","params":{},"binaryLength":65537}` + "\n",
+		`{"version":2,"requestId":"oversized","operation":"sendPrivateReliable","params":{},"binaryLength":1048577}` + "\n",
 	} {
 		var output bytes.Buffer
 		if err := NewServer().Serve(context.Background(), strings.NewReader(input), &output); err != nil {

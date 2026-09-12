@@ -13,8 +13,9 @@ export const PRIVATE_CHANNEL_LIMITS = Object.freeze({
   // Logical channels are intentionally scarce until a real transport exists.
   maxChannelsPerOwner: 4,
   maxChannelsGlobal: 32,
-  // Large files will use a separate bounded streaming API in a later step.
+  // JSON stays small; opaque binary messages have separate keyed-stream budgets.
   maxMessageBytes: 64 * 1024,
+  maxBinaryMessageBytes: 1024 * 1024 - 1,
   maxQueuedBytesPerChannel: 256 * 1024,
   maxQueuedBytesPerOwner: 512 * 1024,
 });
@@ -24,6 +25,7 @@ export const PRIVATE_CHANNEL_FEATURES = Object.freeze({
   reliableMessages: true,
   datagrams: true,
   maxMessageBytes: PRIVATE_CHANNEL_LIMITS.maxMessageBytes,
+  maxBinaryMessageBytes: PRIVATE_CHANNEL_LIMITS.maxBinaryMessageBytes,
 });
 
 export class PrivateChannelError extends Error {
@@ -191,6 +193,7 @@ function validateJsonValue(
 
 export class PrivateChannelManager extends EventEmitter {
   private readonly queuedBytesByStream = new Map<string, number>();
+  private readonly bulkQueued = new Map<string, number>();
   private readonly channels = new Map<string, ChannelRecord>();
   private readonly channelsByOwner = new Map<string, Set<string>>();
   private readonly queuedBytesByOwner = new Map<string, number>();
@@ -313,14 +316,24 @@ export class PrivateChannelManager extends EventEmitter {
       throw new PrivateChannelError('INVALID_MESSAGE_ID');
     }
     const size = byteLength(data);
-    if (size > PRIVATE_CHANNEL_LIMITS.maxMessageBytes) {
+    const largeBinary =
+      size > PRIVATE_CHANNEL_LIMITS.maxMessageBytes &&
+      (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) &&
+      laneValue === 'reliable';
+    if (
+      size >
+      (largeBinary
+        ? PRIVATE_CHANNEL_LIMITS.maxBinaryMessageBytes
+        : PRIVATE_CHANNEL_LIMITS.maxMessageBytes)
+    ) {
       throw new PrivateChannelError('MESSAGE_TOO_LARGE');
     }
     const ownerQueued = this.queuedBytesByOwner.get(channel.ownerKey) ?? 0;
     if (
-      channel.queuedBytes + size >
+      !largeBinary &&
+      (channel.queuedBytes + size >
         PRIVATE_CHANNEL_LIMITS.maxQueuedBytesPerChannel ||
-      ownerQueued + size > PRIVATE_CHANNEL_LIMITS.maxQueuedBytesPerOwner
+        ownerQueued + size > PRIVATE_CHANNEL_LIMITS.maxQueuedBytesPerOwner)
     ) {
       throw new PrivateChannelError('QUEUE_LIMIT_REACHED');
     }
@@ -344,6 +357,36 @@ export class PrivateChannelManager extends EventEmitter {
       endStream = o.endStream === true;
     }
     const message = { lane, messageId, data, streamKey, endStream };
+    if (largeBinary) {
+      if (!streamKey) throw new PrivateChannelError('INVALID_STREAM_OPTIONS');
+      const budgets: Array<[string, number]> = [
+        ['global', 32 * 1024 * 1024],
+        [`owner:${channel.ownerKey}`, 8 * 1024 * 1024],
+        [`channel:${channelId}`, 4 * 1024 * 1024],
+        [`stream:${channelId}:${streamKey}`, 2 * 1024 * 1024],
+      ];
+      if (
+        budgets.some(
+          ([key, limit]) => (this.bulkQueued.get(key) ?? 0) + size > limit
+        )
+      )
+        throw new PrivateChannelError('QUEUE_LIMIT_REACHED');
+      for (const [key] of budgets)
+        this.bulkQueued.set(key, (this.bulkQueued.get(key) ?? 0) + size);
+      try {
+        await channel.transport.sendReliable(message);
+        return { channelId, messageId, accepted: true };
+      } catch (error) {
+        if (error instanceof PrivateChannelError) throw error;
+        throw new PrivateChannelError('CHANNEL_SEND_FAILED');
+      } finally {
+        for (const [key] of budgets) {
+          const left = (this.bulkQueued.get(key) ?? 0) - size;
+          if (left > 0) this.bulkQueued.set(key, left);
+          else this.bulkQueued.delete(key);
+        }
+      }
+    }
     const queueKey = `${channelId}\0${streamKey ?? ''}`;
     const streamBytes = this.queuedBytesByStream.get(queueKey) ?? 0;
     if (streamKey && streamBytes + size > 192 * 1024)
@@ -460,7 +503,11 @@ export class PrivateChannelManager extends EventEmitter {
         return;
       }
       if (
-        size > PRIVATE_CHANNEL_LIMITS.maxMessageBytes ||
+        size >
+          (event.lane === 'reliable' &&
+          (event.data instanceof ArrayBuffer || ArrayBuffer.isView(event.data))
+            ? PRIVATE_CHANNEL_LIMITS.maxBinaryMessageBytes
+            : PRIVATE_CHANNEL_LIMITS.maxMessageBytes) ||
         !VALID_LANES.has(event.lane) ||
         !event.messageId ||
         event.messageId.length > MAX_MESSAGE_ID_LENGTH

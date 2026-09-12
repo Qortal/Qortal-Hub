@@ -240,5 +240,7 @@ func openPrepared(ctx context.Context, cfg Config) (*Tunnel, error) {
 		}
 		return nil, relayConnectionError(err)
 	}
-	return &Tunnel{conn: conn, onClose: release}, nil
+	conn.EnableDatagramReceiveBuffer()
+	p.conn.EnableDatagramReceiveBuffer()
+	return &Tunnel{conn: conn, outer: p.conn, onClose: release}, nil
 }

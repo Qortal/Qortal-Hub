@@ -41,7 +41,17 @@ func TestControlStreamProgressesWhileBulkIsFlowControlled(t *testing.T) {
 	}
 	defer server.CloseWithError(0, "test complete")
 	events := make(chan Event, 4)
-	session := &Session{conn: client, reliableStreams: true, streams: map[string]*reliableLane{}, onEvent: func(e Event) { events <- e }}
+	session := &Session{conn: client, reliableStreams: true, maxReliableBytes: MaxReliablePayloadBytes, streams: map[string]*reliableLane{}, onEvent: func(e Event) { events <- e }}
+	// An older attached peer does not opt into larger frames. Reject locally,
+	// without creating a stream or disturbing its connection.
+	session.maxReliableBytes = 0
+	if err := session.SendReliableStream("unsupported", "large", make([]byte, 65537), false); err == nil || err.Error() != "BULK_TRANSPORT_UNSUPPORTED" {
+		t.Fatalf("expected old-peer capability rejection, got %v", err)
+	}
+	if len(session.streams) != 0 {
+		t.Fatal("unsupported send created a stream")
+	}
+	session.maxReliableBytes = MaxReliablePayloadBytes
 	bulkResult := make(chan error, 1)
 	go func() {
 		bulkResult <- session.SendReliableStream("bulk", "bulk-message", make([]byte, MaxReliablePayloadBytes), false)

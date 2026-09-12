@@ -14,10 +14,11 @@ type reliableJob struct {
 // One worker per active opaque stream key preserves ordering without serializing
 // unrelated streams in the IPC reader. Idle workers disappear immediately.
 type reliableDispatcher struct {
-	mu      sync.Mutex
-	queues  map[string][]reliableJob
-	bytes   int
-	workers sync.WaitGroup
+	maxQueueAge time.Duration
+	mu          sync.Mutex
+	queues      map[string][]reliableJob
+	bytes       int
+	workers     sync.WaitGroup
 }
 
 func (d *reliableDispatcher) submit(key string, size int, run func(bool)) bool {
@@ -49,9 +50,11 @@ func (d *reliableDispatcher) submit(key string, size int, run func(bool)) bool {
 			job := queue[0]
 			d.queues[key] = queue[1:]
 			d.mu.Unlock()
-			// Native writes get five seconds; leave room inside the seven-second IPC
-			// deadline. Expired queued work must not send after its caller times out.
-			job.run(time.Since(job.enqueued) <= time.Second)
+			age := d.maxQueueAge
+			if age == 0 {
+				age = time.Second
+			}
+			job.run(time.Since(job.enqueued) <= age)
 			d.mu.Lock()
 			d.bytes -= job.bytes
 			d.mu.Unlock()

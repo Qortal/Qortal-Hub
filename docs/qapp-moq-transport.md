@@ -1,5 +1,42 @@
 # Generic multi-track Q-App transport
 
+## Bounded tunnel receive buffering (sidecar 0.10.1)
+
+Hub and the standalone relay use documented local quic-go v0.62.0 / masque-go
+v0.5.0 replacements for bounded receive burst absorption. Both the QUIC DATAGRAM
+queue and the HTTP/3 tunnel queue use owned-payload FIFO rings, packet/byte caps,
+lazy 50 ms expiry, and one shared 32 MiB live-allocation budget per process.
+Ring storage is included; this is not a process RSS limit. Queue growth cannot
+bypass the shared budget. Large empty rings and closed queues release storage.
+
+The larger profile (1024 packets / 1 MiB charged packet data plus bounded ring
+slots) is enabled only after successful tunnel admission. Defaults before
+admission retain the upstream 32/128 packet caps. No QApp chooses memory limits.
+The relay still validates access and targets before opening or enabling a tunnel.
+
+Native session metrics distinguish HTTP/3 `tunnelReceiveDroppedFull`,
+`tunnelReceiveDroppedBudget`, `tunnelReceiveDroppedExpired` from corresponding
+`outerReceiveDropped*` QUIC receive-queue counters. They also expose tunnel queued
+bytes and maximum observed residence time. Outer counters include shared relay
+connection traffic. Expired residence times can exceed 50 ms; stale entries are
+never delivered. Relay pressure logs are numeric aggregates, rate-limited to one
+report per 30 seconds, including raw QUIC receive-queue overflow.
+
+This does not alter congestion control, packet encryption, stream priorities,
+capture, codecs, jitter policy or call logic. Encrypted packets remain opaque.
+FIFO buffering cannot guarantee priority or bandwidth across connections.
+
+Build/restart Hub with its matching 0.10.1 sidecar and rebuild the relay to gain
+both directions' improvements. No QApp or backend wire-protocol change is needed.
+Docker and native builds must include `third_party/`; Go 1.26+ is required.
+See the vendored `QORTAL_PATCH.md` files for maintenance and bounds tests.
+
+The opt-in `QORTAL_BULK_BENCH=1` Step 3 test sends 32 MiB through real MASQUE with
+0/120 ms simulated RTT while sending small datagrams every 20 ms. It reports
+throughput, receive drops and datagram p95 RTT; it requires at least 95% of the
+small packets to arrive with p95 below 500 ms. This is a local transport regression
+test, not a WAN speed guarantee or a full media-quality test.
+
 Sidecar 0.5.0 extends the existing owner-bound `PRIVATE_DATA_CHANNEL` capability.
 No capture, codec, media encryption, jitter, call membership, or media-specific
 priority policy lives in Hub.
@@ -171,3 +208,49 @@ before requests reached their handlers. Regression tests exercise the actual
 line-plus-binary Serve path, including legacy requests and malformed fields.
 Rebuild/restart Hub with the matching sidecar; no backend or relay update is
 required for this validation correction.
+
+### Bounded binary reliable messages (sidecar 0.10.0)
+
+Authenticated private channels expose `features.maxBinaryMessageBytes` (1 MiB
+minus the encoding byte). ArrayBuffer/typed-array messages larger than 64 KiB
+require a keyed reliable stream. JSON, primary-stream messages, and datagrams
+retain their existing limits. Hub treats the binary payload as opaque; applications
+own framing, encryption, durable acknowledgements, and idempotent retries.
+
+Large-message send admission uses separate budgets: 2 MiB per stream, 4 MiB per
+channel, 8 MiB per owner, and 32 MiB globally. Capacity is released when native
+submission completes or fails, not when the application's durable reply arrives.
+Small-message admission is independent. These are bounded queues, not a guarantee
+of bandwidth isolation: streams still share connection congestion control.
+
+The backend must advertise `maxReliablePayloadBytes` in its authenticated attach
+response. Missing/invalid advertisements retain the old 64 KiB ceiling; larger
+sends fail locally with `BULK_TRANSPORT_UNSUPPORTED`. Applications must negotiate
+their own binary protocol before using it. Rebuild/restart Hub with sidecar
+0.10.0 to enable the larger limit. No relay change is required.
+
+### Private transport diagnostics
+
+Native `sessionMetrics` also reports `innerPacketsSent/Lost`,
+`innerWireBytesSent/Lost`, and their `outer` counterparts, plus `outerRttMillis`.
+These are QUIC loss-detection estimates, not proof of physical packet loss:
+reordering can cause packets to be declared lost. Wire-byte totals include
+retransmissions and are distinct from the existing application-byte totals.
+Outer counters cover the pooled relay connection and can include other tunnels;
+do not add the same outer totals across sessions. Compare snapshots of a single
+connection during an isolated test. Loss totals may decrease when loss detection
+is corrected, so do not assume every delta is nonnegative.
+
+`tunnelWrites`, `tunnelWriteMicros`, and `tunnelWriteErrors` measure submission
+to the outer datagram transport for this tunnel. Time is cumulative across
+completed writes, not end-to-end delivery time. Existing `datagramsDropped` is
+an application-datagram submission error count, not a network-loss counter.
+These measurements contain no account IDs, endpoints, payloads, or keys. They
+do not change queue limits, congestion algorithms, or retry behavior.
+
+Reliable native sends share a six-second queue-and-write budget under the
+seven-second IPC timeout; individual writes remain capped at five seconds.
+Queue expiry before any write returns `RELIABLE_SEND_NOT_STARTED`, which an
+application can safely back off and retry. Actual write failures still reset
+the affected stream and must not be treated as unsent work. MoQ retains its
+existing expiry policy; queue memory/admission limits are unchanged.

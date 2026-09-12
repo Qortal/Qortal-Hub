@@ -35,6 +35,8 @@ const (
 	ownerBindingHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 )
 
+type benchmarkConnectionKey struct{}
+
 type fixture struct {
 	mu               sync.Mutex
 	backendUDP       *net.UDPConn
@@ -73,6 +75,7 @@ func main() {
 			f.mu.Lock()
 			v := map[string]interface{}{"backendSource": f.backendSource, "relayEgress": f.relayEgress, "reliableCount": f.reliableCount, "datagramCount": f.datagramCount, "tokenUsed": f.tokenUsed}
 			f.mu.Unlock()
+			v["receiveBuffers"] = quic.GlobalDatagramReceiveBufferStats()
 			_ = enc.Encode(v)
 		case "stopRelay":
 			f.stopRelay()
@@ -126,6 +129,11 @@ func startFixture() (*fixture, map[string]interface{}, error) {
 	template := uritemplate.MustNew("https://" + relayAddress + "/.well-known/masque/udp/{target_host}/{target_port}/")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/masque/udp/", func(w http.ResponseWriter, r *http.Request) {
+		// The opt-in delay benchmark forwards through a local UDP proxy.
+		if os.Getenv("QORTAL_STEP3_TEST_ACK_ONLY") == "1" {
+			r.Host = relayAddress
+			r.URL.Host = relayAddress
+		}
 		req, e := masque.ParseProxyRequest(r, template)
 		if e != nil || req.Target != f.backendAddress {
 			w.WriteHeader(http.StatusBadRequest)
@@ -144,9 +152,15 @@ func startFixture() (*fixture, map[string]interface{}, error) {
 		f.mu.Lock()
 		f.relayEgress = egress.LocalAddr().String()
 		f.mu.Unlock()
+		w.(http3.HTTPStreamer).HTTPStream().EnableDatagramReceiveBuffer()
+		if c, ok := r.Context().Value(benchmarkConnectionKey{}).(*quic.Conn); ok {
+			c.EnableDatagramReceiveBuffer()
+		}
 		_ = f.proxy.ProxyConnectedSocket(w, req, egress)
 	})
-	f.relayServer = &http3.Server{TLSConfig: &tls.Config{Certificates: []tls.Certificate{relayCert}, NextProtos: []string{http3.NextProtoH3}}, QUICConfig: &quic.Config{EnableDatagrams: true}, EnableDatagrams: true, Handler: mux}
+	f.relayServer = &http3.Server{ConnContext: func(ctx context.Context, c *quic.Conn) context.Context {
+		return context.WithValue(ctx, benchmarkConnectionKey{}, c)
+	}, TLSConfig: &tls.Config{Certificates: []tls.Certificate{relayCert}, NextProtos: []string{http3.NextProtoH3}}, QUICConfig: &quic.Config{EnableDatagrams: true}, EnableDatagrams: true, Handler: mux}
 	go func() { _ = f.relayServer.Serve(relayUDP) }()
 	relayPin := sha256.Sum256(relayDER)
 	backendPin := sha256.Sum256(backendDER)
@@ -192,6 +206,10 @@ func (f *fixture) handleBackend(conn *quic.Conn) {
 	}
 	f.mu.Unlock()
 	response := map[string]interface{}{"ok": valid, "logicalSessionId": logicalSessionID, "transportGeneration": 1, "reliable": true, "datagrams": true}
+	if os.Getenv("QORTAL_STEP3_TEST_BULK") == "1" {
+		response["reliableStreams"] = true
+		response["maxReliablePayloadBytes"] = innerquic.MaxReliablePayloadBytes
+	}
 	if !valid {
 		response["code"] = "ATTACH_TOKEN_REJECTED"
 	}
@@ -203,6 +221,20 @@ func (f *fixture) handleBackend(conn *quic.Conn) {
 		return
 	}
 	go f.echoDatagrams(conn)
+	go func() {
+		for {
+			keyed, err := conn.AcceptStream(context.Background())
+			if err != nil {
+				return
+			}
+			go f.echoReliable(keyed)
+		}
+	}()
+	f.echoReliable(stream)
+}
+
+func (f *fixture) echoReliable(stream *quic.Stream) {
+	defer stream.Close()
 	for {
 		message, err := innerquic.ReadFrame(stream)
 		if err != nil {
@@ -214,6 +246,9 @@ func (f *fixture) handleBackend(conn *quic.Conn) {
 		f.mu.Lock()
 		f.reliableCount++
 		f.mu.Unlock()
+		if os.Getenv("QORTAL_STEP3_TEST_ACK_ONLY") == "1" {
+			message.Payload = []byte("ack")
+		}
 		if innerquic.WriteFrame(stream, message) != nil {
 			return
 		}

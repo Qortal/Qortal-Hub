@@ -18,11 +18,22 @@ type reliableLane struct {
 // Keys are opaque application routing labels, scoped to this attached session.
 // End sends the final frame and FIN; the reply side remains alive until EOF.
 func (s *Session) SendReliableStream(key, messageID string, data []byte, end bool) error {
+	return s.SendReliableStreamWithTimeout(key, messageID, data, end, 5*time.Second)
+}
+
+func (s *Session) SendReliableStreamWithTimeout(key, messageID string, data []byte, end bool, timeout time.Duration) error {
 	if s.closed.Load() || s.conn.Context().Err() != nil {
 		return errors.New("TRANSPORT_CLOSED")
 	}
 	if !s.reliableStreams {
 		return errors.New("RELIABLE_STREAMS_UNSUPPORTED")
+	}
+	limit := s.maxReliableBytes
+	if limit == 0 {
+		limit = 64 * 1024
+	}
+	if len(data) > limit {
+		return errors.New("BULK_TRANSPORT_UNSUPPORTED")
 	}
 	if !streamKeyPattern.MatchString(key) || len(messageID) == 0 || len(messageID) > 128 || len(data) > MaxReliablePayloadBytes {
 		return errors.New("invalid reliable stream message")
@@ -54,7 +65,7 @@ func (s *Session) SendReliableStream(key, messageID string, data []byte, end boo
 	}
 	s.streamsMu.Unlock()
 	metadata, _ := Metadata(messageMetadata{MessageID: messageID})
-	if err := lane.writer.write(Frame{Type: FrameReliable, Metadata: metadata, Payload: data}, 5*time.Second); err != nil {
+	if err := lane.writer.write(Frame{Type: FrameReliable, Metadata: metadata, Payload: data}, timeout); err != nil {
 		lane.stream.CancelRead(1)
 		lane.stream.CancelWrite(1)
 		return errors.New("RELIABLE_STREAM_FAILED")

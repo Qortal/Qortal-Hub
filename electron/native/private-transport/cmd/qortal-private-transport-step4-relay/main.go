@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -33,6 +34,8 @@ type relay struct {
 	lastEgress string
 }
 
+type connectionKey struct{}
+
 func main() {
 	target := os.Getenv("QORTAL_STEP4_BACKEND_ADDRESS")
 	parsedTarget, err := net.ResolveUDPAddr("udp", target)
@@ -51,6 +54,10 @@ func main() {
 	template := uritemplate.MustNew("https://" + udp.LocalAddr().String() + "/.well-known/masque/udp/{target_host}/{target_port}/")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/masque/udp/", func(w http.ResponseWriter, request *http.Request) {
+		if os.Getenv("QORTAL_STEP4_BULK_BENCH") == "1" {
+			request.Host = udp.LocalAddr().String()
+			request.URL.Host = request.Host
+		}
 		proxyRequest, parseErr := masque.ParseProxyRequest(request, template)
 		if parseErr != nil || proxyRequest.Target != r.target {
 			w.WriteHeader(http.StatusBadRequest)
@@ -64,9 +71,14 @@ func main() {
 		r.mu.Lock()
 		r.lastEgress = egress.LocalAddr().String()
 		r.mu.Unlock()
+		w.(http3.HTTPStreamer).HTTPStream().EnableDatagramReceiveBuffer()
+		request.Context().Value(connectionKey{}).(*quic.Conn).EnableDatagramReceiveBuffer()
 		_ = r.proxy.ProxyConnectedSocket(w, proxyRequest, egress)
 	})
 	r.server = &http3.Server{
+		ConnContext: func(ctx context.Context, c *quic.Conn) context.Context {
+			return context.WithValue(ctx, connectionKey{}, c)
+		},
 		TLSConfig:       &tls.Config{Certificates: []tls.Certificate{certificate}, NextProtos: []string{http3.NextProtoH3}},
 		QUICConfig:      &quic.Config{EnableDatagrams: true},
 		EnableDatagrams: true,

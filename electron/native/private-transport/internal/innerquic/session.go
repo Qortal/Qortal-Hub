@@ -49,12 +49,32 @@ type Event struct {
 	Data                  []byte
 }
 type Metrics struct {
-	InnerRTTMillis   int64  `json:"innerRttMillis"`
-	BytesSent        uint64 `json:"bytesSent"`
-	BytesReceived    uint64 `json:"bytesReceived"`
-	DatagramsDropped uint64 `json:"datagramsDropped"`
-	StreamErrors     uint64 `json:"streamErrors"`
-	ConnectionErrors uint64 `json:"connectionErrors"`
+	TunnelReceiveQueuedBytes        int64  `json:"tunnelReceiveQueuedBytes"`
+	TunnelReceiveDroppedFull        uint64 `json:"tunnelReceiveDroppedFull"`
+	TunnelReceiveDroppedBudget      uint64 `json:"tunnelReceiveDroppedBudget"`
+	TunnelReceiveDroppedExpired     uint64 `json:"tunnelReceiveDroppedExpired"`
+	TunnelReceiveMaxResidenceMicros uint64 `json:"tunnelReceiveMaxResidenceMicros"`
+	OuterReceiveDroppedFull         uint64 `json:"outerReceiveDroppedFull"`
+	OuterReceiveDroppedBudget       uint64 `json:"outerReceiveDroppedBudget"`
+	OuterReceiveDroppedExpired      uint64 `json:"outerReceiveDroppedExpired"`
+	InnerPacketsSent                uint64 `json:"innerPacketsSent"`
+	InnerPacketsLost                uint64 `json:"innerPacketsLost"`
+	InnerWireBytesSent              uint64 `json:"innerWireBytesSent"`
+	InnerWireBytesLost              uint64 `json:"innerWireBytesLost"`
+	OuterRTTMillis                  int64  `json:"outerRttMillis"`
+	OuterPacketsSent                uint64 `json:"outerPacketsSent"`
+	OuterPacketsLost                uint64 `json:"outerPacketsLost"`
+	OuterWireBytesSent              uint64 `json:"outerWireBytesSent"`
+	OuterWireBytesLost              uint64 `json:"outerWireBytesLost"`
+	TunnelWrites                    uint64 `json:"tunnelWrites"`
+	TunnelWriteMicros               uint64 `json:"tunnelWriteMicros"`
+	TunnelWriteErrors               uint64 `json:"tunnelWriteErrors"`
+	InnerRTTMillis                  int64  `json:"innerRttMillis"`
+	BytesSent                       uint64 `json:"bytesSent"`
+	BytesReceived                   uint64 `json:"bytesReceived"`
+	DatagramsDropped                uint64 `json:"datagramsDropped"`
+	StreamErrors                    uint64 `json:"streamErrors"`
+	ConnectionErrors                uint64 `json:"connectionErrors"`
 }
 
 type Session struct {
@@ -66,6 +86,7 @@ type Session struct {
 	streamsMu        sync.Mutex
 	streams          map[string]*reliableLane
 	reliableStreams  bool
+	maxReliableBytes int
 	closed           atomic.Bool
 	appSent          atomic.Uint64
 	appReceived      atomic.Uint64
@@ -83,6 +104,7 @@ type attachMetadata struct {
 	OwnerBindingHash string `json:"ownerBindingHash"`
 }
 type attachedMetadata struct {
+	MaxReliableBytes    int    `json:"maxReliablePayloadBytes"`
 	ReliableStreams     bool   `json:"reliableStreams"`
 	OK                  bool   `json:"ok"`
 	LogicalSessionID    string `json:"logicalSessionId"`
@@ -195,9 +217,13 @@ func Open(ctx context.Context, cfg Config, onEvent func(Event)) (*Session, error
 		return fail(errors.New("SESSION_ATTACH_FAILED"))
 	}
 	_ = stream.SetDeadline(time.Time{})
+	limit := attached.MaxReliableBytes
+	if limit < 64*1024 || limit > MaxReliablePayloadBytes {
+		limit = 64 * 1024
+	}
 	s := &Session{tunnel: tunnel, conn: conn, stream: stream, onEvent: onEvent,
 		reliableWriter: newBoundedFrameWriter(stream), reliableStreams: attached.ReliableStreams,
-		streams: make(map[string]*reliableLane)}
+		streams: make(map[string]*reliableLane), maxReliableBytes: limit}
 	go s.readReliable()
 	go s.readDatagrams()
 	go s.watchConnection()
@@ -205,14 +231,18 @@ func Open(ctx context.Context, cfg Config, onEvent func(Event)) (*Session, error
 }
 
 func (s *Session) SendReliable(messageID string, data []byte) error {
+	return s.SendReliableWithTimeout(messageID, data, 5*time.Second)
+}
+
+func (s *Session) SendReliableWithTimeout(messageID string, data []byte, timeout time.Duration) error {
 	if s.closed.Load() {
 		return errors.New("TRANSPORT_CLOSED")
 	}
-	if len(messageID) == 0 || len(messageID) > 128 || len(data) > MaxReliablePayloadBytes {
+	if len(messageID) == 0 || len(messageID) > 128 || len(data) > 64*1024 {
 		return errors.New("FRAME_TOO_LARGE")
 	}
 	metadata, _ := Metadata(messageMetadata{MessageID: messageID})
-	err := s.reliableWriter.write(Frame{Type: FrameReliable, Metadata: metadata, Payload: data}, 5*time.Second)
+	err := s.reliableWriter.write(Frame{Type: FrameReliable, Metadata: metadata, Payload: data}, timeout)
 	if err == nil {
 		s.appSent.Add(uint64(len(data)))
 	} else {
@@ -239,7 +269,21 @@ func (s *Session) SendDatagram(messageID string, data []byte) error {
 
 func (s *Session) Metrics() Metrics {
 	stats := s.conn.ConnectionStats()
-	return Metrics{InnerRTTMillis: stats.SmoothedRTT.Milliseconds(), BytesSent: s.appSent.Load(), BytesReceived: s.appReceived.Load(), DatagramsDropped: s.datagramsDropped.Load(), StreamErrors: s.streamErrors.Load(), ConnectionErrors: s.connectionErrors.Load()}
+	m := Metrics{InnerRTTMillis: stats.SmoothedRTT.Milliseconds(), BytesSent: s.appSent.Load(), BytesReceived: s.appReceived.Load(), DatagramsDropped: s.datagramsDropped.Load(), StreamErrors: s.streamErrors.Load(), ConnectionErrors: s.connectionErrors.Load(),
+		InnerPacketsSent: stats.PacketsSent, InnerPacketsLost: stats.PacketsLost,
+		InnerWireBytesSent: stats.BytesSent, InnerWireBytesLost: stats.BytesLost}
+	if s.tunnel != nil {
+		h, q := s.tunnel.ReceiveBufferMetrics()
+		m.TunnelReceiveQueuedBytes, m.TunnelReceiveDroppedFull, m.TunnelReceiveDroppedBudget, m.TunnelReceiveDroppedExpired = h.QueuedBytes, h.DroppedFull, h.DroppedBudget, h.DroppedExpired
+		m.TunnelReceiveMaxResidenceMicros = h.MaxResidenceMicros
+		m.OuterReceiveDroppedFull, m.OuterReceiveDroppedBudget, m.OuterReceiveDroppedExpired = q.DroppedFull, q.DroppedBudget, q.DroppedExpired
+		outer, writes, micros, errors := s.tunnel.TransportMetrics()
+		m.OuterRTTMillis = outer.SmoothedRTT.Milliseconds()
+		m.OuterPacketsSent, m.OuterPacketsLost = outer.PacketsSent, outer.PacketsLost
+		m.OuterWireBytesSent, m.OuterWireBytesLost = outer.BytesSent, outer.BytesLost
+		m.TunnelWrites, m.TunnelWriteMicros, m.TunnelWriteErrors = writes, micros, errors
+	}
+	return m
 }
 
 func (s *Session) Close() error {

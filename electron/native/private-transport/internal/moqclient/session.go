@@ -67,12 +67,18 @@ type Event struct {
 
 type Metrics struct {
 	moqtransport.DeliveryMetrics
-	InnerRTTMillis int64  `json:"innerRttMillis"`
-	ObjectsSent    uint64 `json:"objectsSent"`
-	ObjectsRead    uint64 `json:"objectsReceived"`
-	BytesSent      uint64 `json:"bytesSent"`
-	BytesRead      uint64 `json:"bytesReceived"`
-	ObjectErrors   uint64 `json:"objectErrors"`
+	TunnelReceiveDroppedFull    uint64 `json:"tunnelReceiveDroppedFull"`
+	TunnelReceiveDroppedBudget  uint64 `json:"tunnelReceiveDroppedBudget"`
+	TunnelReceiveDroppedExpired uint64 `json:"tunnelReceiveDroppedExpired"`
+	OuterReceiveDroppedFull     uint64 `json:"outerReceiveDroppedFull"`
+	OuterReceiveDroppedBudget   uint64 `json:"outerReceiveDroppedBudget"`
+	OuterReceiveDroppedExpired  uint64 `json:"outerReceiveDroppedExpired"`
+	InnerRTTMillis              int64  `json:"innerRttMillis"`
+	ObjectsSent                 uint64 `json:"objectsSent"`
+	ObjectsRead                 uint64 `json:"objectsReceived"`
+	BytesSent                   uint64 `json:"bytesSent"`
+	BytesRead                   uint64 `json:"bytesReceived"`
+	ObjectErrors                uint64 `json:"objectErrors"`
 }
 
 type publicationHandler struct {
@@ -424,13 +430,19 @@ func (s *Session) readSubscription(subscriptionID string, entry subscription) {
 
 func (s *Session) Metrics() Metrics {
 	stats := s.conn.ConnectionStats()
-	return Metrics{
+	m := Metrics{
 		DeliveryMetrics: s.moq.DeliveryMetrics(),
 		InnerRTTMillis:  stats.SmoothedRTT.Milliseconds(),
 		ObjectsSent:     s.objectsSent.Load(), ObjectsRead: s.objectsRead.Load(),
 		BytesSent: s.bytesSent.Load(), BytesRead: s.bytesRead.Load(),
 		ObjectErrors: s.objectErrors.Load(),
 	}
+	if s.tunnel != nil {
+		h, q := s.tunnel.ReceiveBufferMetrics()
+		m.TunnelReceiveDroppedFull, m.TunnelReceiveDroppedBudget, m.TunnelReceiveDroppedExpired = h.DroppedFull, h.DroppedBudget, h.DroppedExpired
+		m.OuterReceiveDroppedFull, m.OuterReceiveDroppedBudget, m.OuterReceiveDroppedExpired = q.DroppedFull, q.DroppedBudget, q.DroppedExpired
+	}
+	return m
 }
 
 func (s *Session) Close() error {

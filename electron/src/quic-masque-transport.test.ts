@@ -137,6 +137,15 @@ describe('QUIC MASQUE transport', () => {
       generation: 1,
     });
 
+    sidecar.sendPrivateReliable.mockRejectedValueOnce(
+      new PrivateTransportSidecarError('RELIABLE_SEND_NOT_STARTED')
+    );
+    await expect(transport.sendReliable({
+      lane: 'reliable', messageId: 'not-started', data: new Uint8Array(70000), streamKey: 'bulk',
+    })).rejects.toMatchObject({ code: 'RELIABLE_SEND_NOT_STARTED' });
+    expect(sidecar.attempts).toHaveLength(1);
+    expect(sidecar.closePrivateSession).not.toHaveBeenCalled();
+
     sidecar.emit('event', {
       event: 'error',
       sessionId: 'native-1',

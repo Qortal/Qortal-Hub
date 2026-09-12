@@ -10,7 +10,7 @@ import (
 const (
 	ALPN                    = "qortal-private/1"
 	ProtocolVersion         = 1
-	MaxReliablePayloadBytes = 64 * 1024
+	MaxReliablePayloadBytes = 1024 * 1024
 	MaxMetadataBytes        = 4 * 1024
 	MaxDatagramPayloadBytes = 1024
 	InnerPacketSize         = 1200

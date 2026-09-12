@@ -52,6 +52,49 @@ class BlockingTransport implements PrivateTransport {
 }
 
 describe('PrivateChannelManager', () => {
+  it('bounds binary bulk independently and leaves control capacity available', async () => {
+    const transport = new BlockingTransport();
+    const manager = new PrivateChannelManager(ownership, () => transport);
+    const channel = await manager.open(alice, aliceRns, 'file-transfer');
+    const payload = new Uint8Array(700 * 1024);
+    const sends = [0, 1].map((i) =>
+      manager.send(
+        alice,
+        channel.channelId,
+        'reliable',
+        `large-${i}`,
+        payload,
+        { streamKey: 'bulk' }
+      )
+    );
+    await expect(
+      manager.send(alice, channel.channelId, 'reliable', 'overflow', payload, {
+        streamKey: 'bulk',
+      })
+    ).rejects.toMatchObject({ code: 'QUEUE_LIMIT_REACHED' });
+    const control = manager.send(
+      alice,
+      channel.channelId,
+      'reliable',
+      'control',
+      { ping: true },
+      { streamKey: 'control' }
+    );
+    expect(transport.sendReliable).toHaveBeenCalledTimes(3);
+    transport.releases.splice(0).forEach((release) => release());
+    await Promise.all([...sends, control]);
+    const retry = manager.send(
+      alice,
+      channel.channelId,
+      'reliable',
+      'retry',
+      payload,
+      { streamKey: 'bulk' }
+    );
+    transport.releases.splice(0).forEach((release) => release());
+    await retry;
+    await manager.close(alice, channel.channelId);
+  });
   it('bounds one stream without consuming the control stream queue and validates options', async () => {
     const transport = new BlockingTransport();
     const manager = new PrivateChannelManager(ownership, () => transport);
@@ -206,7 +249,7 @@ describe('PrivateChannelManager', () => {
         channelId,
         'reliable',
         'large',
-        new Uint8Array(PRIVATE_CHANNEL_LIMITS.maxMessageBytes + 1)
+        new Uint8Array(PRIVATE_CHANNEL_LIMITS.maxBinaryMessageBytes + 1)
       )
     ).rejects.toMatchObject({ code: 'MESSAGE_TOO_LARGE' });
   });
