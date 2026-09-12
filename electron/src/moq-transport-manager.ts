@@ -394,7 +394,9 @@ export class QAppMoqTransportManager extends EventEmitter {
       if (
         !session.subscriptions.has(event.subscriptionId) ||
         event.payload.byteLength < 1 ||
-        event.payload.byteLength > QAPP_MOQ_LIMITS.maxObjectBytes
+        // Native transport already enforces the separate datagram limit.
+        // Incoming events also carry complete reliable subgroup objects.
+        event.payload.byteLength > QAPP_MOQ_LIMITS.maxReliableObjectBytes
       ) {
         this.fail(session, 'MOQ_PROTOCOL_MISMATCH');
         return;

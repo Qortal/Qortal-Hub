@@ -42,6 +42,72 @@ async function open(manager: QAppMoqTransportManager) {
 }
 
 describe('Q-App generic MOQT manager', () => {
+  it.each([1025, 128 * 1024, 1024 * 1024])(
+    'delivers a %i-byte incoming object without closing other tracks',
+    async (size) => {
+      const { manager, transports, events } = setup();
+      const opened = await open(manager);
+      await manager.subscribe(
+        owner,
+        opened.sessionId,
+        'peer',
+        ['opaque'],
+        'objects'
+      );
+      const payload = new Uint8Array(size).fill(7);
+      transports[0].emit({
+        kind: 'object',
+        subscriptionId: 'peer',
+        namespace: ['opaque'],
+        trackName: 'objects',
+        groupId: 1,
+        objectId: 1,
+        payload,
+      });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          action: 'MOQ_OBJECT',
+          sessionId: opened.sessionId,
+          payload,
+        })
+      );
+      expect(transports[0].close).not.toHaveBeenCalled();
+      await expect(
+        manager.publish(owner, opened.sessionId, new Uint8Array([1]))
+      ).resolves.toMatchObject({ accepted: true });
+      manager.destroy();
+    }
+  );
+
+  it('rejects incoming objects above the reliable object limit', async () => {
+    const { manager, transports, events } = setup();
+    const opened = await open(manager);
+    await manager.subscribe(
+      owner,
+      opened.sessionId,
+      'peer',
+      ['opaque'],
+      'objects'
+    );
+    transports[0].emit({
+      kind: 'object',
+      subscriptionId: 'peer',
+      namespace: ['opaque'],
+      trackName: 'objects',
+      groupId: 1,
+      objectId: 1,
+      payload: new Uint8Array(1024 * 1024 + 1),
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        action: 'MOQ_ERROR',
+        code: 'MOQ_PROTOCOL_MISMATCH',
+      })
+    );
+    expect(transports[0].close).toHaveBeenCalledOnce();
+    manager.destroy();
+  });
+
   it('admits bounded reliable objects without relaxing datagram limits', async () => {
     const { manager, transports } = setup();
     const opened = await manager.open(
