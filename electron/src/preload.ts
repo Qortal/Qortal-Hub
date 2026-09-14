@@ -730,6 +730,10 @@ try {
       ipcRenderer.invoke('qappReticulum:close', owner, connectionId),
     qappReticulumCleanupOwner: (owner) =>
       ipcRenderer.invoke('qappReticulum:cleanupOwner', owner),
+    qappFrameRegister: (frameName: string, owner) =>
+      ipcRenderer.invoke('qappFrame:register', frameName, owner),
+    qappFrameUnregister: (frameName: string) =>
+      ipcRenderer.invoke('qappFrame:unregister', frameName),
     onQAppReticulumEvent: (callback: (payload: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
         callback(payload);

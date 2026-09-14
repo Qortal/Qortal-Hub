@@ -41,6 +41,57 @@ const bob: QAppReticulumOwner = {
 };
 
 describe('QAppReticulumManager', () => {
+  it('rejects a connect completed after navigation cleanup and preserves its replacement', async () => {
+    const transport = new FakeTransport();
+    let complete!: (value: any) => void;
+    transport.invoke.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        })
+    );
+    const manager = new QAppReticulumManager(transport);
+    const pending = manager.connect(alice, destination);
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: 'RNS_CONNECTION_CLOSED',
+    });
+    await manager.cleanupOwner(alice);
+    const fresh = await manager.connect(alice, destination);
+    complete({ ok: true, payload: {} });
+    await rejected;
+    expect(manager.connectionOwnership(alice, fresh.connectionId)).toBe(
+      'owned'
+    );
+    await expect(
+      manager.send(alice, fresh.connectionId, { test: true })
+    ).resolves.toBeDefined();
+    expect(
+      transport.invoke.mock.calls.filter(
+        ([action]) => action === 'qapp_rns_close'
+      )
+    ).toHaveLength(2);
+    manager.destroy();
+  });
+
+  it('does not overwrite a terminal native event with connected', async () => {
+    const transport = new FakeTransport();
+    transport.invoke.mockImplementationOnce(async (_action, payload) => {
+      for (const listener of transport.listeners)
+        listener({
+          managerKey: String(payload.managerKey),
+          connectionId: String(payload.connectionId),
+          kind: 'state',
+          state: 'DISCONNECTED',
+        });
+      return { ok: true, payload: {} };
+    });
+    const manager = new QAppReticulumManager(transport);
+    await expect(manager.connect(alice, destination)).rejects.toMatchObject({
+      code: 'RNS_CONNECTION_CLOSED',
+    });
+    manager.destroy();
+  });
+
   it('reports connection ownership without exposing its destination', async () => {
     const manager = new QAppReticulumManager(new FakeTransport());
     const { connectionId } = await manager.connect(alice, destination);

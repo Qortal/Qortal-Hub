@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { executeEvent } from '../utils/events';
 import {
   infoSnackGlobalAtom,
@@ -612,7 +612,7 @@ export const useQortalMessageListener = (
   appService,
   appIdentifier
 ) => {
-  const hasLoadedFrameRef = useRef(false);
+  const [nativeFrameName] = useState(() => `qapp-frame-${crypto.randomUUID()}`);
   const [path, setPath] = useState('');
   const [history, setHistory] = useState({
     customQDNHistoryPaths: [],
@@ -1052,6 +1052,10 @@ export const useQortalMessageListener = (
       service: identity.service,
     };
     const expectedOwnerKey = `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
+    // A load event belongs to the NEW document and is too late for cleanup:
+    // that document may already be connecting. Main observes navigation start.
+    const frameName = nativeFrameName;
+    void api.qappFrameRegister?.(frameName, owner).catch(console.error);
     const unsubscribe = api.onQAppReticulumEvent?.((payload) => {
       if (payload?.ownerKey !== expectedOwnerKey || !iframe.contentWindow)
         return;
@@ -1135,32 +1139,13 @@ export const useQortalMessageListener = (
         targetOrigin
       );
     });
-    const cleanupOwner = () => {
-      void api
-        .qappFileSave?.(owner, { action: 'FILE_SAVE_CLEANUP' })
-        .catch(() => undefined);
-      // This single main-process operation owns cleanup across Reticulum,
-      // private channels, and MOQT. It is deliberately best-effort because a
-      // tab reload/close can race an Electron main-process restart.
-      const cleanup = api.qappReticulumCleanupOwner?.(owner);
-      if (cleanup) void cleanup.catch(() => undefined);
-    };
-    const handleLoad = () => {
-      if (!hasLoadedFrameRef.current) {
-        hasLoadedFrameRef.current = true;
-        return;
-      }
-      cleanupOwner();
-    };
-    iframe.addEventListener('load', handleLoad);
     return () => {
       unsubscribe?.();
       unsubscribePrivateChannel?.();
       unsubscribeMoq?.();
-      iframe.removeEventListener('load', handleLoad);
-      cleanupOwner();
+      void api.qappFrameUnregister?.(frameName).catch(() => undefined);
     };
-  }, [appName, appService, iframeRef, tabId]);
+  }, [appName, appService, iframeRef, tabId, nativeFrameName]);
 
-  return { path, history, resetHistory, changeCurrentIndex };
+  return { path, history, resetHistory, changeCurrentIndex, nativeFrameName };
 };

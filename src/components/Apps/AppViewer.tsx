@@ -19,7 +19,7 @@ type AppViewerProps = {
 export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
   ({ app, hide, isDevMode }, iframeRef) => {
     const { window: frameWindow } = useFrame();
-    const { path, history, changeCurrentIndex, resetHistory } =
+    const { path, history, changeCurrentIndex, resetHistory, nativeFrameName } =
       useQortalMessageListener(
         frameWindow,
         iframeRef,
@@ -418,6 +418,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       >
         <iframe
           ref={iframeRef}
+          name={nativeFrameName}
           style={{
             border: 'none',
             contain: 'layout paint style',

@@ -6,6 +6,8 @@ import {
 } from './foreign-wallet-signer';
 import { createForeignWalletJournal } from './foreign-wallet-journal';
 import { QAppFileSaves, SaveError } from './qapp-file-save';
+import { QAppFrameLifecycle } from './qapp-frame-lifecycle';
+import { webFrameMain } from 'electron';
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import {
   CapElectronEventEmitter,
@@ -3087,6 +3089,86 @@ app.on('web-contents-created', (_event, contents) => {
   });
 });
 
+async function cleanupQAppOwner(owner: QAppReticulumOwner): Promise<void> {
+  // All managers snapshot their old resources before any shutdown is awaited.
+  await Promise.allSettled([
+    privateChannelManager?.cleanupOwner(owner),
+    qAppMoqTransportManager?.cleanupOwner(owner),
+    qAppReticulumManager?.cleanupOwner(owner),
+    qappFileSaves?.cleanup(saveOwner(owner)),
+  ]);
+}
+
+const qappFrameLifecycles = new Map<
+  number,
+  { lifecycle: QAppFrameLifecycle; frames: Map<number, string> }
+>();
+ipcMain.handle(
+  'qappFrame:register',
+  (event, frameName: string, owner: QAppReticulumOwner) => {
+    validateQAppReticulumIpcSender(event);
+    if (event.senderFrame !== event.sender.mainFrame)
+      throw new Error('RNS_PERMISSION_DENIED');
+    saveOwner(owner); // Validate the shell-provided owner before storing it.
+    if (
+      typeof frameName !== 'string' ||
+      !/^qapp-frame-[a-f0-9-]{36}$/.test(frameName)
+    )
+      throw new Error('QAPP_INVALID_FRAME');
+    const contents = event.sender;
+    const target = contents.mainFrame.framesInSubtree.find(
+      (frame) => frame !== contents.mainFrame && frame.name === frameName
+    );
+    if (!target) throw new Error('QAPP_FRAME_UNAVAILABLE');
+    let entry = qappFrameLifecycles.get(contents.id);
+    if (!entry) {
+      entry = {
+        lifecycle: new QAppFrameLifecycle(cleanupQAppOwner),
+        frames: new Map(),
+      };
+      qappFrameLifecycles.set(contents.id, entry);
+      const { lifecycle: registered, frames } = entry;
+      contents.on(
+        'did-start-navigation',
+        (_event, _url, inPlace, mainFrame, processId, routingId) => {
+          if (inPlace) return;
+          if (mainFrame) {
+            registered.clear();
+            frames.clear();
+            return;
+          }
+          const frame = webFrameMain.fromId(processId, routingId);
+          const name = frame && frames.get(frame.frameTreeNodeId);
+          if (name) registered.navigate(name, false);
+        }
+      );
+      contents.on('render-process-gone', () => {
+        registered.clear();
+        frames.clear();
+      });
+      contents.on('destroyed', () => {
+        registered.clear();
+        qappFrameLifecycles.delete(contents.id);
+      });
+    }
+    const previous = entry.frames.get(target.frameTreeNodeId);
+    if (previous) entry.lifecycle.unregister(previous);
+    entry.lifecycle.register(frameName, owner);
+    entry.frames.set(target.frameTreeNodeId, frameName);
+    return true;
+  }
+);
+ipcMain.handle('qappFrame:unregister', (event, frameName: string) => {
+  validateQAppReticulumIpcSender(event);
+  if (event.senderFrame !== event.sender.mainFrame)
+    throw new Error('RNS_PERMISSION_DENIED');
+  const entry = qappFrameLifecycles.get(event.sender.id);
+  entry?.lifecycle.unregister(frameName);
+  for (const [id, name] of entry?.frames ?? [])
+    if (name === frameName) entry.frames.delete(id);
+  return true;
+});
+
 ipcMain.handle(
   'qappReticulum:request',
   async (event, owner: QAppReticulumOwner, options) => {
@@ -3122,9 +3204,7 @@ ipcMain.handle(
   'qappReticulum:cleanupOwner',
   async (event, owner: QAppReticulumOwner) => {
     validateQAppReticulumIpcSender(event);
-    await privateChannelManager?.cleanupOwner(owner);
-    await qAppMoqTransportManager?.cleanupOwner(owner);
-    await getQAppReticulumManager().cleanupOwner(owner);
+    await cleanupQAppOwner(owner);
     return true;
   }
 );

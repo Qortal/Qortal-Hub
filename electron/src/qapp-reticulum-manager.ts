@@ -224,6 +224,27 @@ export class QAppReticulumManager extends EventEmitter {
         result.code ?? 'RNS_DESTINATION_UNREACHABLE'
       );
     }
+    if (this.connections.get(connectionId) !== connection) {
+      // A reload/close may have removed ownership while native setup waited.
+      // Also close a late native success, never hand out a dead connection ID.
+      void this.transport
+        .invoke('qapp_rns_close', {
+          managerKey: connection.managerKey,
+          connectionId,
+        })
+        .catch(() => undefined);
+      throw new QAppReticulumError('RNS_CONNECTION_CLOSED');
+    }
+    if (connection.state !== 'CONNECTING' && connection.state !== 'CONNECTED') {
+      this.removeConnection(connection);
+      void this.transport
+        .invoke('qapp_rns_close', {
+          managerKey: connection.managerKey,
+          connectionId,
+        })
+        .catch(() => undefined);
+      throw new QAppReticulumError('RNS_CONNECTION_CLOSED');
+    }
     connection.state = 'CONNECTED';
     return { connectionId, state: 'CONNECTED' };
   }
