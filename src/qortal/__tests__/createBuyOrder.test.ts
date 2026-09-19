@@ -83,13 +83,21 @@ vi.mock('../local-trade-funding', () => ({
   localTradeCoins: { LITECOIN: 'LTC' },
   fundLocalTrades: vi.fn(),
 }));
+vi.mock('../foreign-coin-send', () => ({
+  sendLocalForeignCoin: vi.fn(),
+}));
 import { fundLocalTrades } from '../local-trade-funding';
+import { sendLocalForeignCoin } from '../foreign-coin-send';
 
 // ── Imports (after mocks) ────────────────────────────────────────────────────
 
-import { createBuyOrder } from '../get';
+import { createBuyOrder, createSellOrder, sendCoin } from '../get';
 import { isRunningGateway } from '../qortal-requests';
-import { createEndpoint, createBuyOrderTx } from '../../background/background';
+import {
+  createEndpoint,
+  createBuyOrderTx,
+  getKeyPair,
+} from '../../background/background';
 import { simulatePermission } from './common';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -108,6 +116,77 @@ const DEFAULT_AT_DATA = {
 // getBuyingFees divides by QORT_DECIMALS (1e8) to get the displayed amount.
 const UNLOCK_FEE_SATS = 50_000; // 0.0005 LTC
 const LOCK_FEE_SATS = 1_000; // 0.00001 LTC
+
+describe('sendCoin on public nodes', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it('routes Bitcoin-family sends to the local signer without loading the private key', async () => {
+    vi.mocked(isRunningGateway).mockResolvedValue(true);
+    vi.mocked(sendLocalForeignCoin).mockResolvedValue({ success: true } as any);
+
+    await expect(
+      sendCoin({ coin: 'BTC', amount: '0.01', recipient: 'btc-address' }, false)
+    ).resolves.toEqual({ success: true });
+    expect(sendLocalForeignCoin).toHaveBeenCalledWith(
+      expect.objectContaining({ coin: 'BTC' }),
+      expect.any(Function)
+    );
+    expect(getKeyPair).not.toHaveBeenCalled();
+  });
+
+  it('blocks Pirate Chain before loading a key or contacting a node', async () => {
+    vi.mocked(isRunningGateway).mockResolvedValue(true);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      sendCoin(
+        { coin: 'ARRR', amount: '0.01', recipient: 'arrr-address' },
+        false
+      )
+    ).rejects.toThrow('question:message.error.gateway_pirate_local_node');
+    expect(getKeyPair).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendLocalForeignCoin).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('createSellOrder on public nodes', () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it('blocks Bitcoin-family sell offers before accessing wallet keys', async () => {
+    vi.mocked(isRunningGateway).mockResolvedValue(true);
+
+    await expect(
+      createSellOrder(
+        {
+          qortAmount: '10',
+          foreignBlockchain: 'BITCOIN',
+          foreignAmount: '0.1',
+        },
+        false
+      )
+    ).rejects.toThrow('question:message.generic.no_action_public_node');
+    expect(getKeyPair).not.toHaveBeenCalled();
+  });
+
+  it('blocks Pirate Chain offers before accessing wallet keys', async () => {
+    vi.mocked(isRunningGateway).mockResolvedValue(true);
+
+    await expect(
+      createSellOrder(
+        {
+          qortAmount: '10',
+          foreignBlockchain: 'PIRATECHAIN',
+          foreignAmount: '0.1',
+        },
+        false
+      )
+    ).rejects.toThrow('question:message.error.gateway_pirate_local_node');
+    expect(getKeyPair).not.toHaveBeenCalled();
+  });
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -310,12 +389,31 @@ describe('createBuyOrder', () => {
       expect(createBuyOrderTx).not.toHaveBeenCalled();
     });
 
-    it('refuses gateway trading without exposing the wallet key', async () => {
+    it('funds a Bitcoin-family trade on a public node using local signing', async () => {
       vi.mocked(isRunningGateway).mockResolvedValue(true);
       vi.stubGlobal('fetch', makeFetch());
-      await expect(createBuyOrder(makeInput(), false)).rejects.toThrow(
-        'question:message.error.gateway_non_qort_local_node'
+      simulatePermission(true);
+
+      await expect(createBuyOrder(makeInput(), false)).resolves.toEqual({
+        success: true,
+      });
+      expect(fundLocalTrades).toHaveBeenCalledWith(
+        [DEFAULT_AT_DATA],
+        'LTC',
+        expect.any(Function)
       );
+      expect(createBuyOrderTx).not.toHaveBeenCalled();
+    });
+
+    it('refuses Pirate Chain trades on a public node before fetching or signing', async () => {
+      vi.mocked(isRunningGateway).mockResolvedValue(true);
+      const fetchMock = makeFetch();
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(
+        createBuyOrder(makeInput({ foreignBlockchain: 'PIRATECHAIN' }), false)
+      ).rejects.toThrow('question:message.error.gateway_pirate_local_node');
+      expect(fetchMock).not.toHaveBeenCalled();
       expect(fundLocalTrades).not.toHaveBeenCalled();
       expect(createBuyOrderTx).not.toHaveBeenCalled();
     });

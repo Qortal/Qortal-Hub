@@ -5663,19 +5663,17 @@ export const sendCoin = async (data, isFromExtension) => {
     );
   }
   const checkCoin = data.coin;
-  const wallet = await getSaveWallet();
-  const address = wallet.address0;
-  const resKeyPair = await getKeyPair();
-  const parsedData = resKeyPair;
   const isGateway = await isRunningGateway();
 
-  if (checkCoin !== 'QORT' && isGateway)
+  if (checkCoin === 'ARRR' && isGateway)
     throw new Error(
-      i18n.t('question:message.error.gateway_non_qort_local_node', {
+      i18n.t('question:message.error.gateway_pirate_local_node', {
         postProcess: 'capitalizeFirstChar',
       })
     );
   if (checkCoin === 'QORT') {
+    const wallet = await getSaveWallet();
+    const address = wallet.address0;
     // Params: data.coin, data.recipient, data.amount, data.fee
     // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
     // then set the response string from the core to the `response` variable (defined above)
@@ -5805,6 +5803,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const { accepted } = resPermission;
 
     if (accepted) {
+      const parsedData = await getKeyPair();
       const opts = {
         entropy58: parsedData.arrrSeed58,
         receivingAddress: recipient,
@@ -5887,6 +5886,15 @@ export const createBuyOrder = async (data, isFromExtension) => {
   }
   const isGateway = await isRunningGateway();
   const foreignBlockchain = data.foreignBlockchain;
+  if (isGateway && !localTradeCoins[foreignBlockchain])
+    throw new Error(
+      i18n.t(
+        foreignBlockchain === 'PIRATECHAIN'
+          ? 'question:message.error.gateway_pirate_local_node'
+          : 'question:message.generic.no_action_public_node',
+        { postProcess: 'capitalizeFirstChar' }
+      )
+    );
   const atAddresses = data.crosschainAtInfo?.map(
     (order) => order.qortalAtAddress
   );
@@ -5909,12 +5917,6 @@ export const createBuyOrder = async (data, isFromExtension) => {
 
   const crosschainAtInfo = await Promise.all(atPromises);
   if (localTradeCoins[foreignBlockchain]) {
-    if (isGateway)
-      throw new Error(
-        i18n.t('question:message.error.gateway_non_qort_local_node', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
     return fundLocalTrades(
       crosschainAtInfo,
       localTradeCoins[foreignBlockchain],
@@ -6168,6 +6170,17 @@ export const createSellOrder = async (data, isFromExtension) => {
       postProcess: 'capitalizeFirstChar',
     });
     throw new Error(errorMsg);
+  }
+
+  if (await isRunningGateway()) {
+    throw new Error(
+      i18n.t(
+        ['ARRR', 'PIRATECHAIN'].includes(data.foreignBlockchain)
+          ? 'question:message.error.gateway_pirate_local_node'
+          : 'question:message.generic.no_action_public_node',
+        { postProcess: 'capitalizeFirstChar' }
+      )
+    );
   }
 
   const parsedForeignAmount = Number(data.foreignAmount)?.toFixed(8);

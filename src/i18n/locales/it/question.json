@@ -57,6 +57,7 @@
       "file_extension": "impossibile determinare l'estensione del file",
       "gateway_balance_local_node": "non è possibile visualizzare il saldo {{ token }} tramite il gateway. Utilizzare il nodo locale.",
       "gateway_non_qort_local_node": "non è possibile inviare monete non-QORT tramite il gateway. Utilizzare il nodo locale.",
+      "gateway_pirate_local_node": "Pirate Chain (ARRR) non è disponibile sui nodi pubblici. Usa un nodo locale.",
       "gateway_retrieve_balance": "il recupero del saldo {{ token }} non è consentito tramite un gateway",
       "gateway_wallet_local_node": "non è possibile visualizzare il wallet {{ token }} tramite il gateway. Utilizzare il nodo locale.",
       "get_foreign_fee": "errore nel recupero delle commissioni estere",

@@ -57,6 +57,7 @@
       "file_extension": "无法推断文件扩展名",
       "gateway_balance_local_node": "无法通过网关查看 {{ token }} 余额。请使用本地节点。",
       "gateway_non_qort_local_node": "无法通过网关发送非 QORT 币。请使用本地节点。",
+      "gateway_pirate_local_node": "Pirate Chain（ARRR）无法在公共节点上使用。请使用本地节点。",
       "gateway_retrieve_balance": "无法通过网关获取 {{ token }} 余额",
       "gateway_wallet_local_node": "无法通过网关查看 {{ token }} 钱包。请使用本地节点。",
       "get_foreign_fee": "获取外部费用时出错",

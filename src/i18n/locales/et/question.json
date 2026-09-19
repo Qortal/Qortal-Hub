@@ -57,6 +57,7 @@
       "file_extension": "faililaiendit ei suudetud tuletada",
       "gateway_balance_local_node": "ei saa vaadata {{ token }} saldot lüüsi kaudu. Palun kasuta oma kohalikku haaret.",
       "gateway_non_qort_local_node": "ei saa saata mitte-QORT münti lüüsi kaudu. Palun kasuta oma kohalikku haaret.",
+      "gateway_pirate_local_node": "Pirate Chain (ARRR) ei ole avalikes sõlmedes saadaval. Kasuta kohalikku sõlme.",
       "gateway_retrieve_balance": "{{ token }} saldo kättesaamine ei ole lüüsi kaudu lubatud",
       "gateway_wallet_local_node": "ei saa vaadata {{ token }} rahakotti lüüsi kaudu. Palun kasuta oma kohalikku haaret.",
       "get_foreign_fee": "viga välismaise tasu kättesaamisel",

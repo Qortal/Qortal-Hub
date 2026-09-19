@@ -57,6 +57,7 @@
       "file_extension": "ファイルの拡張子を特定できませんでした",
       "gateway_balance_local_node": "ゲートウェイ経由で{{ token }}の残高を表示できません。ローカルノードを使用してください。",
       "gateway_non_qort_local_node": "ゲートウェイ経由でQORT以外のコインを送信できません。ローカルノードを使用してください。",
+      "gateway_pirate_local_node": "Pirate Chain（ARRR）は公開ノードでは利用できません。ローカルノードを使用してください。",
       "gateway_retrieve_balance": "ゲートウェイ経由では{{ token }}の残高取得は許可されていません",
       "gateway_wallet_local_node": "ゲートウェイ経由で{{ token }}のウォレットを表示できません。ローカルノードを使用してください。",
       "get_foreign_fee": "外国手数料の取得時にエラーが発生しました",

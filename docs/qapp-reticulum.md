@@ -17,7 +17,9 @@ Backends use the dedicated Reticulum destination aspect
 - `RNS_CLOSE`: `connectionId`.
 
 The host posts `RNS_MESSAGE` and `RNS_CONNECTION_STATE` events to the owning
-Q-App iframe. States are `CONNECTING`, `CONNECTED`, `RECONNECTING`,
+Q-App view. Desktop Q-Apps use separate Electron web contents and storage
+partitions; browser and mobile builds retain the iframe bridge. States are
+`CONNECTING`, `CONNECTED`, `RECONNECTING`,
 `DISCONNECTED`, `CLOSING`, `CLOSED`, and `ERROR`.
 
 The first operation for a destination in a tab asks whether the app may connect
@@ -138,5 +140,5 @@ to a local MediaStream; streams are never passed through IPC.
 
 Requests expire after 60 seconds. Native code validates the requesting frame,
 unchanged URL, approved source list, main-shell IPC sender, and one-use capability.
-Only one pending capture request is allowed. Hub does not encode, encrypt, or
+Only one pending capture request is allowed across the Hub window. Hub does not encode, encrypt, or
 interpret this app's screen frames; application media logic stays in the Q-App.

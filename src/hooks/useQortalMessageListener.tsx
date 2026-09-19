@@ -604,15 +604,14 @@ async function storeFilesInIndexedDB(obj) {
 }
 
 export const useQortalMessageListener = (
-  frameWindow,
-  iframeRef,
   tabId,
   isDevMode,
   appName,
   appService,
-  appIdentifier
+  appIdentifier,
+  nativeViewRef,
+  nativeGuestActive
 ) => {
-  const [nativeFrameName] = useState(() => `qapp-frame-${crypto.randomUUID()}`);
   const [path, setPath] = useState('');
   const [history, setHistory] = useState({
     customQDNHistoryPaths: [],
@@ -730,19 +729,6 @@ export const useQortalMessageListener = (
 
     const listener = async (event) => {
       if (event?.data?.requestedHandler !== 'UI') return;
-
-      const appWindow = iframeRef.current?.contentWindow;
-      if (!appWindow || event.source !== appWindow) return;
-
-      let appOrigin = null;
-      try {
-        appOrigin = iframeRef.current?.src
-          ? new URL(iframeRef.current.src).origin
-          : null;
-      } catch {
-        return;
-      }
-      if (appOrigin && event.origin !== appOrigin) return;
 
       const eventPort = event.ports?.[0];
 
@@ -1004,19 +990,12 @@ export const useQortalMessageListener = (
         executeEvent('addTab', {
           data: event?.data?.payload,
         });
-        const targetOrigin = iframeRef.current
-          ? new URL(iframeRef.current.src).origin
-          : '*';
-        iframeRef.current.contentWindow.postMessage(
-          {
-            action: 'SET_TAB_SUCCESS',
-            requestedHandler: 'UI',
-            payload: {
-              name: event?.data?.payload?.name,
-            },
-          },
-          targetOrigin
-        );
+        const reply = {
+          action: 'SET_TAB_SUCCESS',
+          requestedHandler: 'UI',
+          payload: { name: event?.data?.payload?.name },
+        };
+        nativeViewRef.current?.send('qapp:event', reply);
         // Respond to close the MessageChannel and prevent pending connections
         if (event.ports[0]) {
           event.ports[0].postMessage({ result: true, error: null });
@@ -1024,19 +1003,42 @@ export const useQortalMessageListener = (
       }
     };
 
-    // Add the listener for messages coming from the frameWindow
-    frameWindow.addEventListener('message', listener);
+    const nativeView = nativeGuestActive ? nativeViewRef?.current : null;
+    const nativeListener = (event) => {
+      if (event.target !== nativeView || event.channel !== 'qapp:request') return;
+      const request = event.args?.[0];
+      if (
+        typeof request?.documentId !== 'string' ||
+        request.documentId.length > 128 ||
+        !Number.isSafeInteger(request?.requestId) ||
+        request.requestId < 1 ||
+        !request.data ||
+        typeof request.data !== 'object'
+      ) return;
+      const port = {
+        postMessage: (result) => {
+          if (nativeView.isConnected)
+            nativeView.send('qapp:response', {
+              documentId: request.documentId,
+              requestId: request.requestId,
+              result,
+            });
+        },
+      };
+      void listener({ data: request.data, ports: [port] });
+    };
+    nativeView?.addEventListener('ipc-message', nativeListener);
 
     // Cleanup function to remove the event listener when the component is unmounted
     return () => {
-      frameWindow.removeEventListener('message', listener);
+      nativeView?.removeEventListener('ipc-message', nativeListener);
     };
-  }, [isDevMode, appName, appService, tabId]); // Empty dependency array to run once when the component mounts
+  }, [isDevMode, appName, appService, tabId, nativeGuestActive]);
 
   useEffect(() => {
     const api = window.electronAPI;
-    const iframe = iframeRef.current;
-    if (!api || !iframe || tabId == null || !appName) return;
+    const nativeView = nativeGuestActive ? nativeViewRef?.current : null;
+    if (!api || !nativeView || tabId == null || !appName) return;
     let identity;
     try {
       identity = normalizeQappIdentityContext({
@@ -1052,40 +1054,22 @@ export const useQortalMessageListener = (
       service: identity.service,
     };
     const expectedOwnerKey = `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
-    // A load event belongs to the NEW document and is too late for cleanup:
-    // that document may already be connecting. Main observes navigation start.
-    const frameName = nativeFrameName;
-    void api.qappFrameRegister?.(frameName, owner).catch(console.error);
+    const postToApp = (payload) => {
+      if (nativeView.isConnected) nativeView.send('qapp:event', payload);
+    };
     const unsubscribe = api.onQAppReticulumEvent?.((payload) => {
-      if (payload?.ownerKey !== expectedOwnerKey || !iframe.contentWindow)
-        return;
-      let targetOrigin: string;
-      try {
-        targetOrigin = new URL(iframe.src).origin;
-      } catch {
-        return;
-      }
-      iframe.contentWindow.postMessage(
-        {
-          action: payload.action,
-          connectionId: payload.connectionId,
-          ...(payload.action === 'RNS_MESSAGE'
-            ? { payload: payload.payload }
-            : { state: payload.state, reason: payload.reason }),
-          requestedHandler: 'UI',
-        },
-        targetOrigin
-      );
+      if (payload?.ownerKey !== expectedOwnerKey) return;
+      postToApp({
+        action: payload.action,
+        connectionId: payload.connectionId,
+        ...(payload.action === 'RNS_MESSAGE'
+          ? { payload: payload.payload }
+          : { state: payload.state, reason: payload.reason }),
+        requestedHandler: 'UI',
+      });
     });
     const unsubscribePrivateChannel = api.onPrivateChannelEvent?.((payload) => {
-      if (payload?.ownerKey !== expectedOwnerKey || !iframe.contentWindow)
-        return;
-      let targetOrigin: string;
-      try {
-        targetOrigin = new URL(iframe.src).origin;
-      } catch {
-        return;
-      }
+      if (payload?.ownerKey !== expectedOwnerKey) return;
       const eventPayload =
         payload.action === 'PRIVATE_CHANNEL_MESSAGE'
           ? {
@@ -1096,56 +1080,39 @@ export const useQortalMessageListener = (
           : payload.action === 'PRIVATE_CHANNEL_ERROR'
             ? { code: payload.code, message: payload.message }
             : { state: payload.state };
-      iframe.contentWindow.postMessage(
-        {
-          action: payload.action,
-          channelId: payload.channelId,
-          ...eventPayload,
-          requestedHandler: 'UI',
-        },
-        targetOrigin
-      );
+      postToApp({
+        action: payload.action,
+        channelId: payload.channelId,
+        ...eventPayload,
+        requestedHandler: 'UI',
+      });
     });
     const unsubscribeMoq = api.onQAppMoqEvent?.((payload) => {
-      if (payload?.ownerKey !== expectedOwnerKey || !iframe.contentWindow)
-        return;
-      let targetOrigin: string;
-      try {
-        targetOrigin = new URL(iframe.src).origin;
-      } catch {
-        return;
-      }
-      iframe.contentWindow.postMessage(
-        {
-          action: payload.action,
-          sessionId: payload.sessionId,
-          ...(payload.action === 'MOQ_OBJECT'
-            ? {
-                subscriptionId: payload.subscriptionId,
-                namespace: payload.namespace,
-                trackName: payload.trackName,
-                groupId: payload.groupId,
-                objectId: payload.objectId,
-                payload: payload.payload,
-              }
-            : payload.action === 'MOQ_ERROR'
-              ? {
-                  subscriptionId: payload.subscriptionId,
-                  code: payload.code,
-                }
-              : { state: payload.state }),
-          requestedHandler: 'UI',
-        },
-        targetOrigin
-      );
+      if (payload?.ownerKey !== expectedOwnerKey) return;
+      postToApp({
+        action: payload.action,
+        sessionId: payload.sessionId,
+        ...(payload.action === 'MOQ_OBJECT'
+          ? {
+              subscriptionId: payload.subscriptionId,
+              namespace: payload.namespace,
+              trackName: payload.trackName,
+              groupId: payload.groupId,
+              objectId: payload.objectId,
+              payload: payload.payload,
+            }
+          : payload.action === 'MOQ_ERROR'
+            ? { subscriptionId: payload.subscriptionId, code: payload.code }
+            : { state: payload.state }),
+        requestedHandler: 'UI',
+      });
     });
     return () => {
       unsubscribe?.();
       unsubscribePrivateChannel?.();
       unsubscribeMoq?.();
-      void api.qappFrameUnregister?.(frameName).catch(() => undefined);
     };
-  }, [appName, appService, iframeRef, tabId, nativeFrameName]);
+  }, [appName, appService, tabId, nativeGuestActive]);
 
-  return { path, history, resetHistory, changeCurrentIndex, nativeFrameName };
+  return { path, history, resetHistory, changeCurrentIndex };
 };

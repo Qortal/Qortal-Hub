@@ -4,7 +4,7 @@ import { getNotificationOsPushDisabled } from '../qortal/qortal-requests';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
-import axios from 'axios';
+import i18n from 'i18next';
 import {
   base64ToUint8Array,
   decryptSingle,
@@ -28,10 +28,7 @@ import {
   API_ENDPOINTS,
   EXT_NODE_QORTAL_LINK,
   getDefaultLocalNodeUrl,
-  HTTPS_QORT_TRADE,
-  HTTPS_TRADE_NODE,
   LOCALHOST_12391,
-  MIN_REQUIRED_QORTS,
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_WEEKS_1_IN_MILLISECONDS,
@@ -350,8 +347,6 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 
 export const walletVersion = 2;
 
-const proxyAccountAddress = 'QXPejUe5Za1KD3zCMViWCX35AreMQ9H7ku';
-const proxyAccountPublicKey = '5hP6stDWybojoDw5t8z9D51nV945oMPX7qBd29rhX1G7';
 const pendingResponses = new Map();
 
 let groups = null;
@@ -654,23 +649,6 @@ export async function getUserInfo() {
 async function connection(hostname: string) {
   const isConnected = await getData<any>(hostname).catch(() => null);
   return isConnected;
-}
-
-async function getTradeInfo(qortalAtAddress) {
-  const response = await fetch(
-    HTTPS_TRADE_NODE + '/crosschain/trade/' + qortalAtAddress
-  );
-  if (!response?.ok) throw new Error('Cannot crosschain trade information');
-  const data = await response.json();
-  return data;
-}
-
-async function getTradesInfo(qortalAtAddresses) {
-  // Use Promise.all to fetch data for all addresses concurrently
-  const trades = await Promise.all(
-    qortalAtAddresses.map((address) => getTradeInfo(address))
-  );
-  return trades; // Return the array of trade info objects
 }
 
 export async function getBalanceInfo() {
@@ -1239,121 +1217,6 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   }
 }
 
-async function sendChatForBuyOrder({
-  qortAddress,
-  recipientPublicKey,
-  message,
-  atAddresses,
-  isSingle,
-}) {
-  let _reference = new Uint8Array(64);
-  self.crypto.getRandomValues(_reference);
-
-  let sendTimestamp = Date.now();
-  const wallet = await getSaveWallet();
-  const address = wallet.address0;
-  let reference = Base58.encode(_reference);
-  const resKeyPair = await getKeyPair();
-  const parsedData = resKeyPair;
-  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
-  const uint8PublicKey = Base58.decode(parsedData.publicKey);
-  const keyPair = {
-    privateKey: uint8PrivateKey,
-    publicKey: uint8PublicKey,
-  };
-  const balance = await getBalanceInfo();
-  const hasEnoughBalance = +balance < MIN_REQUIRED_QORTS ? false : true;
-  const jsonData = {
-    addresses: message.addresses,
-    foreignKey: message.foreignKey,
-    receivingAddress: message.receivingAddress,
-  };
-  const finalJson = {
-    callRequest: jsonData,
-    extra: {
-      type: isSingle ? 'single' : 'multiple',
-    },
-  };
-  const messageStringified = JSON.stringify(finalJson);
-
-  const tx = await createTransaction(18, keyPair, {
-    timestamp: sendTimestamp,
-    recipient: qortAddress,
-    recipientPublicKey: recipientPublicKey,
-    hasChatReference: 0,
-    message: messageStringified,
-    lastReference: reference,
-    proofOfWorkNonce: 0,
-    isEncrypted: 1,
-    isText: 1,
-  });
-  //TODO
-  // if (!hasEnoughBalance) {
-  if (!hasEnoughBalance) {
-    const _encryptedMessage = tx._encryptedMessage;
-    const encryptedMessageToBase58 = Base58.encode(_encryptedMessage);
-    const signature =
-      'id-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-    const checkGatewayStatusRes = await fetch(
-      `${HTTPS_TRADE_NODE}/admin/status`
-    );
-    const checkGatewayStatusData = await checkGatewayStatusRes.json();
-    if (
-      +checkGatewayStatusData?.syncPercent !== 100 ||
-      checkGatewayStatusData?.isSynchronizing !== false
-    ) {
-      throw new Error('Cannot make trade. Gateway node is synchronizing');
-    }
-    const healthCheckRes = await fetch(
-      HTTPS_QORT_TRADE + '/api/transaction/healthcheck'
-    );
-    const healthcheckData = await healthCheckRes.json();
-    if (healthcheckData?.dbConnection !== 'healthy') {
-      throw new Error('Could not connect to db. Try again later.');
-    }
-    const res = await axios.post(
-      HTTPS_QORT_TRADE + `/api/transaction/updatetxgateway`,
-      {
-        qortalAtAddresses: atAddresses,
-        qortAddress: address,
-        node: HTTPS_TRADE_NODE,
-        status: 'message-sent',
-        encryptedMessageToBase58,
-        signature,
-        reference,
-        senderPublicKey: parsedData.publicKey,
-        sender: address,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    return {
-      encryptedMessageToBase58,
-      status: 'message-sent',
-      signature,
-    };
-  }
-
-  const chatBytes = tx.chatBytes;
-  const difficulty = 8;
-  const { nonce, chatBytesArray } = await performPowTask(chatBytes, difficulty);
-
-  let _response = await signChatFunc(
-    chatBytesArray,
-    nonce,
-    HTTPS_TRADE_NODE,
-    keyPair
-  );
-  if (_response?.error) {
-    throw new Error(_response?.message);
-  }
-  return _response;
-}
-
 export async function sendChatGroup({
   groupId,
   typeMessage,
@@ -1569,143 +1432,60 @@ export async function createBuyOrderTx({
   isGateway,
   foreignBlockchain,
 }) {
-  try {
-    if (!isGateway) {
-      const wallet = await getSaveWallet();
-
-      const address = wallet.address0;
-      let message;
-      if (foreignBlockchain === 'PIRATECHAIN') {
-        message = {
-          atAddress: crosschainAtInfo[0].qortalAtAddress,
-          foreignKey: await getForeignKey(foreignBlockchain),
-          receivingAddress: address,
-        };
-      } else {
-        message = {
-          addresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
-          foreignKey: await getForeignKey(foreignBlockchain),
-          receivingAddress: address,
-        };
-      }
-
-      let responseVar;
-      let txn;
-      let url;
-      if (foreignBlockchain === 'PIRATECHAIN') {
-        txn = new TradeBotRespondRequest().createTransaction(message);
-
-        url = await createEndpoint('/crosschain/tradebot/respond');
-      } else {
-        txn = new TradeBotRespondMultipleRequest().createTransaction(message);
-
-        url = await createEndpoint('/crosschain/tradebot/respondmultiple');
-      }
-
-      const responseFetch = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(txn),
-      });
-
-      const res = await responseFetch.json();
-      if (res?.error && res?.message) {
-        throw new Error(res?.message);
-      }
-      if (!responseFetch?.ok) throw new Error('Failed to submit buy order');
-
-      if (res === false) {
-        responseVar = {
-          response: 'Unable to execute buy order',
-          success: false,
-        };
-      } else {
-        responseVar = { response: res, success: true };
-      }
-      const { response, success } = responseVar;
-      let responseMessage;
-      if (success) {
-        responseMessage = {
-          callResponse: response,
-          extra: {
-            message: 'Transaction processed successfully!',
-            atAddresses:
-              foreignBlockchain === 'PIRATECHAIN'
-                ? [crosschainAtInfo[0].qortalAtAddress]
-                : crosschainAtInfo.map((order) => order.qortalAtAddress),
-            senderAddress: address,
-            node: url,
-          },
-        };
-      } else {
-        responseMessage = {
-          callResponse: 'ERROR',
-          extra: {
-            message: response,
-            atAddresses:
-              foreignBlockchain === 'PIRATECHAIN'
-                ? [crosschainAtInfo[0].qortalAtAddress]
-                : crosschainAtInfo.map((order) => order.qortalAtAddress),
-            senderAddress: address,
-            node: url,
-          },
-        };
-      }
-
-      return responseMessage;
-    }
-    const wallet = await getSaveWallet();
-    const address = wallet.address0;
-
-    const message = {
-      addresses:
-        foreignBlockchain === 'PIRATECHAIN'
-          ? [crosschainAtInfo[0].qortalAtAddress]
-          : crosschainAtInfo.map((order) => order.qortalAtAddress),
-      foreignKey: await getForeignKey(foreignBlockchain),
-      receivingAddress: address,
-    };
-    const res = await sendChatForBuyOrder({
-      qortAddress: proxyAccountAddress,
-      recipientPublicKey: proxyAccountPublicKey,
-      message,
-      atAddresses:
-        foreignBlockchain === 'PIRATECHAIN'
-          ? [crosschainAtInfo[0].qortalAtAddress]
-          : crosschainAtInfo.map((order) => order.qortalAtAddress),
-      isSingle: foreignBlockchain === 'PIRATECHAIN',
-    });
-
-    if (res?.signature) {
-      const message = await listenForChatMessageForBuyOrder({
-        nodeBaseUrl: HTTPS_TRADE_NODE,
-        senderAddress: proxyAccountAddress,
-        senderPublicKey: proxyAccountPublicKey,
-        signature: res?.signature,
-      });
-
-      const responseMessage = {
-        callResponse: message.callResponse,
-        extra: {
-          message: message?.extra?.message,
-          senderAddress: address,
-          node: HTTPS_TRADE_NODE,
-          atAddresses:
-            foreignBlockchain === 'PIRATECHAIN'
-              ? [crosschainAtInfo[0].qortalAtAddress]
-              : crosschainAtInfo.map((order) => order.qortalAtAddress),
-        },
-      };
-
-      return responseMessage;
-    } else {
-      throw new Error('Unable to send buy order message');
-    }
-  } catch (error) {
-    throw new Error(error.message);
+  if (isGateway) {
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const isPirateChain = foreignBlockchain === 'PIRATECHAIN';
+  const atAddresses = crosschainAtInfo.map((order) => order.qortalAtAddress);
+  const message = isPirateChain
+    ? {
+        atAddress: atAddresses[0],
+        foreignKey: await getForeignKey(foreignBlockchain),
+        receivingAddress: address,
+      }
+    : {
+        addresses: atAddresses,
+        foreignKey: await getForeignKey(foreignBlockchain),
+        receivingAddress: address,
+      };
+  const txn = isPirateChain
+    ? new TradeBotRespondRequest().createTransaction(message)
+    : new TradeBotRespondMultipleRequest().createTransaction(message);
+  const url = await createEndpoint(
+    isPirateChain
+      ? '/crosschain/tradebot/respond'
+      : '/crosschain/tradebot/respondmultiple'
+  );
+  const responseFetch = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(txn),
+  });
+  const response = await responseFetch.json();
+  if (response?.error && response?.message) {
+    throw new Error(response.message);
+  }
+  if (!responseFetch.ok) throw new Error('Failed to submit buy order');
+
+  const success = response !== false;
+  return {
+    callResponse: success ? response : 'ERROR',
+    extra: {
+      message: success
+        ? 'Transaction processed successfully!'
+        : 'Unable to execute buy order',
+      atAddresses: isPirateChain ? [atAddresses[0]] : atAddresses,
+      senderAddress: address,
+      node: url,
+    },
+  };
 }
 
 export async function sendChatNotification(
@@ -2384,69 +2164,6 @@ function fetchMessages(apiCall) {
   });
 }
 
-async function fetchMessagesForBuyOrders(apiCall, signature, senderPublicKey) {
-  let retryDelay = 2000; // Start with a 2-second delay
-  const maxDuration = 360000 * 2; // Maximum duration set to 12 minutes
-  const startTime = Date.now(); // Record the start time
-  let triedChatMessage = [];
-  // Promise to handle polling logic
-  await new Promise((res) => {
-    setTimeout(() => {
-      res();
-    }, 40000);
-  });
-  return new Promise((resolve, reject) => {
-    const attemptFetch = async () => {
-      if (Date.now() - startTime > maxDuration) {
-        return reject(new Error('Maximum polling time exceeded'));
-      }
-
-      try {
-        const response = await fetch(apiCall);
-        let data = await response.json();
-
-        data = data.filter(
-          (item) => !triedChatMessage.includes(item.signature)
-        );
-        if (data && data.length > 0) {
-          const encodedMessageObj = data[0];
-          const resKeyPair = await getKeyPair();
-          const parsedData = resKeyPair;
-          const uint8PrivateKey = Base58.decode(parsedData.privateKey);
-          const uint8PublicKey = Base58.decode(parsedData.publicKey);
-          const keyPair = {
-            privateKey: uint8PrivateKey,
-            publicKey: uint8PublicKey,
-          };
-
-          const decodedMessage = decryptChatMessage(
-            encodedMessageObj.data,
-            keyPair.privateKey,
-            senderPublicKey,
-            encodedMessageObj.reference
-          );
-          const parsedMessage = JSON.parse(decodedMessage);
-          if (parsedMessage?.extra?.chatRequestSignature === signature) {
-            resolve(parsedMessage);
-          } else {
-            triedChatMessage.push(encodedMessageObj.signature);
-            setTimeout(attemptFetch, retryDelay);
-            retryDelay = Math.min(retryDelay * 2, 360000); // Ensure delay does not exceed 6 minutes
-          }
-          // Resolve the promise when data is found
-        } else {
-          setTimeout(attemptFetch, retryDelay);
-          retryDelay = Math.min(retryDelay * 2, 360000); // Ensure delay does not exceed 6 minutes
-        }
-      } catch (error) {
-        reject(error); // Reject the promise on error
-      }
-    };
-
-    attemptFetch(); // Initial call to start the polling
-  });
-}
-
 async function listenForChatMessage({
   nodeBaseUrl,
   senderAddress,
@@ -2486,49 +2203,6 @@ async function listenForChatMessage({
       encodedMessageObj.reference
     );
     return { secretCode: decodedMessage };
-  } catch (error) {
-    console.error(error);
-    throw new Error(error.message);
-  }
-}
-
-async function listenForChatMessageForBuyOrder({
-  nodeBaseUrl,
-  senderAddress,
-  senderPublicKey,
-  signature,
-}) {
-  try {
-    let validApi = '';
-    const checkIfNodeBaseUrlIsAcceptable = API_ENDPOINTS.find(
-      (item) => item === nodeBaseUrl
-    );
-    if (checkIfNodeBaseUrlIsAcceptable) {
-      validApi = checkIfNodeBaseUrlIsAcceptable;
-    } else {
-      validApi = await findUsableApi();
-    }
-    const wallet = await getSaveWallet();
-    const address = wallet.address0;
-    const before = Date.now() + 1200000;
-    const after = Date.now();
-    const apiCall = `${validApi}/chat/messages?involving=${senderAddress}&involving=${address}&reverse=true&limit=1&before=${before}&after=${after}&encoding=BASE64`;
-    const parsedMessageObj = await fetchMessagesForBuyOrders(
-      apiCall,
-      signature,
-      senderPublicKey
-    );
-
-    return parsedMessageObj;
-
-    // chrome.tabs.query({}, function (tabs) {
-    //   tabs.forEach((tab) => {
-    //     chrome.tabs.sendMessage(tab.id, {
-    //       type: "RESPONSE_FOR_TRADES",
-    //       message: parsedMessageObj,
-    //     });
-    //   });
-    // });
   } catch (error) {
     console.error(error);
     throw new Error(error.message);

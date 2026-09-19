@@ -57,6 +57,7 @@
       "file_extension": "impossible de déterminer l'extension du fichier",
       "gateway_balance_local_node": "le solde {{ token }} ne peut pas être consulté via la passerelle. Utilisez votre nœud local.",
       "gateway_non_qort_local_node": "les pièces non-QORT ne peuvent pas être envoyées via la passerelle. Utilisez votre nœud local.",
+      "gateway_pirate_local_node": "Pirate Chain (ARRR) n’est pas disponible sur les nœuds publics. Utilisez un nœud local.",
       "gateway_retrieve_balance": "la récupération du solde {{ token }} n'est pas autorisée via une passerelle",
       "gateway_wallet_local_node": "le portefeuille {{ token }} ne peut pas être consulté via la passerelle. Utilisez votre nœud local.",
       "get_foreign_fee": "erreur lors de l'obtention des frais étrangers",

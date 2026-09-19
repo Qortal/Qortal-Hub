@@ -6,8 +6,8 @@ import {
 } from './foreign-wallet-signer';
 import { createForeignWalletJournal } from './foreign-wallet-journal';
 import { QAppFileSaves, SaveError } from './qapp-file-save';
-import { QAppFrameLifecycle } from './qapp-frame-lifecycle';
-import { webFrameMain } from 'electron';
+import { qappGuestPartition, qappGuestUrlAllowed, type QAppGuestOwner } from './qapp-guest-policy';
+import { restrictQAppGuestWebRtc } from './qapp-guest-network-policy';
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import {
   CapElectronEventEmitter,
@@ -33,6 +33,7 @@ import {
 import electronIsDev from 'electron-is-dev';
 import windowStateKeeper from 'electron-window-state';
 import { dirname, join } from 'path';
+import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
@@ -70,6 +71,8 @@ import {
 } from './core';
 import {
   ensureCertForBase,
+  installCertificateVerification,
+  installLocalNodeHttpsBlock,
   isLocalPrivateHost,
   persistedLocalNodeCaExists,
   setLocalNodeHttpsReady,
@@ -383,7 +386,6 @@ const defaultDomains = [
   'https://apinode2.qortalnodes.live',
   'https://apinode3.qortalnodes.live',
   'https://apinode4.qortalnodes.live',
-  'https://www.qort.trade',
 ];
 
 let reticulumResourceStore: ReticulumResourceStore | null = null;
@@ -1063,6 +1065,7 @@ export class ElectronCapacitorApp {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
+        webviewTag: true,
         preload: preloadPath,
         backgroundThrottling: false,
         additionalArguments: [
@@ -1071,6 +1074,79 @@ export class ElectronCapacitorApp {
         ],
       },
     });
+    configuredQAppSessions.clear();
+    this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+      const prepared = [...preparedQAppGuests.values()].find(
+        (candidate) => qappGuestUrlAllowed(
+          candidate.url,
+          params.src,
+          candidate.owner,
+          candidate.isDevMode
+        ) &&
+          candidate.partition === params.partition &&
+          candidate.preloadTokenUrl === params.preload
+      );
+      if (!prepared) {
+        event.preventDefault();
+        return;
+      }
+      webPreferences.preload = qappGuestPreloadPath;
+      params.preload = pathToFileURL(qappGuestPreloadPath).toString();
+      webPreferences.nodeIntegration = false;
+      webPreferences.nodeIntegrationInSubFrames = false;
+      webPreferences.contextIsolation = true;
+      webPreferences.sandbox = true;
+      webPreferences.webviewTag = false;
+      webPreferences.partition = prepared.partition;
+      webPreferences.additionalArguments = [`--qapp-guest-token=${prepared.guestToken}`];
+    });
+    this.MainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+      attachedQAppGuests.set(guest.id, { contents: guest, prepared: null });
+      // Restrict WebRTC on the Q-App guest itself. The iframe response policy
+      // does not cover a webview's main document, and this also covers nested
+      // frames that share the guest's WebContents.
+      restrictQAppGuestWebRtc(guest);
+      guest.setWindowOpenHandler(() => ({ action: 'deny' }));
+      const allowedGuestUrl = (nextUrl: string) => {
+        const bound = attachedQAppGuests.get(guest.id)?.prepared;
+        const candidates = bound ? [bound] : [...preparedQAppGuests.values()];
+        return candidates.some(
+          (candidate) =>
+            guest.session === session.fromPartition(candidate.partition) &&
+            qappGuestUrlAllowed(candidate.url, nextUrl, candidate.owner, candidate.isDevMode)
+        );
+      };
+      guest.on('will-navigate', (event, nextUrl) => {
+        if (!allowedGuestUrl(nextUrl)) event.preventDefault();
+      });
+      guest.on('will-redirect', (event, nextUrl, _inPlace, isMainFrame) => {
+        if (isMainFrame && !allowedGuestUrl(nextUrl)) event.preventDefault();
+      });
+      guest.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+        if (mainFrame && !inPlace) {
+          const owner = attachedQAppGuests.get(guest.id)?.prepared?.owner;
+          if (owner) void cleanupQAppOwner(owner);
+        }
+      });
+      const cleanup = () => {
+        const attached = attachedQAppGuests.get(guest.id);
+        attachedQAppGuests.delete(guest.id);
+        if (attached?.prepared) void cleanupQAppOwner(attached.prepared.owner);
+      };
+      guest.on('destroyed', cleanup);
+      guest.on('render-process-gone', cleanup);
+    });
+    const clearGuestRegistrations = () => {
+      for (const attached of attachedQAppGuests.values()) {
+        if (attached.prepared) void cleanupQAppOwner(attached.prepared.owner);
+      }
+      attachedQAppGuests.clear();
+      preparedQAppGuests.clear();
+    };
+    this.MainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+      if (mainFrame && !inPlace) clearGuestRegistrations();
+    });
+    this.MainWindow.webContents.on('destroyed', clearGuestRegistrations);
     this.mainWindowState.manage(this.MainWindow);
     installDisplayMediaPicker(this.MainWindow);
     this.MainWindow.on('maximize', () => {
@@ -1279,8 +1355,8 @@ export class ElectronCapacitorApp {
   }
 }
 
-export function setupContentSecurityPolicy(customScheme: string): void {
-  session.defaultSession.webRequest.onHeadersReceived(
+export function setupContentSecurityPolicy(customScheme: string, targetSession = session.defaultSession): void {
+  targetSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
       const requestUrl = details.url;
       const expandedDomains = [...domainHolder.allowedDomains];
@@ -3099,76 +3175,103 @@ async function cleanupQAppOwner(owner: QAppReticulumOwner): Promise<void> {
   ]);
 }
 
-const qappFrameLifecycles = new Map<
-  number,
-  { lifecycle: QAppFrameLifecycle; frames: Map<number, string> }
->();
-ipcMain.handle(
-  'qappFrame:register',
-  (event, frameName: string, owner: QAppReticulumOwner) => {
-    validateQAppReticulumIpcSender(event);
-    if (event.senderFrame !== event.sender.mainFrame)
-      throw new Error('RNS_PERMISSION_DENIED');
-    saveOwner(owner); // Validate the shell-provided owner before storing it.
-    if (
-      typeof frameName !== 'string' ||
-      !/^qapp-frame-[a-f0-9-]{36}$/.test(frameName)
-    )
-      throw new Error('QAPP_INVALID_FRAME');
-    const contents = event.sender;
-    const target = contents.mainFrame.framesInSubtree.find(
-      (frame) => frame !== contents.mainFrame && frame.name === frameName
-    );
-    if (!target) throw new Error('QAPP_FRAME_UNAVAILABLE');
-    let entry = qappFrameLifecycles.get(contents.id);
-    if (!entry) {
-      entry = {
-        lifecycle: new QAppFrameLifecycle(cleanupQAppOwner),
-        frames: new Map(),
-      };
-      qappFrameLifecycles.set(contents.id, entry);
-      const { lifecycle: registered, frames } = entry;
-      contents.on(
-        'did-start-navigation',
-        (_event, _url, inPlace, mainFrame, processId, routingId) => {
-          if (inPlace) return;
-          if (mainFrame) {
-            registered.clear();
-            frames.clear();
-            return;
-          }
-          const frame = webFrameMain.fromId(processId, routingId);
-          const name = frame && frames.get(frame.frameTreeNodeId);
-          if (name) registered.navigate(name, false);
-        }
-      );
-      contents.on('render-process-gone', () => {
-        registered.clear();
-        frames.clear();
-      });
-      contents.on('destroyed', () => {
-        registered.clear();
-        qappFrameLifecycles.delete(contents.id);
-      });
-    }
-    const previous = entry.frames.get(target.frameTreeNodeId);
-    if (previous) entry.lifecycle.unregister(previous);
-    entry.lifecycle.register(frameName, owner);
-    entry.frames.set(target.frameTreeNodeId, frameName);
-    return true;
-  }
-);
-ipcMain.handle('qappFrame:unregister', (event, frameName: string) => {
+type PreparedQAppGuest = {
+  owner: QAppGuestOwner;
+  url: string;
+  partition: string;
+  isDevMode: boolean;
+  guestToken: string;
+  preloadTokenUrl: string;
+};
+const preparedQAppGuests = new Map<string, PreparedQAppGuest>();
+const attachedQAppGuests = new Map<number, { contents: WebContents; prepared: PreparedQAppGuest | null }>();
+const configuredQAppSessions = new Set<string>();
+const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.js');
+
+function qappGuestOwnerKey(owner: QAppGuestOwner): string {
+  return `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
+}
+
+function configureQAppGuestSession(partition: string): void {
+  if (configuredQAppSessions.has(partition)) return;
+  const guestSession = session.fromPartition(partition);
+  setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme(), guestSession);
+  installCertificateVerification(guestSession);
+  installLocalNodeHttpsBlock(guestSession);
+  installDisplayMediaPicker(
+    myCapacitorApp.getMainWindow(),
+    process.platform,
+    guestSession,
+    (contents) => Boolean(attachedQAppGuests.get(contents.id)?.prepared)
+  );
+  configuredQAppSessions.add(partition);
+}
+
+ipcMain.handle('qappGuest:prepare', (event, owner: QAppGuestOwner, url: string, isDevMode: boolean) => {
   validateQAppReticulumIpcSender(event);
-  if (event.senderFrame !== event.sender.mainFrame)
-    throw new Error('RNS_PERMISSION_DENIED');
-  const entry = qappFrameLifecycles.get(event.sender.id);
-  entry?.lifecycle.unregister(frameName);
-  for (const [id, name] of entry?.frames ?? [])
-    if (name === frameName) entry.frames.delete(id);
+  if (event.senderFrame !== event.sender.mainFrame) throw new Error('QAPP_PERMISSION_DENIED');
+  saveOwner(owner);
+  if (typeof url !== 'string' || url.length > 4096) throw new Error('QAPP_INVALID_URL');
+  const parsed = new URL(url);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('QAPP_INVALID_URL');
+  if (!qappGuestUrlAllowed(url, url, owner, isDevMode === true)) throw new Error('QAPP_INVALID_URL');
+  const guestToken = randomUUID();
+  const prepared = {
+    owner,
+    url,
+    partition: qappGuestPartition(parsed.origin, owner),
+    isDevMode: isDevMode === true,
+    guestToken,
+    preloadTokenUrl: `${pathToFileURL(qappGuestPreloadPath).toString()}?authorization=${guestToken}`,
+  };
+  configureQAppGuestSession(prepared.partition);
+  preparedQAppGuests.set(qappGuestOwnerKey(owner), prepared);
+  return {
+    partition: prepared.partition,
+    preload: prepared.preloadTokenUrl,
+  };
+});
+
+ipcMain.handle('qappGuest:hello', (event, guestToken: string) => {
+  if (event.sender.getType() !== 'webview' ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof guestToken !== 'string' ||
+      !/^[a-f0-9-]{36}$/.test(guestToken))
+    throw new Error('QAPP_PERMISSION_DENIED');
+  const prepared = [...preparedQAppGuests.values()].find(
+    (candidate) => candidate.guestToken === guestToken
+  );
+  const attached = attachedQAppGuests.get(event.sender.id);
+  if (!prepared || !attached ||
+      (attached.prepared && attached.prepared !== prepared))
+    throw new Error('QAPP_GUEST_UNAVAILABLE');
+  if (attached.contents.session !== session.fromPartition(prepared.partition))
+    throw new Error('QAPP_GUEST_MISMATCH');
+  const currentUrl = attached.contents.getURL();
+  if (!qappGuestUrlAllowed(
+    prepared.url,
+    !currentUrl || currentUrl === 'about:blank' ? prepared.url : currentUrl,
+    prepared.owner,
+    prepared.isDevMode
+  ))
+    throw new Error('QAPP_GUEST_MISMATCH');
+  attached.prepared = prepared;
   return true;
 });
 
+ipcMain.handle('qappGuest:release', (event, owner: QAppGuestOwner) => {
+  validateQAppReticulumIpcSender(event);
+  if (event.senderFrame !== event.sender.mainFrame) throw new Error('QAPP_PERMISSION_DENIED');
+  const key = qappGuestOwnerKey(owner);
+  preparedQAppGuests.delete(key);
+  for (const [guestId, attached] of attachedQAppGuests) {
+    if (!attached.prepared || qappGuestOwnerKey(attached.prepared.owner) !== key)
+      continue;
+    attachedQAppGuests.delete(guestId);
+  }
+  void cleanupQAppOwner(owner);
+  return true;
+});
 ipcMain.handle(
   'qappReticulum:request',
   async (event, owner: QAppReticulumOwner, options) => {

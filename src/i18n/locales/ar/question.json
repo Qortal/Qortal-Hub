@@ -57,6 +57,7 @@
       "file_extension": "مش عارف أعرف امتداد الملف",
       "gateway_balance_local_node": "مش هتقدر تشوف رصيد {{ token }} من الجيتواي. استخدم اللوكل نود بتاعك.",
       "gateway_non_qort_local_node": "مينفعش ترسل عملة غير QORT من الجيتواي. استخدم اللوكل نود بتاعك.",
+      "gateway_pirate_local_node": "عملة Pirate Chain (ARRR) غير متاحة عبر العقد العامة. يُرجى استخدام عقدة محلية.",
       "gateway_retrieve_balance": "جلب رصيد {{ token }} مش مسموح من الجيتواي",
       "gateway_wallet_local_node": "مش هتقدر تشوف محفظة {{ token }} من الجيتواي. استخدم اللوكل نود بتاعك.",
       "get_foreign_fee": "غلط في جلب مصاريف العملة الأجنبية",

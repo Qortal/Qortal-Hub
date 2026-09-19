@@ -7,7 +7,11 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
-function fixture(platform: NodeJS.Platform = 'linux') {
+function fixture(
+  platform: NodeJS.Platform = 'linux',
+  guest = false,
+  authorized = true
+) {
   const bus = new EventEmitter();
   vi.spyOn(ipcMain, 'on').mockImplementation(((...args: any[]) =>
     bus.on(args[0], args[1])) as any);
@@ -22,9 +26,10 @@ function fixture(platform: NodeJS.Platform = 'linux') {
   ] as any);
   let handler: any;
   const root = {};
+  const guestRoot = {};
   const frame = {
     detached: false,
-    top: root,
+    top: guest ? guestRoot : root,
     url: 'https://app.test',
     executeJavaScript: vi.fn().mockResolvedValue(undefined),
   };
@@ -38,7 +43,20 @@ function fixture(platform: NodeJS.Platform = 'linux') {
     },
   };
   const window = { webContents, isDestroyed: () => false, once: vi.fn() };
-  installDisplayMediaPicker(window as any, platform);
+  const guestContents = {
+    mainFrame: guestRoot,
+    session: webContents.session,
+    getType: () => 'webview',
+    isDestroyed: () => false,
+    send: vi.fn(),
+  };
+  installDisplayMediaPicker(
+    window as any,
+    platform,
+    webContents.session as any,
+    () => authorized,
+    () => guestContents as any
+  );
   const callback = vi.fn();
   const request = {
     frame,
@@ -47,7 +65,7 @@ function fixture(platform: NodeJS.Platform = 'linux') {
     securityOrigin: 'https://app.test',
   };
   handler(request, callback);
-  const requestId = webContents.send.mock.calls[0][1].requestId;
+  const requestId = webContents.send.mock.calls[0]?.[1]?.requestId;
   const send = (channel: string, payload: object, trusted = true) =>
     bus.emit(
       channel,
@@ -62,6 +80,7 @@ function fixture(platform: NodeJS.Platform = 'linux') {
     handler,
     request,
     webContents,
+    guestContents,
     bus,
   };
 }
@@ -75,6 +94,20 @@ it('reports missing macOS screen permission before denying capture', async () =>
   expect(f.frame.executeJavaScript.mock.calls[0][0]).toContain(
     'SCREEN_OS_PERMISSION_REQUIRED'
   );
+});
+
+it('allows an owned guest capture and denies an unowned guest', async () => {
+  const owned = fixture('linux', true);
+  owned.send('display-media:authorize', { accepted: true });
+  await vi.waitFor(() => expect(owned.guestContents.send).toHaveBeenCalled());
+  owned.send('display-media:select', { sourceId: 'screen:1' });
+  expect(owned.callback).toHaveBeenCalledWith({
+    video: expect.objectContaining({ id: 'screen:1' }),
+  });
+
+  const unowned = fixture('linux', true, false);
+  expect(unowned.callback).toHaveBeenCalledWith({});
+  expect(unowned.webContents.send).not.toHaveBeenCalled();
 });
 
 it('does not enumerate before approval and grants only the selected one-use source', async () => {

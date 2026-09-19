@@ -57,6 +57,7 @@
       "file_extension": "a file extension could not be derived",
       "gateway_balance_local_node": "cannot view {{ token }} balance through the gateway. Please use your local node.",
       "gateway_non_qort_local_node": "cannot send a non-QORT coin through the gateway. Please use your local node.",
+      "gateway_pirate_local_node": "Pirate Chain (ARRR) is not available on public nodes. Please use a local node.",
       "gateway_retrieve_balance": "retrieving {{ token }} balance is not allowed through a gateway",
       "gateway_wallet_local_node": "cannot view {{ token }} wallet through the gateway. Please use your local node.",
       "get_foreign_fee": "error in get foreign fee",

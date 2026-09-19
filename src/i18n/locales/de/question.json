@@ -57,6 +57,7 @@
       "file_extension": "Dateierweiterung konnte nicht ermittelt werden",
       "gateway_balance_local_node": "{{ token }}-Saldo kann über das Gateway nicht angezeigt werden. Bitte lokalen Node verwenden.",
       "gateway_non_qort_local_node": "Nicht-QORT-Coins können nicht über das Gateway gesendet werden. Bitte lokalen Node verwenden.",
+      "gateway_pirate_local_node": "Pirate Chain (ARRR) ist über öffentliche Nodes nicht verfügbar. Bitte verwende einen lokalen Node.",
       "gateway_retrieve_balance": "Abruf des {{ token }}-Saldos über das Gateway nicht erlaubt",
       "gateway_wallet_local_node": "{{ token }}-Wallet kann über das Gateway nicht angezeigt werden. Bitte lokalen Node verwenden.",
       "get_foreign_fee": "Fehler beim Abrufen der externen Gebühr",

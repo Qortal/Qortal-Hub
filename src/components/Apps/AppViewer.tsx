@@ -1,33 +1,39 @@
-import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
-import { Box } from '@mui/material';
+import { createElement, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Box, Button } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
-import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import { buildPreviewUrl } from './appPreviewUrl';
 
 type AppViewerProps = {
   app: any;
-  hide: boolean;
   isDevMode: boolean;
 };
 
 export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
-  ({ app, hide, isDevMode }, iframeRef) => {
-    const { window: frameWindow } = useFrame();
-    const { path, history, changeCurrentIndex, resetHistory, nativeFrameName } =
+  ({ app, isDevMode }, forwardedRef) => {
+    const nativeViewRef = useRef<any>(null);
+    const [nativeConfig, setNativeConfig] = useState<null | { partition: string; preload: string }>(null);
+    const [nativeGuestActive, setNativeGuestActive] = useState(false);
+    const [nativeGuestFailed, setNativeGuestFailed] = useState(false);
+    const [guestPreloadDocument, setGuestPreloadDocument] = useState('');
+    const [guestAttempt, setGuestAttempt] = useState(0);
+    const guestHelloRef = useRef(false);
+    const preparingRef = useRef(false);
+    const preparedInitialUrlRef = useRef('');
+    useImperativeHandle(forwardedRef, () => nativeViewRef.current);
+    const { path, history, changeCurrentIndex, resetHistory } =
       useQortalMessageListener(
-        frameWindow,
-        iframeRef,
         app?.tabId,
         isDevMode,
         isDevMode ? 'devapp' : app?.name,
         isDevMode ? 'APP' : app?.service,
-        app?.identifier
+        app?.identifier,
+        nativeViewRef,
+        nativeGuestActive
       );
 
     const [url, setUrl] = useState('');
@@ -66,6 +72,96 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const defaultUrl = useMemo(() => {
       return url;
     }, [url, isDevMode]);
+
+    const guestOwner = useMemo(
+      () => ({
+        tabId: String(app?.tabId ?? ''),
+        name: isDevMode ? 'devapp' : String(app?.name ?? ''),
+        service: isDevMode ? 'APP' : String(app?.service ?? ''),
+      }),
+      [app?.tabId, app?.name, app?.service, isDevMode]
+    );
+
+    useEffect(() => {
+      if (!defaultUrl || !guestOwner.tabId ||
+          !guestOwner.name || !guestOwner.service ||
+          preparingRef.current || preparedInitialUrlRef.current) return;
+      if (!window.electronAPI?.qappGuestPrepare) {
+        setNativeGuestFailed(true);
+        return;
+      }
+      preparingRef.current = true;
+      preparedInitialUrlRef.current = defaultUrl;
+      void window.electronAPI.qappGuestPrepare(
+        guestOwner,
+        defaultUrl,
+        isDevMode
+      ).then(setNativeConfig).catch(() => setNativeGuestFailed(true));
+    }, [defaultUrl, guestOwner, isDevMode, guestAttempt]);
+
+    const retryNativeGuest = () => {
+      guestHelloRef.current = false;
+      setNativeGuestActive(false);
+      setNativeGuestFailed(false);
+      setGuestPreloadDocument('');
+      if (!nativeConfig) {
+        preparingRef.current = false;
+        preparedInitialUrlRef.current = '';
+        setGuestAttempt((value) => value + 1);
+      }
+    };
+
+    useEffect(() => () => {
+      void window.electronAPI.qappGuestRelease(guestOwner).catch(() => undefined);
+    }, [guestOwner]);
+
+    useLayoutEffect(() => {
+      const view = nativeViewRef.current;
+      if (!nativeConfig || !view) return;
+      const preloadHello = (event) => {
+        if (event.target !== view) return;
+        if (event.channel === 'qapp:error') {
+          setNativeGuestFailed(true);
+          return;
+        }
+        if (event.channel !== 'qapp:hello') return;
+        const documentId = event.args?.[0]?.documentId;
+        if (typeof documentId === 'string' && /^[a-f0-9]{32}$/.test(documentId)) {
+          guestHelloRef.current = true;
+          setGuestPreloadDocument(documentId);
+          setNativeGuestActive(true);
+        }
+      };
+      const guestGone = () => setNativeGuestFailed(true);
+      const loadFailed = (event) => {
+        if (event.isMainFrame && event.errorCode !== -3)
+          setNativeGuestFailed(true);
+      };
+      view.addEventListener('ipc-message', preloadHello);
+      view.addEventListener('render-process-gone', guestGone);
+      view.addEventListener('did-fail-load', loadFailed);
+      const attachTimer = setTimeout(() => {
+        if (!guestHelloRef.current) setNativeGuestFailed(true);
+      }, 10_000);
+      // The guest is attached only after these listeners are registered.
+      if (defaultUrl && view.getAttribute('src') !== defaultUrl)
+        view.setAttribute('src', defaultUrl);
+      return () => {
+        clearTimeout(attachTimer);
+        view.removeEventListener('ipc-message', preloadHello);
+        view.removeEventListener('render-process-gone', guestGone);
+        view.removeEventListener('did-fail-load', loadFailed);
+      };
+    }, [nativeConfig, guestOwner, defaultUrl]);
+
+    useEffect(() => {
+      if (nativeGuestActive && guestPreloadDocument)
+        nativeViewRef.current?.send('qapp:ready', guestPreloadDocument);
+    }, [nativeGuestActive, guestPreloadDocument]);
+
+    const postToApp = useCallback((message) => {
+      if (nativeGuestActive) nativeViewRef.current?.send('qapp:event', message);
+    }, [nativeGuestActive]);
 
     const refreshAppFunc = (e) => {
       const { tabId } = e.detail;
@@ -106,38 +202,24 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     }, [app, path, isDevMode, themeMode, currentLang]);
 
     useEffect(() => {
-      const iframe = iframeRef?.current;
-      if (!iframe || !iframe?.src) return;
-
       try {
-        const targetOrigin = new URL(iframe.src).origin;
-        iframe.contentWindow?.postMessage(
-          { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' },
-          targetOrigin
-        );
+        postToApp({ action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' });
       } catch (err) {
-        console.error('Failed to send theme change to iframe:', err);
+        console.error('Failed to send theme change to Q-App:', err);
       }
-    }, [themeMode]);
+    }, [themeMode, postToApp]);
 
     useEffect(() => {
-      const iframe = iframeRef?.current;
-      if (!iframe || !iframe?.src) return;
-
       try {
-        const targetOrigin = new URL(iframe.src).origin;
-        iframe.contentWindow?.postMessage(
-          {
-            action: 'LANGUAGE_CHANGED',
-            language: currentLang,
-            requestedHandler: 'UI',
-          },
-          targetOrigin
-        );
+        postToApp({
+          action: 'LANGUAGE_CHANGED',
+          language: currentLang,
+          requestedHandler: 'UI',
+        });
       } catch (err) {
-        console.error('Failed to send language change to iframe:', err);
+        console.error('Failed to send language change to Q-App:', err);
       }
-    }, [currentLang]);
+    }, [currentLang, postToApp]);
 
     const removeTrailingSlash = (str) => str.replace(/\/$/, '');
 
@@ -171,8 +253,6 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
     const receiveChunksFunc = useCallback(
       (e) => {
-        const iframe = iframeRef?.current;
-        if (!iframe || !iframe?.src) return;
         if (app?.tabId !== e.detail?.tabId) return;
         const publishLocation = e.detail?.publishLocation;
         const chunksSubmitted = e.detail?.chunksSubmitted;
@@ -181,7 +261,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         const filename = e.detail?.filename;
         try {
           if (publishLocation === undefined || publishLocation === null) return;
-          const dataToBeSent = {};
+          const dataToBeSent: Record<string, unknown> = {};
           if (chunksSubmitted !== undefined && chunksSubmitted !== null) {
             dataToBeSent.chunks = chunksSubmitted;
           }
@@ -194,22 +274,18 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           if (filename !== undefined && filename !== null) {
             dataToBeSent.filename = filename;
           }
-          const targetOrigin = new URL(iframe.src).origin;
-          iframe.contentWindow?.postMessage(
-            {
-              action: 'PUBLISH_STATUS',
-              publishLocation,
-              ...dataToBeSent,
-              requestedHandler: 'UI',
-              processed: e.detail?.processed || false,
-            },
-            targetOrigin
-          );
+          postToApp({
+            action: 'PUBLISH_STATUS',
+            publishLocation,
+            ...dataToBeSent,
+            requestedHandler: 'UI',
+            processed: e.detail?.processed || false,
+          });
         } catch (err) {
-          console.error('Failed to send status to iframe:', err);
+          console.error('Failed to send status to Q-App:', err);
         }
       },
-      [iframeRef, app?.tabId]
+      [postToApp, app?.tabId]
     );
 
     useEffect(() => {
@@ -220,88 +296,42 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       };
     }, [receiveChunksFunc]);
 
-    // Function to navigate back in iframe
-    const navigateBackInIframe = async () => {
-      const iframe = iframeRef.current;
-      if (iframe && iframe.contentWindow && history?.currentIndex > 0) {
-        // Calculate the previous index and path
-        const previousPageIndex = history.currentIndex - 1;
-        const previousPath = history.customQDNHistoryPaths[previousPageIndex];
-        let targetOrigin;
-        try {
-          targetOrigin = new URL(iframe.src).origin;
-        } catch {
-          return;
-        }
-        // Signal non-manual navigation
-        iframe.contentWindow.postMessage(
-          { action: 'PERFORMING_NON_MANUAL', currentIndex: previousPageIndex },
-          targetOrigin
-        );
-        // Update the current index locally
-        changeCurrentIndex(previousPageIndex);
+    const waitForNativeNavigation = (targetPath: string, timeoutMs: number) =>
+      new Promise<void>((resolve, reject) => {
+        const view = nativeViewRef.current;
+        if (!view || !nativeGuestActive) return reject(new Error('navigation_timeout'));
+        const onMessage = (event) => {
+          const data = event.args?.[0]?.data;
+          if (event.channel !== 'qapp:request' ||
+              data?.action !== 'NAVIGATION_SUCCESS' ||
+              data.path !== targetPath) return;
+          clearTimeout(timer);
+          view.removeEventListener('ipc-message', onMessage);
+          resolve();
+        };
+        view.addEventListener('ipc-message', onMessage);
+        const timer = setTimeout(() => {
+          view.removeEventListener('ipc-message', onMessage);
+          reject(new Error('navigation_timeout'));
+        }, timeoutMs);
+        postToApp({ action: 'NAVIGATE_TO_PATH', path: targetPath, requestedHandler: 'UI' });
+      });
 
-        // Create a navigation promise with a 200ms timeout
-        const navigationPromise = new Promise((resolve, reject) => {
-          function handleNavigationSuccess(event) {
-            if (
-              event.source === iframe.contentWindow &&
-              event.origin === targetOrigin &&
-              event.data?.action === 'NAVIGATION_SUCCESS' &&
-              event.data.path === previousPath
-            ) {
-              frameWindow.removeEventListener(
-                'message',
-                handleNavigationSuccess
-              );
-              resolve();
-            }
-          }
-
-          frameWindow.addEventListener('message', handleNavigationSuccess);
-
-          // Timeout after 200ms if no response
-          setTimeout(() => {
-            frameWindow.removeEventListener('message', handleNavigationSuccess);
-            reject(
-              new Error(
-                t('core:message.error.navigation_timeout', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-              )
-            );
-          }, 200);
-          // Send the navigation command after setting up the listener and timeout
-          iframe.contentWindow.postMessage(
-            {
-              action: 'NAVIGATE_TO_PATH',
-              path: previousPath,
-              requestedHandler: 'UI',
-            },
-            targetOrigin
-          );
-        });
-
-        // Execute navigation promise and handle timeout fallback
-        try {
-          await navigationPromise;
-        } catch (error) {
-          if (isDevMode) {
-            setUrl(
-              `${url}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
-            );
-            return;
-          }
-          setUrl(
-            `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
-          );
-          // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
-        }
+    const navigateBackInApp = async () => {
+      if (!nativeGuestActive || history?.currentIndex <= 0) return;
+      const previousPageIndex = history.currentIndex - 1;
+      const previousPath = history.customQDNHistoryPaths[previousPageIndex];
+      postToApp({ action: 'PERFORMING_NON_MANUAL', currentIndex: previousPageIndex });
+      changeCurrentIndex(previousPageIndex);
+      try {
+        await waitForNativeNavigation(previousPath, 1000);
+      } catch {
+        setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath ?? ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier ?? ''}&time=${Date.now()}&isManualNavigation=false`);
       }
     };
 
     const navigateBackAppFunc = (e) => {
-      navigateBackInIframe();
+      navigateBackInApp();
     };
 
     useEffect(() => {
@@ -319,63 +349,15 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const navigateToPathFunc = useCallback(
       async (e) => {
         const { path: targetPath = '' } = e.detail;
-        const iframe = iframeRef.current;
-        if (!iframe?.contentWindow) return;
-
-        let targetOrigin;
         try {
-          targetOrigin = new URL(iframe.src).origin;
+          await waitForNativeNavigation(targetPath, 1000);
         } catch {
-          return;
-        }
-
-        const navigationPromise = new Promise((resolve, reject) => {
-          function handleNavigationSuccess(event) {
-            if (
-              event.source === iframe.contentWindow &&
-              event.origin === targetOrigin &&
-              event.data?.action === 'NAVIGATION_SUCCESS' &&
-              event.data.path === targetPath
-            ) {
-              frameWindow.removeEventListener(
-                'message',
-                handleNavigationSuccess
-              );
-              resolve(undefined);
-            }
-          }
-
-          frameWindow.addEventListener('message', handleNavigationSuccess);
-
-          setTimeout(() => {
-            frameWindow.removeEventListener('message', handleNavigationSuccess);
-            reject(new Error('navigation_timeout'));
-          }, 250);
-          iframe.contentWindow.postMessage(
-            {
-              action: 'NAVIGATE_TO_PATH',
-              path: targetPath,
-              requestedHandler: 'UI',
-            },
-            targetOrigin
-          );
-        });
-
-        try {
-          await navigationPromise;
-        } catch {
-          if (isDevMode) {
-            setUrl(
-              `${url}${targetPath}?theme=${themeMode}&lang=${currentLang}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
-            );
-            return;
-          }
           setUrl(
             `${getBaseApiReact()}/render/${app?.service}/${app?.name}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
           );
         }
       },
-      [app, frameWindow, iframeRef, isDevMode, url, themeMode, currentLang]
+      [app, themeMode, currentLang, postToApp, nativeGuestActive]
     );
 
     useEffect(() => {
@@ -390,25 +372,12 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       };
     }, [app?.tabId, navigateToPathFunc]);
 
-    // Function to navigate back in iframe
-    const navigateForwardInIframe = async () => {
-      if (iframeRef.current && iframeRef.current.contentWindow) {
-        const targetOrigin = iframeRef.current
-          ? new URL(iframeRef.current.src).origin
-          : '*';
-        iframeRef.current.contentWindow.postMessage(
-          { action: 'NAVIGATE_FORWARD' },
-          targetOrigin
-        );
-      }
-    };
-
     return (
       <Box
         sx={{
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
+          height: '100%',
           minHeight: 0,
           overflow: 'hidden',
           overflowAnchor: 'none',
@@ -416,28 +385,29 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           width: '100%',
         }}
       >
-        <iframe
-          ref={iframeRef}
-          name={nativeFrameName}
-          style={{
-            border: 'none',
-            contain: 'layout paint style',
-            display: 'block',
-            flex: '0 0 auto',
-            height: '100vh',
-            isolation: 'isolate',
-            minHeight: 0,
-            overflow: 'hidden',
-            overflowAnchor: 'none',
-            overscrollBehavior: 'none',
-            width: '100%',
-          }}
-          id="browser-iframe"
-          tabIndex={-1}
-          src={defaultUrl}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
-          allow="fullscreen; clipboard-read; clipboard-write; microphone; speaker-selection; display-capture; screen-wake-lock"
-        ></iframe>
+        {nativeConfig && !nativeGuestFailed ? createElement('webview' as any, {
+            ref: nativeViewRef,
+            partition: nativeConfig.partition,
+            preload: nativeConfig.preload,
+            webpreferences: 'contextIsolation=yes,nodeIntegration=no,sandbox=yes,webviewTag=no',
+            style: {
+              border: 'none',
+              // A webview needs flex sizing; otherwise its internal document
+              // falls back to the browser's default 150px viewport height.
+              display: 'flex',
+              flex: '1 1 auto',
+              height: '100%',
+              minHeight: 0,
+              width: '100%',
+            },
+          }) : nativeGuestFailed ? (
+            <Box sx={{ p: 2 }} role="alert">
+              {t('core:message.error.generic', { postProcess: 'capitalizeFirstChar' })}
+              <Button onClick={retryNativeGuest}>
+                {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+              </Button>
+            </Box>
+          ) : null}
       </Box>
     );
   }

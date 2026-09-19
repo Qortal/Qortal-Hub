@@ -57,6 +57,7 @@
       "file_extension": "tiedostopäätettä ei voitu päätellä",
       "gateway_balance_local_node": "et voi tarkastella {{ token }} saldoa yhdyskäytävän kautta. Käytä paikallista solmuasi.",
       "gateway_non_qort_local_node": "et voi lähettää muuta kuin QORT-kolikkoa yhdyskäytävän kautta. Käytä paikallista solmuasi.",
+      "gateway_pirate_local_node": "Pirate Chain (ARRR) ei ole käytettävissä julkisilla solmuilla. Käytä paikallista solmua.",
       "gateway_retrieve_balance": "{{ token }} saldon nouto ei ole sallittua yhdyskäytävän kautta",
       "gateway_wallet_local_node": "et voi tarkastella {{ token }} lompakkoa yhdyskäytävän kautta. Käytä paikallista solmuasi.",
       "get_foreign_fee": "virhe ulkomaan maksun noutamisessa",

@@ -116,17 +116,22 @@ their pending acknowledgement reservation instead of reporting success.
 
 ### Q-App document lifecycle
 
-The shell assigns each Q-App iframe a random name at creation and registers it
-with Electron main. Main binds it to the stable frame-tree node, so a document
-changing `window.name` does not change its cleanup identity. Full navigation
-(including refresh) starts cleanup on `did-start-navigation`, before the new
-document can create connections. Same-document navigation retains connections.
-Tab removal and shell shutdown/crash also clean registered resources.
+Desktop Q-Apps run in isolated guest web contents. The shell registers each
+guest with Electron main using a per-guest attach token bound to a trusted tab,
+service, and name. The guest page has no Node API. Its preload forwards the
+existing Q-App request messages to the owning shell view and retains reply
+ports. Each app's browser storage has a separate persistent partition. Main
+blocks navigation to another app or origin while keeping the guest's owner.
+Full navigation (including refresh) starts resource cleanup on
+`did-start-navigation` before the new document can create connections.
+Same-document navigation retains connections. Tab removal and shell
+shutdown/crash also clean registered resources. Browser and mobile builds keep
+the iframe bridge.
 
 Reticulum, private channels, MoQ, and file saves snapshot their old resources
 at the same time; slow shutdown in one manager must not delay another manager's
 snapshot until after the new page connects. Never trigger owner-wide cleanup
-from the iframe's `load` event: new-page scripts can already have connected.
+from the guest's `load` event: new-page scripts can already have connected.
 Reticulum setup checks ownership again after native setup returns and rejects
 connections cancelled in flight instead of returning a dead connected handle.
 

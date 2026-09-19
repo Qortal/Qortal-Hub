@@ -64,6 +64,9 @@ spend funds.
   Electron confirmation dialog.
 - QORT sending is unchanged.
 - Pirate Chain (ARRR) keeps its separate wallet and transaction implementation.
+- Public nodes can serve BTC-family sends and QORT trade buys through the local
+  signer; creating sell offers and all ARRR trading still require a local node.
+  Hub does not route public-node purchases through a trading proxy.
 - Core's existing trade state machine still watches, redeems and refunds swaps.
 - Legacy Core send endpoints remain available for older clients, but this Hub
   does not use them for BTC, LTC, DOGE, DGB or RVN.
@@ -417,7 +420,7 @@ It does not add:
 - Ravencoin asset transactions;
 - testnet wallets;
 - ACCTv1 local funding;
-- public-gateway or proxy-node trade buys;
+- proxy-node trade buys;
 - fresh change-address allocation (change currently returns to a verified
   selected input address).
 

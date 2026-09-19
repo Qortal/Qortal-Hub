@@ -383,8 +383,14 @@ declare global {
         connectionId: string
       ) => Promise<boolean>;
       qappReticulumCleanupOwner?: (owner: any) => Promise<boolean>;
-      qappFrameRegister?: (frameName: string, owner: any) => Promise<boolean>;
-      qappFrameUnregister?: (frameName: string) => Promise<boolean>;
+      qappGuestPrepare?: (
+        owner: { tabId: string; name: string; service: string },
+        url: string,
+        isDevMode: boolean
+      ) => Promise<{ partition: string; preload: string }>;
+      qappGuestRelease?: (
+        owner: { tabId: string; name: string; service: string }
+      ) => Promise<boolean>;
       onQAppReticulumEvent?: (callback: (payload: any) => void) => () => void;
       qappFileSave?: (owner: any, request: any) => Promise<any>;
       privateChannelOpen?: (
