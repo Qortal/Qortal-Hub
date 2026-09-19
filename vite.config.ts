@@ -43,7 +43,41 @@ export default defineConfig({
         : {},
   },
   build: {
+    // Explicit runtime baseline for the PSBT dependencies (Object.hasOwn).
+    // Also prevents the TLA plugin from reverting to its obsolete Safari 14 target.
+    target: ['es2020', 'chrome94', 'edge94', 'firefox93', 'safari15.4'],
     rollupOptions: {
+      onwarn(warning, warn) {
+        const id = warning.id?.replace(/\\/g, '/');
+        // Scure's documentation comment contains an example PURE annotation.
+        // Keep warnings about actual misplaced annotations everywhere else.
+        if (
+          warning.code === 'INVALID_ANNOTATION' &&
+          id?.endsWith('/node_modules/@scure/base/index.js') &&
+          warning.message.includes('// Freeze the result of a thunk.')
+        )
+          return;
+        // This Babel-only directive has no runtime effect.
+        if (
+          warning.code === 'MODULE_LEVEL_DIRECTIVE' &&
+          id?.endsWith(
+            '/node_modules/react-virtualized/dist/es/WindowScroller/utils/onScroll.js'
+          ) &&
+          warning.message.includes('no babel-plugin-flow-react-proptypes')
+        )
+          return;
+        // bcrypt 2.4.3 catches its optional Node import and uses Web Crypto.
+        // Do not hide other modules accidentally importing Node APIs.
+        if (
+          warning.code === 'PLUGIN_WARNING' &&
+          warning.plugin === 'vite:resolve' &&
+          /^(?:\[plugin vite:resolve\] )?Module "crypto" has been externalized for browser compatibility, imported by "[^"]*\/node_modules\/bcryptjs\/dist\/bcrypt\.js"\./.test(
+            warning.message.replace(/\\/g, '/')
+          )
+        )
+          return;
+        warn(warning);
+      },
       input: {
         main: resolve(__dirname, 'index.html'),
         audioSurface: resolve(__dirname, 'audio-surface.html'),

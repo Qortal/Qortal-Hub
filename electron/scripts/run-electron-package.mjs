@@ -180,6 +180,14 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 run(npmCmd, ['run', 'build']);
 if (cfg.universal) {
+  runWithEnv(npmCmd, ['run', 'build:private-transport'], {
+    QORTAL_PRIVATE_TRANSPORT_GOOS: 'darwin',
+    QORTAL_PRIVATE_TRANSPORT_GOARCH: 'arm64',
+  });
+  runWithEnv(npmCmd, ['run', 'build:private-transport'], {
+    QORTAL_PRIVATE_TRANSPORT_GOOS: 'darwin',
+    QORTAL_PRIVATE_TRANSPORT_GOARCH: 'amd64',
+  });
   runWithEnv(npmCmd, ['run', 'bundle:reticulum'], {
     QORTAL_RETICULUM_OUTPUT_DIR: 'resources/reticulum/darwin-arm64',
   });
@@ -188,6 +196,7 @@ if (cfg.universal) {
     QORTAL_RETICULUM_OUTPUT_DIR: 'resources/reticulum/darwin-x64',
   });
 } else {
+  run(npmCmd, ['run', 'build:private-transport']);
   run(npmCmd, ['run', 'bundle:reticulum']);
 }
 

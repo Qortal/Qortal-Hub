@@ -19,6 +19,23 @@ function deferred(): {
 }
 
 describe('SingleFlightReadiness', () => {
+  it('is a no-op when the target is already ready', async () => {
+    const start = vi.fn(async () => undefined);
+    const onStatusChange = vi.fn();
+    const readiness = new SingleFlightReadiness({
+      isReady: () => true,
+      onStatusChange,
+      start,
+    });
+
+    await expect(readiness.ensureReady()).resolves.toBeUndefined();
+    await expect(readiness.ensureReady()).resolves.toBeUndefined();
+
+    expect(start).not.toHaveBeenCalled();
+    expect(onStatusChange).not.toHaveBeenCalled();
+    expect(readiness.getStatus()).toEqual({ state: 'ready', revision: 0 });
+  });
+
   it('shares one startup attempt between concurrent callers', async () => {
     const startup = deferred();
     let ready = false;

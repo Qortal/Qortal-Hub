@@ -2440,11 +2440,81 @@ export async function signPresenceMessageCase(request, event) {
   }
 }
 
+export async function getRelayGroupHintsCase(request, event) {
+  let groups: number[] | null = null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2_000);
+  try {
+    const wallet = await getData<any>('walletInfo');
+    const address = request.payload?.address;
+    if (
+      event.source !== window ||
+      typeof address !== 'string' ||
+      wallet?.address0 !== address
+    )
+      throw new Error('Account changed');
+    const endpoint = await createEndpoint(
+      `/groups/member/${encodeURIComponent(address)}`
+    );
+    const response = await fetch(endpoint, { signal: controller.signal });
+    if (!response.ok || !response.body)
+      throw new Error('Group hints unavailable');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let size = 0,
+      text = '';
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 262144) throw new Error('Group hints too large');
+        text += decoder.decode(value, { stream: true });
+      }
+      text += decoder.decode();
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+    const rows = JSON.parse(text);
+    if (
+      !Array.isArray(rows) ||
+      rows.length > 4096 ||
+      rows.some(
+        (row) =>
+          !Number.isInteger(row?.groupId) ||
+          row.groupId <= 0 ||
+          row.groupId > 2147483647
+      )
+    )
+      throw new Error('Invalid group hints');
+    groups = [...new Set(rows.map((row) => row.groupId))];
+  } catch {
+    /* Hints are optional; the relay still verifies actual membership. */
+  } finally {
+    clearTimeout(timer);
+  }
+  event.source.postMessage(
+    {
+      requestId: request.requestId,
+      action: 'getRelayGroupHints',
+      payload: { groups },
+      type: 'backgroundMessageResponse',
+    },
+    event.origin
+  );
+}
+
 export async function signReticulumChatEventCase(request, event) {
   let resKeyPair;
   let privateKeyBytes: Uint8Array | null = null;
   let messageBytes: Uint8Array | null = null;
   try {
+    if (
+      request.payload?.type === 'masque-ticket-issue-v1' &&
+      event.source !== window
+    ) {
+      throw new Error('Relay authorization is restricted to the Hub wallet');
+    }
     assertAllowedReticulumSigningPayload(request.payload);
     resKeyPair = await getKeyPair();
     privateKeyBytes = Base58.decode(resKeyPair.privateKey);

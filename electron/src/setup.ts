@@ -1,3 +1,13 @@
+import {
+  clearForeignWalletSigner,
+  importForeignWalletKeys,
+  foreignWalletPublicKey,
+  signForeignWalletPayment,
+} from './foreign-wallet-signer';
+import { createForeignWalletJournal } from './foreign-wallet-journal';
+import { QAppFileSaves, SaveError } from './qapp-file-save';
+import { qappGuestPartition, qappGuestUrlAllowed, type QAppGuestOwner } from './qapp-guest-policy';
+import { restrictQAppGuestWebRtc } from './qapp-guest-network-policy';
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import {
   CapElectronEventEmitter,
@@ -23,9 +33,11 @@ import {
 import electronIsDev from 'electron-is-dev';
 import windowStateKeeper from 'electron-window-state';
 import { dirname, join } from 'path';
+import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
+import { installDisplayMediaPicker } from './display-media-picker';
 import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
   log as loggerLog,
@@ -59,6 +71,8 @@ import {
 } from './core';
 import {
   ensureCertForBase,
+  installCertificateVerification,
+  installLocalNodeHttpsBlock,
   isLocalPrivateHost,
   persistedLocalNodeCaExists,
   setLocalNodeHttpsReady,
@@ -132,6 +146,26 @@ import {
   startReticulumBridge,
   type ReticulumOverlayVerifiedPeer,
 } from './reticulum-bridge';
+import {
+  QAppReticulumManager,
+  type QAppReticulumNativeEvent,
+  type QAppReticulumOwner,
+} from './qapp-reticulum-manager';
+import {
+  PrivateChannelError,
+  PrivateChannelManager,
+} from './private-channel-manager';
+import {
+  createMoqTransport,
+  getPrivateTransportFactory,
+  shutdownPrivateTransportSidecar,
+} from './private-transport-runtime';
+import { QAppMoqError, QAppMoqTransportManager } from './moq-transport-manager';
+import {
+  configureRelaySigner,
+  setRelayAccount,
+  setRelayGroups,
+} from './relay-access-coordinator';
 import { attachReticulumStatusBridgeEvents } from './reticulum-daemon';
 import {
   startReticulumMeshCoordinator,
@@ -162,6 +196,7 @@ import {
   buildAudioSurfaceUrl,
   withAudioSurfaceIsolationHeaders,
 } from './audio-window-policy';
+import { withEmbeddedFrameWebRtcBlocked } from './embedded-frame-network-policy';
 import { ensureAudioSurfaceHttpsServer } from './audio-surface-https';
 import {
   buildDefaultAudioSurfaceBridgeStateLike,
@@ -351,7 +386,6 @@ const defaultDomains = [
   'https://apinode2.qortalnodes.live',
   'https://apinode3.qortalnodes.live',
   'https://apinode4.qortalnodes.live',
-  'https://www.qort.trade',
 ];
 
 let reticulumResourceStore: ReticulumResourceStore | null = null;
@@ -1031,6 +1065,7 @@ export class ElectronCapacitorApp {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
+        webviewTag: true,
         preload: preloadPath,
         backgroundThrottling: false,
         additionalArguments: [
@@ -1039,7 +1074,81 @@ export class ElectronCapacitorApp {
         ],
       },
     });
+    configuredQAppSessions.clear();
+    this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+      const prepared = [...preparedQAppGuests.values()].find(
+        (candidate) => qappGuestUrlAllowed(
+          candidate.url,
+          params.src,
+          candidate.owner,
+          candidate.isDevMode
+        ) &&
+          candidate.partition === params.partition &&
+          candidate.preloadTokenUrl === params.preload
+      );
+      if (!prepared) {
+        event.preventDefault();
+        return;
+      }
+      webPreferences.preload = qappGuestPreloadPath;
+      params.preload = pathToFileURL(qappGuestPreloadPath).toString();
+      webPreferences.nodeIntegration = false;
+      webPreferences.nodeIntegrationInSubFrames = false;
+      webPreferences.contextIsolation = true;
+      webPreferences.sandbox = true;
+      webPreferences.webviewTag = false;
+      webPreferences.partition = prepared.partition;
+      webPreferences.additionalArguments = [`--qapp-guest-token=${prepared.guestToken}`];
+    });
+    this.MainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+      attachedQAppGuests.set(guest.id, { contents: guest, prepared: null });
+      // Restrict WebRTC on the Q-App guest itself. The iframe response policy
+      // does not cover a webview's main document, and this also covers nested
+      // frames that share the guest's WebContents.
+      restrictQAppGuestWebRtc(guest);
+      guest.setWindowOpenHandler(() => ({ action: 'deny' }));
+      const allowedGuestUrl = (nextUrl: string) => {
+        const bound = attachedQAppGuests.get(guest.id)?.prepared;
+        const candidates = bound ? [bound] : [...preparedQAppGuests.values()];
+        return candidates.some(
+          (candidate) =>
+            guest.session === session.fromPartition(candidate.partition) &&
+            qappGuestUrlAllowed(candidate.url, nextUrl, candidate.owner, candidate.isDevMode)
+        );
+      };
+      guest.on('will-navigate', (event, nextUrl) => {
+        if (!allowedGuestUrl(nextUrl)) event.preventDefault();
+      });
+      guest.on('will-redirect', (event, nextUrl, _inPlace, isMainFrame) => {
+        if (isMainFrame && !allowedGuestUrl(nextUrl)) event.preventDefault();
+      });
+      guest.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+        if (mainFrame && !inPlace) {
+          const owner = attachedQAppGuests.get(guest.id)?.prepared?.owner;
+          if (owner) void cleanupQAppOwner(owner);
+        }
+      });
+      const cleanup = () => {
+        const attached = attachedQAppGuests.get(guest.id);
+        attachedQAppGuests.delete(guest.id);
+        if (attached?.prepared) void cleanupQAppOwner(attached.prepared.owner);
+      };
+      guest.on('destroyed', cleanup);
+      guest.on('render-process-gone', cleanup);
+    });
+    const clearGuestRegistrations = () => {
+      for (const attached of attachedQAppGuests.values()) {
+        if (attached.prepared) void cleanupQAppOwner(attached.prepared.owner);
+      }
+      attachedQAppGuests.clear();
+      preparedQAppGuests.clear();
+    };
+    this.MainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
+      if (mainFrame && !inPlace) clearGuestRegistrations();
+    });
+    this.MainWindow.webContents.on('destroyed', clearGuestRegistrations);
     this.mainWindowState.manage(this.MainWindow);
+    installDisplayMediaPicker(this.MainWindow);
     this.MainWindow.on('maximize', () => {
       this.MainWindow?.webContents.send('window:state-changed', true);
     });
@@ -1246,8 +1355,8 @@ export class ElectronCapacitorApp {
   }
 }
 
-export function setupContentSecurityPolicy(customScheme: string): void {
-  session.defaultSession.webRequest.onHeadersReceived(
+export function setupContentSecurityPolicy(customScheme: string, targetSession = session.defaultSession): void {
+  targetSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
       const requestUrl = details.url;
       const expandedDomains = [...domainHolder.allowedDomains];
@@ -1324,10 +1433,11 @@ export function setupContentSecurityPolicy(customScheme: string): void {
 
       // Determine if the request is cross-origin
       const isCrossOrigin = requestOrigin !== requestUrlOrigin;
+      const originalResponseHeaders = details.responseHeaders ?? {};
 
       // Check if the response already includes Access-Control-Allow-Origin
       const hasAccessControlAllowOrigin = Object.keys(
-        details.responseHeaders
+        originalResponseHeaders
       ).some(
         (header) => header.toLowerCase() === 'access-control-allow-origin'
       );
@@ -1336,14 +1446,17 @@ export function setupContentSecurityPolicy(customScheme: string): void {
       // so only our permissive CSP is applied and qapps (e.g. extract7z) can use eval.
       const cspHeaderLower = 'content-security-policy';
       const filtered = Object.fromEntries(
-        Object.entries(details.responseHeaders).filter(
+        Object.entries(originalResponseHeaders).filter(
           ([key]) => key.toLowerCase() !== cspHeaderLower
         )
       );
-      const responseHeaders: Record<string, string | string[]> = {
-        ...filtered,
-        'Content-Security-Policy': [csp],
-      };
+      const responseHeaders = withEmbeddedFrameWebRtcBlocked(
+        {
+          ...filtered,
+          'Content-Security-Policy': [csp],
+        },
+        { resourceType: details.resourceType }
+      );
 
       Object.assign(
         responseHeaders,
@@ -1685,6 +1798,76 @@ export function flushPersistentStore(): void {
 export function flushMiscPersistentStore(): void {
   miscPersistentStore.flush();
 }
+
+let foreignSignerOwner: number | null = null;
+function requireForeignWalletHost(event: Electron.IpcMainInvokeEvent) {
+  if (
+    !isMainShellSender(event.sender) ||
+    event.senderFrame !== event.sender.mainFrame
+  )
+    throw new Error('Wallet signer is restricted to the main frame');
+  const parent = BrowserWindow.fromWebContents(event.sender);
+  if (!parent) throw new Error('Wallet window unavailable');
+  return parent;
+}
+ipcMain.handle('foreignWalletSigner:import', (event, keys) => {
+  requireForeignWalletHost(event);
+  const publicKeys = importForeignWalletKeys(keys);
+  foreignSignerOwner = event.sender.id;
+  return publicKeys;
+});
+ipcMain.handle('foreignWalletSigner:publicKey', (event, coin) => {
+  requireForeignWalletHost(event);
+  return foreignWalletPublicKey(coin);
+});
+ipcMain.handle('foreignWalletSigner:clear', (event) => {
+  requireForeignWalletHost(event);
+  clearForeignWalletSigner();
+});
+ipcMain.handle('foreignWalletSigner:sign', (event, request) => {
+  requireForeignWalletHost(event);
+  return signForeignWalletPayment(request);
+});
+app.on('before-quit', clearForeignWalletSigner);
+app.on('web-contents-created', (_event, contents) => {
+  const contentsId = contents.id;
+  const clearIfHost = () => {
+    if (foreignSignerOwner === contentsId) clearForeignWalletSigner();
+  };
+  contents.on(
+    'did-start-navigation',
+    (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame && !isInPlace) clearIfHost();
+    }
+  );
+  contents.on('render-process-gone', clearIfHost);
+  contents.on('destroyed', clearIfHost);
+});
+
+let foreignWalletJournal: ReturnType<typeof createForeignWalletJournal>;
+function getForeignWalletJournal(event: Electron.IpcMainInvokeEvent) {
+  if (
+    !isMainShellSender(event.sender) ||
+    event.senderFrame !== event.sender.mainFrame
+  )
+    throw new Error('Foreign wallet journal is restricted to the main frame');
+  return (foreignWalletJournal ??= createForeignWalletJournal(
+    path.join(app.getPath('appData'), 'qortal-hub', 'foreign-wallet-journal')
+  ));
+}
+ipcMain.handle('foreignWalletJournal:get', (event, key: string) =>
+  getForeignWalletJournal(event).get(key)
+);
+ipcMain.handle(
+  'foreignWalletJournal:set',
+  (event, key: string, value: string) =>
+    getForeignWalletJournal(event).set(key, value)
+);
+ipcMain.handle(
+  'foreignWalletJournal:delete',
+  (event, key: string, txId: string) =>
+    getForeignWalletJournal(event).delete(key, txId)
+);
 
 ipcMain.handle('persistentStore:get', async (_event, key: string) =>
   persistentStore.get(key)
@@ -2823,10 +3006,503 @@ export function stopReticulumManagers(): void {
   stopReticulumChatManager();
   reticulumChatListenersAttached = false;
   stopPresenceManager();
+  privateChannelManager?.destroy();
+  privateChannelManager = null;
+  qAppMoqTransportManager?.destroy();
+  qAppMoqTransportManager = null;
+  void shutdownPrivateTransportSidecar();
+  qAppReticulumManager?.destroy();
+  qAppReticulumManager = null;
   shutdownReticulumResourceStore();
   attachReticulumStatusBridgeEvents(null);
   reticulumChatReadiness.reset();
 }
+
+let qAppReticulumManager: QAppReticulumManager | null = null;
+let privateChannelManager: PrivateChannelManager | null = null;
+let qAppMoqTransportManager: QAppMoqTransportManager | null = null;
+let qAppReticulumBridge: ReturnType<typeof getReticulumBridge> = null;
+const qAppReticulumNativeListeners = new Set<
+  (event: QAppReticulumNativeEvent) => void
+>();
+
+function getQAppReticulumManager(): QAppReticulumManager {
+  if (qAppReticulumManager) return qAppReticulumManager;
+  const transport = {
+    invoke: async (action: string, payload: Record<string, unknown>) => {
+      await ensureReticulumManagersStarted();
+      const bridge = getReticulumBridge() ?? (await startReticulumBridge());
+      if (qAppReticulumBridge !== bridge) {
+        qAppReticulumBridge = bridge;
+        bridge.on('qapp-rns', (event: QAppReticulumNativeEvent) => {
+          for (const listener of qAppReticulumNativeListeners) listener(event);
+        });
+      }
+      return bridge.invokeQAppReticulum(action as any, payload);
+    },
+    onEvent: (listener: (event: QAppReticulumNativeEvent) => void) => {
+      qAppReticulumNativeListeners.add(listener);
+      return () => qAppReticulumNativeListeners.delete(listener);
+    },
+  };
+  qAppReticulumManager = new QAppReticulumManager(transport);
+  qAppReticulumManager.on('event', (event) => {
+    const win = myCapacitorApp.getMainWindow();
+    if (!win.isDestroyed()) win.webContents.send('qappReticulum:event', event);
+  });
+  return qAppReticulumManager;
+}
+
+function getPrivateChannelManager(): PrivateChannelManager {
+  configureRelaySigner(
+    signReticulumChatControlFields,
+    readRelayWalletAddress,
+    readRelayGroupHints
+  );
+  if (privateChannelManager) return privateChannelManager;
+  privateChannelManager = new PrivateChannelManager(
+    (owner, connectionId) =>
+      getQAppReticulumManager().connectionOwnership(owner, connectionId),
+    getPrivateTransportFactory(getQAppReticulumManager(), () =>
+      getReticulumBridge()
+    )
+  );
+  privateChannelManager.on('event', (event) => {
+    const win = myCapacitorApp.getMainWindow();
+    if (!win.isDestroyed()) win.webContents.send('privateChannel:event', event);
+  });
+  return privateChannelManager;
+}
+
+function getQAppMoqTransportManager(): QAppMoqTransportManager {
+  configureRelaySigner(
+    signReticulumChatControlFields,
+    readRelayWalletAddress,
+    readRelayGroupHints
+  );
+  if (qAppMoqTransportManager) return qAppMoqTransportManager;
+  qAppMoqTransportManager = new QAppMoqTransportManager(
+    (owner, connectionId) =>
+      getQAppReticulumManager().connectionOwnership(owner, connectionId),
+    (emit) =>
+      createMoqTransport(emit, getQAppReticulumManager(), () =>
+        getReticulumBridge()
+      )
+  );
+  qAppMoqTransportManager.on('event', (event) => {
+    const win = myCapacitorApp.getMainWindow();
+    if (!win.isDestroyed()) win.webContents.send('qappMoq:event', event);
+  });
+  return qAppMoqTransportManager;
+}
+
+function validateQAppReticulumIpcSender(
+  event: Electron.IpcMainInvokeEvent
+): void {
+  const win = myCapacitorApp.getMainWindow();
+  if (win.isDestroyed() || event.sender.id !== win.webContents.id) {
+    throw new Error('RNS_PERMISSION_DENIED');
+  }
+}
+
+let qappFileSaves: QAppFileSaves;
+function fileSaves() {
+  return (qappFileSaves ??= new QAppFileSaves(join(app.getPath('userData'), 'file-save-journal')));
+}
+void app.whenReady().then(() => fileSaves().initialize()).catch(() => undefined);
+function saveOwner(owner: any) {
+  if (!owner || !['tabId', 'name', 'service'].every(key =>
+    typeof owner[key] === 'string' && owner[key].length > 0 && owner[key].length <= 256))
+    throw new SaveError('SAVE_INVALID_REQUEST');
+  return JSON.stringify([owner.tabId, owner.name, owner.service]);
+}
+ipcMain.handle('qappFileSave:request', async (event, owner, request) => {
+  if (!isMainShellSender(event.sender) || event.senderFrame !== event.sender.mainFrame)
+    return { error: 'SAVE_PERMISSION_DENIED' };
+  try {
+    const key = saveOwner(owner);
+    const manager = fileSaves();
+    switch (request?.action) {
+      case 'FILE_SAVE_OPEN':
+        return await manager.open(key, request.filename, request.size, async (filename, _size, checkLive) => {
+          const labels = request.labels;
+          if (!labels || !['title', 'detail', 'allow', 'cancel'].every(k =>
+            typeof labels[k] === 'string' && labels[k].length <= 2048))
+            throw new SaveError('SAVE_INVALID_REQUEST');
+          const win = myCapacitorApp.getMainWindow();
+          const permission = await dialog.showMessageBox(win, {
+            type: 'question', message: labels.title, detail: labels.detail,
+            buttons: [labels.cancel, labels.allow], defaultId: 0, cancelId: 0,
+            noLink: true,
+          });
+          if (permission.response !== 1) return undefined;
+          checkLive();
+          const result = await dialog.showSaveDialog(win, {
+            defaultPath: filename, title: labels.title,
+            properties: ['showOverwriteConfirmation', 'createDirectory'],
+          });
+          return result.canceled ? undefined : result.filePath;
+        });
+      case 'FILE_SAVE_WRITE': return await manager.write(key, request.saveId, request.offset, request.data);
+      case 'FILE_SAVE_FINISH': return await manager.finish(key, request.saveId);
+      case 'FILE_SAVE_ABORT': return await manager.abort(key, request.saveId);
+      case 'FILE_SAVE_CLEANUP': await manager.cleanup(key); return { aborted: true };
+      default: throw new SaveError('SAVE_INVALID_REQUEST');
+    }
+  } catch (error) {
+    // Never expose OS errors containing filesystem paths to a QApp.
+    return { error: error instanceof SaveError ? error.message : 'SAVE_IO_ERROR' };
+  }
+});
+setInterval(() => { void qappFileSaves?.expire(); }, 30_000).unref();
+app.on('before-quit', () => { void qappFileSaves?.cleanup(); });
+app.on('web-contents-created', (_event, contents) => {
+  const cleanup = () => { if (isMainShellSender(contents)) void qappFileSaves?.cleanup(); };
+  contents.on('render-process-gone', cleanup);
+  contents.on('destroyed', cleanup);
+  contents.on('did-start-navigation', (_e, _url, inPlace, mainFrame) => {
+    if (mainFrame && !inPlace) cleanup();
+  });
+});
+
+async function cleanupQAppOwner(owner: QAppReticulumOwner): Promise<void> {
+  // All managers snapshot their old resources before any shutdown is awaited.
+  await Promise.allSettled([
+    privateChannelManager?.cleanupOwner(owner),
+    qAppMoqTransportManager?.cleanupOwner(owner),
+    qAppReticulumManager?.cleanupOwner(owner),
+    qappFileSaves?.cleanup(saveOwner(owner)),
+  ]);
+}
+
+type PreparedQAppGuest = {
+  owner: QAppGuestOwner;
+  url: string;
+  partition: string;
+  isDevMode: boolean;
+  guestToken: string;
+  preloadTokenUrl: string;
+};
+const preparedQAppGuests = new Map<string, PreparedQAppGuest>();
+const attachedQAppGuests = new Map<number, { contents: WebContents; prepared: PreparedQAppGuest | null }>();
+const configuredQAppSessions = new Set<string>();
+const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.js');
+
+function qappGuestOwnerKey(owner: QAppGuestOwner): string {
+  return `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
+}
+
+function configureQAppGuestSession(partition: string): void {
+  if (configuredQAppSessions.has(partition)) return;
+  const guestSession = session.fromPartition(partition);
+  setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme(), guestSession);
+  installCertificateVerification(guestSession);
+  installLocalNodeHttpsBlock(guestSession);
+  installDisplayMediaPicker(
+    myCapacitorApp.getMainWindow(),
+    process.platform,
+    guestSession,
+    (contents) => Boolean(attachedQAppGuests.get(contents.id)?.prepared)
+  );
+  configuredQAppSessions.add(partition);
+}
+
+ipcMain.handle('qappGuest:prepare', (event, owner: QAppGuestOwner, url: string, isDevMode: boolean) => {
+  validateQAppReticulumIpcSender(event);
+  if (event.senderFrame !== event.sender.mainFrame) throw new Error('QAPP_PERMISSION_DENIED');
+  saveOwner(owner);
+  if (typeof url !== 'string' || url.length > 4096) throw new Error('QAPP_INVALID_URL');
+  const parsed = new URL(url);
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('QAPP_INVALID_URL');
+  if (!qappGuestUrlAllowed(url, url, owner, isDevMode === true)) throw new Error('QAPP_INVALID_URL');
+  const guestToken = randomUUID();
+  const prepared = {
+    owner,
+    url,
+    partition: qappGuestPartition(parsed.origin, owner),
+    isDevMode: isDevMode === true,
+    guestToken,
+    preloadTokenUrl: `${pathToFileURL(qappGuestPreloadPath).toString()}?authorization=${guestToken}`,
+  };
+  configureQAppGuestSession(prepared.partition);
+  preparedQAppGuests.set(qappGuestOwnerKey(owner), prepared);
+  return {
+    partition: prepared.partition,
+    preload: prepared.preloadTokenUrl,
+  };
+});
+
+ipcMain.handle('qappGuest:hello', (event, guestToken: string) => {
+  if (event.sender.getType() !== 'webview' ||
+      event.senderFrame !== event.sender.mainFrame ||
+      typeof guestToken !== 'string' ||
+      !/^[a-f0-9-]{36}$/.test(guestToken))
+    throw new Error('QAPP_PERMISSION_DENIED');
+  const prepared = [...preparedQAppGuests.values()].find(
+    (candidate) => candidate.guestToken === guestToken
+  );
+  const attached = attachedQAppGuests.get(event.sender.id);
+  if (!prepared || !attached ||
+      (attached.prepared && attached.prepared !== prepared))
+    throw new Error('QAPP_GUEST_UNAVAILABLE');
+  if (attached.contents.session !== session.fromPartition(prepared.partition))
+    throw new Error('QAPP_GUEST_MISMATCH');
+  const currentUrl = attached.contents.getURL();
+  if (!qappGuestUrlAllowed(
+    prepared.url,
+    !currentUrl || currentUrl === 'about:blank' ? prepared.url : currentUrl,
+    prepared.owner,
+    prepared.isDevMode
+  ))
+    throw new Error('QAPP_GUEST_MISMATCH');
+  attached.prepared = prepared;
+  return true;
+});
+
+ipcMain.handle('qappGuest:release', (event, owner: QAppGuestOwner) => {
+  validateQAppReticulumIpcSender(event);
+  if (event.senderFrame !== event.sender.mainFrame) throw new Error('QAPP_PERMISSION_DENIED');
+  const key = qappGuestOwnerKey(owner);
+  preparedQAppGuests.delete(key);
+  for (const [guestId, attached] of attachedQAppGuests) {
+    if (!attached.prepared || qappGuestOwnerKey(attached.prepared.owner) !== key)
+      continue;
+    attachedQAppGuests.delete(guestId);
+  }
+  void cleanupQAppOwner(owner);
+  return true;
+});
+ipcMain.handle(
+  'qappReticulum:request',
+  async (event, owner: QAppReticulumOwner, options) => {
+    validateQAppReticulumIpcSender(event);
+    return getQAppReticulumManager().request(owner, options);
+  }
+);
+ipcMain.handle(
+  'qappReticulum:connect',
+  async (event, owner: QAppReticulumOwner, destination: string) => {
+    validateQAppReticulumIpcSender(event);
+    return getQAppReticulumManager().connect(owner, destination);
+  }
+);
+ipcMain.handle(
+  'qappReticulum:send',
+  async (event, owner: QAppReticulumOwner, connectionId: string, payload) => {
+    validateQAppReticulumIpcSender(event);
+    return getQAppReticulumManager().send(owner, connectionId, payload);
+  }
+);
+ipcMain.handle(
+  'qappReticulum:close',
+  async (event, owner: QAppReticulumOwner, connectionId: string) => {
+    validateQAppReticulumIpcSender(event);
+    await privateChannelManager?.cleanupRnsConnection(owner, connectionId);
+    await qAppMoqTransportManager?.cleanupRnsConnection(owner, connectionId);
+    await getQAppReticulumManager().close(owner, connectionId);
+    return true;
+  }
+);
+ipcMain.handle(
+  'qappReticulum:cleanupOwner',
+  async (event, owner: QAppReticulumOwner) => {
+    validateQAppReticulumIpcSender(event);
+    await cleanupQAppOwner(owner);
+    return true;
+  }
+);
+
+async function qAppMoqIpcResult<T>(
+  operation: () => Promise<T> | T
+): Promise<
+  | { ok: true; value: T }
+  | { ok: false; error: { code: string; message: string } }
+> {
+  try {
+    return { ok: true, value: await operation() };
+  } catch (error) {
+    const code = error instanceof QAppMoqError ? error.code : 'MOQ_ERROR';
+    return { ok: false, error: { code, message: code } };
+  }
+}
+
+ipcMain.handle(
+  'qappMoq:open',
+  async (
+    event,
+    owner: QAppReticulumOwner,
+    rnsConnectionId: unknown,
+    publicationNamespace: unknown,
+    publicationTrack: unknown
+  ) => {
+    validatePrivateChannelIpcSender(event);
+    return qAppMoqIpcResult(() =>
+      getQAppMoqTransportManager().open(
+        owner,
+        rnsConnectionId,
+        publicationNamespace,
+        publicationTrack
+      )
+    );
+  }
+);
+ipcMain.handle(
+  'qappMoq:subscribe',
+  async (
+    event,
+    owner: QAppReticulumOwner,
+    sessionId: unknown,
+    subscriptionId: unknown,
+    namespace: unknown,
+    trackName: unknown
+  ) => {
+    validatePrivateChannelIpcSender(event);
+    return qAppMoqIpcResult(() =>
+      getQAppMoqTransportManager().subscribe(
+        owner,
+        sessionId,
+        subscriptionId,
+        namespace,
+        trackName
+      )
+    );
+  }
+);
+ipcMain.handle(
+  'qappMoq:publish',
+  async (
+    event,
+    owner: QAppReticulumOwner,
+    sessionId: unknown,
+    payload: unknown
+  ) => {
+    validatePrivateChannelIpcSender(event);
+    return qAppMoqIpcResult(() =>
+      getQAppMoqTransportManager().publish(owner, sessionId, payload)
+    );
+  }
+);
+ipcMain.handle(
+  'qappMoq:metrics',
+  (event, owner: QAppReticulumOwner, sessionId: unknown) => {
+    validatePrivateChannelIpcSender(event);
+    return qAppMoqIpcResult(() =>
+      getQAppMoqTransportManager().metrics(owner, sessionId)
+    );
+  }
+);
+ipcMain.handle(
+  'qappMoq:close',
+  async (event, owner: QAppReticulumOwner, sessionId: unknown) => {
+    validatePrivateChannelIpcSender(event);
+    return qAppMoqIpcResult(() =>
+      getQAppMoqTransportManager().close(owner, sessionId)
+    );
+  }
+);
+ipcMain.handle(
+  'qappMoq:cleanupOwner',
+  async (event, owner: QAppReticulumOwner) => {
+    validatePrivateChannelIpcSender(event);
+    return qAppMoqIpcResult(async () => {
+      await qAppMoqTransportManager?.cleanupOwner(owner);
+      return true;
+    });
+  }
+);
+
+function validatePrivateChannelIpcSender(
+  event: Electron.IpcMainInvokeEvent
+): void {
+  const win = myCapacitorApp.getMainWindow();
+  if (win.isDestroyed() || event.sender.id !== win.webContents.id) {
+    throw new Error('PERMISSION_DENIED');
+  }
+}
+
+async function privateChannelIpcResult<T>(
+  operation: () => Promise<T> | T
+): Promise<
+  | { ok: true; value: T }
+  | { ok: false; error: { code: string; message: string } }
+> {
+  try {
+    return { ok: true, value: await operation() };
+  } catch (error) {
+    const code =
+      error instanceof PrivateChannelError
+        ? error.code
+        : 'PRIVATE_CHANNEL_ERROR';
+    return { ok: false, error: { code, message: code } };
+  }
+}
+
+ipcMain.handle(
+  'privateChannel:open',
+  async (
+    event,
+    owner: QAppReticulumOwner,
+    rnsConnectionId: unknown,
+    purpose: unknown
+  ) => {
+    validatePrivateChannelIpcSender(event);
+    return privateChannelIpcResult(() =>
+      getPrivateChannelManager().open(owner, rnsConnectionId, purpose)
+    );
+  }
+);
+ipcMain.handle(
+  'privateChannel:send',
+  async (
+    event,
+    owner: QAppReticulumOwner,
+    channelId: unknown,
+    lane: unknown,
+    messageId: unknown,
+    data: unknown,
+    streamOptions?: unknown
+  ) => {
+    validatePrivateChannelIpcSender(event);
+    return privateChannelIpcResult(() =>
+      getPrivateChannelManager().send(
+        owner,
+        channelId,
+        lane,
+        messageId,
+        data,
+        streamOptions
+      )
+    );
+  }
+);
+ipcMain.handle(
+  'privateChannel:status',
+  (event, owner: QAppReticulumOwner, channelId: unknown) => {
+    validatePrivateChannelIpcSender(event);
+    return privateChannelIpcResult(() =>
+      getPrivateChannelManager().status(owner, channelId)
+    );
+  }
+);
+ipcMain.handle(
+  'privateChannel:close',
+  async (event, owner: QAppReticulumOwner, channelId: unknown) => {
+    validatePrivateChannelIpcSender(event);
+    return privateChannelIpcResult(() =>
+      getPrivateChannelManager().close(owner, channelId)
+    );
+  }
+);
+ipcMain.handle(
+  'privateChannel:cleanupOwner',
+  async (event, owner: QAppReticulumOwner) => {
+    validatePrivateChannelIpcSender(event);
+    return privateChannelIpcResult(async () => {
+      await privateChannelManager?.cleanupOwner(owner);
+      return true;
+    });
+  }
+);
 
 async function getReadyReticulumChatManager(): Promise<
   ReturnType<typeof getReticulumChatManager>
@@ -3118,6 +3794,46 @@ function scheduleReticulumOverlayStateSyncRetry(
     void syncReticulumOverlayStateToBridge(manager, attempt + 1, sequence);
   }, delay);
   reticulumOverlaySyncRetryTimer.unref?.();
+}
+
+async function readRelayGroupHints(address: string): Promise<number[] | null> {
+  const main = myCapacitorApp.getMainWindow();
+  if (
+    !main ||
+    main.isDestroyed() ||
+    !isRendererMainFrameReady(main.webContents)
+  )
+    return null;
+  const result = await main.webContents.executeJavaScript(
+    `(async () => {
+    const result = await window.sendMessage('getRelayGroupHints', {address:${JSON.stringify(address)}}, 3000);
+    return result?.groups ?? null;
+  })()`,
+    true
+  );
+  return Array.isArray(result) &&
+    result.length <= 4096 &&
+    result.every((id) => Number.isInteger(id) && id > 0 && id <= 2147483647)
+    ? result
+    : null;
+}
+
+async function readRelayWalletAddress(): Promise<string> {
+  const main = myCapacitorApp.getMainWindow();
+  if (
+    !main ||
+    main.isDestroyed() ||
+    !isRendererMainFrameReady(main.webContents)
+  )
+    return '';
+  const result = await main.webContents.executeJavaScript(
+    `(async () => {
+    const result = await window.sendMessage('getWalletInfo', {}, 5000);
+    return result?.hasKeyPair && typeof result?.walletInfo?.address0 === 'string' ? result.walletInfo.address0 : '';
+  })()`,
+    true
+  );
+  return typeof result === 'string' ? result : '';
 }
 
 async function signReticulumChatControlFields(
@@ -3973,6 +4689,11 @@ ipcMain.handle(
       return { success: false, error: 'Account session changed' };
     }
     manager.setLocalGroupMemberships(Array.isArray(groupIds) ? groupIds : []);
+    setRelayGroups(
+      (Array.isArray(groupIds) ? groupIds : []).map((value) =>
+        typeof value === 'number' ? value : Number(value.groupId)
+      )
+    );
     return { success: true };
   }
 );
@@ -4041,6 +4762,8 @@ ipcMain.handle(
 );
 
 ipcMain.handle('reticulumChat:clearLocalAccountState', async () => {
+  await qappFileSaves?.cleanup();
+  setRelayAccount('', true);
   reticulumLocalAccountLifecycleGeneration += 1;
   // These managers live for the lifetime of the main process too. Clear their
   // account routing at the same explicit logout boundary so a later login

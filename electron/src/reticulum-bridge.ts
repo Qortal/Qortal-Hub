@@ -201,6 +201,8 @@ type BridgeCmdFrame = {
     | 'overlay_note_candidate_failure'
     | 'configure_community_stun'
     | 'get_community_stun_endpoints'
+    | 'get_community_masque_relays'
+    | 'relay_ticket_request'
     | 'configure_developer_log_filter'
     | 'stop'
     | 'send_call'
@@ -235,6 +237,10 @@ type BridgeCmdFrame = {
     | 'configure_group_audio_data_plane_routes'
     | 'configure_group_audio_forwarding'
     | 'configure_land_state_forwarding'
+    | 'qapp_rns_request'
+    | 'qapp_rns_connect'
+    | 'qapp_rns_send'
+    | 'qapp_rns_close'
     | 'get_local_identity_public_key'
     | 'ensure_peer_identity'
     | 'register_peer_identity';
@@ -825,6 +831,11 @@ type BridgeEventFrame =
     }
   | {
       type: 'event';
+      event: 'qapp_rns';
+      payload?: Record<string, unknown>;
+    }
+  | {
+      type: 'event';
       event: 'qchat_file_transfer';
       payload?: Record<string, unknown>;
     }
@@ -853,6 +864,17 @@ type BridgeEventFrame =
       type: 'event';
       event: 'community_stun_endpoint';
       payload?: { host?: string; port?: number; expiresAt?: number };
+    }
+  | {
+      type: 'event';
+      event: 'community_masque_relay';
+      payload?: {
+        host?: string;
+        port?: number;
+        serverName?: string;
+        certSha256?: string;
+        expiresAt?: number;
+      };
     }
   | {
       type: 'event';
@@ -1153,6 +1175,7 @@ function commandPriorityForAction(
     case 'overlay_note_candidate_failure':
     case 'configure_community_stun':
     case 'get_community_stun_endpoints':
+    case 'get_community_masque_relays':
     case 'configure_developer_log_filter':
       return 'low';
     default:
@@ -3364,6 +3387,46 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     );
   }
 
+  async relayTicketRequest(identity: string, path: string, data: Record<string, unknown>): Promise<Record<string, any>> {
+    await this.start();
+    const result = await this.sendCommand('relay_ticket_request', { identity, path, data });
+    if (!result.ok || result.payload?.error) throw new Error(String(result.payload?.error || result.error || 'RELAY_AUTH_UNAVAILABLE'));
+    return result.payload ?? {};
+  }
+
+  async getCommunityMasqueRelays(announce = false): Promise<
+    Array<{
+      host: string;
+      port: number;
+      serverName: string;
+      certSha256: string;
+      expiresAt: number;
+    }>
+  > {
+    await this.start();
+    if (this.state !== 'ready') return [];
+    const resp = await this.sendCommand('get_community_masque_relays', {
+      announce,
+    });
+    if (!resp.ok || !Array.isArray(resp.payload?.relays)) return [];
+    return resp.payload.relays.filter(
+      (value): value is {
+        host: string;
+        port: number;
+        serverName: string;
+        certSha256: string;
+        expiresAt: number;
+      } =>
+        value != null &&
+        typeof value === 'object' &&
+        typeof (value as { host?: unknown }).host === 'string' &&
+        typeof (value as { port?: unknown }).port === 'number' &&
+        typeof (value as { serverName?: unknown }).serverName === 'string' &&
+        typeof (value as { certSha256?: unknown }).certSha256 === 'string' &&
+        typeof (value as { expiresAt?: unknown }).expiresAt === 'number'
+    );
+  }
+
   async setDeveloperLogsFiltered(filtered: boolean): Promise<boolean> {
     const changed = this.developerLogsFiltered !== filtered;
     this.developerLogsFiltered = filtered;
@@ -3652,6 +3715,39 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       return typeof pk === 'string' && pk.length > 0 ? pk : null;
     } catch {
       return null;
+    }
+  }
+
+  async invokeQAppReticulum(
+    action:
+      | 'qapp_rns_request'
+      | 'qapp_rns_connect'
+      | 'qapp_rns_send'
+      | 'qapp_rns_close',
+    payload: Record<string, unknown>
+  ): Promise<{
+    ok: boolean;
+    payload?: Record<string, unknown>;
+    code?: string;
+  }> {
+    try {
+      await this.start();
+      if (this.state !== 'ready') {
+        return { ok: false, code: 'RNS_DESTINATION_UNREACHABLE' };
+      }
+      const response = await this.sendCommand(action, payload);
+      return {
+        ok: response.ok,
+        payload: response.payload,
+        code:
+          typeof response.payload?.code === 'string'
+            ? response.payload.code
+            : response.ok
+              ? undefined
+              : 'RNS_DESTINATION_UNREACHABLE',
+      };
+    } catch {
+      return { ok: false, code: 'RNS_LINK_TIMEOUT' };
     }
   }
 
@@ -3963,12 +4059,24 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const frame: BridgeCmdFrame = { type: 'cmd', action, id, payload };
     const wire = JSON.stringify(frame) + '\n';
+    const timeoutMs =
+      action === 'relay_ticket_request' ? 28_000 : action === 'qapp_rns_connect'
+        ? 45_000
+        : action === 'qapp_rns_request'
+          ? Math.min(
+              125_000,
+              Math.max(
+                REQUEST_TIMEOUT_MS,
+                Number(payload?.timeoutMs ?? 30_000) + 5_000
+              )
+            )
+          : REQUEST_TIMEOUT_MS;
 
     return new Promise<BridgeRespFrame>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Reticulum bridge request timed out: ${action}`));
-      }, REQUEST_TIMEOUT_MS);
+      }, timeoutMs);
       this.pending.set(id, { action, priority, resolve, reject, timer });
       this.enqueueCommand({ id, wire, priority });
       this.flushWriteQueue();
@@ -5328,6 +5436,10 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
         this.emitBridgeFrameEvent('qchat-file-transfer', frame.payload ?? {});
         return;
       }
+      case 'qapp_rns': {
+        this.emitBridgeFrameEvent('qapp-rns', frame.payload ?? {});
+        return;
+      }
       case 'reticulum_chat_resource': {
         this.emitBridgeFrameEvent(
           'reticulum-chat-resource',
@@ -5349,6 +5461,13 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
       case 'community_stun_endpoint': {
         this.emitBridgeFrameEvent(
           'community-stun-endpoint',
+          frame.payload ?? {}
+        );
+        return;
+      }
+      case 'community_masque_relay': {
+        this.emitBridgeFrameEvent(
+          'community-masque-relay',
           frame.payload ?? {}
         );
         return;

@@ -1,3 +1,4 @@
+import i18n from 'i18next';
 import { SecureStoragePlugin } from '@evva/capacitor-secure-storage-plugin';
 
 let inMemoryKey: CryptoKey | null = null;
@@ -79,9 +80,39 @@ function base64ToJson(base64) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// Keep explicit foreign xprv strings in the native signing session after unlock.
+// Qortal's renderer-held secret still contains the shared derivation seed;
+
+async function isolateForeignWalletKeys(payload: any) {
+  if (!window.foreignWalletSigner) return payload;
+  const coins = ['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'];
+  if (!coins.some((coin) => payload?.[`${coin.toLowerCase()}PrivateKey`]))
+    return payload;
+  let publicKeys: Record<string, string>;
+  try {
+    publicKeys = await window.foreignWalletSigner.importKeys(
+      Object.fromEntries(
+        coins.map((coin) => {
+          const field = `${coin.toLowerCase()}PrivateKey`;
+          return [field, payload[field]];
+        })
+      )
+    );
+  } catch {
+    throw new Error(i18n.t('question:local_send.invalid'));
+  }
+  const sanitized = { ...payload };
+  for (const coin of coins) {
+    delete sanitized[`${coin.toLowerCase()}PrivateKey`];
+    sanitized[`${coin.toLowerCase()}PublicKey`] = publicKeys[coin];
+  }
+  return sanitized;
+}
+
 export const storeData = async (key: string, payload: any): Promise<string> => {
   await initializeKeyAndIV();
 
+  if (key === 'keyPair') payload = await isolateForeignWalletKeys(payload);
   const base64Data = jsonToBase64(payload);
 
   if (keysToEncrypt.includes(key) && inMemoryKey) {
@@ -124,7 +155,13 @@ export const getData = async <T = any>(key: string): Promise<T | null> => {
           inMemoryKey,
           iv
         );
-        return base64ToJson(decryptedBase64Data);
+        const payload = base64ToJson(decryptedBase64Data);
+        if (key === 'keyPair' && window.foreignWalletSigner) {
+          const sanitized = await isolateForeignWalletKeys(payload);
+          if (sanitized !== payload) await storeData(key, sanitized);
+          return sanitized;
+        }
+        return payload;
       } else {
         // Decode non-encrypted data
         return base64ToJson(storedDataBase64.value);
@@ -144,6 +181,7 @@ export async function removeKeysAndLogout(
   request: any
 ) {
   try {
+    if (keys.includes('keyPair')) await window.foreignWalletSigner?.clear();
     for (const key of keys) {
       try {
         await SecureStoragePlugin.remove({ key });

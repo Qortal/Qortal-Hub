@@ -1,0 +1,534 @@
+package moqtransport
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"math"
+	"sync"
+	"sync/atomic"
+
+	"github.com/mengelbart/moqtransport/internal/wire"
+	"github.com/mengelbart/moqtransport/varint"
+)
+
+var (
+	errMissingPathParameter    = errors.New("missing path parameter")
+	errUnexpectedPathParameter = errors.New("unexpected path parameter on WebTransport connection")
+)
+
+type messageReader interface {
+	Read() (wire.ControlMessage, error)
+}
+
+type messageWriter interface {
+	Write(wire.ControlMessage) error
+}
+
+type Option func(*Session) error
+
+func WithHandler(handler Handler) Option {
+	return func(s *Session) error {
+		s.handler = handler
+		return nil
+	}
+}
+
+// A Session is an endpoint of a MoQ Session session.
+type Session struct {
+	deliveryOnce sync.Once
+	delivery     *deliveryScheduler
+	logger       *slog.Logger
+
+	ctx       context.Context
+	cancelCtx context.CancelCauseFunc
+	wg        sync.WaitGroup
+
+	closeLock sync.Mutex
+	closeErr  error
+
+	conn       Connection
+	requestIDs *requestIDGenerator
+
+	controlStreamLock   sync.Mutex
+	remoteControlStream *remoteControlStream
+	localControlStream  *localControlStream
+	remotePath          string
+
+	handler Handler
+
+	version uint64
+	path    string
+
+	tracksLock    sync.Mutex
+	tracks        map[uint64]*trackEntry
+	pendingTracks int
+	pendingBytes  int
+	receiveBytes  atomic.Int64
+	reliableBytes atomic.Int64
+}
+
+// NewSession creates a session on conn. It never closes conn: if NewSession
+// returns an error, nothing has been written and the caller keeps ownership of
+// conn. Once a session exists, only the session closes conn. Errors that occur
+// after NewSession returned, including a failed SETUP write, are reported
+// through Context.
+func NewSession(conn Connection, path string, options ...Option) (*Session, error) {
+	version := conn.ApplicationProtocol().versionNumber()
+	if version == 0 {
+		return nil, fmt.Errorf("unsupported application protocol: %q", conn.ApplicationProtocol())
+	}
+	logger := defaultLogger.With("perspective", conn.Perspective())
+	logger.Debug("creating new session", "version", version, "path", path)
+
+	s := &Session{
+		logger:              logger,
+		wg:                  sync.WaitGroup{},
+		conn:                conn,
+		requestIDs:          newRequestIDGenerator(uint64(conn.Perspective())),
+		remoteControlStream: nil,
+		localControlStream:  nil,
+		handler:             nil,
+		version:             version,
+		path:                path,
+		tracks:              make(map[uint64]*trackEntry),
+	}
+
+	for _, opt := range options {
+		if err := opt(s); err != nil {
+			return nil, err
+		}
+	}
+
+	ctrlStream, err := conn.OpenUniStream()
+	if err != nil {
+		return nil, err
+	}
+	s.localControlStream = newLocalControlStream(wire.NewAppender(ctrlStream, uint64(version)))
+
+	s.ctx, s.cancelCtx = context.WithCancelCause(context.Background())
+
+	s.wg.Go(func() { s.sendSetup() })
+	s.wg.Go(func() { s.readUniStreams() })
+	s.wg.Go(func() { s.readBidiStreams() })
+	s.wg.Go(func() { s.readDatagrams() })
+
+	return s, nil
+}
+
+type SessionError struct {
+	Code   uint64
+	Reason string
+	Remote bool
+}
+
+func (e *SessionError) Error() string {
+	return e.Reason
+}
+
+func (e *SessionError) Is(target error) bool {
+	other, ok := target.(*SessionError)
+	return ok && e.Code == other.Code && e.Remote == other.Remote
+}
+
+func (s *Session) CloseWithError(code uint64, reason string) {
+	s.closeWithError(&SessionError{Code: code, Reason: reason, Remote: false})
+	s.wg.Wait()
+}
+
+// Context returns a context that is canceled when the session closes.
+// context.Cause reports the error that closed it.
+func (s *Session) Context() context.Context {
+	return s.ctx
+}
+
+func (s *Session) sendSetup() {
+	setup := &wire.Setup{}
+	if s.conn.Protocol() == ProtocolQUIC {
+		setup.Options = []wire.KeyValuePair{
+			{Type: wire.PathParameterKey, Bytes: []byte(s.path)},
+		}
+	}
+	if err := s.localControlStream.write(setup); err != nil {
+		s.handleReaderError(err)
+		return
+	}
+	s.logger.Debug("setup message sent", "version", s.version, "path", s.path)
+}
+
+func (s *Session) closeWithError(closeErr error) bool {
+	s.closeLock.Lock()
+	defer s.closeLock.Unlock()
+	if s.closeErr != nil {
+		return false
+	}
+	s.closeErr = closeErr
+	s.cancelCtx(closeErr)
+
+	code := uint64(ErrorCodeInternal)
+	reason := ""
+	if se, ok := closeErr.(*SessionError); ok {
+		code = se.Code
+		reason = se.Reason
+	}
+	_ = s.conn.CloseWithError(code, reason)
+
+	return true
+}
+
+// goTracked runs f in a goroutine tracked by the session WaitGroup. It reports
+// an error and does not start f if the session is already closed.
+func (s *Session) goTracked(f func()) error {
+	s.closeLock.Lock()
+	defer s.closeLock.Unlock()
+	if s.closeErr != nil {
+		return s.closeErr
+	}
+	s.wg.Go(f)
+	return nil
+}
+
+// handleReaderError closes the session unless it is already shutting down, in
+// which case the error is expected and ignored.
+func (s *Session) handleReaderError(err error) {
+	if s.ctx.Err() != nil {
+		s.logger.Debug("ignoring reader error during session shutdown", "error", err)
+		return
+	}
+	s.closeWithError(err)
+}
+
+func (s *Session) readUniStreams() {
+	s.logger.Debug("starting to read uni streams")
+	for {
+		stream, err := s.conn.AcceptUniStream(s.ctx)
+		if err != nil {
+			if s.ctx.Err() != nil {
+				s.logger.Debug("context canceled, stopping readUniStreams")
+				return
+			}
+			s.closeWithError(err)
+			return
+		}
+		s.wg.Go(func() { s.handleUniStream(stream) })
+	}
+}
+
+func (s *Session) readBidiStreams() {
+	s.logger.Debug("starting to read bidi streams")
+	for {
+		stream, err := s.conn.AcceptStream(s.ctx)
+		if err != nil {
+			if s.ctx.Err() != nil {
+				s.logger.Debug("context canceled, stopping readBidiStreams")
+				return
+			}
+			s.closeWithError(err)
+			return
+		}
+		s.wg.Go(func() { s.handleBidiStream(stream) })
+	}
+}
+
+func (s *Session) readDatagrams() {
+	s.logger.Debug("starting to read datagrams")
+	for {
+		dgram, err := s.conn.ReceiveDatagram(s.ctx)
+		if err != nil {
+			if s.ctx.Err() != nil {
+				s.logger.Debug("context canceled, stopping readDatagrams")
+				return
+			}
+			s.closeWithError(err)
+			return
+		}
+		msg := new(wire.DatagramObject)
+		if err = msg.Parse(dgram); err != nil {
+			s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: fmt.Sprintf("failed to parse datagram: %v", err), Remote: false})
+			return
+		}
+		s.receiveDatagram(msg)
+	}
+}
+
+func (s *Session) handleUniStream(stream ReceiveStream) {
+	s.logger.Debug("accepted new uni stream", "streamID", stream.StreamID())
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var wg sync.WaitGroup
+	defer func() { cancel(); wg.Wait() }()
+	wg.Go(func() {
+		select {
+		case <-ctx.Done():
+		case <-s.ctx.Done():
+			stream.Stop(0) // TODO: Set correct error code?
+		}
+	})
+
+	// TODO: This is a hacky way to figure out the stream type before
+	// creating the parser. Ideally, we wouldn't need to know the stream
+	// type, because we could parse all messages based on the message type
+	// given in the first varint. However, the code points currently overlap
+	// so it is impossible to distinguish between some messages that can
+	// only be sent on different stream types.
+	br := bufio.NewReader(stream)
+	firstVarint, err := peekFirstVarint(br)
+	if err != nil {
+		s.logger.Error("failed to peek first varint of stream", "streamID", stream.StreamID(), "error", err)
+		stream.Stop(uint32(StreamResetErrorCodeInternal))
+		return
+	}
+	typ, _, err := varint.Parse(firstVarint)
+	if err != nil {
+		s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: fmt.Sprintf("failed to parse first varint of stream: %v", err), Remote: false})
+		return
+	}
+	var streamType wire.StreamType
+	if typ == 0x2f00 {
+		streamType = wire.StreamTypeControl
+	} else {
+		streamType = wire.StreamTypeData
+	}
+	s.logger.Debug("got stream type", "streamID", stream.StreamID(), "streamType", streamType)
+
+	parser, err := wire.NewParser(br, uint64(s.version), streamType)
+	if err != nil {
+		s.logger.Error("failed to create parser", "streamID", stream.StreamID(), "error", err)
+		stream.Stop(uint32(StreamResetErrorCodeInternal))
+		return
+	}
+	msg, err := parser.Read()
+	if err != nil {
+		s.logger.Error("error while reading message", "streamID", stream.StreamID(), "error", err, "typ", typ)
+		if streamType == wire.StreamTypeData {
+			stream.Stop(uint32(StreamResetErrorCodeInternal))
+			return
+		}
+		s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: fmt.Sprintf("failed to parse message: %v", err), Remote: false})
+		return
+	}
+	switch m := msg.(type) {
+	case *wire.Setup:
+		path, err := validatePathParameter(m.Options, s.conn.Protocol() == ProtocolQUIC)
+		if err != nil {
+			s.closeWithError(&SessionError{Code: uint64(ErrorCodeInvalidPath), Reason: err.Error(), Remote: false})
+			return
+		}
+		rcs := newRemoteControlStream(m, parser, s)
+		if !s.setRemoteControlStream(rcs, path) {
+			s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: "duplicate control stream", Remote: false})
+			return
+		}
+		rcs.readMessages()
+	case *wire.SubgroupHeader:
+		defer stream.Stop(uint32(StreamResetErrorCodeInternal))
+		s.readDataStream(m, parser)
+	case *wire.Padding:
+		if _, err := io.Copy(io.Discard, br); err != nil {
+			s.logger.Debug("error while discarding padding stream", "streamID", stream.StreamID(), "error", err)
+		}
+	default:
+		// TODO
+		s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: fmt.Sprintf("unexpected message type: %T", m), Remote: false})
+		return
+	}
+}
+
+func (s *Session) setRemoteControlStream(rcs *remoteControlStream, path string) bool {
+	s.controlStreamLock.Lock()
+	defer s.controlStreamLock.Unlock()
+	if s.remoteControlStream != nil {
+		return false
+	}
+	s.remoteControlStream = rcs
+	s.remotePath = path
+	return true
+}
+
+// Path returns the path the peer sent in its SETUP message. It is only
+// populated for QUIC connections, since WebTransport conveys the path in the
+// HTTP request instead. It is empty until the peer's SETUP has been received.
+func (s *Session) Path() string {
+	s.controlStreamLock.Lock()
+	defer s.controlStreamLock.Unlock()
+	return s.remotePath
+}
+
+func peekFirstVarint(br *bufio.Reader) ([]byte, error) {
+	firstByte, err := br.Peek(1)
+	if err != nil {
+		return nil, err
+	}
+
+	needed := 1
+	for i := 7; i >= 0; i-- {
+		if (firstByte[0] & (1 << uint(i))) == 0 {
+			break
+		}
+		needed++
+	}
+
+	return br.Peek(needed)
+}
+
+func (s *Session) handleBidiStream(stream Stream) {
+	s.logger.Debug("accepted new bidi stream", "streamID", stream.StreamID())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Go(func() {
+		select {
+		case <-ctx.Done():
+		case <-s.ctx.Done():
+			stream.Stop(0)  // TODO: Set correct error code?
+			stream.Reset(0) // TODO: Set correct error code?
+		}
+	})
+
+	parser, err := wire.NewParser(stream, uint64(s.version), wire.StreamTypeRequest)
+	if err != nil {
+		stream.Stop(uint32(StreamResetErrorCodeInternal))
+		stream.Reset(uint32(StreamResetErrorCodeInternal))
+		return
+	}
+	msg, err := parser.Read()
+	if err != nil {
+		stream.Stop(uint32(StreamResetErrorCodeInternal))
+		stream.Reset(uint32(StreamResetErrorCodeInternal))
+		return
+	}
+	switch m := msg.(type) {
+	case *wire.TrackStatus:
+	case *wire.Subscribe:
+		// TODO: Handle incoming request
+		if s.handler == nil {
+			return
+		}
+		request := newIncomingSubscribeRequest(m, s, wire.NewAppender(stream, uint64(s.version)), parser)
+		s.handler.HandleSubscribe(request)
+		request.readMessages()
+	case *wire.Publish:
+	case *wire.Fetch:
+	case *wire.PublishNamespace:
+	case *wire.SubscribeNamespace:
+	case *wire.SubscribeTracks:
+	default:
+		s.closeWithError(&SessionError{Code: uint64(ErrorCodeProtocolViolation), Reason: fmt.Sprintf("unexpected message type: %T", m), Remote: false})
+		return
+	}
+}
+
+// readDataStream reads objects from a subgroup stream until it ends and routes
+// them by track alias. It must be called from a goroutine tracked by the
+// session WaitGroup.
+func (s *Session) readDataStream(header *wire.SubgroupHeader, parser messageReader) {
+	var (
+		firstObject  = true
+		lastObjectID uint64
+		subgroupID   = header.SubgroupID
+	)
+	for {
+		m, err := parser.Read()
+		if err != nil {
+			// Expiry/reset of a data subgroup is local to that subgroup, not
+			// a control-plane failure. Keep other tracks and the session alive.
+			return
+		}
+		o, ok := m.(*wire.SubgroupObject)
+		if !ok {
+			s.closeWithError(&SessionError{
+				Code:   uint64(ErrorCodeProtocolViolation),
+				Reason: fmt.Sprintf("unexpected message type: %T", m),
+			})
+			return
+		}
+		objectID := o.ObjectIDDelta
+		if firstObject {
+			if header.SubgroupIDMode() == wire.SubgroupIDModeFirstObject {
+				subgroupID = objectID
+			}
+		} else {
+			if o.ObjectIDDelta >= math.MaxUint64-lastObjectID {
+				s.closeWithError(&SessionError{
+					Code:   uint64(ErrorCodeProtocolViolation),
+					Reason: "object ID out of range",
+				})
+				return
+			}
+			objectID = lastObjectID + o.ObjectIDDelta + 1
+		}
+		firstObject = false
+		lastObjectID = objectID
+
+		payload := make([]byte, len(o.ObjectPayload))
+		copy(payload, o.ObjectPayload)
+		s.logger.Debug("received object", "groupID", header.GroupID, "subgroupID", subgroupID, "objectID", objectID, "payloadLength", len(payload))
+		s.pushObject(header.TrackAlias, &Object{
+			GroupID:              header.GroupID,
+			ObjectID:             objectID,
+			ForwardingPreference: ObjectForwardingPreferenceSubgroup,
+			SubGroupID:           subgroupID,
+			Payload:              payload,
+		})
+	}
+}
+
+func (s *Session) receiveDatagram(msg *wire.DatagramObject) {
+	payload := make([]byte, len(msg.ObjectPayload))
+	copy(payload, msg.ObjectPayload)
+	s.pushObject(msg.TrackAlias, &Object{
+		GroupID:              msg.GroupID,
+		ObjectID:             msg.ObjectID,
+		ForwardingPreference: ObjectForwardingPreferenceDatagram,
+		Payload:              payload,
+	})
+}
+
+func (s *Session) Subscribe(
+	ctx context.Context,
+	namespace [][]byte,
+	name string,
+) (*OutgoingSubscribeRequest, error) {
+	s.closeLock.Lock()
+	if s.closeErr != nil {
+		s.closeLock.Unlock()
+		return nil, s.closeErr
+	}
+	s.closeLock.Unlock()
+
+	requestID := s.requestIDs.next()
+	stream, err := s.conn.OpenStreamSync(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.logger.Debug("opened new stream for subscribe request", "requestID", requestID, "namespace", namespace, "name", name)
+	parser, err := wire.NewParser(stream, uint64(s.version), wire.StreamTypeRequest)
+	if err != nil {
+		return nil, err
+	}
+	appender := wire.NewAppender(stream, uint64(s.version))
+
+	request, err := newOutgoingSubscribeRequest(requestID, s, appender, parser, namespace, []byte(name))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.goTracked(request.readMessages); err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+func (s *Session) onGoAway(msg *wire.GoAwayCtrl) {
+	if s.handler == nil {
+		return
+	}
+	s.handler.HandleGoAway(msg.NewSessionURI)
+}

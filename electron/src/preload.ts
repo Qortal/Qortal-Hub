@@ -69,6 +69,46 @@ function parseWindowRoleFromArgv(): string {
   return 'main-shell';
 }
 
+async function invokePrivateChannel(
+  ipcChannel: string,
+  ...args: unknown[]
+): Promise<unknown> {
+  const result = (await ipcRenderer.invoke(ipcChannel, ...args)) as
+    | { ok: true; value: unknown }
+    | { ok: false; error: { code?: string; message?: string } };
+  if (result.ok === true) return result.value;
+  const failure = result as {
+    ok: false;
+    error: { code?: string; message?: string };
+  };
+  const code = failure.error?.code || 'PRIVATE_CHANNEL_ERROR';
+  const error = new Error(failure.error?.message || code) as Error & {
+    code?: string;
+  };
+  error.code = code;
+  throw error;
+}
+
+async function invokeMoqTransport(
+  ipcChannel: string,
+  ...args: unknown[]
+): Promise<unknown> {
+  const result = (await ipcRenderer.invoke(ipcChannel, ...args)) as
+    | { ok: true; value: unknown }
+    | { ok: false; error: { code?: string; message?: string } };
+  if (result.ok === true) return result.value;
+  const failure = result as {
+    ok: false;
+    error: { code?: string; message?: string };
+  };
+  const code = failure.error?.code || 'MOQ_ERROR';
+  const error = new Error(failure.error?.message || code) as Error & {
+    code?: string;
+  };
+  error.code = code;
+  throw error;
+}
+
 const hubP2pBootstrapIceServers = isDisabledLegacy
   ? []
   : buildBootstrapIceServers(parseHubBootstrapSeedsFromArgv());
@@ -449,6 +489,18 @@ try {
       return () => ipcRenderer.removeListener('system:lock-requested', handler);
     },
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
+    onDisplayMediaRequest: (callback: (request: { requestId: string; origin: string }) => void) => {
+      const handler = (_event, request) => callback(request);
+      ipcRenderer.on('display-media:request', handler);
+      return () => ipcRenderer.removeListener('display-media:request', handler);
+    },
+    onDisplayMediaCancel: (callback: (requestId: string) => void) => {
+      const handler = (_event, requestId) => callback(requestId);
+      ipcRenderer.on('display-media:cancel', handler);
+      return () => ipcRenderer.removeListener('display-media:cancel', handler);
+    },
+    selectDisplayMedia: (requestId: string, sourceId?: string) => ipcRenderer.send('display-media:select', { requestId, sourceId }),
+    authorizeDisplayMedia: (requestId: string, accepted: boolean) => ipcRenderer.send('display-media:authorize', { requestId, accepted }),
     listScreenShareSources: () =>
       ipcRenderer.invoke('screenShare:listSources') as Promise<{
         success: boolean;
@@ -668,6 +720,105 @@ try {
       ) as Promise<{
         publicKeyBase64: string | null;
       }>,
+    qappReticulumRequest: (owner, options) =>
+      ipcRenderer.invoke('qappReticulum:request', owner, options),
+    qappReticulumConnect: (owner, destination: string) =>
+      ipcRenderer.invoke('qappReticulum:connect', owner, destination),
+    qappReticulumSend: (owner, connectionId: string, payload) =>
+      ipcRenderer.invoke('qappReticulum:send', owner, connectionId, payload),
+    qappReticulumClose: (owner, connectionId: string) =>
+      ipcRenderer.invoke('qappReticulum:close', owner, connectionId),
+    qappReticulumCleanupOwner: (owner) =>
+      ipcRenderer.invoke('qappReticulum:cleanupOwner', owner),
+    qappGuestPrepare: (owner, url: string, isDevMode: boolean) =>
+      ipcRenderer.invoke('qappGuest:prepare', owner, url, isDevMode),
+    qappGuestRelease: (owner) =>
+      ipcRenderer.invoke('qappGuest:release', owner),
+    onQAppReticulumEvent: (callback: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
+        callback(payload);
+      ipcRenderer.on('qappReticulum:event', listener);
+      return () => ipcRenderer.removeListener('qappReticulum:event', listener);
+    },
+    qappFileSave: (owner, request) => ipcRenderer.invoke('qappFileSave:request', owner, request),
+    privateChannelOpen: (owner, rnsConnectionId, purpose) =>
+      invokePrivateChannel(
+        'privateChannel:open',
+        owner,
+        rnsConnectionId,
+        purpose
+      ),
+    privateChannelSend: (
+      owner,
+      channelId,
+      lane,
+      messageId,
+      data,
+      streamOptions
+    ) =>
+      invokePrivateChannel(
+        'privateChannel:send',
+        owner,
+        channelId,
+        lane,
+        messageId,
+        data,
+        streamOptions
+      ),
+    privateChannelStatus: (owner, channelId) =>
+      invokePrivateChannel('privateChannel:status', owner, channelId),
+    privateChannelClose: (owner, channelId) =>
+      invokePrivateChannel('privateChannel:close', owner, channelId),
+    privateChannelCleanupOwner: (owner) =>
+      invokePrivateChannel('privateChannel:cleanupOwner', owner),
+    onPrivateChannelEvent: (callback: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
+        callback(payload);
+      ipcRenderer.on('privateChannel:event', listener);
+      return () => ipcRenderer.removeListener('privateChannel:event', listener);
+    },
+    qappMoqOpen: (
+      owner,
+      rnsConnectionId,
+      publicationNamespace,
+      publicationTrack
+    ) =>
+      invokeMoqTransport(
+        'qappMoq:open',
+        owner,
+        rnsConnectionId,
+        publicationNamespace,
+        publicationTrack
+      ),
+    qappMoqSubscribe: (
+      owner,
+      sessionId,
+      subscriptionId,
+      namespace,
+      trackName
+    ) =>
+      invokeMoqTransport(
+        'qappMoq:subscribe',
+        owner,
+        sessionId,
+        subscriptionId,
+        namespace,
+        trackName
+      ),
+    qappMoqPublish: (owner, sessionId, payload) =>
+      invokeMoqTransport('qappMoq:publish', owner, sessionId, payload),
+    qappMoqMetrics: (owner, sessionId) =>
+      invokeMoqTransport('qappMoq:metrics', owner, sessionId),
+    qappMoqClose: (owner, sessionId) =>
+      invokeMoqTransport('qappMoq:close', owner, sessionId),
+    qappMoqCleanupOwner: (owner) =>
+      invokeMoqTransport('qappMoq:cleanupOwner', owner),
+    onQAppMoqEvent: (callback: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
+        callback(payload);
+      ipcRenderer.on('qappMoq:event', listener);
+      return () => ipcRenderer.removeListener('qappMoq:event', listener);
+    },
     qchatFileSelect: () =>
       ipcRenderer.invoke('reticulum:qchatFileSelect') as Promise<{
         ok: boolean;
@@ -876,6 +1027,22 @@ try {
   });
 
   // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
+  contextBridge.exposeInMainWorld('foreignWalletSigner', {
+    importKeys: (keys: Record<string, unknown>) =>
+      ipcRenderer.invoke('foreignWalletSigner:import', keys),
+    publicKey: (coin: string) =>
+      ipcRenderer.invoke('foreignWalletSigner:publicKey', coin),
+    clear: () => ipcRenderer.invoke('foreignWalletSigner:clear'),
+    sign: (request: unknown, language: string) =>
+      ipcRenderer.invoke('foreignWalletSigner:sign', request, language),
+  });
+  contextBridge.exposeInMainWorld('foreignWalletJournal', {
+    get: (key: string) => ipcRenderer.invoke('foreignWalletJournal:get', key),
+    set: (key: string, value: string) =>
+      ipcRenderer.invoke('foreignWalletJournal:set', key, value),
+    delete: (key: string, txId: string) =>
+      ipcRenderer.invoke('foreignWalletJournal:delete', key, txId),
+  });
   contextBridge.exposeInMainWorld('appStorage', {
     get: async (key) => {
       return ipcRenderer.invoke('persistentStore:get', key);

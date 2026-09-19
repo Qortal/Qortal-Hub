@@ -84,6 +84,25 @@ declare global {
       isExtension?: unknown,
       appInfo?: unknown
     ) => Promise<unknown>;
+    foreignWalletSigner?: {
+      importKeys: (
+        keys: Record<string, unknown>
+      ) => Promise<Record<string, string>>;
+      publicKey: (coin: string) => Promise<string>;
+      clear: () => Promise<void>;
+      sign: (
+        request: import('../lib/foreign-wallet/desktop-engine').DesktopSignRequest,
+        language: string
+      ) => Promise<{
+        signed?: import('../lib/foreign-wallet/foreign-wallet-transaction').ForeignWalletSignedTransaction;
+        error?: 'invalid' | 'changed' | 'declined' | 'pending';
+      }>;
+    };
+    foreignWalletJournal?: {
+      get: (key: string) => Promise<string | null>;
+      set: (key: string, value: string) => Promise<void>;
+      delete: (key: string, txId: string) => Promise<void>;
+    };
     appStorage?: {
       get: (key: string) => Promise<unknown>;
       set: (key: string, value: unknown) => Promise<void>;
@@ -130,6 +149,10 @@ declare global {
       ) => () => void;
       onSystemLockRequested?: (callback: () => void) => () => void;
       getPlatform?: () => Promise<string>;
+      onDisplayMediaRequest?: (callback: (request: { requestId: string; origin: string }) => void) => () => void;
+      onDisplayMediaCancel?: (callback: (requestId: string) => void) => () => void;
+      selectDisplayMedia?: (requestId: string, sourceId?: string) => void;
+      authorizeDisplayMedia?: (requestId: string, accepted: boolean) => void;
       listScreenShareSources?: () => Promise<{
         success: boolean;
         error?: string;
@@ -348,6 +371,67 @@ declare global {
       reticulumGetLocalIdentityPublicKeyBase64?: () => Promise<{
         publicKeyBase64: string | null;
       }>;
+      qappReticulumRequest?: (owner: any, options: any) => Promise<any>;
+      qappReticulumConnect?: (owner: any, destination: string) => Promise<any>;
+      qappReticulumSend?: (
+        owner: any,
+        connectionId: string,
+        payload: unknown
+      ) => Promise<any>;
+      qappReticulumClose?: (
+        owner: any,
+        connectionId: string
+      ) => Promise<boolean>;
+      qappReticulumCleanupOwner?: (owner: any) => Promise<boolean>;
+      qappGuestPrepare?: (
+        owner: { tabId: string; name: string; service: string },
+        url: string,
+        isDevMode: boolean
+      ) => Promise<{ partition: string; preload: string }>;
+      qappGuestRelease?: (
+        owner: { tabId: string; name: string; service: string }
+      ) => Promise<boolean>;
+      onQAppReticulumEvent?: (callback: (payload: any) => void) => () => void;
+      qappFileSave?: (owner: any, request: any) => Promise<any>;
+      privateChannelOpen?: (
+        owner: any,
+        rnsConnectionId: unknown,
+        purpose: unknown
+      ) => Promise<any>;
+      privateChannelSend?: (
+        owner: any,
+        channelId: unknown,
+        lane: unknown,
+        messageId: unknown,
+        data: unknown,
+        streamOptions?: unknown
+      ) => Promise<any>;
+      privateChannelStatus?: (owner: any, channelId: unknown) => Promise<any>;
+      privateChannelClose?: (owner: any, channelId: unknown) => Promise<any>;
+      privateChannelCleanupOwner?: (owner: any) => Promise<boolean>;
+      onPrivateChannelEvent?: (callback: (payload: any) => void) => () => void;
+      qappMoqOpen?: (
+        owner: any,
+        rnsConnectionId: unknown,
+        publicationNamespace: unknown,
+        publicationTrack: unknown
+      ) => Promise<any>;
+      qappMoqSubscribe?: (
+        owner: any,
+        sessionId: unknown,
+        subscriptionId: unknown,
+        namespace: unknown,
+        trackName: unknown
+      ) => Promise<any>;
+      qappMoqPublish?: (
+        owner: any,
+        sessionId: unknown,
+        payload: unknown
+      ) => Promise<any>;
+      qappMoqMetrics?: (owner: any, sessionId: unknown) => Promise<any>;
+      qappMoqClose?: (owner: any, sessionId: unknown) => Promise<any>;
+      qappMoqCleanupOwner?: (owner: any) => Promise<any>;
+      onQAppMoqEvent?: (callback: (payload: any) => void) => () => void;
       /** Hidden audio-surface: proxy signing to the main shell (wallet key in-memory). */
       gcallProxySignPresenceMessage?: (
         payload: Record<string, unknown>

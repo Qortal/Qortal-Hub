@@ -47,6 +47,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import { Label } from '../../styles/App-styles.ts';
+import { filterPrivateGroups } from './privateGroups';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
@@ -65,8 +66,9 @@ export const AppsPrivate = ({ myName, myAddress }) => {
   const [myGroupsWhereIAmAdminFromGlobal] = useAtom(myGroupsWhereIAmAdminAtom);
 
   const myGroupsWhereIAmAdmin = useMemo(() => {
-    return myGroupsWhereIAmAdminFromGlobal?.filter(
-      (group) => groupsProperties[group?.groupId]?.isOpen === false
+    return filterPrivateGroups(
+      myGroupsWhereIAmAdminFromGlobal,
+      groupsProperties
     );
   }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties]);
 
@@ -80,9 +82,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
 
   const myGroupsPrivate = useMemo(() => {
-    return memberGroups?.filter(
-      (group) => groupsProperties[group?.groupId]?.isOpen === false
-    );
+    return filterPrivateGroups(memberGroups, groupsProperties);
   }, [memberGroups, groupsProperties]);
 
   const [privateAppValues, setPrivateAppValues] = useState({
@@ -463,15 +463,13 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                       })}
                     </MenuItem>
 
-                    {myGroupsPrivate
-                      ?.filter((item) => !item?.isOpen)
-                      .map((group) => {
-                        return (
-                          <MenuItem key={group?.groupId} value={group?.groupId}>
-                            {group?.groupName}
-                          </MenuItem>
-                        );
-                      })}
+                    {myGroupsPrivate?.map((group) => {
+                      return (
+                        <MenuItem key={group?.groupId} value={group?.groupId}>
+                          {group?.groupName}
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </Box>
 
@@ -680,15 +678,13 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                       })}
                     </MenuItem>
 
-                    {myGroupsWhereIAmAdmin
-                      ?.filter((item) => !item?.isOpen)
-                      .map((group) => {
-                        return (
-                          <MenuItem key={group?.groupId} value={group?.groupId}>
-                            {group?.groupName}
-                          </MenuItem>
-                        );
-                      })}
+                    {myGroupsWhereIAmAdmin?.map((group) => {
+                      return (
+                        <MenuItem key={group?.groupId} value={group?.groupId}>
+                          {group?.groupName}
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                 </Box>
 

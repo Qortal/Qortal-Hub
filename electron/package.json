@@ -22,12 +22,15 @@
     ]
   },
   "license": "GPL-3.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "build/src/index.js",
   "scripts": {
-    "build": "tsc && electron-rebuild",
+    "build": "npm run build:wallet && tsc && electron-rebuild",
     "test:reticulum-chat-worker": "npm run build && electron ./scripts/test-reticulum-chat-worker.cjs",
     "electron:start-live": "node ./live-runner.js",
-    "electron:start": "npm run build && electron --inspect=5858 ./",
+    "electron:start": "npm run build:private-transport && npm run build && electron --inspect=5858 ./",
     "electron:pack": "node ./scripts/run-electron-package.mjs pack",
     "electron:make": "node ./scripts/run-electron-package.mjs local",
     "electron:make-local": "node ./scripts/run-electron-package.mjs local",
@@ -44,18 +47,20 @@
     "electron:make-all": "node ./scripts/run-electron-package.mjs all",
     "bundle:reticulum": "node ./scripts/run-build-rnsd-frozen.mjs",
     "bundle:reticulum-venv": "node ./scripts/bundle-reticulum-runtime.mjs",
-    "generate:mesh-network-identity": "python3 -c \"import RNS; RNS.Identity().to_file('resources/mesh-network.identity')\""
+    "build:private-transport": "node ./scripts/build-private-transport.mjs",
+    "generate:mesh-network-identity": "python3 -c \"import RNS; RNS.Identity().to_file('resources/mesh-network.identity')\"",
+    "build:wallet": "node ./scripts/build-wallet-engine.mjs"
   },
   "dependencies": {
     "@capacitor-community/electron": "^5.0.0",
     "@silentbot1/nat-api": "^0.4.9",
-    "adm-zip": "^0.5.16",
-    "better-sqlite3": "^12.8.0",
+    "adm-zip": "^0.6.0",
+    "better-sqlite3": "^13.0.3",
     "chokidar": "^4.0.3",
     "electron-is-dev": "~2.0.0",
     "electron-serve": "~1.1.0",
     "electron-unhandled": "~4.0.1",
-    "electron-updater": "^6.6.2",
+    "electron-updater": "^6.8.9",
     "electron-window-state": "^5.0.3",
     "extract-zip": "^2.0.1",
     "moment-timezone": "^0.5.48",
@@ -66,11 +71,11 @@
   },
   "devDependencies": {
     "@electron/notarize": "^2.5.0",
-    "@electron/rebuild": "^3.7.2",
+    "@electron/rebuild": "^4.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/write-file-atomic": "^4.0.3",
-    "electron": "^32.3.1",
-    "electron-builder": "^25.1.8",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
     "shelljs": "^0.8.5",
     "typescript": "^5.0.4"
   },

@@ -32,6 +32,27 @@ module.exports = async function afterPack(context) {
         warn(`⚠️ chmod reticulum/${name} failed:`, e.message);
       }
     }
+    const privateTransportDir = path.join(
+      appOutDir,
+      'resources',
+      'private-transport'
+    );
+    if (fs.existsSync(privateTransportDir)) {
+      for (const archDir of fs.readdirSync(privateTransportDir)) {
+        const sidecarPath = path.join(
+          privateTransportDir,
+          archDir,
+          'qortal-private-transport'
+        );
+        if (!fs.existsSync(sidecarPath)) continue;
+        try {
+          fs.chmodSync(sidecarPath, 0o755);
+          log(`✅ private-transport/${archDir} permissions set.`);
+        } catch (e) {
+          warn(`⚠️ chmod private-transport/${archDir} failed:`, e.message);
+        }
+      }
+    }
   }
 
   if (!plat.includes('linux')) return;
