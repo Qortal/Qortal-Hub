@@ -107,53 +107,55 @@ export const ListOfBans = ({
       });
 
       setIsLoadingUnban(true);
-      new Promise((res, rej) => {
-        window
-          .sendMessage('cancelBan', {
-            groupId,
-            qortalAddress: address,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              setIsLoadingUnban(false);
-              setBans((current) =>
-                current.filter((ban) => ban?.offender !== address)
-              );
-              setInfoSnack({
-                type: 'success',
-                message: t('group:message.success.unbanned_user', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-              });
-              handlePopoverClose();
-              setOpenSnack(true);
-              return;
-            }
-            setInfoSnack({
-              type: 'error',
-              message: response?.error,
-            });
-            setOpenSnack(true);
-            rej(response.error);
-          })
-          .catch((error) => {
-            setInfoSnack({
-              type: 'error',
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-            setOpenSnack(true);
-            rej(error);
-          });
+      const response = await window.sendMessage('cancelBan', {
+        groupId,
+        qortalAddress: address,
       });
-    } catch (error) {
-      console.log(error);
-    } finally {
+      
+      if (!response?.error) {
+        setIsLoadingUnban(false);
+        setBans((current) =>
+          current.filter((ban) => ban?.offender !== address)
+        );
+        setInfoSnack({
+          type: 'success',
+          message: t('group:message.success.unbanned_user', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        handlePopoverClose();
+        setOpenSnack(true);
+        return;
+      }
+      
       setIsLoadingUnban(false);
+      setInfoSnack({
+        type: 'error',
+        message:
+          response?.message ||
+          response?.error ||
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
+    } catch (error) {
+      console.error('Cancel ban error:', error);
+      setIsLoadingUnban(false);
+      // If user cancelled the modal, don't show an error
+      if (error?.isCanceled) {
+        return;
+      }
+      setInfoSnack({
+        type: 'error',
+        message:
+          error?.message ||
+          String(error) ||
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
     }
   };
 

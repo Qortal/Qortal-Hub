@@ -778,11 +778,12 @@ export async function kickFromGroupCase(request, event) {
       event.origin
     );
   } catch (error) {
+    console.error('kickFromGroupCase error:', error);
     event.source.postMessage(
       {
         requestId: request.requestId,
         action: 'kickFromGroup',
-        error: error?.message,
+        error: error?.message || String(error),
         type: 'backgroundMessageResponse',
       },
       event.origin
@@ -817,11 +818,12 @@ export async function banFromGroupCase(request, event) {
       event.origin
     );
   } catch (error) {
+    console.error('banFromGroupCase error:', error);
     event.source.postMessage(
       {
         requestId: request.requestId,
         action: 'banFromGroup',
-        error: error?.message,
+        error: error?.message || String(error),
         type: 'backgroundMessageResponse',
       },
       event.origin
@@ -951,11 +953,12 @@ export async function cancelBanCase(request, event) {
       event.origin
     );
   } catch (error) {
+    console.error('cancelBanCase error:', error);
     event.source.postMessage(
       {
         requestId: request.requestId,
         action: 'cancelBan',
-        error: error?.message,
+        error: error?.message || String(error),
         type: 'backgroundMessageResponse',
       },
       event.origin
