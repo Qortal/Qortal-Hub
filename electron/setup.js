@@ -154,7 +154,6 @@ const defaultDomains = [
     'https://apinode2.qortalnodes.live',
     'https://apinode3.qortalnodes.live',
     'https://apinode4.qortalnodes.live',
-    'https://www.qort.trade',
 ];
 // let allowedDomains: string[] = [...defaultDomains]
 const domainHolder = {

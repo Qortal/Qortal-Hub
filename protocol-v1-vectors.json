@@ -1,0 +1,47 @@
+{
+  "protocol": "qortal-hub-v3.qapp-backend.v1",
+  "header_bytes": 14,
+  "data_frame": {
+    "version": 1,
+    "type": 1,
+    "message_id_hex": "0102030405060708",
+    "payload_hex": "01020304",
+    "frame_hex": "010101020304050607080000000401020304"
+  },
+  "ack_frame": {
+    "version": 1,
+    "type": 2,
+    "message_id_hex": "1112131415161718",
+    "payload_hex": "",
+    "frame_hex": "0102111213141516171800000000"
+  },
+  "control_frame": {
+    "version": 1,
+    "type": 3,
+    "message_id_hex": "2122232425262728",
+    "control": { "type": "PING" },
+    "payload_hex": "7b2274797065223a2250494e47227d",
+    "frame_hex": "010321222324252627280000000f7b2274797065223a2250494e47227d"
+  },
+  "data_envelope": {
+    "connection_id": "rns-00000000-0000-0000-0000-000000000000",
+    "encoding": "json",
+    "application_json": { "type": "echo", "value": 42, "text": "hello" },
+    "application_utf8_hex": "7b2274797065223a226563686f222c2276616c7565223a34322c2274657874223a2268656c6c6f227d",
+    "payload_base64": "eyJ0eXBlIjoiZWNobyIsInZhbHVlIjo0MiwidGV4dCI6ImhlbGxvIn0=",
+    "envelope_utf8": "{\"connectionId\":\"rns-00000000-0000-0000-0000-000000000000\",\"payloadBase64\":\"eyJ0eXBlIjoiZWNobyIsInZhbHVlIjo0MiwidGV4dCI6ImhlbGxvIn0=\",\"encoding\":\"json\"}"
+  },
+  "rpc_request": {
+    "version": 1,
+    "request_id": "request-0001",
+    "encoding": "json",
+    "application_json": { "name": "Alice" },
+    "payload_base64": "eyJuYW1lIjoiQWxpY2UifQ=="
+  },
+  "rpc_response": {
+    "application_json": {
+      "message": "Hello, Alice",
+      "requestId": "request-0001"
+    }
+  }
+}

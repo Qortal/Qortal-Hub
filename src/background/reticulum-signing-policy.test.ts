@@ -12,6 +12,26 @@ function expectAllowed(
 }
 
 describe('Reticulum wallet signing policy', () => {
+  it('accepts only the exact fresh relay authorization domain', () => {
+    const challenge = {
+      type: 'masque-ticket-issue-v1',
+      binding: 'ab'.repeat(32),
+      nonce: 'cd'.repeat(32),
+      policy: 'ef'.repeat(32),
+      relayPin: '12'.repeat(32),
+      expiresAt: Date.now() + 10_000,
+    };
+    expectAllowed(assertAllowedReticulumSigningPayload, challenge);
+    for (const invalid of [
+      { ...challenge, extra: 'injected' },
+      { ...challenge, expiresAt: 1 },
+      { ...challenge, expiresAt: Date.now() + 120_000 },
+      { ...challenge, type: 'masque-relay-auth-v1' },
+      { ...challenge, binding: 'short' },
+    ]) {
+      expect(() => assertAllowedReticulumSigningPayload(invalid)).toThrow();
+    }
+  });
   it('allows only an exact, short-lived Qortal Land proximity capability', () => {
     const now = Date.now();
     const capability = {

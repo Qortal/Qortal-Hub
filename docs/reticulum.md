@@ -94,6 +94,47 @@ A Python subprocess (`presence_bridge.py`) launched after the daemon is ready.
 | `send_qchat_file_resource` | Send a file offer to a peer |
 | `authorize_qchat_file_resource` | Authorise file delivery |
 
+### Q-App Backend Scheduling
+
+Q-App backend traffic is isolated from Hub control traffic and from its own realtime data path:
+
+- `qapp-rpc-*` handles bounded request/response work.
+- `qapp-realtime-*` handles gameplay and other realtime sends.
+- `qapp-lifecycle-*` handles connection setup and teardown.
+
+Each class is deterministically sharded by Q-App owner and backend destination. Once an RPC link is established, waiting for its response is callback-driven; it does not occupy a scheduler worker. The Electron manager additionally caps pending RPCs and logical connections both per Q-App owner and globally so one Q-App—or many malfunctioning owners—cannot exhaust shared bridge capacity.
+
+Q-App stream sends use raw partial writes, not Python `BufferedWriter`: the
+Reticulum raw writer can return zero while its channel window is full, which
+can make buffered `flush()` spin indefinitely. Sends have a ten-second deadline
+and run in a bounded pool (eight workers, 64 pending jobs), isolated from the
+Q-App scheduler. A failed or stalled write detaches its physical Link and
+schedules the existing reconnect flow. Every new stream gets a new write lock;
+late writes and reader failures remain tied to the old Link. Queue pressure
+alone does not reset a healthy Link. Failed sends return an error and release
+their pending acknowledgement reservation instead of reporting success.
+
+### Q-App document lifecycle
+
+Desktop Q-Apps run in isolated guest web contents. The shell registers each
+guest with Electron main using a per-guest attach token bound to a trusted tab,
+service, and name. The guest page has no Node API. Its preload forwards the
+existing Q-App request messages to the owning shell view and retains reply
+ports. Each app's browser storage has a separate persistent partition. Main
+blocks navigation to another app or origin while keeping the guest's owner.
+Full navigation (including refresh) starts resource cleanup on
+`did-start-navigation` before the new document can create connections.
+Same-document navigation retains connections. Tab removal and shell
+shutdown/crash also clean registered resources. Browser and mobile builds keep
+the iframe bridge.
+
+Reticulum, private channels, MoQ, and file saves snapshot their old resources
+at the same time; slow shutdown in one manager must not delay another manager's
+snapshot until after the new page connects. Never trigger owner-wide cleanup
+from the guest's `load` event: new-page scripts can already have connected.
+Reticulum setup checks ownership again after native setup returns and rejects
+connections cancelled in flight instead of returning a dead connected handle.
+
 ### Mesh Coordinator — `reticulum-mesh.ts`
 
 Handles hub-to-hub mesh networking, separate from the TLS P2P layer (`p2p-network.ts`).

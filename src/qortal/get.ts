@@ -1,3 +1,5 @@
+import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
+import { sendLocalForeignCoin } from './foreign-coin-send';
 import { Sha256 } from 'asmcrypto.js';
 import {
   createEndpoint,
@@ -47,6 +49,10 @@ import {
   uint8ArrayToObject,
 } from '../encryption/encryption.ts';
 import { showSaveFilePicker } from '../hooks/useQortalMessageListener.tsx';
+import {
+  codedQortalRequestError,
+  USER_DECLINED_REQUEST_CODE,
+} from './qortal-request-errors.ts';
 import { getPublishesFromAdminsAdminSpace } from '../components/Chat/AdminSpaceInner.tsx';
 import { extractComponents } from '../components/Chat/MessageDisplay.tsx';
 import {
@@ -56,17 +62,12 @@ import {
   validateSecretKey,
 } from '../components/Group/Group.tsx';
 import {
-  BTC_FEE_PER_BYTE,
-  DGB_FEE_PER_BYTE,
-  DOGE_FEE_PER_BYTE,
-  LTC_FEE_PER_BYTE,
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
   PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
-  RVN_FEE_PER_BYTE,
   SELLER_FOREIGN_FEE,
   TIME_MINUTES_1_IN_MILLISECONDS,
   TIME_MINUTES_20_IN_MILLISECONDS,
@@ -112,6 +113,11 @@ import { getElectronPersistentStorage } from '../utils/electronPersistentStorage
 import { fileToBase64 } from '../utils/fileReading/index.ts';
 import { mimeToExtensionMap } from '../utils/memeTypes.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
+import { normalizeQappIdentityContext } from './qapp-identity.ts';
+import {
+  createBackendPermissions,
+  unapprovedSessionPermissions,
+} from './qapp-backend-permission.ts';
 import utils from '../utils/utils.ts';
 import ShortUniqueId from 'short-unique-id';
 import {
@@ -124,7 +130,6 @@ import i18n from 'i18next';
 import aesjs from 'aes-js';
 import { roundUpToDecimals } from '../utils/numberFunctions.ts';
 import { normalizeFilename } from '../utils/downloadFromLocation.ts';
-import { getElectronPersistentStorage } from '../utils/electronPersistentStorage.ts';
 
 const uid = new ShortUniqueId({ length: 6 });
 
@@ -452,6 +457,25 @@ function getFileFromContentScript(fileId) {
 
 const responseResolvers = new Map();
 const notificationPermissionResolvers = new Map();
+const backendPermissions = createBackendPermissions(
+  async (appInfo, isFromExtension) => {
+    const response = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.backend_connection', {
+          appName: appInfo.name,
+        }),
+        text2: i18n.t('question:permission.backend_connection_description'),
+        confirmCheckbox: true,
+        confirmCheckboxLabel: i18n.t(
+          'question:permission.backend_connection_understand'
+        ),
+      },
+      isFromExtension
+    );
+    return response?.accepted === true;
+  },
+  (tabId, name, permissions) => setSessionPermissions(tabId, name, permissions)
+);
 
 function generatePermissionRequestId(): string {
   if (globalThis.crypto?.randomUUID) {
@@ -514,6 +538,37 @@ async function getUserPermission(payload, isFromExtension) {
     }, TIME_MINUTES_1_IN_MILLISECONDS);
   });
 }
+
+export const authorizeRnsDestination = async (
+  destination: string,
+  isFromExtension: boolean,
+  appInfo: { tabId?: string | number; name?: string }
+) => {
+  const normalized = String(destination ?? '')
+    .trim()
+    .toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(normalized)) {
+    throw new Error('RNS_DESTINATION_UNREACHABLE');
+  }
+  if (!window.electronAPI?.qappReticulumConnect) {
+    throw new Error('RNS_NATIVE_TRANSPORT_UNAVAILABLE');
+  }
+  if (appInfo?.tabId == null || !appInfo?.name) {
+    throw new Error('RNS_PERMISSION_DENIED');
+  }
+  await backendPermissions.authorize(
+    { tabId: appInfo.tabId, name: appInfo.name },
+    normalized,
+    isFromExtension
+  );
+  return normalized;
+};
+
+export const clearRnsDestinationPermissionsByTabId = (
+  tabId: string | number
+) => {
+  backendPermissions.clearByTabId(tabId);
+};
 
 export const getWhichUI = async () => {
   try {
@@ -597,6 +652,90 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
         postProcess: 'capitalizeFirstChar',
       })
     );
+  }
+};
+
+export const signQappIdentityProof = async (
+  payload,
+  _isFromExtension,
+  appInfo
+) => {
+  const protocol = payload?.protocol;
+  const challengeId = payload?.challengeId;
+  const nonce = payload?.nonce;
+  const backendDestination = payload?.backendDestination;
+  const expiresAt = payload?.expiresAt;
+  if (
+    protocol !== 'qortal-qapp-auth-v1' ||
+    typeof challengeId !== 'string' ||
+    !/^[A-Za-z0-9_-]{12,128}$/.test(challengeId) ||
+    typeof nonce !== 'string' ||
+    !/^[A-Za-z0-9_-]{32,128}$/.test(nonce) ||
+    typeof backendDestination !== 'string' ||
+    !/^[0-9a-f]{32}$/.test(backendDestination) ||
+    !Number.isSafeInteger(expiresAt) ||
+    expiresAt < Date.now() - 5_000 ||
+    expiresAt > Date.now() + 180_000
+  ) {
+    throw new Error(
+      i18n.t('auth:message.error.invalid_qapp_identity_challenge')
+    );
+  }
+  const qapp = normalizeQappIdentityContext(appInfo);
+  if (appInfo?.tabId == null) {
+    throw new Error(i18n.t('auth:message.error.invalid_qapp_identity_context'));
+  }
+  const hasPersistentAccountPermission = appInfo?.name
+    ? Boolean(await getPermission(`qAPPAutoAuth-${appInfo.name}`))
+    : false;
+  const hasAccountSessionPermission = Boolean(
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_ACCOUNT')
+  );
+  if (!hasPersistentAccountPermission && !hasAccountSessionPermission) {
+    throw new Error(
+      i18n.t('auth:message.error.qapp_account_authentication_required')
+    );
+  }
+  if (!backendPermissions.has(appInfo, backendDestination))
+    throw new Error('RNS_PERMISSION_DENIED');
+  const wallet = await getSaveWallet();
+  const account = {
+    address: wallet?.address0,
+    publicKey: wallet?.publicKey,
+  };
+  const keyPair = await getKeyPair();
+  if (
+    !account?.address ||
+    !account?.publicKey ||
+    keyPair?.publicKey !== account.publicKey
+  ) {
+    throw new Error(i18n.t('auth:message.error.wallet_account_mismatch'));
+  }
+  const fields = {
+    address: account.address,
+    backendDestination,
+    challengeId,
+    expiresAt,
+    nonce,
+    protocol,
+    publicKey: account.publicKey,
+    qappName: qapp.name,
+    qappService: qapp.service,
+  };
+  const sorted = {};
+  for (const key of Object.keys(fields).sort()) sorted[key] = fields[key];
+  const message = new TextEncoder().encode(JSON.stringify(sorted));
+  const privateKey = Base58.decode(keyPair.privateKey);
+  try {
+    return {
+      ...fields,
+      signature: Base58.encode(nacl.sign.detached(message, privateKey)),
+    };
+  } finally {
+    privateKey.fill(0);
+    message.fill(0);
   }
 };
 
@@ -723,6 +862,15 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
       );
     }
 
+    // RNS_CONNECT already approves private transport for this app's tab.
+    // Keep legacy SESSION_PERMISSIONS requests compatible without a second dialog.
+    const pendingPermissions = unapprovedSessionPermissions(
+      { tabId, name: appInfo.name },
+      permissions,
+      hasSessionPermission
+    );
+    if (pendingPermissions.length === 0) return true;
+
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.session_permissions', {
@@ -737,7 +885,7 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
         }),
         details: {
           type: 'sessionPermissions',
-          permissions,
+          permissions: pendingPermissions,
         },
         confirmCheckbox: true,
         confirmCheckboxLabel: i18n.t('question:permission.session_understand', {
@@ -5487,7 +5635,11 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
 };
 
 export const sendCoin = async (data, isFromExtension) => {
-  const requiredFields = ['coin', 'amount'];
+  const requiredFields =
+    data.sendMax === true &&
+    ['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(data.coin)
+      ? ['coin']
+      : ['coin', 'amount'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
     if (!data[field]) {
@@ -5511,19 +5663,17 @@ export const sendCoin = async (data, isFromExtension) => {
     );
   }
   const checkCoin = data.coin;
-  const wallet = await getSaveWallet();
-  const address = wallet.address0;
-  const resKeyPair = await getKeyPair();
-  const parsedData = resKeyPair;
   const isGateway = await isRunningGateway();
 
-  if (checkCoin !== 'QORT' && isGateway)
+  if (checkCoin === 'ARRR' && isGateway)
     throw new Error(
-      i18n.t('question:message.error.gateway_non_qort_local_node', {
+      i18n.t('question:message.error.gateway_pirate_local_node', {
         postProcess: 'capitalizeFirstChar',
       })
     );
   if (checkCoin === 'QORT') {
+    const wallet = await getSaveWallet();
+    const address = wallet.address0;
     // Params: data.coin, data.recipient, data.amount, data.fee
     // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
     // then set the response string from the core to the `response` variable (defined above)
@@ -5605,390 +5755,17 @@ export const sendCoin = async (data, isFromExtension) => {
       );
       return makePayment.res?.data;
     } else {
-      throw new Error(
+      throw codedQortalRequestError(
+        USER_DECLINED_REQUEST_CODE,
         i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
     }
-  } else if (checkCoin === 'BTC') {
-    const amount = Number(data.amount);
-    const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.btcPrivateKey;
-    const feePerByte = data.fee ? data.fee : BTC_FEE_PER_BYTE;
-
-    const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
-
-    if (isNaN(Number(btcWalletBalance))) {
-      throw new Error(
-        i18n.t('question:message.error.fetch_balance_token', {
-          token: 'BTC',
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-    const btcWalletBalanceDecimals = Number(btcWalletBalance);
-    const btcAmountDecimals = Number(amount);
-    const fee = feePerByte * 500; // default 0.00050000
-    if (btcAmountDecimals + fee > btcWalletBalanceDecimals) {
-      throw new Error(
-        i18n.t('question:message.error.insufficient_funds', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-
-    const resPermission = await getUserPermission(
-      {
-        text1: i18n.t('question:permission.send_coins', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        text2: i18n.t('question:to_recipient', {
-          recipient: recipient,
-          postProcess: 'capitalizeFirstChar',
-        }),
-        highlightedText: `${amount} ${checkCoin}`,
-        foreignFee: `${fee} BTC`,
-      },
-      isFromExtension
+  } else if (['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(checkCoin)) {
+    return sendLocalForeignCoin(data, (payload) =>
+      getUserPermission(payload, isFromExtension)
     );
-    const { accepted } = resPermission;
-
-    if (accepted) {
-      const opts = {
-        xprv58: xprv58,
-        receivingAddress: recipient,
-        bitcoinAmount: amount,
-        feePerByte: feePerByte,
-      };
-      const url = await createEndpoint(`/crosschain/btc/send`);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(opts),
-      });
-      if (!response.ok)
-        throw new Error(
-          i18n.t('question:message.error.send', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      return res;
-    } else {
-      throw new Error(
-        i18n.t('question:message.generic.user_declined_request', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-  } else if (checkCoin === 'LTC') {
-    const amount = Number(data.amount);
-    const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.ltcPrivateKey;
-    const feePerByte = data.fee ? data.fee : LTC_FEE_PER_BYTE;
-    const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
-
-    if (isNaN(Number(ltcWalletBalance))) {
-      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
-        token: 'LTC',
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-    const ltcWalletBalanceDecimals = Number(ltcWalletBalance);
-    const ltcAmountDecimals = Number(amount);
-    const fee = feePerByte * 1000; // default 0.00030000
-    if (ltcAmountDecimals + fee > ltcWalletBalanceDecimals) {
-      throw new Error(
-        i18n.t('question:message.error.insufficient_funds', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-    const resPermission = await getUserPermission(
-      {
-        text1: i18n.t('question:permission.send_coins', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        text2: i18n.t('question:to_recipient', {
-          recipient: recipient,
-          postProcess: 'capitalizeFirstChar',
-        }),
-        highlightedText: `${amount} ${checkCoin}`,
-        foreignFee: `${fee} LTC`,
-      },
-      isFromExtension
-    );
-    const { accepted } = resPermission;
-
-    if (accepted) {
-      const url = await createEndpoint(`/crosschain/ltc/send`);
-      const opts = {
-        xprv58: xprv58,
-        receivingAddress: recipient,
-        litecoinAmount: amount,
-        feePerByte: feePerByte,
-      };
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(opts),
-      });
-      if (!response.ok)
-        throw new Error(
-          i18n.t('question:message.error.send', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      return res;
-    } else {
-      throw new Error(
-        i18n.t('question:message.generic.user_declined_request', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-  } else if (checkCoin === 'DOGE') {
-    const amount = Number(data.amount);
-    const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.dogePrivateKey;
-    const feePerByte = data.fee ? data.fee : DOGE_FEE_PER_BYTE;
-    const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
-    if (isNaN(Number(dogeWalletBalance))) {
-      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
-        token: 'DOGE',
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-    const dogeWalletBalanceDecimals = Number(dogeWalletBalance);
-    const dogeAmountDecimals = Number(amount);
-    const fee = feePerByte * 5000; // default 0.05000000
-    if (dogeAmountDecimals + fee > dogeWalletBalanceDecimals) {
-      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-
-    const resPermission = await getUserPermission(
-      {
-        text1: i18n.t('question:permission.send_coins', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        text2: i18n.t('question:to_recipient', {
-          recipient: recipient,
-          postProcess: 'capitalizeFirstChar',
-        }),
-        highlightedText: `${amount} ${checkCoin}`,
-        foreignFee: `${fee} DOGE`,
-      },
-      isFromExtension
-    );
-    const { accepted } = resPermission;
-
-    if (accepted) {
-      const opts = {
-        xprv58: xprv58,
-        receivingAddress: recipient,
-        dogecoinAmount: amount,
-        feePerByte: feePerByte,
-      };
-      const url = await createEndpoint(`/crosschain/doge/send`);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(opts),
-      });
-      if (!response.ok)
-        throw new Error(
-          i18n.t('question:message.error.send', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      return res;
-    } else {
-      throw new Error(
-        i18n.t('question:message.generic.user_declined_request', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-  } else if (checkCoin === 'DGB') {
-    const amount = Number(data.amount);
-    const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.dgbPrivateKey;
-    const feePerByte = data.fee ? data.fee : DGB_FEE_PER_BYTE;
-    const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
-    if (isNaN(Number(dgbWalletBalance))) {
-      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
-        token: 'DGB',
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-    const dgbWalletBalanceDecimals = Number(dgbWalletBalance);
-    const dgbAmountDecimals = Number(amount);
-    const fee = feePerByte * 500; // default 0.00005000
-    if (dgbAmountDecimals + fee > dgbWalletBalanceDecimals) {
-      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-
-    const resPermission = await getUserPermission(
-      {
-        text1: i18n.t('question:permission.send_coins', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        text2: `To: ${recipient}`,
-        highlightedText: `${amount} ${checkCoin}`,
-        foreignFee: `${fee} DGB`,
-      },
-      isFromExtension
-    );
-    const { accepted } = resPermission;
-
-    if (accepted) {
-      const opts = {
-        xprv58: xprv58,
-        receivingAddress: recipient,
-        digibyteAmount: amount,
-        feePerByte: feePerByte,
-      };
-      const url = await createEndpoint(`/crosschain/dgb/send`);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(opts),
-      });
-      if (!response.ok)
-        throw new Error(
-          i18n.t('question:message.error.send', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      return res;
-    } else {
-      throw new Error(
-        i18n.t('question:message.generic.user_declined_request', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
-  } else if (checkCoin === 'RVN') {
-    const amount = Number(data.amount);
-    const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.rvnPrivateKey;
-    const feePerByte = data.fee ? data.fee : RVN_FEE_PER_BYTE;
-    const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
-    if (isNaN(Number(rvnWalletBalance))) {
-      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
-        token: 'RVN',
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-    const rvnWalletBalanceDecimals = Number(rvnWalletBalance);
-    const rvnAmountDecimals = Number(amount);
-    const fee = feePerByte * 500; // default 0.00562500
-    if (rvnAmountDecimals + fee > rvnWalletBalanceDecimals) {
-      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-
-    const resPermission = await getUserPermission(
-      {
-        text1: i18n.t('question:permission.send_coins', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        text2: `To: ${recipient}`,
-        highlightedText: `${amount} ${checkCoin}`,
-        foreignFee: `${fee} RVN`,
-      },
-      isFromExtension
-    );
-    const { accepted } = resPermission;
-
-    if (accepted) {
-      const opts = {
-        xprv58: xprv58,
-        receivingAddress: recipient,
-        ravencoinAmount: amount,
-        feePerByte: feePerByte,
-      };
-      const url = await createEndpoint(`/crosschain/rvn/send`);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(opts),
-      });
-      if (!response.ok)
-        throw new Error(
-          i18n.t('question:message.error.send', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      return res;
-    } else {
-      throw new Error(
-        i18n.t('question:message.generic.user_declined_request', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
   } else if (checkCoin === 'ARRR') {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
@@ -6026,6 +5803,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const { accepted } = resPermission;
 
     if (accepted) {
+      const parsedData = await getKeyPair();
       const opts = {
         entropy58: parsedData.arrrSeed58,
         receivingAddress: recipient,
@@ -6108,6 +5886,15 @@ export const createBuyOrder = async (data, isFromExtension) => {
   }
   const isGateway = await isRunningGateway();
   const foreignBlockchain = data.foreignBlockchain;
+  if (isGateway && !localTradeCoins[foreignBlockchain])
+    throw new Error(
+      i18n.t(
+        foreignBlockchain === 'PIRATECHAIN'
+          ? 'question:message.error.gateway_pirate_local_node'
+          : 'question:message.generic.no_action_public_node',
+        { postProcess: 'capitalizeFirstChar' }
+      )
+    );
   const atAddresses = data.crosschainAtInfo?.map(
     (order) => order.qortalAtAddress
   );
@@ -6129,6 +5916,13 @@ export const createBuyOrder = async (data, isFromExtension) => {
   );
 
   const crosschainAtInfo = await Promise.all(atPromises);
+  if (localTradeCoins[foreignBlockchain]) {
+    return fundLocalTrades(
+      crosschainAtInfo,
+      localTradeCoins[foreignBlockchain],
+      (payload) => getUserPermission(payload, isFromExtension)
+    );
+  }
 
   try {
     const buyingFees = await getBuyingFees(foreignBlockchain);
@@ -6376,6 +6170,17 @@ export const createSellOrder = async (data, isFromExtension) => {
       postProcess: 'capitalizeFirstChar',
     });
     throw new Error(errorMsg);
+  }
+
+  if (await isRunningGateway()) {
+    throw new Error(
+      i18n.t(
+        ['ARRR', 'PIRATECHAIN'].includes(data.foreignBlockchain)
+          ? 'question:message.error.gateway_pirate_local_node'
+          : 'question:message.generic.no_action_public_node',
+        { postProcess: 'capitalizeFirstChar' }
+      )
+    );
   }
 
   const parsedForeignAmount = Number(data.foreignAmount)?.toFixed(8);

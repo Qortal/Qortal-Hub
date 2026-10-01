@@ -18,7 +18,7 @@ window.addEventListener('message', (event) => {
     return;
   }
 
-  const { type, requestId, payload, error, message } = event.data;
+  const { type, requestId } = event.data;
 
   // Only process messages of type `backgroundMessageResponse`
   if (type !== 'backgroundMessageResponse') return;
@@ -84,6 +84,9 @@ export const sendMessageBackground = async (
   } else if (response_2?.error || response_2?.message) {
     return {
       error: response_2.error,
+      ...(typeof response_2?.code === 'string'
+        ? { code: response_2.code }
+        : {}),
       message: response_2?.message || response_2?.error || 'An error occurred',
     };
   }

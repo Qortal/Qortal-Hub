@@ -2,7 +2,7 @@
 
 Requirements for the development of Qortal-Hub from sources:
 
-- installation of nodejs from the [official site](https://nodejs.org/en/download)
+- installation of Node.js 22.12 or newer from the [official site](https://nodejs.org/en/download)
 - Python 3.9+ and Git on PATH for Reticulum networking during Electron development
 - an IDE like vscode or Intellij, or similar tools
 - some knowledge of React and its ecosystem

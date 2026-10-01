@@ -278,6 +278,8 @@ def freeze_target(
         "qortalland_proximity",
         "--hidden-import",
         "qortal_python_diagnostics",
+        "--hidden-import",
+        "masque_discovery_codec",
         "--paths",
         str(electron_root / "resources"),
         "--runtime-hook",
@@ -319,6 +321,7 @@ def copy_runtime_sources(electron_root: Path, output_dir: Path) -> None:
     if not source_sitecustomize.is_file():
         sys.exit(f"Missing Python diagnostics startup hook: {source_sitecustomize}")
     shutil.copy2(source_bridge, output_dir / "presence_bridge.py")
+    shutil.copy2(electron_root / "resources" / "masque_discovery_codec.py", output_dir / "masque_discovery_codec.py")
     shutil.copy2(source_games, output_dir / "qortalland_games.py")
     shutil.copy2(source_proximity, output_dir / "qortalland_proximity.py")
     shutil.copy2(source_diagnostics, output_dir / "qortal_python_diagnostics.py")

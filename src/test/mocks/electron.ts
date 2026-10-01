@@ -17,10 +17,19 @@ export const dialog = {
 };
 
 export const ipcMain = {
+  removeListener: () => undefined,
   handle: () => undefined,
   on: () => undefined,
   removeAllListeners: () => undefined,
   removeHandler: () => undefined,
+};
+
+export const systemPreferences = {
+  getMediaAccessStatus: (_type: string) => 'granted',
+};
+
+export const desktopCapturer = {
+  getSources: async (_options?: unknown): Promise<unknown[]> => [],
 };
 
 export const ipcRenderer = {
@@ -37,4 +46,3 @@ export const contextBridge = {
 export const shell = {
   openExternal: async () => undefined,
 };
-

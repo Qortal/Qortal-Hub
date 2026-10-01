@@ -47,6 +47,7 @@ import {
   setLastP2POptions,
   startDecentralizedStunAfterP2P,
 } from './setup';
+import { shutdownPrivateTransportSidecar } from './private-transport-runtime';
 import {
   startP2PNetwork,
   DEFAULT_P2P_PORT,
@@ -116,6 +117,20 @@ autoUpdater.logger = {
 app.commandLine.appendSwitch(
   'disable-features',
   'BlockInsecurePrivateNetworkRequests'
+);
+
+// Chromium exposes AudioContext.setSinkId but gates the delegable permission
+// behind SpeakerSelection. Without it, cross-origin Q-Apps cannot select an
+// output even with allow="speaker-selection". Enable only this API feature;
+// normal frame policy and device permissions still apply.
+app.commandLine.appendSwitch(
+  'enable-blink-features',
+  Array.from(
+    new Set([
+      ...app.commandLine.getSwitchValue('enable-blink-features').split(',').filter(Boolean),
+      'SpeakerSelection',
+    ])
+  ).join(',')
 );
 
 // app.commandLine.appendSwitch('ignore-certificate-errors');
@@ -289,6 +304,11 @@ function performAppShutdown(reason: string): Promise<void> {
       stopReticulumManagers();
     } catch (error) {
       loggerError('[Reticulum] Manager shutdown failed:', error);
+    }
+    try {
+      await shutdownPrivateTransportSidecar();
+    } catch (error) {
+      loggerError('[PrivateTransport] Sidecar shutdown failed:', error);
     }
     try {
       // Do not let Electron disappear after merely sending SIGTERM. Waiting

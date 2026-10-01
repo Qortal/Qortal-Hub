@@ -31,6 +31,14 @@ export class SingleFlightReadiness {
       return this.activeStart;
     }
 
+    // Callers use ensureReady() at request boundaries. Once the target exists,
+    // another call is not a lifecycle transition and must not publish a false
+    // `starting -> ready` cycle. Consumers treat that cycle as a reconnect and
+    // may perform expensive recovery work.
+    if (this.options.isReady()) {
+      return Promise.resolve();
+    }
+
     this.setStatus({ state: 'starting' });
     const generation = this.generation;
     const start = Promise.resolve()

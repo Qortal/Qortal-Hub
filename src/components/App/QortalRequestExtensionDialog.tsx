@@ -64,7 +64,7 @@ export function QortalRequestExtensionDialog({
   onCountdownComplete,
 }: QortalRequestExtensionDialogProps) {
   const theme = useTheme();
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['core', 'question']);
   const requestMessage = (message || {}) as MessageQortalRequestExtension & {
     appName?: string;
     sourceKind?: string;
@@ -81,7 +81,7 @@ export function QortalRequestExtensionDialog({
   const summaryText =
     requestMessage.highlightedText ||
     (requestMessage.text1?.toLowerCase().includes('authenticate')
-      ? 'Grant permissions for this session only'
+      ? t('question:permission.session_only_summary')
       : requestMessage.text1);
   const wrappingTextSx = {
     overflowWrap: 'anywhere',
@@ -635,7 +635,8 @@ export function QortalRequestExtensionDialog({
                   transform: canAccept ? 'translateY(-1px)' : 'none',
                 },
               }}
-              onClick={onAccept}
+              aria-disabled={!canAccept}
+              onClick={canAccept ? onAccept : undefined}
             >
               {t('core:action.accept', { postProcess: 'capitalizeFirstChar' })}
             </CustomButtonAccept>

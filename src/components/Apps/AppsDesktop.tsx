@@ -925,6 +925,26 @@ export const AppsDesktop = ({
     };
   }, [tabs]);
 
+  const updateAppUrlFunc = useCallback((e) => {
+    const { tabId, url } = e.detail ?? {};
+    if (!tabId || !url) return;
+
+    setTabs((currentTabs) =>
+      currentTabs.map((tab) => (tab?.tabId === tabId ? { ...tab, url } : tab))
+    );
+    setSelectedTab((currentTab) =>
+      currentTab?.tabId === tabId ? { ...currentTab, url } : currentTab
+    );
+  }, []);
+
+  useEffect(() => {
+    subscribeToEvent('updateAppUrl', updateAppUrlFunc);
+
+    return () => {
+      unsubscribeFromEvent('updateAppUrl', updateAppUrlFunc);
+    };
+  }, [updateAppUrlFunc]);
+
   const setSelectedTabFunc = (e) => {
     const data = e.detail?.data;
     const isDev = e.detail?.isDevMode;

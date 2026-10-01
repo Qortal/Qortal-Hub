@@ -17,6 +17,25 @@ import {
   TIME_SECONDS_30_IN_MILLISECONDS,
 } from '../constants/constants';
 import { buildQortalResourceLink } from '../utils/qortalLink';
+import {
+  dispatchQAppReticulumRequest,
+  isQAppReticulumAction,
+} from '../qortal/qapp-reticulum-request';
+import {
+  dispatchQAppPrivateChannelRequest,
+  isQAppPrivateChannelAction,
+} from '../qortal/qapp-private-channel-request';
+import {
+  dispatchQAppMoqRequest,
+  isQAppMoqAction,
+} from '../qortal/qapp-moq-request';
+import { normalizeQappIdentityContext } from '../qortal/qapp-identity';
+import { dispatchQAppScreenCaptureRequest } from '../qortal/qapp-screen-capture-request';
+import {
+  dispatchQAppFileSaveRequest,
+  isQAppFileSaveAction,
+} from '../qortal/qapp-file-save-request';
+import { serializeQortalRequestError } from '../qortal/qortal-request-errors';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -178,6 +197,24 @@ export function openIndexedDB() {
 }
 
 export const listOfAllQortalRequests = [
+  'FILE_SAVE_OPEN',
+  'FILE_SAVE_WRITE',
+  'FILE_SAVE_FINISH',
+  'FILE_SAVE_ABORT',
+  'SCREEN_CAPTURE_SELECT',
+  'RNS_CLOSE',
+  'RNS_CONNECT',
+  'RNS_REQUEST',
+  'RNS_SEND',
+  'PRIVATE_CHANNEL_CLOSE',
+  'PRIVATE_CHANNEL_OPEN',
+  'PRIVATE_CHANNEL_SEND',
+  'PRIVATE_CHANNEL_STATUS',
+  'MOQ_OBJECT_PUBLISH',
+  'MOQ_SESSION_CLOSE',
+  'MOQ_SESSION_METRICS',
+  'MOQ_SESSION_OPEN',
+  'MOQ_TRACK_SUBSCRIBE',
   'ADD_FOREIGN_SERVER',
   'ADD_GROUP_ADMIN',
   'ADD_LIST_ITEMS',
@@ -272,6 +309,7 @@ export const listOfAllQortalRequests = [
   'SHOW_ACTIONS',
   'SHOW_PDF_READER',
   'SIGN_FOREIGN_FEES',
+  'SIGN_QAPP_IDENTITY',
   'SIGN_TRANSACTION',
   'START_CROSSCHAIN_SERVER',
   'TRANSFER_ASSET',
@@ -285,6 +323,24 @@ export const listOfAllQortalRequests = [
 ];
 
 export const UIQortalRequests = [
+  'FILE_SAVE_OPEN',
+  'FILE_SAVE_WRITE',
+  'FILE_SAVE_FINISH',
+  'FILE_SAVE_ABORT',
+  'SCREEN_CAPTURE_SELECT',
+  'RNS_CLOSE',
+  'RNS_CONNECT',
+  'RNS_REQUEST',
+  'RNS_SEND',
+  'PRIVATE_CHANNEL_CLOSE',
+  'PRIVATE_CHANNEL_OPEN',
+  'PRIVATE_CHANNEL_SEND',
+  'PRIVATE_CHANNEL_STATUS',
+  'MOQ_OBJECT_PUBLISH',
+  'MOQ_SESSION_CLOSE',
+  'MOQ_SESSION_METRICS',
+  'MOQ_SESSION_OPEN',
+  'MOQ_TRACK_SUBSCRIBE',
   'ADD_FOREIGN_SERVER',
   'ADD_GROUP_ADMIN',
   'ADD_LIST_ITEMS',
@@ -351,6 +407,7 @@ export const UIQortalRequests = [
   'SHOW_ACTIONS',
   'SHOW_PDF_READER',
   'SIGN_FOREIGN_FEES',
+  'SIGN_QAPP_IDENTITY',
   'SIGN_TRANSACTION',
   'START_CROSSCHAIN_SERVER',
   'TRANSFER_ASSET',
@@ -547,13 +604,13 @@ async function storeFilesInIndexedDB(obj) {
 }
 
 export const useQortalMessageListener = (
-  frameWindow,
-  iframeRef,
   tabId,
   isDevMode,
   appName,
   appService,
-  appIdentifier
+  appIdentifier,
+  nativeViewRef,
+  nativeGuestActive
 ) => {
   const [path, setPath] = useState('');
   const [history, setHistory] = useState({
@@ -673,19 +730,6 @@ export const useQortalMessageListener = (
     const listener = async (event) => {
       if (event?.data?.requestedHandler !== 'UI') return;
 
-      const appWindow = iframeRef.current?.contentWindow;
-      if (!appWindow || event.source !== appWindow) return;
-
-      let appOrigin = null;
-      try {
-        appOrigin = iframeRef.current?.src
-          ? new URL(iframeRef.current.src).origin
-          : null;
-      } catch {
-        return;
-      }
-      if (appOrigin && event.origin !== appOrigin) return;
-
       const eventPort = event.ports?.[0];
 
       const sendMessageToRuntime = (message, eventPort) => {
@@ -720,12 +764,18 @@ export const useQortalMessageListener = (
                   result: null,
                   error: {
                     error: response?.error,
+                    ...(typeof response?.code === 'string'
+                      ? { code: response.code }
+                      : {}),
                     message:
-                      typeof response?.error === 'string'
-                        ? response?.error
-                        : typeof response?.message === 'string'
-                          ? response?.message
-                          : 'An error has occurred',
+                      typeof response?.code === 'string' &&
+                      typeof response?.message === 'string'
+                        ? response?.message
+                        : typeof response?.error === 'string'
+                          ? response?.error
+                          : typeof response?.message === 'string'
+                            ? response?.message
+                            : 'An error has occurred',
                   },
                 });
               } else {
@@ -747,17 +797,36 @@ export const useQortalMessageListener = (
           return;
         }
 
-        const requestPromise = window.sendMessage(
-          message.action,
-          message.payload,
-          timeout,
-          message.isExtension,
-          {
-            name: appName,
-            service: appService,
-            tabId,
-          }
-        );
+        const requestContext = {
+          appName,
+          appService,
+          isFromExtension: message.isExtension,
+          tabId,
+        };
+        const requestPromise = isQAppFileSaveAction(message?.action)
+          ? dispatchQAppFileSaveRequest(message.payload, requestContext)
+          : isQAppReticulumAction(message?.action)
+            ? dispatchQAppReticulumRequest(message.payload, requestContext)
+            : isQAppPrivateChannelAction(message?.action)
+              ? dispatchQAppPrivateChannelRequest(
+                  message.payload,
+                  requestContext
+                )
+              : isQAppMoqAction(message?.action)
+                ? dispatchQAppMoqRequest(message.payload, requestContext)
+                : message?.action === 'SCREEN_CAPTURE_SELECT'
+                  ? dispatchQAppScreenCaptureRequest(message.payload)
+                  : window.sendMessage(
+                      message.action,
+                      message.payload,
+                      timeout,
+                      message.isExtension,
+                      {
+                        name: appName,
+                        service: appService,
+                        tabId,
+                      }
+                    );
 
         // Store the promise for deduplication
         if (isDeduplicable) {
@@ -774,12 +843,18 @@ export const useQortalMessageListener = (
                 result: null,
                 error: {
                   error: response?.error,
+                  ...(typeof response?.code === 'string'
+                    ? { code: response.code }
+                    : {}),
                   message:
-                    typeof response?.error === 'string'
-                      ? response?.error
-                      : typeof response?.message === 'string'
-                        ? response?.message
-                        : 'An error has occurred',
+                    typeof response?.code === 'string' &&
+                    typeof response?.message === 'string'
+                      ? response?.message
+                      : typeof response?.error === 'string'
+                        ? response?.error
+                        : typeof response?.message === 'string'
+                          ? response?.message
+                          : 'An error has occurred',
                 },
               });
             } else {
@@ -793,10 +868,7 @@ export const useQortalMessageListener = (
             console.error('Failed qortalRequest', error);
             eventPort.postMessage({
               result: null,
-              error: {
-                error: error?.message || 'Request failed',
-                message: error?.message || 'An error has occurred',
-              },
+              error: serializeQortalRequestError(error),
             });
           });
       };
@@ -918,19 +990,12 @@ export const useQortalMessageListener = (
         executeEvent('addTab', {
           data: event?.data?.payload,
         });
-        const targetOrigin = iframeRef.current
-          ? new URL(iframeRef.current.src).origin
-          : '*';
-        iframeRef.current.contentWindow.postMessage(
-          {
-            action: 'SET_TAB_SUCCESS',
-            requestedHandler: 'UI',
-            payload: {
-              name: event?.data?.payload?.name,
-            },
-          },
-          targetOrigin
-        );
+        const reply = {
+          action: 'SET_TAB_SUCCESS',
+          requestedHandler: 'UI',
+          payload: { name: event?.data?.payload?.name },
+        };
+        nativeViewRef.current?.send('qapp:event', reply);
         // Respond to close the MessageChannel and prevent pending connections
         if (event.ports[0]) {
           event.ports[0].postMessage({ result: true, error: null });
@@ -938,14 +1003,116 @@ export const useQortalMessageListener = (
       }
     };
 
-    // Add the listener for messages coming from the frameWindow
-    frameWindow.addEventListener('message', listener);
+    const nativeView = nativeGuestActive ? nativeViewRef?.current : null;
+    const nativeListener = (event) => {
+      if (event.target !== nativeView || event.channel !== 'qapp:request') return;
+      const request = event.args?.[0];
+      if (
+        typeof request?.documentId !== 'string' ||
+        request.documentId.length > 128 ||
+        !Number.isSafeInteger(request?.requestId) ||
+        request.requestId < 1 ||
+        !request.data ||
+        typeof request.data !== 'object'
+      ) return;
+      const port = {
+        postMessage: (result) => {
+          if (nativeView.isConnected)
+            nativeView.send('qapp:response', {
+              documentId: request.documentId,
+              requestId: request.requestId,
+              result,
+            });
+        },
+      };
+      void listener({ data: request.data, ports: [port] });
+    };
+    nativeView?.addEventListener('ipc-message', nativeListener);
 
     // Cleanup function to remove the event listener when the component is unmounted
     return () => {
-      frameWindow.removeEventListener('message', listener);
+      nativeView?.removeEventListener('ipc-message', nativeListener);
     };
-  }, [isDevMode, appName, appService, tabId]); // Empty dependency array to run once when the component mounts
+  }, [isDevMode, appName, appService, tabId, nativeGuestActive]);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    const nativeView = nativeGuestActive ? nativeViewRef?.current : null;
+    if (!api || !nativeView || tabId == null || !appName) return;
+    let identity;
+    try {
+      identity = normalizeQappIdentityContext({
+        name: appName,
+        service: appService,
+      });
+    } catch {
+      return;
+    }
+    const owner = {
+      tabId: String(tabId),
+      name: identity.name,
+      service: identity.service,
+    };
+    const expectedOwnerKey = `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
+    const postToApp = (payload) => {
+      if (nativeView.isConnected) nativeView.send('qapp:event', payload);
+    };
+    const unsubscribe = api.onQAppReticulumEvent?.((payload) => {
+      if (payload?.ownerKey !== expectedOwnerKey) return;
+      postToApp({
+        action: payload.action,
+        connectionId: payload.connectionId,
+        ...(payload.action === 'RNS_MESSAGE'
+          ? { payload: payload.payload }
+          : { state: payload.state, reason: payload.reason }),
+        requestedHandler: 'UI',
+      });
+    });
+    const unsubscribePrivateChannel = api.onPrivateChannelEvent?.((payload) => {
+      if (payload?.ownerKey !== expectedOwnerKey) return;
+      const eventPayload =
+        payload.action === 'PRIVATE_CHANNEL_MESSAGE'
+          ? {
+              lane: payload.lane,
+              messageId: payload.messageId,
+              data: payload.data,
+            }
+          : payload.action === 'PRIVATE_CHANNEL_ERROR'
+            ? { code: payload.code, message: payload.message }
+            : { state: payload.state };
+      postToApp({
+        action: payload.action,
+        channelId: payload.channelId,
+        ...eventPayload,
+        requestedHandler: 'UI',
+      });
+    });
+    const unsubscribeMoq = api.onQAppMoqEvent?.((payload) => {
+      if (payload?.ownerKey !== expectedOwnerKey) return;
+      postToApp({
+        action: payload.action,
+        sessionId: payload.sessionId,
+        ...(payload.action === 'MOQ_OBJECT'
+          ? {
+              subscriptionId: payload.subscriptionId,
+              namespace: payload.namespace,
+              trackName: payload.trackName,
+              groupId: payload.groupId,
+              objectId: payload.objectId,
+              payload: payload.payload,
+            }
+          : payload.action === 'MOQ_ERROR'
+            ? { subscriptionId: payload.subscriptionId, code: payload.code }
+            : { state: payload.state }),
+        requestedHandler: 'UI',
+      });
+    });
+    return () => {
+      unsubscribe?.();
+      unsubscribePrivateChannel?.();
+      unsubscribeMoq?.();
+    };
+  }, [appName, appService, tabId, nativeGuestActive]);
 
   return { path, history, resetHistory, changeCurrentIndex };
 };

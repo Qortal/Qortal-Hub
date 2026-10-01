@@ -21,6 +21,16 @@ export type ManagedSubscriptionEntry = {
   url: string;
 };
 
+const MANAGED_SUBSCRIPTIONS_CACHE_MS = 5 * 60 * 1000;
+const managedSubscriptionsCache = new Map<
+  string,
+  { expiresAt: number; value: ManagedSubscriptionEntry[] }
+>();
+const managedSubscriptionsInFlight = new Map<
+  string,
+  Promise<ManagedSubscriptionEntry[]>
+>();
+
 export async function getGroupMembers(groupNumber: number) {
   const response = await fetch(
     `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0`
@@ -69,149 +79,183 @@ export function useManagedSubscriptionsFromGroups(
       if (!hasLoadedOnce.current) setLoading(true);
       setError(null);
 
+      const cacheKey = JSON.stringify({
+        address,
+        name,
+        groups: groups
+          .filter((group) => group.owner === address)
+          .map((group) => group.groupId)
+          .sort((left, right) => left - right),
+      });
+      const cached = managedSubscriptionsCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        setManagedSubscriptions(cached.value);
+        hasLoadedOnce.current = true;
+        setLoading(false);
+        return;
+      }
+
       try {
-        const results = await Promise.all(
-          groups
-            .filter((group) => group.owner === address)
-            .map(async (group): Promise<ManagedSubscriptionEntry | null> => {
-              try {
-                const subscriptionId = getSubscriptionIdForGroup(group.groupId);
-                const { detailsIdentifier, indexIdentifier } =
-                  await buildSubscriptionIdentifiers(subscriptionId);
-                const baseIdentifierPrefix = indexIdentifier.replace(
-                  /-v\d+$/,
-                  ''
-                );
-
-                const matchesResponse = await fetch(
-                  `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${baseIdentifierPrefix}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${name}`
-                );
-                if (!matchesResponse.ok) return null;
-                const matches = await matchesResponse.json();
-                const latestIdentifier = matches?.[0]?.identifier;
-                if (!latestIdentifier || !/-v\d+$/.test(latestIdentifier)) {
-                  return null;
-                }
-
-                let validJoinRequestCount = 0;
-                const joinResponse = await fetch(
-                  `${getBaseApiReact()}/groups/joinrequests/${group.groupId}`
-                );
-                if (joinResponse.ok) {
-                  const joinRequests = await joinResponse.json();
-                  const validations = await Promise.all(
-                    (Array.isArray(joinRequests) ? joinRequests : []).map(
-                      async (request) => {
-                        try {
-                          const nameResponse = await fetch(
-                            `${getBaseApiReact()}/names/primary/${request.joiner}`
-                          );
-                          if (!nameResponse.ok) return false;
-                          const primaryName = (await nameResponse.json())?.name;
-                          if (!primaryName) return false;
-
-                          const resourceResponse = await fetch(
-                            `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${primaryName}`
-                          );
-                          const resources = await resourceResponse.json();
-                          return resourceResponse.ok && resources.length > 0;
-                        } catch {
-                          return false;
-                        }
-                      }
-                    )
-                  );
-                  validJoinRequestCount = validations.filter(Boolean).length;
-                }
-
-                let needsReEncryption = false;
+        let request = managedSubscriptionsInFlight.get(cacheKey);
+        if (!request) {
+          request = Promise.all(
+            groups
+              .filter((group) => group.owner === address)
+              .map(async (group): Promise<ManagedSubscriptionEntry | null> => {
                 try {
-                  const memberData = await getGroupMembers(group.groupId);
-                  const { names: adminNames } = await getGroupAdmins(
+                  const subscriptionId = getSubscriptionIdForGroup(
                     group.groupId
                   );
+                  const { detailsIdentifier, indexIdentifier } =
+                    await buildSubscriptionIdentifiers(subscriptionId);
+                  const baseIdentifierPrefix = indexIdentifier.replace(
+                    /-v\d+$/,
+                    ''
+                  );
 
-                  if (adminNames.length > 0) {
-                    const queryString = adminNames
-                      .map(
-                        (adminName) => `name=${encodeURIComponent(adminName)}`
+                  const matchesResponse = await fetch(
+                    `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${baseIdentifierPrefix}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${name}`
+                  );
+                  if (!matchesResponse.ok) return null;
+                  const matches = await matchesResponse.json();
+                  const latestIdentifier = matches?.[0]?.identifier;
+                  if (!latestIdentifier || !/-v\d+$/.test(latestIdentifier)) {
+                    return null;
+                  }
+
+                  let validJoinRequestCount = 0;
+                  const joinResponse = await fetch(
+                    `${getBaseApiReact()}/groups/joinrequests/${group.groupId}`
+                  );
+                  if (joinResponse.ok) {
+                    const joinRequests = await joinResponse.json();
+                    const validations = await Promise.all(
+                      (Array.isArray(joinRequests) ? joinRequests : []).map(
+                        async (request) => {
+                          try {
+                            const nameResponse = await fetch(
+                              `${getBaseApiReact()}/names/primary/${request.joiner}`
+                            );
+                            if (!nameResponse.ok) return false;
+                            const primaryName = (await nameResponse.json())
+                              ?.name;
+                            if (!primaryName) return false;
+
+                            const resourceResponse = await fetch(
+                              `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${primaryName}`
+                            );
+                            const resources = await resourceResponse.json();
+                            return resourceResponse.ok && resources.length > 0;
+                          } catch {
+                            return false;
+                          }
+                        }
                       )
-                      .join('&');
-                    const resourcesResponse = await fetch(
-                      `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${group.groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`
+                    );
+                    validJoinRequestCount = validations.filter(Boolean).length;
+                  }
+
+                  let needsReEncryption = false;
+                  try {
+                    const memberData = await getGroupMembers(group.groupId);
+                    const { names: adminNames } = await getGroupAdmins(
+                      group.groupId
                     );
 
-                    if (!resourcesResponse.ok) {
-                      needsReEncryption = true;
-                    } else {
-                      const resources = await resourcesResponse.json();
-                      const matchingResources = resources.filter(
-                        (resource: any) =>
-                          resource.identifier ===
-                          `symmetric-qchat-group-${group.groupId}`
+                    if (adminNames.length > 0) {
+                      const queryString = adminNames
+                        .map(
+                          (adminName) => `name=${encodeURIComponent(adminName)}`
+                        )
+                        .join('&');
+                      const resourcesResponse = await fetch(
+                        `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${group.groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`
                       );
 
-                      if (!matchingResources.length) {
+                      if (!resourcesResponse.ok) {
                         needsReEncryption = true;
                       } else {
-                        const latestResource = matchingResources.sort(
-                          (left: any, right: any) => {
-                            const leftDate = left.updated
-                              ? new Date(left.updated)
-                              : new Date(left.created);
-                            const rightDate = right.updated
-                              ? new Date(right.updated)
-                              : new Date(right.created);
-                            return rightDate.getTime() - leftDate.getTime();
-                          }
-                        )[0];
-
-                        const encryptedResponse = await fetch(
-                          `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${latestResource.name}/${latestResource.identifier}?encoding=base64`
+                        const resources = await resourcesResponse.json();
+                        const matchingResources = resources.filter(
+                          (resource: any) =>
+                            resource.identifier ===
+                            `symmetric-qchat-group-${group.groupId}`
                         );
-                        const encryptedData = await encryptedResponse.text();
-                        const combined = base64ToUint8Array(encryptedData);
-                        const countStart = combined.length - 4;
-                        const countArray = combined.slice(
-                          countStart,
-                          countStart + 4
-                        );
-                        const count = new Uint32Array(countArray.buffer)[0];
 
-                        if (count !== memberData?.memberCount) {
+                        if (!matchingResources.length) {
                           needsReEncryption = true;
+                        } else {
+                          const latestResource = matchingResources.sort(
+                            (left: any, right: any) => {
+                              const leftDate = left.updated
+                                ? new Date(left.updated)
+                                : new Date(left.created);
+                              const rightDate = right.updated
+                                ? new Date(right.updated)
+                                : new Date(right.created);
+                              return rightDate.getTime() - leftDate.getTime();
+                            }
+                          )[0];
+
+                          const encryptedResponse = await fetch(
+                            `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${latestResource.name}/${latestResource.identifier}?encoding=base64`
+                          );
+                          const encryptedData = await encryptedResponse.text();
+                          const combined = base64ToUint8Array(encryptedData);
+                          const countStart = combined.length - 4;
+                          const countArray = combined.slice(
+                            countStart,
+                            countStart + 4
+                          );
+                          const count = new Uint32Array(countArray.buffer)[0];
+
+                          if (count !== memberData?.memberCount) {
+                            needsReEncryption = true;
+                          }
                         }
                       }
                     }
+                  } catch {
+                    // Network failures should not create false positive actions.
                   }
+
+                  const actions = {
+                    groupId: group.groupId,
+                    pendingJoinRequests: validJoinRequestCount,
+                    needsReEncryption,
+                    totalActions:
+                      validJoinRequestCount + (needsReEncryption ? 1 : 0),
+                  };
+
+                  return {
+                    group,
+                    groupId: group.groupId,
+                    actions,
+                    url: `manage/${group.groupId}`,
+                  };
                 } catch {
-                  // Network failures should not create false positive actions.
+                  return null;
                 }
-
-                const actions = {
-                  groupId: group.groupId,
-                  pendingJoinRequests: validJoinRequestCount,
-                  needsReEncryption,
-                  totalActions:
-                    validJoinRequestCount + (needsReEncryption ? 1 : 0),
-                };
-
-                return {
-                  group,
-                  groupId: group.groupId,
-                  actions,
-                  url: `manage/${group.groupId}`,
-                };
-              } catch {
-                return null;
-              }
-            })
-        );
-
-        if (!cancelled) {
-          setManagedSubscriptions(
-            results.filter(Boolean) as ManagedSubscriptionEntry[]
+              })
+          ).then(
+            (results) => results.filter(Boolean) as ManagedSubscriptionEntry[]
           );
+          managedSubscriptionsInFlight.set(cacheKey, request);
+        }
+        let results: ManagedSubscriptionEntry[];
+        try {
+          results = await request;
+        } finally {
+          if (managedSubscriptionsInFlight.get(cacheKey) === request) {
+            managedSubscriptionsInFlight.delete(cacheKey);
+          }
+        }
+        managedSubscriptionsCache.set(cacheKey, {
+          expiresAt: Date.now() + MANAGED_SUBSCRIPTIONS_CACHE_MS,
+          value: results,
+        });
+        if (!cancelled) {
+          setManagedSubscriptions(results);
           hasLoadedOnce.current = true;
         }
       } catch (event: any) {

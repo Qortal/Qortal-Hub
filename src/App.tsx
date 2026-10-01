@@ -78,6 +78,7 @@ import {
 } from './utils/events';
 import { stopSharedEarbumpPlayback } from './components/Group/earbumpSharedAudio';
 import { Settings } from './components/Group/Settings';
+import { QAppScreenCapturePermission } from './components/Apps/QAppScreenCapturePermission';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
@@ -140,6 +141,7 @@ import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
 import { openQWalletsTab } from './utils/openQWalletsTab';
 import { clearLastAuthenticatedWalletAddress } from './utils/lastAuthenticatedWallet';
 import { appLockedAtom, isIdleAtom } from './atoms/presence';
+import { reconcilePendingLocalForeignCoinSends } from './qortal/foreign-coin-send';
 import {
   DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES,
   isAutoLockDue,
@@ -475,6 +477,24 @@ function App() {
       setIsAppLocked(false);
     }
   }, [extState, setIsAppLocked, setIsIdle]);
+
+  useEffect(() => {
+    if (extState !== 'authenticated' || !isMainWindow || isAppLocked) return;
+    const controller = new AbortController();
+    const reconcile = () => {
+      void reconcilePendingLocalForeignCoinSends(controller.signal).catch(
+        () => undefined
+      );
+    };
+    reconcile();
+    const intervalId = window.setInterval(reconcile, 60_000);
+    window.addEventListener('focus', reconcile);
+    return () => {
+      controller.abort();
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', reconcile);
+    };
+  }, [extState, isAppLocked, selectedNode?.apikey, selectedNode?.url]);
 
   useEffect(() => {
     if (
@@ -2064,6 +2084,7 @@ function App() {
       }}
     >
       <CustomTitleBar rightNav={titleBarRightNav} />
+      <QAppScreenCapturePermission active={extState === 'authenticated' && isMainWindow} />
       {extState === 'authenticated' && isMainWindow && (
         <GlobalQortalNavBar
           desktopViewMode={desktopViewMode}

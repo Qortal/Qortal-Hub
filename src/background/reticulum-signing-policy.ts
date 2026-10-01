@@ -946,6 +946,27 @@ export function assertAllowedPresenceSigningPayload(
 export function assertAllowedReticulumSigningPayload(
   payload: unknown
 ): asserts payload is Record<string, unknown> {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    (payload as Record<string, unknown>).type === 'masque-ticket-issue-v1'
+  ) {
+    const p = payload as Record<string, unknown>;
+    if (
+      Object.keys(p).sort().join(',') !==
+        'binding,expiresAt,nonce,policy,relayPin,type' ||
+      ['binding', 'nonce', 'policy', 'relayPin'].some(
+        (key) =>
+          typeof p[key] !== 'string' || !/^[a-f0-9]{64}$/.test(p[key] as string)
+      ) ||
+      !Number.isSafeInteger(p.expiresAt) ||
+      Number(p.expiresAt) <= Date.now() ||
+      Number(p.expiresAt) > Date.now() + 65_000
+    ) {
+      throw new Error('Invalid relay authorization proof');
+    }
+    return;
+  }
   assertPayload(
     payload,
     rchatSchemas,

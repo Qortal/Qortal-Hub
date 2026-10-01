@@ -71,6 +71,7 @@ import {
   sellNameRequest,
   cancelSellNameRequest,
   signForeignFees,
+  signQappIdentityProof,
   multiPaymentWithPrivateData,
   transferAssetRequest,
   reEncryptQortalKeys,
@@ -83,7 +84,9 @@ import {
   markNotificationSeenInApp,
   notificationHasPermission,
   removeNotificationSubscriptions,
+  clearRnsDestinationPermissionsByTabId,
 } from './get.ts';
+import { serializeQortalRequestError } from './qortal-request-errors.ts';
 import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
@@ -411,12 +414,15 @@ export const VALID_SESSION_PERMISSIONS = [
   'REENCRYPT_GROUP_KEYS',
   'START_CROSSCHAIN_SERVER',
   'NOTIFICATION_PERMISSION',
+  'PRIVATE_DATA_CHANNEL',
 ];
 
-// Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
-// These are read-only, low-risk permissions
+// Permissions automatically granted for the same Q-App tab session when
+// GET_USER_ACCOUNT is accepted. LOCK_TAB is a reversible, tab-scoped UI
+// safeguard and therefore does not need a second prompt after authentication.
 export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
   'GET_USER_ACCOUNT',
+  'LOCK_TAB',
   'GET_USER_WALLET',
   'GET_WALLET_BALANCE',
   'GET_USER_WALLET_INFO',
@@ -535,6 +541,7 @@ export function clearSessionPermissionsByTabId(tabId) {
       }
     }
     keysToDelete.forEach((key) => sessionPermissionsStore.delete(key));
+    clearRnsDestinationPermissionsByTabId(tabId);
 
     // Also cleanup any encrypted media associated with this tab
     cleanupEncryptedMediaByTabId(tabId).catch((error) => {
@@ -589,6 +596,35 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: 'Unable to get user account',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+      case 'SIGN_QAPP_IDENTITY': {
+        try {
+          const res = await signQappIdentityProof(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message || 'Unable to sign Q-App identity proof',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1538,11 +1574,12 @@ function setupMessageListenerQortalRequest() {
             event.origin
           );
         } catch (error) {
+          const serializedError = serializeQortalRequestError(error);
           event.source.postMessage(
             {
               requestId: request.requestId,
               action: request.action,
-              error: error.message,
+              ...serializedError,
               type: 'backgroundMessageResponse',
             },
             event.origin

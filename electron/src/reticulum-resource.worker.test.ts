@@ -7,6 +7,7 @@ import {
   deleteReticulumResourcePaths,
   finalizeReticulumResource,
   hashReticulumResourceFile,
+  readAndHashReticulumResourceFile,
   writeReticulumResourceRange,
 } from './reticulum-resource.worker';
 
@@ -41,6 +42,21 @@ describe('reticulum resource worker operations', () => {
     ).toBe(expectedHash);
     expect(fs.readFileSync(destinationPath)).toEqual(contents);
     expect(fs.readFileSync(sourcePath)).toEqual(contents);
+  });
+
+  it('copies file bytes into a transferable array buffer', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-worker-test-'));
+    directories.push(dir);
+    const sourcePath = path.join(dir, 'download.partial');
+    const contents = Buffer.from('transferable worker resource');
+    const expectedHash = nodeCrypto.createHash('sha256').update(contents).digest('hex');
+    fs.writeFileSync(sourcePath, contents);
+
+    const result = readAndHashReticulumResourceFile(sourcePath);
+
+    expect(Buffer.isBuffer(result.bytes)).toBe(false);
+    expect(Buffer.from(result.bytes)).toEqual(contents);
+    expect(result.hash).toBe(expectedHash);
   });
 
   it('moves a completed download into place without a second full-size copy', () => {
