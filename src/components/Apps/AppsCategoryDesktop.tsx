@@ -73,6 +73,14 @@ export const AppsCategoryDesktop = ({
     };
   }, [searchValue]);
 
+  // Going back to the library clears the category; start the next one with an empty search.
+  // Returning from app info keeps the category, so its search is kept too.
+  useEffect(() => {
+    if (category) return;
+    setSearchValue('');
+    setDebouncedValue('');
+  }, [category]);
+
   const searchedAndSortedList = useMemo(() => {
     let result = categoryList;
 
