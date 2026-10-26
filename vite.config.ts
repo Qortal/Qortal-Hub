@@ -8,6 +8,8 @@ import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const rendererProfiling = process.env.QORTAL_RENDERER_PROFILE_SOURCEMAP === '1';
+
 export default defineConfig({
   resolve: {
     alias:
@@ -43,9 +45,15 @@ export default defineConfig({
         : {},
   },
   build: {
+    // Include source maps so profiling samples can be traced back to the
+    // original TypeScript and React sources. Normal builds omit these maps.
+    sourcemap: rendererProfiling,
     // Explicit runtime baseline for the PSBT dependencies (Object.hasOwn).
     // Also prevents the TLA plugin from reverting to its obsolete Safari 14 target.
-    target: ['es2020', 'chrome94', 'edge94', 'firefox93', 'safari15.4'],
+    // The Electron-only profiling build supports native top-level await.
+    target: rendererProfiling
+      ? 'es2022'
+      : ['es2020', 'chrome94', 'edge94', 'firefox93', 'safari15.4'],
     rollupOptions: {
       onwarn(warning, warn) {
         const id = warning.id?.replace(/\\/g, '/');
@@ -120,7 +128,9 @@ export default defineConfig({
   plugins: [
     react(),
     wasm(),
-    topLevelAwait(),
+    // This plugin rewrites chunks in generateBundle without updating their
+    // source maps. Keep it for compatibility builds; use native TLA when profiling.
+    ...(!rendererProfiling ? [topLevelAwait()] : []),
     VitePWA({
       registerType: 'prompt',
       manifest: {

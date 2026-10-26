@@ -1,6 +1,7 @@
 import base64
 import ctypes
 import importlib.util
+import io
 import json
 import os
 import queue
@@ -36,6 +37,120 @@ def load_bridge():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+class StdoutWriterWakeTest(unittest.TestCase):
+    def setUp(self):
+        self.bridge = load_bridge()
+
+    def test_writer_preserves_response_and_event_priority_order(self):
+        output = io.StringIO()
+        self.bridge._queue_json_event_line(
+            {"type": "event", "event": "ordinary", "payload": {"value": 1}}
+        )
+        self.bridge._queue_json_event_line(
+            {"type": "event", "event": "ready", "payload": {"value": 2}}
+        )
+        self.bridge._queue_json_resp_line(
+            {"type": "resp", "id": "request-1", "ok": True}
+        )
+        self.bridge._json_resp_queue.put_nowait(None)
+        self.bridge._json_event_queue.put_nowait(None)
+        self.bridge._json_priority_event_queue.put_nowait(None)
+        self.bridge._json_output_ready.set()
+
+        writer = threading.Thread(
+            target=self.bridge._stdout_writer_loop,
+            args=(output,),
+        )
+        writer.start()
+        writer.join(timeout=1.0)
+
+        self.assertFalse(writer.is_alive())
+        frames = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(frames[0]["type"], "resp")
+        self.assertEqual(frames[1]["event"], "ready")
+        self.assertEqual(frames[2]["event"], "ordinary")
+
+    def test_wait_rechecks_queue_after_clearing_signal(self):
+        bridge = self.bridge
+
+        class EnqueueOnClearEvent:
+            def __init__(self):
+                self.wait_called = False
+
+            def clear(self):
+                bridge._json_resp_queue.put_nowait(
+                    {"type": "resp", "id": "raced", "ok": True}
+                )
+
+            def wait(self):
+                self.wait_called = True
+
+        race_event = EnqueueOnClearEvent()
+        bridge._json_output_ready = race_event
+
+        bridge._wait_for_json_output(False, False)
+
+        self.assertFalse(race_event.wait_called)
+
+    def test_each_output_source_wakes_writer(self):
+        bridge = self.bridge
+
+        bridge._json_output_ready.clear()
+        bridge._queue_json_resp_line({"type": "resp", "id": "1", "ok": True})
+        self.assertTrue(bridge._json_output_ready.is_set())
+
+        bridge._json_output_ready.clear()
+        bridge._queue_json_event_line({"type": "event", "event": "ordinary"})
+        self.assertTrue(bridge._json_output_ready.is_set())
+
+        bridge._json_output_ready.clear()
+        bridge._queue_coalesced_json_event_line(
+            {"type": "event", "event": "transport_state"},
+            "transport_state",
+        )
+        self.assertTrue(bridge._json_output_ready.is_set())
+
+    def test_blocked_writer_wakes_for_output_and_shutdown(self):
+        bridge = self.bridge
+        output = io.StringIO()
+        waiting = threading.Event()
+
+        class ObservedEvent:
+            def __init__(self):
+                self.event = threading.Event()
+
+            def clear(self):
+                self.event.clear()
+
+            def set(self):
+                self.event.set()
+
+            def wait(self):
+                waiting.set()
+                return self.event.wait()
+
+        bridge._json_output_ready = ObservedEvent()
+        writer = threading.Thread(
+            target=bridge._stdout_writer_loop,
+            args=(output,),
+        )
+        writer.start()
+        self.assertTrue(waiting.wait(timeout=1.0))
+
+        bridge._queue_json_resp_line(
+            {"type": "resp", "id": "after-wait", "ok": True}
+        )
+        bridge._json_resp_queue.put_nowait(None)
+        bridge._json_event_queue.put_nowait(None)
+        bridge._json_priority_event_queue.put_nowait(None)
+        bridge._json_output_ready.set()
+        writer.join(timeout=1.0)
+
+        self.assertFalse(writer.is_alive())
+        frames = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(frames[0]["id"], "after-wait")
 
 
 class QAppReticulumV1CompatibilityTest(unittest.TestCase):
