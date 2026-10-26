@@ -52,6 +52,7 @@ import {
 } from './renderer-delivery';
 import { createRefcountedSubscriberSet } from './refcounted-subscriber-set';
 import { PresenceRendererUpdateDeduplicator } from './presence-renderer-updates';
+import { maybeStartRendererCpuProfile } from './renderer-cpu-profile';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -1107,6 +1108,9 @@ export class ElectronCapacitorApp {
       // does not cover a webview's main document, and this also covers nested
       // frames that share the guest's WebContents.
       restrictQAppGuestWebRtc(guest);
+      guest.once('dom-ready', () => {
+        maybeStartRendererCpuProfile(guest, 'qapp-guest');
+      });
       guest.setWindowOpenHandler(() => ({ action: 'deny' }));
       const allowedGuestUrl = (nextUrl: string) => {
         const bound = attachedQAppGuests.get(guest.id)?.prepared;
@@ -1337,6 +1341,7 @@ export class ElectronCapacitorApp {
 
     // When the web app is loaded we hide the splashscreen if needed and show the mainwindow.
     this.MainWindow.webContents.on('dom-ready', () => {
+      maybeStartRendererCpuProfile(this.MainWindow.webContents, 'main-shell');
       if (this.CapacitorFileConfig.electron?.splashScreenEnabled) {
         this.SplashScreen.getSplashWindow().hide();
       }

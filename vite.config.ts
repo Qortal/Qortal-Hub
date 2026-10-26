@@ -43,6 +43,9 @@ export default defineConfig({
         : {},
   },
   build: {
+    // Include source maps so profiling samples can be traced back to the
+    // original TypeScript and React sources. Normal builds omit these maps.
+    sourcemap: process.env.QORTAL_RENDERER_PROFILE_SOURCEMAP === '1',
     // Explicit runtime baseline for the PSBT dependencies (Object.hasOwn).
     // Also prevents the TLA plugin from reverting to its obsolete Safari 14 target.
     target: ['es2020', 'chrome94', 'edge94', 'firefox93', 'safari15.4'],
