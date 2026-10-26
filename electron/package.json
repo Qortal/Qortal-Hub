@@ -31,6 +31,7 @@
     "test:reticulum-chat-worker": "npm run build && electron ./scripts/test-reticulum-chat-worker.cjs",
     "electron:start-live": "node ./live-runner.js",
     "electron:start": "npm run build:private-transport && npm run build && electron --inspect=5858 ./",
+    "electron:profile-renderer": "npm run build:private-transport && npm run build && node ./scripts/run-renderer-profile.mjs",
     "electron:pack": "node ./scripts/run-electron-package.mjs pack",
     "electron:make": "node ./scripts/run-electron-package.mjs local",
     "electron:make-local": "node ./scripts/run-electron-package.mjs local",
