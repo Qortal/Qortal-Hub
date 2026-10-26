@@ -33,6 +33,52 @@ rm -rf resources/reticulum-runtime/venv
 npm run bundle:reticulum-venv
 ```
 
+## Opt-in renderer CPU profiling (Linux development)
+
+From the repository root, with dependencies installed in both projects:
+
+```bash
+nvm use 24
+npm run profile:renderer
+```
+
+This builds the renderer with source maps, syncs Electron, and launches a
+profiling instance. Each main window and Q-App webview gets one capture:
+by default it waits 60 seconds after that renderer's first `dom-ready`, then
+records for 900 seconds. Reproduce the slowdown during the recording.
+The app stays open after recording finishes.
+
+For a shorter capture:
+
+```bash
+QORTAL_RENDERER_PROFILE_SECONDS=60 QORTAL_RENDERER_PROFILE_DELAY_SECONDS=10 npm run profile:renderer
+```
+
+The terminal prints `[RendererProfile]` messages with the start and saved file
+path, even when ordinary development logs are disabled. Profiles are saved under
+Electron's `userData/renderer-profiles/` directory as `.cpuprofile` files, with
+`main-shell` or `qapp-guest` labels. Load a saved file in Chrome DevTools'
+Performance panel. Keep the matching build and its source maps when inspecting it.
+These are JavaScript CPU samples, not a React render-count or GPU profiler.
+
+Keep DevTools closed on the target renderer during capture: Electron's debugger
+can disconnect when DevTools opens. Closing or crashing a renderer also cancels
+its unfinished capture. Other renderers continue independently.
+
+After building and syncing, `cd electron && npm run electron:profile-renderer`
+starts another profiling session without rebuilding the web assets. The normal
+`npm run electron:start` command does not enable recording. Profiling is disabled
+in packaged apps. The underlying explicit flag is `--profile-renderer=SECONDS`
+(with `--profile-renderer-delay=SECONDS`); the bare activation flag defaults to
+60 seconds with no delay. Durations are capped at one hour.
+
+Source maps are enabled only for the profiling build. Run a normal `npm run build`
+and sync again when returning to a normal build or before packaging.
+The profiling build targets Electron with native top-level await, bypassing the
+compatibility transform that would invalidate source maps. Normal builds retain
+their existing browser targets. Profiles from older builds must be inspected with
+their matching assets; rebuilding does not repair an existing recording's maps.
+
 ## Build Qortal-Hub from Source
 
 Follow these steps:

@@ -945,6 +945,7 @@ _json_event_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
 _json_priority_event_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
     maxsize=_JSON_PRIORITY_EVENT_OUT_QUEUE_MAX
 )
+_json_output_ready = threading.Event()
 _json_event_coalesce_lock = threading.Lock()
 _json_event_coalesced_by_key: Dict[str, Dict[str, Any]] = {}
 _audio_binary_out_queue: "queue.Queue[Optional[bytes]]" = queue.Queue(
@@ -1504,6 +1505,7 @@ def _queue_coalesced_json_event_line(frame: Dict[str, Any], key: str) -> None:
                 _json_event_coalesced_evictions += 1
         _json_event_coalesced_by_key[key] = frame
         _json_event_coalesced_updates += 1
+    _json_output_ready.set()
 
 
 def _pop_coalesced_json_event_line() -> Optional[Dict[str, Any]]:
@@ -1541,6 +1543,7 @@ def _queue_json_event_line(frame: Dict[str, Any]) -> None:
                     _queue_coalesced_json_event_line(frame, coalesce_key)
                     return
         target_queue.put_nowait(frame)
+        _json_output_ready.set()
     except queue.Full:
         if isinstance(frame, dict):
             coalesce_key = _coalesce_key_for_event(frame)
@@ -1559,6 +1562,7 @@ def _queue_json_resp_line(frame: Dict[str, Any]) -> None:
     while not _shutdown.is_set():
         try:
             _json_resp_queue.put(frame, timeout=0.05)
+            _json_output_ready.set()
             return
         except queue.Full:
             continue
@@ -5131,9 +5135,30 @@ def _process_audio_batch(frames: list) -> None:
     _note_process_audio_batch_duration(process_start, len(frames))
 
 
-def _stdout_writer_loop() -> None:
+def _json_output_has_pending(resp_closed: bool, event_closed: bool) -> bool:
+    if not resp_closed and not _json_resp_queue.empty():
+        return True
+    if event_closed:
+        return False
+    if not _json_priority_event_queue.empty() or not _json_event_queue.empty():
+        return True
+    with _json_event_coalesce_lock:
+        return bool(_json_event_coalesced_by_key)
+
+
+def _wait_for_json_output(resp_closed: bool, event_closed: bool) -> None:
+    # Clear before checking the queues so a producer cannot signal between the
+    # final empty check and wait without leaving the event set.
+    _json_output_ready.clear()
+    if _json_output_has_pending(resp_closed, event_closed):
+        return
+    _json_output_ready.wait()
+
+
+def _stdout_writer_loop(output_stream: Optional[IO[str]] = None) -> None:
     resp_closed = False
     event_closed = False
+    output = output_stream if output_stream is not None else sys.stdout
 
     def encode_resp_frame(frame: Dict[str, Any]) -> str:
         return json.dumps(frame, separators=(",", ":")) + "\n"
@@ -5164,8 +5189,8 @@ def _stdout_writer_loop() -> None:
     def write_lines(lines: list[str]) -> None:
         if not lines:
             return
-        sys.stdout.write("".join(lines))
-        sys.stdout.flush()
+        output.write("".join(lines))
+        output.flush()
 
     def append_line(lines: list[str], line: str, bytes_so_far: int) -> int:
         lines.append(line)
@@ -5241,40 +5266,10 @@ def _stdout_writer_loop() -> None:
             write_lines(event_lines)
             continue
 
-        if not resp_closed:
-            try:
-                frame = _json_resp_queue.get(timeout=0.01)
-            except queue.Empty:
-                frame = None
-            else:
-                if frame is None:
-                    resp_closed = True
-                else:
-                    write_lines([encode_resp_frame(frame)])
-                    continue
+        if resp_closed and event_closed:
+            break
 
-        if event_closed:
-            continue
-        try:
-            try:
-                frame = _json_priority_event_queue.get_nowait()
-            except queue.Empty:
-                frame = _pop_coalesced_json_event_line()
-                if frame is None:
-                    frame = _json_event_queue.get(timeout=0.05)
-        except queue.Empty:
-            continue
-        if frame is None:
-            event_closed = True
-            continue
-        lines = [encode_event_frame(frame)]
-        lines.extend(
-            drain_event_lines(
-                max(0, _STDOUT_EVENT_BATCH_MAX - 1),
-                max(0, _STDOUT_BATCH_MAX_BYTES - len(lines[0])),
-            )
-        )
-        write_lines(lines)
+        _wait_for_json_output(resp_closed, event_closed)
 
 
 def _audio_binary_out_writer_loop() -> None:
@@ -28292,6 +28287,7 @@ def main() -> None:
         _json_priority_event_queue.put_nowait(None)
     except queue.Full:
         pass
+    _json_output_ready.set()
     stdout_thread.join(timeout=10.0)
     try:
         _audio_binary_out_queue.put_nowait(None)
