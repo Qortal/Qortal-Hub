@@ -74,6 +74,10 @@ in packaged apps. The underlying explicit flag is `--profile-renderer=SECONDS`
 
 Source maps are enabled only for the profiling build. Run a normal `npm run build`
 and sync again when returning to a normal build or before packaging.
+The profiling build targets Electron with native top-level await, bypassing the
+compatibility transform that would invalidate source maps. Normal builds retain
+their existing browser targets. Profiles from older builds must be inspected with
+their matching assets; rebuilding does not repair an existing recording's maps.
 
 ## Build Qortal-Hub from Source
 
