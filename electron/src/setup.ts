@@ -51,6 +51,7 @@ import {
   sendToRenderer,
 } from './renderer-delivery';
 import { createRefcountedSubscriberSet } from './refcounted-subscriber-set';
+import { PresenceRendererUpdateDeduplicator } from './presence-renderer-updates';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -2999,6 +3000,7 @@ export function stopReticulumManagers(): void {
     reticulumChatSubscriptionReplayTimer = null;
   }
   stopPresenceMainHeartbeatScheduler();
+  resetPresenceRendererUpdateState();
   stopStunCoordinator();
   stopReticulumMeshCoordinator();
   stopGroupCallManager();
@@ -3633,6 +3635,8 @@ ipcMain.on('p2p:peerChange:unsubscribe', (event) => {
 
 const presenceUpdateSubscribers = new Set<Electron.WebContents>();
 const queuedPresenceUpdates = new Map<string, unknown>();
+const presenceRendererUpdateDeduplicator =
+  new PresenceRendererUpdateDeduplicator();
 let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let lateReticulumRecoveryCleanup: (() => void) | null = null;
 const RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000, 30_000];
@@ -3691,10 +3695,16 @@ function queuePresenceUpdate(payload: unknown): void {
 }
 
 function broadcastPresenceUpdate(payload: unknown): void {
+  if (!presenceRendererUpdateDeduplicator.shouldForward(payload)) return;
+
   loggerLog(
     '[Presence] Broadcasting presence update from manager to renderer queue'
   );
   queuePresenceUpdate(payload);
+}
+
+function resetPresenceRendererUpdateState(): void {
+  presenceRendererUpdateDeduplicator.reset();
 }
 
 async function syncReticulumOverlayStateToBridge(
@@ -4407,6 +4417,9 @@ ipcMain.handle('presence:getAllOnline', async () => {
 });
 
 ipcMain.on('presence:subscribe', (event) => {
+  if (presenceUpdateSubscribers.size === 0) {
+    presenceRendererUpdateDeduplicator.reset();
+  }
   presenceUpdateSubscribers.add(event.sender);
   loggerLog(
     `[Presence] Renderer subscribed. subscriber_count=${presenceUpdateSubscribers.size}`
