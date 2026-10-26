@@ -120,7 +120,10 @@ func startFixture() (*fixture, map[string]string, error) {
 		TLSConfig:  &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{http3.NextProtoH3}},
 		QUICConfig: &quic.Config{EnableDatagrams: true}, EnableDatagrams: true, Handler: mux,
 	}
-	go func() { _ = f.server.Serve(relayConn) }()
+	// Capture the server before launching: stopRelay may clear f.server before
+	// this goroutine is scheduled. Server.Close safely handles a later Serve.
+	server := f.server
+	go func() { _ = server.Serve(relayConn) }()
 	pin := sha256.Sum256(der)
 	return f, map[string]string{
 		"relayAddress": relayAddress, "relayServerName": "qortal-test-relay",
