@@ -15,6 +15,7 @@ import RNS
 
 HEADER = struct.Struct(">BBQI")
 VERSION, DATA, ACK, STREAM_ID = 1, 1, 2, 7
+CONTROL = 3
 MAX_FRAME = 256 * 1024
 STATE_LOCK = threading.Lock()
 SEEN_ORDER, SEEN = deque(), set()
@@ -45,6 +46,7 @@ def serve_link(link):
     reader = RNS.Buffer.create_reader(STREAM_ID, channel)
     writer = RNS.Buffer.create_writer(STREAM_ID, channel)
     buffered = bytearray()
+    closed_connections = set()
     while True:
         chunk = reader.read(64 * 1024)
         if chunk is None:
@@ -67,8 +69,35 @@ def serve_link(link):
             payload = bytes(buffered[HEADER.size:total])
             del buffered[:total]
             if kind == ACK:
+                if payload:
+                    link.teardown()
+                    return
                 with STATE_LOCK:
                     PENDING.pop(message_id, None)
+                continue
+            if kind == CONTROL:
+                try:
+                    control = json.loads(payload.decode("utf-8"))
+                    if not isinstance(control, dict):
+                        raise ValueError("invalid control")
+                    if control == {"type": "PING"}:
+                        write_all(writer, frame(CONTROL, message_id, b'{"type":"PONG"}'))
+                    elif control == {"type": "PONG"}:
+                        pass
+                    elif (set(control) == {"type", "connectionId"}
+                          and control["type"] == "CLOSE"
+                          and isinstance(control["connectionId"], str)
+                          and control["connectionId"]):
+                        closed_connections.add(control["connectionId"])
+                        with STATE_LOCK:
+                            for pending_id, pending in list(PENDING.items()):
+                                if pending["connectionId"] == control["connectionId"]:
+                                    PENDING.pop(pending_id, None)
+                    else:
+                        raise ValueError("invalid control")
+                except (ValueError, UnicodeError):
+                    link.teardown()
+                    return
                 continue
             if kind != DATA:
                 link.teardown()
@@ -76,6 +105,8 @@ def serve_link(link):
             write_all(writer, frame(ACK, message_id))
             envelope = json.loads(payload.decode("utf-8"))
             connection_id = envelope["connectionId"]
+            if connection_id in closed_connections:
+                continue
             with STATE_LOCK:
                 pending_for_connection = [
                     item["frame"]

@@ -11,9 +11,11 @@ backends never receive relay tickets and do not participate in authorization.
    membership. Coalesce selection and hedge after 300 ms, at most two concurrent
    candidates and six attempts within a 60-second cold-path budget.
    Fresh membership information excludes nonmatching restricted relays, even
-   if none remain. That case returns `RELAY_NO_ELIGIBLE_RELAY` without requesting
-   tickets or opening QUIC. Unknown or stale membership still permits trying
-   a relay; public relays remain eligible.
+   if none remain. Hub performs one bounded fresh discovery for an eligible
+   alternative before returning `RELAY_NO_ELIGIBLE_RELAY`; it never requests
+   tickets or opens QUIC to a relay ruled out by fresh membership information.
+   Unknown or stale membership still permits trying a relay; public relays remain
+   eligible.
 3. For restricted relays, fetch the current public ticket descriptor through an
    encrypted Reticulum Link. Check its relay pin, group-policy hash and key
    commitment against the signed advertisement. Native Go additionally validates
@@ -29,8 +31,11 @@ backends never receive relay tickets and do not participate in authorization.
 7. Use spare single-use tickets for reconnects; refresh batches when exhausted
    or near expiry. Reuse the authorized outer connection across QApps. Renew
    five minutes before expiry without replacing the connection.
-8. Logout/account switch clears credentials, pending results, timers and
-   connections. There is no direct-to-backend fallback.
+8. Logout/account switch, sidecar reset, and coordinator disposal invalidate
+   pending discovery, preparation and renewal work. Late prepared handles are
+   closed and cannot repopulate caches or timers. Local sidecar/IPC failures
+   reconnect without excluding a healthy relay; network-route failures retain
+   alternative-relay failover. There is no direct-to-backend fallback.
 
 Expiry is issuance-hour start plus 12 hours (11–12 hours of actual validity).
 Redemption never extends it. The relay commits a spent marker durably before
@@ -40,7 +45,7 @@ access for the remaining window, subject also to Core freshness.
 
 ## Protocol and packaging
 
-Sidecar version: **0.7.0**; IPC framing remains version 2. Main-only operations:
+Sidecar version: **0.11.1**; IPC framing remains version 2. Main-only operations:
 `prepareRelayTickets`, `finalizeRelayTickets`, `prepareRelay`, `authorizeRelay`,
 `closeRelay`, `clearRelays`. Native ticket blinding state is bounded and expires
 after a minute. Prepared connection handles remain process-local.

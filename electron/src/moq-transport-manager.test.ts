@@ -42,6 +42,125 @@ async function open(manager: QAppMoqTransportManager) {
 }
 
 describe('Q-App generic MOQT manager', () => {
+  it('counts pending subscriptions toward the limit', async () => {
+    const { manager, transports } = setup();
+    const { sessionId } = await open(manager);
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    transports[0].subscribe.mockImplementation(() => gate);
+    const pending = Array.from({ length: 128 }, (_, index) =>
+      manager.subscribe(owner, sessionId, `peer-${index}`, ['opaque'], 'events')
+    );
+    await expect(
+      manager.subscribe(owner, sessionId, 'overflow', ['opaque'], 'events')
+    ).rejects.toMatchObject({ code: 'MOQ_SUBSCRIPTION_LIMIT' });
+    expect(transports[0].subscribe).toHaveBeenCalledTimes(128);
+    finish();
+    await Promise.all(pending);
+    manager.destroy();
+  });
+  it('coalesces pending subscriptions and rejects conflicting reuse', async () => {
+    const { manager, transports } = setup();
+    const { sessionId } = await open(manager);
+    let finish!: () => void;
+    transports[0].subscribe.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const first = manager.subscribe(
+      owner,
+      sessionId,
+      'peer',
+      ['opaque'],
+      'events'
+    );
+    const second = manager.subscribe(
+      owner,
+      sessionId,
+      'peer',
+      ['opaque'],
+      'events'
+    );
+    await expect(
+      manager.subscribe(owner, sessionId, 'peer', ['opaque'], 'different')
+    ).rejects.toMatchObject({ code: 'MOQ_SUBSCRIPTION_ID_REUSED' });
+    expect(transports[0].subscribe).toHaveBeenCalledOnce();
+    finish();
+    await Promise.all([first, second]);
+    manager.destroy();
+  });
+
+  it('releases a rejected subscription without closing other tracks and permits retry', async () => {
+    const { manager, transports, events } = setup();
+    const { sessionId } = await open(manager);
+    await manager.subscribe(owner, sessionId, 'healthy', ['opaque'], 'healthy');
+    transports[0].subscribe.mockImplementationOnce(async () => {
+      transports[0].emit({
+        kind: 'error',
+        subscriptionId: 'rejected',
+        code: 'MOQ_SUBSCRIBE_REJECTED',
+      });
+    });
+    await expect(
+      manager.subscribe(owner, sessionId, 'rejected', ['opaque'], 'rejected')
+    ).rejects.toMatchObject({ code: 'MOQ_SUBSCRIBE_FAILED' });
+    expect(transports[0].close).not.toHaveBeenCalled();
+    transports[0].emit({
+      kind: 'object',
+      subscriptionId: 'healthy',
+      namespace: ['opaque'],
+      trackName: 'healthy',
+      groupId: 1,
+      objectId: 1,
+      payload: new Uint8Array([1]),
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        action: 'MOQ_OBJECT',
+        subscriptionId: 'healthy',
+      })
+    );
+    await manager.subscribe(
+      owner,
+      sessionId,
+      'rejected',
+      ['opaque'],
+      'rejected'
+    );
+    manager.destroy();
+  });
+
+  it('does not resurrect a subscription after the session closes during setup', async () => {
+    const { manager, transports } = setup();
+    const { sessionId } = await open(manager);
+    let finish!: () => void;
+    transports[0].subscribe.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const pending = manager.subscribe(
+      owner,
+      sessionId,
+      'peer',
+      ['opaque'],
+      'events'
+    );
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: 'MOQ_SESSION_CLOSED',
+    });
+    await Promise.resolve();
+    await manager.close(owner, sessionId);
+    finish();
+    await rejected;
+    manager.destroy();
+  });
+
   it.each([1025, 128 * 1024, 1024 * 1024])(
     'delivers a %i-byte incoming object without closing other tracks',
     async (size) => {

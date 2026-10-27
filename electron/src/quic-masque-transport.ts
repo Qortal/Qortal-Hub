@@ -1,3 +1,4 @@
+import { shouldExcludeMasqueRelay } from './masque-relay-recovery';
 import {
   PrivateChannelError,
   type PrivateTransport,
@@ -48,7 +49,7 @@ export class QuicMasqueTransport implements PrivateTransport {
     this.handleSidecarEvent(event);
   private readonly onSidecarDeath = () => {
     if (!this.closed && this.sessionId) {
-      void this.recover('TRANSPORT_CLOSED');
+      void this.recover('SIDECAR_EXITED');
     }
   };
 
@@ -78,7 +79,10 @@ export class QuicMasqueTransport implements PrivateTransport {
             this.closed
           )
             throw error;
-          if (this.lastAttemptedRelayAddress)
+          if (
+            this.lastAttemptedRelayAddress &&
+            shouldExcludeMasqueRelay(errorCode(error))
+          )
             this.failedRelayAddresses.set(
               this.lastAttemptedRelayAddress,
               Date.now()
@@ -95,8 +99,11 @@ export class QuicMasqueTransport implements PrivateTransport {
     if (encoded.length > MAX_RELIABLE_BINARY_BYTES) {
       throw new PrivateChannelError('MESSAGE_TOO_LARGE_FOR_TRANSPORT');
     }
+    let submitted = false;
+    let sessionId: string | undefined;
     try {
-      const sessionId = await this.requireSession();
+      sessionId = await this.requireSession();
+      submitted = true;
       await this.sidecar.sendPrivateReliable(
         sessionId,
         message.messageId,
@@ -107,18 +114,16 @@ export class QuicMasqueTransport implements PrivateTransport {
     } catch (error) {
       if (isRecoverableTransportError(error)) {
         try {
-          const replacementSessionId = await this.recover(errorCode(error));
-          await this.sidecar.sendPrivateReliable(
-            replacementSessionId,
-            message.messageId,
-            encoded,
-            message.streamKey,
-            message.endStream
-          );
-          return;
+          await this.recover(errorCode(error), sessionId);
         } catch (recoveryError) {
+          if (submitted)
+            throw new PrivateChannelError('RELIABLE_DELIVERY_UNKNOWN');
           throw translateSidecarError(recoveryError);
         }
+        // IPC failure does not prove that the peer did not execute the message.
+        // Recover the path, but leave any idempotent retry to the application.
+        if (submitted)
+          throw new PrivateChannelError('RELIABLE_DELIVERY_UNKNOWN');
       }
       throw translateSidecarError(error);
     }
@@ -257,23 +262,31 @@ export class QuicMasqueTransport implements PrivateTransport {
       : Promise.resolve(this.relay);
   }
 
-  private recover(_reason: string): Promise<string> {
+  private recover(reason: string, failedSessionId?: string): Promise<string> {
     if (this.closed)
       return Promise.reject(new PrivateChannelError('TRANSPORT_CLOSED'));
     if (this.recoveryPromise) return this.recoveryPromise;
+    if (
+      failedSessionId &&
+      this.sessionId &&
+      failedSessionId !== this.sessionId
+    ) {
+      return Promise.resolve(this.sessionId);
+    }
     const context = this.context;
     if (!context)
       return Promise.reject(new PrivateChannelError('TRANSPORT_CLOSED'));
-    if (this.activeRelayAddress)
+    if (this.activeRelayAddress && shouldExcludeMasqueRelay(reason))
       this.failedRelayAddresses.set(this.activeRelayAddress, Date.now());
     const oldSessionId = this.sessionId;
     this.sessionId = null;
     this.activeRelayAddress = null;
-    if (oldSessionId)
-      void this.sidecar
-        .closePrivateSession(oldSessionId)
-        .catch(() => undefined);
+    const closing = oldSessionId
+      ? this.sidecar.closePrivateSession(oldSessionId).catch(() => undefined)
+      : Promise.resolve();
     const recovery = (async (): Promise<string> => {
+      // Release the old attachment before asking the backend for a new one.
+      await closing;
       let lastError: unknown = new PrivateChannelError('TRANSPORT_CLOSED');
       for (const delayMs of RECOVERY_DELAYS_MS) {
         if (delayMs) await delay(delayMs);
@@ -285,7 +298,10 @@ export class QuicMasqueTransport implements PrivateTransport {
           return this.sessionId;
         } catch (error) {
           lastError = error;
-          if (this.lastAttemptedRelayAddress)
+          if (
+            this.lastAttemptedRelayAddress &&
+            shouldExcludeMasqueRelay(errorCode(error))
+          )
             this.failedRelayAddresses.set(
               this.lastAttemptedRelayAddress,
               Date.now()
@@ -383,6 +399,8 @@ function translateSidecarError(error: unknown): PrivateChannelError {
         ? error.message
         : 'TRANSPORT_ERROR';
   const allowed = new Set([
+    'SIDECAR_QUEUE_FULL',
+    'TRANSPORT_BUSY',
     'STREAM_LIMIT_REACHED',
     'RELIABLE_STREAM_FAILED',
     'RELIABLE_SEND_NOT_STARTED',

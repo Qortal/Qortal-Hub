@@ -150,9 +150,9 @@ import {
 } from './reticulum-bridge';
 import {
   QAppReticulumManager,
-  type QAppReticulumNativeEvent,
   type QAppReticulumOwner,
 } from './qapp-reticulum-manager';
+import { QAppReticulumBridgeTransport } from './qapp-reticulum-bridge-transport';
 import {
   PrivateChannelError,
   PrivateChannelManager,
@@ -3028,31 +3028,20 @@ export function stopReticulumManagers(): void {
 let qAppReticulumManager: QAppReticulumManager | null = null;
 let privateChannelManager: PrivateChannelManager | null = null;
 let qAppMoqTransportManager: QAppMoqTransportManager | null = null;
-let qAppReticulumBridge: ReturnType<typeof getReticulumBridge> = null;
-const qAppReticulumNativeListeners = new Set<
-  (event: QAppReticulumNativeEvent) => void
->();
 
 function getQAppReticulumManager(): QAppReticulumManager {
   if (qAppReticulumManager) return qAppReticulumManager;
-  const transport = {
-    invoke: async (action: string, payload: Record<string, unknown>) => {
-      await ensureReticulumManagersStarted();
-      const bridge = getReticulumBridge() ?? (await startReticulumBridge());
-      if (qAppReticulumBridge !== bridge) {
-        qAppReticulumBridge = bridge;
-        bridge.on('qapp-rns', (event: QAppReticulumNativeEvent) => {
-          for (const listener of qAppReticulumNativeListeners) listener(event);
-        });
-      }
-      return bridge.invokeQAppReticulum(action as any, payload);
-    },
-    onEvent: (listener: (event: QAppReticulumNativeEvent) => void) => {
-      qAppReticulumNativeListeners.add(listener);
-      return () => qAppReticulumNativeListeners.delete(listener);
-    },
-  };
+  const transport = new QAppReticulumBridgeTransport(async () => {
+    await ensureReticulumManagersStarted();
+    return getReticulumBridge() ?? (await startReticulumBridge());
+  });
   qAppReticulumManager = new QAppReticulumManager(transport);
+  qAppReticulumManager.on('connection-closed', (owner, connectionId) => {
+    void Promise.allSettled([
+      privateChannelManager?.cleanupRnsConnection(owner, connectionId),
+      qAppMoqTransportManager?.cleanupRnsConnection(owner, connectionId),
+    ]);
+  });
   qAppReticulumManager.on('event', (event) => {
     const win = myCapacitorApp.getMainWindow();
     if (!win.isDestroyed()) win.webContents.send('qappReticulum:event', event);
@@ -3304,8 +3293,8 @@ ipcMain.handle(
   'qappReticulum:close',
   async (event, owner: QAppReticulumOwner, connectionId: string) => {
     validateQAppReticulumIpcSender(event);
-    await privateChannelManager?.cleanupRnsConnection(owner, connectionId);
-    await qAppMoqTransportManager?.cleanupRnsConnection(owner, connectionId);
+    // Revoke logical ownership before any asynchronous transport cleanup.
+    // The manager's connection-closed listener starts dependent cleanup too.
     await getQAppReticulumManager().close(owner, connectionId);
     return true;
   }

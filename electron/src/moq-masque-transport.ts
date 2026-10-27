@@ -1,3 +1,4 @@
+import { shouldExcludeMasqueRelay } from './masque-relay-recovery';
 import type { PrivateChannelBootstrapProvider } from './private-channel-bootstrap';
 import type { PrivateTransportContext } from './private-channel-manager';
 import {
@@ -65,7 +66,7 @@ export class MoqMasqueTransport {
     this.handleSidecarEvent(event);
   private readonly onSidecarDeath = () => {
     if (!this.closed && this.moqSessionId) {
-      void this.recover('MOQ_TRANSPORT_CLOSED');
+      void this.recover('SIDECAR_EXITED');
     }
   };
 
@@ -106,7 +107,10 @@ export class MoqMasqueTransport {
           this.closed
         )
           throw error;
-        if (this.lastAttemptedRelayAddress)
+        if (
+          this.lastAttemptedRelayAddress &&
+          shouldExcludeMasqueRelay(errorCode(error))
+        )
           this.failedRelayAddresses.set(
             this.lastAttemptedRelayAddress,
             Date.now()
@@ -320,6 +324,15 @@ export class MoqMasqueTransport {
   private handleSidecarEvent(event: PrivateTransportSidecarEvent): void {
     if (event.sessionId !== this.moqSessionId || this.closed) return;
     if (event.event === 'error') {
+      if (event.subscriptionId) {
+        this.subscriptions.delete(event.subscriptionId);
+        this.emit({
+          kind: 'error',
+          code: event.code ?? 'MOQ_READ_FAILED',
+          subscriptionId: event.subscriptionId,
+        });
+        return;
+      }
       if (isRecoverableMoqCode(event.code)) {
         void this.recover(event.code ?? 'MOQ_TRANSPORT_CLOSED');
         return;
@@ -359,7 +372,7 @@ export class MoqMasqueTransport {
     });
   }
 
-  private recover(_reason: string): Promise<string> {
+  private recover(reason: string): Promise<string> {
     if (this.closed)
       return Promise.reject(
         new PrivateTransportSidecarError('MOQ_SESSION_CLOSED')
@@ -370,14 +383,16 @@ export class MoqMasqueTransport {
       return Promise.reject(
         new PrivateTransportSidecarError('MOQ_SESSION_CLOSED')
       );
-    if (this.activeRelayAddress)
+    if (this.activeRelayAddress && shouldExcludeMasqueRelay(reason))
       this.failedRelayAddresses.set(this.activeRelayAddress, Date.now());
     const oldSessionId = this.moqSessionId;
     this.moqSessionId = null;
     this.activeRelayAddress = null;
-    if (oldSessionId)
-      void this.sidecar.closeMoqSession(oldSessionId).catch(() => undefined);
+    const closing = oldSessionId
+      ? this.sidecar.closeMoqSession(oldSessionId).catch(() => undefined)
+      : Promise.resolve();
     const recovery = (async (): Promise<string> => {
+      await closing;
       let lastError: unknown = new PrivateTransportSidecarError(
         'MOQ_TRANSPORT_CLOSED'
       );
@@ -392,7 +407,10 @@ export class MoqMasqueTransport {
           return this.moqSessionId;
         } catch (error) {
           lastError = error;
-          if (this.lastAttemptedRelayAddress)
+          if (
+            this.lastAttemptedRelayAddress &&
+            shouldExcludeMasqueRelay(errorCode(error))
+          )
             this.failedRelayAddresses.set(
               this.lastAttemptedRelayAddress,
               Date.now()
