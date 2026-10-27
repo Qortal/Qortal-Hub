@@ -13,6 +13,15 @@
   "deploy_at": "haluatko ottaa tämän AT:n käyttöön?",
   "description": "kuvaus: {{ description }}",
   "download_file": "haluatko ladata:",
+  "foreign_fees": {
+    "approve": "Allekirjoitetaanko lueteltujen kauppatarjousten maksut?",
+    "busy": "Maksujen allekirjoituspyyntö on jo odottamassa.",
+    "changed": "Lompakko tai Core vaihtui. Tarkista maksut uudelleen.",
+    "declined": "Maksujen allekirjoittaminen hylättiin.",
+    "failed": "Maksujen allekirjoittamista Coren kanssa ei voitu suorittaa loppuun. Yritä uudelleen.",
+    "invalid": "Core palautti virheelliset ulkovaluuttamaksujen tiedot. Mitään ei allekirjoitettu.",
+    "review": "Tarkista alla olevat AT-osoitteet ja maksujen arvot. Tämä hyväksyntä koskee vain tätä erää."
+  },
   "local_send": {
     "changed": "Lompakko, solmu tai käytettävissä olevat varat ovat muuttuneet. Tarkista maksu uudelleen.",
     "confirming": "Edellinen maksusi odottaa vielä verkon vahvistusta. Tapahtuma: {{txId}}. Uutta maksua ei lähetetty.",

@@ -13,6 +13,15 @@
   "deploy_at": "você gostaria de implantar este AT?",
   "description": "descrição: {{ description }}",
   "download_file": "você gostaria de baixar:",
+  "foreign_fees": {
+    "approve": "Assinar as taxas das ofertas de negociação listadas?",
+    "busy": "Já existe uma solicitação de assinatura de taxas pendente.",
+    "changed": "A carteira ou o Core mudou. Confira as taxas novamente.",
+    "declined": "A assinatura das taxas foi recusada.",
+    "failed": "Não foi possível concluir a assinatura das taxas com o Core. Tente novamente.",
+    "invalid": "O Core retornou dados inválidos de taxas de moedas estrangeiras. Nada foi assinado.",
+    "review": "Confira os endereços AT e os valores das taxas abaixo. Esta aprovação se aplica apenas a este lote."
+  },
   "local_send": {
     "changed": "A carteira, o nó ou os fundos disponíveis mudaram. Revise o pagamento novamente.",
     "confirming": "O seu pagamento anterior ainda aguarda confirmação da rede. Transação: {{txId}}. Nenhum novo pagamento foi enviado.",

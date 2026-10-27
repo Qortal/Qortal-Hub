@@ -13,6 +13,15 @@
   "deploy_at": "Souhaitez-vous déployer cet AT ?",
   "description": "description : {{ description }}",
   "download_file": "Souhaitez-vous télécharger :",
+  "foreign_fees": {
+    "approve": "Signer les frais des offres d’échange indiquées ?",
+    "busy": "Une demande de signature de frais est déjà en attente.",
+    "changed": "Le portefeuille ou Core a changé. Veuillez vérifier à nouveau les frais.",
+    "declined": "La signature des frais a été refusée.",
+    "failed": "Impossible de terminer la signature des frais avec Core. Veuillez réessayer.",
+    "invalid": "Core a renvoyé des données de frais de monnaies étrangères non valides. Rien n’a été signé.",
+    "review": "Vérifiez les adresses AT et les valeurs des frais ci-dessous. Cette approbation ne concerne que ce lot."
+  },
   "local_send": {
     "changed": "Le portefeuille, le nœud ou les fonds disponibles ont changé. Vérifiez à nouveau le paiement.",
     "confirming": "Votre paiement précédent attend toujours la confirmation du réseau. Transaction : {{txId}}. Aucun nouveau paiement n’a été envoyé.",

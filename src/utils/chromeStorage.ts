@@ -5,6 +5,22 @@ let inMemoryKey: CryptoKey | null = null;
 
 const keysToEncrypt = ['keyPair'];
 
+let signingContextRevision = 0;
+let signingContextChanges = 0;
+export const getSigningContextRevision = (): number | null =>
+  signingContextChanges ? null : signingContextRevision;
+
+function beginSigningContextChange(keys: string[]): () => void {
+  if (!keys.some((key) => ['keyPair', 'walletInfo', 'apiKey'].includes(key)))
+    return () => {};
+  signingContextRevision++;
+  signingContextChanges++;
+  return () => {
+    signingContextChanges--;
+    signingContextRevision++;
+  };
+}
+
 async function initializeKeyAndIV() {
   if (!inMemoryKey) {
     inMemoryKey = await generateKey(); // Generates the key in memory
@@ -110,28 +126,33 @@ async function isolateForeignWalletKeys(payload: any) {
 }
 
 export const storeData = async (key: string, payload: any): Promise<string> => {
-  await initializeKeyAndIV();
+  const finishContextChange = beginSigningContextChange([key]);
+  try {
+    await initializeKeyAndIV();
 
-  if (key === 'keyPair') payload = await isolateForeignWalletKeys(payload);
-  const base64Data = jsonToBase64(payload);
+    if (key === 'keyPair') payload = await isolateForeignWalletKeys(payload);
+    const base64Data = jsonToBase64(payload);
 
-  if (keysToEncrypt.includes(key) && inMemoryKey) {
-    // Encrypt the Base64-encoded payload
-    const { iv, encryptedData } = await encryptData(base64Data, inMemoryKey);
+    if (keysToEncrypt.includes(key) && inMemoryKey) {
+      // Encrypt the Base64-encoded payload
+      const { iv, encryptedData } = await encryptData(base64Data, inMemoryKey);
 
-    // Combine IV and encrypted data into a single Uint8Array
-    const combinedData = new Uint8Array([
-      ...iv,
-      ...new Uint8Array(encryptedData),
-    ]);
-    const encryptedBase64Data = btoa(String.fromCharCode(...combinedData));
-    await SecureStoragePlugin.set({ key, value: encryptedBase64Data });
-  } else {
-    // Store Base64-encoded data in plain text if not in keysToEncrypt
-    await SecureStoragePlugin.set({ key, value: base64Data });
+      // Combine IV and encrypted data into a single Uint8Array
+      const combinedData = new Uint8Array([
+        ...iv,
+        ...new Uint8Array(encryptedData),
+      ]);
+      const encryptedBase64Data = btoa(String.fromCharCode(...combinedData));
+      await SecureStoragePlugin.set({ key, value: encryptedBase64Data });
+    } else {
+      // Store Base64-encoded data in plain text if not in keysToEncrypt
+      await SecureStoragePlugin.set({ key, value: base64Data });
+    }
+
+    return 'Data saved successfully';
+  } finally {
+    finishContextChange();
   }
-
-  return 'Data saved successfully';
 };
 
 export const getData = async <T = any>(key: string): Promise<T | null> => {
@@ -180,6 +201,7 @@ export async function removeKeysAndLogout(
   event: MessageEvent,
   request: any
 ) {
+  const finishContextChange = beginSigningContextChange(keys);
   try {
     if (keys.includes('keyPair')) await window.foreignWalletSigner?.clear();
     for (const key of keys) {
@@ -202,5 +224,7 @@ export async function removeKeysAndLogout(
     );
   } catch (error) {
     console.error('Error removing keys:', error);
+  } finally {
+    finishContextChange();
   }
 }
