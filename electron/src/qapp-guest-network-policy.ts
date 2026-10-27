@@ -1,6 +1,9 @@
 import type { WebContents } from 'electron';
 
-/** Keep a Q-App guest from gathering direct WebRTC network candidates. */
+/**
+ * Limit WebRTC IP exposure as defense in depth. This still permits TURN TCP;
+ * the guest session must also block WebRTC on mainFrame/subFrame responses.
+ */
 export function restrictQAppGuestWebRtc(
   guest: Pick<WebContents, 'setWebRTCIPHandlingPolicy'>
 ): void {

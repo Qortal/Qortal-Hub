@@ -22,6 +22,16 @@ partitions; browser and mobile builds retain the iframe bridge. States are
 `CONNECTING`, `CONNECTED`, `RECONNECTING`,
 `DISCONNECTED`, `CLOSING`, `CLOSED`, and `ERROR`.
 
+Desktop guest sessions block browser WebRTC on both main documents and nested
+frames using `Connection-Allowlist: ("*://*:*/*");redirects=allow;webrtc=block`.
+The guest's `disable_non_proxied_udp` policy is additional protection, not a
+complete block: by itself it still allows direct TURN TCP connections. Ordinary
+allowed HTTP requests and media capture remain available; private data and MoQ
+use the native transport. The Hub shell's own main document is not blocked.
+Run `npm run test:qapp-network-policy` from `electron/` with a graphical display
+to check real webviews against a local TURN TCP listener, including an unblocked
+positive control and fake microphone capture. This needs no external service.
+
 The first operation for a destination in a tab asks whether the app may connect
 to its backend and exchange data. This single approval also grants
 `PRIVATE_DATA_CHANNEL` for that app's tab, covering private channels and MoQ.
