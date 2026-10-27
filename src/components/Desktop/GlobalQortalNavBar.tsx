@@ -44,6 +44,8 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
+import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
+import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
 import {
@@ -927,6 +929,11 @@ export function GlobalQortalNavBar({
   const handleOpenInput = useCallback(() => {
     const trimmed = inputValue.trim();
     if (!trimmed) return;
+
+    if (parseQortalUseGroupLink(trimmed)) {
+      void openQortalUseGroupLink(trimmed);
+      return;
+    }
 
     const isExplicitQortalLink = /^qortal:\/\//i.test(trimmed);
     const parsedLink = isExplicitQortalLink
