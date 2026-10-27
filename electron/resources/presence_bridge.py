@@ -27010,6 +27010,8 @@ _QAPP_RNS_MAX_QUEUE_BYTES = int(os.environ.get("QORTAL_QAPP_RNS_MAX_QUEUE_BYTES"
 _QAPP_RNS_IDLE_SECONDS = float(os.environ.get("QORTAL_QAPP_RNS_IDLE_SECONDS", 300))
 _QAPP_RNS_ACK_TIMEOUT_SECONDS = float(os.environ.get("QORTAL_QAPP_RNS_ACK_TIMEOUT_SECONDS", 120))
 _QAPP_RNS_WRITE_TIMEOUT_SECONDS = 10.0
+_QAPP_RNS_EVENT_ADMISSION_SECONDS = 5.0
+_QAPP_RNS_MAX_ENTRIES = 128
 _QAPP_RNS_CLOSE_WRITE_TIMEOUT_SECONDS = max(
     0.1,
     float(os.environ.get("QORTAL_QAPP_RNS_CLOSE_WRITE_TIMEOUT_SECONDS", 10.0)),
@@ -27234,6 +27236,43 @@ def _qapp_rns_schedule_keepalive(entry: Dict[str, Any]) -> None:
         )
 
 
+def _qapp_rns_admit_event(payload: Dict[str, Any]) -> None:
+    # Reliable data must never use the best-effort event queue's drop policy.
+    # Bound the wait; the reader tears down its Link on failure without ACKing,
+    # so the peer can retry the complete frame on the replacement Link.
+    frame = {"type": "event", "event": "qapp_rns", "payload": payload,
+             "_queuedAtMs": _now_wall_ms(), "_queuedAtMono": time.monotonic()}
+    deadline = time.monotonic() + _QAPP_RNS_EVENT_ADMISSION_SECONDS
+    while not _shutdown.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            _json_event_queue.put(frame, timeout=min(0.05, remaining))
+            _json_output_ready.set()
+            return
+        except queue.Full:
+            continue
+    raise RuntimeError("RNS_RECEIVE_QUEUE_FULL")
+
+
+def _qapp_rns_remove_logical(entry: Dict[str, Any], connection_id: str) -> None:
+    with _state_lock:
+        entry["connections"].discard(connection_id)
+        for message_id, pending in list(entry.get("unacked", {}).items()):
+            if pending.get("connectionId") == connection_id:
+                entry["unacked"].pop(message_id)
+                pending["timer"].cancel()
+                entry["queued_bytes"] = max(0, entry["queued_bytes"] - len(pending["frame"]))
+        entry["last_used"] = time.time()
+        if not entry["connections"]:
+            _qapp_rns_cancel_keepalive(entry)
+            timer = entry.pop("reconnect_timer", None)
+            if timer is not None:
+                timer.cancel()
+        _qapp_rns_schedule_idle(entry)
+
+
 def _qapp_rns_handle_frame(entry: Dict[str, Any], frame_type: int, message_id: int, payload: bytes) -> None:
     if frame_type == _QAPP_RNS_ACK:
         if payload:
@@ -27251,9 +27290,22 @@ def _qapp_rns_handle_frame(entry: Dict[str, Any], frame_type: int, message_id: i
         return
     if frame_type == _QAPP_RNS_CONTROL:
         control = json.loads(payload.decode("utf-8"))
-        if not isinstance(control, dict) or set(control) != {"type"}:
+        if not isinstance(control, dict):
             raise ValueError("invalid control frame")
         control_type = control.get("type")
+        if control_type == "CLOSE":
+            connection_id = control.get("connectionId")
+            if set(control) != {"type", "connectionId"} or not isinstance(connection_id, str) or not connection_id:
+                raise ValueError("invalid close frame")
+            if connection_id in entry.get("connections", set()):
+                _qapp_rns_admit_event({
+                    "managerKey": entry["managerKey"], "connectionId": connection_id,
+                    "kind": "state", "state": "CLOSED", "reason": "RNS_PEER_CLOSED",
+                })
+                _qapp_rns_remove_logical(entry, connection_id)
+            return
+        if set(control) != {"type"}:
+            raise ValueError("invalid control frame")
         if control_type == "PING":
             response = json.dumps({"type": "PONG"}, separators=(",", ":")).encode("utf-8")
             _qapp_rns_write(entry, _qapp_rns_frame(_QAPP_RNS_CONTROL, message_id, response))
@@ -27263,29 +27315,32 @@ def _qapp_rns_handle_frame(entry: Dict[str, Any], frame_type: int, message_id: i
         raise ValueError("unsupported control frame")
     if frame_type != _QAPP_RNS_DATA:
         raise ValueError("unsupported frame type")
-    duplicate = False
-    with _state_lock:
-        duplicate = message_id in entry["received_set"]
-        if not duplicate:
+    # Replacement readers may overlap briefly. Serialize admission and dedup
+    # across generations without holding the bridge-wide state lock during I/O.
+    with entry.setdefault("receive_lock", threading.Lock()):
+        if message_id not in entry["received_set"]:
+            envelope = json.loads(payload.decode("utf-8"))
+            if not isinstance(envelope, dict):
+                raise ValueError("invalid DATA envelope")
+            connection_id = str(envelope.get("connectionId") or "")
+            if connection_id in entry.get("connections", set()):
+                raw = envelope.get("payloadBase64")
+                encoding = envelope.get("encoding")
+                if not isinstance(raw, str) or encoding not in ("base64", "json"):
+                    raise ValueError("invalid DATA encoding")
+                decoded = base64.b64decode(raw, validate=True)
+                if encoding == "json":
+                    json.loads(decoded.decode("utf-8"))
+                _qapp_rns_admit_event({
+                    "managerKey": entry["managerKey"], "connectionId": connection_id,
+                    "kind": "message", "payloadBase64": raw, "encoding": encoding,
+                })
             if len(entry["received_ids"]) >= 512:
                 expired = entry["received_ids"].popleft()
                 entry["received_set"].discard(expired)
             entry["received_ids"].append(message_id)
             entry["received_set"].add(message_id)
     _qapp_rns_write(entry, _qapp_rns_frame(_QAPP_RNS_ACK, message_id))
-    if duplicate:
-        return
-    envelope = json.loads(payload.decode("utf-8"))
-    connection_id = str(envelope.get("connectionId") or "")
-    if connection_id not in entry.get("connections", set()):
-        return
-    emit_event("qapp_rns", {
-        "managerKey": entry["managerKey"],
-        "connectionId": connection_id,
-        "kind": "message",
-        "payloadBase64": str(envelope.get("payloadBase64") or ""),
-        "encoding": "base64" if envelope.get("encoding") == "base64" else "json",
-    })
 
 
 def _qapp_rns_reader(entry: Dict[str, Any], generation: int) -> None:
@@ -27495,6 +27550,8 @@ def _qapp_rns_entry(manager_key: str, destination: str) -> Dict[str, Any]:
             if entry.get("destination") != destination:
                 raise ValueError("RNS_PERMISSION_DENIED")
             return entry
+        if len(_qapp_rns_entries) >= _QAPP_RNS_MAX_ENTRIES:
+            raise ValueError("RNS_SEND_QUEUE_FULL")
         entry = {
             "managerKey": manager_key,
             "destination": destination,
@@ -27541,8 +27598,9 @@ def handle_qapp_rns_connect(req_id: str, payload: Dict[str, Any]) -> None:
             return _qapp_rns_error(req_id, "RNS_LINK_TIMEOUT")
         _qapp_rns_schedule_keepalive(entry)
         emit_resp(req_id, True, payload={"state": "CONNECTED"})
-    except Exception:
-        _qapp_rns_error(req_id, "RNS_DESTINATION_UNREACHABLE")
+    except Exception as exc:
+        code = str(exc) if str(exc) in ("RNS_SEND_QUEUE_FULL", "RNS_PERMISSION_DENIED") else "RNS_DESTINATION_UNREACHABLE"
+        _qapp_rns_error(req_id, code)
 
 
 def handle_qapp_rns_send(req_id: str, payload: Dict[str, Any]) -> None:
@@ -27582,7 +27640,7 @@ def handle_qapp_rns_send(req_id: str, payload: Dict[str, Any]) -> None:
 
         timer = threading.Timer(_QAPP_RNS_ACK_TIMEOUT_SECONDS, expire_unacked)
         timer.daemon = True
-        entry["unacked"][message_id] = {"frame": frame, "created": time.time(), "timer": timer}
+        entry["unacked"][message_id] = {"frame": frame, "created": time.time(), "timer": timer, "connectionId": connection_id}
         entry["queued_bytes"] += len(frame)
         timer.start()
     if not _qapp_rns_write(entry, frame):
@@ -27613,11 +27671,7 @@ def handle_qapp_rns_close(req_id: str, payload: Dict[str, Any]) -> None:
     with _state_lock:
         current = _qapp_rns_entries.get(manager_key)
         if current is entry and entry is not None:
-            entry["connections"].discard(connection_id)
-            entry["last_used"] = time.time()
-            if not entry["connections"]:
-                _qapp_rns_cancel_keepalive(entry)
-            _qapp_rns_schedule_idle(entry)
+            _qapp_rns_remove_logical(entry, connection_id)
     try:
         emit_resp(req_id, True, payload={"state": "CLOSED"})
     finally:
@@ -27630,6 +27684,7 @@ def handle_qapp_rns_close(req_id: str, payload: Dict[str, Any]) -> None:
 
 
 def handle_qapp_rns_request(req_id: str, payload: Dict[str, Any]) -> None:
+    entry = None
     try:
         manager_key = str(payload.get("managerKey") or "")
         destination = str(payload.get("destination") or "").lower()
@@ -27717,13 +27772,21 @@ def handle_qapp_rns_request(req_id: str, payload: Dict[str, Any]) -> None:
                 response_callback=response_received,
                 failed_callback=request_failed,
                 timeout=timeout,
+                # RNS measures the encoded response, including its request-ID
+                # envelope. Keep this bounded before Resource acceptance, then
+                # enforce the application JSON/bytes bound in response_received.
+                max_response_size=max_response + 1024,
             )
             if receipt is False:
                 request_failed()
         except Exception:
             finish(code="RNS_REQUEST_TIMEOUT")
-    except Exception:
-        _qapp_rns_error(req_id, "RNS_REQUEST_TIMEOUT")
+    except Exception as exc:
+        code = str(exc) if str(exc) in ("RNS_SEND_QUEUE_FULL", "RNS_PERMISSION_DENIED") else "RNS_REQUEST_TIMEOUT"
+        _qapp_rns_error(req_id, code)
+    finally:
+        if entry is not None:
+            _qapp_rns_schedule_idle(entry)
 
 
 _relay_ticket_slots = threading.BoundedSemaphore(4)

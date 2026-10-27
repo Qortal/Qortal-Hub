@@ -41,6 +41,7 @@ export interface QAppReticulumTransport {
     code?: string;
   }>;
   onEvent(listener: (event: QAppReticulumNativeEvent) => void): () => void;
+  onReset?(listener: () => void): () => void;
 }
 
 export class QAppReticulumError extends Error {
@@ -53,6 +54,7 @@ export class QAppReticulumError extends Error {
 }
 
 type LogicalConnection = {
+  owner: QAppReticulumOwner;
   connectionId: string;
   ownerKey: string;
   managerKey: string;
@@ -110,12 +112,19 @@ export class QAppReticulumManager extends EventEmitter {
   private readonly pendingRequestsByOwner = new Map<string, number>();
   private pendingRequestCount = 0;
   private readonly detachTransport: () => void;
+  private readonly detachReset: () => void;
 
   constructor(private readonly transport: QAppReticulumTransport) {
     super();
     this.detachTransport = transport.onEvent((event) =>
       this.handleTransportEvent(event)
     );
+    this.detachReset =
+      transport.onReset?.(() => {
+        for (const connection of [...this.connections.values()]) {
+          this.invalidateConnection(connection, 'RNS_TRANSPORT_RESET');
+        }
+      }) ?? (() => undefined);
   }
 
   async request(
@@ -197,6 +206,7 @@ export class QAppReticulumManager extends EventEmitter {
       throw new QAppReticulumError('RNS_SEND_QUEUE_FULL');
     }
     const connection: LogicalConnection = {
+      owner: { ...owner },
       connectionId,
       ownerKey: key,
       managerKey: this.managerKey(owner, destination),
@@ -279,6 +289,9 @@ export class QAppReticulumManager extends EventEmitter {
       ...encoded,
     });
     if (!result.ok) {
+      if (result.code === 'RNS_INVALID_CONNECTION') {
+        this.invalidateConnection(connection, result.code);
+      }
       throw new QAppReticulumError(result.code ?? 'RNS_SEND_QUEUE_FULL');
     }
     return { messageId: String(result.payload?.messageId ?? '') };
@@ -294,6 +307,7 @@ export class QAppReticulumManager extends EventEmitter {
       state: 'CLOSING',
     });
     this.removeConnection(connection);
+    this.emit('connection-closed', connection.owner, connectionId);
     await this.transport.invoke('qapp_rns_close', {
       managerKey: connection.managerKey,
       connectionId,
@@ -337,6 +351,7 @@ export class QAppReticulumManager extends EventEmitter {
 
   destroy(): void {
     this.detachTransport();
+    this.detachReset();
     this.connections.clear();
     this.connectionsByOwner.clear();
     this.pendingRequestsByOwner.clear();
@@ -348,6 +363,13 @@ export class QAppReticulumManager extends EventEmitter {
     const connection = this.connections.get(connectionId);
     if (!connection || connection.managerKey !== event.managerKey) return;
     if (event.kind === 'state' && event.state) {
+      if (event.state === 'CLOSED') {
+        this.invalidateConnection(
+          connection,
+          event.reason ?? 'RNS_PEER_CLOSED'
+        );
+        return;
+      }
       connection.state = event.state;
       this.emit('event', {
         ownerKey: connection.ownerKey,
@@ -377,6 +399,23 @@ export class QAppReticulumManager extends EventEmitter {
       throw new QAppReticulumError('RNS_INVALID_CONNECTION');
     }
     return connection;
+  }
+
+  private invalidateConnection(
+    connection: LogicalConnection,
+    reason: string
+  ): void {
+    if (this.connections.get(connection.connectionId) !== connection) return;
+    connection.state = 'CLOSED';
+    this.removeConnection(connection);
+    this.emit('connection-closed', connection.owner, connection.connectionId);
+    this.emit('event', {
+      ownerKey: connection.ownerKey,
+      connectionId: connection.connectionId,
+      action: 'RNS_CONNECTION_STATE',
+      state: 'CLOSED',
+      reason,
+    });
   }
 
   private removeConnection(connection: LogicalConnection): void {

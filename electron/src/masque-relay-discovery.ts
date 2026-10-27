@@ -1,3 +1,4 @@
+import { waitForRelayOperation } from './relay-operation';
 import net from 'net';
 import type { ReticulumBridge } from './reticulum-bridge';
 import type { TrustedRelayConfig } from './quic-masque-transport';
@@ -23,6 +24,8 @@ export type CommunityMasqueRelay = {
 
 export type MasqueRelayDiscoveryOptions = {
   timeoutMs?: number;
+  signal?: AbortSignal;
+  acceptRelay?: (relay: CommunityMasqueRelay) => boolean;
   allowLoopback?: boolean;
   /** Relay endpoints already known to have failed for this logical session. */
   excludeRelayAddresses?: ReadonlySet<string>;
@@ -138,11 +141,17 @@ export async function discoverCommunityMasqueRelay(
   bridge: ReticulumBridge,
   options: MasqueRelayDiscoveryOptions = {}
 ): Promise<TrustedRelayConfig> {
+  options.signal?.throwIfAborted();
   const candidates = new Map<string, CommunityMasqueRelay>();
   let wake: (() => void) | null = null;
   const accept = (value: unknown) => {
     const relay = validateCommunityMasqueRelay(value, options);
-    if (!relay) return;
+    if (
+      !relay ||
+      options.signal?.aborted ||
+      options.acceptRelay?.(relay) === false
+    )
+      return;
     const host = net.isIP(relay.host) === 6 ? `[${relay.host}]` : relay.host;
     if (options.excludeRelayAddresses?.has(`${host}:${relay.port}`)) return;
     candidates.set(`${relay.host}:${relay.port}:${relay.certSha256}`, relay);
@@ -158,34 +167,45 @@ export async function discoverCommunityMasqueRelay(
     const deadline = Date.now() + timeoutMs;
     let queryAnnounced = false;
     while (candidates.size === 0) {
-      const cached = await bridge.getCommunityMasqueRelays(false);
+      const cached = await waitForRelayOperation(
+        bridge.getCommunityMasqueRelays(false),
+        options.signal
+      );
       for (const relay of cached) accept(relay);
       if (candidates.size > 0) break;
       if (!queryAnnounced) {
         queryAnnounced = true;
-        const discovered = await bridge.getCommunityMasqueRelays(true);
+        const discovered = await waitForRelayOperation(
+          bridge.getCommunityMasqueRelays(true),
+          options.signal
+        );
         for (const relay of discovered) accept(relay);
         if (candidates.size > 0) break;
       }
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) break;
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(
-          () => {
+      await waitForRelayOperation(
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(
+            () => {
+              wake = null;
+              resolve();
+            },
+            Math.min(MASQUE_RELAY_QUERY_INTERVAL_MS, remainingMs)
+          );
+          timer.unref?.();
+          wake = () => {
+            clearTimeout(timer);
             wake = null;
             resolve();
-          },
-          Math.min(MASQUE_RELAY_QUERY_INTERVAL_MS, remainingMs)
-        );
-        timer.unref?.();
-        wake = () => {
-          clearTimeout(timer);
-          wake = null;
-          resolve();
-        };
-      });
+          };
+        }),
+        options.signal
+      );
     }
+    options.signal?.throwIfAborted();
   } finally {
+    wake?.();
     bridge.off('community-masque-relay', onRelay);
   }
   const relays = [...candidates.values()];

@@ -379,10 +379,15 @@ func (s *Session) handleBidiStream(stream Stream) {
 	s.logger.Debug("accepted new bidi stream", "streamID", stream.StreamID())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	var wg sync.WaitGroup
-	defer wg.Wait()
+	defer func() {
+		// A completed request must release its watcher and both stream halves.
+		// Waiting before cancel retains every rejected request until session end.
+		cancel()
+		stream.Stop(0)
+		_ = stream.Close()
+		wg.Wait()
+	}()
 	wg.Go(func() {
 		select {
 		case <-ctx.Done():
@@ -508,6 +513,8 @@ func (s *Session) Subscribe(
 	if err != nil {
 		return nil, err
 	}
+	stopWrite := context.AfterFunc(ctx, func() { stream.Reset(0); stream.Stop(0) })
+	defer stopWrite()
 	s.logger.Debug("opened new stream for subscribe request", "requestID", requestID, "namespace", namespace, "name", name)
 	parser, err := wire.NewParser(stream, uint64(s.version), wire.StreamTypeRequest)
 	if err != nil {
@@ -517,10 +524,20 @@ func (s *Session) Subscribe(
 
 	request, err := newOutgoingSubscribeRequest(requestID, s, appender, parser, namespace, []byte(name))
 	if err != nil {
+		stream.Reset(0)
+		stream.Stop(0)
 		return nil, err
+	}
+	// Finish the request direction gracefully: resetting it after a rejection
+	// can make older peers treat that reset as a connection-wide failure.
+	request.stopStream = func() { _ = stream.Close(); stream.Stop(0) }
+	if !stopWrite() || ctx.Err() != nil {
+		_ = request.Close()
+		return nil, ctx.Err()
 	}
 
 	if err := s.goTracked(request.readMessages); err != nil {
+		_ = request.Close()
 		return nil, err
 	}
 	return request, nil
