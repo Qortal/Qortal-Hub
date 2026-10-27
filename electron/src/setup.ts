@@ -198,7 +198,10 @@ import {
   buildAudioSurfaceUrl,
   withAudioSurfaceIsolationHeaders,
 } from './audio-window-policy';
-import { withEmbeddedFrameWebRtcBlocked } from './embedded-frame-network-policy';
+import {
+  withEmbeddedFrameWebRtcBlocked,
+  type WebRtcDocumentScope,
+} from './embedded-frame-network-policy';
 import { ensureAudioSurfaceHttpsServer } from './audio-surface-https';
 import {
   buildDefaultAudioSurfaceBridgeStateLike,
@@ -1104,9 +1107,8 @@ export class ElectronCapacitorApp {
     });
     this.MainWindow.webContents.on('did-attach-webview', (_event, guest) => {
       attachedQAppGuests.set(guest.id, { contents: guest, prepared: null });
-      // Restrict WebRTC on the Q-App guest itself. The iframe response policy
-      // does not cover a webview's main document, and this also covers nested
-      // frames that share the guest's WebContents.
+      // Defense in depth alongside the guest session's document-level WebRTC
+      // block. This IP policy alone still permits direct TURN over TCP.
       restrictQAppGuestWebRtc(guest);
       guest.once('dom-ready', () => {
         maybeStartRendererCpuProfile(guest, 'qapp-guest');
@@ -1361,7 +1363,11 @@ export class ElectronCapacitorApp {
   }
 }
 
-export function setupContentSecurityPolicy(customScheme: string, targetSession = session.defaultSession): void {
+export function setupContentSecurityPolicy(
+  customScheme: string,
+  targetSession = session.defaultSession,
+  documentScope: WebRtcDocumentScope = 'hub'
+): void {
   targetSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
       const requestUrl = details.url;
@@ -1461,7 +1467,8 @@ export function setupContentSecurityPolicy(customScheme: string, targetSession =
           ...filtered,
           'Content-Security-Policy': [csp],
         },
-        { resourceType: details.resourceType }
+        { resourceType: details.resourceType },
+        documentScope
       );
 
       Object.assign(
@@ -3191,7 +3198,11 @@ function qappGuestOwnerKey(owner: QAppGuestOwner): string {
 function configureQAppGuestSession(partition: string): void {
   if (configuredQAppSessions.has(partition)) return;
   const guestSession = session.fromPartition(partition);
-  setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme(), guestSession);
+  setupContentSecurityPolicy(
+    myCapacitorApp.getCustomURLScheme(),
+    guestSession,
+    'qapp-guest'
+  );
   installCertificateVerification(guestSession);
   installLocalNodeHttpsBlock(guestSession);
   installDisplayMediaPicker(
