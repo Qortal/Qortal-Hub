@@ -1,3 +1,10 @@
+import { registerMainWindowWalletStorage } from './main-window-storage';
+import {
+  installMainWindowNavigationPolicy,
+  isMainWindowUrl,
+  requireMainWindowSender,
+} from './main-window-policy';
+import { registerMainWindowFileIpc } from './main-window-files';
 import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
@@ -367,7 +374,6 @@ function attachGroupAudioIpcTiming(
   });
 }
 
-const AdmZip = require('adm-zip');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -673,7 +679,16 @@ function isMainShellSender(sender: Electron.WebContents): boolean {
   return Boolean(
     mainWindow &&
     !mainWindow.isDestroyed() &&
-    mainWindow.webContents.id === sender.id
+    mainWindow.webContents.id === sender.id &&
+    isMainWindowUrl(sender.getURL(), `${myCapacitorApp.getCustomURLScheme()}://-`)
+  );
+}
+
+function requireMainShellEvent(event: Electron.IpcMainInvokeEvent): void {
+  requireMainWindowSender(
+    event,
+    myCapacitorApp?.getMainWindow?.()?.webContents,
+    `${myCapacitorApp?.getCustomURLScheme?.()}://-`
   );
 }
 
@@ -1068,7 +1083,10 @@ export class ElectronCapacitorApp {
       backgroundColor: '#27282c',
       frame: false,
       webPreferences: {
-        nodeIntegration: true,
+        nodeIntegration: false,
+        // The existing preload uses Node modules; keep its isolated context
+        // unsandboxed while removing Node from the page itself.
+        sandbox: false,
         contextIsolation: true,
         webviewTag: true,
         preload: preloadPath,
@@ -1076,9 +1094,21 @@ export class ElectronCapacitorApp {
         additionalArguments: [
           `--hub-p2p-seeds=${seedsB64}`,
           `--window-role=${MAIN_WINDOW_ROLE}`,
+          `--hub-shell-url=${this.customScheme}://-`,
         ],
       },
     });
+    installMainWindowNavigationPolicy(
+      this.MainWindow.webContents,
+      `${this.customScheme}://-`,
+      (url) => shell.openExternal(url),
+      (error) => loggerError('Main window navigation failed', error)
+    );
+    const mainContents = this.MainWindow.webContents;
+    const revokeFiles = () => mainWindowFiles.revoke(mainContents.id);
+    mainContents.on('did-navigate', revokeFiles);
+    mainContents.on('render-process-gone', revokeFiles);
+    mainContents.on('destroyed', revokeFiles);
     configuredQAppSessions.clear();
     this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
       const prepared = [...preparedQAppGuests.values()].find(
@@ -1150,9 +1180,8 @@ export class ElectronCapacitorApp {
       attachedQAppGuests.clear();
       preparedQAppGuests.clear();
     };
-    this.MainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
-      if (mainFrame && !inPlace) clearGuestRegistrations();
-    });
+    // Blocked external links must not disconnect the active QApps.
+    this.MainWindow.webContents.on('did-navigate', clearGuestRegistrations);
     this.MainWindow.webContents.on('destroyed', clearGuestRegistrations);
     this.mainWindowState.manage(this.MainWindow);
     installDisplayMediaPicker(this.MainWindow);
@@ -1322,21 +1351,6 @@ export class ElectronCapacitorApp {
     } else {
       this.loadMainWindow(this);
     }
-
-    // Security
-    this.MainWindow.webContents.setWindowOpenHandler((details) => {
-      if (!details.url.includes(this.customScheme)) {
-        return { action: 'deny' };
-      } else {
-        return { action: 'allow' };
-      }
-    });
-
-    this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
-      if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
-        event.preventDefault();
-      }
-    });
 
     // Link electron plugins into the system.
     setupCapacitorElectronPlugins();
@@ -1600,64 +1614,10 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle('dialog:openFile', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile'],
-    filters: [
-      { name: 'ZIP Files', extensions: ['zip'] }, // Restrict to ZIP files
-    ],
-  });
-  return result.filePaths[0];
-});
-
-ipcMain.handle('fs:readFile', async (_, filePath) => {
-  try {
-    // Ensure the file exists
-    if (!fs.existsSync(filePath)) {
-      throw new Error('File does not exist.');
-    }
-
-    // Ensure the filePath is an absolute path (optional but recommended for safety)
-    const absolutePath = path.resolve(filePath);
-
-    // Read the file as a Buffer
-    const fileBuffer = fs.readFileSync(absolutePath);
-
-    return fileBuffer;
-  } catch (error) {
-    loggerError('Error reading file:', error.message);
-    return null; // Return null on error
-  }
-});
-
-ipcMain.handle('fs:selectAndZip', async (_, path) => {
-  let directoryPath = path;
-  if (!directoryPath) {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-    });
-    if (canceled || filePaths.length === 0) {
-      loggerError('No directory selected');
-      return null;
-    }
-
-    directoryPath = filePaths[0];
-  }
-
-  try {
-    // Add the entire directory to the zip
-    const zip = new AdmZip();
-
-    // Add the entire directory to the zip
-    zip.addLocalFolder(directoryPath);
-
-    // Generate the zip file as a buffer
-    const zipBuffer = zip.toBuffer();
-
-    return { buffer: zipBuffer, directoryPath };
-  } catch (error) {
-    return null;
-  }
+const mainWindowFiles = registerMainWindowFileIpc({
+  ipcMain,
+  dialog,
+  checkSender: requireMainShellEvent,
 });
 
 // Helper to get or create the shared settings directory
@@ -1847,12 +1807,8 @@ app.on('web-contents-created', (_event, contents) => {
   const clearIfHost = () => {
     if (foreignSignerOwner === contentsId) clearForeignWalletSigner();
   };
-  contents.on(
-    'did-start-navigation',
-    (_event, _url, isInPlace, isMainFrame) => {
-      if (isMainFrame && !isInPlace) clearIfHost();
-    }
-  );
+  // A prevented navigation leaves the existing signing session intact.
+  contents.on('did-navigate', clearIfHost);
   contents.on('render-process-gone', clearIfHost);
   contents.on('destroyed', clearIfHost);
 });
@@ -1882,13 +1838,15 @@ ipcMain.handle(
     getForeignWalletJournal(event).delete(key, txId)
 );
 
-ipcMain.handle('persistentStore:get', async (_event, key: string) =>
-  persistentStore.get(key)
-);
+ipcMain.handle('persistentStore:get', async (_event, key: string) => {
+  requireMainShellEvent(_event);
+  return persistentStore.get(key);
+});
 
 ipcMain.handle(
   'persistentStore:set',
   async (_event, key: string, value: unknown) => {
+    requireMainShellEvent(_event);
     await persistentStore.set(key, value);
     if (key === DEV_LOGS_DISABLED_STORAGE_KEY) {
       const next = value === false ? false : true;
@@ -1899,6 +1857,7 @@ ipcMain.handle(
 );
 
 ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
+  requireMainShellEvent(_event);
   await persistentStore.deleteKey(key);
   if (key === DEV_LOGS_DISABLED_STORAGE_KEY) {
     setDisableDevLogs(true);
@@ -1907,6 +1866,7 @@ ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
 });
 
 ipcMain.handle('logger:setDisableDevLogs', async (_event, value: boolean) => {
+  requireMainShellEvent(_event);
   const next = value === false ? false : true;
   setDisableDevLogs(next);
   setReticulumBridgeDeveloperLogsFiltered(next);
@@ -1914,18 +1874,21 @@ ipcMain.handle('logger:setDisableDevLogs', async (_event, value: boolean) => {
   return next;
 });
 
-ipcMain.handle('miscPersistentStore:get', async (_event, key: string) =>
-  miscPersistentStore.get(key)
-);
+ipcMain.handle('miscPersistentStore:get', async (_event, key: string) => {
+  requireMainShellEvent(_event);
+  return miscPersistentStore.get(key);
+});
 
 ipcMain.handle(
   'miscPersistentStore:set',
   async (_event, key: string, value: unknown) => {
+    requireMainShellEvent(_event);
     await miscPersistentStore.set(key, value);
   }
 );
 
 ipcMain.handle('miscPersistentStore:delete', async (_event, key: string) => {
+  requireMainShellEvent(_event);
   await miscPersistentStore.deleteKey(key);
 });
 
@@ -2112,36 +2075,12 @@ export async function startAppSettingsWatcher(): Promise<() => void> {
   return () => fs.unwatchFile(filePath);
 }
 
-// READ handler
-ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
-  try {
-    const filePath = await getSharedSettingsFilePath(fileName);
-
-    const stats = await fs.promises.stat(filePath).catch(() => null);
-    if (!stats || !stats.isFile()) return null;
-
-    return fs.promises.readFile(filePath, 'utf-8');
-  } catch (err) {
-    loggerError(`Error in walletStorage:read for "${fileName}"`, err);
-    return null;
-  }
+registerMainWindowWalletStorage({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  getFilePath: () => getSharedSettingsFilePath('wallet-storage.json'),
+  onError: (error) => loggerError('Error reading wallet storage', error),
 });
-
-// WRITE handler
-ipcMain.handle(
-  'walletStorage:write',
-  async (_event, fileName: string, contents: string) => {
-    try {
-      const filePath = await getSharedSettingsFilePath(fileName);
-
-      await fs.promises.writeFile(filePath, contents, 'utf-8');
-      return true;
-    } catch (err) {
-      loggerError(`Error in walletStorage:write for "${fileName}"`, err);
-      throw err;
-    }
-  }
-);
 
 // Persistent store: shared across instances via atomic writes to appData/qortal-hub/
 // Uses write-file-atomic to prevent partial writes corrupting the file.
@@ -2290,80 +2229,6 @@ ipcMain.handle(
     return { ok: true };
   }
 );
-
-// Handler for initiating a streaming file save
-ipcMain.handle(
-  'file:startStreamSave',
-  async (_event, options: { filename: string; mimeType?: string }) => {
-    try {
-      // Show save dialog
-      const result = await dialog.showSaveDialog({
-        defaultPath: options.filename,
-        filters: options.mimeType
-          ? [
-              {
-                name: 'File',
-                extensions: [options.filename.split('.').pop() || '*'],
-              },
-            ]
-          : undefined,
-      });
-
-      if (result.canceled || !result.filePath) {
-        return { canceled: true };
-      }
-
-      return {
-        canceled: false,
-        filePath: result.filePath,
-      };
-    } catch (err) {
-      loggerError('Error in file:startStreamSave', err);
-      throw err;
-    }
-  }
-);
-
-// Handler for writing chunks to a file
-ipcMain.handle(
-  'file:writeChunk',
-  async (_event, filePath: string, chunk: Uint8Array, append: boolean) => {
-    try {
-      const buffer = Buffer.from(chunk);
-      const mode = append ? 'append' : 'write';
-      loggerLog(
-        `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
-      );
-
-      if (append) {
-        await fs.promises.appendFile(filePath, buffer);
-      } else {
-        await fs.promises.writeFile(filePath, buffer);
-      }
-
-      // Get file size after write to verify
-      const stats = await fs.promises.stat(filePath);
-      loggerLog(`[IPC] File size after write: ${stats.size} bytes`);
-
-      return true;
-    } catch (err) {
-      loggerError('[IPC] Error writing chunk to', filePath, ':', err);
-      throw err;
-    }
-  }
-);
-
-// Handler for cleaning up failed downloads
-ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
-  try {
-    await fs.promises.unlink(filePath);
-    return true;
-  } catch (err) {
-    loggerError('Error deleting file', filePath, err);
-    // Don't throw - file might not exist
-    return false;
-  }
-});
 
 const progressSubscribers = new Set<Electron.WebContents>();
 
@@ -3160,12 +3025,15 @@ ipcMain.handle('qappFileSave:request', async (event, owner, request) => {
 setInterval(() => { void qappFileSaves?.expire(); }, 30_000).unref();
 app.on('before-quit', () => { void qappFileSaves?.cleanup(); });
 app.on('web-contents-created', (_event, contents) => {
-  const cleanup = () => { if (isMainShellSender(contents)) void qappFileSaves?.cleanup(); };
+  // Lifecycle cleanup uses window identity even after its URL has changed.
+  const cleanup = () => {
+    if (myCapacitorApp?.getMainWindow?.()?.webContents.id === contents.id) {
+      void qappFileSaves?.cleanup();
+    }
+  };
   contents.on('render-process-gone', cleanup);
   contents.on('destroyed', cleanup);
-  contents.on('did-start-navigation', (_e, _url, inPlace, mainFrame) => {
-    if (mainFrame && !inPlace) cleanup();
-  });
+  contents.on('did-navigate', cleanup);
 });
 
 async function cleanupQAppOwner(owner: QAppReticulumOwner): Promise<void> {
@@ -5292,13 +5160,9 @@ function ensureReticulumChatReservationLifecycle(sender: WebContents): number {
   if (!reticulumChatReservationLifecycleWired.has(webContentsId)) {
     reticulumChatReservationLifecycleWired.add(webContentsId);
     reticulumChatReservationEpochs.set(webContentsId, 0);
-    sender.on(
-      'did-start-navigation',
-      (_event, _url, _isInPlace, isMainFrame) => {
-        if (isMainFrame)
-          releaseReticulumChatReservationsForWebContents(webContentsId);
-      }
-    );
+    sender.on('did-navigate', () => {
+      releaseReticulumChatReservationsForWebContents(webContentsId);
+    });
     sender.once('destroyed', () => {
       releaseReticulumChatReservationsForWebContents(webContentsId);
       reticulumChatReservationLifecycleWired.delete(webContentsId);

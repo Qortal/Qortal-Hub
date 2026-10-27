@@ -13,6 +13,15 @@
   "deploy_at": "kas sa soovid seda AT-d (automaatset tehingut) käivitada?",
   "description": "kirjeldus: {{ description }}",
   "download_file": "kas sa soovid allalaadida:",
+  "foreign_fees": {
+    "approve": "Kas allkirjastada loetletud kauplemispakkumiste tasud?",
+    "busy": "Üks tasude allkirjastamise taotlus on juba ootel.",
+    "changed": "Rahakott või Core on muutunud. Vaadake tasud uuesti üle.",
+    "declined": "Tasude allkirjastamisest keelduti.",
+    "failed": "Tasude allkirjastamist Core’iga ei õnnestunud lõpule viia. Proovige uuesti.",
+    "invalid": "Core tagastas vigased välisvaluutatasude andmed. Midagi ei allkirjastatud.",
+    "review": "Vaadake allpool olevad AT-aadressid ja tasude väärtused üle. See kinnitus kehtib ainult selle partii kohta."
+  },
   "local_send": {
     "changed": "Rahakott, sõlm või saadaolevad vahendid on muutunud. Vaata makse uuesti üle.",
     "confirming": "Teie eelmine makse ootab endiselt võrgu kinnitust. Tehing: {{txId}}. Uut makset ei saadetud.",

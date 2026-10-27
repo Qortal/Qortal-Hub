@@ -13,6 +13,15 @@
   "deploy_at": "¿Desea implementar este AT?",
   "description": "descripción: {{ description }}",
   "download_file": "¿Desea descargar:",
+  "foreign_fees": {
+    "approve": "¿Firmar las comisiones de las ofertas de intercambio indicadas?",
+    "busy": "Ya hay una solicitud de firma de comisiones pendiente.",
+    "changed": "La cartera o Core ha cambiado. Revise las comisiones de nuevo.",
+    "declined": "Se rechazó la firma de las comisiones.",
+    "failed": "No se pudo completar la firma de las comisiones con Core. Inténtelo de nuevo.",
+    "invalid": "Core devolvió datos de comisiones de monedas extranjeras no válidos. No se firmó nada.",
+    "review": "Revise las direcciones AT y los valores de las comisiones a continuación. Esta aprobación solo se aplica a este lote."
+  },
   "local_send": {
     "changed": "La cartera, el nodo o los fondos disponibles han cambiado. Revisa el pago de nuevo.",
     "confirming": "Su pago anterior aún espera la confirmación de la red. Transacción: {{txId}}. No se envió ningún pago nuevo.",
