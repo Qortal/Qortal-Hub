@@ -17,9 +17,6 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { QappLibraryText } from '../../assets/Icons/QappLibraryText.tsx';
 import { Spacer } from '../../common/Spacer';
-import { executeEvent } from '../../utils/events';
-import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
 import { useTranslation } from 'react-i18next';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
@@ -247,22 +244,6 @@ export const AppsLibraryDesktop = ({
             width: '90%',
           }}
         >
-          <Spacer height="20px" />
-
-          <ShowMessageReturnButton
-            sx={{ padding: '2px' }}
-            onClick={() => {
-              executeEvent('navigateBack', {});
-            }}
-          >
-            <ReturnIcon />
-            <ComposeP sx={{ fontSize: '18px' }}>
-              {t('core:action.return_apps_dashboard', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </ComposeP>
-          </ShowMessageReturnButton>
-
           <Spacer height="20px" />
 
           {/* Tabs + Search/Filter — single column, shared center axis */}

@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { extractComponents } from '../Chat/MessageDisplay';
 import {
+  appsLibraryPageActiveAtom,
   balanceAtom,
   infoSnackGlobalAtom,
   navigationControllerAtom,
@@ -761,6 +762,7 @@ export function GlobalQortalNavBar({
 }: GlobalQortalNavBarProps) {
   const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
+  const appsLibraryPageActive = useAtomValue(appsLibraryPageActiveAtom);
   const balance = useAtomValue(balanceAtom);
   const qortBalanceLoading = useAtomValue(qortBalanceLoadingAtom);
   const txList = useAtomValue(txListAtom);
@@ -1043,10 +1045,13 @@ export function GlobalQortalNavBar({
   }, [setInfoSnackGlobal, setOpenSnackGlobal, t]);
 
   const isInternalTabSelected = selectedTab?.service === INTERNAL_TAB_SERVICE;
+  const isAppsLibraryPage =
+    desktopViewMode === 'apps' && appsLibraryPageActive;
   const canGoBack =
-    !!selectedTab?.tabId &&
-    !!currentNavigation?.hasBack &&
-    !isInternalTabSelected;
+    isAppsLibraryPage ||
+    (!!selectedTab?.tabId &&
+      !!currentNavigation?.hasBack &&
+      !isInternalTabSelected);
   const canRefresh =
     !!selectedTab?.tabId &&
     (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
@@ -1251,9 +1256,16 @@ export function GlobalQortalNavBar({
           >
             <ButtonBase
               disableRipple
+              aria-label={t('core:action.back', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               onClick={() => {
                 if (isDevMode) {
                   executeEvent('devModeNavigateBack', {});
+                  return;
+                }
+                if (isAppsLibraryPage) {
+                  executeEvent('navigateBack', {});
                   return;
                 }
                 if (!selectedTab?.tabId) return;
