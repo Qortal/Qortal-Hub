@@ -15,6 +15,17 @@ import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
 const stripTrailingQortalLinkPunctuation = (value: string) =>
   value.replace(/[),.;!?]+$/g, '');
 
+// Decode the name once, after splitting the URI into segments. Decoding the
+// whole link would turn escaped route/query delimiters into URL structure.
+const decodeQortalName = (name: string): string => {
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    // Retain compatibility with literal percent signs in unescaped names.
+    return name;
+  }
+};
+
 export const extractComponents = (url: string) => {
   if (!url || !url.startsWith(QORTAL_PROTOCOL)) {
     return null;
@@ -39,7 +50,7 @@ export const extractComponents = (url: string) => {
     const parts = basePart.split('/');
     const service = parts[0].toUpperCase();
     parts.shift();
-    const name = parts[0];
+    const name = decodeQortalName(parts[0] ?? '');
     parts.shift();
 
     const params = new URLSearchParams(queryString);
@@ -58,7 +69,7 @@ export const extractComponents = (url: string) => {
   // Case 2: url is just a username -> default to WEBSITE
   return {
     service: 'WEBSITE',
-    name: url,
+    name: decodeQortalName(url),
     identifier: undefined,
     path: '',
   };

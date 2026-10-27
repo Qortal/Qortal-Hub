@@ -43,7 +43,7 @@ export function normalizeBookmarkPath(path?: string): string {
 }
 
 function encodeAppName(name: string): string {
-  return name.trim().replace(/ /g, '%20');
+  return encodeURIComponent(name.trim());
 }
 
 export function buildBookmarkLink(bookmark: {

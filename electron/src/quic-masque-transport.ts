@@ -1,3 +1,4 @@
+import { diagnosePrivateTransport } from './private-transport-diagnostics';
 import { shouldExcludeMasqueRelay } from './masque-relay-recovery';
 import {
   PrivateChannelError,
@@ -203,29 +204,32 @@ export class QuicMasqueTransport implements PrivateTransport {
 
   private async connect(context: PrivateTransportContext): Promise<void> {
     this.lastAttemptedRelayAddress = null;
-    let [relay, bootstrap] = await Promise.all([
-      this.resolveRelay(),
+    const [relay, initialBootstrap] = await Promise.all([
+      diagnosePrivateTransport('relay-selection', () => this.resolveRelay()),
       this.bootstrapProvider.getBootstrap(context),
     ]);
+    let bootstrap = initialBootstrap;
     // Discovery/authentication can outlast a short-lived backend credential.
     // Refresh before sending it; a real backend rejection remains terminal.
     if (bootstrap.expiresAt < Date.now() + 5_000)
       bootstrap = await this.bootstrapProvider.getBootstrap(context);
     const openAt = (relayAddress: string) =>
-      this.sidecar.openPrivateSession({
-        preparedRelay: relay.preparedRelay,
-        relayAddress,
-        relayServerName: relay.relayServerName,
-        relayCertSha256: relay.relayCertSha256,
-        backendAddress: bootstrap.backendTransportEndpoint,
-        backendServerName: bootstrap.backendTransportServerName,
-        backendCertSha256: bootstrap.backendTransportCertSha256,
-        logicalSessionId: bootstrap.logicalSessionId,
-        attachToken: bootstrap.attachToken,
-        nonce: bootstrap.nonce,
-        purpose: context.purpose,
-        ownerBindingHash: bootstrap.ownerBindingHash,
-      });
+      diagnosePrivateTransport('session-open', () =>
+        this.sidecar.openPrivateSession({
+          preparedRelay: relay.preparedRelay,
+          relayAddress,
+          relayServerName: relay.relayServerName,
+          relayCertSha256: relay.relayCertSha256,
+          backendAddress: bootstrap.backendTransportEndpoint,
+          backendServerName: bootstrap.backendTransportServerName,
+          backendCertSha256: bootstrap.backendTransportCertSha256,
+          logicalSessionId: bootstrap.logicalSessionId,
+          attachToken: bootstrap.attachToken,
+          nonce: bootstrap.nonce,
+          purpose: context.purpose,
+          ownerBindingHash: bootstrap.ownerBindingHash,
+        })
+      );
     let opened;
     this.lastAttemptedRelayAddress = relay.relayAddress;
     try {
@@ -406,6 +410,11 @@ function translateSidecarError(error: unknown): PrivateChannelError {
     'RELIABLE_SEND_NOT_STARTED',
     'RELIABLE_STREAMS_UNSUPPORTED',
     'TRANSPORT_ALREADY_ATTACHED',
+    'BOOTSTRAP_FAILED',
+    'BOOTSTRAP_EXPIRED',
+    'BOOTSTRAP_BINDING_MISMATCH',
+    'BOOTSTRAP_REUSED',
+    'UNSUPPORTED_TRANSPORT',
     'RELAY_NO_ELIGIBLE_RELAY',
     'RELAY_ACCESS_DENIED',
     'RELAY_PROOF_INVALID',

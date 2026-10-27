@@ -140,9 +140,14 @@ describe('QUIC MASQUE transport', () => {
     sidecar.sendPrivateReliable.mockRejectedValueOnce(
       new PrivateTransportSidecarError('RELIABLE_SEND_NOT_STARTED')
     );
-    await expect(transport.sendReliable({
-      lane: 'reliable', messageId: 'not-started', data: new Uint8Array(70000), streamKey: 'bulk',
-    })).rejects.toMatchObject({ code: 'RELIABLE_SEND_NOT_STARTED' });
+    await expect(
+      transport.sendReliable({
+        lane: 'reliable',
+        messageId: 'not-started',
+        data: new Uint8Array(70000),
+        streamKey: 'bulk',
+      })
+    ).rejects.toMatchObject({ code: 'RELIABLE_SEND_NOT_STARTED' });
     expect(sidecar.attempts).toHaveLength(1);
     expect(sidecar.closePrivateSession).not.toHaveBeenCalled();
 
@@ -176,3 +181,38 @@ describe('QUIC MASQUE transport', () => {
     expect(events).not.toHaveBeenCalled();
   });
 });
+
+it.each([
+  'BOOTSTRAP_FAILED',
+  'BOOTSTRAP_BINDING_MISMATCH',
+  'BOOTSTRAP_REUSED',
+  'UNSUPPORTED_TRANSPORT',
+])(
+  'preserves %s instead of masking it as a transient transport error',
+  async (code) => {
+    const sidecar = new RecoveringSidecarStub();
+    const getBootstrap = vi.fn(async () => {
+      throw new PrivateChannelError(code);
+    });
+    const transport = new QuicMasqueTransport(
+      vi.fn(),
+      sidecar as never,
+      {
+        relayAddress: '8.8.8.8:47322',
+        relayServerName: 'relay.test',
+        relayCertSha256: 'ab'.repeat(32),
+      },
+      { getBootstrap }
+    );
+    await expect(
+      transport.open({
+        owner: { tabId: 'tab', name: 'app', service: 'APP' },
+        rnsConnectionId: 'rns',
+        purpose: 'file-transfer',
+      })
+    ).rejects.toMatchObject({ code });
+    expect(getBootstrap).toHaveBeenCalledTimes(1);
+    expect(sidecar.attempts).toHaveLength(0);
+    await transport.close();
+  }
+);

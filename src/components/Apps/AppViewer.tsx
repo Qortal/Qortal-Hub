@@ -7,6 +7,7 @@ import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { buildPreviewUrl } from './appPreviewUrl';
+import { buildAppRenderRoot } from './appRenderUrl';
 
 type AppViewerProps = {
   app: any;
@@ -53,7 +54,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       }
 
       setUrl(
-        `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
+        `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
       );
     }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview]);
 
@@ -188,7 +189,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           );
           return;
         }
-        const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
+        const constructUrl = `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
         setUrl(constructUrl);
       }
     };
@@ -227,7 +228,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       const { tabId } = e.detail;
       if (tabId === app?.tabId) {
         let link =
-          QORTAL_PROTOCOL + app?.service + '/' + app?.name.replace(/ /g, '%20');
+          QORTAL_PROTOCOL + app?.service + '/' + encodeURIComponent(app?.name ?? '');
         if (path && path.startsWith('/')) {
           link = link + removeTrailingSlash(path);
         }
@@ -326,7 +327,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       try {
         await waitForNativeNavigation(previousPath, 1000);
       } catch {
-        setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath ?? ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier ?? ''}&time=${Date.now()}&isManualNavigation=false`);
+        setUrl(`${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${previousPath ?? ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier ?? ''}&time=${Date.now()}&isManualNavigation=false`);
       }
     };
 
@@ -353,7 +354,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           await waitForNativeNavigation(targetPath, 1000);
         } catch {
           setUrl(
-            `${getBaseApiReact()}/render/${app?.service}/${app?.name}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
           );
         }
       },
