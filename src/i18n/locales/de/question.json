@@ -13,6 +13,15 @@
   "deploy_at": "Möchten Sie dieses AT bereitstellen?",
   "description": "Beschreibung: {{ description }}",
   "download_file": "Möchten Sie herunterladen:",
+  "foreign_fees": {
+    "approve": "Die aufgeführten Gebühren der Handelsangebote signieren?",
+    "busy": "Eine Anfrage zum Signieren von Gebühren ist bereits offen.",
+    "changed": "Die Wallet oder Core hat sich geändert. Bitte prüfen Sie die Gebühren erneut.",
+    "declined": "Das Signieren der Gebühren wurde abgelehnt.",
+    "failed": "Das Signieren der Gebühren mit Core konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.",
+    "invalid": "Core hat ungültige Daten zu Fremdwährungsgebühren zurückgegeben. Es wurde nichts signiert.",
+    "review": "Prüfen Sie die AT-Adressen und Gebührenwerte unten. Diese Zustimmung gilt nur für diesen Stapel."
+  },
   "local_send": {
     "changed": "Wallet, Node oder verfügbare Mittel haben sich geändert. Prüfe die Zahlung erneut.",
     "confirming": "Ihre vorherige Zahlung wartet noch auf die Netzwerkbestätigung. Transaktion: {{txId}}. Es wurde keine neue Zahlung gesendet.",

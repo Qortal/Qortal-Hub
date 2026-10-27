@@ -29,6 +29,7 @@
   "scripts": {
     "build": "npm run build:wallet && tsc && electron-rebuild",
     "test:reticulum-chat-worker": "npm run build && electron ./scripts/test-reticulum-chat-worker.cjs",
+    "test:main-window-security": "tsc && electron ./scripts/test-main-window-security.cjs",
     "test:qapp-network-policy": "tsc && electron ./scripts/test-qapp-network-policy.cjs",
     "electron:start-live": "node ./live-runner.js",
     "electron:start": "npm run build:private-transport && npm run build && electron --inspect=5858 ./",

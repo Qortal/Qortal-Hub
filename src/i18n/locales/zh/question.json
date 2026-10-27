@@ -13,6 +13,15 @@
   "deploy_at": "您想部署此AT吗？",
   "description": "描述：{{ description }}",
   "download_file": "您想下载以下内容：",
+  "foreign_fees": {
+    "approve": "是否签署所列交易报价的手续费？",
+    "busy": "已有手续费签名请求正在等待处理。",
+    "changed": "钱包或Core已更改。请重新核对手续费。",
+    "declined": "已拒绝签署手续费。",
+    "failed": "无法完成与Core的手续费签名操作。请重试。",
+    "invalid": "Core返回了无效的外部币种手续费数据。未进行任何签名。",
+    "review": "请核对以下AT地址和手续费数值。此次批准仅适用于本批次。"
+  },
   "local_send": {
     "changed": "钱包、节点或可用资金已发生变化。请重新检查付款。",
     "confirming": "您之前的付款仍在等待网络确认。交易：{{txId}}。未发送新的付款。",

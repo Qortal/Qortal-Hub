@@ -1,3 +1,8 @@
+import {
+  ForeignFeeSigningError,
+  signValidatedForeignFees,
+} from './foreign-fee-signing';
+import { getSigningContextRevision } from '../utils/chromeStorage';
 import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
 import { sendLocalForeignCoin } from './foreign-coin-send';
 import { Sha256 } from 'asmcrypto.js';
@@ -7965,89 +7970,60 @@ export const buyNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const signForeignFees = async (data, appInfo, isFromExtension) => {
-  let skip = false;
-  let acceptedVar = false;
-  if (
-    !skip &&
-    appInfo?.tabId &&
-    appInfo?.name &&
-    hasSessionPermission(appInfo.tabId, appInfo.name, 'SIGN_FOREIGN_FEES')
-  ) {
-    skip = true;
+let foreignFeeSigningInProgress = false;
+export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
+  if (foreignFeeSigningInProgress) {
+    throw new Error(i18n.t('question:foreign_fees.busy'));
   }
-  let resPermission;
-  if (!skip) {
-    resPermission = await getUserPermission(
-      {
-        text1: i18n.t('question:permission.sign_fee', {
-          postProcess: 'capitalizeFirstChar',
-        }),
+  foreignFeeSigningInProgress = true;
+  const assertRevision = (expected: number) => {
+    if (getSigningContextRevision() !== expected) {
+      throw new ForeignFeeSigningError('changed');
+    }
+  };
+  try {
+    return await signValidatedForeignFees({
+      getContext: async () => {
+        const revision = getSigningContextRevision();
+        if (revision === null) throw new ForeignFeeSigningError('changed');
+        const wallet = await getSaveWallet();
+        if (!wallet?.address0 || !wallet?.publicKey) {
+          throw new ForeignFeeSigningError('changed');
+        }
+        const [unsignedUrl, signedUrl] = await Promise.all([
+          createEndpoint(`/crosschain/unsignedfees/${wallet.address0}`),
+          createEndpoint('/crosschain/signedfees'),
+        ]);
+        assertRevision(revision);
+        return {
+          address: wallet.address0,
+          publicKey: wallet.publicKey,
+          unsignedUrl,
+          signedUrl,
+          revision,
+        };
       },
-      isFromExtension
-    );
-    const { accepted } = resPermission;
-
-    acceptedVar = accepted;
-  }
-  if (acceptedVar || skip) {
-    const wallet = await getSaveWallet();
-    const address = wallet.address0;
-    const resKeyPair = await getKeyPair();
-    const parsedData = resKeyPair;
-    const uint8PrivateKey = Base58.decode(parsedData.privateKey);
-    const uint8PublicKey = Base58.decode(parsedData.publicKey);
-    const keyPair = {
-      privateKey: uint8PrivateKey,
-      publicKey: uint8PublicKey,
-    };
-
-    const unsignedFeesUrl = await createEndpoint(
-      `/crosschain/unsignedfees/${address}`
-    );
-
-    const unsignedFeesResponse = await fetch(unsignedFeesUrl);
-
-    const unsignedFees = await unsignedFeesResponse.json();
-
-    const signedFees = [];
-
-    unsignedFees.forEach((unsignedFee) => {
-      const unsignedDataDecoded = Base58.decode(unsignedFee.data);
-
-      const signature = nacl.sign.detached(
-        unsignedDataDecoded,
-        keyPair.privateKey
-      );
-
-      const signedFee = {
-        timestamp: unsignedFee.timestamp,
-        data: `${Base58.encode(signature)}`,
-        atAddress: unsignedFee.atAddress,
-        fee: unsignedFee.fee,
-      };
-
-      signedFees.push(signedFee);
-    });
-
-    const signedFeesUrl = await createEndpoint(`/crosschain/signedfees`);
-
-    await fetch(signedFeesUrl, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
+      assertRevision,
+      getPrivateKey: async () => Base58.decode((await getKeyPair()).privateKey),
+      approve: async (fees) => {
+        const { accepted } = await getUserPermission(
+          {
+            text1: i18n.t('question:foreign_fees.approve'),
+            highlightedText: i18n.t('question:foreign_fees.review'),
+            json: fees,
+          },
+          isFromExtension
+        );
+        return accepted === true;
       },
-      body: `${JSON.stringify(signedFees)}`,
+      fetch: (url, options) => fetch(url, options),
     });
-
-    return true;
-  } else {
-    throw new Error(
-      i18n.t('question:message.generic.user_declined_request', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
+  } catch (error) {
+    const code =
+      error instanceof ForeignFeeSigningError ? error.code : 'failed';
+    throw new Error(i18n.t(`question:foreign_fees.${code}`));
+  } finally {
+    foreignFeeSigningInProgress = false;
   }
 };
 export const multiPaymentWithPrivateData = async (data, isFromExtension) => {

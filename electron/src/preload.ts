@@ -14,6 +14,18 @@ import {
   invokeGroupCallJoin,
   type GroupCallJoinIpcArguments,
 } from './group-call-ipc-contract';
+import { isMainWindowUrl } from './main-window-policy';
+
+// A preload runs again after navigation. Never expose shell capabilities to
+// remote pages, opaque documents, or subframes, even if navigation is forced
+// through a main-process loadURL call (which bypasses will-navigate).
+const shellUrlArg = process.argv.find((arg) =>
+  arg.startsWith('--hub-shell-url=')
+);
+const shellUrl = shellUrlArg?.slice('--hub-shell-url='.length) ?? '';
+if (!process.isMainFrame || !isMainWindowUrl(window.location.href, shellUrl)) {
+  throw new Error('Hub preload is restricted to the main application document');
+}
 
 // Sandbox-safe minimal Capacitor bridge. The repo's electron-plugins module is
 // currently empty, so we only need to preserve the platform marker here.

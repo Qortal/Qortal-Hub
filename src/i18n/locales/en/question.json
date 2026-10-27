@@ -13,6 +13,15 @@
   "deploy_at": "would you like to deploy this AT?",
   "description": "description: {{ description }}",
   "download_file": "would you like to download:",
+  "foreign_fees": {
+    "approve": "Sign the listed trade-offer fees?",
+    "busy": "A fee-signing request is already pending.",
+    "changed": "The wallet or Core changed. Please review the fees again.",
+    "declined": "Fee signing was declined.",
+    "failed": "Unable to complete fee signing with Core. Please try again.",
+    "invalid": "Core returned invalid foreign-fee data. Nothing was signed.",
+    "review": "Review the AT addresses and fee values below. This approval applies only to this batch."
+  },
   "local_send": {
     "changed": "The wallet, node, or spendable funds changed. Please review the payment again.",
     "confirming": "Your previous payment is still waiting for network confirmation. Transaction: {{txId}}. No new payment was sent.",
