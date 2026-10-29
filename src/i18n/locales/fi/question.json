@@ -22,6 +22,9 @@
     "invalid": "Core palautti virheelliset ulkovaluuttamaksujen tiedot. Mitään ei allekirjoitettu.",
     "review": "Tarkista alla olevat AT-osoitteet ja maksujen arvot. Tämä hyväksyntä koskee vain tätä erää."
   },
+  "legacy_save": {
+    "started": "Tiedoston lataus alkoi."
+  },
   "local_send": {
     "changed": "Lompakko, solmu tai käytettävissä olevat varat ovat muuttuneet. Tarkista maksu uudelleen.",
     "confirming": "Edellinen maksusi odottaa vielä verkon vahvistusta. Tapahtuma: {{txId}}. Uutta maksua ei lähetetty.",
@@ -223,6 +226,10 @@
   },
   "poll": "kysely: {{ name }}",
   "provide_recipient_group_id": "anna vastaanottaja tai groupId",
+  "publish_validation": {
+    "invalid_file": "Julkaisupyyntö ei sisältänyt kelvollista tiedostoa.",
+    "storage_check_failed": "Julkaisun tallennustilan tarkistus epäonnistui (HTTP {{status}})."
+  },
   "request_create_poll": "pyydät luomaan alla olevan kyselyn:",
   "request_vote_poll": "sinua pyydetään äänestämään alla olevassa kyselyssä:",
   "sats": "{{ amount }} satsia",

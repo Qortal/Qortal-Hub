@@ -22,6 +22,9 @@
     "invalid": "Coreから無効な外部通貨の手数料データが返されました。署名は行われていません。",
     "review": "以下のATアドレスと手数料の値を確認してください。この承認は今回の一括処理にのみ適用されます。"
   },
+  "legacy_save": {
+    "started": "ファイルのダウンロードを開始しました。"
+  },
   "local_send": {
     "changed": "ウォレット、ノード、または利用可能な資金が変更されました。支払いを再確認してください。",
     "confirming": "前回の支払いはまだネットワークの確認を待っています。トランザクション：{{txId}}。新しい支払いは送信されていません。",
@@ -223,6 +226,10 @@
   },
   "poll": "投票：{{ name }}",
   "provide_recipient_group_id": "受信者または groupId を入力してください",
+  "publish_validation": {
+    "invalid_file": "公開リクエストに有効なファイルが含まれていませんでした。",
+    "storage_check_failed": "公開用ストレージの確認に失敗しました（HTTP {{status}}）。"
+  },
   "request_create_poll": "次の投票を作成しようとしています：",
   "request_vote_poll": "次の投票への投票が求められています：",
   "sats": "{{ amount }} sats",

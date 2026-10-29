@@ -22,6 +22,9 @@
     "invalid": "Core a renvoyé des données de frais de monnaies étrangères non valides. Rien n’a été signé.",
     "review": "Vérifiez les adresses AT et les valeurs des frais ci-dessous. Cette approbation ne concerne que ce lot."
   },
+  "legacy_save": {
+    "started": "Le téléchargement du fichier a commencé."
+  },
   "local_send": {
     "changed": "Le portefeuille, le nœud ou les fonds disponibles ont changé. Vérifiez à nouveau le paiement.",
     "confirming": "Votre paiement précédent attend toujours la confirmation du réseau. Transaction : {{txId}}. Aucun nouveau paiement n’a été envoyé.",
@@ -223,6 +226,10 @@
   },
   "poll": "sondage : {{ name }}",
   "provide_recipient_group_id": "veuillez fournir un destinataire ou un groupId",
+  "publish_validation": {
+    "invalid_file": "La demande de publication ne contenait pas de fichier valide.",
+    "storage_check_failed": "La vérification du stockage pour la publication a échoué (HTTP {{status}})."
+  },
   "request_create_poll": "vous demandez la création du sondage suivant :",
   "request_vote_poll": "vous êtes invité à voter au sondage suivant :",
   "sats": "{{ amount }} sats",

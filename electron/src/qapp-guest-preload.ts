@@ -1,4 +1,9 @@
 import { ipcRenderer } from 'electron';
+import {
+  prepareQAppRequest,
+  QAppBinarySender,
+  type QAppRequest,
+} from './qapp-request-transport';
 
 // This preload runs only in an isolated Q-App guest. No Electron API is exposed
 // to the page. Core's q-apps.js posts UI requests to window.parent; in a guest
@@ -17,12 +22,63 @@ const queued: Array<{ documentId: string; requestId: number; data: unknown }> =
   [];
 const injectedEvents = new WeakSet<MessageEvent>();
 let ready = false;
+let binaryRequests = 0;
+const createBinarySender = () =>
+  new QAppBinarySender((message) =>
+    ipcRenderer.sendToHost('qapp:binary', message)
+  );
+let binarySender = createBinarySender();
+ipcRenderer.on('qapp:binary-ack', (_event, ack) =>
+  binarySender.acknowledge(ack)
+);
+
+const failRequest = (requestId: number) => {
+  const entry = pending.get(requestId);
+  pending.delete(requestId);
+  entry?.port.postMessage({ result: null, error: 'QAPP_BRIDGE_ERROR' });
+  entry?.port.close();
+};
+const sendRequest = (request: QAppRequest) => {
+  try {
+    const prepared = prepareQAppRequest(request.data);
+    if (!prepared.files.length) {
+      ipcRenderer.sendToHost('qapp:request', request);
+      return;
+    }
+    if (binaryRequests >= MAX_QUEUED_REQUESTS) {
+      failRequest(request.requestId);
+      return;
+    }
+    binaryRequests++;
+    void binarySender.sendRequest(request, prepared).then(
+      () => {
+        binaryRequests--;
+      },
+      () => {
+        binaryRequests--;
+        failRequest(request.requestId);
+      }
+    );
+  } catch {
+    failRequest(request.requestId);
+  }
+};
+window.addEventListener('pagehide', () => {
+  ready = false;
+  queued.length = 0;
+  binarySender.dispose();
+  for (const entry of pending.values()) entry.port.close();
+  pending.clear();
+});
 
 window.addEventListener('message', (event: MessageEvent) => {
   if (injectedEvents.has(event)) return;
-  if (event.source !== window ||
-      (event.data?.requestedHandler !== 'UI' &&
-       event.data?.action !== 'NAVIGATION_SUCCESS')) return;
+  if (
+    event.source !== window ||
+    (event.data?.requestedHandler !== 'UI' &&
+      event.data?.action !== 'NAVIGATION_SUCCESS')
+  )
+    return;
   const requestId = ++nextRequestId;
   const port = event.ports?.[0];
   if (!ready && queued.length >= MAX_QUEUED_REQUESTS) {
@@ -50,7 +106,7 @@ window.addEventListener('message', (event: MessageEvent) => {
       requestId,
       data: event.data,
     };
-    if (ready) ipcRenderer.sendToHost('qapp:request', request);
+    if (ready) sendRequest(request);
     else queued.push(request);
   } catch {
     pending.delete(requestId);
@@ -62,16 +118,7 @@ window.addEventListener('message', (event: MessageEvent) => {
 ipcRenderer.on('qapp:ready', (_event, acceptedDocumentId: string) => {
   if (acceptedDocumentId !== documentId) return;
   ready = true;
-  for (const request of queued.splice(0)) {
-    try {
-      ipcRenderer.sendToHost('qapp:request', request);
-    } catch {
-      const entry = pending.get(request.requestId);
-      pending.delete(request.requestId);
-      entry?.port.postMessage({ result: null, error: 'QAPP_BRIDGE_ERROR' });
-      entry?.port.close();
-    }
-  }
+  for (const request of queued.splice(0)) sendRequest(request);
 });
 
 // Main binds this guest to its prepared owner using a token passed only to the
@@ -79,7 +126,7 @@ ipcRenderer.on('qapp:ready', (_event, acceptedDocumentId: string) => {
 const guestToken = process.argv
   ?.find((arg) => arg.startsWith('--qapp-guest-token='))
   ?.slice('--qapp-guest-token='.length);
-void (async () => {
+const announceGuest = async () => {
   if (!guestToken) {
     ipcRenderer.sendToHost('qapp:error');
     return;
@@ -90,12 +137,17 @@ void (async () => {
       ipcRenderer.sendToHost('qapp:hello', { documentId });
       return;
     } catch {
-      if (attempt < 4)
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
   ipcRenderer.sendToHost('qapp:error');
-})();
+};
+void announceGuest();
+window.addEventListener('pageshow', (event) => {
+  if (!event.persisted) return;
+  binarySender = createBinarySender();
+  void announceGuest();
+});
 
 ipcRenderer.on('qapp:response', (_event, response) => {
   if (response?.documentId !== documentId) return;
@@ -107,9 +159,10 @@ ipcRenderer.on('qapp:response', (_event, response) => {
 });
 
 ipcRenderer.on('qapp:event', (_event, data) => {
-  const forwardedData = data?.action === 'PERFORMING_NON_MANUAL'
-    ? data
-    : { ...data, requestedHandler: 'UI' };
+  const forwardedData =
+    data?.action === 'PERFORMING_NON_MANUAL'
+      ? data
+      : { ...data, requestedHandler: 'UI' };
   const event = new MessageEvent('message', {
     data: forwardedData,
     origin: window.location.origin,

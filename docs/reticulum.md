@@ -11,6 +11,26 @@ Reticulum is a cryptography-based networking stack designed for reliable communi
 - **Group voice calls** — multi-party audio with topology-aware forwarding (see `docs/group-audio-calls.md`).
 - **Q-Chat file transfers** — encrypted file offers and deliveries with a 2-hour TTL.
 
+## Opening local files and folders on Linux
+
+Verified attachments are copied to a private temporary directory with a sanitized
+file name before desktop dispatch. Linux uses `shell.openExternal` with a
+`pathToFileURL` URL. Electron 44.1.1's Linux `shell.openPath` drops its completion
+callback, leaving the IPC invocation unresolved and eventually producing
+`reply was never sent`. Windows and macOS continue to use `shell.openPath`.
+The shared `desktop-shell.ts` helper also opens the config directory when the
+Reticulum config file does not exist yet. Existing config files still use
+`showItemInFolder`.
+Success means the desktop opener was dispatched, not that the external viewer
+finished loading the file.
+The upstream callback behavior is visible in
+[Electron 44.1.1's Linux opener](https://github.com/electron/electron/blob/v44.1.1/shell/common/platform_util_linux.cc#L350-L353).
+
+Run `cd electron && npm run test:reticulum-resource-open` with
+`ELECTRON_RUN_AS_NODE` unset to exercise materialization and real IPC using a
+synthetic Linux opener for files and folders; it does not open a user's files or
+launch a viewer.
+
 ## Architecture Overview
 
 ```text

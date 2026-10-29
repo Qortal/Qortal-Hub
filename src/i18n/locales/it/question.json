@@ -22,6 +22,9 @@
     "invalid": "Core ha restituito dati non validi sulle commissioni delle valute estere. Non è stato firmato nulla.",
     "review": "Controlla gli indirizzi AT e i valori delle commissioni qui sotto. Questa approvazione vale solo per questo gruppo."
   },
+  "legacy_save": {
+    "started": "Download del file avviato."
+  },
   "local_send": {
     "changed": "Il portafoglio, il nodo o i fondi disponibili sono cambiati. Controlla nuovamente il pagamento.",
     "confirming": "Il pagamento precedente è ancora in attesa della conferma della rete. Transazione: {{txId}}. Non è stato inviato alcun nuovo pagamento.",
@@ -223,6 +226,10 @@
   },
   "poll": "sondaggio: {{ name }}",
   "provide_recipient_group_id": "fornisci un destinatario o un groupId",
+  "publish_validation": {
+    "invalid_file": "La richiesta di pubblicazione non conteneva un file valido.",
+    "storage_check_failed": "Il controllo dello spazio di archiviazione per la pubblicazione non è riuscito (HTTP {{status}})."
+  },
   "request_create_poll": "si sta richiedendo di creare il seguente sondaggio:",
   "request_vote_poll": "viene richiesto di votare nel seguente sondaggio:",
   "sats": "{{ amount }} sats",

@@ -22,6 +22,9 @@
     "invalid": "Core tagastas vigased välisvaluutatasude andmed. Midagi ei allkirjastatud.",
     "review": "Vaadake allpool olevad AT-aadressid ja tasude väärtused üle. See kinnitus kehtib ainult selle partii kohta."
   },
+  "legacy_save": {
+    "started": "Faili allalaadimine algas."
+  },
   "local_send": {
     "changed": "Rahakott, sõlm või saadaolevad vahendid on muutunud. Vaata makse uuesti üle.",
     "confirming": "Teie eelmine makse ootab endiselt võrgu kinnitust. Tehing: {{txId}}. Uut makset ei saadetud.",
@@ -223,6 +226,10 @@
   },
   "poll": "küsitlus: {{ name }}",
   "provide_recipient_group_id": "palun anna vastuvõtja või rühma ID (groupId)",
+  "publish_validation": {
+    "invalid_file": "Avaldamistaotlus ei sisaldanud kehtivat faili.",
+    "storage_check_failed": "Avaldamiseks vajaliku salvestusruumi kontroll ebaõnnestus (HTTP {{status}})."
+  },
   "request_create_poll": "sa taotled alloleva küsitluse loomist:",
   "request_vote_poll": "sinult palutakse hääletada allolevas küsitluses:",
   "sats": "{{ amount }} satsi",

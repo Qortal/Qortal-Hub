@@ -22,6 +22,9 @@
     "invalid": "Core returned invalid foreign-fee data. Nothing was signed.",
     "review": "Review the AT addresses and fee values below. This approval applies only to this batch."
   },
+  "legacy_save": {
+    "started": "File download started."
+  },
   "local_send": {
     "changed": "The wallet, node, or spendable funds changed. Please review the payment again.",
     "confirming": "Your previous payment is still waiting for network confirmation. Transaction: {{txId}}. No new payment was sent.",
@@ -223,6 +226,10 @@
   },
   "poll": "poll: {{ name }}",
   "provide_recipient_group_id": "please provide a recipient or groupId",
+  "publish_validation": {
+    "invalid_file": "The publish request did not contain a valid file.",
+    "storage_check_failed": "Publishing storage check failed (HTTP {{status}})."
+  },
   "request_create_poll": "you are requesting to create the poll below:",
   "request_vote_poll": "you are being requested to vote on the poll below:",
   "sats": "{{ amount }} sats",

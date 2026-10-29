@@ -22,6 +22,9 @@
     "invalid": "Core返回了无效的外部币种手续费数据。未进行任何签名。",
     "review": "请核对以下AT地址和手续费数值。此次批准仅适用于本批次。"
   },
+  "legacy_save": {
+    "started": "文件下载已开始。"
+  },
   "local_send": {
     "changed": "钱包、节点或可用资金已发生变化。请重新检查付款。",
     "confirming": "您之前的付款仍在等待网络确认。交易：{{txId}}。未发送新的付款。",
@@ -223,6 +226,10 @@
   },
   "poll": "投票：{{ name }}",
   "provide_recipient_group_id": "请提供接收人或群组ID",
+  "publish_validation": {
+    "invalid_file": "发布请求未包含有效文件。",
+    "storage_check_failed": "发布存储空间检查失败（HTTP {{status}}）。"
+  },
   "request_create_poll": "您正在请求创建以下投票：",
   "request_vote_poll": "您被请求参与以下投票：",
   "sats": "{{ amount }} sats",

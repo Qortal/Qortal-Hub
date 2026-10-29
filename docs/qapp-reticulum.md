@@ -16,6 +16,17 @@ Backends use the dedicated Reticulum destination aspect
   message is queued and written.
 - `RNS_CLOSE`: `connectionId`.
 
+For `RNS_REQUEST` and `RNS_SEND`, `payload` can be a JSON value or a top-level
+`ArrayBuffer`, typed array, or `DataView`. Binary views send exactly their
+`byteOffset`/`byteLength` range as raw bytes, including zero-length views;
+multi-byte typed arrays are not converted into arrays of numeric values.
+Binary replies and `RNS_MESSAGE` payloads arrive as `Uint8Array`. The existing
+version 1 `base64` wire encoding and size limits are unchanged. The native encoder
+rejects detached buffers and shared-memory buffers with `RNS_PROTOCOL_ERROR`.
+Blob/File inputs and binary objects nested inside JSON are not part of this
+RNS payload contract; convert binary data to a top-level byte buffer before
+calling these actions.
+
 The host posts `RNS_MESSAGE` and `RNS_CONNECTION_STATE` events to the owning
 Q-App view. Desktop Q-Apps use separate Electron web contents and storage
 partitions; browser and mobile builds retain the iframe bridge. States are
