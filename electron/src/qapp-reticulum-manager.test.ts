@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import {
   QAppReticulumError,
   QAppReticulumManager,
@@ -41,6 +42,143 @@ const bob: QAppReticulumOwner = {
 };
 
 describe('QAppReticulumManager', () => {
+  describe.each(['request', 'send'] as const)(
+    '%s binary payloads',
+    (action) => {
+      const binaryCases = [
+        ['ArrayBuffer', () => new Uint8Array([1, 2, 255]).buffer, [1, 2, 255]],
+        [
+          'cross-realm ArrayBuffer',
+          () => runInNewContext('new Uint8Array([1, 2, 255]).buffer'),
+          [1, 2, 255],
+        ],
+        [
+          'Uint8Array slice',
+          () => new Uint8Array([99, 1, 2, 88]).subarray(1, 3),
+          [1, 2],
+        ],
+        [
+          'DataView slice',
+          () => new DataView(new Uint8Array([99, 1, 2, 88]).buffer, 1, 2),
+          [1, 2],
+        ],
+        [
+          'Uint16Array bytes',
+          () =>
+            new Uint16Array(
+              new Uint8Array([99, 99, 1, 2, 3, 4, 88, 88]).buffer,
+              2,
+              2
+            ),
+          [1, 2, 3, 4],
+        ],
+        [
+          'BigInt64Array bytes',
+          () =>
+            new BigInt64Array(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer),
+          [1, 2, 3, 4, 5, 6, 7, 8],
+        ],
+        [
+          'Buffer slice',
+          () => Buffer.from([99, 1, 2, 88]).subarray(1, 3),
+          [1, 2],
+        ],
+        ['empty ArrayBuffer', () => new ArrayBuffer(0), []],
+        ['empty view', () => new Uint8Array([99]).subarray(1), []],
+        // The backing allocation is oversized; only the selected bytes count.
+        [
+          'small view of large buffer',
+          () => new Uint8Array(new ArrayBuffer(300 * 1024), 100, 2),
+          [0, 0],
+        ],
+      ] as const;
+
+      it.each(binaryCases)('preserves %s', async (_name, create, expected) => {
+        const transport = new FakeTransport();
+        const manager = new QAppReticulumManager(transport);
+        const { connectionId } = await manager.connect(alice, destination);
+        transport.invoke.mockClear();
+        try {
+          const payload = create();
+          if (action === 'request') {
+            await manager.request(alice, {
+              destination,
+              path: '/binary',
+              payload,
+            });
+          } else {
+            await manager.send(alice, connectionId, payload);
+          }
+          expect(transport.invoke).toHaveBeenCalledTimes(1);
+          const [nativeAction, encoded] = transport.invoke.mock.calls[0];
+          expect(nativeAction).toBe(`qapp_rns_${action}`);
+          expect(encoded.encoding).toBe('base64');
+          expect(
+            Array.from(Buffer.from(String(encoded.payloadBase64), 'base64'))
+          ).toEqual(expected);
+        } finally {
+          manager.destroy();
+        }
+      });
+
+      it.each([
+        [
+          'oversized buffer',
+          () => new ArrayBuffer(256 * 1024 + 1),
+          'RNS_MESSAGE_TOO_LARGE',
+        ],
+        [
+          'oversized view',
+          () => new DataView(new ArrayBuffer(256 * 1024 + 1)),
+          'RNS_MESSAGE_TOO_LARGE',
+        ],
+        ['shared buffer', () => new SharedArrayBuffer(2), 'RNS_PROTOCOL_ERROR'],
+        [
+          'shared view',
+          () => new Uint8Array(new SharedArrayBuffer(2)),
+          'RNS_PROTOCOL_ERROR',
+        ],
+        [
+          'detached buffer',
+          () => {
+            const buffer = new ArrayBuffer(2);
+            structuredClone(buffer, { transfer: [buffer] });
+            return buffer;
+          },
+          'RNS_PROTOCOL_ERROR',
+        ],
+        [
+          'detached view',
+          () => {
+            const buffer = new ArrayBuffer(2);
+            const view = new DataView(buffer);
+            structuredClone(buffer, { transfer: [buffer] });
+            return view;
+          },
+          'RNS_PROTOCOL_ERROR',
+        ],
+      ] as const)('rejects %s without sending', async (_name, create, code) => {
+        const transport = new FakeTransport();
+        const manager = new QAppReticulumManager(transport);
+        const { connectionId } = await manager.connect(alice, destination);
+        transport.invoke.mockClear();
+        const submit = (payload: unknown) =>
+          action === 'request'
+            ? manager.request(alice, { destination, path: '/binary', payload })
+            : manager.send(alice, connectionId, payload);
+        try {
+          await expect(submit(create())).rejects.toMatchObject({ code });
+          expect(transport.invoke).not.toHaveBeenCalled();
+          // A failed encode must release request admission and leave the link usable.
+          await submit(new Uint8Array([42]));
+          expect(transport.invoke).toHaveBeenCalledTimes(1);
+        } finally {
+          manager.destroy();
+        }
+      });
+    }
+  );
+
   it('rejects a connect completed after navigation cleanup and preserves its replacement', async () => {
     const transport = new FakeTransport();
     let complete!: (value: any) => void;

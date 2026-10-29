@@ -24,6 +24,7 @@ import {
   type WebContents,
 } from 'electron';
 import electronIsDev from 'electron-is-dev';
+import { openLocalPath } from './desktop-shell';
 import fs from 'fs';
 import net from 'net';
 import os from 'os';
@@ -1821,7 +1822,7 @@ async function revealReticulumConfigInFileExplorer(): Promise<{
       shell.showItemInFolder(configPath);
       return { ok: true, configPath, configDir };
     }
-    const openError = await shell.openPath(configDir);
+    const openError = await openLocalPath(configDir, shell);
     return {
       ok: openError.length === 0,
       error: openError || undefined,

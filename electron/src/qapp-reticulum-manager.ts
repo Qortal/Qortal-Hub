@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
+import { types } from 'util';
 
 export type QAppReticulumState =
   | 'CONNECTING'
@@ -82,16 +83,42 @@ function encodePayload(
   payloadBase64: string;
   encoding: 'json' | 'base64';
 } {
-  const bytes =
-    payload instanceof Uint8Array
-      ? Buffer.from(payload)
-      : Buffer.from(JSON.stringify(payload ?? null), 'utf8');
+  const isBinary = types.isArrayBuffer(payload) || ArrayBuffer.isView(payload);
+  let bytes: Buffer;
+  if (isBinary) {
+    // A view may cover only part of a larger buffer. Send its bytes, not its
+    // backing storage or JSON representation (which loses binary types).
+    try {
+      const buffer = ArrayBuffer.isView(payload) ? payload.buffer : payload;
+      if (!types.isArrayBuffer(buffer)) {
+        throw new QAppReticulumError('RNS_PROTOCOL_ERROR');
+      }
+      if (payload.byteLength > limit) {
+        throw new QAppReticulumError('RNS_MESSAGE_TOO_LARGE');
+      }
+      bytes = Buffer.from(
+        buffer,
+        ArrayBuffer.isView(payload) ? payload.byteOffset : 0,
+        payload.byteLength
+      );
+    } catch (error) {
+      if (error instanceof QAppReticulumError) throw error;
+      // Detached buffers cannot be read. Return a protocol error rather than
+      // leaking a runtime-specific exception or silently sending an empty body.
+      throw new QAppReticulumError('RNS_PROTOCOL_ERROR');
+    }
+  } else {
+    if (types.isSharedArrayBuffer(payload)) {
+      throw new QAppReticulumError('RNS_PROTOCOL_ERROR');
+    }
+    bytes = Buffer.from(JSON.stringify(payload ?? null), 'utf8');
+  }
   if (bytes.byteLength > limit) {
     throw new QAppReticulumError('RNS_MESSAGE_TOO_LARGE');
   }
   return {
     payloadBase64: bytes.toString('base64'),
-    encoding: payload instanceof Uint8Array ? 'base64' : 'json',
+    encoding: isBinary ? 'base64' : 'json',
   };
 }
 

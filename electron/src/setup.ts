@@ -44,6 +44,7 @@ import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
+import { openLocalPath } from './desktop-shell';
 import { installDisplayMediaPicker } from './display-media-picker';
 import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
@@ -6169,7 +6170,7 @@ ipcMain.handle(
           suggestedFileName,
           fallbackFileName: manifest.fileName || 'attachment.bin',
         });
-        const openError = await shell.openPath(openPath);
+        const openError = await openLocalPath(openPath, shell);
         if (openError) {
           return { success: false, error: openError };
         }

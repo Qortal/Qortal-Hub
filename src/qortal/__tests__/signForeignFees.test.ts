@@ -59,11 +59,15 @@ vi.mock('../../utils/decode', async () =>
   (await import('./common')).decodeFactory()
 );
 vi.mock('i18next', async () => (await import('./common')).i18nFactory());
+vi.mock('../../i18n/i18n', async () => (await import('./common')).i18nFactory());
 vi.mock('aes-js', async () => (await import('./common')).aesFactory());
 vi.mock('../../encryption/ed2curve', async () =>
   (await import('./common')).ed2curveFactory()
 );
 vi.mock('../../hooks/useQortalMessageListener', async () =>
+  (await import('./common')).messageListenerFactory()
+);
+vi.mock('../qapp-save-file', async () =>
   (await import('./common')).messageListenerFactory()
 );
 

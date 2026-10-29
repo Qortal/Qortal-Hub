@@ -27,9 +27,9 @@
   },
   "main": "build/src/index.js",
   "scripts": {
-    "build": "npm run build:wallet && tsc && electron-rebuild",
+    "build": "npm run build:wallet && tsc && npm run build:qapp-preload && electron-rebuild",
     "test:reticulum-chat-worker": "npm run build && electron ./scripts/test-reticulum-chat-worker.cjs",
-    "test:main-window-security": "tsc && electron ./scripts/test-main-window-security.cjs",
+    "test:main-window-security": "tsc && npm run build:qapp-preload && electron ./scripts/test-main-window-security.cjs",
     "test:qapp-network-policy": "tsc && electron ./scripts/test-qapp-network-policy.cjs",
     "electron:start-live": "node ./live-runner.js",
     "electron:start": "npm run build:private-transport && npm run build && electron --inspect=5858 ./",
@@ -52,6 +52,9 @@
     "bundle:reticulum-venv": "node ./scripts/bundle-reticulum-runtime.mjs",
     "build:private-transport": "node ./scripts/build-private-transport.mjs",
     "generate:mesh-network-identity": "python3 -c \"import RNS; RNS.Identity().to_file('resources/mesh-network.identity')\"",
+    "build:qapp-preload": "node ./scripts/build-qapp-preload.mjs",
+    "test:qapp-binary": "npm run build:qapp-preload && electron ./scripts/test-qapp-binary.cjs",
+    "test:reticulum-resource-open": "electron ./scripts/test-reticulum-resource-open.cjs",
     "build:wallet": "node ./scripts/build-wallet-engine.mjs"
   },
   "dependencies": {

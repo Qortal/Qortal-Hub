@@ -53,7 +53,11 @@ import {
   getNameInfo,
   uint8ArrayToObject,
 } from '../encryption/encryption.ts';
-import { showSaveFilePicker } from '../hooks/useQortalMessageListener.tsx';
+import { showSaveFilePicker } from './qapp-save-file';
+import {
+  checkPublishStorage,
+  requirePublishFile,
+} from '../qdn/publish/upload-validation';
 import {
   codedQortalRequestError,
   USER_DECLINED_REQUEST_CODE,
@@ -2123,19 +2127,14 @@ export const publishMultipleQDNResources = async (
 
   const totalFileSize = resources.reduce((acc, resource) => {
     const file = resource?.file;
-    if (file && file?.size && !isNaN(file?.size)) {
+    if (file != null) {
+      requirePublishFile(file);
       return acc + file.size;
     }
     return acc;
   }, 0);
   if (totalFileSize > 0) {
-    const urlCheck = `/arbitrary/check/tmp?totalSize=${totalFileSize}`;
-
-    const checkEndpoint = await createEndpoint(urlCheck);
-    const checkRes = await fetch(checkEndpoint);
-    if (!checkRes.ok) {
-      throw new Error('Not enough space on your hard drive');
-    }
+    await checkPublishStorage(totalFileSize, createEndpoint);
   }
 
   const encrypt = data?.encrypt;
@@ -3008,7 +3007,10 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
 
 export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
   try {
-    if (!data?.filename) throw new Error('Missing filename');
+    if (!data?.filename)
+      throw new Error(i18n.t('question:message.error.missing_fields', {
+        fields: 'filename', postProcess: 'capitalizeFirstChar',
+      }));
 
     // Handle location-based downloads (streaming approach)
     if (data?.location) {
@@ -3031,6 +3033,8 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     }
     const filename = data.filename;
     const blob = data.blob;
+    if (!(blob instanceof Blob))
+      throw new Error(i18n.t('question:stream_save.failed'));
 
     const resPermission = await getUserPermission(
       {
@@ -3073,10 +3077,9 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         };
       }
 
-      showSaveFilePicker(
+      await showSaveFilePicker(
         {
           filename,
-          mimeType,
           blob,
         },
         snackMethods

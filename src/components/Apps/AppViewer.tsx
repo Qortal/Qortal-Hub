@@ -34,7 +34,8 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         isDevMode ? 'APP' : app?.service,
         app?.identifier,
         nativeViewRef,
-        nativeGuestActive
+        nativeGuestActive,
+        guestPreloadDocument
       );
 
     const [url, setUrl] = useState('');
@@ -116,9 +117,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       void window.electronAPI.qappGuestRelease(guestOwner).catch(() => undefined);
     }, [guestOwner]);
 
+    // Failure removes the webview; Retry mounts a new element with the same
+    // config and URL, so reinstall the listeners and src after either change.
     useLayoutEffect(() => {
       const view = nativeViewRef.current;
-      if (!nativeConfig || !view) return;
+      if (nativeGuestFailed || !nativeConfig || !view) return;
       const preloadHello = (event) => {
         if (event.target !== view) return;
         if (event.channel === 'qapp:error') {
@@ -153,7 +156,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         view.removeEventListener('render-process-gone', guestGone);
         view.removeEventListener('did-fail-load', loadFailed);
       };
-    }, [nativeConfig, guestOwner, defaultUrl]);
+    }, [nativeConfig, guestOwner, defaultUrl, nativeGuestFailed]);
 
     useEffect(() => {
       if (nativeGuestActive && guestPreloadDocument)

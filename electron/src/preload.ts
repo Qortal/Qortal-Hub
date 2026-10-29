@@ -15,6 +15,7 @@ import {
   type GroupCallJoinIpcArguments,
 } from './group-call-ipc-contract';
 import { isMainWindowUrl } from './main-window-policy';
+import { openExternalHttp } from './desktop-shell';
 
 // A preload runs again after navigation. Never expose shell capabilities to
 // remote pages, opaque documents, or subframes, even if navigation is forced
@@ -454,21 +455,9 @@ try {
   // Expose Electron API
   contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url: string) => {
-      if (typeof url !== 'string') {
-        return;
-      }
-      try {
-        const parsed = new URL(url.trim());
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          return;
-        }
-        if (!parsed.hostname) {
-          return;
-        }
-        void shell.openExternal(parsed.toString());
-      } catch {
-        // Invalid URL
-      }
+      void openExternalHttp(url, shell, (error) => {
+        loggerError('Failed to open external website', error);
+      });
     },
     setAllowedDomains: (domains) => {
       ipcRenderer.send('set-allowed-domains', domains);

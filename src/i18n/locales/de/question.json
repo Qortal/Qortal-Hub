@@ -22,6 +22,9 @@
     "invalid": "Core hat ungültige Daten zu Fremdwährungsgebühren zurückgegeben. Es wurde nichts signiert.",
     "review": "Prüfen Sie die AT-Adressen und Gebührenwerte unten. Diese Zustimmung gilt nur für diesen Stapel."
   },
+  "legacy_save": {
+    "started": "Der Dateidownload wurde gestartet."
+  },
   "local_send": {
     "changed": "Wallet, Node oder verfügbare Mittel haben sich geändert. Prüfe die Zahlung erneut.",
     "confirming": "Ihre vorherige Zahlung wartet noch auf die Netzwerkbestätigung. Transaktion: {{txId}}. Es wurde keine neue Zahlung gesendet.",
@@ -223,6 +226,10 @@
   },
   "poll": "Abstimmung: {{ name }}",
   "provide_recipient_group_id": "Bitte geben Sie einen Empfänger oder groupId an",
+  "publish_validation": {
+    "invalid_file": "Die Veröffentlichungsanfrage enthielt keine gültige Datei.",
+    "storage_check_failed": "Die Speicherprüfung für die Veröffentlichung ist fehlgeschlagen (HTTP {{status}})."
+  },
   "request_create_poll": "Sie beantragen, die folgende Abstimmung zu erstellen:",
   "request_vote_poll": "Sie werden gebeten, über die folgende Abstimmung abzustimmen:",
   "sats": "{{ amount }} Sats",

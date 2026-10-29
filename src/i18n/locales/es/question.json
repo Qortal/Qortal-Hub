@@ -22,6 +22,9 @@
     "invalid": "Core devolvió datos de comisiones de monedas extranjeras no válidos. No se firmó nada.",
     "review": "Revise las direcciones AT y los valores de las comisiones a continuación. Esta aprobación solo se aplica a este lote."
   },
+  "legacy_save": {
+    "started": "Se ha iniciado la descarga del archivo."
+  },
   "local_send": {
     "changed": "La cartera, el nodo o los fondos disponibles han cambiado. Revisa el pago de nuevo.",
     "confirming": "Su pago anterior aún espera la confirmación de la red. Transacción: {{txId}}. No se envió ningún pago nuevo.",
@@ -223,6 +226,10 @@
   },
   "poll": "votación: {{ name }}",
   "provide_recipient_group_id": "por favor proporciona un destinatario o groupId",
+  "publish_validation": {
+    "invalid_file": "La solicitud de publicación no contenía un archivo válido.",
+    "storage_check_failed": "Falló la comprobación de almacenamiento para publicar (HTTP {{status}})."
+  },
   "request_create_poll": "estás solicitando crear la siguiente votación:",
   "request_vote_poll": "se te solicita votar en la siguiente votación:",
   "sats": "{{ amount }} sats",

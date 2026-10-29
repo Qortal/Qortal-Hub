@@ -5,6 +5,40 @@ It does not download URLs, decrypt data, inspect file formats, or verify an app'
 claims. The app remains responsible for its protocol and integrity checks.
 Legacy `SAVE_FILE` remains unchanged. An updated desktop Hub is required.
 
+## Compatibility with legacy Q-Apps
+
+`SAVE_FILE` with `blob`, `PUBLISH_QDN_RESOURCE` with `file`, and
+`PUBLISH_MULTIPLE_QDN_RESOURCES` with nested resource files remain supported.
+Q-Apps do not need to convert files to `data64` or migrate to `FILE_SAVE_*` to
+work in isolated desktop webviews. Blob/File inputs to `ENCRYPT_DATA`,
+`ENCRYPT_QORTAL_GROUP_DATA`, `ENCRYPT_DATA_WITH_SHARING_KEY`, and
+`SHOW_PDF_READER` use the same compatibility transport. Existing `data64`
+inputs are also supported.
+
+Hub transports Blob/File bytes internally in acknowledged 256 KiB binary chunks
+and rebuilds the objects before invoking the existing handlers. File names, MIME
+types and last-modified timestamps are preserved, including empty files. This
+avoids base64 expansion and whole-file ArrayBuffers at the IPC boundary. The
+bridge allows up to 8 GiB of unique Blob/File data and 4096 binary objects per
+request. File reads and chunk acknowledgements time out after 60 seconds, so a
+stalled read cannot block later requests. Committed navigation or guest closure
+discards incomplete transfers; cancelled navigation and download links keep the
+current document connected. These are transport limits, not changes to QDN's
+service limits or permission requirements.
+
+Legacy requests still reconstruct complete Blobs in Chromium storage and retain
+the existing handler's memory requirements. They are not a guarantee of constant
+memory for multi-gigabyte files, particularly when encryption requires base64.
+Use the streaming-save API below when producing a download incrementally; it is
+an additional desktop API, not a replacement for legacy `SAVE_FILE`. Keep a
+legacy fallback when supporting older Hubs or other clients. Successful legacy
+`SAVE_FILE` means the download was initiated, not that disk writing has finished.
+
+For the isolated-webview regression test, run `cd electron && npm run test:qapp-binary`
+(with `ELECTRON_RUN_AS_NODE` unset). It tests actual Electron serialization,
+metadata and bytes, nested/empty files, concurrent and early requests, interrupted
+transfers, cancelled download navigation, response serialization failures, and reload.
+
 ## Permission and API
 
 Call `FILE_SAVE_OPEN` from a deliberate Download/Save action. Hub presents a
@@ -14,15 +48,27 @@ are not a guarantee of content or safety. Approval opens the native save dialog.
 Approval is per save, never a session-wide permission. Hub never auto-opens files.
 
 ```js
-const { saveId } = await qortalRequestWithTimeout({
-  action: 'FILE_SAVE_OPEN', filename: 'example.zip', size: expectedBytes
-}, 330000);
+const { saveId } = await qortalRequestWithTimeout(
+  {
+    action: 'FILE_SAVE_OPEN',
+    filename: 'example.zip',
+    size: expectedBytes,
+  },
+  330000
+);
 try {
   let offset = 0;
-  for await (const data of verifiedChunks) { // Uint8Array, max 256 KiB
-    await qortalRequestWithTimeout({
-      action: 'FILE_SAVE_WRITE', saveId, offset, data
-    }, 60000);
+  for await (const data of verifiedChunks) {
+    // Uint8Array, max 256 KiB
+    await qortalRequestWithTimeout(
+      {
+        action: 'FILE_SAVE_WRITE',
+        saveId,
+        offset,
+        data,
+      },
+      60000
+    );
     offset += data.byteLength;
   }
   await verifyCompleteFile();

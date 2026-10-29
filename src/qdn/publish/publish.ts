@@ -9,6 +9,7 @@ import { getData } from '../../utils/chromeStorage';
 import { executeEvent } from '../../utils/events';
 import { fileToBase64 } from '../../utils/fileReading';
 import aesjs from 'aes-js';
+import { checkPublishStorage, requirePublishFile } from './upload-validation';
 
 async function encryptAesCtrChunkWithFallback(
   keyBytes,
@@ -464,6 +465,7 @@ export const publishData = async ({
     }
 
     const file = data;
+    requirePublishFile(file);
 
     if (file?.size === 0) {
       postBody = await fileToBase64(file);
@@ -490,13 +492,7 @@ export const publishData = async ({
         service,
       });
     }
-    const urlCheck = `/arbitrary/check/tmp?totalSize=${file.size}`;
-
-    const checkEndpoint = await createEndpoint(urlCheck);
-    const checkRes = await fetch(checkEndpoint);
-    if (!checkRes.ok) {
-      throw new Error('Not enough space on your hard drive');
-    }
+    await checkPublishStorage(file.size, createEndpoint);
 
     const chunkUrl = uploadDataUrl + `/chunk`;
     const chunkSize = 5 * 1024 * 1024; // 5MB
