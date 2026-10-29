@@ -22,6 +22,7 @@ const virtualizer = vi.hoisted(() => ({
       start: index * 80,
     })),
   isScrolling: false,
+  useAnimationFrameWithResizeObserver: false,
   getOffsetForIndex: vi.fn(
     (index: number, align: 'start' | 'end') => [index * 80, align] as const
   ),
@@ -64,11 +65,14 @@ vi.mock('@tanstack/react-virtual', () => ({
   },
   useVirtualizer: (options: {
     count: number;
+    useAnimationFrameWithResizeObserver?: boolean;
     rangeExtractor?: typeof virtualizer.rangeExtractor;
     shouldAdjustScrollPositionOnItemSizeChange?: typeof virtualizer.shouldAdjustScrollPositionOnItemSizeChange;
   }) => {
     const { count } = options;
     virtualizer.count = count;
+    virtualizer.useAnimationFrameWithResizeObserver =
+      options.useAnimationFrameWithResizeObserver ?? false;
     virtualizer.shouldAdjustScrollPositionOnItemSizeChange =
       options.shouldAdjustScrollPositionOnItemSizeChange ?? null;
     virtualizer.rangeExtractor = options.rangeExtractor ?? null;
@@ -241,6 +245,86 @@ describe('Reticulum ChatList channel handoff', () => {
       />
     );
     expect(virtualizer.measureElement).not.toHaveBeenCalled();
+  });
+
+  it('remeasures a welcome when membership validation changes, before an animation frame', () => {
+    const initialMessages = [
+      message('message-1'),
+      message('message-2', 'Qnew', {
+        groupId: 1,
+        qchatSystem: {
+          type: 'group-welcome',
+          groupId: 1,
+          joinedAddress: 'Qnew',
+          joinedAt: 123,
+        },
+      }),
+      message('message-3'),
+    ];
+    const props = {
+      ...baseProps,
+      initialMessages,
+      chatId: 'group-1:welcome-channel',
+      reticulumMemberJoinedByAddress: { Qnew: 123 },
+    };
+    const { container, rerender } = render(
+      <ChatList {...props} reticulumMemberRolesReady={false} />
+    );
+    virtualizer.measureElement.mockClear();
+    rerender(<ChatList {...props} reticulumMemberRolesReady />);
+    const welcomeRow = container.querySelector('[data-index="1"]');
+    expect(virtualizer.measureElement.mock.calls).toEqual([[welcomeRow]]);
+    // A deferred ResizeObserver entry could restore the old hidden-row size
+    // even after this synchronous measurement has corrected the next row.
+    expect(virtualizer.useAnimationFrameWithResizeObserver).toBe(false);
+
+    virtualizer.measureElement.mockClear();
+    rerender(
+      <ChatList
+        {...props}
+        reticulumMemberRolesReady
+        reticulumMemberJoinedByAddress={{ Qnew: 123, Qunrelated: 456 }}
+      />
+    );
+    expect(virtualizer.measureElement).not.toHaveBeenCalled();
+
+    rerender(
+      <ChatList
+        {...props}
+        reticulumMemberRolesReady
+        reticulumMemberJoinedByAddress={{ Qnew: 456 }}
+      />
+    );
+    expect(virtualizer.measureElement.mock.calls).toEqual([[welcomeRow]]);
+  });
+
+  it('remeasures an unread divider and the following newly ungrouped header', async () => {
+    const initialMessages = [
+      message('message-1'),
+      message('message-2'),
+      message('message-3'),
+    ];
+    const props = {
+      ...baseProps,
+      initialMessages,
+      chatId: 'group-1:divider-channel',
+    };
+    const { container, rerender } = render(<ChatList {...props} />);
+    virtualizer.measureElement.mockClear();
+    rerender(
+      <ChatList
+        {...props}
+        reticulumUnreadCount={2}
+        reticulumReadEntryToken={1}
+      />
+    );
+    // The unread boundary is selected on the positioning frame. Measuring the
+    // resulting divider/header change must happen in that React commit.
+    await flushPositioning();
+    expect(virtualizer.measureElement.mock.calls).toEqual([
+      [container.querySelector('[data-index="1"]')],
+      [container.querySelector('[data-index="2"]')],
+    ]);
   });
 
   it('does not remeasure reaction rows while replacing a channel window', () => {
