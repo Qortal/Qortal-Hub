@@ -224,7 +224,7 @@ export const ChatList = ({
   const reticulumFollowBottomRef = useRef(false);
   const reticulumReadingPositionLockedRef = useRef(false);
   const reticulumReaderGestureRef = useRef(false);
-  const reticulumReactionLayoutRef = useRef<{
+  const reticulumRowLayoutRef = useRef<{
     chatIdentity: string;
     signatures: Map<string, string>;
   }>({ chatIdentity: '', signatures: new Map() });
@@ -425,7 +425,9 @@ export const ChatList = ({
         : 0,
     rangeExtractor: extractVirtualRows,
     overscan: reticulumChatEnabled ? 5 : 10,
-    useAnimationFrameWithResizeObserver: reticulumChatEnabled,
+    // Deliver resize measurements immediately. Deferring a captured border-box
+    // size can overwrite a newer before-paint measurement after a row changes.
+    useAnimationFrameWithResizeObserver: false,
     // Keep the visible Reticulum content anchored when a reply preview or image
     // settles to a different measured height. If the reader was pinned to the
     // end, preserve that anchor even when the final row itself grows (for
@@ -615,7 +617,7 @@ export const ChatList = ({
         }
         previousOffset = nextOffset;
 
-        // Dynamic rows are measured through an animation-frame ResizeObserver.
+        // Dynamic rows are measured through ResizeObserver.
         // Do not reveal based only on a stable estimated offset: the real row
         // must be mounted and aligned for consecutive frames. The attempt cap
         // prevents an unexpected virtualizer failure from hiding chat forever.
@@ -1589,7 +1591,7 @@ export const ChatList = ({
       // runs. Do not measure that stale combination of rows and references.
       return;
     }
-    const previous = reticulumReactionLayoutRef.current;
+    const previous = reticulumRowLayoutRef.current;
     const nextSignatures = new Map<string, string>();
     const changedIndexes: number[] = [];
     const canCompare =
@@ -1597,7 +1599,35 @@ export const ChatList = ({
 
     processedRows.forEach((row, index) => {
       const key = String(getMessageKey(messages[index], index));
-      const signature = row.reactionLayoutSignature;
+      const message = row.message;
+      const welcome =
+        message?.qchatSystem?.type === 'group-welcome'
+          ? message.qchatSystem
+          : message?.decryptedData?.qchatSystem?.type === 'group-welcome'
+            ? message.decryptedData.qchatSystem
+            : null;
+      // Track the inputs that change welcome visibility, without changing the
+      // membership validation performed by MessageItem. Unrelated membership
+      // updates must not cause every mounted message to be measured again.
+      const signature = JSON.stringify([
+        row.reactionLayoutSignature,
+        Boolean(message?.divide),
+        isReticulumMessageContinuation(
+          processedRows[index - 1]?.message,
+          message
+        ),
+        welcome
+          ? [
+              reticulumMemberRolesReady,
+              reticulumMemberJoinedByAddress?.[message?.sender],
+              message?.sender,
+              message?.groupId,
+              welcome.joinedAddress,
+              welcome.groupId,
+              welcome.joinedAt,
+            ]
+          : null,
+      ]);
       nextSignatures.set(key, signature);
       if (
         canCompare &&
@@ -1608,7 +1638,7 @@ export const ChatList = ({
       }
     });
 
-    reticulumReactionLayoutRef.current = {
+    reticulumRowLayoutRef.current = {
       chatIdentity,
       signatures: nextSignatures,
     };
@@ -1617,7 +1647,8 @@ export const ChatList = ({
     const scrollElement = parentRef.current as HTMLDivElement | null;
     if (!scrollElement) return;
 
-    // Reaction rows change a virtual message's real height. Measure only the
+    // Reactions, unread dividers, grouped headers and welcome visibility can
+    // change a virtual message's real height. Measure only the
     // mounted rows that actually changed, before paint, so the following
     // absolute-positioned row never uses the previous cached height. Rows from
     // a new channel/history/search window establish a baseline above and do
@@ -1635,6 +1666,8 @@ export const ChatList = ({
     messages,
     processedRows,
     reticulumChatEnabled,
+    reticulumMemberJoinedByAddress,
+    reticulumMemberRolesReady,
     rowVirtualizer,
     tempMessages,
   ]);
