@@ -726,6 +726,7 @@
   "payment": "支付",
   "payment_notification": "付款通知",
   "payments_count": "付款 ({{count}})",
+  "pdf_viewer": "PDF 阅读器",
   "poll_embed": "嵌入民意测验",
   "port": "港口",
   "presence": {

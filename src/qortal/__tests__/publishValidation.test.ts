@@ -85,9 +85,22 @@ vi.mock('../qapp-save-file', async () =>
   (await import('./common')).messageListenerFactory()
 );
 
-import { publishMultipleQDNResources } from '../get';
+import {
+  publishMultipleQDNResources,
+  publishQDNResource,
+  saveFile,
+} from '../get';
 import { isRunningGateway } from '../qortal-requests';
-import { createEndpoint } from '../../background/background';
+import {
+  createEndpoint,
+  getFee,
+  getBalanceInfo,
+} from '../../background/background';
+import { getNameInfo, getAllUserNames } from '../../encryption/encryption';
+import { publishData } from '../../qdn/publish/publish';
+import { showSaveFilePicker } from '../qapp-save-file';
+import { simulatePermission } from './common';
+import { QAppFileReference } from '../qapp-file-reference';
 
 beforeEach(() => {
   vi.mocked(isRunningGateway).mockResolvedValue(false);
@@ -99,6 +112,68 @@ afterEach(() => {
 });
 
 describe('multi-resource publish input validation', () => {
+  it.each(['single', 'multiple', 'save'])(
+    'does not operate on native files after permission denial (%s)',
+    async (action) => {
+      const call = vi.fn();
+      const file = new QAppFileReference(
+        { reference: {}, size: 31, type: 'video/mp4' },
+        0,
+        call
+      );
+      vi.mocked(getFee).mockResolvedValue({ fee: '0.01' } as any);
+      vi.mocked(getNameInfo).mockResolvedValue('test');
+      vi.mocked(getAllUserNames).mockResolvedValue(['test']);
+      vi.mocked(getBalanceInfo).mockResolvedValue(100);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+      simulatePermission(false);
+      const promise =
+        action === 'single'
+          ? publishQDNResource(
+              { name: 'test', service: 'VIDEO', file },
+              null,
+              true
+            )
+          : action === 'multiple'
+            ? publishMultipleQDNResources(
+                { resources: [{ service: 'VIDEO', file }] },
+                null,
+                true,
+                {}
+              )
+            : saveFile({ filename: 'video.mp4', blob: file }, null, true, {});
+      await expect(promise).rejects.toThrow(
+        action === 'save'
+          ? 'question:message.generic.user_declined_save_file'
+          : 'question:message.generic.user_declined_request'
+      );
+      expect(call).not.toHaveBeenCalled();
+      expect(publishData).not.toHaveBeenCalled();
+      expect(showSaveFilePicker).not.toHaveBeenCalled();
+    }
+  );
+  it('uses the native file metadata without reading bytes before permission', async () => {
+    const call = vi.fn();
+    const file = new QAppFileReference(
+      { reference: {}, size: 31, type: 'video/mp4' },
+      0,
+      call
+    );
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 400 });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(
+      publishMultipleQDNResources(
+        { resources: [{ service: 'VIDEO', file }] },
+        null,
+        true,
+        {}
+      )
+    ).rejects.toThrow('question:publish_validation.storage_check_failed');
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      '/arbitrary/check/tmp?totalSize=31'
+    );
+    expect(call).not.toHaveBeenCalled();
+  });
   it('rejects files damaged by IPC before making a storage request', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

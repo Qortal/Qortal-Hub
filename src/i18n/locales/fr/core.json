@@ -726,6 +726,7 @@
   "payment": "paiement",
   "payment_notification": "Notification de paiement",
   "payments_count": "Paiements ({{count}})",
+  "pdf_viewer": "Lecteur PDF",
   "poll_embed": "sondage",
   "port": "port",
   "presence": {

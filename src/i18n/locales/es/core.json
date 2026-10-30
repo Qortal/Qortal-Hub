@@ -726,6 +726,7 @@
   "payment": "pago",
   "payment_notification": "notificación de pago",
   "payments_count": "Pagos ({{count}})",
+  "pdf_viewer": "Visor de PDF",
   "poll_embed": "encuesta",
   "port": "puerto",
   "presence": {

@@ -18,3 +18,19 @@ await build({
   external: ['electron'],
   target: 'chrome140',
 });
+
+await build({
+  entryPoints: [
+    fileURLToPath(
+      new URL('../src/qapp-file-worker-preload.ts', import.meta.url)
+    ),
+  ],
+  outfile: fileURLToPath(
+    new URL('../build/src/qapp-file-worker-preload.js', import.meta.url)
+  ),
+  bundle: true,
+  platform: 'browser',
+  format: 'cjs',
+  external: ['electron'],
+  target: 'chrome140',
+});

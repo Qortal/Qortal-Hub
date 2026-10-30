@@ -726,6 +726,7 @@
   "payment": "maksu",
   "payment_notification": "maksuilmoitus",
   "payments_count": "Maksut ({{count}})",
+  "pdf_viewer": "PDF-katseluohjelma",
   "poll_embed": "kyselyn upotus",
   "port": "portti",
   "presence": {

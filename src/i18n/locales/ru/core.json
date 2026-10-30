@@ -728,6 +728,7 @@
   "payment": "оплата",
   "payment_notification": "уведомление о платеже",
   "payments_count": "Платежи ({{count}})",
+  "pdf_viewer": "Просмотр PDF",
   "poll_embed": "Опрос встроен",
   "port": "порт",
   "presence": {

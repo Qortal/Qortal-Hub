@@ -28,6 +28,13 @@ if (!process.isMainFrame || !isMainWindowUrl(window.location.href, shellUrl)) {
   throw new Error('Hub preload is restricted to the main application document');
 }
 
+// Transfer only the capability port from main. File bytes remain in the worker's
+// Q-App session; this window receives metadata and authorized operation replies.
+ipcRenderer.on('qappFiles:control', (event, metadata) => {
+  window.postMessage({ type: 'qappFiles:control', ...metadata },
+    window.location.origin, event.ports);
+});
+
 // Sandbox-safe minimal Capacitor bridge. The repo's electron-plugins module is
 // currently empty, so we only need to preserve the platform marker here.
 contextBridge.exposeInMainWorld('CapacitorCustomPlatform', {

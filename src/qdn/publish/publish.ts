@@ -10,6 +10,7 @@ import { executeEvent } from '../../utils/events';
 import { fileToBase64 } from '../../utils/fileReading';
 import aesjs from 'aes-js';
 import { checkPublishStorage, requirePublishFile } from './upload-validation';
+import { isQAppFileReference } from '../../qortal/qapp-file-reference';
 
 async function encryptAesCtrChunkWithFallback(
   keyBytes,
@@ -118,10 +119,20 @@ async function reusablePostStream(endpoint, _body) {
   return response; // return the actual response so calling code can use response.ok
 }
 
-async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
+async function uploadChunkWithRetry(
+  endpoint,
+  formData,
+  index,
+  maxRetries = 3,
+  remoteUpload?
+) {
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
+      if (remoteUpload) {
+        await remoteUpload(await createEndpoint(endpoint));
+        return;
+      }
       const response = await reusablePostStream(endpoint, formData);
       if (!response.ok) {
         const errorText = await response.text();
@@ -227,7 +238,7 @@ export const publishData = async ({
   const getArbitraryFee = async () => {
     const timestamp = Date.now();
 
-    let fee = await reusableGet(
+    const fee = await reusableGet(
       `/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`
     );
 
@@ -288,7 +299,7 @@ export const publishData = async ({
   };
 
   const signAndProcessWithFee = async (transactionBytesBase58: string) => {
-    let convertedBytesBase58 = await convertBytesForSigning(
+    const convertedBytesBase58 = await convertBytesForSigning(
       transactionBytesBase58
     );
 
@@ -305,7 +316,7 @@ export const publishData = async ({
       publicKey: uint8PublicKey,
     };
 
-    let signedArbitraryBytes = signArbitraryWithFee(
+    const signedArbitraryBytes = signArbitraryWithFee(
       transactionBytesBase58,
       convertedBytesBase58,
       keyPair
@@ -324,7 +335,7 @@ export const publishData = async ({
   };
 
   const validate = async () => {
-    let validNameRes = await validateName(registeredName);
+    const validNameRes = await validateName(registeredName);
 
     if (validNameRes.error) {
       throw new Error('Name not found');
@@ -343,7 +354,7 @@ export const publishData = async ({
       }
     }
 
-    let transactionBytes = await uploadData(registeredName, data, fee);
+    const transactionBytes = await uploadData(registeredName, data, fee);
     if (!transactionBytes || transactionBytes.error) {
       throw new Error(transactionBytes?.message || 'Error when uploading');
     } else if (transactionBytes.includes('Error 500 Internal Server Error')) {
@@ -522,36 +533,50 @@ export const publishData = async ({
       const start = index * chunkSize;
       const end = Math.min(start + chunkSize, file.size);
 
-      const rawChunkBlob = file.slice(start, end);
-
-      let chunkToUpload;
-
-      if (encryption == null) {
-        // NO ENCRYPTION —
-        chunkToUpload = rawChunkBlob;
-      } else {
-        //  ENCRYPTION ENABLED — AES-CTR encrypt this chunk
-        const rawBytes = new Uint8Array(await rawChunkBlob.arrayBuffer());
-
-        const blockOffset = BigInt(bytesProcessed >> 4);
-
-        const encryptedBytes = await encryptAesCtrChunkWithFallback(
-          keyBytes,
-          ivBytes,
-          blockOffset,
-          rawBytes
+      if (isQAppFileReference(file)) {
+        await uploadChunkWithRetry(chunkUrl, null, index, 3, (endpoint) =>
+          file.upload({
+            start,
+            end,
+            index,
+            endpoint,
+            ...(encryption == null
+              ? {}
+              : { encryption: { key: keyBytes, iv: ivBytes } }),
+          })
         );
+      } else {
+        const rawChunkBlob = file.slice(start, end);
 
-        chunkToUpload = new Blob([encryptedBytes]);
-        bytesProcessed += rawBytes.length;
+        let chunkToUpload;
+
+        if (encryption == null) {
+          // NO ENCRYPTION —
+          chunkToUpload = rawChunkBlob;
+        } else {
+          //  ENCRYPTION ENABLED — AES-CTR encrypt this chunk
+          const rawBytes = new Uint8Array(await rawChunkBlob.arrayBuffer());
+
+          const blockOffset = BigInt(bytesProcessed) / 16n;
+
+          const encryptedBytes = await encryptAesCtrChunkWithFallback(
+            keyBytes,
+            ivBytes,
+            blockOffset,
+            rawBytes
+          );
+
+          chunkToUpload = new Blob([encryptedBytes]);
+          bytesProcessed += rawBytes.length;
+        }
+
+        // Upload the (encrypted or raw) chunk
+        const formData = new FormData();
+        formData.append('chunk', chunkToUpload, file.name);
+        formData.append('index', index);
+
+        await uploadChunkWithRetry(chunkUrl, formData, index);
       }
-
-      // Upload the (encrypted or raw) chunk
-      const formData = new FormData();
-      formData.append('chunk', chunkToUpload, file.name);
-      formData.append('index', index);
-
-      await uploadChunkWithRetry(chunkUrl, formData, index);
 
       if (appInfo?.tabId) {
         executeEvent('receiveChunks', {

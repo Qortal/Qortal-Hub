@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import FileSaver from 'file-saver';
 import { showSaveFilePicker } from './qapp-save-file';
+import { QAppFileReference } from './qapp-file-reference';
 
 vi.mock('file-saver', () => ({ default: { saveAs: vi.fn() } }));
 vi.mock('../i18n/i18n', () => ({ default: { t: (key: string) => key } }));
@@ -11,6 +12,22 @@ function snacks() {
 }
 
 describe('legacy SAVE_FILE download initiation', () => {
+  it('saves a native reference without constructing a local Blob or invoking FileSaver', async () => {
+    vi.mocked(FileSaver.saveAs).mockClear();
+    const call = vi.fn().mockResolvedValue(null);
+    const blob = new QAppFileReference(
+      { reference: {}, size: 8, type: 'text/plain' },
+      0,
+      call
+    );
+    await showSaveFilePicker({ filename: 'hello.txt', blob }, snacks());
+    expect(call).toHaveBeenCalledExactlyOnceWith({
+      kind: 'save',
+      file: 0,
+      filename: 'hello.txt',
+    });
+    expect(FileSaver.saveAs).not.toHaveBeenCalled();
+  });
   it('passes the original Blob to FileSaver and reports initiation, not completed saving', async () => {
     const blob = new Blob(['hello'], { type: 'text/plain' });
     const ui = snacks();

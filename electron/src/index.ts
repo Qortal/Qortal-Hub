@@ -510,6 +510,11 @@ const audioSurfaceRendererScheme = buildAudioSurfaceScheme(
 
 protocol.registerSchemesAsPrivileged([
   {
+    scheme: 'qapp-file-worker',
+    privileges: { standard: true, secure: true, supportFetchAPI: true,
+      corsEnabled: true },
+  },
+  {
     scheme: capacitorRendererScheme,
     privileges: {
       standard: true,
