@@ -3,6 +3,7 @@ import { attachQAppRequestBridge } from './qapp-guest-request-bridge';
 
 class Guest extends EventTarget {
   isConnected = true;
+  getWebContentsId = () => 42;
   send = vi.fn();
   emit(type: string, values: any) {
     const event = new Event(type);
@@ -53,21 +54,25 @@ describe('guest request lifecycle', () => {
       const view = new Guest();
       const listener = vi.fn(async () => undefined);
       const dispose = attachQAppRequestBridge(view, 'current', listener);
-      const reference = {};
-      view.emit('ipc-message', {
-        channel: 'qapp:binary',
-        args: [
-          {
+      const port = {
+        postMessage: vi.fn(),
+        close: vi.fn(),
+        addEventListener: vi.fn(),
+      } as any;
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          source: window,
+          origin: window.location.origin,
+          data: {
+            type: 'qappFiles:control',
+            guestId: 42,
             documentId: 'current',
             requestId: 1,
-            step: 0,
-            kind: 'start',
-            data: { blob: reference },
-            files: [{ reference, type: 'text/plain', size: 0 }],
           },
-        ],
-      });
-      expect(view.send).toHaveBeenCalledTimes(1);
+          ports: [port],
+        })
+      );
+      expect(view.send).not.toHaveBeenCalled();
       if (reason === 'cleanup') dispose();
       else if (reason === 'new-document')
         view.emit('ipc-message', {
@@ -75,20 +80,14 @@ describe('guest request lifecycle', () => {
           args: [{ documentId: 'next' }],
         });
       else view.emit(reason, {});
-      view.emit('ipc-message', {
-        channel: 'qapp:binary',
-        args: [
-          {
-            documentId: 'current',
-            requestId: 1,
-            step: 1,
-            kind: 'finish',
-          },
-        ],
+      expect(port.postMessage).toHaveBeenCalledWith({
+        kind: 'release',
+        completed: false,
       });
+      expect(port.close).toHaveBeenCalledOnce();
       view.request();
       expect(listener).not.toHaveBeenCalled();
-      expect(view.send).toHaveBeenCalledTimes(1);
+      expect(view.send).not.toHaveBeenCalled();
       dispose();
     }
   );

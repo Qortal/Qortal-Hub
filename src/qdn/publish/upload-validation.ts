@@ -1,7 +1,13 @@
 import i18n from '../../i18n/i18n';
+import {
+  isQAppFile,
+  type QAppFileReference,
+} from '../../qortal/qapp-file-reference';
 
-export function requirePublishFile(value: unknown): asserts value is Blob {
-  if (!(value instanceof Blob)) {
+export function requirePublishFile(
+  value: unknown
+): asserts value is Blob | QAppFileReference {
+  if (!isQAppFile(value)) {
     throw new Error(i18n.t('question:publish_validation.invalid_file'));
   }
 }

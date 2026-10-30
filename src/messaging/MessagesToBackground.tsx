@@ -1,4 +1,5 @@
 import { TIME_MINUTES_10_IN_MILLISECONDS } from '../constants/constants';
+import { hasQAppFileReferences } from '../qortal/qapp-file-reference';
 
 // Utility to generate unique request IDs
 function generateRequestId() {
@@ -44,17 +45,26 @@ export const sendMessageBackground = async (
     callbackMap.set(requestId, { resolve, reject }); // Store both resolve and reject callbacks
     const targetOrigin = window.location.origin;
     // Send the message with `backgroundMessage` type
-    window.postMessage(
-      {
-        type: 'backgroundMessage',
-        action,
-        requestId,
-        payload: data,
-        isExtension,
-        appInfo,
-      },
-      targetOrigin
-    );
+    const message = {
+      type: 'backgroundMessage',
+      action,
+      requestId,
+      payload: data,
+      isExtension,
+      appInfo,
+    };
+    // Both endpoints are trusted code in this document. Structured cloning
+    // would erase the private worker capability. Guest data cannot opt into
+    // this path: references are recognized by a private WeakSet, not a marker.
+    if (hasQAppFileReferences(data)) {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: message,
+          source: window,
+          origin: targetOrigin,
+        })
+      );
+    } else window.postMessage(message, targetOrigin);
 
     // Set up a timeout to automatically reject if no response is received
     const timeoutId = setTimeout(() => {

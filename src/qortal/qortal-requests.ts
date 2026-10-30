@@ -4,6 +4,7 @@ import {
   getNameInfoForOthers,
 } from '../background/background.ts';
 import { listOfAllQortalRequests } from '../hooks/useQortalMessageListener.tsx';
+import { isQAppFileReference } from './qapp-file-reference';
 import {
   addForeignServer,
   addGroupAdminRequest,
@@ -2562,7 +2563,9 @@ function setupMessageListenerQortalRequest() {
           }
           if (request.payload?.blob?.type !== 'application/pdf')
             throw new Error('blob type must be application/pdf');
-          executeEvent('openPdf', { blob: request.payload?.blob });
+          const file = request.payload.blob;
+          const blob = isQAppFileReference(file) ? await file.readableBlob() : file;
+          executeEvent('openPdf', { blob });
           event.source.postMessage(
             {
               requestId: request.requestId,

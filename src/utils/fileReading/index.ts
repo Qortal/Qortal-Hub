@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { isQAppFileReference } from '../../qortal/qapp-file-reference';
+import i18n from '../../i18n/i18n';
 
 class Semaphore {
   constructor(count) {
@@ -26,31 +28,28 @@ class Semaphore {
 }
 
 const semaphore = new Semaphore(1);
-const reader = new FileReader();
-
-export const fileToBase64 = (file) =>
-  new Promise(async (resolve, reject) => {
-    const reader = new FileReader(); // Create a new instance
-    await semaphore.acquire();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      semaphore.release();
-      if (typeof dataUrl === 'string') {
-        resolve(dataUrl.split(',')[1]);
-      } else {
-        reject(new Error('Invalid data URL'));
-      }
-      reader.onload = null; // Clear the handler
-      reader.onerror = null; // Clear the handle
-    };
-    reader.onerror = (error) => {
-      semaphore.release();
-      reject(error);
-      reader.onload = null; // Clear the handler
-      reader.onerror = null; // Clear the handle
-    };
-  });
+// Both local and native-reference reads share the semaphore. Legacy encryption
+// needs a complete string, so concurrent whole-file encodes must stay bounded.
+export const fileToBase64 = async (file) => {
+  await semaphore.acquire();
+  try {
+    if (isQAppFileReference(file)) return await file.base64();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const fail = () =>
+        reject(new Error(i18n.t('question:publish_validation.invalid_file')));
+      reader.onload = () => {
+        if (typeof reader.result === 'string')
+          resolve(reader.result.slice(reader.result.indexOf(',') + 1));
+        else fail();
+      };
+      reader.onerror = reader.onabort = fail;
+      reader.readAsDataURL(file);
+    });
+  } finally {
+    semaphore.release();
+  }
+};
 
 export const base64ToBlobUrl = (base64, mimeType = 'image/png') => {
   const binary = atob(base64);

@@ -726,6 +726,7 @@
   "payment": "دفع",
   "payment_notification": "إشعار الدفع",
   "payments_count": "المدفوعات ({{count}})",
+  "pdf_viewer": "عارض PDF",
   "poll_embed": "تضمين استطلاع رأي",
   "port": "منفذ",
   "presence": {

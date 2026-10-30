@@ -726,6 +726,7 @@
   "payment": "makse",
   "payment_notification": "Saabunud maksed",
   "payments_count": "Maksed ({{count}})",
+  "pdf_viewer": "PDF-vaatur",
   "poll_embed": "küsitluse manustamine",
   "port": "port",
   "presence": {

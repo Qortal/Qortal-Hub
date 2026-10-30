@@ -726,6 +726,7 @@
   "payment": "支払い",
   "payment_notification": "支払い通知",
   "payments_count": "支払い ({{count}})",
+  "pdf_viewer": "PDFビューアー",
   "poll_embed": "投票埋め込み",
   "port": "ポート",
   "presence": {

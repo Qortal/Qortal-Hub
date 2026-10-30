@@ -726,6 +726,7 @@
   "payment": "Zahlung",
   "payment_notification": "Zahlungsbenachrichtigung",
   "payments_count": "Zahlungen ({{count}})",
+  "pdf_viewer": "PDF-Anzeige",
   "poll_embed": "Umfrage Einbettung",
   "port": "Hafen",
   "presence": {
