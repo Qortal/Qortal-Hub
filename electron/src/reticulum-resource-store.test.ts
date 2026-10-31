@@ -7,6 +7,7 @@ import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
 import {
   RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS,
   RETICULUM_RESOURCE_MIN_FREE_DISK_BYTES,
+  RETICULUM_RESOURCE_MAX_FREE_DISK_BYTES,
   RETICULUM_RESOURCE_MIN_LIMIT_BYTES,
   ReticulumResourceStore,
   getReticulumResourceFreeDiskReserveBytes,
@@ -40,13 +41,19 @@ describe('reticulum resource store', () => {
     while (stores.length) stores.pop()?.close();
   });
 
-  it('reserves at least 1 GiB and 5 percent of larger filesystems', () => {
+  it('reserves at least 1 GiB, with a 4 GiB cap on large filesystems', () => {
     const gibibyte = 1024 * 1024 * 1024;
 
     expect(getReticulumResourceFreeDiskReserveBytes(10 * gibibyte)).toBe(
       RETICULUM_RESOURCE_MIN_FREE_DISK_BYTES
     );
-    expect(getReticulumResourceFreeDiskReserveBytes(100 * gibibyte)).toBe(5 * gibibyte);
+    expect(getReticulumResourceFreeDiskReserveBytes(40 * gibibyte)).toBe(2 * gibibyte);
+    expect(getReticulumResourceFreeDiskReserveBytes(100 * gibibyte)).toBe(
+      RETICULUM_RESOURCE_MAX_FREE_DISK_BYTES
+    );
+    expect(getReticulumResourceFreeDiskReserveBytes(500 * gibibyte)).toBe(
+      RETICULUM_RESOURCE_MAX_FREE_DISK_BYTES
+    );
   });
 
   it('imports a local file as a verified assembled resource', () => {

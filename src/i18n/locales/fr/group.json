@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Espace disque insuffisant pour enregistrer cette pièce jointe",
     "delete_shortcut": "Supprimer (Maj+Suppr)",
     "download_failed": "Échec du téléchargement",
     "file_attachment": "Fichier joint",
     "file_transfer": "Transfert de fichier",
     "file_unavailable": "Fichier indisponible",
     "image_attachment": "Image jointe",
+    "image_disk_full": "Espace disque insuffisant pour enregistrer cette image",
+    "image_download_failed": "Impossible de télécharger l’image",
     "image_unavailable_no_peers": "Image indisponible pour le moment (aucun pair)",
     "invalid_attachment": "Pièce jointe de ressource non valide",
     "new_messages": "Nouveaux messages",

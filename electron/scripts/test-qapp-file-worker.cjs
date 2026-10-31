@@ -177,7 +177,7 @@ app
     shell.webContents.on('will-attach-webview', (_event, preferences) => {
       preferences.preload = path.join(
         __dirname,
-        '../build/src/qapp-guest-preload.js'
+        '../build/src/qapp-guest-preload.bundle.js'
       );
       preferences.additionalArguments = ['--qapp-guest-token=test'];
       preferences.contextIsolation = true;

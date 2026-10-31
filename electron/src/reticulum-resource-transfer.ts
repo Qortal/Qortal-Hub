@@ -6,6 +6,7 @@ import type { ReticulumBridge, ReticulumSendResult } from './reticulum-bridge';
 import {
   RETICULUM_RESOURCE_MAX_RANGE_SIZE,
   RETICULUM_RESOURCE_RANGE_SIZE,
+  ReticulumResourceDiskSpaceError,
   ReticulumResourceStore,
   type ReticulumResourceManifest,
 } from './reticulum-resource-store';
@@ -101,7 +102,7 @@ export type ReticulumResourceTransferProgress = {
   complete?: boolean;
   failed?: boolean;
   canceled?: boolean;
-  failureReason?: 'verification_failed';
+  failureReason?: 'verification_failed' | 'disk_full';
   sourcePeerHashes?: string[];
   featureData?: Record<string, unknown>;
 };
@@ -121,6 +122,7 @@ export type ReticulumResourceDownloadRuntimeStatus = {
   currentBytesPerSecond: number;
   averageBytesPerSecond: number;
   nextRequestAt: number | null;
+  failureReason?: ReticulumResourceTransferProgress['failureReason'];
 };
 
 type ReticulumResourceDownloadState<TRequestWire> = {
@@ -274,6 +276,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   private readonly resolvePeerIdentity?: ReticulumResourceTransferOptions<TRequestWire>['resolvePeerIdentity'];
   private readonly onProgress?: ReticulumResourceTransferOptions<TRequestWire>['onProgress'];
   private readonly downloads = new Map<string, ReticulumResourceDownloadState<TRequestWire>>();
+  private readonly terminalFailures = new Map<string, ReticulumResourceTransferProgress['failureReason']>();
   private readonly recentCandidatePeers = new Map<string, Map<string, number>>();
   private readonly offers = new Map<string, ReticulumResourceTransferOffer>();
   private readonly pendingLinkedRangeServes = new Map<string, Promise<void>>();
@@ -321,6 +324,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     }
     for (const state of this.downloads.values()) this.releaseStorageProtection(state);
     this.downloads.clear();
+    this.terminalFailures.clear();
     this.recentCandidatePeers.clear();
     this.offers.clear();
     this.pendingLinkedRangeServes.clear();
@@ -407,6 +411,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
   }): void {
     if (this.closed) return;
     const blobId = options.manifest.fileHash.toLowerCase();
+    this.terminalFailures.delete(blobId);
     const manifest: ReticulumResourceManifest = {
       ...options.manifest,
       fileHash: blobId,
@@ -425,6 +430,13 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       this.ensureStorageProtection(state);
       this.resourceStore.ensurePartialFile(blobId);
     } catch (error) {
+      if (
+        error instanceof ReticulumResourceDiskSpaceError ||
+        (error as NodeJS.ErrnoException)?.code === 'ENOSPC'
+      ) {
+        this.failDownloadForDiskSpace(blobId, state);
+        return;
+      }
       if (!existingDownload) {
         this.releaseStorageProtection(state);
         this.downloads.delete(blobId);
@@ -474,6 +486,7 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
     if (this.closed) return false;
     const blobId = String(fileHash || '').trim().toLowerCase();
     if (!blobId) return false;
+    this.terminalFailures.delete(blobId);
     const state = this.downloads.get(blobId);
     const transferIds = new Set<string>();
     for (const [transferId, offer] of this.offers.entries()) {
@@ -676,6 +689,9 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       currentBytesPerSecond: 0,
       averageBytesPerSecond: 0,
       nextRequestAt: null,
+      ...(this.terminalFailures.has(fileHash)
+        ? { failureReason: this.terminalFailures.get(fileHash) }
+        : {}),
     };
   }
 
@@ -1735,9 +1751,14 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       await fs.promises.unlink(payload.path).catch(() => undefined);
       return;
     }
+    const receivingState = this.downloads.get(offer.fileHash.toLowerCase());
     try {
       const { bytes, hash: actualHash } = await this.resourceStore.readAndHashFile(payload.path);
-      if (this.closed) return;
+      if (
+        this.closed ||
+        !receivingState ||
+        this.downloads.get(offer.fileHash.toLowerCase()) !== receivingState
+      ) return;
       const expectedPayloadHash =
         typeof offer.payloadHash === 'string' && /^[0-9a-f]{64}$/i.test(offer.payloadHash)
           ? offer.payloadHash.toLowerCase()
@@ -1798,7 +1819,14 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       await this.handleReceivedRange(offer);
     } catch (err) {
       loggerWarn(`[${this.loggerPrefix}] Failed to import received resource:`, err);
-      this.finishTransfer(payload.transferId, false);
+      if (
+        err instanceof ReticulumResourceDiskSpaceError ||
+        (err as NodeJS.ErrnoException)?.code === 'ENOSPC'
+      ) {
+        this.failDownloadForDiskSpace(offer.fileHash, receivingState);
+      } else {
+        this.finishTransfer(payload.transferId, false);
+      }
     } finally {
       const currentState = this.downloads.get(offer.fileHash);
       if (currentState) {
@@ -1811,6 +1839,41 @@ export class ReticulumResourceTransferManager<TRequestWire> extends EventEmitter
       this.activeAccepts.delete(payload.transferId);
       this.activeAcceptStartedAt.delete(payload.transferId);
       await fs.promises.unlink(payload.path).catch(() => undefined);
+    }
+  }
+
+  private failDownloadForDiskSpace(
+    fileHash: string,
+    receivingState: ReticulumResourceDownloadState<TRequestWire> | undefined
+  ): void {
+    const blobId = fileHash.toLowerCase();
+    const state = this.downloads.get(blobId);
+    if (!state || state !== receivingState) return;
+    this.downloads.delete(blobId);
+    this.terminalFailures.set(blobId, 'disk_full');
+    if (this.terminalFailures.size > 500) {
+      this.terminalFailures.delete(this.terminalFailures.keys().next().value!);
+    }
+    this.emitProgress(state, false, undefined, true, 'disk_full');
+    this.releaseStorageProtection(state);
+    this.clearRequestedResourcesForFile(blobId);
+    for (const [transferId, offer] of this.offers) {
+      if (offer.fileHash.toLowerCase() !== blobId) continue;
+      this.cleanupTemporaryOfferFile(offer);
+      this.offers.delete(transferId);
+      this.transferSpeedSamples.delete(transferId);
+      this.clearTransferFinalizationWatchdog(transferId);
+      this.transferProgressWatch.delete(transferId);
+      this.activeAccepts.delete(transferId);
+      this.activeAcceptStartedAt.delete(transferId);
+      const cancellation = this.bridge?.cancelReticulumResourceDetailed?.({
+        transferId,
+        peerPresenceHash: offer.sourcePeerHash,
+        reason: 'disk_full',
+      });
+      void cancellation?.catch((error) => {
+        loggerWarn(`[${this.loggerPrefix}] Failed to cancel resource after disk-space error:`, error);
+      });
     }
   }
 

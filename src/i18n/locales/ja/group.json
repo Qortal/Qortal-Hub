@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "この添付ファイルを保存するためのディスク空き容量が不足しています",
     "delete_shortcut": "削除 (Shift+Del)",
     "download_failed": "ダウンロードに失敗しました",
     "file_attachment": "ファイル添付",
     "file_transfer": "ファイル転送",
     "file_unavailable": "ファイルを利用できません",
     "image_attachment": "画像添付",
+    "image_disk_full": "この画像を保存するためのディスク空き容量が不足しています",
+    "image_download_failed": "画像をダウンロードできませんでした",
     "image_unavailable_no_peers": "現在この画像は利用できません（ピアなし）",
     "invalid_attachment": "無効なリソース添付",
     "new_messages": "新着メッセージ",

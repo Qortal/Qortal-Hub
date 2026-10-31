@@ -882,7 +882,8 @@ export const MessageItemComponent = ({
     );
   const [resourceReloadNonce, setResourceReloadNonce] = useState(0);
   const [reticulumImageDownloadIssue, setReticulumImageDownloadIssue] =
-    useState<'unavailable' | 'error' | null>(null);
+    useState<'unavailable' | 'error' | 'disk_full' | null>(null);
+  const allowReticulumImageDiskRetryRef = useRef(false);
   const reticulumImageRequestKey =
     isReticulumResourceImage && imageResourceId
       ? isReticulumDirectResourceMessage
@@ -899,9 +900,11 @@ export const MessageItemComponent = ({
           : ''
       : '';
   useEffect(() => {
+    allowReticulumImageDiskRetryRef.current = false;
     setReticulumImageDownloadIssue(null);
   }, [imageResourceId]);
   const retryReticulumImageDownload = useCallback(() => {
+    allowReticulumImageDiskRetryRef.current = true;
     if (reticulumImageRequestKey) {
       reticulumImageRequestGate.clear(reticulumImageRequestKey);
     }
@@ -937,7 +940,7 @@ export const MessageItemComponent = ({
     'idle' | 'downloading' | 'ready' | 'saving' | 'error'
   >('idle');
   const [fileResourceFailureReason, setFileResourceFailureReason] = useState<
-    'verification_failed' | null
+    'verification_failed' | 'disk_full' | null
   >(null);
   const [fileResourceProgress, setFileResourceProgress] = useState<
     number | null
@@ -967,6 +970,7 @@ export const MessageItemComponent = ({
     currentBytesPerSecond?: number;
     averageBytesPerSecond?: number;
     nextRequestAt?: number | null;
+    failureReason?: 'verification_failed' | 'disk_full';
   } | null>(null);
   const fileResourceFailureCheckRef = useRef(0);
   const [isFileOpenWarningOpen, setIsFileOpenWarningOpen] = useState(false);
@@ -1018,6 +1022,10 @@ export const MessageItemComponent = ({
               }
 
               const runtime = status?.runtime;
+              if (runtime?.failureReason === 'disk_full') {
+                setReticulumImageDownloadIssue('disk_full');
+                return;
+              }
               const hasActiveTransfer = Boolean(
                 (runtime?.activeTransfers ?? 0) > 0 ||
                 (runtime?.pendingTransfers ?? 0) > 0 ||
@@ -1064,6 +1072,13 @@ export const MessageItemComponent = ({
           setReticulumImageDownloadIssue(null);
           return;
         }
+        if (
+          status?.runtime?.failureReason === 'disk_full' &&
+          !allowReticulumImageDiskRetryRef.current
+        ) {
+          setReticulumImageDownloadIssue('disk_full');
+          return;
+        }
 
         const requestStartedAt = Date.now();
         if (!reticulumImageRequestGate.claim(key, requestStartedAt)) {
@@ -1083,6 +1098,7 @@ export const MessageItemComponent = ({
 
         const currentManifest = imageResourceManifestRef.current;
         if (!currentManifest || currentManifest.fileHash !== imageResourceId) {
+          allowReticulumImageDiskRetryRef.current = false;
           reticulumImageRequestGate.clear(key);
           setReticulumImageDownloadIssue('error');
           return;
@@ -1102,6 +1118,7 @@ export const MessageItemComponent = ({
               currentManifest,
               reticulumResourceEventId || undefined
             );
+        allowReticulumImageDiskRetryRef.current = false;
         if (!response?.success) {
           reticulumImageRequestGate.clear(key);
           if (cancelled) return;
@@ -1114,6 +1131,7 @@ export const MessageItemComponent = ({
           );
         }
       } catch (error) {
+        allowReticulumImageDiskRetryRef.current = false;
         reticulumImageRequestGate.clear(key);
         if (cancelled) return;
         clearAvailabilityTimer();
@@ -1347,7 +1365,7 @@ export const MessageItemComponent = ({
       progress?: number;
       complete?: boolean;
       failed?: boolean;
-      failureReason?: 'verification_failed';
+      failureReason?: 'verification_failed' | 'disk_full';
       latestRangeUpdatedAt?: number | null;
       checkedAt?: number;
       runtime?: {
@@ -1362,9 +1380,20 @@ export const MessageItemComponent = ({
         currentBytesPerSecond?: number;
         averageBytesPerSecond?: number;
         nextRequestAt?: number | null;
+        failureReason?: 'verification_failed' | 'disk_full';
       } | null;
     }) => {
       if (!payload) return;
+      if (
+        payload.failureReason === 'disk_full' ||
+        payload.runtime?.failureReason === 'disk_full'
+      ) {
+        fileResourceFailureCheckRef.current += 1;
+        setFileResourceFailureReason('disk_full');
+        setFileResourceStatus('error');
+        setFileResourceRuntime(payload.runtime ?? null);
+        return;
+      }
       const verificationFailed =
         payload.failureReason === 'verification_failed';
       if (verificationFailed) {
@@ -1490,6 +1519,10 @@ export const MessageItemComponent = ({
       applyFileResourceStatus(status);
       return;
     }
+    if (status?.runtime?.failureReason === 'disk_full') {
+      applyFileResourceStatus(status);
+      return;
+    }
     if (status?.success && status.runtime?.active) {
       applyFileResourceStatus(status);
       setFileResourceFailureReason(null);
@@ -1519,7 +1552,9 @@ export const MessageItemComponent = ({
           setReticulumImageDownloadIssue(null);
           setResourceReloadNonce((value) => value + 1);
         } else if (payload.failed === true) {
-          setReticulumImageDownloadIssue('error');
+          setReticulumImageDownloadIssue(
+            payload.failureReason === 'disk_full' ? 'disk_full' : 'error'
+          );
         }
       }
       if (payload?.fileHash === reticulumFileResourceId) {
@@ -1528,15 +1563,14 @@ export const MessageItemComponent = ({
           void markFileResourceReadyIfComplete();
         } else if (
           payload.failed &&
-          payload.failureReason !== 'verification_failed'
+          payload.failureReason !== 'verification_failed' &&
+          payload.failureReason !== 'disk_full'
         ) {
           void reconcileFileResourceFailure();
         } else if (!payload.failed && !payload.canceled) {
           fileResourceFailureCheckRef.current += 1;
           setFileResourceStatus((status) =>
-            status === 'ready' || status === 'saving'
-              ? status
-              : 'downloading'
+            status === 'ready' || status === 'saving' ? status : 'downloading'
           );
         }
       }
@@ -1700,6 +1734,11 @@ export const MessageItemComponent = ({
           return;
         if (result?.success && result.complete) {
           applyFileResourceStatus(result);
+        } else if (
+          result?.success &&
+          result.runtime?.failureReason === 'disk_full'
+        ) {
+          applyFileResourceStatus(result);
         } else if (result?.success && result.runtime?.active) {
           applyFileResourceStatus(result);
           setFileResourceStatus('downloading');
@@ -1834,6 +1873,7 @@ export const MessageItemComponent = ({
     if (
       (fileResourceStatus !== 'downloading' &&
         fileResourceStatus !== 'error') ||
+      fileResourceFailureReason === 'disk_full' ||
       !fileResourceStartedAt ||
       nowMs - fileResourceStartedAt < RETICULUM_FILE_UNAVAILABLE_TIMEOUT_MS ||
       fileResourceBytes?.received
@@ -1853,6 +1893,8 @@ export const MessageItemComponent = ({
     return providerCount === 0 && activeTransferCount === 0;
   })();
   const fileResourceStatusText = (() => {
+    if (fileResourceFailureReason === 'disk_full')
+      return t('group:message_item.attachment_disk_full');
     if (fileResourceStatus === 'ready') return 'ready';
     if (fileResourceStatus === 'saving') return 'saving';
     if (fileResourceUnavailableNoPeers) {
@@ -1883,6 +1925,8 @@ export const MessageItemComponent = ({
     return 'not downloaded';
   })();
   const fileResourceStatusLabel = (() => {
+    if (fileResourceFailureReason === 'disk_full')
+      return t('group:message_item.attachment_disk_full');
     if (fileResourceStatus === 'ready') return 'Downloaded';
     if (fileResourceStatus === 'saving') return 'Saving...';
     if (fileResourceUnavailableNoPeers)
@@ -3356,7 +3400,9 @@ export const MessageItemComponent = ({
                       >
                         {reticulumImageDownloadIssue === 'unavailable'
                           ? t('group:message_item.image_unavailable_no_peers')
-                          : "Couldn't download image"}
+                          : reticulumImageDownloadIssue === 'disk_full'
+                            ? t('group:message_item.image_disk_full')
+                            : t('group:message_item.image_download_failed')}
                       </Typography>
                       <Button
                         size="small"
@@ -3381,7 +3427,7 @@ export const MessageItemComponent = ({
                           },
                         }}
                       >
-                        Retry
+                        {t('group:message_item.try_again')}
                       </Button>
                     </Box>
                   ) : (

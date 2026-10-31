@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Nicht genügend Speicherplatz, um diesen Anhang zu speichern",
     "delete_shortcut": "Löschen (Umschalt+Entf)",
     "download_failed": "Download fehlgeschlagen",
     "file_attachment": "Dateianhang",
     "file_transfer": "Dateiübertragung",
     "file_unavailable": "Datei nicht verfügbar",
     "image_attachment": "Bildanhang",
+    "image_disk_full": "Nicht genügend Speicherplatz, um dieses Bild zu speichern",
+    "image_download_failed": "Bild konnte nicht heruntergeladen werden",
     "image_unavailable_no_peers": "Bild derzeit nicht verfügbar (keine Peers)",
     "invalid_attachment": "Ungültiger Ressourcenanhang",
     "new_messages": "Neue Nachrichten",

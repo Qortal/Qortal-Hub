@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Espaço em disco insuficiente para guardar este anexo",
     "delete_shortcut": "Eliminar (Shift+Del)",
     "download_failed": "Falha na transferência",
     "file_attachment": "Ficheiro anexado",
     "file_transfer": "Transferência de ficheiro",
     "file_unavailable": "Ficheiro indisponível",
     "image_attachment": "Imagem anexada",
+    "image_disk_full": "Espaço em disco insuficiente para guardar esta imagem",
+    "image_download_failed": "Não foi possível transferir a imagem",
     "image_unavailable_no_peers": "Imagem indisponível neste momento (sem pares)",
     "invalid_attachment": "Anexo de recurso inválido",
     "new_messages": "Novas mensagens",

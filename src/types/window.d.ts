@@ -1308,7 +1308,7 @@ declare global {
           complete?: boolean;
           failed?: boolean;
           canceled?: boolean;
-          failureReason?: 'verification_failed';
+          failureReason?: 'verification_failed' | 'disk_full';
         }) => void
       ) => () => void;
     };
@@ -1382,6 +1382,7 @@ declare global {
           totalBytes?: number;
           progress?: number;
           nextRequestAt?: number | null;
+          failureReason?: 'verification_failed' | 'disk_full';
         } | null;
         error?: string;
       }>;

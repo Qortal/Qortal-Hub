@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Недостаточно места на диске для сохранения этого вложения",
     "delete_shortcut": "Удалить (Shift+Del)",
     "download_failed": "Ошибка загрузки",
     "file_attachment": "Вложенный файл",
     "file_transfer": "Передача файла",
     "file_unavailable": "Файл недоступен",
     "image_attachment": "Вложенное изображение",
+    "image_disk_full": "Недостаточно места на диске для сохранения этого изображения",
+    "image_download_failed": "Не удалось загрузить изображение",
     "image_unavailable_no_peers": "Изображение сейчас недоступно (нет узлов)",
     "invalid_attachment": "Недопустимое вложение ресурса",
     "new_messages": "Новые сообщения",

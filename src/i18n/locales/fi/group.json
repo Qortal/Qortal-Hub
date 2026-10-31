@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Levytilaa ei ole riittävästi tämän liitteen tallentamiseen",
     "delete_shortcut": "Poista (Vaihto+Del)",
     "download_failed": "Lataus epäonnistui",
     "file_attachment": "Tiedostoliite",
     "file_transfer": "Tiedostonsiirto",
     "file_unavailable": "Tiedosto ei ole saatavilla",
     "image_attachment": "Kuvaliite",
+    "image_disk_full": "Levytilaa ei ole riittävästi tämän kuvan tallentamiseen",
+    "image_download_failed": "Kuvan lataaminen epäonnistui",
     "image_unavailable_no_peers": "Kuva ei ole juuri nyt saatavilla (ei vertaisia)",
     "invalid_attachment": "Virheellinen resurssiliite",
     "new_messages": "Uudet viestit",
