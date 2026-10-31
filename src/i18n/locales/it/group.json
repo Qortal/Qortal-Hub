@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Spazio su disco insufficiente per salvare questo allegato",
     "delete_shortcut": "Elimina (Maiusc+Canc)",
     "download_failed": "Download non riuscito",
     "file_attachment": "Allegato file",
     "file_transfer": "Trasferimento file",
     "file_unavailable": "File non disponibile",
     "image_attachment": "Immagine allegata",
+    "image_disk_full": "Spazio su disco insufficiente per salvare questa immagine",
+    "image_download_failed": "Impossibile scaricare l'immagine",
     "image_unavailable_no_peers": "Immagine non disponibile al momento (nessun peer)",
     "invalid_attachment": "Allegato di risorsa non valido",
     "new_messages": "Nuovi messaggi",

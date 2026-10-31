@@ -3,7 +3,11 @@ import * as fs from 'fs';
 import * as nodeCrypto from 'crypto';
 import * as os from 'os';
 import * as path from 'path';
-import { ReticulumResourceStore, type ReticulumResourceManifest } from './reticulum-resource-store';
+import {
+  ReticulumResourceDiskSpaceError,
+  ReticulumResourceStore,
+  type ReticulumResourceManifest,
+} from './reticulum-resource-store';
 import {
   RETICULUM_RESOURCE_TRANSFER_AUTHORIZATION_TIMEOUT_MS,
   RETICULUM_RESOURCE_TRANSFER_FINALIZATION_TIMEOUT_MS,
@@ -55,6 +59,127 @@ describe('reticulum resource transfer storage protection', () => {
     expect(completedBytes).not.toHaveBeenCalled();
     expect(transfer.addCandidatePeers('f'.repeat(64), ['peer-a'])).toBe(false);
     await expect(transfer.cancelResource('f'.repeat(64))).resolves.toBe(false);
+  });
+
+  it('stops a received download on disk-space failure and reports it until retry', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-disk-test-'));
+    const store = new ReticulumResourceStore({
+      dbPath: path.join(dir, 'resources.db'),
+      rootDir: path.join(dir, 'resources'),
+    });
+    stores.push(store);
+    const contents = Buffer.from('received attachment');
+    const fileHash = nodeCrypto.createHash('sha256').update(contents).digest('hex');
+    const manifest: ReticulumResourceManifest = {
+      namespace: 'reticulum-group-resource',
+      ownerId: '716:sender',
+      fileName: 'image.webp',
+      mimeType: 'image/webp',
+      sizeBytes: contents.length,
+      fileHash,
+      encrypted: false,
+      createdAt: Date.now(),
+      metadata: { groupId: 716 },
+    };
+    store.storeManifest(manifest, { provenance: 'remote_downloaded' });
+    const cancelReticulumResourceDetailed = vi.fn().mockResolvedValue({ ok: true });
+    const transfer = new ReticulumResourceTransferManager<Record<string, never>>({
+      bridge: { cancelReticulumResourceDetailed } as any,
+      resourceStore: store,
+      buildRequestPayloads: async () => [],
+    });
+    transfers.push(transfer);
+    const progress: ReticulumResourceTransferProgress[] = [];
+    transfer.on('progress', (event) => progress.push(event));
+    (transfer as any).upsertDownload(716, manifest, 'image-event', ['c'.repeat(32)]);
+    const transferId = 'received-disk-full';
+    (transfer as any).offers.set(transferId, {
+      transferId,
+      contextId: 716,
+      fileHash,
+      totalSizeBytes: contents.length,
+      sizeBytes: contents.length,
+      ranges: [{ startByte: 0, endByteExclusive: contents.length }],
+      sourcePeerHash: 'c'.repeat(32),
+    });
+    (transfer as any).activeAccepts.add(transferId);
+    (transfer as any).offers.set('second-range', {
+      transferId: 'second-range',
+      contextId: 716,
+      fileHash,
+      totalSizeBytes: contents.length,
+      sizeBytes: contents.length,
+      ranges: [{ startByte: 0, endByteExclusive: contents.length }],
+      sourcePeerHash: 'd'.repeat(32),
+    });
+    (transfer as any).activeAccepts.add('second-range');
+    vi.spyOn(store, 'readAndHashFile').mockResolvedValue({
+      bytes: contents,
+      hash: fileHash,
+    });
+    vi.spyOn(store, 'storeByteRangeAsync').mockRejectedValue(
+      new ReticulumResourceDiskSpaceError(contents.length, 0, 4 * 1024 ** 3)
+    );
+    const receivedPath = path.join(dir, 'received.range');
+    fs.writeFileSync(receivedPath, contents);
+
+    await (transfer as any).importReceived({ path: receivedPath, transferId });
+
+    expect(transfer.getDownloadStatus(fileHash)).toMatchObject({
+      active: false,
+      failureReason: 'disk_full',
+    });
+    expect(progress.at(-1)).toMatchObject({
+      fileHash,
+      failed: true,
+      failureReason: 'disk_full',
+    });
+    expect((transfer as any).downloads.has(fileHash)).toBe(false);
+    expect((transfer as any).activeAccepts.has(transferId)).toBe(false);
+    expect((transfer as any).activeAccepts.has('second-range')).toBe(false);
+    expect(cancelReticulumResourceDetailed).toHaveBeenCalledTimes(2);
+    expect(store.getCompletedBytes(fileHash)).toBe(0);
+
+    transfer.requestResource({ contextId: 716, manifest });
+    expect(transfer.getDownloadStatus(fileHash).failureReason).toBeUndefined();
+  });
+
+  it('reports disk-full failure when the partial download file cannot be created', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-disk-start-test-'));
+    const store = new ReticulumResourceStore({
+      dbPath: path.join(dir, 'resources.db'),
+      rootDir: path.join(dir, 'resources'),
+    });
+    stores.push(store);
+    const manifest: ReticulumResourceManifest = {
+      namespace: 'reticulum-group-resource',
+      fileName: 'image.webp',
+      mimeType: 'image/webp',
+      sizeBytes: 42,
+      fileHash: 'a'.repeat(64),
+      encrypted: false,
+      createdAt: Date.now(),
+      metadata: { groupId: 716 },
+    };
+    const transfer = new ReticulumResourceTransferManager<Record<string, never>>({
+      resourceStore: store,
+      buildRequestPayloads: async () => [],
+    });
+    transfers.push(transfer);
+    const progress: ReticulumResourceTransferProgress[] = [];
+    transfer.on('progress', (event) => progress.push(event));
+    vi.spyOn(store, 'ensurePartialFile').mockImplementation(() => {
+      const error = new Error('No space left on device') as NodeJS.ErrnoException;
+      error.code = 'ENOSPC';
+      throw error;
+    });
+
+    expect(() => transfer.requestResource({ contextId: 716, manifest })).not.toThrow();
+    expect(transfer.getDownloadStatus(manifest.fileHash)).toMatchObject({
+      active: false,
+      failureReason: 'disk_full',
+    });
+    expect(progress.at(-1)).toMatchObject({ failed: true, failureReason: 'disk_full' });
   });
 
   it('recreates expired leases and reservations when a provider appears later', async () => {

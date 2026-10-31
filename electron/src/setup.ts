@@ -3075,7 +3075,7 @@ const preparedQAppGuests = new Map<string, PreparedQAppGuest>();
 const attachedQAppGuests = new Map<number, { contents: WebContents; prepared: PreparedQAppGuest | null; documentId?: string }>();
 const qappFileWorkers = new QAppFileWorkers();
 const configuredQAppSessions = new Set<string>();
-const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.js');
+const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.bundle.js');
 
 function qappGuestOwnerKey(owner: QAppGuestOwner): string {
   return `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;

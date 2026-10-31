@@ -1291,6 +1291,7 @@ try {
           currentBytesPerSecond?: number;
           averageBytesPerSecond?: number;
           nextRequestAt?: number | null;
+          failureReason?: 'verification_failed' | 'disk_full';
         } | null;
         error?: string;
       }>,
@@ -2585,7 +2586,7 @@ try {
           progress?: number;
           complete?: boolean;
           failed?: boolean;
-          failureReason?: 'verification_failed';
+          failureReason?: 'verification_failed' | 'disk_full';
         }) => void
       ) => {
         const handler = (_event: unknown, payload: unknown) => {
@@ -2599,7 +2600,7 @@ try {
               progress?: number;
               complete?: boolean;
               failed?: boolean;
-              failureReason?: 'verification_failed';
+              failureReason?: 'verification_failed' | 'disk_full';
             }
           );
         };
@@ -3648,7 +3649,7 @@ try {
           progress?: number;
           complete?: boolean;
           failed?: boolean;
-          failureReason?: 'verification_failed';
+          failureReason?: 'verification_failed' | 'disk_full';
         }) => void
       ) => {
         const handler = (_event: unknown, payload: unknown) => {
@@ -3662,7 +3663,7 @@ try {
               progress?: number;
               complete?: boolean;
               failed?: boolean;
-              failureReason?: 'verification_failed';
+              failureReason?: 'verification_failed' | 'disk_full';
             }
           );
         };

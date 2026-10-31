@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "لا توجد مساحة كافية على القرص لحفظ هذا المرفق",
     "delete_shortcut": "حذف (Shift+Del)",
     "download_failed": "فشل التنزيل",
     "file_attachment": "ملف مرفق",
     "file_transfer": "نقل ملف",
     "file_unavailable": "الملف غير متاح",
     "image_attachment": "صورة مرفقة",
+    "image_disk_full": "لا توجد مساحة كافية على القرص لحفظ هذه الصورة",
+    "image_download_failed": "تعذّر تنزيل الصورة",
     "image_unavailable_no_peers": "الصورة غير متاحة حاليًا (لا يوجد أقران)",
     "invalid_attachment": "مرفق مورد غير صالح",
     "new_messages": "رسائل جديدة",

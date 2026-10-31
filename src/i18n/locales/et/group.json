@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Selle manuse salvestamiseks pole kettal piisavalt ruumi",
     "delete_shortcut": "Kustuta (Shift+Del)",
     "download_failed": "Allalaadimine ebaõnnestus",
     "file_attachment": "Failimanus",
     "file_transfer": "Failiedastus",
     "file_unavailable": "Fail pole saadaval",
     "image_attachment": "Pildimanus",
+    "image_disk_full": "Selle pildi salvestamiseks pole kettal piisavalt ruumi",
+    "image_download_failed": "Pilti ei õnnestunud alla laadida",
     "image_unavailable_no_peers": "Pilt pole praegu saadaval (sõlmi pole)",
     "invalid_attachment": "Sobimatu ressursimanus",
     "new_messages": "Uued sõnumid",

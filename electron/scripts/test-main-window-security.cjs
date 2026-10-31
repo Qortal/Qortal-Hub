@@ -187,7 +187,7 @@ app.whenReady().then(async () => {
     main.webContents.on('will-attach-webview', (_event, preferences) => {
       preferences.preload = path.resolve(
         __dirname,
-        '../build/src/qapp-guest-preload.js'
+        '../build/src/qapp-guest-preload.bundle.js'
       );
       preferences.nodeIntegration = false;
       preferences.contextIsolation = true;

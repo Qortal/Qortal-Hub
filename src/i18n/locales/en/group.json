@@ -796,12 +796,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Not enough disk space to save this attachment",
     "delete_shortcut": "Delete (shift+del)",
     "download_failed": "Download failed",
     "file_attachment": "File attachment",
     "file_transfer": "File transfer",
     "file_unavailable": "File unavailable",
     "image_attachment": "Image attachment",
+    "image_disk_full": "Not enough disk space to save this image",
+    "image_download_failed": "Couldn't download image",
     "image_unavailable_no_peers": "Image unavailable right now (no peers)",
     "invalid_attachment": "Invalid resource attachment",
     "new_messages": "New messages",

@@ -13,6 +13,17 @@ export const RETICULUM_RESOURCE_DEFAULT_LIMIT_BYTES = 10 * 1024 * 1024 * 1024;
 export const RETICULUM_RESOURCE_MIN_LIMIT_BYTES = 512 * 1024 * 1024;
 export const RETICULUM_RESOURCE_MIN_FREE_DISK_BYTES = 1024 * 1024 * 1024;
 export const RETICULUM_RESOURCE_FREE_DISK_RATIO = 0.05;
+export const RETICULUM_RESOURCE_MAX_FREE_DISK_BYTES = 4 * 1024 * 1024 * 1024;
+
+export class ReticulumResourceDiskSpaceError extends Error {
+  constructor(requiredBytes: number, availableBytes: number, reserveBytes: number) {
+    super(
+      `Insufficient physical disk space for resource write: required=${requiredBytes} ` +
+        `available=${availableBytes} reserve=${reserveBytes}`
+    );
+    this.name = 'ReticulumResourceDiskSpaceError';
+  }
+}
 
 const DEFAULT_LOW_WATERMARK_RATIO = 0.8;
 const DEFAULT_AUTHORED_CAP_RATIO = 0.5;
@@ -234,7 +245,10 @@ export function getReticulumResourceFreeDiskReserveBytes(totalBytes: number): nu
     : 0;
   return Math.max(
     RETICULUM_RESOURCE_MIN_FREE_DISK_BYTES,
-    Math.floor(normalizedTotal * RETICULUM_RESOURCE_FREE_DISK_RATIO)
+    Math.min(
+      RETICULUM_RESOURCE_MAX_FREE_DISK_BYTES,
+      Math.floor(normalizedTotal * RETICULUM_RESOURCE_FREE_DISK_RATIO)
+    )
   );
 }
 
@@ -1661,9 +1675,10 @@ export class ReticulumResourceStore {
         afterCleanup = this.getPhysicalWriteCapacity(required);
       }
       if (afterCleanup != null && afterCleanup.writableBytes < required) {
-        throw new Error(
-          `Insufficient physical disk space for resource write: required=${required} ` +
-            `available=${afterCleanup.writableBytes} reserve=${afterCleanup.reserveBytes}`
+        throw new ReticulumResourceDiskSpaceError(
+          required,
+          afterCleanup.writableBytes,
+          afterCleanup.reserveBytes
         );
       }
     } finally {

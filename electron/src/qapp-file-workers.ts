@@ -118,7 +118,7 @@ export class QAppFileWorkers {
       focusable: false,
       webPreferences: {
         session: guestSession,
-        preload: join(__dirname, 'qapp-file-worker-preload.js'),
+        preload: join(__dirname, 'qapp-file-worker-preload.bundle.js'),
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
