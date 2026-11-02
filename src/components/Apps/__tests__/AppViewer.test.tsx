@@ -26,6 +26,8 @@ vi.mock('react-i18next', () => ({
 }));
 
 import { AppViewer } from '../AppViewer';
+import { qappGuestUrlAllowed } from '../../../../electron/src/qapp-guest-policy';
+import { executeEvent } from '../../../utils/events';
 
 afterEach(() => {
   cleanup();
@@ -33,6 +35,50 @@ afterEach(() => {
 });
 
 describe('AppViewer guest recovery', () => {
+  it.each(['Q-Mail+', 'Q-Shop+', 'Qortal World'])(
+    'prepares, refreshes and navigates %s with Core-compatible URLs',
+    async (name) => {
+      const prepare = vi.fn().mockImplementation((owner, url) => {
+        if (!qappGuestUrlAllowed(url, url, owner, false)) {
+          return Promise.reject(new Error('QAPP_INVALID_URL'));
+        }
+        return Promise.resolve({
+          partition: 'test-compatible-url',
+          preload: 'file:///test/qapp-guest-preload.js',
+        });
+      });
+      vi.stubGlobal('electronAPI', {
+        qappGuestPrepare: prepare,
+        qappGuestRelease: vi.fn().mockResolvedValue(true),
+      });
+      const { container } = render(
+        <AppViewer
+          app={{ tabId: 'mail', name, service: 'APP' }}
+          isDevMode={false}
+        />
+      );
+      const root = `http://localhost:12391/render/APP/${name.replace(/ /g, '%20')}`;
+      const source = () =>
+        container.querySelector('webview')?.getAttribute('src');
+      await waitFor(() => expect(source()).toContain(`${root}?`));
+      act(() => executeEvent('refreshApp', { tabId: 'mail' }));
+      await waitFor(() => expect(source()).toContain(`${root}?`));
+      await act(async () => {
+        executeEvent('navigateToPath-mail', { path: 'inbox' });
+      });
+      await waitFor(() => expect(source()).toContain(`${root}/inbox?`));
+      expect(prepare).toHaveBeenCalledTimes(1);
+      expect(
+        qappGuestUrlAllowed(
+          prepare.mock.calls[0][1],
+          source()!,
+          prepare.mock.calls[0][0],
+          false
+        )
+      ).toBe(true);
+    }
+  );
+
   it('reattaches the source and handshake listener when Retry remounts a failed guest', async () => {
     const prepare = vi.fn().mockResolvedValue({
       partition: 'test-qmail',

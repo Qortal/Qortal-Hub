@@ -27,6 +27,25 @@ describe('file worker guest authentication', () => {
       isQAppFileGuest(f.event, f.attached, f.prepared, f.session, f.documentId)
     ).toBe(true);
   });
+  it.each(['+', '%2B'])(
+    'authenticates file requests after navigation to a Q-Mail%s URL',
+    (suffix) => {
+      const f = fixture();
+      f.prepared.owner.name = 'Q-Mail+';
+      f.prepared.url = 'https://node.invalid/render/APP/Q-Mail+/';
+      f.event.sender.getURL = () =>
+        `https://node.invalid/render/APP/Q-Mail${suffix}/inbox`;
+      expect(
+        isQAppFileGuest(
+          f.event,
+          f.attached,
+          f.prepared,
+          f.session,
+          f.documentId
+        )
+      ).toBe(true);
+    }
+  );
   it.each([
     'subframe',
     'other-contents',
