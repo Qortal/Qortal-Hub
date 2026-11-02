@@ -1,11 +1,16 @@
-/** Encode QDN service/name as individual path segments. A literal '+' is valid
- * in a URL path, so URL parsing alone will not canonicalize it to '%2B', which
- * the isolated guest's app-root policy expects. Routes are appended separately.
+/** Keep the literal path punctuation used by Core's injected router base and
+ * master's render URLs. Encoding '+' as '%2B', for example, breaks existing
+ * routers and Core's navigation reports. Delimiters and literal '%' still need
+ * encoding so a name cannot introduce another path segment, query or fragment.
  */
 export function buildAppRenderRoot(
   baseUrl: string,
   service: string,
   name: string
 ): string {
-  return `${baseUrl}/render/${encodeURIComponent(service)}/${encodeURIComponent(name)}`;
+  const encodedName = encodeURIComponent(name).replace(
+    /%(24|26|2B|2C|3A|3B|3D|40|5B|5D|5E|7C)/g,
+    (escaped) => decodeURIComponent(escaped)
+  );
+  return `${baseUrl}/render/${encodeURIComponent(service)}/${encodedName}`;
 }

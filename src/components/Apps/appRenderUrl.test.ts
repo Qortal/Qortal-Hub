@@ -5,22 +5,50 @@ import { qappGuestUrlAllowed } from '../../../electron/src/qapp-guest-policy';
 const base = 'https://core.example';
 
 describe('QApp render URL compatibility with guest isolation', () => {
-  it('encodes the Q-Shop+ name that previously failed guest preparation', () => {
-    const owner = { tabId: 'tab', service: 'APP', name: 'Q-Shop+' };
-    const raw = `${base}/render/APP/Q-Shop+?theme=dark`;
-    expect(qappGuestUrlAllowed(raw, raw, owner, false)).toBe(false);
-    const root = buildAppRenderRoot(base, owner.service, owner.name);
-    expect(root).toBe(`${base}/render/APP/Q-Shop%2B`);
-    expect(qappGuestUrlAllowed(root, root, owner, false)).toBe(true);
-  });
+  it.each(['Q-Mail+', 'Q-Shop+'])(
+    'loads %s with the same URL spelling as master and Core',
+    (name) => {
+      const owner = { tabId: 'tab', service: 'APP', name };
+      const raw = `${base}/render/APP/${name}?theme=dark`;
+      const root = buildAppRenderRoot(base, owner.service, owner.name);
+      expect(root).toBe(`${base}/render/APP/${name}`);
+      expect(qappGuestUrlAllowed(raw, raw, owner, false)).toBe(true);
+      expect(qappGuestUrlAllowed(root, root, owner, false)).toBe(true);
+    }
+  );
+
+  it.each(['+', '$', '&', ',', ':', ';', '=', '@', '[', ']', '^', '|'])(
+    'preserves %s for existing routers and Core navigation reports',
+    (punctuation) => {
+      const name = `Q-App${punctuation}Test`;
+      const coreBase = `/render/APP/${name}`;
+      const root = buildAppRenderRoot(base, 'APP', name);
+      const url = new URL(`${root}/inbox?theme=dark`);
+      // Existing app routers and Core's navigation listener compare the
+      // pathname to the injected _qdnBase as strings, without decoding it.
+      expect(url.pathname.startsWith(coreBase)).toBe(true);
+      expect(url.pathname.slice(coreBase.length)).toBe('/inbox');
+      expect(
+        qappGuestUrlAllowed(
+          root,
+          url.href,
+          { tabId: 'tab', service: 'APP', name },
+          false
+        )
+      ).toBe(true);
+    }
+  );
 
   it.each([
     'Q-Shop+',
+    'Q-Mail+',
     'Qortal Together',
     'Café',
     'literal%2B',
     'name#fragment',
     'name?query',
+    'name/segment',
+    'name\\segment',
   ])(
     'keeps %s as one name through load, refresh and route navigation',
     (name) => {
@@ -47,7 +75,7 @@ describe('QApp render URL compatibility with guest isolation', () => {
       `${base}/render/APP/Q-Trade`
     );
     expect(buildAppRenderRoot(base, 'APP/OTHER', 'Q-Shop+')).toBe(
-      `${base}/render/APP%2FOTHER/Q-Shop%2B`
+      `${base}/render/APP%2FOTHER/Q-Shop+`
     );
   });
 

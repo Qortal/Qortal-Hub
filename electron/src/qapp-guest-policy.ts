@@ -32,8 +32,16 @@ export function qappGuestUrlAllowed(
       const root = initial.pathname.split('/').slice(0, 4).join('/');
       return next.pathname === root || next.pathname.startsWith(`${root}/`);
     }
-    const root = `/render/${encodeURIComponent(owner.service)}/${encodeURIComponent(owner.name)}`;
-    return next.pathname === root || next.pathname.startsWith(`${root}/`);
+    // Split before decoding: literal '+' and '%2B' identify the same app, but
+    // another name, a name prefix or a second layer of encoding must not match.
+    // URL parsing has already resolved dot segments, including encoded ones.
+    const segments = next.pathname.split('/');
+    return (
+      segments.length >= 4 &&
+      segments[1] === 'render' &&
+      decodeURIComponent(segments[2]) === owner.service &&
+      decodeURIComponent(segments[3]) === owner.name
+    );
   } catch {
     return false;
   }
