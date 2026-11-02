@@ -183,11 +183,11 @@
       "legacy": "旧版"
     },
     "legacy": {
-      "description": "在 Q-Chat 顶栏显示旧版的 Threads 和 Admin 控件。",
+      "description": "在 Q-Chat 顶栏显示旧版 Threads 按钮。",
       "title": "Threads",
       "toggle": {
         "aria": "显示旧版 Threads",
-        "description": "显示旧版的 Threads 和 Admin 图标。",
+        "description": "显示旧版 Threads 图标。",
         "label": "Threads"
       },
       "warning": "Threads 将在下一个版本中移除。更新前请把重要的主题信息转移到安全的位置或 Q-Chat 的新频道。"

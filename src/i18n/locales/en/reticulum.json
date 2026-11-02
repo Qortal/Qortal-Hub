@@ -183,11 +183,11 @@
       "legacy": "Legacy"
     },
     "legacy": {
-      "description": "Show the legacy Threads and Admin controls in the Q-Chat header.",
+      "description": "Show the legacy Threads button in the Q-Chat header.",
       "title": "Threads",
       "toggle": {
         "aria": "Show legacy Threads",
-        "description": "Display the legacy Threads and Admin icons.",
+        "description": "Display the legacy Threads icon.",
         "label": "Threads"
       },
       "warning": "Threads will be removed in the upcoming release. Move any important thread information to a safe place or to a new channel in Q-Chat before updating."

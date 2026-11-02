@@ -183,11 +183,11 @@
       "legacy": "Vanha versio"
     },
     "legacy": {
-      "description": "Näytä vanhat Threads- ja Admin-painikkeet Q-Chatin yläpalkissa.",
+      "description": "Näytä vanha Threads-painike Q-Chatin yläpalkissa.",
       "title": "Threads",
       "toggle": {
         "aria": "Näytä vanhat Threads",
-        "description": "Näyttää vanhat Threads- ja Admin-kuvakkeet.",
+        "description": "Näyttää vanhan Threads-kuvakkeen.",
         "label": "Threads"
       },
       "warning": "Threads poistetaan tulevassa julkaisussa. Siirrä tärkeät ketjujen tiedot turvalliseen paikkaan tai uudelle Q-Chat-kanavalle ennen päivitystä."

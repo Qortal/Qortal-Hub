@@ -147,7 +147,6 @@ export const GroupAnnouncements = ({
   setSecretKey,
   getSecretKey,
   myAddress,
-  handleNewEncryptionNotification,
   isAdmin,
   hide,
   isPrivate,

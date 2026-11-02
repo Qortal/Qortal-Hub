@@ -183,11 +183,11 @@
       "legacy": "Прежняя версия"
     },
     "legacy": {
-      "description": "Показывать прежние элементы Threads и Admin в заголовке Q-Chat.",
+      "description": "Показывать прежнюю кнопку Threads в заголовке Q-Chat.",
       "title": "Threads",
       "toggle": {
         "aria": "Показывать прежние Threads",
-        "description": "Отображает прежние значки Threads и Admin.",
+        "description": "Отображает прежний значок Threads.",
         "label": "Threads"
       },
       "warning": "Threads будут удалены в следующем выпуске. Перед обновлением перенесите важную информацию из тем в надёжное место или в новый канал Q-Chat."

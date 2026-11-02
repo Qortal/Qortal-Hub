@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "Clave secreta de administradores (ASK)",
+    "create_ask": "Crear clave secreta de administradores",
+    "create_gsk": "Crear clave secreta del grupo",
+    "create_gsk_confirm": "¿Crear y publicar la primera clave secreta del grupo? La clave se cifrará para los miembros del grupo. Se aplicará una tarifa de publicación en QDN.",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "Clave secreta del grupo (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "Clave secreta publicada. Puede tardar unos minutos en aparecer."
   },
   "advanced_options": "opciones avanzadas",
   "announcement_placeholder": "Write an announcement...",
