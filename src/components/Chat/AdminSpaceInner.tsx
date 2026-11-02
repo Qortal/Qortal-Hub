@@ -1,13 +1,16 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   QORTAL_APP_CONTEXT,
   getArbitrarySearchSimpleEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
+  resumeAllQueues,
 } from '../../App';
 import {
   Box,
   Button,
+  Checkbox,
+  FormControlLabel,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,11 +21,11 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  decryptResource,
   getAllPublishesFromAdmins,
   getPublishesFromAdmins,
-  validateSecretKey,
-} from '../Group/Group';
+} from '../Group/groupApi';
+import { decryptResource } from '../Group/groupDataPublishes';
+import { validateSecretKey } from '../Group/groupValidation';
 import { getFee } from '../../background/background.ts';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption.ts';
@@ -30,19 +33,20 @@ import { formatTimestampForum } from '../../utils/time';
 import { Spacer } from '../../common/Spacer';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
-import { useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import {
   infoSnackGlobalAtom,
   openSnackGlobalAtom,
   txListAtom,
 } from '../../atoms/global';
-import { LoadingButton } from '@mui/lab';
 
 export const getPublishesFromAdminsAdminSpace = async (
   admins: string[],
   groupId
 ) => {
-  const queryString = admins.map((name) => `name=${name}`).join('&');
+  const queryString = admins
+    .map((name) => `name=${encodeURIComponent(name)}`)
+    .join('&');
   const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=admins-symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
@@ -71,9 +75,11 @@ export const getPublishesFromAdminsAdminSpace = async (
   return sortedData[0];
 };
 
+const EMPTY_ADMINS = [];
+
 export const AdminSpaceInner = ({
   selectedGroup,
-  adminsWithNames,
+  adminsWithNames = EMPTY_ADMINS,
   isOwner,
   compact = false,
 }) => {
@@ -88,265 +94,355 @@ export const AdminSpaceInner = ({
   ] = useState(null);
   const [groupSecretKeyPublishDetails, setGroupSecretKeyPublishDetails] =
     useState(null);
+  const [groupKeyLoadError, setGroupKeyLoadError] = useState(false);
+  const [adminKeyLoadError, setAdminKeyLoadError] = useState(false);
   const [isLoadingPublishKey, setIsLoadingPublishKey] = useState(false);
   const [groupKeyPublishSelectOpen, setGroupKeyPublishSelectOpen] =
     useState(false);
-  const [groupKeyPublishList, setGroupKeyPublishList] = useState([]);
+  const [groupKeyPublishList, setGroupKeyPublishList] = useState<any[]>([]);
   const [loadingGroupKeyPublishList, setLoadingGroupKeyPublishList] =
+    useState(false);
+  const [groupKeyPublishListError, setGroupKeyPublishListError] =
     useState(false);
   const [selectedPublishForGroupKey, setSelectedPublishForGroupKey] =
     useState(null);
   const [isPublishingGroupKey, setIsPublishingGroupKey] = useState(false);
   const [groupKeyPublishConfirmOpen, setGroupKeyPublishConfirmOpen] =
     useState(false);
-  const setTxList = useSetAtom(txListAtom);
+  const [addNewKey, setAddNewKey] = useState(false);
+  const [publishedGroupKey, setPublishedGroupKey] = useState(false);
+  const operationInProgress = useRef(false);
+  const groupRef = useRef(selectedGroup);
+  groupRef.current = selectedGroup;
+  const ownerRef = useRef(isOwner);
+  ownerRef.current = isOwner;
+  const adminScopeRef = useRef('');
+  adminScopeRef.current = JSON.stringify(
+    adminsWithNames.map((admin) => [admin?.address, admin?.name])
+  );
+  const mountedRef = useRef(true);
+  const groupLoadRevision = useRef(0);
+  const adminLoadRevision = useRef(0);
+  const [txList, setTxList] = useAtom(txListAtom);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
+  const isCurrentGroup = (groupId) =>
+    mountedRef.current && String(groupRef.current) === String(groupId);
+  const hasPendingGroupPublish = txList.some(
+    (tx) =>
+      tx.type === 'created-common-secret' &&
+      tx.keyType !== 'admin' &&
+      String(tx.groupId) === String(selectedGroup) &&
+      !tx.done
+  );
+  const hasPendingAdminPublish = txList.some(
+    (tx) =>
+      tx.type === 'created-common-secret' &&
+      tx.keyType === 'admin' &&
+      String(tx.groupId) === String(selectedGroup) &&
+      !tx.done
+  );
+  const isBusy = isPublishingGroupKey || isLoadingPublishKey;
 
-  const getAdminGroupSecretKey = useCallback(async () => {
-    try {
-      if (!selectedGroup) return;
-      const getLatestPublish = await getPublishesFromAdminsAdminSpace(
-        adminsWithNames.map((admin) => admin?.name),
-        selectedGroup
-      );
-      if (getLatestPublish === false) return;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-      const res = await fetch(
-        `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${
-          getLatestPublish.name
-        }/${getLatestPublish.identifier}?encoding=base64&rebuild=true`
-      );
-
-      const data = await res.text();
-      const decryptedKey: any = await decryptResource(data);
-      const dataint8Array = base64ToUint8Array(decryptedKey.data);
-      const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
-
-      if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error(
-          t('auth:message.error.invalid_secret_key', {
+  const showError = useCallback(
+    (error) => {
+      if (error?.isCanceled) return;
+      setInfoSnackCustom({
+        type: 'error',
+        message:
+          error?.message ||
+          (typeof error === 'string' && error) ||
+          t('auth:message.error.reencrypt_secret_key', {
             postProcess: 'capitalizeFirstChar',
-          })
-        );
-      setAdminGroupSecretKey(decryptedKeyToObject);
-      setAdminGroupSecretKeyPublishDetails(getLatestPublish);
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setIsFetchingAdminGroupSecretKey(false);
+          }),
+      });
+      setOpenSnackGlobal(true);
+    },
+    [setInfoSnackCustom, setOpenSnackGlobal, t]
+  );
+
+  const adminNames = useCallback(() => {
+    const names = adminsWithNames.map((admin) => admin?.name).filter(Boolean);
+    if (!selectedGroup || names.length === 0) {
+      throw new Error(t('core:message.error.network_generic'));
     }
-  }, [adminsWithNames, selectedGroup]);
+    return names;
+  }, [adminsWithNames, selectedGroup, t]);
+
+  const readKeyPublish = async (publish) => {
+    const res = await fetch(
+      `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${encodeURIComponent(publish.name)}/${encodeURIComponent(publish.identifier)}?encoding=base64&rebuild=true`
+    );
+    if (!res.ok) throw new Error(t('core:message.error.network_generic'));
+    const decrypted: any = await decryptResource(await res.text());
+    const key = uint8ArrayToObject(base64ToUint8Array(decrypted.data));
+    if (!validateSecretKey(key) || Object.keys(key).length === 0) {
+      throw new Error(
+        t('auth:message.error.invalid_secret_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+    return key;
+  };
 
   const getGroupSecretKey = useCallback(async () => {
+    const groupId = selectedGroup;
+    const revision = ++groupLoadRevision.current;
+    setIsFetchingGroupSecretKey(true);
+    setGroupKeyLoadError(false);
     try {
-      if (!selectedGroup) return;
-      const getLatestPublish = await getPublishesFromAdmins(
-        adminsWithNames.map((admin) => admin?.name),
-        selectedGroup
-      );
-      if (getLatestPublish === false) setGroupSecretKeyPublishDetails(false);
-      setGroupSecretKeyPublishDetails(getLatestPublish);
+      const latest = await getPublishesFromAdmins(adminNames(), groupId);
+      if (latest !== false && !latest)
+        throw new Error(t('core:message.error.network_generic'));
+      if (!isCurrentGroup(groupId) || revision !== groupLoadRevision.current)
+        return;
+      setGroupSecretKeyPublishDetails(latest);
+      if (latest) setPublishedGroupKey(false);
     } catch (error) {
-      console.log(error);
+      if (!isCurrentGroup(groupId) || revision !== groupLoadRevision.current)
+        return;
+      setGroupSecretKeyPublishDetails(null);
+      setGroupKeyLoadError(true);
+      showError(error);
     } finally {
-      setIsFetchingGroupSecretKey(false);
+      if (isCurrentGroup(groupId) && revision === groupLoadRevision.current)
+        setIsFetchingGroupSecretKey(false);
     }
-  }, [adminsWithNames, selectedGroup]);
+  }, [adminNames, selectedGroup, showError]);
 
-  const createCommonSecretForAdmins = async () => {
+  const getAdminGroupSecretKey = useCallback(async () => {
+    const groupId = selectedGroup;
+    const revision = ++adminLoadRevision.current;
+    setIsFetchingAdminGroupSecretKey(true);
+    setAdminKeyLoadError(false);
     try {
-      const fee = await getFee('ARBITRARY');
+      const latest = await getPublishesFromAdminsAdminSpace(
+        adminNames(),
+        groupId
+      );
+      const key = latest ? await readKeyPublish(latest) : null;
+      if (!isCurrentGroup(groupId) || revision !== adminLoadRevision.current)
+        return;
+      setAdminGroupSecretKey(key);
+      setAdminGroupSecretKeyPublishDetails(latest || null);
+    } catch (error) {
+      if (!isCurrentGroup(groupId) || revision !== adminLoadRevision.current)
+        return;
+      setAdminGroupSecretKey(null);
+      setAdminGroupSecretKeyPublishDetails(null);
+      setAdminKeyLoadError(true);
+      showError(error);
+    } finally {
+      if (isCurrentGroup(groupId) && revision === adminLoadRevision.current)
+        setIsFetchingAdminGroupSecretKey(false);
+    }
+  }, [adminNames, selectedGroup, showError]);
 
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'ARBITRARY',
+  useEffect(() => {
+    setGroupSecretKeyPublishDetails(null);
+    setAdminGroupSecretKey(null);
+    setAdminGroupSecretKeyPublishDetails(null);
+    setSelectedPublishForGroupKey(null);
+    setGroupKeyPublishSelectOpen(false);
+    setGroupKeyPublishConfirmOpen(false);
+    setAddNewKey(false);
+    setPublishedGroupKey(false);
+    void getGroupSecretKey();
+    void getAdminGroupSecretKey();
+    return () => {
+      groupLoadRevision.current++;
+      adminLoadRevision.current++;
+    };
+  }, [getAdminGroupSecretKey, getGroupSecretKey]);
+
+  const confirmFee = async () => {
+    const fee = await getFee('ARBITRARY');
+    await show({
+      message: t('core:message.question.perform_transaction', {
+        action: 'ARBITRARY',
+        postProcess: 'capitalizeFirstChar',
+      }),
+      publishFee: fee.fee + ' QORT',
+    });
+  };
+
+  const recordPublish = (response, groupId, keyType = 'group') => {
+    setInfoSnackCustom({
+      type: 'success',
+      message: t('group:admin_space.published'),
+    });
+    setOpenSnackGlobal(true);
+    setTxList((prev) => [
+      {
+        ...response,
+        type: 'created-common-secret',
+        keyType,
+        groupId,
+        done: false,
+        label: t('group:message.success.published_secret_key', {
+          group_id: groupId,
           postProcess: 'capitalizeFirstChar',
         }),
-        publishFee: fee.fee + ' QORT',
-      });
+        labelDone: t('group:message.success.published_secret_key_label', {
+          group_id: groupId,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      ...prev,
+    ]);
+  };
 
-      setIsLoadingPublishKey(true);
-
-      window
-        .sendMessage('encryptAndPublishSymmetricKeyGroupChatForAdmins', {
-          groupId: selectedGroup,
-          previousData: adminGroupSecretKey,
-          admins: adminsWithNames,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            setInfoSnackCustom({
-              type: 'success',
-              message: t('auth:message.success.reencrypted_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-            });
-            setOpenSnackGlobal(true);
-            return;
-          }
-          setInfoSnackCustom({
-            type: 'error',
-            message:
-              response?.error ||
-              t('auth:message.error.reencrypt_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          });
-          setOpenSnackGlobal(true);
-        })
-        .catch((error) => {
-          setInfoSnackCustom({
-            type: 'error',
-            message:
-              error?.message ||
-              t('auth:message.error.reencrypt_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          });
-          setOpenSnackGlobal(true);
-        });
+  const openGroupKeyPublishSelect = async () => {
+    if (
+      isBusy ||
+      operationInProgress.current ||
+      isFetchingGroupSecretKey ||
+      groupKeyLoadError
+    )
+      return;
+    setAddNewKey(false);
+    setSelectedPublishForGroupKey(null);
+    if (groupSecretKeyPublishDetails === false) {
+      setGroupKeyPublishConfirmOpen(true);
+      return;
+    }
+    const groupId = selectedGroup;
+    setGroupKeyPublishSelectOpen(true);
+    setLoadingGroupKeyPublishList(true);
+    setGroupKeyPublishListError(false);
+    try {
+      const list = await getAllPublishesFromAdmins(adminNames(), groupId);
+      if (!isCurrentGroup(groupId)) return;
+      setGroupKeyPublishList(list);
+      if (list.length === 0) {
+        setGroupSecretKeyPublishDetails(false);
+        setGroupKeyPublishSelectOpen(false);
+        setGroupKeyPublishConfirmOpen(true);
+      }
     } catch (error) {
-      console.log(error);
+      if (!isCurrentGroup(groupId)) return;
+      setGroupKeyPublishList([]);
+      setGroupKeyPublishListError(true);
+      showError(error);
+    } finally {
+      if (isCurrentGroup(groupId)) setLoadingGroupKeyPublishList(false);
     }
   };
 
-  useEffect(() => {
-    getAdminGroupSecretKey();
-    getGroupSecretKey();
-  }, [getAdminGroupSecretKey, getGroupSecretKey]);
-
-  const openGroupKeyPublishSelect = useCallback(async () => {
-    setGroupKeyPublishSelectOpen(true);
-    setLoadingGroupKeyPublishList(true);
-    setSelectedPublishForGroupKey(null);
+  const publishGroupKeyFromSelection = async () => {
+    if (
+      operationInProgress.current ||
+      groupKeyLoadError ||
+      isFetchingGroupSecretKey ||
+      hasPendingGroupPublish
+    )
+      return;
+    const groupId = selectedGroup;
+    const adminScope = adminScopeRef.current;
+    operationInProgress.current = true;
+    setIsPublishingGroupKey(true);
+    let paused = false;
     try {
-      const list = await getAllPublishesFromAdmins(
-        adminsWithNames.map((admin) => admin?.name),
-        selectedGroup
-      );
-      setGroupKeyPublishList(Array.isArray(list) ? list : []);
-    } catch (e) {
-      console.log(e);
-      setGroupKeyPublishList([]);
-    } finally {
-      setLoadingGroupKeyPublishList(false);
-    }
-  }, [adminsWithNames, selectedGroup]);
-
-  const publishGroupKeyFromSelection = useCallback(async () => {
-    if (!selectedPublishForGroupKey) return;
-    const publish = selectedPublishForGroupKey;
-    try {
-      const fee = await getFee('ARBITRARY');
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'ARBITRARY',
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
-      setIsPublishingGroupKey(true);
+      const names = adminNames();
+      await confirmFee();
+      if (!isCurrentGroup(groupId) || adminScope !== adminScopeRef.current)
+        return;
       pauseAllQueues();
-      const res = await fetch(
-        `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64&rebuild=true`
+      paused = true;
+      // Recheck an empty state after confirmation: another admin may have
+      // published in the meantime. Never discard an existing key history.
+      const publish =
+        selectedPublishForGroupKey ||
+        (await getPublishesFromAdmins(names, groupId));
+      if (publish !== false && !publish)
+        throw new Error(t('core:message.error.network_generic'));
+      const previousData = publish ? await readKeyPublish(publish) : null;
+      if (!isCurrentGroup(groupId) || adminScope !== adminScopeRef.current)
+        return;
+      const response = await window.sendMessage(
+        'encryptAndPublishSymmetricKeyGroupChat',
+        {
+          groupId,
+          previousData,
+          isOwner: ownerRef.current === true,
+          addKey: Boolean(
+            previousData && ownerRef.current === true && addNewKey
+          ),
+        }
       );
-      const data = await res.text();
-      const decryptedKey = await decryptResource(data);
-      const dataint8Array = base64ToUint8Array(decryptedKey.data);
-      const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
-      if (!validateSecretKey(decryptedKeyToObject))
+      if (!response || response.error)
         throw new Error(
-          t('auth:message.error.invalid_secret_key', {
-            postProcess: 'capitalizeFirstChar',
-          })
+          response?.error || t('auth:message.error.reencrypt_secret_key')
         );
-      const secretKeyToSend = decryptedKeyToObject;
-      window
-        .sendMessage('encryptAndPublishSymmetricKeyGroupChat', {
-          groupId: selectedGroup,
-          previousData: secretKeyToSend,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            setInfoSnackCustom({
-              type: 'success',
-              message: t('auth:message.success.reencrypted_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-            });
-            setOpenSnackGlobal(true);
-            setTxList((prev) => [
-              {
-                ...response,
-                type: 'created-common-secret',
-                label: t('group:message.success.published_secret_key', {
-                  group_id: selectedGroup,
-                  postProcess: 'capitalizeFirstChar',
-                }),
-                labelDone: t(
-                  'group:message.success.published_secret_key_label',
-                  {
-                    group_id: selectedGroup,
-                    postProcess: 'capitalizeFirstChar',
-                  }
-                ),
-                done: false,
-                groupId: selectedGroup,
-              },
-              ...prev,
-            ]);
-            setGroupKeyPublishSelectOpen(false);
-            setSelectedPublishForGroupKey(null);
-            getGroupSecretKey();
-          } else {
-            setInfoSnackCustom({
-              type: 'error',
-              message:
-                response?.error ||
-                t('auth:message.error.reencrypt_secret_key', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-            setOpenSnackGlobal(true);
-          }
-          setIsPublishingGroupKey(false);
-        })
-        .catch((error) => {
-          console.error(
-            'Failed to encrypt and publish symmetric key for group chat:',
-            error?.message ||
-              t('core:message.error.generic', {
-                postProcess: 'capitalizeFirstChar',
-              })
-          );
-          setInfoSnackCustom({
-            type: 'error',
-            message:
-              error?.message ||
-              t('auth:message.error.reencrypt_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          });
-          setOpenSnackGlobal(true);
-          setIsPublishingGroupKey(false);
-        });
+      recordPublish(response, groupId);
+      if (isCurrentGroup(groupId)) {
+        setPublishedGroupKey(true);
+        setGroupKeyPublishConfirmOpen(false);
+        setGroupKeyPublishSelectOpen(false);
+        setSelectedPublishForGroupKey(null);
+        setAddNewKey(false);
+      }
     } catch (error) {
-      console.log(error);
-      setIsPublishingGroupKey(false);
+      if (isCurrentGroup(groupId)) showError(error);
+    } finally {
+      if (paused) resumeAllQueues();
+      operationInProgress.current = false;
+      if (isCurrentGroup(groupId)) setIsPublishingGroupKey(false);
     }
-  }, [
-    selectedPublishForGroupKey,
-    selectedGroup,
-    show,
-    t,
-    setInfoSnackCustom,
-    setOpenSnackGlobal,
-    setTxList,
-    getGroupSecretKey,
-  ]);
+  };
+
+  const createCommonSecretForAdmins = async () => {
+    if (
+      operationInProgress.current ||
+      adminKeyLoadError ||
+      isFetchingAdminGroupSecretKey ||
+      hasPendingAdminPublish
+    )
+      return;
+    const groupId = selectedGroup;
+    const adminScope = adminScopeRef.current;
+    operationInProgress.current = true;
+    setIsLoadingPublishKey(true);
+    let paused = false;
+    try {
+      const names = adminNames();
+      await confirmFee();
+      if (!isCurrentGroup(groupId) || adminScope !== adminScopeRef.current)
+        return;
+      pauseAllQueues();
+      paused = true;
+      const publish = await getPublishesFromAdminsAdminSpace(names, groupId);
+      const previousData = publish ? await readKeyPublish(publish) : null;
+      if (!isCurrentGroup(groupId) || adminScope !== adminScopeRef.current)
+        return;
+      const response = await window.sendMessage(
+        'encryptAndPublishSymmetricKeyGroupChatForAdmins',
+        { groupId, previousData, admins: adminsWithNames }
+      );
+      if (!response || response.error)
+        throw new Error(
+          response?.error || t('auth:message.error.reencrypt_secret_key')
+        );
+      recordPublish(response, groupId, 'admin');
+      if (isCurrentGroup(groupId)) void getAdminGroupSecretKey();
+    } catch (error) {
+      if (isCurrentGroup(groupId)) showError(error);
+    } finally {
+      if (paused) resumeAllQueues();
+      operationInProgress.current = false;
+      if (isCurrentGroup(groupId)) setIsLoadingPublishKey(false);
+    }
+  };
 
   return (
     <Box
@@ -391,7 +487,7 @@ export const AdminSpaceInner = ({
           <Typography
             sx={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.01em' }}
           >
-            Group Secret Key (GSK)
+            {t('group:admin_space.gsk_title')}
           </Typography>
         )}
         {isFetchingGroupSecretKey && (
@@ -414,7 +510,9 @@ export const AdminSpaceInner = ({
         )}
 
         {!isFetchingGroupSecretKey &&
-          groupSecretKeyPublishDetails === false && (
+          groupSecretKeyPublishDetails === false &&
+          !publishedGroupKey &&
+          !hasPendingGroupPublish && (
             <Typography
               sx={
                 compact
@@ -457,16 +555,47 @@ export const AdminSpaceInner = ({
           </Typography>
         )}
 
+        {groupKeyLoadError && (
+          <Button onClick={getGroupSecretKey} disabled={isBusy}>
+            {t('core:retry')}
+          </Button>
+        )}
+        {(publishedGroupKey || hasPendingGroupPublish) && (
+          <>
+            <Typography variant="caption" color="text.secondary">
+              {t('auth:message.generic.publishing_key', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <Button
+              onClick={getGroupSecretKey}
+              disabled={isBusy || isFetchingGroupSecretKey}
+            >
+              {t('core:action.refresh', { postProcess: 'capitalizeFirstChar' })}
+            </Button>
+          </>
+        )}
         <Button
           onClick={openGroupKeyPublishSelect}
+          loading={isPublishingGroupKey}
+          disabled={
+            isBusy ||
+            isFetchingGroupSecretKey ||
+            groupKeyLoadError ||
+            groupSecretKeyPublishDetails == null ||
+            publishedGroupKey ||
+            hasPendingGroupPublish
+          }
           size={compact ? 'small' : 'medium'}
           variant="contained"
         >
-          {compact
-            ? t('group:admin_space.publish_gsk')
-            : t('auth:action.publish_group_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+          {groupSecretKeyPublishDetails === false
+            ? t('group:admin_space.create_gsk')
+            : compact
+              ? t('group:admin_space.publish_gsk')
+              : t('auth:action.publish_group_secret_key', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
         </Button>
 
         <Dialog
@@ -492,6 +621,10 @@ export const AdminSpaceInner = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
+            ) : groupKeyPublishListError ? (
+              <Typography color="error">
+                {t('core:message.error.network_generic')}
+              </Typography>
             ) : groupKeyPublishList.length === 0 ? (
               <Typography>
                 {t('auth:message.generic.no_secret_key_published', {
@@ -504,7 +637,11 @@ export const AdminSpaceInner = ({
                   const ts = publish?.updated ?? publish?.created ?? 0;
                   const dateNum =
                     typeof ts === 'number' ? ts : new Date(ts).getTime();
-                  const label = `${formatTimestampForum(dateNum)} by ${publish?.name ?? ''}`;
+                  const label = t('auth:message.generic.last_encryption_date', {
+                    date: formatTimestampForum(dateNum),
+                    name: publish?.name ?? '',
+                    postProcess: 'capitalizeFirstChar',
+                  });
                   return (
                     <ListItemButton
                       key={`${publish.name}-${dateNum}`}
@@ -534,16 +671,20 @@ export const AdminSpaceInner = ({
                 postProcess: 'capitalizeFirstChar',
               })}
             </Button>
-            <LoadingButton
+            <Button
               variant="contained"
               loading={isPublishingGroupKey}
               onClick={() => setGroupKeyPublishConfirmOpen(true)}
-              disabled={!selectedPublishForGroupKey}
+              disabled={
+                loadingGroupKeyPublishList ||
+                groupKeyPublishListError ||
+                !selectedPublishForGroupKey
+              }
             >
               {t('core:action.publish', {
                 postProcess: 'capitalizeFirstChar',
               })}
-            </LoadingButton>
+            </Button>
           </DialogActions>
         </Dialog>
 
@@ -560,10 +701,40 @@ export const AdminSpaceInner = ({
           </DialogTitle>
           <DialogContent>
             <Typography>
-              {t('auth:message.generic.confirm_publish_group_secret_key_body', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              {t(
+                selectedPublishForGroupKey
+                  ? 'auth:message.generic.confirm_publish_group_secret_key_body'
+                  : 'group:admin_space.create_gsk_confirm',
+                {
+                  postProcess: 'capitalizeFirstChar',
+                }
+              )}
             </Typography>
+            {selectedPublishForGroupKey && isOwner === true && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={addNewKey}
+                      disabled={isBusy}
+                      onChange={(event) => setAddNewKey(event.target.checked)}
+                    />
+                  }
+                  label={t('group:message.generic.add_new_key_option', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                >
+                  {t('group:message.generic.add_new_key_sparingly', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </>
+            )}
           </DialogContent>
           <DialogActions>
             <Button
@@ -576,11 +747,9 @@ export const AdminSpaceInner = ({
             </Button>
             <Button
               variant="contained"
-              onClick={() => {
-                setGroupKeyPublishConfirmOpen(false);
-                publishGroupKeyFromSelection();
-              }}
-              disabled={isPublishingGroupKey}
+              onClick={publishGroupKeyFromSelection}
+              loading={isPublishingGroupKey}
+              disabled={isLoadingPublishKey}
             >
               {t('core:action.confirm', {
                 postProcess: 'capitalizeFirstChar',
@@ -626,7 +795,7 @@ export const AdminSpaceInner = ({
           <Typography
             sx={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.01em' }}
           >
-            Admin Secret Key (ASK)
+            {t('group:admin_space.ask_title')}
           </Typography>
         )}
         {isFetchingAdminGroupSecretKey && (
@@ -648,24 +817,26 @@ export const AdminSpaceInner = ({
           </Typography>
         )}
 
-        {!isFetchingAdminGroupSecretKey && !adminGroupSecretKey && (
-          <Typography
-            sx={
-              compact
-                ? {
-                    color: 'text.secondary',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    lineHeight: 1.4,
-                  }
-                : undefined
-            }
-          >
-            {t('auth:message.generic.no_secret_key_published', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        )}
+        {!isFetchingAdminGroupSecretKey &&
+          !adminKeyLoadError &&
+          !adminGroupSecretKey && (
+            <Typography
+              sx={
+                compact
+                  ? {
+                      color: 'text.secondary',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      lineHeight: 1.4,
+                    }
+                  : undefined
+              }
+            >
+              {t('auth:message.generic.no_secret_key_published', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          )}
 
         {adminGroupSecretKeyPublishDetails && (
           <Typography
@@ -691,17 +862,30 @@ export const AdminSpaceInner = ({
           </Typography>
         )}
 
+        {adminKeyLoadError && (
+          <Button onClick={getAdminGroupSecretKey} disabled={isBusy}>
+            {t('core:retry')}
+          </Button>
+        )}
         <Button
-          disabled={isFetchingAdminGroupSecretKey}
+          loading={isLoadingPublishKey}
+          disabled={
+            isBusy ||
+            isFetchingAdminGroupSecretKey ||
+            adminKeyLoadError ||
+            hasPendingAdminPublish
+          }
           onClick={createCommonSecretForAdmins}
           size={compact ? 'small' : 'medium'}
           variant="contained"
         >
-          {compact
-            ? t('group:admin_space.publish_ask')
-            : t('auth:action.publish_admin_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+          {!adminGroupSecretKey
+            ? t('group:admin_space.create_ask')
+            : compact
+              ? t('group:admin_space.publish_ask')
+              : t('auth:action.publish_admin_secret_key', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
         </Button>
 
         {!compact && <Spacer height="20px" />}
@@ -730,8 +914,9 @@ export const AdminSpaceInner = ({
             pt: 0,
           }}
         >
-          Reminder: After publishing the key, please allow a few minutes for it
-          to appear.
+          {t('auth:message.generic.publishing_key', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
       )}
     </Box>

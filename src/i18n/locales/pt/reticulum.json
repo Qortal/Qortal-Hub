@@ -183,11 +183,11 @@
       "legacy": "Versão anterior"
     },
     "legacy": {
-      "description": "Mostrar os antigos controlos Threads e Admin no cabeçalho do Q-Chat.",
+      "description": "Mostrar o antigo botão Threads no cabeçalho do Q-Chat.",
       "title": "Threads",
       "toggle": {
         "aria": "Mostrar os Threads antigos",
-        "description": "Mostra os antigos ícones Threads e Admin.",
+        "description": "Mostra o antigo ícone Threads.",
         "label": "Threads"
       },
       "warning": "Os Threads serão removidos na próxima versão. Move as informações importantes dos tópicos para um local seguro ou para um novo canal do Q-Chat antes de atualizar."

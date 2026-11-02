@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "Administraatorite salajane võti (ASK)",
+    "create_ask": "Loo administraatorite salajane võti",
+    "create_gsk": "Loo grupi salajane võti",
+    "create_gsk_confirm": "Kas luua ja avaldada grupi esimene salajane võti? Võti krüptitakse grupi liikmete jaoks. Rakendub QDN-i avaldamistasu.",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "Grupi salajane võti (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "Salajane võti on avaldatud. Selle ilmumiseks võib kuluda mõni minut."
   },
   "advanced_options": "lisavalikud",
   "announcement_placeholder": "Write an announcement...",

@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "管理者秘密鍵（ASK）",
+    "create_ask": "管理者秘密鍵を作成",
+    "create_gsk": "グループ秘密鍵を作成",
+    "create_gsk_confirm": "グループの最初の秘密鍵を作成して公開しますか？鍵はグループメンバー向けに暗号化されます。QDNの公開手数料がかかります。",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "グループ秘密鍵（GSK）",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "秘密鍵を公開しました。表示されるまで数分かかる場合があります。"
   },
   "advanced_options": "高度なオプション",
   "announcement_placeholder": "Write an announcement...",

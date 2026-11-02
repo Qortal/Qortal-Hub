@@ -183,11 +183,11 @@
       "legacy": "Vana versioon"
     },
     "legacy": {
-      "description": "Näita Q-Chati päises vanu Threadsi ja Admini juhtnuppe.",
+      "description": "Näita Q-Chati päises vana Threadsi nuppu.",
       "title": "Threads",
       "toggle": {
         "aria": "Näita vana Threadsi",
-        "description": "Kuvab vanad Threadsi ja Admini ikoonid.",
+        "description": "Kuvab vana Threadsi ikooni.",
         "label": "Threads"
       },
       "warning": "Threads eemaldatakse tulevases versioonis. Vii oluline lõimede teave enne uuendamist turvalisse kohta või uude Q-Chati kanalisse."
