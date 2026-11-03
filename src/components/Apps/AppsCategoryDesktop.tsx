@@ -16,9 +16,6 @@ import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
 import { AppCardEnhanced } from './AppCard';
 import { useTranslation } from 'react-i18next';
-import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
-import { executeEvent } from '../../utils/events';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { useAtom } from 'jotai';
 import { appSortAtom } from '../../atoms/appsAtoms';
 import { SortDropdown, SortOption } from './Filters';
@@ -76,6 +73,14 @@ export const AppsCategoryDesktop = ({
     };
   }, [searchValue]);
 
+  // Going back to the library clears the category; start the next one with an empty search.
+  // Returning from app info keeps the category, so its search is kept too.
+  useEffect(() => {
+    if (category) return;
+    setSearchValue('');
+    setDebouncedValue('');
+  }, [category]);
+
   const searchedAndSortedList = useMemo(() => {
     let result = categoryList;
 
@@ -111,31 +116,11 @@ export const AppsCategoryDesktop = ({
       >
         <AppsWidthLimiter
           sx={{
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             alignItems: 'center',
             flexDirection: 'row',
           }}
         >
-          <ShowMessageReturnButton
-            sx={{
-              padding: '2px',
-            }}
-            onClick={() => {
-              executeEvent('navigateBack', {});
-              setSearchValue('');
-            }}
-          >
-            <ReturnIcon />
-            <ComposeP
-              sx={{
-                fontSize: '18px',
-              }}
-            >
-              {t('core:action.return', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </ComposeP>
-          </ShowMessageReturnButton>
           <AppsSearchContainer
             sx={{
               width: '412px',
