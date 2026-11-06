@@ -432,7 +432,9 @@
     "wallet_password": "Rahakoti parool",
     "wallet_password_placeholder": "Sisesta rahakoti parool",
     "wallet_password_required": "Privaatvõtme dekrüpteerimiseks sisesta rahakoti parool.",
-    "wallet_unavailable_error": "Rahakoti andmed pole praegu saadaval."
+    "wallet_unavailable_error": "Rahakoti andmed pole praegu saadaval.",
+    "widgets_module": "Vidinad",
+    "widgets_module_desc": "Kuva avalehel oma vidinaid: väikseid Q-Appe, näiteks kella või ilma. Lülita välja, et need enam ei töötaks."
   },
   "dm": {
     "add_friend_before_calling": "Lisa see kasutaja enne helistamist sõbraks",
@@ -672,6 +674,35 @@
     "register_name": "Registreeri oma nimi",
     "register_name_pending_hint": "Nime salvestamine ahelas võtab hetk.",
     "register_name_workspace_hint": "Registreeritud nimi muudab selle konto äratuntavaks identiteediks."
+  },
+  "home_widgets": {
+    "add": "lisa",
+    "add_widget": "lisa vidin",
+    "added": "lisatud",
+    "arrange": "korralda",
+    "arrange_hint": "Lohista vidinat selle teisaldamiseks või selle nurka suuruse muutmiseks.",
+    "arrange_widget": "{{title}}: nooleklahvid teisaldavad, Shift ja nooleklahvid muudavad suurust, Delete eemaldab.",
+    "by": "autor {{name}}",
+    "done": "valmis",
+    "empty": "Pane avalehele väikesed Q-Appid: kell, ilm, lemmikrakenduste uusimad postitused.",
+    "error": {
+      "not_allowed": "Vidinad ei saa seda teha. Ava selleks rakendus (OPEN_NEW_TAB).",
+      "not_on_screen": "Avaleht pole nähtaval, seega ei saa vidinad seda küsida."
+    },
+    "limit": "Avalehel võib olla kuni {{max}} vidinat.",
+    "load_failed": "{{title}} ei laadinud.",
+    "loading": "{{title}} laadimine",
+    "open_app": "ava {{name}}",
+    "picker_developers": "Q-Appi arendajad: avaldage vidin APP-ina sildiga go-widget või identifikaatoriga, mis algab go-widget.",
+    "picker_empty": "Vidinaid pole veel avaldatud.",
+    "picker_error": "Vidinaid ei õnnestunud laadida. Kontrolli ühendust sõlmega.",
+    "picker_none_found": "Sobivaid vidinaid pole.",
+    "picker_note": "Vidinad on väikesed Q-Appid avalehel. Need saavad asju näidata ja rakendusi avada, kuid ei saa midagi maksta, avaldada ega allkirjastada.",
+    "picker_search": "Otsi vidinaid",
+    "picker_title": "Lisa vidin",
+    "reload": "laadi vidin uuesti",
+    "remove": "eemalda vidin",
+    "title": "Vidinad"
   },
   "important_info": "oluline teave",
   "initial": {

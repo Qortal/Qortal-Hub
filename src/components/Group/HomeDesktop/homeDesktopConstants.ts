@@ -59,6 +59,8 @@ export const HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY =
   'home-dashboard-module-group-activity-visible';
 export const HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY =
   'home-dashboard-module-quitter-feed-visible';
+export const HOME_WIDGETS_VISIBLE_STORAGE_KEY =
+  'home-dashboard-module-widgets-visible';
 export const HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX = 60;
 export const HOME_DASHBOARD_WIDGET_HEIGHT_PX = 612;
 export const HOME_DASHBOARD_WIDGET_DISPLAY_MODE: WidgetDisplayMode = 'expanded';

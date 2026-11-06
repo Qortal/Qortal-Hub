@@ -432,7 +432,9 @@
     "wallet_password": "钱包密码",
     "wallet_password_placeholder": "输入钱包密码",
     "wallet_password_required": "输入钱包密码以解密私钥。",
-    "wallet_unavailable_error": "钱包数据暂时不可用。"
+    "wallet_unavailable_error": "钱包数据暂时不可用。",
+    "widgets_module": "小组件",
+    "widgets_module_desc": "在首页显示你的小组件：时钟、天气等小型 Q-App。关闭后它们将停止运行。"
   },
   "dm": {
     "add_friend_before_calling": "通话前请先将此用户加为好友",
@@ -672,6 +674,35 @@
     "register_name": "注册您的名称",
     "register_name_pending_hint": "正在链上保存姓名，这可能需要一点时间。",
     "register_name_workspace_hint": "注册姓名后，此账户会变成可识别的身份。"
+  },
+  "home_widgets": {
+    "add": "添加",
+    "add_widget": "添加小组件",
+    "added": "已添加",
+    "arrange": "排列",
+    "arrange_hint": "拖动小组件可移动它，拖动它的角可调整大小。",
+    "arrange_widget": "{{title}}：方向键移动，Shift 加方向键调整大小，Delete 键移除。",
+    "by": "来自 {{name}}",
+    "done": "完成",
+    "empty": "把小型 Q-App 放到首页：时钟、天气、你喜爱的应用的最新动态。",
+    "error": {
+      "not_allowed": "小组件无法执行此操作。请打开应用来完成 (OPEN_NEW_TAB)。",
+      "not_on_screen": "首页未显示，因此小组件无法请求此操作。"
+    },
+    "limit": "首页最多可放置 {{max}} 个小组件。",
+    "load_failed": "{{title}} 未能加载。",
+    "loading": "正在加载 {{title}}",
+    "open_app": "打开 {{name}}",
+    "picker_developers": "Q-App 开发者：将小组件以 APP 形式发布，并添加标签 go-widget，或使用以 go-widget 开头的标识符。",
+    "picker_empty": "尚未发布任何小组件。",
+    "picker_error": "无法加载小组件。请检查节点连接。",
+    "picker_none_found": "没有匹配的小组件。",
+    "picker_note": "小组件是首页上的小型 Q-App。它们可以显示内容和打开应用，但不能付款、发布或签名任何内容。",
+    "picker_search": "搜索小组件",
+    "picker_title": "添加小组件",
+    "reload": "重新加载小组件",
+    "remove": "移除小组件",
+    "title": "小组件"
   },
   "important_info": "重要信息",
   "initial": {

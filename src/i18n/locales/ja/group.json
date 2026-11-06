@@ -432,7 +432,9 @@
     "wallet_password": "ウォレットのパスワード",
     "wallet_password_placeholder": "ウォレットのパスワードを入力",
     "wallet_password_required": "秘密鍵を復号するにはウォレットのパスワードを入力してください。",
-    "wallet_unavailable_error": "ウォレットデータは現在利用できません。"
+    "wallet_unavailable_error": "ウォレットデータは現在利用できません。",
+    "widgets_module": "ウィジェット",
+    "widgets_module_desc": "ホームにウィジェットを表示します。時計や天気などの小さな Q-App です。オフにすると実行されなくなります。"
   },
   "dm": {
     "add_friend_before_calling": "通話する前にこのユーザーを友だちに追加してください",
@@ -672,6 +674,35 @@
     "register_name": "名前を登録する",
     "register_name_pending_hint": "名前をオンチェーンで保存しています。しばらくかかることがあります。",
     "register_name_workspace_hint": "名前を登録すると、このアカウントが識別しやすい身元になります。"
+  },
+  "home_widgets": {
+    "add": "追加",
+    "add_widget": "ウィジェットを追加",
+    "added": "追加済み",
+    "arrange": "並べ替え",
+    "arrange_hint": "ウィジェットをドラッグすると移動、角をドラッグするとサイズを変更できます。",
+    "arrange_widget": "{{title}}：矢印キーで移動、Shift と矢印キーでサイズ変更、Delete で削除します。",
+    "by": "作成者: {{name}}",
+    "done": "完了",
+    "empty": "ホームに小さな Q-App を置きましょう。時計、天気、お気に入りアプリの最新の投稿など。",
+    "error": {
+      "not_allowed": "ウィジェットではこの操作はできません。アプリを開いて行ってください (OPEN_NEW_TAB)。",
+      "not_on_screen": "ホームが表示されていないため、ウィジェットはこれを要求できません。"
+    },
+    "limit": "ホームに置けるウィジェットは最大 {{max}} 個です。",
+    "load_failed": "{{title}} を読み込めませんでした。",
+    "loading": "{{title}} を読み込み中",
+    "open_app": "{{name}} を開く",
+    "picker_developers": "Q-App 開発者の方へ：ウィジェットは APP として、タグ go-widget を付けるか、go-widget で始まる識別子で公開してください。",
+    "picker_empty": "公開されているウィジェットはまだありません。",
+    "picker_error": "ウィジェットを読み込めませんでした。ノードへの接続を確認してください。",
+    "picker_none_found": "一致するウィジェットはありません。",
+    "picker_note": "ウィジェットはホームに置く小さな Q-App です。情報を表示したりアプリを開いたりできますが、支払い、公開、署名は一切できません。",
+    "picker_search": "ウィジェットを検索",
+    "picker_title": "ウィジェットを追加",
+    "reload": "ウィジェットを再読み込み",
+    "remove": "ウィジェットを削除",
+    "title": "ウィジェット"
   },
   "important_info": "重要な情報",
   "initial": {

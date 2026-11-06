@@ -432,7 +432,9 @@
     "wallet_password": "Lompakon salasana",
     "wallet_password_placeholder": "Syötä lompakon salasana",
     "wallet_password_required": "Syötä lompakon salasana yksityisen avaimen salauksen purkamiseen.",
-    "wallet_unavailable_error": "Lompakon tiedot eivät ole juuri nyt saatavilla."
+    "wallet_unavailable_error": "Lompakon tiedot eivät ole juuri nyt saatavilla.",
+    "widgets_module": "Widgetit",
+    "widgets_module_desc": "Näytä widgetisi etusivulla: pieniä Q-Appeja, kuten kello tai sää. Poista käytöstä, niin ne eivät enää ole käynnissä."
   },
   "dm": {
     "add_friend_before_calling": "Lisää tämä käyttäjä kaveriksi ennen soittamista",
@@ -672,6 +674,35 @@
     "register_name": "Rekisteröi nimesi",
     "register_name_pending_hint": "Nimeä tallennetaan ketjuun — tämä voi kestää hetken.",
     "register_name_workspace_hint": "Rekisteröity nimi tekee tilistä tunnistettavan identiteetin."
+  },
+  "home_widgets": {
+    "add": "lisää",
+    "add_widget": "lisää widget",
+    "added": "lisätty",
+    "arrange": "järjestä",
+    "arrange_hint": "Vedä widgetiä siirtääksesi sitä tai sen kulmaa muuttaaksesi kokoa.",
+    "arrange_widget": "{{title}}: nuolinäppäimet siirtävät, Vaihto ja nuolinäppäimet muuttavat kokoa, Delete poistaa.",
+    "by": "tekijä {{name}}",
+    "done": "valmis",
+    "empty": "Lisää etusivulle pieniä Q-Appeja: kello, sää, suosikkisovellustesi uusimmat julkaisut.",
+    "error": {
+      "not_allowed": "Widgetit eivät voi tehdä tätä. Avaa sovellus sitä varten (OPEN_NEW_TAB).",
+      "not_on_screen": "Etusivu ei ole näkyvissä, joten widgetit eivät voi pyytää tätä."
+    },
+    "limit": "Etusivulla voi olla enintään {{max}} widgetiä.",
+    "load_failed": "{{title}} ei latautunut.",
+    "loading": "Ladataan {{title}}",
+    "open_app": "avaa {{name}}",
+    "picker_developers": "Q-App-kehittäjät: julkaise widget APP-resurssina tagilla go-widget tai tunnisteella, joka alkaa go-widget.",
+    "picker_empty": "Widgettejä ei ole vielä julkaistu.",
+    "picker_error": "Widgettejä ei voitu ladata. Tarkista yhteys solmuun.",
+    "picker_none_found": "Ei vastaavia widgettejä.",
+    "picker_note": "Widgetit ovat pieniä Q-Appeja etusivulla. Ne voivat näyttää asioita ja avata sovelluksia, mutta eivät voi maksaa, julkaista tai allekirjoittaa mitään.",
+    "picker_search": "Hae widgettejä",
+    "picker_title": "Lisää widget",
+    "reload": "lataa widget uudelleen",
+    "remove": "poista widget",
+    "title": "Widgetit"
   },
   "important_info": "tärkeää tietoa",
   "initial": {
