@@ -41,8 +41,7 @@ type LoadState =
   | { phase: 'ready'; widgets: HomeWidgetListing[] };
 
 /**
- * The widgets published on QDN (tagged go-widget, or with a go-widget…
- * identifier), to add to Home. Nothing runs from here: a widget only loads
+ * The widgets published on QDN (APPs tagged go-widget), to add to Home. Nothing runs from here: a widget only loads
  * once it is on Home.
  */
 export const HomeWidgetPicker = ({
@@ -244,7 +243,7 @@ export const HomeWidgetPicker = ({
               >
                 {t('group:home_widgets.picker_developers', {
                   defaultValue:
-                    'Q-App developers: publish a widget as an APP with the tag go-widget, or with an identifier starting with go-widget.',
+                    'Q-App developers: publish a widget as an APP with the tag go-widget, ideally with an identifier starting with go-widget.',
                 })}
               </Typography>
             ) : null}

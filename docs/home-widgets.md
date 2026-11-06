@@ -24,17 +24,23 @@ implements it.
 
 ### Publishing: how the Hub finds widgets
 
-An `APP` resource is listed as a widget when **either** is true:
+An `APP` resource is listed as a widget when it is **tagged `go-widget`** (any
+letter case). Give it an identifier starting with `go-widget` as well, e.g.
+`APP / Torq / go-widget-news`:
 
-| Rule                                             | Example                        | Notes                                                                                                                      |
-| ------------------------------------------------ | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Identifier starts with `go-widget` (recommended) | `APP / Torq / go-widget-news`  | A name publishes its widget beside its main app. Core filters identifier prefixes on the node, so these are found quickly. |
-| Tagged `go-widget` (any letter case)             | `APP / Clock`, tag `go-widget` | For a name whose default APP is the widget. Core has no tag filter, so the Hub reads all APP metadata to find these.       |
+- your name can publish the widget next to its main app;
+- Core filters identifier prefixes on the node, so the picker finds it
+  quickly. Core has no tag filter, so widgets under other identifiers are
+  only found by reading all APP metadata.
 
-Use both when you can: identifier `go-widget-<slug>` and tag `go-widget`.
 The picker shows the resource's **title** and **description** and the name's
 avatar. `WEBSITE` resources are never widgets; publish the widget page as an
 `APP`. Blocked names are left out by the node.
+
+**Retiring a widget:** republish it under the same name and identifier
+without the `go-widget` tag, for example as a "moved" notice. It leaves the
+list, but everyone who already added it keeps loading it, since saved widgets
+are loaded by name and identifier.
 
 ```js
 await qortalRequest({

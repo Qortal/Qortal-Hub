@@ -693,7 +693,7 @@
     "load_failed": "تعذّر تحميل {{title}}.",
     "loading": "جارٍ تحميل {{title}}",
     "open_app": "افتح {{name}}",
-    "picker_developers": "لمطوري Q-App: انشر الأداة المصغّرة كـ APP مع الوسم go-widget، أو بمعرّف يبدأ بـ go-widget.",
+    "picker_developers": "لمطوري Q-App: انشر الأداة المصغّرة كـ APP مع الوسم go-widget، ويُفضَّل بمعرّف يبدأ بـ go-widget.",
     "picker_empty": "لم تُنشر أي أدوات مصغّرة بعد.",
     "picker_error": "تعذّر تحميل الأدوات المصغّرة. تحقّق من الاتصال بالعقدة.",
     "picker_none_found": "لا توجد أدوات مصغّرة مطابقة.",

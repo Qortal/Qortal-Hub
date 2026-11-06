@@ -693,7 +693,7 @@
     "load_failed": "{{title}} 未能加载。",
     "loading": "正在加载 {{title}}",
     "open_app": "打开 {{name}}",
-    "picker_developers": "Q-App 开发者：将小组件以 APP 形式发布，并添加标签 go-widget，或使用以 go-widget 开头的标识符。",
+    "picker_developers": "Q-App 开发者：将小组件以 APP 形式发布并添加标签 go-widget，最好使用以 go-widget 开头的标识符。",
     "picker_empty": "尚未发布任何小组件。",
     "picker_error": "无法加载小组件。请检查节点连接。",
     "picker_none_found": "没有匹配的小组件。",

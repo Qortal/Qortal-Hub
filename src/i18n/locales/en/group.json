@@ -693,7 +693,7 @@
     "load_failed": "{{title}} didn't load.",
     "loading": "Loading {{title}}",
     "open_app": "open {{name}}",
-    "picker_developers": "Q-App developers: publish a widget as an APP with the tag go-widget, or with an identifier starting with go-widget.",
+    "picker_developers": "Q-App developers: publish a widget as an APP with the tag go-widget, ideally with an identifier starting with go-widget.",
     "picker_empty": "No widgets published yet.",
     "picker_error": "Couldn't load the widgets. Check the node connection.",
     "picker_none_found": "No widgets match.",

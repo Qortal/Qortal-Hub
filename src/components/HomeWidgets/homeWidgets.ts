@@ -18,11 +18,15 @@ import {
  * weather, the latest posts of an app, ...). The same widgets run on the
  * widgets screen of Qortal GO, so they are found and loaded the same way.
  *
- * A Q-App is a widget when it is published as an APP resource and either
- * - is tagged `go-widget` (any letter case), or
- * - has an identifier starting with `go-widget` (`go-widget-news`), which
- *   lets a name publish its widget next to its main app, and which Core can
- *   filter on the node (identifier prefix search) where tags cannot be.
+ * A Q-App is a widget when it is published as an APP resource tagged
+ * `go-widget` (any letter case). An identifier starting with `go-widget`
+ * (`go-widget-news`) is recommended on top: it lets a name publish its widget
+ * next to its main app, and Core can filter it on the node (identifier prefix
+ * search) where it cannot filter tags, so such widgets are found quickly.
+ *
+ * Republishing a widget without the tag retires it: it leaves the list, but
+ * keeps loading for everyone who has already added it (a "moved" notice, for
+ * example), since saved widgets are loaded by name and identifier.
  *
  * Nothing runs until the user adds it: Home shows only the widgets in the
  * saved list, and the list only takes what the user picked.
@@ -87,10 +91,6 @@ const hasWidgetTag = (tags: unknown): boolean =>
     (tag) => typeof tag === 'string' && tag.trim().toLowerCase() === WIDGET_TAG
   );
 
-const hasWidgetIdentifier = (identifier: string | null): boolean =>
-  identifier !== null &&
-  identifier.toLowerCase().startsWith(WIDGET_IDENTIFIER_PREFIX);
-
 /** The listing for `resource` when it is a widget, else null. */
 export const toWidgetListing = (
   resource: QdnAppResource | null | undefined
@@ -98,13 +98,8 @@ export const toWidgetListing = (
   if (!resource || resource.service !== 'APP') return null;
   const name = typeof resource.name === 'string' ? resource.name.trim() : '';
   if (!name) return null;
+  if (!hasWidgetTag(resource.metadata?.tags)) return null;
   const identifier = normalizeIdentifier(resource.identifier);
-  if (
-    !hasWidgetTag(resource.metadata?.tags) &&
-    !hasWidgetIdentifier(identifier)
-  ) {
-    return null;
-  }
   const title =
     typeof resource.metadata?.title === 'string' &&
     resource.metadata.title.trim()

@@ -36,12 +36,13 @@ describe('toWidgetListing', () => {
     });
   });
 
-  it('takes an APP whose identifier starts with go-widget, untagged', () => {
+  it('takes a tagged APP under a go-widget identifier, next to its app', () => {
     expect(
       toWidgetListing({
         name: 'Torq',
         service: 'APP',
         identifier: 'go-widget-news',
+        metadata: { tags: ['go-widget'] },
         created: 3,
       })
     ).toMatchObject({
@@ -68,6 +69,19 @@ describe('toWidgetListing', () => {
     [
       'an identifier that only contains it',
       { name: 'X', service: 'APP', identifier: 'my-go-widget' },
+    ],
+    [
+      'a go-widget identifier without the tag',
+      { name: 'Torq', service: 'APP', identifier: 'go-widget-news' },
+    ],
+    [
+      'a retired widget (republished without the tag, e.g. "moved")',
+      {
+        name: 'Weather Now',
+        service: 'APP',
+        identifier: 'go-widget-now',
+        metadata: { title: 'Moved to Q-Weather', tags: ['weather'] },
+      },
     ],
     [
       'tags that are not a list',

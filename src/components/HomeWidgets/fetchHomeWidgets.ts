@@ -7,12 +7,13 @@ import {
 } from './homeWidgets';
 
 /**
- * The widgets published on QDN, for the picker. Two searches, side by side:
+ * The widgets published on QDN, for the picker: APP resources tagged
+ * `go-widget`. Two searches, side by side:
  *
  * - by identifier prefix (`go-widget…`): Core filters it on the node, so the
- *   answer holds widgets only and is small and quick;
- * - every APP resource with its metadata, filtered here by the `go-widget`
- *   tag (Core's search has no tag filter).
+ *   answer is small and quick (retired widgets in it, untagged, are left out);
+ * - every APP resource with its metadata, for widgets under other
+ *   identifiers (Core's search has no tag filter).
  *
  * Either one failing still shows what the other found. Blocked names are left
  * out by the node (excludeblocked). Kept for a few minutes per node, so the

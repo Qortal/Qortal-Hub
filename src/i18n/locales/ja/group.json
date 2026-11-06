@@ -693,7 +693,7 @@
     "load_failed": "{{title}} を読み込めませんでした。",
     "loading": "{{title}} を読み込み中",
     "open_app": "{{name}} を開く",
-    "picker_developers": "Q-App 開発者の方へ：ウィジェットは APP として、タグ go-widget を付けるか、go-widget で始まる識別子で公開してください。",
+    "picker_developers": "Q-App 開発者の方へ：ウィジェットは APP として、タグ go-widget を付けて公開してください（go-widget で始まる識別子がおすすめです）。",
     "picker_empty": "公開されているウィジェットはまだありません。",
     "picker_error": "ウィジェットを読み込めませんでした。ノードへの接続を確認してください。",
     "picker_none_found": "一致するウィジェットはありません。",

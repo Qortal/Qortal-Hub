@@ -693,7 +693,7 @@
     "load_failed": "{{title}} non si è caricato.",
     "loading": "Caricamento di {{title}}",
     "open_app": "apri {{name}}",
-    "picker_developers": "Sviluppatori di Q-App: pubblicate un widget come APP con il tag go-widget, o con un identificatore che inizia con go-widget.",
+    "picker_developers": "Sviluppatori di Q-App: pubblicate un widget come APP con il tag go-widget, meglio con un identificatore che inizia con go-widget.",
     "picker_empty": "Nessun widget ancora pubblicato.",
     "picker_error": "Impossibile caricare i widget. Controlla la connessione al nodo.",
     "picker_none_found": "Nessun widget corrisponde.",

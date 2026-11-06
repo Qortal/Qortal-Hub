@@ -693,7 +693,7 @@
     "load_failed": "{{title}} wurde nicht geladen.",
     "loading": "{{title}} wird geladen",
     "open_app": "{{name}} öffnen",
-    "picker_developers": "Q-App-Entwickler: Veröffentlicht ein Widget als APP mit dem Tag go-widget oder mit einem Identifier, der mit go-widget beginnt.",
+    "picker_developers": "Q-App-Entwickler: Veröffentlicht ein Widget als APP mit dem Tag go-widget, am besten mit einem Identifier, der mit go-widget beginnt.",
     "picker_empty": "Noch keine Widgets veröffentlicht.",
     "picker_error": "Die Widgets konnten nicht geladen werden. Prüfe die Verbindung zum Node.",
     "picker_none_found": "Keine passenden Widgets.",

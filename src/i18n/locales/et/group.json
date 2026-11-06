@@ -693,7 +693,7 @@
     "load_failed": "{{title}} ei laadinud.",
     "loading": "{{title}} laadimine",
     "open_app": "ava {{name}}",
-    "picker_developers": "Q-Appi arendajad: avaldage vidin APP-ina sildiga go-widget või identifikaatoriga, mis algab go-widget.",
+    "picker_developers": "Q-Appi arendajad: avaldage vidin APP-ina sildiga go-widget, soovitatavalt identifikaatoriga, mis algab go-widget.",
     "picker_empty": "Vidinaid pole veel avaldatud.",
     "picker_error": "Vidinaid ei õnnestunud laadida. Kontrolli ühendust sõlmega.",
     "picker_none_found": "Sobivaid vidinaid pole.",

@@ -693,7 +693,7 @@
     "load_failed": "{{title}} ei latautunut.",
     "loading": "Ladataan {{title}}",
     "open_app": "avaa {{name}}",
-    "picker_developers": "Q-App-kehittäjät: julkaise widget APP-resurssina tagilla go-widget tai tunnisteella, joka alkaa go-widget.",
+    "picker_developers": "Q-App-kehittäjät: julkaise widget APP-resurssina tagilla go-widget, mieluiten tunnisteella, joka alkaa go-widget.",
     "picker_empty": "Widgettejä ei ole vielä julkaistu.",
     "picker_error": "Widgettejä ei voitu ladata. Tarkista yhteys solmuun.",
     "picker_none_found": "Ei vastaavia widgettejä.",
