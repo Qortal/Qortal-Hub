@@ -883,7 +883,7 @@
   },
   "supply": "supply",
   "tabs": {
-    "add_private": "+ private app",
+    "add_private": "Private app",
     "categories": "categories",
     "community_apps": "community apps",
     "my_apps": "my apps",

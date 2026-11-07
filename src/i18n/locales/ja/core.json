@@ -883,7 +883,7 @@
   },
   "supply": "供給",
   "tabs": {
-    "add_private": "+ プライベートアプリ",
+    "add_private": "プライベートアプリ",
     "categories": "カテゴリ",
     "community_apps": "コミュニティアプリ",
     "my_apps": "マイアプリ",

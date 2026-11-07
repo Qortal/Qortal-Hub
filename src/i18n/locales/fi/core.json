@@ -883,7 +883,7 @@
   },
   "supply": "tarjonta",
   "tabs": {
-    "add_private": "+ yksityinen sovellus",
+    "add_private": "Yksityinen sovellus",
     "categories": "kategoriat",
     "community_apps": "yhteisösovellukset",
     "my_apps": "omat sovellukset",

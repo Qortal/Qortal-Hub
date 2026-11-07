@@ -883,7 +883,7 @@
   },
   "supply": "供应",
   "tabs": {
-    "add_private": "+ 私人应用",
+    "add_private": "私人应用",
     "categories": "分类",
     "community_apps": "社区应用",
     "my_apps": "我的应用",
