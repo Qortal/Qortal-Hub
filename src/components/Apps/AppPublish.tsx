@@ -2,7 +2,6 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   AppLibrarySubTitle,
   AppPublishTagsContainer,
-  AppsBackContainer,
   AppsLibraryContainer,
   AppsWidthLimiter,
   PublishQAppCTAButton,
@@ -26,11 +25,6 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
-import {
-  ComposeP,
-  ShowMessageReturnButton,
-} from '../Group/Forum/Mail-styles.ts';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
@@ -355,31 +349,6 @@ export const AppPublish = ({
         paddingTop: '30px',
       }}
     >
-      <AppsBackContainer>
-        <Spacer height="20px" />
-
-        <ShowMessageReturnButton
-          sx={{
-            padding: '2px',
-          }}
-          onClick={() => {
-            executeEvent('navigateBack', {});
-          }}
-        >
-          <ReturnIcon />
-          <ComposeP
-            sx={{
-              fontSize: '18px',
-            }}
-          >
-            {t('core:action.return', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </ComposeP>
-        </ShowMessageReturnButton>
-
-        <Spacer height="20px" />
-      </AppsBackContainer>
       <AppsWidthLimiter
         sx={{
           width: 'auto',

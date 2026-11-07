@@ -76,6 +76,55 @@ const context = {
 };
 
 describe('generic trusted MOQT transport', () => {
+  it('releases the old attachment before requesting replacement credentials', async () => {
+    const { transport, sidecar, provider } = setup();
+    await transport.open(context);
+    let finish!: () => void;
+    sidecar.closeMoqSession.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    sidecar.emit('death', 'SIDECAR_EXITED');
+    await Promise.resolve();
+    expect(provider.getBootstrap).toHaveBeenCalledTimes(1);
+    finish();
+    await transport.metrics();
+    expect(provider.getBootstrap).toHaveBeenCalledTimes(2);
+    await transport.close();
+  });
+  it('isolates subscription rejection and does not restore rejected tracks on recovery', async () => {
+    const { transport, sidecar, events } = setup();
+    await transport.open(context);
+    await transport.subscribe('rejected', ['opaque'], 'events');
+    await transport.subscribe('healthy', ['opaque'], 'audio');
+    sidecar.emit('event', {
+      sessionId: 'moq-session',
+      event: 'error',
+      subscriptionId: 'rejected',
+      code: 'MOQ_SUBSCRIBE_REJECTED',
+    });
+    expect(sidecar.closeMoqSession).not.toHaveBeenCalled();
+    expect(events).toContainEqual({
+      kind: 'error',
+      subscriptionId: 'rejected',
+      code: 'MOQ_SUBSCRIBE_REJECTED',
+    });
+    sidecar.emit('death', 'SIDECAR_EXITED');
+    await transport.metrics();
+    expect(
+      sidecar.subscribeMoqTrack.mock.calls.filter(
+        (call) => call[1] === 'rejected'
+      )
+    ).toHaveLength(1);
+    expect(
+      sidecar.subscribeMoqTrack.mock.calls.filter(
+        (call) => call[1] === 'healthy'
+      )
+    ).toHaveLength(2);
+    await transport.close();
+  });
   it.each(['MOQ_QUEUE_LIMIT', 'MOQ_OBJECT_EXPIRED'])(
     'does not reconnect for expected delivery pressure: %s',
     async (code) => {
@@ -288,8 +337,7 @@ describe('generic trusted MOQT transport', () => {
     sidecar.emit('event', {
       event: 'error',
       sessionId: 'moq-session',
-      code: 'MOQ_READ_FAILED',
-      subscriptionId: 'subscription-1',
+      code: 'MOQ_TRANSPORT_CLOSED',
       data: Buffer.alloc(0),
     });
     await transport.publish(new Uint8Array([9]));

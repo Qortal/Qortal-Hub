@@ -117,7 +117,6 @@
     "resize": "изменить размер",
     "restore": "восстановить",
     "return": "вернуться",
-    "return_apps_dashboard": "Вернуться в приложения для приложений",
     "save": "сохранять",
     "save_disk": "сохранить на диск",
     "search": "поиск",
@@ -728,6 +727,7 @@
   "payment": "оплата",
   "payment_notification": "уведомление о платеже",
   "payments_count": "Платежи ({{count}})",
+  "pdf_viewer": "Просмотр PDF",
   "poll_embed": "Опрос встроен",
   "port": "порт",
   "presence": {

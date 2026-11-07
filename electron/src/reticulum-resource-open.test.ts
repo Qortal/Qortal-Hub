@@ -6,7 +6,6 @@ import {
   materializeReticulumResourceForOpen,
   safeReticulumOpenFileName,
 } from './reticulum-resource-open';
-
 describe('reticulum resource OS opening', () => {
   const temporaryDirectories: string[] = [];
 

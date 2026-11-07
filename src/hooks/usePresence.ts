@@ -138,6 +138,50 @@ export function buildPresenceSnapshot(sessions: PresenceSession[]): {
   return { onlineAddresses, statusMap };
 }
 
+type PresenceUpdate = {
+  address: string;
+  online: boolean;
+  status: UserStatus | null;
+};
+
+export function applyOnlineAddressPresenceUpdates(
+  previous: Set<string>,
+  updates: PresenceUpdate[]
+): Set<string> {
+  let next: Set<string> | null = null;
+
+  for (const { address, online } of updates) {
+    const current = next ?? previous;
+    if (current.has(address) === online) continue;
+
+    next ??= new Set(previous);
+    if (online) next.add(address);
+    else next.delete(address);
+  }
+
+  return next ?? previous;
+}
+
+export function applyStatusPresenceUpdates(
+  previous: Map<string, UserStatus>,
+  updates: PresenceUpdate[]
+): Map<string, UserStatus> {
+  let next: Map<string, UserStatus> | null = null;
+
+  for (const { address, online, status } of updates) {
+    const current = next ?? previous;
+    const nextStatus = online ? status : null;
+    const currentStatus = current.get(address) ?? null;
+    if (currentStatus === nextStatus) continue;
+
+    next ??= new Map(previous);
+    if (nextStatus) next.set(address, nextStatus);
+    else next.delete(address);
+  }
+
+  return next ?? previous;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -662,31 +706,13 @@ export function usePresence(): {
       setStatusMap(snapshot.statusMap);
     });
 
-    const applyPresenceUpdates = (
-      updates: Array<{
-        address: string;
-        online: boolean;
-        status: UserStatus | null;
-      }>
-    ) => {
+    const applyPresenceUpdates = (updates: PresenceUpdate[]) => {
       if (updates.length === 0) return;
       unstable_batchedUpdates(() => {
-        setOnlineAddresses((prev) => {
-          const next = new Set(prev);
-          for (const { address, online } of updates) {
-            if (online) next.add(address);
-            else next.delete(address);
-          }
-          return next;
-        });
-        setStatusMap((prev) => {
-          const next = new Map(prev);
-          for (const { address, online, status } of updates) {
-            if (online && status) next.set(address, status);
-            else next.delete(address);
-          }
-          return next;
-        });
+        setOnlineAddresses((prev) =>
+          applyOnlineAddressPresenceUpdates(prev, updates)
+        );
+        setStatusMap((prev) => applyStatusPresenceUpdates(prev, updates));
       });
     };
 
@@ -698,8 +724,8 @@ export function usePresence(): {
 
     const unsubscribeCleared = window.presence.onCleared?.(() => {
       unstable_batchedUpdates(() => {
-        setOnlineAddresses(new Set());
-        setStatusMap(new Map());
+        setOnlineAddresses((prev) => (prev.size === 0 ? prev : new Set()));
+        setStatusMap((prev) => (prev.size === 0 ? prev : new Map()));
       });
     });
 

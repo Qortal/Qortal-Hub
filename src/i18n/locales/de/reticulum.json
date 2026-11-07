@@ -183,11 +183,11 @@
       "legacy": "Legacy"
     },
     "legacy": {
-      "description": "Zeige die alten Threads- und Admin-Steuerelemente in der Q-Chat-Kopfzeile an.",
+      "description": "Zeige die alte Threads-Schaltfläche in der Q-Chat-Kopfzeile an.",
       "title": "Threads",
       "toggle": {
         "aria": "Alte Threads anzeigen",
-        "description": "Zeigt die alten Threads- und Admin-Symbole an.",
+        "description": "Zeigt das alte Threads-Symbol an.",
         "label": "Threads"
       },
       "warning": "Threads werden in der kommenden Version entfernt. Verschiebe wichtige Thread-Informationen vor dem Update an einen sicheren Ort oder in einen neuen Kanal in Q-Chat."

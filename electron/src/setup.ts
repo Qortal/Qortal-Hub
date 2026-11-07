@@ -1,3 +1,10 @@
+import { registerMainWindowWalletStorage } from './main-window-storage';
+import {
+  installMainWindowNavigationPolicy,
+  isMainWindowUrl,
+  requireMainWindowSender,
+} from './main-window-policy';
+import { registerMainWindowFileIpc } from './main-window-files';
 import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
@@ -8,6 +15,9 @@ import { createForeignWalletJournal } from './foreign-wallet-journal';
 import { QAppFileSaves, SaveError } from './qapp-file-save';
 import { qappGuestPartition, qappGuestUrlAllowed, type QAppGuestOwner } from './qapp-guest-policy';
 import { restrictQAppGuestWebRtc } from './qapp-guest-network-policy';
+import { QAppFileWorkers, QAPP_FILE_WORKER_CSP } from './qapp-file-workers';
+import { QAPP_FILE_WORKER_URL } from './qapp-file-protocol';
+import { isQAppFileGuest } from './qapp-file-guest';
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import {
   CapElectronEventEmitter,
@@ -37,6 +47,7 @@ import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
+import { openLocalPath } from './desktop-shell';
 import { installDisplayMediaPicker } from './display-media-picker';
 import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
@@ -51,6 +62,8 @@ import {
   sendToRenderer,
 } from './renderer-delivery';
 import { createRefcountedSubscriberSet } from './refcounted-subscriber-set';
+import { PresenceRendererUpdateDeduplicator } from './presence-renderer-updates';
+import { maybeStartRendererCpuProfile } from './renderer-cpu-profile';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -148,9 +161,9 @@ import {
 } from './reticulum-bridge';
 import {
   QAppReticulumManager,
-  type QAppReticulumNativeEvent,
   type QAppReticulumOwner,
 } from './qapp-reticulum-manager';
+import { QAppReticulumBridgeTransport } from './qapp-reticulum-bridge-transport';
 import {
   PrivateChannelError,
   PrivateChannelManager,
@@ -196,7 +209,10 @@ import {
   buildAudioSurfaceUrl,
   withAudioSurfaceIsolationHeaders,
 } from './audio-window-policy';
-import { withEmbeddedFrameWebRtcBlocked } from './embedded-frame-network-policy';
+import {
+  withEmbeddedFrameWebRtcBlocked,
+  type WebRtcDocumentScope,
+} from './embedded-frame-network-policy';
 import { ensureAudioSurfaceHttpsServer } from './audio-surface-https';
 import {
   buildDefaultAudioSurfaceBridgeStateLike,
@@ -362,7 +378,6 @@ function attachGroupAudioIpcTiming(
   });
 }
 
-const AdmZip = require('adm-zip');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -668,7 +683,16 @@ function isMainShellSender(sender: Electron.WebContents): boolean {
   return Boolean(
     mainWindow &&
     !mainWindow.isDestroyed() &&
-    mainWindow.webContents.id === sender.id
+    mainWindow.webContents.id === sender.id &&
+    isMainWindowUrl(sender.getURL(), `${myCapacitorApp.getCustomURLScheme()}://-`)
+  );
+}
+
+function requireMainShellEvent(event: Electron.IpcMainInvokeEvent): void {
+  requireMainWindowSender(
+    event,
+    myCapacitorApp?.getMainWindow?.()?.webContents,
+    `${myCapacitorApp?.getCustomURLScheme?.()}://-`
   );
 }
 
@@ -1063,7 +1087,10 @@ export class ElectronCapacitorApp {
       backgroundColor: '#27282c',
       frame: false,
       webPreferences: {
-        nodeIntegration: true,
+        nodeIntegration: false,
+        // The existing preload uses Node modules; keep its isolated context
+        // unsandboxed while removing Node from the page itself.
+        sandbox: false,
         contextIsolation: true,
         webviewTag: true,
         preload: preloadPath,
@@ -1071,9 +1098,21 @@ export class ElectronCapacitorApp {
         additionalArguments: [
           `--hub-p2p-seeds=${seedsB64}`,
           `--window-role=${MAIN_WINDOW_ROLE}`,
+          `--hub-shell-url=${this.customScheme}://-`,
         ],
       },
     });
+    installMainWindowNavigationPolicy(
+      this.MainWindow.webContents,
+      `${this.customScheme}://-`,
+      (url) => shell.openExternal(url),
+      (error) => loggerError('Main window navigation failed', error)
+    );
+    const mainContents = this.MainWindow.webContents;
+    const revokeFiles = () => mainWindowFiles.revoke(mainContents.id);
+    mainContents.on('did-navigate', revokeFiles);
+    mainContents.on('render-process-gone', revokeFiles);
+    mainContents.on('destroyed', revokeFiles);
     configuredQAppSessions.clear();
     this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
       const prepared = [...preparedQAppGuests.values()].find(
@@ -1102,10 +1141,12 @@ export class ElectronCapacitorApp {
     });
     this.MainWindow.webContents.on('did-attach-webview', (_event, guest) => {
       attachedQAppGuests.set(guest.id, { contents: guest, prepared: null });
-      // Restrict WebRTC on the Q-App guest itself. The iframe response policy
-      // does not cover a webview's main document, and this also covers nested
-      // frames that share the guest's WebContents.
+      // Defense in depth alongside the guest session's document-level WebRTC
+      // block. This IP policy alone still permits direct TURN over TCP.
       restrictQAppGuestWebRtc(guest);
+      guest.once('dom-ready', () => {
+        maybeStartRendererCpuProfile(guest, 'qapp-guest');
+      });
       guest.setWindowOpenHandler(() => ({ action: 'deny' }));
       const allowedGuestUrl = (nextUrl: string) => {
         const bound = attachedQAppGuests.get(guest.id)?.prepared;
@@ -1122,8 +1163,8 @@ export class ElectronCapacitorApp {
       guest.on('will-redirect', (event, nextUrl, _inPlace, isMainFrame) => {
         if (isMainFrame && !allowedGuestUrl(nextUrl)) event.preventDefault();
       });
-      guest.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
-        if (mainFrame && !inPlace) {
+      guest.on('did-frame-navigate', (_event, _url, _code, _status, mainFrame) => {
+        if (mainFrame) {
           const owner = attachedQAppGuests.get(guest.id)?.prepared?.owner;
           if (owner) void cleanupQAppOwner(owner);
         }
@@ -1143,9 +1184,8 @@ export class ElectronCapacitorApp {
       attachedQAppGuests.clear();
       preparedQAppGuests.clear();
     };
-    this.MainWindow.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
-      if (mainFrame && !inPlace) clearGuestRegistrations();
-    });
+    // Blocked external links must not disconnect the active QApps.
+    this.MainWindow.webContents.on('did-navigate', clearGuestRegistrations);
     this.MainWindow.webContents.on('destroyed', clearGuestRegistrations);
     this.mainWindowState.manage(this.MainWindow);
     installDisplayMediaPicker(this.MainWindow);
@@ -1316,26 +1356,12 @@ export class ElectronCapacitorApp {
       this.loadMainWindow(this);
     }
 
-    // Security
-    this.MainWindow.webContents.setWindowOpenHandler((details) => {
-      if (!details.url.includes(this.customScheme)) {
-        return { action: 'deny' };
-      } else {
-        return { action: 'allow' };
-      }
-    });
-
-    this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
-      if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
-        event.preventDefault();
-      }
-    });
-
     // Link electron plugins into the system.
     setupCapacitorElectronPlugins();
 
     // When the web app is loaded we hide the splashscreen if needed and show the mainwindow.
     this.MainWindow.webContents.on('dom-ready', () => {
+      maybeStartRendererCpuProfile(this.MainWindow.webContents, 'main-shell');
       if (this.CapacitorFileConfig.electron?.splashScreenEnabled) {
         this.SplashScreen.getSplashWindow().hide();
       }
@@ -1355,10 +1381,23 @@ export class ElectronCapacitorApp {
   }
 }
 
-export function setupContentSecurityPolicy(customScheme: string, targetSession = session.defaultSession): void {
+export function setupContentSecurityPolicy(
+  customScheme: string,
+  targetSession = session.defaultSession,
+  documentScope: WebRtcDocumentScope = 'hub'
+): void {
   targetSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
       const requestUrl = details.url;
+      // The file executor has no page scripts or embedded content. Never replace
+      // its policy with the permissive policy required by untrusted Q-Apps.
+      if (requestUrl === QAPP_FILE_WORKER_URL) {
+        callback({ responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [QAPP_FILE_WORKER_CSP],
+        } });
+        return;
+      }
       const expandedDomains = [...domainHolder.allowedDomains];
       for (const d of domainHolder.allowedDomains) {
         try {
@@ -1455,7 +1494,8 @@ export function setupContentSecurityPolicy(customScheme: string, targetSession =
           ...filtered,
           'Content-Security-Policy': [csp],
         },
-        { resourceType: details.resourceType }
+        { resourceType: details.resourceType },
+        documentScope
       );
 
       Object.assign(
@@ -1587,64 +1627,10 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle('dialog:openFile', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile'],
-    filters: [
-      { name: 'ZIP Files', extensions: ['zip'] }, // Restrict to ZIP files
-    ],
-  });
-  return result.filePaths[0];
-});
-
-ipcMain.handle('fs:readFile', async (_, filePath) => {
-  try {
-    // Ensure the file exists
-    if (!fs.existsSync(filePath)) {
-      throw new Error('File does not exist.');
-    }
-
-    // Ensure the filePath is an absolute path (optional but recommended for safety)
-    const absolutePath = path.resolve(filePath);
-
-    // Read the file as a Buffer
-    const fileBuffer = fs.readFileSync(absolutePath);
-
-    return fileBuffer;
-  } catch (error) {
-    loggerError('Error reading file:', error.message);
-    return null; // Return null on error
-  }
-});
-
-ipcMain.handle('fs:selectAndZip', async (_, path) => {
-  let directoryPath = path;
-  if (!directoryPath) {
-    const { canceled, filePaths } = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-    });
-    if (canceled || filePaths.length === 0) {
-      loggerError('No directory selected');
-      return null;
-    }
-
-    directoryPath = filePaths[0];
-  }
-
-  try {
-    // Add the entire directory to the zip
-    const zip = new AdmZip();
-
-    // Add the entire directory to the zip
-    zip.addLocalFolder(directoryPath);
-
-    // Generate the zip file as a buffer
-    const zipBuffer = zip.toBuffer();
-
-    return { buffer: zipBuffer, directoryPath };
-  } catch (error) {
-    return null;
-  }
+const mainWindowFiles = registerMainWindowFileIpc({
+  ipcMain,
+  dialog,
+  checkSender: requireMainShellEvent,
 });
 
 // Helper to get or create the shared settings directory
@@ -1834,12 +1820,8 @@ app.on('web-contents-created', (_event, contents) => {
   const clearIfHost = () => {
     if (foreignSignerOwner === contentsId) clearForeignWalletSigner();
   };
-  contents.on(
-    'did-start-navigation',
-    (_event, _url, isInPlace, isMainFrame) => {
-      if (isMainFrame && !isInPlace) clearIfHost();
-    }
-  );
+  // A prevented navigation leaves the existing signing session intact.
+  contents.on('did-navigate', clearIfHost);
   contents.on('render-process-gone', clearIfHost);
   contents.on('destroyed', clearIfHost);
 });
@@ -1869,13 +1851,15 @@ ipcMain.handle(
     getForeignWalletJournal(event).delete(key, txId)
 );
 
-ipcMain.handle('persistentStore:get', async (_event, key: string) =>
-  persistentStore.get(key)
-);
+ipcMain.handle('persistentStore:get', async (_event, key: string) => {
+  requireMainShellEvent(_event);
+  return persistentStore.get(key);
+});
 
 ipcMain.handle(
   'persistentStore:set',
   async (_event, key: string, value: unknown) => {
+    requireMainShellEvent(_event);
     await persistentStore.set(key, value);
     if (key === DEV_LOGS_DISABLED_STORAGE_KEY) {
       const next = value === false ? false : true;
@@ -1886,6 +1870,7 @@ ipcMain.handle(
 );
 
 ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
+  requireMainShellEvent(_event);
   await persistentStore.deleteKey(key);
   if (key === DEV_LOGS_DISABLED_STORAGE_KEY) {
     setDisableDevLogs(true);
@@ -1894,6 +1879,7 @@ ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
 });
 
 ipcMain.handle('logger:setDisableDevLogs', async (_event, value: boolean) => {
+  requireMainShellEvent(_event);
   const next = value === false ? false : true;
   setDisableDevLogs(next);
   setReticulumBridgeDeveloperLogsFiltered(next);
@@ -1901,18 +1887,21 @@ ipcMain.handle('logger:setDisableDevLogs', async (_event, value: boolean) => {
   return next;
 });
 
-ipcMain.handle('miscPersistentStore:get', async (_event, key: string) =>
-  miscPersistentStore.get(key)
-);
+ipcMain.handle('miscPersistentStore:get', async (_event, key: string) => {
+  requireMainShellEvent(_event);
+  return miscPersistentStore.get(key);
+});
 
 ipcMain.handle(
   'miscPersistentStore:set',
   async (_event, key: string, value: unknown) => {
+    requireMainShellEvent(_event);
     await miscPersistentStore.set(key, value);
   }
 );
 
 ipcMain.handle('miscPersistentStore:delete', async (_event, key: string) => {
+  requireMainShellEvent(_event);
   await miscPersistentStore.deleteKey(key);
 });
 
@@ -2099,36 +2088,12 @@ export async function startAppSettingsWatcher(): Promise<() => void> {
   return () => fs.unwatchFile(filePath);
 }
 
-// READ handler
-ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
-  try {
-    const filePath = await getSharedSettingsFilePath(fileName);
-
-    const stats = await fs.promises.stat(filePath).catch(() => null);
-    if (!stats || !stats.isFile()) return null;
-
-    return fs.promises.readFile(filePath, 'utf-8');
-  } catch (err) {
-    loggerError(`Error in walletStorage:read for "${fileName}"`, err);
-    return null;
-  }
+registerMainWindowWalletStorage({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  getFilePath: () => getSharedSettingsFilePath('wallet-storage.json'),
+  onError: (error) => loggerError('Error reading wallet storage', error),
 });
-
-// WRITE handler
-ipcMain.handle(
-  'walletStorage:write',
-  async (_event, fileName: string, contents: string) => {
-    try {
-      const filePath = await getSharedSettingsFilePath(fileName);
-
-      await fs.promises.writeFile(filePath, contents, 'utf-8');
-      return true;
-    } catch (err) {
-      loggerError(`Error in walletStorage:write for "${fileName}"`, err);
-      throw err;
-    }
-  }
-);
 
 // Persistent store: shared across instances via atomic writes to appData/qortal-hub/
 // Uses write-file-atomic to prevent partial writes corrupting the file.
@@ -2277,80 +2242,6 @@ ipcMain.handle(
     return { ok: true };
   }
 );
-
-// Handler for initiating a streaming file save
-ipcMain.handle(
-  'file:startStreamSave',
-  async (_event, options: { filename: string; mimeType?: string }) => {
-    try {
-      // Show save dialog
-      const result = await dialog.showSaveDialog({
-        defaultPath: options.filename,
-        filters: options.mimeType
-          ? [
-              {
-                name: 'File',
-                extensions: [options.filename.split('.').pop() || '*'],
-              },
-            ]
-          : undefined,
-      });
-
-      if (result.canceled || !result.filePath) {
-        return { canceled: true };
-      }
-
-      return {
-        canceled: false,
-        filePath: result.filePath,
-      };
-    } catch (err) {
-      loggerError('Error in file:startStreamSave', err);
-      throw err;
-    }
-  }
-);
-
-// Handler for writing chunks to a file
-ipcMain.handle(
-  'file:writeChunk',
-  async (_event, filePath: string, chunk: Uint8Array, append: boolean) => {
-    try {
-      const buffer = Buffer.from(chunk);
-      const mode = append ? 'append' : 'write';
-      loggerLog(
-        `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
-      );
-
-      if (append) {
-        await fs.promises.appendFile(filePath, buffer);
-      } else {
-        await fs.promises.writeFile(filePath, buffer);
-      }
-
-      // Get file size after write to verify
-      const stats = await fs.promises.stat(filePath);
-      loggerLog(`[IPC] File size after write: ${stats.size} bytes`);
-
-      return true;
-    } catch (err) {
-      loggerError('[IPC] Error writing chunk to', filePath, ':', err);
-      throw err;
-    }
-  }
-);
-
-// Handler for cleaning up failed downloads
-ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
-  try {
-    await fs.promises.unlink(filePath);
-    return true;
-  } catch (err) {
-    loggerError('Error deleting file', filePath, err);
-    // Don't throw - file might not exist
-    return false;
-  }
-});
 
 const progressSubscribers = new Set<Electron.WebContents>();
 
@@ -2999,6 +2890,7 @@ export function stopReticulumManagers(): void {
     reticulumChatSubscriptionReplayTimer = null;
   }
   stopPresenceMainHeartbeatScheduler();
+  resetPresenceRendererUpdateState();
   stopStunCoordinator();
   stopReticulumMeshCoordinator();
   stopGroupCallManager();
@@ -3021,31 +2913,20 @@ export function stopReticulumManagers(): void {
 let qAppReticulumManager: QAppReticulumManager | null = null;
 let privateChannelManager: PrivateChannelManager | null = null;
 let qAppMoqTransportManager: QAppMoqTransportManager | null = null;
-let qAppReticulumBridge: ReturnType<typeof getReticulumBridge> = null;
-const qAppReticulumNativeListeners = new Set<
-  (event: QAppReticulumNativeEvent) => void
->();
 
 function getQAppReticulumManager(): QAppReticulumManager {
   if (qAppReticulumManager) return qAppReticulumManager;
-  const transport = {
-    invoke: async (action: string, payload: Record<string, unknown>) => {
-      await ensureReticulumManagersStarted();
-      const bridge = getReticulumBridge() ?? (await startReticulumBridge());
-      if (qAppReticulumBridge !== bridge) {
-        qAppReticulumBridge = bridge;
-        bridge.on('qapp-rns', (event: QAppReticulumNativeEvent) => {
-          for (const listener of qAppReticulumNativeListeners) listener(event);
-        });
-      }
-      return bridge.invokeQAppReticulum(action as any, payload);
-    },
-    onEvent: (listener: (event: QAppReticulumNativeEvent) => void) => {
-      qAppReticulumNativeListeners.add(listener);
-      return () => qAppReticulumNativeListeners.delete(listener);
-    },
-  };
+  const transport = new QAppReticulumBridgeTransport(async () => {
+    await ensureReticulumManagersStarted();
+    return getReticulumBridge() ?? (await startReticulumBridge());
+  });
   qAppReticulumManager = new QAppReticulumManager(transport);
+  qAppReticulumManager.on('connection-closed', (owner, connectionId) => {
+    void Promise.allSettled([
+      privateChannelManager?.cleanupRnsConnection(owner, connectionId),
+      qAppMoqTransportManager?.cleanupRnsConnection(owner, connectionId),
+    ]);
+  });
   qAppReticulumManager.on('event', (event) => {
     const win = myCapacitorApp.getMainWindow();
     if (!win.isDestroyed()) win.webContents.send('qappReticulum:event', event);
@@ -3157,15 +3038,22 @@ ipcMain.handle('qappFileSave:request', async (event, owner, request) => {
 setInterval(() => { void qappFileSaves?.expire(); }, 30_000).unref();
 app.on('before-quit', () => { void qappFileSaves?.cleanup(); });
 app.on('web-contents-created', (_event, contents) => {
-  const cleanup = () => { if (isMainShellSender(contents)) void qappFileSaves?.cleanup(); };
+  // Lifecycle cleanup uses window identity even after its URL has changed.
+  const cleanup = () => {
+    if (myCapacitorApp?.getMainWindow?.()?.webContents.id === contents.id) {
+      void qappFileSaves?.cleanup();
+    }
+  };
   contents.on('render-process-gone', cleanup);
   contents.on('destroyed', cleanup);
-  contents.on('did-start-navigation', (_e, _url, inPlace, mainFrame) => {
-    if (mainFrame && !inPlace) cleanup();
-  });
+  contents.on('did-navigate', cleanup);
 });
 
 async function cleanupQAppOwner(owner: QAppReticulumOwner): Promise<void> {
+  for (const attached of attachedQAppGuests.values()) {
+    if (attached.prepared && qappGuestOwnerKey(attached.prepared.owner) === qappGuestOwnerKey(owner))
+      qappFileWorkers.releaseGuest(attached.contents);
+  }
   // All managers snapshot their old resources before any shutdown is awaited.
   await Promise.allSettled([
     privateChannelManager?.cleanupOwner(owner),
@@ -3184,9 +3072,10 @@ type PreparedQAppGuest = {
   preloadTokenUrl: string;
 };
 const preparedQAppGuests = new Map<string, PreparedQAppGuest>();
-const attachedQAppGuests = new Map<number, { contents: WebContents; prepared: PreparedQAppGuest | null }>();
+const attachedQAppGuests = new Map<number, { contents: WebContents; prepared: PreparedQAppGuest | null; documentId?: string }>();
+const qappFileWorkers = new QAppFileWorkers();
 const configuredQAppSessions = new Set<string>();
-const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.js');
+const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.bundle.js');
 
 function qappGuestOwnerKey(owner: QAppGuestOwner): string {
   return `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
@@ -3195,7 +3084,11 @@ function qappGuestOwnerKey(owner: QAppGuestOwner): string {
 function configureQAppGuestSession(partition: string): void {
   if (configuredQAppSessions.has(partition)) return;
   const guestSession = session.fromPartition(partition);
-  setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme(), guestSession);
+  setupContentSecurityPolicy(
+    myCapacitorApp.getCustomURLScheme(),
+    guestSession,
+    'qapp-guest'
+  );
   installCertificateVerification(guestSession);
   installLocalNodeHttpsBlock(guestSession);
   installDisplayMediaPicker(
@@ -3232,11 +3125,12 @@ ipcMain.handle('qappGuest:prepare', (event, owner: QAppGuestOwner, url: string, 
   };
 });
 
-ipcMain.handle('qappGuest:hello', (event, guestToken: string) => {
+ipcMain.handle('qappGuest:hello', (event, guestToken: string, documentId: string) => {
   if (event.sender.getType() !== 'webview' ||
       event.senderFrame !== event.sender.mainFrame ||
       typeof guestToken !== 'string' ||
-      !/^[a-f0-9-]{36}$/.test(guestToken))
+      !/^[a-f0-9-]{36}$/.test(guestToken) ||
+      typeof documentId !== 'string' || !/^[a-f0-9]{32}$/.test(documentId))
     throw new Error('QAPP_PERMISSION_DENIED');
   const prepared = [...preparedQAppGuests.values()].find(
     (candidate) => candidate.guestToken === guestToken
@@ -3256,7 +3150,26 @@ ipcMain.handle('qappGuest:hello', (event, guestToken: string) => {
   ))
     throw new Error('QAPP_GUEST_MISMATCH');
   attached.prepared = prepared;
+  if (attached.documentId && attached.documentId !== documentId)
+    qappFileWorkers.releaseGuest(event.sender);
+  attached.documentId = documentId;
   return true;
+});
+
+ipcMain.handle('qappFiles:open', async (event, documentId, requestId, bytes, files) => {
+  const attached = attachedQAppGuests.get(event.sender.id);
+  const prepared = attached?.prepared;
+  if (!isQAppFileGuest(event, attached,
+      prepared && preparedQAppGuests.get(qappGuestOwnerKey(prepared.owner)),
+      prepared && session.fromPartition(prepared.partition), documentId))
+    throw new Error('QAPP_PERMISSION_DENIED');
+  try {
+    await qappFileWorkers.open(event.sender, myCapacitorApp.getMainWindow().webContents,
+      attached.prepared.partition, documentId, requestId, bytes, files);
+  } catch (error) {
+    if (error?.message === 'QAPP_BRIDGE_BUSY') return { busy: true };
+    throw error;
+  }
 });
 
 ipcMain.handle('qappGuest:release', (event, owner: QAppGuestOwner) => {
@@ -3267,6 +3180,7 @@ ipcMain.handle('qappGuest:release', (event, owner: QAppGuestOwner) => {
   for (const [guestId, attached] of attachedQAppGuests) {
     if (!attached.prepared || qappGuestOwnerKey(attached.prepared.owner) !== key)
       continue;
+    qappFileWorkers.releaseGuest(attached.contents);
     attachedQAppGuests.delete(guestId);
   }
   void cleanupQAppOwner(owner);
@@ -3297,8 +3211,8 @@ ipcMain.handle(
   'qappReticulum:close',
   async (event, owner: QAppReticulumOwner, connectionId: string) => {
     validateQAppReticulumIpcSender(event);
-    await privateChannelManager?.cleanupRnsConnection(owner, connectionId);
-    await qAppMoqTransportManager?.cleanupRnsConnection(owner, connectionId);
+    // Revoke logical ownership before any asynchronous transport cleanup.
+    // The manager's connection-closed listener starts dependent cleanup too.
     await getQAppReticulumManager().close(owner, connectionId);
     return true;
   }
@@ -3633,6 +3547,8 @@ ipcMain.on('p2p:peerChange:unsubscribe', (event) => {
 
 const presenceUpdateSubscribers = new Set<Electron.WebContents>();
 const queuedPresenceUpdates = new Map<string, unknown>();
+const presenceRendererUpdateDeduplicator =
+  new PresenceRendererUpdateDeduplicator();
 let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let lateReticulumRecoveryCleanup: (() => void) | null = null;
 const RETICULUM_OVERLAY_SYNC_RETRY_DELAYS_MS = [1_000, 3_000, 10_000, 30_000];
@@ -3691,10 +3607,16 @@ function queuePresenceUpdate(payload: unknown): void {
 }
 
 function broadcastPresenceUpdate(payload: unknown): void {
+  if (!presenceRendererUpdateDeduplicator.shouldForward(payload)) return;
+
   loggerLog(
     '[Presence] Broadcasting presence update from manager to renderer queue'
   );
   queuePresenceUpdate(payload);
+}
+
+function resetPresenceRendererUpdateState(): void {
+  presenceRendererUpdateDeduplicator.reset();
 }
 
 async function syncReticulumOverlayStateToBridge(
@@ -4407,6 +4329,9 @@ ipcMain.handle('presence:getAllOnline', async () => {
 });
 
 ipcMain.on('presence:subscribe', (event) => {
+  if (presenceUpdateSubscribers.size === 0) {
+    presenceRendererUpdateDeduplicator.reset();
+  }
   presenceUpdateSubscribers.add(event.sender);
   loggerLog(
     `[Presence] Renderer subscribed. subscriber_count=${presenceUpdateSubscribers.size}`
@@ -4761,7 +4686,10 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle('reticulumChat:clearLocalAccountState', async () => {
+ipcMain.handle('reticulumChat:clearLocalAccountState', async (event) => {
+  validateQAppReticulumIpcSender(event);
+  if (event.senderFrame !== event.sender.mainFrame) throw new Error('QAPP_PERMISSION_DENIED');
+  qappFileWorkers.releaseAll();
   await qappFileSaves?.cleanup();
   setRelayAccount('', true);
   reticulumLocalAccountLifecycleGeneration += 1;
@@ -5274,13 +5202,9 @@ function ensureReticulumChatReservationLifecycle(sender: WebContents): number {
   if (!reticulumChatReservationLifecycleWired.has(webContentsId)) {
     reticulumChatReservationLifecycleWired.add(webContentsId);
     reticulumChatReservationEpochs.set(webContentsId, 0);
-    sender.on(
-      'did-start-navigation',
-      (_event, _url, _isInPlace, isMainFrame) => {
-        if (isMainFrame)
-          releaseReticulumChatReservationsForWebContents(webContentsId);
-      }
-    );
+    sender.on('did-navigate', () => {
+      releaseReticulumChatReservationsForWebContents(webContentsId);
+    });
     sender.once('destroyed', () => {
       releaseReticulumChatReservationsForWebContents(webContentsId);
       reticulumChatReservationLifecycleWired.delete(webContentsId);
@@ -6287,7 +6211,7 @@ ipcMain.handle(
           suggestedFileName,
           fallbackFileName: manifest.fileName || 'attachment.bin',
         });
-        const openError = await shell.openPath(openPath);
+        const openError = await openLocalPath(openPath, shell);
         if (openError) {
           return { success: false, error: openError };
         }

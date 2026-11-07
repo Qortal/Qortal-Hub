@@ -115,7 +115,6 @@
     "resize": "Größe ändern",
     "restore": "wiederherstellen",
     "return": "zurück",
-    "return_apps_dashboard": "Kehren Sie zu Apps Dashboard zurück",
     "save": "speichern",
     "save_disk": "Speichern auf der Festplatte",
     "search": "suchen",
@@ -726,6 +725,7 @@
   "payment": "Zahlung",
   "payment_notification": "Zahlungsbenachrichtigung",
   "payments_count": "Zahlungen ({{count}})",
+  "pdf_viewer": "PDF-Anzeige",
   "poll_embed": "Umfrage Einbettung",
   "port": "Hafen",
   "presence": {

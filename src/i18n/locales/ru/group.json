@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "Секретный ключ администраторов (ASK)",
+    "create_ask": "Создать секретный ключ администраторов",
+    "create_gsk": "Создать секретный ключ группы",
+    "create_gsk_confirm": "Создать и опубликовать первый секретный ключ группы? Ключ будет зашифрован для участников группы. Взимается комиссия за публикацию в QDN.",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "Секретный ключ группы (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "Секретный ключ опубликован. Он может появиться через несколько минут."
   },
   "advanced_options": "расширенные настройки",
   "announcement_placeholder": "Write an announcement...",
@@ -796,12 +802,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Недостаточно места на диске для сохранения этого вложения",
     "delete_shortcut": "Удалить (Shift+Del)",
     "download_failed": "Ошибка загрузки",
     "file_attachment": "Вложенный файл",
     "file_transfer": "Передача файла",
     "file_unavailable": "Файл недоступен",
     "image_attachment": "Вложенное изображение",
+    "image_disk_full": "Недостаточно места на диске для сохранения этого изображения",
+    "image_download_failed": "Не удалось загрузить изображение",
     "image_unavailable_no_peers": "Изображение сейчас недоступно (нет узлов)",
     "invalid_attachment": "Недопустимое вложение ресурса",
     "new_messages": "Новые сообщения",

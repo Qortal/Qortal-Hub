@@ -22,7 +22,19 @@ import {
 import { getForeignWalletMainnetChainId } from './foreign-wallet-spend-context';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 
-function fixture(coin: (typeof foreignCoins)[number]) {
+function uint64Le(value: bigint) {
+  return Array.from({ length: 8 }, (_, index) =>
+    Number((value >> BigInt(index * 8)) & 0xffn)
+      .toString(16)
+      .padStart(2, '0')
+  ).join('');
+}
+
+function fixture(
+  coin: (typeof foreignCoins)[number],
+  inputValue = 1000000000n,
+  fundingMarker = '11'
+) {
   const wallet = new PhraseWallet(new Uint8Array(32).fill(7), 2);
   const original = wallet.addresses[0][`${coin.toLowerCase()}Wallet`];
   const xprv = original.derivedMasterPrivateKey;
@@ -34,8 +46,8 @@ function fixture(coin: (typeof foreignCoins)[number]) {
     index: 0,
   });
   const script = `76a914${bytesToHex(ripemd160(sha256(leaf.publicKey)))}88ac`;
-  // Non-coinbase funding fixture paying 10 coins to the existing Hub wallet.
-  const previousTransactionHex = `0100000001${'11'.repeat(32)}0000000000ffffffff0100ca9a3b0000000019${script}00000000`;
+  // Non-coinbase funding fixture paying the requested value to the Hub wallet.
+  const previousTransactionHex = `0100000001${fundingMarker.repeat(32)}0000000000ffffffff01${uint64Le(inputValue)}19${script}00000000`;
   const txHash = bytesToHex(
     sha256(
       sha256(
@@ -53,7 +65,7 @@ function fixture(coin: (typeof foreignCoins)[number]) {
     scriptPubKey: script,
     txHash,
     txPos: 0,
-    value: 1000000000n,
+    value: inputValue,
   };
   const context = {
     version: 1,
@@ -185,6 +197,134 @@ describe('local foreign wallet signing', () => {
     expect(max.amount + max.fee).toBe(input.value);
     expect(() => planForeignWalletSpend({ ...common, amount: 1n })).toThrow();
   });
+  it('uses current chain policy instead of stale altcoinj change constants', async () => {
+    const { planForeignWalletSpend } =
+      await import('./foreign-wallet-spend-plan');
+    const p2shRecipient = base58check(sha256).encode(
+      Uint8Array.from([50, ...new Uint8Array(20).fill(9)])
+    );
+    const single = fixture('LTC', 42946194n, '12');
+    const common = {
+      coin: 'LTC' as const,
+      xprv: single.xprv,
+      crypto: foreignCrypto,
+      feePerByte: 10n,
+      // This is the stale value currently returned by altcoinj through Core.
+      minimumNonDustOutput: 100000n,
+      recipientAddress: p2shRecipient,
+    };
+    const singlePlan = planForeignWalletSpend({
+      ...common,
+      amount: 42921000n,
+      utxos: [single.input],
+    });
+    expect(singlePlan.fee).toBe(2250n);
+    expect(singlePlan.change).toBe(22944n);
+    expect(singlePlan.outputs).toHaveLength(2);
+    expect(
+      buildForeignWalletSignedTransaction({
+        coin: 'LTC',
+        xprv: single.xprv,
+        crypto: foreignCrypto,
+        inputs: singlePlan.inputs,
+        outputs: singlePlan.outputs,
+      }).fee
+    ).toBe(singlePlan.fee);
+    const dustPlan = planForeignWalletSpend({
+      ...common,
+      amount: single.input.value - 2500n,
+      utxos: [single.input],
+    });
+    expect(dustPlan.fee).toBe(2500n);
+    expect(dustPlan.change).toBe(0n);
+    expect(dustPlan.outputs).toHaveLength(1);
+
+    const multiple = [
+      fixture('LTC', 5000000n, '13'),
+      fixture('LTC', 4900000n, '14'),
+      fixture('LTC', 9811n, '15'),
+    ];
+    const multiplePlan = planForeignWalletSpend({
+      ...common,
+      amount: 9901000n,
+      utxos: multiple.map(({ input }) => input),
+    });
+    expect(multiplePlan.inputs).toHaveLength(3);
+    expect(multiplePlan.fee).toBe(8811n);
+    expect(multiplePlan.change).toBe(0n);
+    expect(multiplePlan.outputs).toHaveLength(1);
+    expect(
+      buildForeignWalletSignedTransaction({
+        coin: 'LTC',
+        xprv: single.xprv,
+        crypto: foreignCrypto,
+        inputs: multiplePlan.inputs,
+        outputs: multiplePlan.outputs,
+      }).fee
+    ).toBe(multiplePlan.fee);
+
+    const policies = [
+      ['BTC', 546n, 546n],
+      ['LTC', 100000n, 5460n],
+      ['DOGE', 100000000n, 1000000n],
+      ['DGB', 546n, 5460n],
+      ['RVN', 2730n, 546n],
+    ] as const;
+    for (const [coin, reportedMinimum, minimumChange] of policies) {
+      const wallet = fixture(coin);
+      const exactPlan = planForeignWalletSpend({
+        coin,
+        xprv: wallet.xprv,
+        crypto: foreignCrypto,
+        feePerByte: 10n,
+        minimumNonDustOutput: reportedMinimum,
+        recipientAddress: wallet.leaf.address,
+        amount: wallet.input.value - 2270n - minimumChange,
+        utxos: [wallet.input],
+      });
+      expect(exactPlan.change, coin).toBe(minimumChange);
+      expect(exactPlan.fee, coin).toBe(2270n);
+
+      expect(
+        planForeignWalletSpend({
+          coin,
+          xprv: wallet.xprv,
+          crypto: foreignCrypto,
+          feePerByte: 10n,
+          minimumNonDustOutput: reportedMinimum,
+          recipientAddress: wallet.leaf.address,
+          amount: minimumChange,
+          utxos: [wallet.input],
+        }).amount,
+        coin
+      ).toBe(minimumChange);
+      expect(() =>
+        planForeignWalletSpend({
+          coin,
+          xprv: wallet.xprv,
+          crypto: foreignCrypto,
+          feePerByte: 10n,
+          minimumNonDustOutput: reportedMinimum,
+          recipientAddress: wallet.leaf.address,
+          amount: minimumChange - 1n,
+          utxos: [wallet.input],
+        })
+      ).toThrow();
+
+      const belowPlan = planForeignWalletSpend({
+        coin,
+        xprv: wallet.xprv,
+        crypto: foreignCrypto,
+        feePerByte: 10n,
+        minimumNonDustOutput: reportedMinimum,
+        recipientAddress: wallet.leaf.address,
+        amount: wallet.input.value - 2270n - minimumChange + 1n,
+        utxos: [wallet.input],
+      });
+      expect(belowPlan.change, coin).toBe(0n);
+      expect(belowPlan.outputs, coin).toHaveLength(1);
+    }
+  }, 15000);
   it('does not broadcast when journal persistence fails', async () => {
     const { xprv, leaf, context } = fixture('LTC');
     let broadcasts = 0;

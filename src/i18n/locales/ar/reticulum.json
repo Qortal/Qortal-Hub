@@ -183,11 +183,11 @@
       "legacy": "الإصدار السابق"
     },
     "legacy": {
-      "description": "إظهار عناصر Threads وAdmin القديمة في ترويسة Q-Chat.",
+      "description": "إظهار زر Threads القديم في ترويسة Q-Chat.",
       "title": "Threads",
       "toggle": {
         "aria": "إظهار Threads القديمة",
-        "description": "يعرض أيقونتَي Threads وAdmin القديمتين.",
+        "description": "يعرض أيقونة Threads القديمة.",
         "label": "Threads"
       },
       "warning": "ستتم إزالة Threads في الإصدار القادم. انقل أي معلومات مهمة من المواضيع إلى مكان آمن أو إلى قناة جديدة في Q-Chat قبل التحديث."

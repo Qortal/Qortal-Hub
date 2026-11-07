@@ -115,7 +115,6 @@
     "resize": "redimensionner",
     "restore": "restaurer",
     "return": "retour",
-    "return_apps_dashboard": "Retour au tableau de bord Apps",
     "save": "sauvegarder",
     "save_disk": "Économiser sur le disque",
     "search": "recherche",
@@ -726,6 +725,7 @@
   "payment": "paiement",
   "payment_notification": "Notification de paiement",
   "payments_count": "Paiements ({{count}})",
+  "pdf_viewer": "Lecteur PDF",
   "poll_embed": "sondage",
   "port": "port",
   "presence": {

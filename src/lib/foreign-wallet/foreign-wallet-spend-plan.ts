@@ -25,6 +25,20 @@ export type ForeignWalletSpendPlan = {
   recipientAddress: string;
   sendMax: boolean;
 };
+
+// Core exposes altcoinj's per-network minimum-output constants, but several are
+// stale and do not match the current chain wallets. P2PKH has the largest dust
+// threshold among the standard payment scripts accepted here. Keep these
+// explicit so a low stale value cannot create a non-relayable output, while a
+// high stale value cannot silently turn valid change into miner fees.
+const minimumStandardOutput = {
+  BTC: 546n,
+  LTC: 5460n,
+  DOGE: 1000000n,
+  DGB: 5460n,
+  RVN: 546n,
+} as const satisfies Record<ForeignWalletCoin, bigint>;
+
 export function estimateMaximumForeignWalletTransactionSize(
   count: number,
   lengths: readonly number[]
@@ -62,6 +76,7 @@ export function planForeignWalletSpend(input: {
   positiveAtomic(input.feePerByte);
   positiveAtomic(input.minimumNonDustOutput);
   const sendMax = input.sendMax === true;
+  const minimumOutput = minimumStandardOutput[input.coin];
   if (
     sendMax
       ? input.amount !== undefined || !!input.payments
@@ -81,7 +96,7 @@ export function planForeignWalletSpend(input: {
     if (payments.reduce((sum, p) => sum + p.value, 0n) !== input.amount) fail();
     payments.forEach((p) => {
       positiveAtomic(p.value);
-      if (p.value < input.minimumNonDustOutput) fail();
+      if (p.value < minimumOutput) fail();
     });
   }
   const lengths = payments.map(
@@ -148,7 +163,7 @@ export function planForeignWalletSpend(input: {
     const minimumFee = BigInt(size) * input.feePerByte;
     if (sendMax) {
       const amount = inputAmount - minimumFee;
-      if (amount < input.minimumNonDustOutput) fail();
+      if (amount < minimumOutput) fail();
       return finish(amount, minimumFee, 0n, size);
     }
     if (inputAmount < input.amount + minimumFee) continue;
@@ -158,7 +173,7 @@ export function planForeignWalletSpend(input: {
     );
     const fee = BigInt(changeSize) * input.feePerByte;
     const change = inputAmount - input.amount - fee;
-    if (change >= input.minimumNonDustOutput)
+    if (change >= minimumOutput)
       return finish(input.amount, fee, change, changeSize);
     return finish(input.amount, inputAmount - input.amount, 0n, size);
   }

@@ -62,6 +62,7 @@ vi.mock('../../utils/decode', async () =>
   (await import('./common')).decodeFactory()
 );
 vi.mock('i18next', async () => (await import('./common')).i18nFactory());
+vi.mock('../../i18n/i18n', async () => (await import('./common')).i18nFactory());
 vi.mock('aes-js', async () => (await import('./common')).aesFactory());
 vi.mock('../../encryption/Base58', async () =>
   (await import('./common')).base58Factory()
@@ -76,6 +77,9 @@ vi.mock('asmcrypto.js', async () =>
   (await import('./common')).asmcryptoFactory()
 );
 vi.mock('../../hooks/useQortalMessageListener', async () =>
+  (await import('./common')).messageListenerFactory()
+);
+vi.mock('../qapp-save-file', async () =>
   (await import('./common')).messageListenerFactory()
 );
 

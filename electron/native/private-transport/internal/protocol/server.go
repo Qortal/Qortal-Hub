@@ -23,7 +23,7 @@ import (
 
 const (
 	Version                 = 2
-	SidecarVersion          = "0.11.0"
+	SidecarVersion          = "0.11.1"
 	MaxControlMessageBytes  = 64 * 1024
 	MaxBinaryMessageBytes   = innerquic.MaxReliablePayloadBytes
 	maxRememberedRequestIDs = 4096
@@ -104,14 +104,20 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	ctx, cancel := context.WithCancel(ctx)
 	var preparations sync.WaitGroup
 	slots := make(chan struct{}, 4)
-	defer func() { cancel(); preparations.Wait(); masqueclient.CloseAllRelays() }()
 	reader := bufio.NewReaderSize(input, 4096)
 	s.emit = func(event Event, binary []byte) { s.write(output, event, binary) }
 	reliableSends := reliableDispatcher{maxQueueAge: 6 * time.Second}
 	var moqSends reliableDispatcher
-	defer moqSends.workers.Wait()
-	defer reliableSends.workers.Wait()
-	defer s.Close()
+	defer func() {
+		cancel()
+		// Cancel network setup before waiting, then close any resource installed
+		// by a setup that completed concurrently with cancellation.
+		preparations.Wait()
+		s.Close()
+		moqSends.workers.Wait()
+		reliableSends.workers.Wait()
+		masqueclient.CloseAllRelays()
+	}()
 	for {
 		line, err := readControlLine(reader)
 		if errors.Is(err, io.EOF) {
@@ -175,7 +181,9 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			continue
 		}
-		if req.Operation == "prepareRelay" || req.Operation == "authorizeRelay" {
+		if req.Operation == "prepareRelay" || req.Operation == "authorizeRelay" ||
+			req.Operation == "openPrivateSession" || req.Operation == "openMoqSession" ||
+			req.Operation == "openMasqueTunnel" || req.Operation == "subscribeMoqTrack" {
 			select {
 			case slots <- struct{}{}:
 				preparations.Add(1)
@@ -186,7 +194,11 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 					s.write(output, response, nil)
 				}(req)
 			default:
-				s.write(output, failure(req.RequestID, "RELAY_BUSY", "relay preparation capacity reached"), nil)
+				code := "TRANSPORT_BUSY"
+				if req.Operation == "prepareRelay" || req.Operation == "authorizeRelay" {
+					code = "RELAY_BUSY"
+				}
+				s.write(output, failure(req.RequestID, code, "transport setup capacity reached"), nil)
 			}
 			continue
 		}
@@ -287,7 +299,7 @@ func (s *Server) handleRequest(ctx context.Context, req Request, binary []byte) 
 	case "openMoqSession":
 		return s.openMoqSession(ctx, req), false
 	case "subscribeMoqTrack":
-		return s.subscribeMoqTrack(req), false
+		return s.subscribeMoqTrack(ctx, req), false
 	case "publishMoqObject":
 		return s.publishMoqObject(req, binary), false
 	case "moqSessionMetrics":
@@ -394,7 +406,7 @@ func (s *Server) emitMoq(sessionID string, event moqclient.Event) {
 	}, event.Data)
 }
 
-func (s *Server) subscribeMoqTrack(req Request) Response {
+func (s *Server) subscribeMoqTrack(ctx context.Context, req Request) Response {
 	var p struct {
 		MoqSessionID   string   `json:"moqSessionId"`
 		SubscriptionID string   `json:"subscriptionId"`
@@ -408,7 +420,9 @@ func (s *Server) subscribeMoqTrack(req Request) Response {
 	if session == nil {
 		return failure(req.RequestID, "MOQ_SESSION_CLOSED", "MOQT session does not exist")
 	}
-	if err := session.Subscribe(p.SubscriptionID, p.Namespace, p.TrackName); err != nil {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := session.SubscribeWithContext(ctx, p.SubscriptionID, p.Namespace, p.TrackName); err != nil {
 		return failure(req.RequestID, moqErrorCode(err), "MOQT subscription failed")
 	}
 	return success(req.RequestID, map[string]interface{}{

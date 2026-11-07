@@ -115,7 +115,6 @@
     "resize": "サイズ変更",
     "restore": "元に戻す",
     "return": "戻る",
-    "return_apps_dashboard": "アプリダッシュボードに戻ります",
     "save": "保存",
     "save_disk": "ディスクに保存します",
     "search": "検索",
@@ -726,6 +725,7 @@
   "payment": "支払い",
   "payment_notification": "支払い通知",
   "payments_count": "支払い ({{count}})",
+  "pdf_viewer": "PDFビューアー",
   "poll_embed": "投票埋め込み",
   "port": "ポート",
   "presence": {

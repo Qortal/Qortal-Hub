@@ -16,9 +16,6 @@ import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
 import { AppCardEnhanced } from './AppCard';
 import { useTranslation } from 'react-i18next';
-import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
-import { executeEvent } from '../../utils/events';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { useAtom } from 'jotai';
 import { appSortAtom } from '../../atoms/appsAtoms';
 import { SortDropdown, SortOption } from './Filters';
@@ -53,6 +50,10 @@ export const AppsCategoryDesktop = ({
   contentHeight,
 }) => {
   const [searchValue, setSearchValue] = useState('');
+
+  useEffect(() => {
+    if (!isShow) setSearchValue('');
+  }, [isShow]);
   const [sortOption, setSortOption] = useAtom(appSortAtom);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
@@ -111,31 +112,11 @@ export const AppsCategoryDesktop = ({
       >
         <AppsWidthLimiter
           sx={{
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             alignItems: 'center',
             flexDirection: 'row',
           }}
         >
-          <ShowMessageReturnButton
-            sx={{
-              padding: '2px',
-            }}
-            onClick={() => {
-              executeEvent('navigateBack', {});
-              setSearchValue('');
-            }}
-          >
-            <ReturnIcon />
-            <ComposeP
-              sx={{
-                fontSize: '18px',
-              }}
-            >
-              {t('core:action.return', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </ComposeP>
-          </ShowMessageReturnButton>
           <AppsSearchContainer
             sx={{
               width: '412px',

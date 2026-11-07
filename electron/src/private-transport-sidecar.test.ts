@@ -6,7 +6,7 @@ import {
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   PrivateTransportSidecar,
   PrivateTransportSidecarError,
@@ -28,16 +28,47 @@ const goBinary = process.env.QORTAL_GO_BINARY || 'go';
 const goAvailable =
   spawnSync(goBinary, ['version'], { windowsHide: true }).status === 0;
 
+const fixtures = new Set<FixtureProcess>();
+
 class FixtureProcess {
   readonly child: ChildProcessWithoutNullStreams;
   private buffer = '';
+  private stderr = '';
   private lines: string[] = [];
-  private waiters: Array<(line: string) => void> = [];
+  private waiters: Array<{
+    resolve: (line: string) => void;
+    reject: (error: Error) => void;
+  }> = [];
+  private failure: Error | null = null;
+  private exited = false;
+  private closed: Promise<void>;
 
-  constructor() {
-    this.child = spawn(fixtureBinary, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  constructor(
+    command = fixtureBinary,
+    args: string[] = [],
+    private replyTimeoutMs = 5_000
+  ) {
+    this.child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    fixtures.add(this);
     this.child.stdout.setEncoding('utf8');
-    this.child.stderr.resume();
+    this.child.stderr.setEncoding('utf8');
+    this.child.stderr.on('data', (chunk: string) => {
+      this.stderr = (this.stderr + chunk).slice(-8_192);
+    });
+    this.child.on('error', (error) => this.fail(error));
+    this.child.stdin.on('error', (error) => this.fail(error));
+    this.closed = new Promise((resolve) => {
+      this.child.once('close', (code, signal) => {
+        this.exited = true;
+        fixtures.delete(this);
+        this.fail(
+          new Error(
+            `Fixture exited (code=${code}, signal=${signal}): ${this.stderr.trim()}`
+          )
+        );
+        resolve();
+      });
+    });
     this.child.stdout.on('data', (chunk: string) => {
       this.buffer += chunk;
       for (;;) {
@@ -46,33 +77,105 @@ class FixtureProcess {
         const line = this.buffer.slice(0, newline);
         this.buffer = this.buffer.slice(newline + 1);
         const waiter = this.waiters.shift();
-        if (waiter) waiter(line);
+        if (waiter) waiter.resolve(line);
         else this.lines.push(line);
       }
     });
   }
 
   async startup(): Promise<FixtureStartup> {
-    return JSON.parse(await this.nextLine()) as FixtureStartup;
+    return JSON.parse(await this.nextLine('startup')) as FixtureStartup;
   }
 
   async command<T>(operation: string): Promise<T> {
-    this.child.stdin.write(`${JSON.stringify({ operation })}\n`);
-    return JSON.parse(await this.nextLine()) as T;
+    const response = this.nextLine(operation);
+    if (!this.failure)
+      this.child.stdin.write(`${JSON.stringify({ operation })}\n`);
+    return JSON.parse(await response) as T;
   }
 
   async close(): Promise<void> {
-    if (this.child.exitCode !== null) return;
-    await this.command('shutdown').catch(() => undefined);
-    this.child.kill();
+    if (this.exited) return;
+    // A stalled fixture must not stall test cleanup as well.
+    const forceKill = setTimeout(() => this.child.kill('SIGKILL'), 1_000);
+    try {
+      if (!this.failure) await this.command('shutdown').catch(() => undefined);
+      if (!this.exited) this.child.kill();
+      await this.closed;
+    } finally {
+      clearTimeout(forceKill);
+    }
   }
 
-  private nextLine(): Promise<string> {
+  private fail(error: Error): void {
+    this.failure ??= error;
+    for (const waiter of this.waiters.splice(0)) waiter.reject(this.failure);
+  }
+
+  private nextLine(operation: string): Promise<string> {
+    if (this.failure) return Promise.reject(this.failure);
     const line = this.lines.shift();
     if (line !== undefined) return Promise.resolve(line);
-    return new Promise((resolve) => this.waiters.push(resolve));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.fail(
+          new Error(
+            `Fixture timed out waiting for ${operation}: ${this.stderr.trim()}`
+          )
+        );
+      }, this.replyTimeoutMs);
+      this.waiters.push({
+        resolve: (line) => {
+          clearTimeout(timer);
+          resolve(line);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
+    });
   }
 }
+
+afterEach(async () => {
+  await Promise.all([...fixtures].map((fixture) => fixture.close()));
+});
+
+describe('private transport fixture lifecycle', () => {
+  it('reports a fixture crash and its stderr instead of hanging', async () => {
+    const fixture = new FixtureProcess(process.execPath, [
+      '-e',
+      "process.stderr.write('fixture crash detail'); process.exit(1)",
+    ]);
+    await expect(fixture.startup()).rejects.toThrow(
+      /Fixture exited.*fixture crash detail/
+    );
+    await expect(fixture.command('stats')).rejects.toThrow('Fixture exited');
+  });
+
+  it('reports a failed spawn instead of hanging', async () => {
+    const fixture = new FixtureProcess(
+      path.join(os.tmpdir(), 'nonexistent-qortal-fixture', 'binary')
+    );
+    await expect(fixture.startup()).rejects.toThrow('ENOENT');
+  });
+
+  it('bounds a stalled reply and can still close the child', async () => {
+    const fixture = new FixtureProcess(
+      process.execPath,
+      ['-e', 'setInterval(() => {}, 1000)'],
+      100
+    );
+    await expect(fixture.startup()).rejects.toThrow(
+      'Fixture timed out waiting for startup'
+    );
+    await fixture.close();
+    expect(
+      fixture.child.exitCode !== null || fixture.child.signalCode !== null
+    ).toBe(true);
+  });
+});
 
 const describeIntegration = goAvailable ? describe.sequential : describe.skip;
 
@@ -125,7 +228,7 @@ describeIntegration('private transport sidecar integration', () => {
     await sidecar.start();
     expect(await sidecar.health()).toEqual({
       service: 'qortal-private-transport',
-      sidecarVersion: '0.11.0',
+      sidecarVersion: '0.11.1',
       protocolVersion: 2,
       innerAlpn: 'qortal-private/1',
       moqAlpn: 'moqt-18',
@@ -184,16 +287,19 @@ describeIntegration('private transport sidecar integration', () => {
 
   it('never falls back directly when the literal-IP relay is unavailable', async () => {
     const fixture = new FixtureProcess();
-    const config = await fixture.startup();
-    await fixture.command('stopRelay');
     const sidecar = new PrivateTransportSidecar({ command: sidecarBinary });
-    await sidecar.start();
-    await expect(
-      sidecar.openMasqueTunnel({ ...config, timeoutMs: 500 })
-    ).rejects.toMatchObject({ code: 'MASQUE_OPEN_FAILED' });
-    expect((await fixture.command<FixtureStats>('stats')).echoCount).toBe(0);
-    await sidecar.shutdown();
-    await fixture.close();
+    try {
+      const config = await fixture.startup();
+      await fixture.command('stopRelay');
+      await sidecar.start();
+      await expect(
+        sidecar.openMasqueTunnel({ ...config, timeoutMs: 500 })
+      ).rejects.toMatchObject({ code: 'MASQUE_OPEN_FAILED' });
+      expect((await fixture.command<FixtureStats>('stats')).echoCount).toBe(0);
+    } finally {
+      await sidecar.shutdown();
+      await fixture.close();
+    }
   }, 20_000);
 
   it('rejects pending work when the sidecar exits mid-request', async () => {
@@ -216,7 +322,7 @@ describeIntegration('private transport sidecar integration', () => {
       let count = 0;
       readline.createInterface({ input: process.stdin }).on('line', (line) => {
         const request = JSON.parse(line);
-        if (count++ === 0) process.stdout.write(JSON.stringify({version:2,type:'response',requestId:request.requestId,ok:true,result:{service:'qortal-private-transport',sidecarVersion:'0.11.0',protocolVersion:2,innerAlpn:'qortal-private/1',moqAlpn:'moqt-18'}}) + '\\n');
+        if (count++ === 0) process.stdout.write(JSON.stringify({version:2,type:'response',requestId:request.requestId,ok:true,result:{service:'qortal-private-transport',sidecarVersion:'0.11.1',protocolVersion:2,innerAlpn:'qortal-private/1',moqAlpn:'moqt-18'}}) + '\\n');
         else process.stdout.write('{not-json\\n');
       });
     `;

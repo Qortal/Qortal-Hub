@@ -803,6 +803,10 @@ export const statusesAtom = atomWithReset<Steps>({
 
 export const isNewTabWindowAtom = atomWithReset<boolean>(false);
 
+// True while the Apps view shows an internal sub-page (library, category,
+// app info, publish) that the global nav bar back button can leave.
+export const appsSubPageCanGoBackAtom = atomWithReset<boolean>(false);
+
 // Global snack (reduces context re-renders when snack opens/closes)
 export const openSnackGlobalAtom = atomWithReset<boolean>(false);
 export const infoSnackGlobalAtom = atomWithReset<{

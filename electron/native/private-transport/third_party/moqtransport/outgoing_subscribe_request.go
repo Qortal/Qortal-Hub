@@ -2,7 +2,6 @@ package moqtransport
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +12,15 @@ import (
 
 type OutgoingSubscribeRequestOption func(*OutgoingSubscribeRequest) error
 
+type SubscriptionRejectedError struct {
+	Code   uint64
+	Reason string
+}
+
+func (e *SubscriptionRejectedError) Error() string {
+	return fmt.Sprintf("subscription rejected (%d): %s", e.Code, e.Reason)
+}
+
 type OutgoingSubscribeRequest struct {
 	logger       *slog.Logger
 	requestID    uint64
@@ -22,6 +30,10 @@ type OutgoingSubscribeRequest struct {
 	buffer       chan *Object
 	bufferMu     sync.Mutex
 	bufferBytes  int
+	ctx          context.Context
+	cancel       context.CancelCauseFunc
+	stopStream   func()
+	closeOnce    sync.Once
 }
 
 func newOutgoingSubscribeRequest(
@@ -41,8 +53,10 @@ func newOutgoingSubscribeRequest(
 		streamReader: streamReader,
 		buffer:       make(chan *Object, 100), // TODO: Make buffer size configurable
 	}
+	r.ctx, r.cancel = context.WithCancelCause(session.Context())
 	for _, opt := range parameters {
 		if err := opt(r); err != nil {
+			r.cancel(err)
 			return nil, err
 		}
 	}
@@ -53,6 +67,7 @@ func newOutgoingSubscribeRequest(
 		Parameters:     nil, // TODO: Add parameters if needed
 	}
 	if err := r.streamWriter.Write(msg); err != nil {
+		r.cancel(err)
 		return nil, err
 	}
 	r.logger.Debug("sent subscribe request", "requestID", requestID, "namespace", namespace, "trackName", trackName)
@@ -65,9 +80,8 @@ func (r *OutgoingSubscribeRequest) readMessages() {
 	for {
 		msg, err := r.streamReader.Read()
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				r.session.handleReaderError(err)
-			}
+			r.cancel(err)
+			_ = r.Close()
 			return
 		}
 		switch msg := msg.(type) {
@@ -81,6 +95,9 @@ func (r *OutgoingSubscribeRequest) readMessages() {
 			}
 		case *wire.RequestOk:
 		case *wire.RequestError:
+			r.cancel(&SubscriptionRejectedError{Code: msg.ErrorCode, Reason: msg.ErrorReason})
+			_ = r.Close()
+			return
 		default:
 			r.session.closeWithError(&SessionError{
 				Code:   uint64(ErrorCodeProtocolViolation),
@@ -94,6 +111,9 @@ func (r *OutgoingSubscribeRequest) readMessages() {
 func (t *OutgoingSubscribeRequest) push(o *Object) {
 	t.bufferMu.Lock()
 	defer t.bufferMu.Unlock()
+	if t.ctx != nil && t.ctx.Err() != nil {
+		return
+	}
 	if t.bufferBytes+len(o.Payload) > maxGroupBytes {
 		return
 	}
@@ -122,25 +142,41 @@ func (t *OutgoingSubscribeRequest) push(o *Object) {
 }
 
 func (r *OutgoingSubscribeRequest) Close() error {
-	// TODO: Send a message to the peer to stop the subscription.
-	r.session.removeReceiver(r)
-	r.bufferMu.Lock()
-	defer r.bufferMu.Unlock()
-	for {
-		select {
-		case obj := <-r.buffer:
-			r.bufferBytes -= len(obj.Payload)
-			r.session.receiveBytes.Add(-int64(len(obj.Payload)))
-		default:
-			return nil
+	r.closeOnce.Do(func() {
+		if r.cancel != nil {
+			r.cancel(io.EOF)
 		}
-	}
+		if r.stopStream != nil {
+			r.stopStream()
+		}
+		r.session.removeReceiver(r)
+		r.bufferMu.Lock()
+		defer r.bufferMu.Unlock()
+		for {
+			select {
+			case obj := <-r.buffer:
+				r.bufferBytes -= len(obj.Payload)
+				r.session.receiveBytes.Add(-int64(len(obj.Payload)))
+			default:
+				return
+			}
+		}
+	})
+	return nil
 }
 
 func (r *OutgoingSubscribeRequest) ReadObject(ctx context.Context) (*Object, error) {
 	r.logger.Debug("waiting for next object")
-	// TODO: Add case for shutdown when request is closed
+	var terminal <-chan struct{}
+	if r.ctx != nil {
+		if r.ctx.Err() != nil {
+			return nil, context.Cause(r.ctx)
+		}
+		terminal = r.ctx.Done()
+	}
 	select {
+	case <-terminal:
+		return nil, context.Cause(r.ctx)
 	case <-ctx.Done():
 		return nil, context.Cause(ctx)
 	case obj := <-r.buffer:

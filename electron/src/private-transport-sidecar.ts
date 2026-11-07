@@ -5,7 +5,7 @@ import { EventEmitter } from 'events';
 import path from 'path';
 
 export const PRIVATE_TRANSPORT_PROTOCOL_VERSION = 2;
-export const PRIVATE_TRANSPORT_SIDECAR_VERSION = '0.11.0';
+export const PRIVATE_TRANSPORT_SIDECAR_VERSION = '0.11.1';
 export const MAX_MOQ_OBJECT_BYTES = 1024;
 export const MAX_MOQ_RELIABLE_OBJECT_BYTES = 1024 * 1024;
 export type PreparedRelay = {
@@ -26,6 +26,8 @@ function validMoqNamespace(namespace: readonly string[]): boolean {
 }
 const MAX_RESPONSE_LINE_BYTES = 64 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 7_000;
+const OPEN_REQUEST_TIMEOUT_MS = 10_000;
+const MAX_PENDING_REQUESTS = 512;
 
 export class PrivateTransportSidecarError extends Error {
   constructor(
@@ -195,6 +197,12 @@ export class PrivateTransportSidecar extends EventEmitter {
       })
     | null = null;
   private readonly pending = new Map<string, PendingRequest>();
+  private readonly requestPrefix = `${randomUUID()}:`;
+  private requestSequence = 0;
+  // Keep resource-creating requests until their response, even after timeout.
+  // Other expired requests need no tombstone: issued sequence IDs identify them.
+  private readonly openingRequests = new Map<string, SidecarOperation>();
+  private readonly disposingRequests = new Set<string>();
   private stopping = false;
 
   constructor(
@@ -556,6 +564,10 @@ export class PrivateTransportSidecar extends EventEmitter {
     }
     if (this.child === child && child.exitCode === null) child.kill();
     this.child = null;
+    this.stdoutBuffer = Buffer.alloc(0);
+    this.pendingBinaryEvent = null;
+    this.openingRequests.clear();
+    this.disposingRequests.clear();
     this.rejectPending('SIDECAR_STOPPED');
     this.stopping = false;
   }
@@ -598,8 +610,10 @@ export class PrivateTransportSidecar extends EventEmitter {
         throw new PrivateTransportSidecarError('SIDECAR_VERSION_MISMATCH');
       }
     } catch (error) {
-      if (this.child === child) child.kill();
-      this.child = null;
+      if (this.child === child) {
+        this.handleDeath(child, 'SIDECAR_HANDSHAKE_FAILED');
+        child.kill();
+      }
       throw error;
     }
   }
@@ -608,7 +622,8 @@ export class PrivateTransportSidecar extends EventEmitter {
     operation: SidecarOperation,
     params: unknown,
     timeoutMs = this.testOptions.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-    binary: Uint8Array = Buffer.alloc(0)
+    binary: Uint8Array = Buffer.alloc(0),
+    lateCleanup = false
   ): Promise<unknown> {
     const child = this.child;
     if (!child || !child.stdin.writable) {
@@ -616,7 +631,27 @@ export class PrivateTransportSidecar extends EventEmitter {
         new PrivateTransportSidecarError('SIDECAR_NOT_RUNNING')
       );
     }
-    const requestId = randomUUID();
+    const createsResource = [
+      'openPrivateSession',
+      'openMoqSession',
+      'openMasqueTunnel',
+      'prepareRelay',
+    ].includes(operation);
+    // At most 64 unfinished opens exist. Reserve their cleanup capacity even
+    // when ordinary requests fill the queue; keep their slots until cleanup ends.
+    if (
+      this.pending.size >= MAX_PENDING_REQUESTS + (lateCleanup ? 64 : 0) ||
+      (createsResource && this.openingRequests.size >= 64)
+    ) {
+      return Promise.reject(
+        new PrivateTransportSidecarError('SIDECAR_QUEUE_FULL')
+      );
+    }
+    if (createsResource && this.testOptions.requestTimeoutMs === undefined) {
+      timeoutMs = Math.max(timeoutMs, OPEN_REQUEST_TIMEOUT_MS);
+    }
+    const requestId = `${this.requestPrefix}${++this.requestSequence}`;
+    if (createsResource) this.openingRequests.set(requestId, operation);
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
@@ -756,9 +791,23 @@ export class PrivateTransportSidecar extends EventEmitter {
       }
       const pending = this.pending.get(response.requestId);
       if (!pending) {
-        this.failMalformed(child);
-        return;
+        const sequenceText = response.requestId.slice(
+          this.requestPrefix.length
+        );
+        const sequence = Number(sequenceText);
+        if (
+          !response.requestId.startsWith(this.requestPrefix) ||
+          !/^[1-9][0-9]*$/.test(sequenceText) ||
+          !Number.isSafeInteger(sequence) ||
+          sequence > this.requestSequence
+        ) {
+          this.failMalformed(child);
+          return;
+        }
+        this.disposeLateResource(response);
+        continue;
       }
+      this.openingRequests.delete(response.requestId);
       clearTimeout(pending.timer);
       this.pending.delete(response.requestId);
       if (response.ok) pending.resolve(response.result);
@@ -777,6 +826,45 @@ export class PrivateTransportSidecar extends EventEmitter {
     child.kill();
   }
 
+  private disposeLateResource(response: SidecarResponse): void {
+    if (this.disposingRequests.has(response.requestId)) return;
+    const operation = this.openingRequests.get(response.requestId);
+    if (
+      !operation ||
+      !response.ok ||
+      !response.result ||
+      typeof response.result !== 'object'
+    ) {
+      this.openingRequests.delete(response.requestId);
+      return;
+    }
+    const result = response.result as Record<string, unknown>;
+    const cleanup =
+      operation === 'openPrivateSession'
+        ? ['closePrivateSession', 'sessionId']
+        : operation === 'openMoqSession'
+          ? ['closeMoqSession', 'moqSessionId']
+          : operation === 'prepareRelay'
+            ? ['closeRelay', 'handle']
+            : ['closeTunnel', 'tunnelId'];
+    const id = result[cleanup[1]];
+    if (typeof id === 'string' && id.length > 0 && id.length <= 128) {
+      this.disposingRequests.add(response.requestId);
+      void this.request(
+        cleanup[0] as SidecarOperation,
+        { [cleanup[1]]: id },
+        undefined,
+        undefined,
+        true
+      )
+        .catch(() => undefined)
+        .finally(() => {
+          this.openingRequests.delete(response.requestId);
+          this.disposingRequests.delete(response.requestId);
+        });
+    } else this.openingRequests.delete(response.requestId);
+  }
+
   private handleDeath(
     child: ChildProcessWithoutNullStreams,
     code: string
@@ -785,6 +873,8 @@ export class PrivateTransportSidecar extends EventEmitter {
     this.child = null;
     this.stdoutBuffer = Buffer.alloc(0);
     this.pendingBinaryEvent = null;
+    this.openingRequests.clear();
+    this.disposingRequests.clear();
     this.emit('death', code);
     this.rejectPending(this.stopping ? 'SIDECAR_STOPPED' : code);
   }

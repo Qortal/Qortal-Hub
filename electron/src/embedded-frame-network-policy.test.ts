@@ -5,7 +5,7 @@ import {
 } from './embedded-frame-network-policy';
 
 describe('embedded frame network policy', () => {
-  it('blocks WebRTC only on subframe document responses', () => {
+  it('blocks WebRTC on Hub subframe document responses', () => {
     expect(
       withEmbeddedFrameWebRtcBlocked(
         { Existing: ['value'] },
@@ -16,6 +16,36 @@ describe('embedded frame network policy', () => {
       'Connection-Allowlist': [EMBEDDED_FRAME_CONNECTION_ALLOWLIST],
     });
   });
+
+  it.each(['mainFrame', 'subFrame'])(
+    'blocks WebRTC on Q-App guest %s documents, overriding server policy',
+    (resourceType) => {
+      const headers = {
+        Existing: ['value'],
+        'Content-Security-Policy': ["connect-src 'self'"],
+        'connection-allowlist': ['("*");webrtc=allow'],
+        'CONNECTION-ALLOWLIST': ['("*");webrtc=allow'],
+      };
+      expect(
+        withEmbeddedFrameWebRtcBlocked(headers, { resourceType }, 'qapp-guest')
+      ).toEqual({
+        Existing: ['value'],
+        'Content-Security-Policy': ["connect-src 'self'"],
+        'Connection-Allowlist': [EMBEDDED_FRAME_CONNECTION_ALLOWLIST],
+      });
+      expect(headers['connection-allowlist']).toEqual(['("*");webrtc=allow']);
+    }
+  );
+
+  it.each(['script', 'xhr', 'media', 'image', undefined])(
+    'leaves guest %s resource responses unchanged',
+    (resourceType) => {
+      const headers = { Existing: ['value'] };
+      expect(
+        withEmbeddedFrameWebRtcBlocked(headers, { resourceType }, 'qapp-guest')
+      ).toEqual(headers);
+    }
+  );
 
   it('does not restrict the Hub main frame', () => {
     expect(

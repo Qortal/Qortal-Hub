@@ -26,7 +26,7 @@ export function buildQortalResourceLink({
   path = '',
   identifier,
 }: QortalResourceLinkInput): string {
-  const encodedName = (name || '').replace(/ /g, '%20');
+  const encodedName = encodeURIComponent(name || '');
   const normalizedPath = path || '';
   const identifierSuffix = identifier
     ? `${normalizedPath.includes('?') ? '&' : '?'}identifier=${encodeURIComponent(identifier)}`

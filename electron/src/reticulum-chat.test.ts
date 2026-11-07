@@ -20045,7 +20045,13 @@ describe('reticulum chat manager', () => {
         },
       } as any,
       now: () => 9_999_999_999_999,
-      signLocalFields: createReticulumChatTestSigner(),
+      // Keep this size boundary deterministic, like the fitting case above.
+      // Random Base58 keys/signatures can be shorter and make the wire fit.
+      signLocalFields: async () => ({
+        authorAddress: 'Q'.repeat(34),
+        authorPublicKey: 'z'.repeat(44),
+        signature: 'z'.repeat(88),
+      }),
     });
     const event = signedEvent({
       groupId: 2_147_483_647,

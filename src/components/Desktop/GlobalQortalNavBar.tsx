@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { extractComponents } from '../Chat/MessageDisplay';
 import {
+  appsSubPageCanGoBackAtom,
   balanceAtom,
   infoSnackGlobalAtom,
   navigationControllerAtom,
@@ -44,6 +45,8 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
+import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
+import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
 import {
@@ -759,6 +762,7 @@ export function GlobalQortalNavBar({
 }: GlobalQortalNavBarProps) {
   const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
+  const appsSubPageCanGoBack = useAtomValue(appsSubPageCanGoBackAtom);
   const balance = useAtomValue(balanceAtom);
   const qortBalanceLoading = useAtomValue(qortBalanceLoadingAtom);
   const txList = useAtomValue(txListAtom);
@@ -928,6 +932,11 @@ export function GlobalQortalNavBar({
     const trimmed = inputValue.trim();
     if (!trimmed) return;
 
+    if (parseQortalUseGroupLink(trimmed)) {
+      void openQortalUseGroupLink(trimmed);
+      return;
+    }
+
     const isExplicitQortalLink = /^qortal:\/\//i.test(trimmed);
     const parsedLink = isExplicitQortalLink
       ? extractComponents(normalizeQortalInput(trimmed))
@@ -1036,10 +1045,14 @@ export function GlobalQortalNavBar({
   }, [setInfoSnackGlobal, setOpenSnackGlobal, t]);
 
   const isInternalTabSelected = selectedTab?.service === INTERNAL_TAB_SERVICE;
+  const canGoBackInSubPage =
+    appsSubPageCanGoBack &&
+    (desktopViewMode === 'apps' || desktopViewMode === 'dev');
   const canGoBack =
-    !!selectedTab?.tabId &&
-    !!currentNavigation?.hasBack &&
-    !isInternalTabSelected;
+    canGoBackInSubPage ||
+    (!!selectedTab?.tabId &&
+      !!currentNavigation?.hasBack &&
+      !isInternalTabSelected);
   const canRefresh =
     !!selectedTab?.tabId &&
     (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
@@ -1247,6 +1260,10 @@ export function GlobalQortalNavBar({
               onClick={() => {
                 if (isDevMode) {
                   executeEvent('devModeNavigateBack', {});
+                  return;
+                }
+                if (canGoBackInSubPage) {
+                  executeEvent('navigateBack', {});
                   return;
                 }
                 if (!selectedTab?.tabId) return;

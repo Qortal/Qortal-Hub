@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "المفتاح السري للمشرفين (ASK)",
+    "create_ask": "إنشاء مفتاح سري للمشرفين",
+    "create_gsk": "إنشاء مفتاح سري للمجموعة",
+    "create_gsk_confirm": "هل تريد إنشاء أول مفتاح سري للمجموعة ونشره؟ سيُشفّر المفتاح لأعضاء المجموعة. تُطبّق رسوم نشر QDN.",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "المفتاح السري للمجموعة (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "نُشر المفتاح السري. قد يستغرق ظهوره بضع دقائق."
   },
   "advanced_options": "خيارات متقدمة",
   "announcement_placeholder": "Write an announcement...",
@@ -796,12 +802,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "لا توجد مساحة كافية على القرص لحفظ هذا المرفق",
     "delete_shortcut": "حذف (Shift+Del)",
     "download_failed": "فشل التنزيل",
     "file_attachment": "ملف مرفق",
     "file_transfer": "نقل ملف",
     "file_unavailable": "الملف غير متاح",
     "image_attachment": "صورة مرفقة",
+    "image_disk_full": "لا توجد مساحة كافية على القرص لحفظ هذه الصورة",
+    "image_download_failed": "تعذّر تنزيل الصورة",
     "image_unavailable_no_peers": "الصورة غير متاحة حاليًا (لا يوجد أقران)",
     "invalid_attachment": "مرفق مورد غير صالح",
     "new_messages": "رسائل جديدة",
