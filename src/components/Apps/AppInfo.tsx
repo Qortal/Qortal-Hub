@@ -9,7 +9,6 @@ import {
   AppInfoSnippetLeft,
   AppInfoSnippetMiddle,
   AppInfoUserName,
-  AppsBackContainer,
   AppsInfoDescription,
   AppsLibraryContainer,
   AppsWidthLimiter,
@@ -34,8 +33,6 @@ import {
 import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { AppRatingBreakdown } from './AppInfo/AppRatingBreakdown';
 import { AppDetailsSection } from './AppInfo/AppDetailsSection';
 import { getFee } from '../../background/background';
@@ -223,38 +220,6 @@ export const AppInfo = ({ app, myName }) => {
         overflow: 'auto',
       }}
     >
-      <AppsBackContainer>
-        <Spacer height="30px" />
-        <AppsWidthLimiter
-          sx={{
-            justifyContent: 'space-between',
-            aliginItems: 'center',
-            flexDirection: 'row',
-          }}
-        >
-          <ShowMessageReturnButton
-            sx={{
-              padding: '2px',
-            }}
-            onClick={() => {
-              executeEvent('navigateBack', {});
-            }}
-          >
-            <ReturnIcon />
-            <ComposeP
-              sx={{
-                fontSize: '18px',
-              }}
-            >
-              {t('core:action.return', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </ComposeP>
-          </ShowMessageReturnButton>
-        </AppsWidthLimiter>
-        <Spacer height="20px" />
-      </AppsBackContainer>
-
       <Box
         sx={{
           display: 'flex',

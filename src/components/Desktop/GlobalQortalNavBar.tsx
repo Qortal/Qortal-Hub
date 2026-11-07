@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { extractComponents } from '../Chat/MessageDisplay';
 import {
+  appsSubPageCanGoBackAtom,
   balanceAtom,
   infoSnackGlobalAtom,
   navigationControllerAtom,
@@ -761,6 +762,7 @@ export function GlobalQortalNavBar({
 }: GlobalQortalNavBarProps) {
   const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
+  const appsSubPageCanGoBack = useAtomValue(appsSubPageCanGoBackAtom);
   const balance = useAtomValue(balanceAtom);
   const qortBalanceLoading = useAtomValue(qortBalanceLoadingAtom);
   const txList = useAtomValue(txListAtom);
@@ -1043,10 +1045,14 @@ export function GlobalQortalNavBar({
   }, [setInfoSnackGlobal, setOpenSnackGlobal, t]);
 
   const isInternalTabSelected = selectedTab?.service === INTERNAL_TAB_SERVICE;
+  const canGoBackInSubPage =
+    appsSubPageCanGoBack &&
+    (desktopViewMode === 'apps' || desktopViewMode === 'dev');
   const canGoBack =
-    !!selectedTab?.tabId &&
-    !!currentNavigation?.hasBack &&
-    !isInternalTabSelected;
+    canGoBackInSubPage ||
+    (!!selectedTab?.tabId &&
+      !!currentNavigation?.hasBack &&
+      !isInternalTabSelected);
   const canRefresh =
     !!selectedTab?.tabId &&
     (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
@@ -1254,6 +1260,10 @@ export function GlobalQortalNavBar({
               onClick={() => {
                 if (isDevMode) {
                   executeEvent('devModeNavigateBack', {});
+                  return;
+                }
+                if (canGoBackInSubPage) {
+                  executeEvent('navigateBack', {});
                   return;
                 }
                 if (!selectedTab?.tabId) return;
