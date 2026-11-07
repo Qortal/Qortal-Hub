@@ -52,6 +52,7 @@ await qortalRequest({
   description: 'The time and date, at a glance.',
   tag1: 'go-widget',
   file: zipBlob, // the widget folder, index.html at its root
+  isMultiFileZip: true, // publish the zip's files, not the zip as one file
 });
 ```
 
@@ -115,7 +116,9 @@ them before drawing, and give them a timeout.
 | `THEME_CHANGED`        | `theme: 'dark' \| 'light'`      | The user switched theme. Also on load.                                         |
 | `LANGUAGE_CHANGED`     | `language: string`              | The user switched language. Also on load.                                      |
 
-Pause timers, animations and polling while `visible` is `false`.
+Pause timers, animations and polling while `visible` is `false`. Read `theme`
+and `lang` from the address when you start and treat these messages as
+changes: the first ones can arrive before your script runs.
 
 ### What a widget may ask for
 

@@ -100,6 +100,11 @@ const hello = (view: HTMLElement) =>
     );
   });
 
+const domReady = (view: HTMLElement) =>
+  act(() => {
+    view.dispatchEvent(new Event('dom-ready'));
+  });
+
 const ask = async (view: HTMLElement, requestId: number, data: object) => {
   await act(async () => {
     view.dispatchEvent(
@@ -162,6 +167,32 @@ describe('HomeWidgetView', () => {
         }),
       ])
     );
+  });
+
+  it('tells the page theme, language and visibility again once it has loaded', async () => {
+    stubGuestApi();
+    const { container } = renderView();
+    const view = await guestView(container);
+    hello(view);
+    view.send.mockClear();
+    domReady(view);
+    expect(events(view)).toEqual([
+      expect.objectContaining({ action: 'THEME_CHANGED', theme: 'dark' }),
+      expect.objectContaining({ action: 'LANGUAGE_CHANGED', language: 'en' }),
+      expect.objectContaining({
+        action: 'GO_WIDGET_VISIBILITY',
+        payload: { visible: true },
+      }),
+    ]);
+    expect(view.send).not.toHaveBeenCalledWith('qapp:ready', DOCUMENT_ID);
+  });
+
+  it('tells a page nothing on load before its document said hello', async () => {
+    stubGuestApi();
+    const { container } = renderView();
+    const view = await guestView(container);
+    domReady(view);
+    expect(view.send).not.toHaveBeenCalled();
   });
 
   it('refuses what widgets may not do and answers GO_WIDGET_SET_SIZE', async () => {
@@ -290,6 +321,49 @@ describe('HomeWidgetView', () => {
     expect(webview.send).not.toHaveBeenCalledWith('qapp:ready', DOCUMENT_ID);
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(release).not.toHaveBeenCalled();
+  });
+
+  it('tells a widget that reloads while Home is hidden that it is not visible', async () => {
+    stubGuestApi();
+    const view = (mode: 'visible' | 'hidden') => (
+      <Activity mode={mode}>
+        <HomeWidgetView
+          baseUrl="http://127.0.0.1:12391"
+          columns={15}
+          heightPx={248}
+          interactive
+          isOnScreen={() => true}
+          loadDelayMs={0}
+          onAskSize={vi.fn()}
+          reloadKey={0}
+          visible
+          widget={weather}
+          widthPx={386}
+        />
+      </Activity>
+    );
+    const { container, rerender } = render(view('visible'));
+    const webview = await guestView(container);
+    hello(webview);
+    rerender(view('hidden'));
+    webview.send.mockClear();
+    // The widget reloads itself: a new document says hello, then loads.
+    act(() => {
+      webview.dispatchEvent(
+        Object.assign(new Event('ipc-message'), {
+          channel: 'qapp:hello',
+          args: [{ documentId: 'b'.repeat(32) }],
+        })
+      );
+    });
+    domReady(webview);
+    const visibility = events(webview).filter(
+      (message) => message.action === 'GO_WIDGET_VISIBILITY'
+    );
+    expect(visibility).toHaveLength(2);
+    for (const message of visibility) {
+      expect(message.payload).toEqual({ visible: false });
+    }
   });
 
   it('offers a retry when the guest fails, with the same address', async () => {

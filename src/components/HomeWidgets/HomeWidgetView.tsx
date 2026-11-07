@@ -155,6 +155,9 @@ const HomeWidgetViewInner = ({
   const bridgeRef = useRef<null | (() => void)>(null);
   const helloTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentVisibleRef = useRef<boolean | null>(null);
+  // Off while Home's <Activity> hides the view: the widget is not visible
+  // then, even before the props catch up.
+  const effectsOnRef = useRef(false);
 
   const live = useRef({
     visible,
@@ -198,6 +201,14 @@ const HomeWidgetViewInner = ({
     },
     [post]
   );
+
+  // What a document is told when it starts: theme, language and visibility.
+  const postState = useCallback(() => {
+    const current = live.current;
+    post({ action: 'THEME_CHANGED', theme: current.themeMode });
+    post({ action: 'LANGUAGE_CHANGED', language: current.language });
+    postVisibility(effectsOnRef.current && current.visible);
+  }, [post, postVisibility]);
 
   const answerOwn = useCallback(
     (action: string, data: Record<string, unknown>) => {
@@ -255,14 +266,19 @@ const HomeWidgetViewInner = ({
       } catch {
         return; // the guest is already going away
       }
-      const current = live.current;
-      post({ action: 'THEME_CHANGED', theme: current.themeMode });
-      post({ action: 'LANGUAGE_CHANGED', language: current.language });
-      postVisibility(current.visible);
+      postState();
       setStatus('ready');
     },
-    [answerOwn, owner, post, postVisibility]
+    [answerOwn, owner, postState]
   );
+
+  // The preload says hello as soon as it runs, so what onHello posts can
+  // reach the page before the widget's own script listens. Tell it again
+  // once the page has loaded; a repeat is harmless. Only after a document
+  // said hello, and the guest hands it to the page loaded now.
+  const onLoaded = useCallback(() => {
+    if (documentRef.current) postState();
+  }, [postState]);
 
   const fail = useCallback(() => {
     if (helloTimerRef.current) clearTimeout(helloTimerRef.current);
@@ -273,8 +289,8 @@ const HomeWidgetViewInner = ({
     setStatus('failed');
   }, []);
 
-  const handlers = useRef({ onHello, fail });
-  handlers.current = { onHello, fail };
+  const handlers = useRef({ onHello, onLoaded, fail });
+  handlers.current = { onHello, onLoaded, fail };
 
   // Prepare the guest (after the stagger delay). Kept across Activity hides:
   // a hidden Home cancels a prepare still in flight and asks again on show.
@@ -353,7 +369,10 @@ const HomeWidgetViewInner = ({
           handlers.current.fail();
         }
       });
-      view.addEventListener('dom-ready', () => setShown(true));
+      view.addEventListener('dom-ready', () => {
+        setShown(true);
+        handlers.current.onLoaded();
+      });
       helloTimerRef.current = setTimeout(() => {
         if (!documentRef.current) handlers.current.fail();
       }, GUEST_HELLO_TIMEOUT_MS);
@@ -383,8 +402,10 @@ const HomeWidgetViewInner = ({
   // Lets a widget pause while nobody sees it. The cleanup covers Home's
   // <Activity> hiding it, when no later effect runs until it shows again.
   useEffect(() => {
+    effectsOnRef.current = true;
     if (sentVisibleRef.current !== visible) postVisibility(visible);
     return () => {
+      effectsOnRef.current = false;
       if (sentVisibleRef.current !== false) postVisibility(false);
     };
   }, [visible, postVisibility]);
