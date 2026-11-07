@@ -2,7 +2,6 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   AppLibrarySubTitle,
   AppPublishTagsContainer,
-  AppsBackContainer,
   AppsLibraryContainer,
   AppsWidthLimiter,
   PublishQAppCTAButton,
@@ -350,9 +349,6 @@ export const AppPublish = ({
         paddingTop: '30px',
       }}
     >
-      <AppsBackContainer>
-        <Spacer height="20px" />
-      </AppsBackContainer>
       <AppsWidthLimiter
         sx={{
           width: 'auto',

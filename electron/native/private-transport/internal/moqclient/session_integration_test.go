@@ -11,6 +11,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -33,11 +34,15 @@ type integrationHandler struct {
 func (h *integrationHandler) HandleGoAway(string) {}
 
 func (h *integrationHandler) HandleSubscribe(request *moqtransport.IncomingSubscribeRequest) {
+	if string(request.Name()) == "denied" {
+		request.Reject(moqtransport.RequestErrorCodeUnauthorized, "test rejection")
+		return
+	}
 	h.subscriptions <- request
 }
 
 func TestSessionTransportsOpaqueMOQTObjectOnlyThroughMasque(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	backendCertificate := integrationCertificate(t, "moq-backend")
@@ -168,6 +173,28 @@ func TestSessionTransportsOpaqueMOQTObjectOnlyThroughMasque(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
+	// More rejections than the subscription limit must neither exhaust slots
+	// nor close the shared connection used by the legitimate tracks below.
+	for index := 0; index <= MaxSubscriptions; index++ {
+		id := fmt.Sprintf("denied-%d", index)
+		if err := session.Subscribe(id, publicationNamespace, "denied"); err != nil {
+			t.Fatalf("rejection %d: %v", index, err)
+		}
+		select {
+		case event := <-events:
+			if event.Kind != "error" || event.Code != "MOQ_SUBSCRIBE_REJECTED" || event.SubscriptionID != id {
+				t.Fatalf("unexpected rejection: %#v", event)
+			}
+		case <-ctx.Done():
+			t.Fatal("subscription rejection did not reach caller")
+		}
+		session.mu.Lock()
+		remaining := len(session.subscriptions)
+		session.mu.Unlock()
+		if remaining != 0 {
+			t.Fatalf("rejection retained %d subscriptions", remaining)
+		}
+	}
 	for _, publicationTrack := range tracks {
 		if err = session.Subscribe("self-"+publicationTrack, publicationNamespace, publicationTrack); err != nil {
 			t.Fatal(err)

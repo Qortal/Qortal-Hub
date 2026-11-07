@@ -9,7 +9,6 @@ import {
   AppInfoSnippetLeft,
   AppInfoSnippetMiddle,
   AppInfoUserName,
-  AppsBackContainer,
   AppsInfoDescription,
   AppsLibraryContainer,
   AppsWidthLimiter,
@@ -221,11 +220,6 @@ export const AppInfo = ({ app, myName }) => {
         overflow: 'auto',
       }}
     >
-      <AppsBackContainer>
-        <Spacer height="30px" />
-        <Spacer height="20px" />
-      </AppsBackContainer>
-
       <Box
         sx={{
           display: 'flex',

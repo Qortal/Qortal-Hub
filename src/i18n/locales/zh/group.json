@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "管理员密钥 (ASK)",
+    "create_ask": "创建管理员密钥",
+    "create_gsk": "创建群组密钥",
+    "create_gsk_confirm": "创建并发布群组的第一个密钥？密钥将为群组成员加密。需要支付 QDN 发布费用。",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "群组密钥 (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "密钥已发布，可能需要几分钟才能显示。"
   },
   "advanced_options": "高级选项",
   "announcement_placeholder": "Write an announcement...",
@@ -796,12 +802,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "磁盘空间不足，无法保存此附件",
     "delete_shortcut": "删除 (Shift+Del)",
     "download_failed": "下载失败",
     "file_attachment": "文件附件",
     "file_transfer": "文件传输",
     "file_unavailable": "文件不可用",
     "image_attachment": "图片附件",
+    "image_disk_full": "磁盘空间不足，无法保存此图片",
+    "image_download_failed": "无法下载图片",
     "image_unavailable_no_peers": "图片当前不可用（无节点）",
     "invalid_attachment": "无效的资源附件",
     "new_messages": "新消息",

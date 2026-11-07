@@ -4,7 +4,7 @@ const { pathToFileURL } = require('url');
 const http = require('http');
 const { restrictQAppGuestWebRtc } = require('../build/src/qapp-guest-network-policy.js');
 
-const preload = join(__dirname, '..', 'build', 'src', 'qapp-guest-preload.js');
+const preload = join(__dirname, '..', 'build', 'src', 'qapp-guest-preload.bundle.js');
 const preloadUrl = `${pathToFileURL(preload)}?authorization=smoke`;
 const partitionOne = `qapp-smoke-one-${process.pid}`;
 const partitionTwo = `qapp-smoke-two-${process.pid}`;

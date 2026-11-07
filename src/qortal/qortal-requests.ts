@@ -4,6 +4,7 @@ import {
   getNameInfoForOthers,
 } from '../background/background.ts';
 import { listOfAllQortalRequests } from '../hooks/useQortalMessageListener.tsx';
+import { isQAppFileReference } from './qapp-file-reference';
 import {
   addForeignServer,
   addGroupAdminRequest,
@@ -410,7 +411,6 @@ export const VALID_SESSION_PERMISSIONS = [
   'PUBLISH_MULTIPLE_QDN_RESOURCES',
   'GET_USER_ACCOUNT',
   'GET_LIST_ITEMS',
-  'SIGN_FOREIGN_FEES',
   'REENCRYPT_GROUP_KEYS',
   'START_CROSSCHAIN_SERVER',
   'NOTIFICATION_PERMISSION',
@@ -428,7 +428,6 @@ export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
   'GET_USER_WALLET_INFO',
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_LIST_ITEMS',
-  'SIGN_FOREIGN_FEES',
   'START_CROSSCHAIN_SERVER',
 ];
 
@@ -2564,7 +2563,9 @@ function setupMessageListenerQortalRequest() {
           }
           if (request.payload?.blob?.type !== 'application/pdf')
             throw new Error('blob type must be application/pdf');
-          executeEvent('openPdf', { blob: request.payload?.blob });
+          const file = request.payload.blob;
+          const blob = isQAppFileReference(file) ? await file.readableBlob() : file;
+          executeEvent('openPdf', { blob });
           event.source.postMessage(
             {
               requestId: request.requestId,

@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "Chave secreta dos administradores (ASK)",
+    "create_ask": "Criar chave secreta dos administradores",
+    "create_gsk": "Criar chave secreta do grupo",
+    "create_gsk_confirm": "Criar e publicar a primeira chave secreta do grupo? A chave será encriptada para os membros do grupo. Aplica-se uma taxa de publicação QDN.",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "Chave secreta do grupo (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "Chave secreta publicada. Pode demorar alguns minutos a aparecer."
   },
   "advanced_options": "opções avancadas",
   "announcement_placeholder": "Write an announcement...",
@@ -796,12 +802,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Espaço em disco insuficiente para guardar este anexo",
     "delete_shortcut": "Eliminar (Shift+Del)",
     "download_failed": "Falha na transferência",
     "file_attachment": "Ficheiro anexado",
     "file_transfer": "Transferência de ficheiro",
     "file_unavailable": "Ficheiro indisponível",
     "image_attachment": "Imagem anexada",
+    "image_disk_full": "Espaço em disco insuficiente para guardar esta imagem",
+    "image_download_failed": "Não foi possível transferir a imagem",
     "image_unavailable_no_peers": "Imagem indisponível neste momento (sem pares)",
     "invalid_attachment": "Anexo de recurso inválido",
     "new_messages": "Novas mensagens",

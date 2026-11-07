@@ -88,16 +88,24 @@ describe('community MASQUE relay discovery', () => {
 
   it('uses one fresh query and only polls the cache while waiting', async () => {
     const bridge = new BridgeStub();
-    await expect(
-      discoverCommunityMasqueRelay(bridge as never, {
+    vi.useFakeTimers();
+    try {
+      const pending = discoverCommunityMasqueRelay(bridge as never, {
         now: () => 1_000_000,
         timeoutMs: 100,
-      })
-    ).rejects.toThrow('MASQUE_RELAY_UNAVAILABLE');
-    expect(bridge.getCommunityMasqueRelays).toHaveBeenCalledTimes(3);
-    expect(bridge.getCommunityMasqueRelays).toHaveBeenNthCalledWith(1, false);
-    expect(bridge.getCommunityMasqueRelays).toHaveBeenNthCalledWith(2, true);
-    expect(bridge.getCommunityMasqueRelays).toHaveBeenNthCalledWith(3, false);
+      });
+      const rejected = expect(pending).rejects.toThrow(
+        'MASQUE_RELAY_UNAVAILABLE'
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      await rejected;
+      expect(bridge.getCommunityMasqueRelays).toHaveBeenCalledTimes(3);
+      expect(bridge.getCommunityMasqueRelays).toHaveBeenNthCalledWith(1, false);
+      expect(bridge.getCommunityMasqueRelays).toHaveBeenNthCalledWith(2, true);
+      expect(bridge.getCommunityMasqueRelays).toHaveBeenNthCalledWith(3, false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('allows loopback only for an explicit development override', () => {

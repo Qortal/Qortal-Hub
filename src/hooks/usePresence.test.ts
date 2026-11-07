@@ -4,8 +4,77 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { extStateAtom, userInfoAtom } from '../atoms/global';
 import { appLockedAtom, isIdleAtom, myStatusAtom } from '../atoms/presence';
-import { buildPresenceSnapshot } from './usePresence';
-import { usePresence } from './usePresence';
+import {
+  applyOnlineAddressPresenceUpdates,
+  applyStatusPresenceUpdates,
+  buildPresenceSnapshot,
+  usePresence,
+} from './usePresence';
+
+describe('presence state updates', () => {
+  it('preserves collection identity for unchanged heartbeats', () => {
+    const onlineAddresses = new Set(['Q123']);
+    const statuses = new Map([['Q123', 'online'] as const]);
+    const updates = [
+      { address: 'Q123', online: true, status: 'online' as const },
+    ];
+
+    expect(applyOnlineAddressPresenceUpdates(onlineAddresses, updates)).toBe(
+      onlineAddresses
+    );
+    expect(applyStatusPresenceUpdates(statuses, updates)).toBe(statuses);
+  });
+
+  it('publishes new collections for real membership and status changes', () => {
+    const onlineAddresses = new Set(['Q123']);
+    const statuses = new Map([['Q123', 'online'] as const]);
+
+    const nextOnlineAddresses = applyOnlineAddressPresenceUpdates(
+      onlineAddresses,
+      [{ address: 'Q456', online: true, status: 'busy' }]
+    );
+    const nextStatuses = applyStatusPresenceUpdates(statuses, [
+      { address: 'Q123', online: true, status: 'idle' },
+      { address: 'Q456', online: true, status: 'busy' },
+    ]);
+
+    expect(nextOnlineAddresses).not.toBe(onlineAddresses);
+    expect(nextOnlineAddresses).toEqual(new Set(['Q123', 'Q456']));
+    expect(nextStatuses).not.toBe(statuses);
+    expect(nextStatuses).toEqual(
+      new Map([
+        ['Q123', 'idle'],
+        ['Q456', 'busy'],
+      ])
+    );
+  });
+
+  it('does not publish membership when only a status changes', () => {
+    const onlineAddresses = new Set(['Q123']);
+    const statuses = new Map([['Q123', 'online'] as const]);
+    const updates = [
+      { address: 'Q123', online: true, status: 'busy' as const },
+    ];
+
+    expect(applyOnlineAddressPresenceUpdates(onlineAddresses, updates)).toBe(
+      onlineAddresses
+    );
+    expect(applyStatusPresenceUpdates(statuses, updates)).toEqual(
+      new Map([['Q123', 'busy']])
+    );
+  });
+
+  it('removes offline addresses and statuses', () => {
+    const onlineAddresses = new Set(['Q123']);
+    const statuses = new Map([['Q123', 'online'] as const]);
+    const updates = [{ address: 'Q123', online: false, status: null }];
+
+    expect(applyOnlineAddressPresenceUpdates(onlineAddresses, updates)).toEqual(
+      new Set()
+    );
+    expect(applyStatusPresenceUpdates(statuses, updates)).toEqual(new Map());
+  });
+});
 
 describe('usePresence', () => {
   beforeEach(() => {

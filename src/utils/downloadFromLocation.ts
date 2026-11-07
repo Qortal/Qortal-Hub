@@ -1,4 +1,4 @@
-import aesjs from 'aes-js';
+import { decryptAesCtrChunk } from '../qdn/encryption/aes-ctr-stream';
 import { createEndpoint } from '../background/background.ts';
 
 export function normalizeFilename(
@@ -199,11 +199,10 @@ export async function downloadFromLocation(
             // Decrypt chunk if encrypted
             if (isEncrypted && keyBytes && ivBytes) {
               try {
-                const blockOffset = BigInt(bytesProcessed >> 4);
                 chunkToWrite = await decryptAesCtrChunk(
                   keyBytes,
                   ivBytes,
-                  blockOffset,
+                  bytesProcessed,
                   value
                 );
               } catch (decryptError: any) {
@@ -321,11 +320,10 @@ export async function downloadFromLocation(
                 break;
               }
 
-              const blockOffset = BigInt(bytesProcessed >> 4);
               const decryptedChunk = await decryptAesCtrChunk(
                 keyBytes,
                 ivBytes,
-                blockOffset,
+                bytesProcessed,
                 value
               );
 
@@ -364,11 +362,10 @@ export async function downloadFromLocation(
             const { done, value } = await reader.read();
             if (done) break;
 
-            const blockOffset = BigInt(bytesProcessed >> 4);
             const decryptedChunk = await decryptAesCtrChunk(
               keyBytes,
               ivBytes,
-              blockOffset,
+              bytesProcessed,
               value
             );
 
@@ -472,75 +469,6 @@ export async function downloadFromLocation(
       error: error?.message || 'Unknown error occurred',
     };
   }
-}
-
-/**
- * Decrypts a single chunk using AES-CTR
- */
-async function decryptAesCtrChunk(
-  keyBytes: Uint8Array,
-  ivBytes: Uint8Array,
-  blockOffset: bigint,
-  ciphertext: Uint8Array
-): Promise<Uint8Array> {
-  // Try WebCrypto first
-  if (crypto?.subtle) {
-    try {
-      const cryptoKey = await crypto.subtle.importKey(
-        'raw',
-        keyBytes,
-        { name: 'AES-CTR' },
-        false,
-        ['decrypt']
-      );
-
-      const counter = deriveCtrCounter(ivBytes, blockOffset);
-
-      const decrypted = await crypto.subtle.decrypt(
-        {
-          name: 'AES-CTR',
-          counter,
-          length: 128,
-        },
-        cryptoKey,
-        ciphertext
-      );
-
-      return new Uint8Array(decrypted);
-    } catch (e) {
-      console.warn('WebCrypto AES-CTR decrypt failed, falling back:', e);
-    }
-  }
-
-  // Fallback using aes-js
-  return fallbackDecryptCtr(keyBytes, ivBytes, blockOffset, ciphertext);
-}
-
-function deriveCtrCounter(iv: Uint8Array, blockOffset: bigint): Uint8Array {
-  const counter = new Uint8Array(iv);
-  let carry = blockOffset;
-
-  for (let i = 15; i >= 0 && carry > 0n; i--) {
-    const sum = BigInt(counter[i]) + (carry & 0xffn);
-    counter[i] = Number(sum & 0xffn);
-    carry = (carry >> 8n) + (sum >> 8n);
-  }
-  return counter;
-}
-
-function fallbackDecryptCtr(
-  keyBytes: Uint8Array,
-  ivBytes: Uint8Array,
-  blockOffset: bigint,
-  ciphertext: Uint8Array
-): Uint8Array {
-  const counter = deriveCtrCounter(ivBytes, blockOffset);
-  const aesCtr = new aesjs.ModeOfOperation.ctr(
-    keyBytes,
-    new aesjs.Counter(counter)
-  );
-  const decrypted = aesCtr.decrypt(ciphertext);
-  return new Uint8Array(decrypted);
 }
 
 /**

@@ -115,7 +115,6 @@
     "resize": "muuta kokoa",
     "restore": "palauta",
     "return": "palaa",
-    "return_apps_dashboard": "palaa sovellusten hallintaan",
     "save": "tallenna",
     "save_disk": "tallenna levylle",
     "search": "etsi",
@@ -726,6 +725,7 @@
   "payment": "maksu",
   "payment_notification": "maksuilmoitus",
   "payments_count": "Maksut ({{count}})",
+  "pdf_viewer": "PDF-katseluohjelma",
   "poll_embed": "kyselyn upotus",
   "port": "portti",
   "presence": {

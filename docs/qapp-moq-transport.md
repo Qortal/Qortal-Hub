@@ -1,5 +1,29 @@
 # Generic multi-track Q-App transport
 
+## Failure isolation and cleanup (sidecar 0.11.1)
+
+Update Hub and its native sidecar together; the version handshake rejects a
+stale binary. Network setup and subscription creation use four bounded workers,
+so a stalled handshake does not block existing traffic, health or close commands.
+Resource creation gets a 10-second IPC budget, above the native 8-second default.
+Late replies to issued requests no longer kill the shared process. A late
+successful open is closed instead of leaving an orphaned session. Outstanding
+requests and unfinished opens are bounded, with reserved cleanup capacity.
+
+Pending subscriptions count toward the 128-track limit and accept early objects.
+Concurrent identical subscriptions share setup; conflicting ID reuse fails.
+An explicit subscription rejection emits `MOQ_ERROR` with `subscriptionId` and
+`MOQ_SUBSCRIBE_REJECTED`; it frees that ID without closing other tracks. A whole
+connection failure remains recoverable and restores the surviving subscriptions.
+The vendored MoQ lifecycle patch also belongs in the backend media service:
+completed request streams must release both halves and their watcher goroutines.
+
+Private reliable sends are never automatically replayed after uncertain native
+delivery. The path can recover, but the original send rejects with
+`RELIABLE_DELIVERY_UNKNOWN`. Use an application operation ID and backend
+deduplication before retrying a non-idempotent action. A successful transport
+send is not an application-level acknowledgement.
+
 ## Complete reliable objects (sidecar 0.11.0)
 
 `MOQ_OBJECT_PUBLISH` accepts one opaque reliable object using:

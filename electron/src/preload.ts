@@ -14,6 +14,26 @@ import {
   invokeGroupCallJoin,
   type GroupCallJoinIpcArguments,
 } from './group-call-ipc-contract';
+import { isMainWindowUrl } from './main-window-policy';
+import { openExternalHttp } from './desktop-shell';
+
+// A preload runs again after navigation. Never expose shell capabilities to
+// remote pages, opaque documents, or subframes, even if navigation is forced
+// through a main-process loadURL call (which bypasses will-navigate).
+const shellUrlArg = process.argv.find((arg) =>
+  arg.startsWith('--hub-shell-url=')
+);
+const shellUrl = shellUrlArg?.slice('--hub-shell-url='.length) ?? '';
+if (!process.isMainFrame || !isMainWindowUrl(window.location.href, shellUrl)) {
+  throw new Error('Hub preload is restricted to the main application document');
+}
+
+// Transfer only the capability port from main. File bytes remain in the worker's
+// Q-App session; this window receives metadata and authorized operation replies.
+ipcRenderer.on('qappFiles:control', (event, metadata) => {
+  window.postMessage({ type: 'qappFiles:control', ...metadata },
+    window.location.origin, event.ports);
+});
 
 // Sandbox-safe minimal Capacitor bridge. The repo's electron-plugins module is
 // currently empty, so we only need to preserve the platform marker here.
@@ -442,21 +462,9 @@ try {
   // Expose Electron API
   contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url: string) => {
-      if (typeof url !== 'string') {
-        return;
-      }
-      try {
-        const parsed = new URL(url.trim());
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          return;
-        }
-        if (!parsed.hostname) {
-          return;
-        }
-        void shell.openExternal(parsed.toString());
-      } catch {
-        // Invalid URL
-      }
+      void openExternalHttp(url, shell, (error) => {
+        loggerError('Failed to open external website', error);
+      });
     },
     setAllowedDomains: (domains) => {
       ipcRenderer.send('set-allowed-domains', domains);
@@ -1283,6 +1291,7 @@ try {
           currentBytesPerSecond?: number;
           averageBytesPerSecond?: number;
           nextRequestAt?: number | null;
+          failureReason?: 'verification_failed' | 'disk_full';
         } | null;
         error?: string;
       }>,
@@ -2577,7 +2586,7 @@ try {
           progress?: number;
           complete?: boolean;
           failed?: boolean;
-          failureReason?: 'verification_failed';
+          failureReason?: 'verification_failed' | 'disk_full';
         }) => void
       ) => {
         const handler = (_event: unknown, payload: unknown) => {
@@ -2591,7 +2600,7 @@ try {
               progress?: number;
               complete?: boolean;
               failed?: boolean;
-              failureReason?: 'verification_failed';
+              failureReason?: 'verification_failed' | 'disk_full';
             }
           );
         };
@@ -3640,7 +3649,7 @@ try {
           progress?: number;
           complete?: boolean;
           failed?: boolean;
-          failureReason?: 'verification_failed';
+          failureReason?: 'verification_failed' | 'disk_full';
         }) => void
       ) => {
         const handler = (_event: unknown, payload: unknown) => {
@@ -3654,7 +3663,7 @@ try {
               progress?: number;
               complete?: boolean;
               failed?: boolean;
-              failureReason?: 'verification_failed';
+              failureReason?: 'verification_failed' | 'disk_full';
             }
           );
         };

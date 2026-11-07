@@ -1,3 +1,4 @@
+import { diagnosePrivateTransport } from './private-transport-diagnostics';
 import { createHash, randomBytes } from 'crypto';
 import net from 'net';
 import {
@@ -55,28 +56,32 @@ export class ReticulumPrivateChannelBootstrapProvider implements PrivateChannelB
     const nonce = randomBytes(24).toString('base64url');
     let value: unknown;
     try {
-      value = await this.manager.request(context.owner, {
-        destination,
-        path: PRIVATE_BOOTSTRAP_PATH,
-        payload: {
-          version: PRIVATE_BOOTSTRAP_VERSION,
-          transport: PRIVATE_BOOTSTRAP_TRANSPORT,
-          nonce,
-          purpose: context.purpose,
-        },
-        timeoutMs: 15_000,
-        maxResponseBytes: 16 * 1024,
-        connectionId: context.rnsConnectionId,
-      });
+      value = await diagnosePrivateTransport('bootstrap-rpc', () =>
+        this.manager.request(context.owner, {
+          destination,
+          path: PRIVATE_BOOTSTRAP_PATH,
+          payload: {
+            version: PRIVATE_BOOTSTRAP_VERSION,
+            transport: PRIVATE_BOOTSTRAP_TRANSPORT,
+            nonce,
+            purpose: context.purpose,
+          },
+          timeoutMs: 15_000,
+          maxResponseBytes: 16 * 1024,
+          connectionId: context.rnsConnectionId,
+        })
+      );
     } catch {
       throw new PrivateChannelError('BOOTSTRAP_FAILED');
     }
-    return validatePrivateBootstrapDescriptor(value, {
-      context,
-      authenticatedRnsDestination: destination,
-      requestNonce: nonce,
-      consumedNonces: this.consumedNonces,
-    });
+    return diagnosePrivateTransport('bootstrap-validation', () =>
+      validatePrivateBootstrapDescriptor(value, {
+        context,
+        authenticatedRnsDestination: destination,
+        requestNonce: nonce,
+        consumedNonces: this.consumedNonces,
+      })
+    );
   }
 }
 

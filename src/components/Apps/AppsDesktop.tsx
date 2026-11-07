@@ -66,6 +66,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
+  appsSubPageCanGoBackAtom,
   navigationControllerAtom,
   isNewTabWindowAtom,
   userInfoAtom,
@@ -777,6 +778,29 @@ export const AppsDesktop = ({
       unsubscribeFromEvent('devModeNavigateBack', navigateBackFunc);
     };
   }, [navigateBackFunc]);
+
+  const setAppsSubPageCanGoBack = useSetAtom(appsSubPageCanGoBackAtom);
+
+  useEffect(() => {
+    const currentMode = desktopViewMode === 'dev' ? devMode : mode;
+    const isSubPage =
+      (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
+      !selectedTab &&
+      [
+        'category',
+        'appInfo-from-category',
+        'appInfo',
+        'library',
+        'publish',
+        'publish-app',
+        'publish-website',
+      ].includes(currentMode);
+    setAppsSubPageCanGoBack(isSubPage);
+  }, [desktopViewMode, devMode, mode, selectedTab, setAppsSubPageCanGoBack]);
+
+  useEffect(() => {
+    return () => setAppsSubPageCanGoBack(false);
+  }, [setAppsSubPageCanGoBack]);
 
   const addTabFunc = (e) => {
     const data = e.detail?.data;

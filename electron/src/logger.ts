@@ -27,6 +27,7 @@ export function setDisableDevLogs(value: boolean): void {
 }
 
 const IMPORTANT_LOG_PATTERNS = [
+  /^\[RendererProfile\]/,
   /\bfailed\b/i,
   /\bfailure\b/i,
   /\berror\b/i,

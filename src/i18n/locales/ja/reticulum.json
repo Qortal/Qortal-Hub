@@ -183,11 +183,11 @@
       "legacy": "旧バージョン"
     },
     "legacy": {
-      "description": "Q-Chatのヘッダーに旧来のThreadsとAdminのコントロールを表示します。",
+      "description": "Q-Chatのヘッダーに旧来のThreadsボタンを表示します。",
       "title": "Threads",
       "toggle": {
         "aria": "旧来のThreadsを表示",
-        "description": "旧来のThreadsとAdminのアイコンを表示します。",
+        "description": "旧来のThreadsアイコンを表示します。",
         "label": "Threads"
       },
       "warning": "Threadsは次回のリリースで削除されます。更新する前に、重要なスレッドの情報を安全な場所かQ-Chatの新しいチャンネルに移してください。"

@@ -74,10 +74,16 @@
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
+    "ask_title": "Admin Secret Key (ASK)",
+    "create_ask": "Create admin secret key",
+    "create_gsk": "Create group secret key",
+    "create_gsk_confirm": "Create and publish the first group secret key? The key will be encrypted for the group members. A QDN publishing fee applies.",
     "gsk_description": "This key encrypts group content visible to all group members. It is currently the only key used for group chat and shared data.",
     "gsk_description_compact": "This key encrypts group content visible to all group members. It is currently the only key used in this UI.",
+    "gsk_title": "Group Secret Key (GSK)",
     "publish_ask": "Publish ASK",
-    "publish_gsk": "Publish GSK"
+    "publish_gsk": "Publish GSK",
+    "published": "Secret key published. It may take a few minutes to appear."
   },
   "advanced_options": "advanced options",
   "announcement_placeholder": "Write an announcement...",
@@ -796,12 +802,15 @@
     }
   },
   "message_item": {
+    "attachment_disk_full": "Not enough disk space to save this attachment",
     "delete_shortcut": "Delete (shift+del)",
     "download_failed": "Download failed",
     "file_attachment": "File attachment",
     "file_transfer": "File transfer",
     "file_unavailable": "File unavailable",
     "image_attachment": "Image attachment",
+    "image_disk_full": "Not enough disk space to save this image",
+    "image_download_failed": "Couldn't download image",
     "image_unavailable_no_peers": "Image unavailable right now (no peers)",
     "invalid_attachment": "Invalid resource attachment",
     "new_messages": "New messages",

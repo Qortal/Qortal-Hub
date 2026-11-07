@@ -16,11 +16,32 @@ Backends use the dedicated Reticulum destination aspect
   message is queued and written.
 - `RNS_CLOSE`: `connectionId`.
 
+For `RNS_REQUEST` and `RNS_SEND`, `payload` can be a JSON value or a top-level
+`ArrayBuffer`, typed array, or `DataView`. Binary views send exactly their
+`byteOffset`/`byteLength` range as raw bytes, including zero-length views;
+multi-byte typed arrays are not converted into arrays of numeric values.
+Binary replies and `RNS_MESSAGE` payloads arrive as `Uint8Array`. The existing
+version 1 `base64` wire encoding and size limits are unchanged. The native encoder
+rejects detached buffers and shared-memory buffers with `RNS_PROTOCOL_ERROR`.
+Blob/File inputs and binary objects nested inside JSON are not part of this
+RNS payload contract; convert binary data to a top-level byte buffer before
+calling these actions.
+
 The host posts `RNS_MESSAGE` and `RNS_CONNECTION_STATE` events to the owning
 Q-App view. Desktop Q-Apps use separate Electron web contents and storage
 partitions; browser and mobile builds retain the iframe bridge. States are
 `CONNECTING`, `CONNECTED`, `RECONNECTING`,
 `DISCONNECTED`, `CLOSING`, `CLOSED`, and `ERROR`.
+
+Desktop guest sessions block browser WebRTC on both main documents and nested
+frames using `Connection-Allowlist: ("*://*:*/*");redirects=allow;webrtc=block`.
+The guest's `disable_non_proxied_udp` policy is additional protection, not a
+complete block: by itself it still allows direct TURN TCP connections. Ordinary
+allowed HTTP requests and media capture remain available; private data and MoQ
+use the native transport. The Hub shell's own main document is not blocked.
+Run `npm run test:qapp-network-policy` from `electron/` with a graphical display
+to check real webviews against a local TURN TCP listener, including an unblocked
+positive control and fake microphone capture. This needs no external service.
 
 The first operation for a destination in a tab asks whether the app may connect
 to its backend and exchange data. This single approval also grants
@@ -46,6 +67,13 @@ Buffer; complete unacknowledged messages are resent from their beginning.
 RPC calls are not replayed automatically after submission. Backends should use
 the supplied application `requestId` to deduplicate non-idempotent operations.
 
+A Python bridge process restart cannot preserve its physical Links or message
+queues. Hub emits `CLOSED` with reason `RNS_TRANSPORT_RESET`, revokes the old
+logical IDs and closes their private/MoQ transports. The Q-App must connect and
+authenticate again. A peer's logical `CLOSE` similarly revokes only that ID.
+Failed RPC-only establishment also schedules idle cleanup; at most 128 physical
+Link entries are retained. Further new entries return `RNS_SEND_QUEUE_FULL`.
+
 ## Wire protocol version 1
 
 Version 1 is frozen. Incompatible changes require a new destination aspect such
@@ -67,6 +95,10 @@ The parser supports partial and coalesced reads. Frames are limited to 256 KiB,
 the receive accumulator to twice that, the unacknowledged queue to 64 messages,
 and queued bytes to 2 MiB. Received IDs are retained in a bounded 512-entry
 deduplication cache. An ACK is returned even for a duplicate DATA frame.
+New DATA is validated and admitted to the bounded bridge output queue before
+its ID is remembered or acknowledged. If the queue remains full for five
+seconds, the Link fails without ACKing that message, allowing a reconnect retry.
+This ACK confirms host-queue admission, not completion of application logic.
 
 Realtime uses bidirectional RNS Buffer stream ID `7`. Writers loop over partial
 writes and flush only after the complete frame is accepted. Each sender starts
@@ -98,6 +130,9 @@ RPC `link.request()` data is a native dictionary with `version: 1`, application
 value or bytes directly. Requests are limited to 256 KiB decoded; responses are
 limited to the requested bound, at most 1 MiB. Submitted RPCs are never replayed
 automatically after ambiguous failure.
+The requested response bound is also passed to RNS before response Resource
+acceptance, with 1 KiB allowed for the encoded wire envelope. The decoded
+application response still has the exact requested byte limit.
 
 Reconnect begins at 0.5 seconds, doubles with 0.8–1.2 jitter, and caps at 30
 seconds. Partial Buffer bytes are discarded. Complete unacknowledged DATA frames
@@ -126,6 +161,7 @@ Current limitations:
   messages and RPC bodies are bounded and are not suitable for large files.
 - Request cancellation and a bulk-priority scheduler are not exposed yet.
 - Application session/subscription resumption remains the Q-App/backend's job.
+
 ## Generic Q-App screen capture
 
 Q-Apps may call `navigator.mediaDevices.getDisplayMedia({video: true, audio: false})`

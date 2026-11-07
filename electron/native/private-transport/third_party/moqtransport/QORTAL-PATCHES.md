@@ -1,5 +1,16 @@
 # Local MoQT dependency
 
+Subscription lifecycle: RequestError becomes a typed SubscriptionRejectedError;
+request EOF, local close and session cancellation unblock ReadObject and release
+buffer accounting. Subscribe bounds stream creation and request writes by the
+caller context. Completed bidirectional requests cancel their watcher before
+waiting and close both stream halves, releasing QUIC stream credit. Closing a
+rejected outgoing request uses FIN rather than resetting the peer's request
+reader. These changes prevent rejection churn from exhausting a live session.
+Run subscription_lifecycle_test.go and the parent moqclient integration test,
+which rejects more than 128 tracks then exchanges valid objects on the same
+MASQUE connection. Apply the lifecycle patch to the backend's vendored copy too.
+
 Complete-object delivery adds real subgroup FIN/reset, cancellable group leases,
 monotonic object IDs, per-track/session byte limits and session-wide receive
 budgets. Expiry or stream cancellation does not close the media connection.

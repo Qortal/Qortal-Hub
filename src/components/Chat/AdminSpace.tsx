@@ -48,6 +48,7 @@ export const AdminSpace = ({
 
       {isAdmin && (
         <AdminSpaceInner
+          key={selectedGroup}
           adminsWithNames={adminsWithNames}
           selectedGroup={selectedGroup}
           balance={balance}

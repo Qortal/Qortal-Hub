@@ -1,7 +1,12 @@
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { SecureStoragePlugin } from '@evva/capacitor-secure-storage-plugin';
-import { storeData, getData, removeKeysAndLogout } from './chromeStorage';
+import {
+  storeData,
+  getData,
+  removeKeysAndLogout,
+  getSigningContextRevision,
+} from './chromeStorage';
 const storage = new Map<string, string>();
 const privateKeys = Object.fromEntries(
   ['btc', 'ltc', 'doge', 'dgb', 'rvn'].map((c) => [
@@ -89,4 +94,31 @@ it('clears the signing session on logout', async () => {
     { requestId: 'logout' }
   );
   expect(native.clear).toHaveBeenCalledOnce();
+});
+
+it('invalidates pending approvals across Core changes, including switching away and back', async () => {
+  const before = getSigningContextRevision();
+  const update = storeData('apiKey', { url: 'https://other.invalid' });
+  expect(getSigningContextRevision()).toBeNull();
+  await update;
+  await storeData('apiKey', { url: 'https://original.invalid' });
+  expect(getSigningContextRevision()).toBeGreaterThan(before!);
+  const after = getSigningContextRevision();
+  await storeData('unrelated-ui-setting', true);
+  expect(getSigningContextRevision()).toBe(after);
+});
+
+it('invalidates approvals on logout and leaves no mutation marked active after failure', async () => {
+  const before = getSigningContextRevision();
+  await removeKeysAndLogout(
+    ['keyPair', 'walletInfo'],
+    { source: { postMessage: vi.fn() }, origin: 'test' } as any,
+    { requestId: 'test' } as any
+  );
+  expect(getSigningContextRevision()).toBeGreaterThan(before!);
+  vi.mocked(SecureStoragePlugin.set).mockRejectedValueOnce(
+    new Error('storage unavailable')
+  );
+  await expect(storeData('apiKey', {})).rejects.toThrow('storage unavailable');
+  expect(getSigningContextRevision()).not.toBeNull();
 });

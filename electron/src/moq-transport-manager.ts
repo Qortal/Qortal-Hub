@@ -65,7 +65,14 @@ type SessionRecord = {
   rnsConnectionId: string;
   state: 'OPENING' | 'OPEN' | 'CLOSED';
   transport: ManagedMoqTransport;
-  subscriptions: Set<string>;
+  subscriptions: Map<
+    string,
+    {
+      namespace: string[];
+      trackName: string;
+      ready: Promise<void>;
+    }
+  >;
   queuedBytes: number;
   publicationTracks: readonly string[];
   queuedByTrack: Map<string, number>;
@@ -142,7 +149,7 @@ export class QAppMoqTransportManager extends EventEmitter {
       rnsConnectionId,
       state: 'OPENING',
       transport,
-      subscriptions: new Set(),
+      subscriptions: new Map(),
       queuedBytes: 0,
       publicationTracks,
       queuedByTrack: new Map(),
@@ -194,15 +201,46 @@ export class QAppMoqTransportManager extends EventEmitter {
       'INVALID_MOQ_SUBSCRIPTION'
     );
     const trackName = requireName(trackNameValue, 'INVALID_MOQ_SUBSCRIPTION');
+    const existing = session.subscriptions.get(subscriptionId);
+    if (existing) {
+      if (
+        existing.trackName !== trackName ||
+        JSON.stringify(existing.namespace) !== JSON.stringify(namespace)
+      ) {
+        throw new QAppMoqError('MOQ_SUBSCRIPTION_ID_REUSED');
+      }
+      await existing.ready;
+      return { sessionId: session.sessionId, subscriptionId, subscribed: true };
+    }
     if (
-      !session.subscriptions.has(subscriptionId) &&
       session.subscriptions.size >= QAPP_MOQ_LIMITS.maxSubscriptionsPerSession
     ) {
       throw new QAppMoqError('MOQ_SUBSCRIPTION_LIMIT');
     }
+    // Reserve before native setup: objects can precede its IPC acknowledgement.
+    // Pending subscriptions consume capacity and duplicate callers share setup.
+    const subscription = { namespace, trackName, ready: Promise.resolve() };
+    session.subscriptions.set(subscriptionId, subscription);
+    subscription.ready = Promise.resolve()
+      .then(async () => {
+        await session.transport.subscribe(subscriptionId, namespace, trackName);
+        if (
+          this.sessions.get(session.sessionId) !== session ||
+          session.state !== 'OPEN'
+        ) {
+          throw new QAppMoqError('MOQ_SESSION_CLOSED');
+        }
+        if (session.subscriptions.get(subscriptionId) !== subscription) {
+          throw new QAppMoqError('MOQ_SUBSCRIBE_FAILED');
+        }
+      })
+      .catch((error) => {
+        if (session.subscriptions.get(subscriptionId) === subscription)
+          session.subscriptions.delete(subscriptionId);
+        throw normalizeError(error, 'MOQ_SUBSCRIBE_FAILED');
+      });
     try {
-      await session.transport.subscribe(subscriptionId, namespace, trackName);
-      session.subscriptions.add(subscriptionId);
+      await subscription.ready;
       return { sessionId: session.sessionId, subscriptionId, subscribed: true };
     } catch (error) {
       throw normalizeError(error, 'MOQ_SUBSCRIBE_FAILED');
@@ -421,6 +459,8 @@ export class QAppMoqTransportManager extends EventEmitter {
       subscriptionId: event.subscriptionId,
       code: event.code,
     });
+    if (event.subscriptionId)
+      session.subscriptions.delete(event.subscriptionId);
     if (!event.subscriptionId) this.fail(session, event.code, false);
   }
 

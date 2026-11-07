@@ -50,6 +50,10 @@ export const AppsCategoryDesktop = ({
   contentHeight,
 }) => {
   const [searchValue, setSearchValue] = useState('');
+
+  useEffect(() => {
+    if (!isShow) setSearchValue('');
+  }, [isShow]);
   const [sortOption, setSortOption] = useAtom(appSortAtom);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);

@@ -77,7 +77,9 @@ export const getPublishesFromAdmins = async (
   admins: string[],
   groupId: string
 ): Promise<Record<string, unknown> | false> => {
-  const queryString = admins.map((name) => `name=${name}`).join('&');
+  const queryString = admins
+    .map((name) => `name=${encodeURIComponent(name)}`)
+    .join('&');
   const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 
@@ -113,7 +115,9 @@ export const getAllPublishesFromAdmins = async (
   admins: string[],
   groupId: string
 ): Promise<Record<string, unknown>[]> => {
-  const queryString = admins.map((name) => `name=${name}`).join('&');
+  const queryString = admins
+    .map((name) => `name=${encodeURIComponent(name)}`)
+    .join('&');
   const url = `${getBaseApiReact()}${getArbitrarySearchSimpleEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
 

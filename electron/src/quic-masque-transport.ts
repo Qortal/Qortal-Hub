@@ -1,3 +1,5 @@
+import { diagnosePrivateTransport } from './private-transport-diagnostics';
+import { shouldExcludeMasqueRelay } from './masque-relay-recovery';
 import {
   PrivateChannelError,
   type PrivateTransport,
@@ -48,7 +50,7 @@ export class QuicMasqueTransport implements PrivateTransport {
     this.handleSidecarEvent(event);
   private readonly onSidecarDeath = () => {
     if (!this.closed && this.sessionId) {
-      void this.recover('TRANSPORT_CLOSED');
+      void this.recover('SIDECAR_EXITED');
     }
   };
 
@@ -78,7 +80,10 @@ export class QuicMasqueTransport implements PrivateTransport {
             this.closed
           )
             throw error;
-          if (this.lastAttemptedRelayAddress)
+          if (
+            this.lastAttemptedRelayAddress &&
+            shouldExcludeMasqueRelay(errorCode(error))
+          )
             this.failedRelayAddresses.set(
               this.lastAttemptedRelayAddress,
               Date.now()
@@ -95,8 +100,11 @@ export class QuicMasqueTransport implements PrivateTransport {
     if (encoded.length > MAX_RELIABLE_BINARY_BYTES) {
       throw new PrivateChannelError('MESSAGE_TOO_LARGE_FOR_TRANSPORT');
     }
+    let submitted = false;
+    let sessionId: string | undefined;
     try {
-      const sessionId = await this.requireSession();
+      sessionId = await this.requireSession();
+      submitted = true;
       await this.sidecar.sendPrivateReliable(
         sessionId,
         message.messageId,
@@ -107,18 +115,16 @@ export class QuicMasqueTransport implements PrivateTransport {
     } catch (error) {
       if (isRecoverableTransportError(error)) {
         try {
-          const replacementSessionId = await this.recover(errorCode(error));
-          await this.sidecar.sendPrivateReliable(
-            replacementSessionId,
-            message.messageId,
-            encoded,
-            message.streamKey,
-            message.endStream
-          );
-          return;
+          await this.recover(errorCode(error), sessionId);
         } catch (recoveryError) {
+          if (submitted)
+            throw new PrivateChannelError('RELIABLE_DELIVERY_UNKNOWN');
           throw translateSidecarError(recoveryError);
         }
+        // IPC failure does not prove that the peer did not execute the message.
+        // Recover the path, but leave any idempotent retry to the application.
+        if (submitted)
+          throw new PrivateChannelError('RELIABLE_DELIVERY_UNKNOWN');
       }
       throw translateSidecarError(error);
     }
@@ -198,29 +204,32 @@ export class QuicMasqueTransport implements PrivateTransport {
 
   private async connect(context: PrivateTransportContext): Promise<void> {
     this.lastAttemptedRelayAddress = null;
-    let [relay, bootstrap] = await Promise.all([
-      this.resolveRelay(),
+    const [relay, initialBootstrap] = await Promise.all([
+      diagnosePrivateTransport('relay-selection', () => this.resolveRelay()),
       this.bootstrapProvider.getBootstrap(context),
     ]);
+    let bootstrap = initialBootstrap;
     // Discovery/authentication can outlast a short-lived backend credential.
     // Refresh before sending it; a real backend rejection remains terminal.
     if (bootstrap.expiresAt < Date.now() + 5_000)
       bootstrap = await this.bootstrapProvider.getBootstrap(context);
     const openAt = (relayAddress: string) =>
-      this.sidecar.openPrivateSession({
-        preparedRelay: relay.preparedRelay,
-        relayAddress,
-        relayServerName: relay.relayServerName,
-        relayCertSha256: relay.relayCertSha256,
-        backendAddress: bootstrap.backendTransportEndpoint,
-        backendServerName: bootstrap.backendTransportServerName,
-        backendCertSha256: bootstrap.backendTransportCertSha256,
-        logicalSessionId: bootstrap.logicalSessionId,
-        attachToken: bootstrap.attachToken,
-        nonce: bootstrap.nonce,
-        purpose: context.purpose,
-        ownerBindingHash: bootstrap.ownerBindingHash,
-      });
+      diagnosePrivateTransport('session-open', () =>
+        this.sidecar.openPrivateSession({
+          preparedRelay: relay.preparedRelay,
+          relayAddress,
+          relayServerName: relay.relayServerName,
+          relayCertSha256: relay.relayCertSha256,
+          backendAddress: bootstrap.backendTransportEndpoint,
+          backendServerName: bootstrap.backendTransportServerName,
+          backendCertSha256: bootstrap.backendTransportCertSha256,
+          logicalSessionId: bootstrap.logicalSessionId,
+          attachToken: bootstrap.attachToken,
+          nonce: bootstrap.nonce,
+          purpose: context.purpose,
+          ownerBindingHash: bootstrap.ownerBindingHash,
+        })
+      );
     let opened;
     this.lastAttemptedRelayAddress = relay.relayAddress;
     try {
@@ -257,23 +266,31 @@ export class QuicMasqueTransport implements PrivateTransport {
       : Promise.resolve(this.relay);
   }
 
-  private recover(_reason: string): Promise<string> {
+  private recover(reason: string, failedSessionId?: string): Promise<string> {
     if (this.closed)
       return Promise.reject(new PrivateChannelError('TRANSPORT_CLOSED'));
     if (this.recoveryPromise) return this.recoveryPromise;
+    if (
+      failedSessionId &&
+      this.sessionId &&
+      failedSessionId !== this.sessionId
+    ) {
+      return Promise.resolve(this.sessionId);
+    }
     const context = this.context;
     if (!context)
       return Promise.reject(new PrivateChannelError('TRANSPORT_CLOSED'));
-    if (this.activeRelayAddress)
+    if (this.activeRelayAddress && shouldExcludeMasqueRelay(reason))
       this.failedRelayAddresses.set(this.activeRelayAddress, Date.now());
     const oldSessionId = this.sessionId;
     this.sessionId = null;
     this.activeRelayAddress = null;
-    if (oldSessionId)
-      void this.sidecar
-        .closePrivateSession(oldSessionId)
-        .catch(() => undefined);
+    const closing = oldSessionId
+      ? this.sidecar.closePrivateSession(oldSessionId).catch(() => undefined)
+      : Promise.resolve();
     const recovery = (async (): Promise<string> => {
+      // Release the old attachment before asking the backend for a new one.
+      await closing;
       let lastError: unknown = new PrivateChannelError('TRANSPORT_CLOSED');
       for (const delayMs of RECOVERY_DELAYS_MS) {
         if (delayMs) await delay(delayMs);
@@ -285,7 +302,10 @@ export class QuicMasqueTransport implements PrivateTransport {
           return this.sessionId;
         } catch (error) {
           lastError = error;
-          if (this.lastAttemptedRelayAddress)
+          if (
+            this.lastAttemptedRelayAddress &&
+            shouldExcludeMasqueRelay(errorCode(error))
+          )
             this.failedRelayAddresses.set(
               this.lastAttemptedRelayAddress,
               Date.now()
@@ -383,11 +403,18 @@ function translateSidecarError(error: unknown): PrivateChannelError {
         ? error.message
         : 'TRANSPORT_ERROR';
   const allowed = new Set([
+    'SIDECAR_QUEUE_FULL',
+    'TRANSPORT_BUSY',
     'STREAM_LIMIT_REACHED',
     'RELIABLE_STREAM_FAILED',
     'RELIABLE_SEND_NOT_STARTED',
     'RELIABLE_STREAMS_UNSUPPORTED',
     'TRANSPORT_ALREADY_ATTACHED',
+    'BOOTSTRAP_FAILED',
+    'BOOTSTRAP_EXPIRED',
+    'BOOTSTRAP_BINDING_MISMATCH',
+    'BOOTSTRAP_REUSED',
+    'UNSUPPORTED_TRANSPORT',
     'RELAY_NO_ELIGIBLE_RELAY',
     'RELAY_ACCESS_DENIED',
     'RELAY_PROOF_INVALID',

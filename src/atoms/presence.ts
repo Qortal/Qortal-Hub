@@ -35,6 +35,12 @@ export const appLockedAtom = atom<boolean>(false);
 export const onlineAddressesAtom = atom<Set<string>>(new Set<string>());
 
 /**
+ * Primitive online count for consumers that do not need address membership.
+ * Jotai only notifies subscribers when this number changes.
+ */
+export const onlineUserCountAtom = atom((get) => get(onlineAddressesAtom).size);
+
+/**
  * The local user's chosen presence status.
  * `'offline'` triggers PRESENCE_OFFLINE and stops heartbeating.
  */

@@ -35,7 +35,9 @@ const advertisement = (host = '8.8.8.8', ids: number[] = []) => ({
   allowedGroupIds: ids,
 });
 const bridgeFor = (...relays: unknown[]) =>
-  ({ getCommunityMasqueRelays: vi.fn(async () => relays) }) as never;
+  Object.assign(new EventEmitter(), {
+    getCommunityMasqueRelays: vi.fn(async () => relays),
+  }) as never;
 let coordinator: RelayAccessCoordinator;
 let sidecar: Sidecar;
 beforeEach(() => {
@@ -62,10 +64,13 @@ describe('shared relay selection and authorization', () => {
   it.each([{ ids: [] }, { ids: [9] }])(
     'does not contact restricted relays with fresh nonmatching groups %j',
     async ({ ids }) => {
+      vi.useFakeTimers();
       setRelayGroups(ids);
-      await expect(
+      const checked = expect(
         coordinator.select(bridgeFor(advertisement('8.8.8.8', [42])))
       ).rejects.toMatchObject({ code: 'RELAY_NO_ELIGIBLE_RELAY' });
+      await vi.advanceTimersByTimeAsync(5000);
+      await checked;
       expect(RelayTicketWallet.prototype.ensure).not.toHaveBeenCalled();
       expect(sidecar.prepareRelay).not.toHaveBeenCalled();
       expect(sidecar.authorizeRelay).not.toHaveBeenCalled();
@@ -93,10 +98,13 @@ describe('shared relay selection and authorization', () => {
     expect(RelayTicketWallet.prototype.ensure).not.toHaveBeenCalled();
   });
   it('treats a successful empty Core membership result as known nonmembership', async () => {
+    vi.useFakeTimers();
     configureRelaySigner(vi.fn(), undefined, async () => []);
-    await expect(
+    const checked = expect(
       coordinator.select(bridgeFor(advertisement('8.8.8.8', [42])))
     ).rejects.toMatchObject({ code: 'RELAY_NO_ELIGIBLE_RELAY' });
+    await vi.advanceTimersByTimeAsync(5000);
+    await checked;
     expect(sidecar.prepareRelay).not.toHaveBeenCalled();
   });
   it('shares a concurrent preparation between applications', async () => {

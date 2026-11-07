@@ -115,7 +115,6 @@
     "resize": "resize",
     "restore": "restore",
     "return": "return",
-    "return_apps_dashboard": "return to Apps Dashboard",
     "save": "save",
     "save_disk": "save to disk",
     "search": "search",
@@ -726,6 +725,7 @@
   "payment": "payment",
   "payment_notification": "payment notification",
   "payments_count": "Payments ({{count}})",
+  "pdf_viewer": "PDF viewer",
   "poll_embed": "poll embed",
   "port": "port",
   "presence": {

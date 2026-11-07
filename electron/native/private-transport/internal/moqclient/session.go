@@ -120,6 +120,8 @@ type subscription struct {
 	namespace []string
 	track     string
 	request   *moqtransport.OutgoingSubscribeRequest
+	ready     chan struct{}
+	err       error
 }
 
 type Session struct {
@@ -132,7 +134,7 @@ type Session struct {
 	onEvent      func(Event)
 
 	mu            sync.Mutex
-	subscriptions map[string]subscription
+	subscriptions map[string]*subscription
 	closed        atomic.Bool
 	nextObjectID  atomic.Uint64
 	objectsSent   atomic.Uint64
@@ -194,6 +196,8 @@ func Open(ctx context.Context, cfg Config, onEvent func(Event)) (*Session, error
 	if err != nil {
 		return fail(fmt.Errorf("MOQ_QUIC_FAILED: %w", err))
 	}
+	stopSetup := context.AfterFunc(openCtx, func() { _ = connection.CloseWithError(1, "setup cancelled") })
+	defer stopSetup()
 	handler := &publicationHandler{
 		namespace: stringsToNamespace(cfg.PublicationNamespace),
 		track:     cfg.PublicationTrack, tracks: tracks, publication: make(chan *moqtransport.IncomingSubscribeRequest, len(tracks)),
@@ -228,8 +232,19 @@ func Open(ctx context.Context, cfg Config, onEvent func(Event)) (*Session, error
 			return fail(errors.New("MOQ_ATTACH_FAILED"))
 		}
 	}
-	return &Session{tunnel: tunnel, conn: connection, moq: moq, publication: publications[tracks[0]],
-		publications: publications, defaultTrack: tracks[0], onEvent: onEvent, subscriptions: make(map[string]subscription)}, nil
+	if !stopSetup() || openCtx.Err() != nil {
+		moq.CloseWithError(1, "MOQT attach timed out")
+		return fail(errors.New("MOQ_ATTACH_FAILED"))
+	}
+	s := &Session{tunnel: tunnel, conn: connection, moq: moq, publication: publications[tracks[0]],
+		publications: publications, defaultTrack: tracks[0], onEvent: onEvent, subscriptions: make(map[string]*subscription)}
+	go func() {
+		<-moq.Context().Done()
+		if !s.closed.Load() {
+			s.emit(Event{Kind: "error", Code: "MOQ_TRANSPORT_CLOSED"})
+		}
+	}()
+	return s, nil
 }
 
 func backendTLSConfig(serverName string, pin []byte) *tls.Config {
@@ -291,6 +306,12 @@ func equalNamespace(left, right [][]byte) bool {
 }
 
 func (s *Session) Subscribe(subscriptionID string, namespace []string, track string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.SubscribeWithContext(ctx, subscriptionID, namespace, track)
+}
+
+func (s *Session) SubscribeWithContext(ctx context.Context, subscriptionID string, namespace []string, track string) error {
 	if s.closed.Load() {
 		return errors.New("MOQ_SESSION_CLOSED")
 	}
@@ -298,22 +319,44 @@ func (s *Session) Subscribe(subscriptionID string, namespace []string, track str
 		return errors.New("INVALID_MOQ_SUBSCRIPTION")
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if existing, found := s.subscriptions[subscriptionID]; found {
+		s.mu.Unlock()
 		if equalStringNamespace(existing.namespace, namespace) && existing.track == track {
-			return nil
+			select {
+			case <-existing.ready:
+				return existing.err
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 		return errors.New("MOQ_SUBSCRIPTION_ID_REUSED")
 	}
 	if len(s.subscriptions) >= MaxSubscriptions {
+		s.mu.Unlock()
 		return errors.New("MOQ_SUBSCRIPTION_LIMIT")
 	}
-	request, err := s.moq.Subscribe(s.moq.Context(), stringsToNamespace(namespace), track)
+	entry := &subscription{namespace: append([]string(nil), namespace...), track: track, ready: make(chan struct{})}
+	s.subscriptions[subscriptionID] = entry
+	s.mu.Unlock()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(s.moq.Context(), cancel)
+	defer stop()
+	request, err := s.moq.Subscribe(ctx, stringsToNamespace(namespace), track)
+	s.mu.Lock()
+	if err == nil && (s.closed.Load() || s.subscriptions[subscriptionID] != entry) {
+		_ = request.Close()
+		err = errors.New("MOQ_SESSION_CLOSED")
+	}
+	entry.request, entry.err = request, err
+	if err != nil && s.subscriptions[subscriptionID] == entry {
+		delete(s.subscriptions, subscriptionID)
+	}
+	close(entry.ready)
+	s.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("MOQ_SUBSCRIBE_FAILED: %w", err)
 	}
-	entry := subscription{namespace: append([]string(nil), namespace...), track: track, request: request}
-	s.subscriptions[subscriptionID] = entry
 	go s.readSubscription(subscriptionID, entry)
 	return nil
 }
@@ -429,13 +472,30 @@ func (s *Session) queueTrackObject(track string, payload []byte, policy moqtrans
 	return completion, nil
 }
 
-func (s *Session) readSubscription(subscriptionID string, entry subscription) {
+func (s *Session) readSubscription(subscriptionID string, entry *subscription) {
+	cleanup := func() {
+		_ = entry.request.Close()
+		s.mu.Lock()
+		if s.subscriptions[subscriptionID] == entry {
+			delete(s.subscriptions, subscriptionID)
+		}
+		s.mu.Unlock()
+	}
+	defer cleanup()
 	for {
 		object, err := entry.request.ReadObject(s.moq.Context())
 		if err != nil {
-			if !s.closed.Load() {
+			// Free the ID before notifying IPC: the caller may immediately retry
+			// with the same ID after observing this scoped failure.
+			cleanup()
+			if !s.closed.Load() && s.moq.Context().Err() == nil {
 				s.objectErrors.Add(1)
-				s.emit(Event{Kind: "error", SubscriptionID: subscriptionID, Code: "MOQ_READ_FAILED"})
+				code := "MOQ_READ_FAILED"
+				var rejected *moqtransport.SubscriptionRejectedError
+				if errors.As(err, &rejected) {
+					code = "MOQ_SUBSCRIBE_REJECTED"
+				}
+				s.emit(Event{Kind: "error", SubscriptionID: subscriptionID, Code: code})
 			}
 			return
 		}
@@ -483,13 +543,16 @@ func (s *Session) Close() error {
 	if !s.closed.CompareAndSwap(false, true) {
 		return nil
 	}
+	// Cancel setup and readers before taking the subscription bookkeeping lock.
+	s.moq.CloseWithError(0, "closed")
 	s.mu.Lock()
 	for _, entry := range s.subscriptions {
-		_ = entry.request.Close()
+		if entry.request != nil {
+			_ = entry.request.Close()
+		}
 	}
-	s.subscriptions = make(map[string]subscription)
+	s.subscriptions = make(map[string]*subscription)
 	s.mu.Unlock()
-	s.moq.CloseWithError(0, "closed")
 	time.Sleep(50 * time.Millisecond)
 	return s.tunnel.Close()
 }

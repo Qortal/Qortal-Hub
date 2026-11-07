@@ -1,3 +1,7 @@
+import { EventEmitter } from 'node:events';
+
+export default '/mock/electron';
+
 export const app = {
   getAppPath: () => process.cwd(),
   getPath: (name: string) =>
@@ -46,3 +50,39 @@ export const contextBridge = {
 export const shell = {
   openExternal: async () => undefined,
 };
+
+// Renderer/debugger lifecycle fake shared by Electron diagnostic tests.
+export class MockWebContents extends EventEmitter {
+  id = 42;
+  destroyed = false;
+  devToolsOpened = false;
+  isDevToolsOpened() {
+    return this.devToolsOpened;
+  }
+  isDestroyed() {
+    return this.destroyed;
+  }
+  debugger = new (class extends EventEmitter {
+    attached = false;
+    isAttached() {
+      return this.attached;
+    }
+    attach(_version?: string) {
+      this.attached = true;
+    }
+    detach() {
+      this.attached = false;
+      this.emit('detach', {}, 'target closed');
+    }
+    async sendCommand(_method: string, _params?: object): Promise<any> {
+      return {
+        profile: { nodes: [], startTime: 0, endTime: 1000, samples: [] },
+      };
+    }
+  })();
+  destroy() {
+    this.destroyed = true;
+    this.emit('destroyed');
+    this.debugger.detach();
+  }
+}
