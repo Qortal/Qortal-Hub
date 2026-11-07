@@ -140,7 +140,11 @@ export const AppsPrivate = ({
   const addPrivateApp = async () => {
     try {
       if (privateAppValues?.groupId === 0) return;
-      await openApp(privateAppValues, true);
+      const opened = await openApp(privateAppValues, true, undefined);
+      if (opened) {
+        setIsOpenPrivateModal(false);
+        clearFields();
+      }
     } catch (error) {
       console.error(error);
     }
@@ -290,6 +294,7 @@ export const AppsPrivate = ({
         },
         true
       );
+      setIsOpenPrivateModal(false);
       clearFields();
       onPublished?.();
     } catch (error) {
