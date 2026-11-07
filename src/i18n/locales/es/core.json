@@ -737,12 +737,17 @@
   },
   "price": "precio",
   "private_apps": {
+    "actions_title": "acceder a una aplicación privada o publicarla",
     "details": "{{name}} · {{group}}",
     "empty": "aún no has publicado ninguna aplicación privada",
     "group_id": "grupo {{groupId}}",
     "listing_hint": "aquí solo se muestran las aplicaciones privadas publicadas a partir de esta versión de Qortal Hub",
     "load_error": "no se pueden cargar tus aplicaciones privadas",
-    "published_title": "mis aplicaciones privadas publicadas"
+    "max_file_size": "tamaño máximo: {{size}} MB",
+    "no_name_selected": "ningún nombre seleccionado",
+    "published_title": "mis aplicaciones privadas publicadas",
+    "select_name": "selecciona un nombre de Qortal",
+    "selected_file": "archivo seleccionado: {{filename}}"
   },
   "publish": "publicar",
   "q_apps": {
@@ -883,7 +888,7 @@
   },
   "supply": "suministrar",
   "tabs": {
-    "add_private": "App privado",
+    "add_private": "Apps privadas",
     "categories": "categorías",
     "community_apps": "apps de la comunidad",
     "my_apps": "mis apps",

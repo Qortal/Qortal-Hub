@@ -21,6 +21,7 @@ import {
   PublishedPrivateApp,
   toPublishedPrivateApps,
 } from './privateAppMetadata';
+import { EmptyStateBox, SectionTitle } from './AppsLibrary/LibraryTab-styles';
 
 interface PublishedPrivateAppsProps {
   myAddress: string;
@@ -95,12 +96,11 @@ export const PublishedPrivateApps = ({
         maxWidth: '720px',
       }}
     >
-      <Box sx={{ alignItems: 'center', display: 'flex', gap: '8px' }}>
-        <Typography sx={{ fontSize: '18px', fontWeight: 600 }}>
-          {t('core:private_apps.published_title', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
+      <SectionTitle>
+        <LockIcon sx={{ fontSize: '20px' }} />
+        {t('core:private_apps.published_title', {
+          postProcess: 'capitalizeFirstChar',
+        })}
 
         <Tooltip
           title={t('core:action.refresh', {
@@ -120,7 +120,7 @@ export const PublishedPrivateApps = ({
             </IconButton>
           </span>
         </Tooltip>
-      </Box>
+      </SectionTitle>
 
       <Typography
         sx={{ color: theme.palette.text.secondary, fontSize: '13px' }}
@@ -147,11 +147,16 @@ export const PublishedPrivateApps = ({
       )}
 
       {!isLoading && !hasError && apps.length === 0 && (
-        <Typography sx={{ color: theme.palette.text.secondary }}>
-          {t('core:private_apps.empty', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
+        <EmptyStateBox>
+          <LockIcon sx={{ fontSize: '48px', color: 'text.disabled', mb: 2 }} />
+          <Typography
+            sx={{ fontSize: '16px', color: theme.palette.text.secondary }}
+          >
+            {t('core:private_apps.empty', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </EmptyStateBox>
       )}
 
       {!isLoading &&

@@ -737,12 +737,17 @@
   },
   "price": "价格",
   "private_apps": {
+    "actions_title": "访问或发布私有应用",
     "details": "{{name}} · {{group}}",
     "empty": "您尚未发布任何私有应用",
     "group_id": "群组 {{groupId}}",
     "listing_hint": "此处仅列出从此版本的Qortal Hub起发布的私有应用",
     "load_error": "无法加载您的私有应用",
-    "published_title": "我发布的私有应用"
+    "max_file_size": "最大大小：{{size}} MB",
+    "no_name_selected": "未选择名称",
+    "published_title": "我发布的私有应用",
+    "select_name": "选择一个Qortal名称",
+    "selected_file": "已选文件：{{filename}}"
   },
   "publish": "发布",
   "q_apps": {

@@ -737,12 +737,17 @@
   },
   "price": "価格",
   "private_apps": {
+    "actions_title": "プライベートアプリにアクセスまたは公開",
     "details": "{{name}} · {{group}}",
     "empty": "まだプライベートアプリを公開していません",
     "group_id": "グループ {{groupId}}",
     "listing_hint": "ここには、このバージョンのQortal Hub以降に公開されたプライベートアプリのみが表示されます",
     "load_error": "プライベートアプリを読み込めません",
-    "published_title": "公開したプライベートアプリ"
+    "max_file_size": "最大サイズ: {{size}} MB",
+    "no_name_selected": "名前が選択されていません",
+    "published_title": "公開したプライベートアプリ",
+    "select_name": "Qortalの名前を選択",
+    "selected_file": "選択したファイル: {{filename}}"
   },
   "publish": "公開",
   "q_apps": {

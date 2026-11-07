@@ -737,12 +737,17 @@
   },
   "price": "سعر",
   "private_apps": {
+    "actions_title": "الوصول إلى تطبيق خاص أو نشره",
     "details": "{{name}} · {{group}}",
     "empty": "لم تنشر أي تطبيقات خاصة بعد",
     "group_id": "المجموعة {{groupId}}",
     "listing_hint": "تظهر هنا فقط التطبيقات الخاصة المنشورة بدءًا من هذا الإصدار من Qortal Hub",
     "load_error": "تعذر تحميل تطبيقاتك الخاصة",
-    "published_title": "تطبيقاتي الخاصة المنشورة"
+    "max_file_size": "الحجم الأقصى: {{size}} ميغابايت",
+    "no_name_selected": "لم يتم اختيار أي اسم",
+    "published_title": "تطبيقاتي الخاصة المنشورة",
+    "select_name": "اختر اسمًا في Qortal",
+    "selected_file": "الملف المحدد: {{filename}}"
   },
   "publish": "نشر",
   "q_apps": {
@@ -883,7 +888,7 @@
   },
   "supply": "العرض",
   "tabs": {
-    "add_private": "تطبيق خاص",
+    "add_private": "التطبيقات الخاصة",
     "categories": "الفئات",
     "community_apps": "تطبيقات المجتمع",
     "my_apps": "تطبيقاتي",
