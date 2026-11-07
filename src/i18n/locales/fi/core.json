@@ -736,6 +736,14 @@
     "peer_online_hint": "Tavoitettavissa verkossa — äänipuhelu käytettävissä"
   },
   "price": "hinta",
+  "private_apps": {
+    "details": "{{name}} · {{group}}",
+    "empty": "et ole vielä julkaissut yksityisiä sovelluksia",
+    "group_id": "ryhmä {{groupId}}",
+    "listing_hint": "tässä näytetään vain yksityiset sovellukset, jotka on julkaistu tästä Qortal Hubin versiosta alkaen",
+    "load_error": "yksityisiä sovelluksiasi ei voitu ladata",
+    "published_title": "julkaisemani yksityiset sovellukset"
+  },
   "publish": "julkaise",
   "q_apps": {
     "about": "tietoa tästä Q-sovelluksesta",

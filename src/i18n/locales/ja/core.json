@@ -736,6 +736,14 @@
     "peer_online_hint": "ネットワーク上にいます — 音声通話を利用できます"
   },
   "price": "価格",
+  "private_apps": {
+    "details": "{{name}} · {{group}}",
+    "empty": "まだプライベートアプリを公開していません",
+    "group_id": "グループ {{groupId}}",
+    "listing_hint": "ここには、このバージョンのQortal Hub以降に公開されたプライベートアプリのみが表示されます",
+    "load_error": "プライベートアプリを読み込めません",
+    "published_title": "公開したプライベートアプリ"
+  },
   "publish": "公開",
   "q_apps": {
     "about": "このq-appについて",

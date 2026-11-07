@@ -736,6 +736,14 @@
     "peer_online_hint": "In rete — chiamata vocale disponibile"
   },
   "price": "prezzo",
+  "private_apps": {
+    "details": "{{name}} · {{group}}",
+    "empty": "non hai ancora pubblicato alcuna app privata",
+    "group_id": "gruppo {{groupId}}",
+    "listing_hint": "qui sono elencate solo le app private pubblicate a partire da questa versione di Qortal Hub",
+    "load_error": "impossibile caricare le tue app private",
+    "published_title": "le mie app private pubblicate"
+  },
   "publish": "pubblicazione",
   "q_apps": {
     "about": "su questo Q-app",

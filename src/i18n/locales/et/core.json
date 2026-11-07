@@ -736,6 +736,14 @@
     "peer_online_hint": "On võrgus — häälkõne on saadaval"
   },
   "price": "hind",
+  "private_apps": {
+    "details": "{{name}} · {{group}}",
+    "empty": "sa pole veel ühtegi privaatrakendust avaldanud",
+    "group_id": "grupp {{groupId}}",
+    "listing_hint": "siin kuvatakse ainult privaatrakendusi, mis on avaldatud alates sellest Qortal Hubi versioonist",
+    "load_error": "sinu privaatrakendusi ei saa laadida",
+    "published_title": "minu avaldatud privaatrakendused"
+  },
   "publish": "avalda",
   "q_apps": {
     "about": "rakenduse kohta",

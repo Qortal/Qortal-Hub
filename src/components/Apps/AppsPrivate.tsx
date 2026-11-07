@@ -48,10 +48,19 @@ import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import { Label } from '../../styles/App-styles.ts';
 import { filterPrivateGroups } from './privateGroups';
+import { buildPrivateAppDescription } from './privateAppMetadata';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
-export const AppsPrivate = ({ myName, myAddress }) => {
+export const AppsPrivate = ({
+  myName,
+  myAddress,
+  onPublished,
+}: {
+  myName: string;
+  myAddress: string;
+  onPublished?: () => void;
+}) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(0);
 
@@ -253,6 +262,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
             service: newPrivateAppValues?.service,
             uploadType: 'base64',
             name,
+            description: buildPrivateAppDescription(selectedGroup),
           })
           .then((response) => {
             if (!response?.error) {
@@ -281,6 +291,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
         true
       );
       clearFields();
+      onPublished?.();
     } catch (error) {
       setOpenSnackGlobal(true);
       setInfoSnackCustom({

@@ -736,6 +736,14 @@
     "peer_online_hint": "على الشبكة — المكالمة الصوتية متاحة"
   },
   "price": "سعر",
+  "private_apps": {
+    "details": "{{name}} · {{group}}",
+    "empty": "لم تنشر أي تطبيقات خاصة بعد",
+    "group_id": "المجموعة {{groupId}}",
+    "listing_hint": "تظهر هنا فقط التطبيقات الخاصة المنشورة بدءًا من هذا الإصدار من Qortal Hub",
+    "load_error": "تعذر تحميل تطبيقاتك الخاصة",
+    "published_title": "تطبيقاتي الخاصة المنشورة"
+  },
   "publish": "نشر",
   "q_apps": {
     "about": "حول تطبيق Q هذا",
