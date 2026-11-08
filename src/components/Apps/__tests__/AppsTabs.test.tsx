@@ -16,7 +16,7 @@ i18n.init({
         'tabs.community_apps': 'community apps',
         'tabs.categories': 'categories',
         'tabs.my_apps': 'my apps',
-        'tabs.add_private': '+ private app',
+        'tabs.add_private': 'Private apps',
       },
     },
   },
@@ -50,7 +50,7 @@ describe('AppsTabs', () => {
     expect(screen.getByText(/community apps/i)).toBeInTheDocument();
     expect(screen.getByText(/categories/i)).toBeInTheDocument();
     expect(screen.getByText(/my apps/i)).toBeInTheDocument();
-    expect(screen.getByText(/\+ private app/i)).toBeInTheDocument();
+    expect(screen.getByText(/private apps/i)).toBeInTheDocument();
   });
 
   it('highlights the current tab', () => {

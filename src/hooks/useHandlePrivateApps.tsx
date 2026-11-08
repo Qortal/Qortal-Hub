@@ -13,6 +13,7 @@ import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { upsertPrivatePinnedApp } from './privatePinnedApps';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
@@ -222,18 +223,15 @@ export const useHandlePrivateApps = () => {
           }
           if (addToPinnedApps) {
             setSortablePinnedApps((prev) => {
-              const updatedApps = [
-                ...prev,
-                {
-                  isPrivate: true,
-                  isPreview: true,
-                  privateAppProperties: {
-                    ...privateAppProperties,
-                    logo,
-                    appName,
-                  },
+              const updatedApps = upsertPrivatePinnedApp(prev, {
+                isPrivate: true,
+                isPreview: true,
+                privateAppProperties: {
+                  ...privateAppProperties,
+                  logo,
+                  appName,
                 },
-              ];
+              });
 
               saveToLocalStorage(
                 'ext_saved_settings',
@@ -244,6 +242,7 @@ export const useHandlePrivateApps = () => {
             });
             setSettingsLocalLastUpdated(Date.now());
           }
+          return true;
         }
       } catch (error) {
         if (setLoadingStatePrivateApp) {
@@ -268,6 +267,7 @@ export const useHandlePrivateApps = () => {
           }),
       });
     }
+    return false;
   };
   return {
     openApp,
