@@ -1,36 +1,20 @@
-import {
-  SyntheticEvent,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
-  ButtonBase,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogTitle,
   Input,
   MenuItem,
   Select,
-  Tab,
-  Tabs,
   useTheme,
 } from '@mui/material';
 import { useDropzone } from 'react-dropzone';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
 import { Spacer } from '../../common/Spacer';
-import {
-  AppCircle,
-  AppCircleContainer,
-  AppCircleLabel,
-  PublishQAppChoseFile,
-  PublishQAppInfo,
-} from './Apps-styles';
-import AddIcon from '@mui/icons-material/Add';
+import { PublishQAppChoseFile, PublishQAppInfo } from './Apps-styles';
 import ImageUploader from '../../common/ImageUploader';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
@@ -48,10 +32,26 @@ import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import { Label } from '../../styles/App-styles.ts';
 import { filterPrivateGroups } from './privateGroups';
+import { buildPrivateAppDescription } from './privateAppMetadata';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
-export const AppsPrivate = ({ myName, myAddress }) => {
+export type PrivateAppAction = 'access' | 'publish';
+
+/** Dialog for one private-app action; `action === null` keeps it closed. */
+export const AppsPrivate = ({
+  myName,
+  myAddress,
+  action,
+  onClose,
+  onPublished,
+}: {
+  myName: string;
+  myAddress: string;
+  action: PrivateAppAction | null;
+  onClose: () => void;
+  onPublished?: () => void;
+}) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(0);
 
@@ -61,7 +61,6 @@ export const AppsPrivate = ({ myName, myAddress }) => {
   const [qortalUrl, setQortalUrl] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(0);
 
-  const [valueTabPrivateApp, setValueTabPrivateApp] = useState(0);
   const [groupsProperties] = useAtom(groupsPropertiesAtom);
   const [myGroupsWhereIAmAdminFromGlobal] = useAtom(myGroupsWhereIAmAdminAtom);
 
@@ -72,7 +71,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
     );
   }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties]);
 
-  const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
+  const isOpen = action !== null;
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
@@ -131,7 +130,8 @@ export const AppsPrivate = ({ myName, myAddress }) => {
   const addPrivateApp = async () => {
     try {
       if (privateAppValues?.groupId === 0) return;
-      await openApp(privateAppValues, true);
+      const opened = await openApp(privateAppValues, true, undefined);
+      if (opened) closeDialog();
     } catch (error) {
       console.error(error);
     }
@@ -150,9 +150,13 @@ export const AppsPrivate = ({ myName, myAddress }) => {
       name: '',
     });
     setFile(null);
-    setValueTabPrivateApp(0);
     setSelectedGroup(0);
     setLogo(null);
+  };
+
+  const closeDialog = () => {
+    clearFields();
+    onClose();
   };
 
   const publishPrivateApp = async () => {
@@ -253,6 +257,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
             service: newPrivateAppValues?.service,
             uploadType: 'base64',
             name,
+            description: buildPrivateAppDescription(selectedGroup),
           })
           .then((response) => {
             if (!response?.error) {
@@ -280,7 +285,8 @@ export const AppsPrivate = ({ myName, myAddress }) => {
         },
         true
       );
-      clearFields();
+      closeDialog();
+      onPublished?.();
     } catch (error) {
       setOpenSnackGlobal(true);
       setInfoSnackCustom({
@@ -293,17 +299,6 @@ export const AppsPrivate = ({ myName, myAddress }) => {
       });
     }
   };
-
-  const handleChange = (event: SyntheticEvent, newValue: number) => {
-    setValueTabPrivateApp(newValue);
-  };
-
-  function a11yProps(index: number) {
-    return {
-      id: `simple-tab-${index}`,
-      'aria-controls': `simple-tabpanel-${index}`,
-    };
-  }
 
   const getNames = useCallback(async () => {
     if (!myAddress) return;
@@ -318,46 +313,21 @@ export const AppsPrivate = ({ myName, myAddress }) => {
     }
   }, [myAddress]);
   useEffect(() => {
-    if (isOpenPrivateModal) {
+    if (isOpen) {
       getNames();
     }
-  }, [getNames, isOpenPrivateModal]);
+  }, [getNames, isOpen]);
 
   return (
     <>
-      <ButtonBase
-        onClick={() => {
-          setIsOpenPrivateModal(true);
-        }}
-        sx={{
-          width: '80px',
-        }}
-      >
-        <AppCircleContainer
-          sx={{
-            gap: '10px',
-          }}
-        >
-          <AppCircle>
-            <AddIcon />
-          </AppCircle>
-
-          <AppCircleLabel>
-            {t('core:app_private', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </AppCircleLabel>
-        </AppCircleContainer>
-      </ButtonBase>
-
-      {isOpenPrivateModal && (
+      {isOpen && (
         <Dialog
-          open={isOpenPrivateModal}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
+          open={isOpen}
+          onClose={closeDialog}
+          aria-labelledby="private-app-dialog-title"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              if (valueTabPrivateApp === 0) {
+              if (action === 'access') {
                 if (
                   !privateAppValues.name ||
                   !privateAppValues.service ||
@@ -380,46 +350,17 @@ export const AppsPrivate = ({ myName, myAddress }) => {
             },
           }}
         >
-          <Box>
-            <Tabs
-              value={valueTabPrivateApp}
-              onChange={handleChange}
-              variant={'fullWidth'}
-              scrollButtons="auto"
-              sx={{
-                '&.MuiTabs-indicator': {
-                  backgroundColor: theme.palette.background.default,
-                },
-              }}
-            >
-              <Tab
-                label={t('core:action.access_app', {
+          <DialogTitle id="private-app-dialog-title">
+            {action === 'access'
+              ? t('core:action.access_app', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+              : t('core:action.publish_app', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-                {...a11yProps(0)}
-                sx={{
-                  '&.Mui-selected': {
-                    color: theme.palette.text.primary,
-                  },
-                  fontSize: '1rem',
-                }}
-              />
-              <Tab
-                label={t('core:action.publish_app', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                {...a11yProps(1)}
-                sx={{
-                  '&.Mui-selected': {
-                    color: theme.palette.text.primary,
-                  },
-                  fontSize: '1rem',
-                }}
-              />
-            </Tabs>
-          </Box>
+          </DialogTitle>
 
-          {valueTabPrivateApp === 0 && (
+          {action === 'access' && (
             <>
               <DialogContent>
                 <Box
@@ -535,12 +476,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
               </DialogContent>
 
               <DialogActions>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    setIsOpenPrivateModal(false);
-                  }}
-                >
+                <Button variant="contained" onClick={closeDialog}>
                   {t('core:action.close', {
                     postProcess: 'capitalizeFirstChar',
                   })}
@@ -565,7 +501,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
             </>
           )}
 
-          {valueTabPrivateApp === 1 && (
+          {action === 'publish' && (
             <>
               <DialogContent>
                 <PublishQAppInfo
@@ -586,12 +522,22 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                     backgroundColor: theme.palette.background.paper,
                     fontSize: '14px',
                   }}
-                >{` 50mb MB max`}</PublishQAppInfo>
+                >
+                  {t('core:private_apps.max_file_size', {
+                    size: maxFileSize / (1024 * 1024),
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </PublishQAppInfo>
                 {file && (
                   <>
                     <Spacer height="5px" />
 
-                    <PublishQAppInfo>{`Selected: (${file?.name})`}</PublishQAppInfo>
+                    <PublishQAppInfo>
+                      {t('core:private_apps.selected_file', {
+                        filename: file?.name,
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </PublishQAppInfo>
                   </>
                 )}
 
@@ -623,16 +569,26 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                     gap: '5px',
                   }}
                 >
-                  <Label>Select a Qortal name</Label>
+                  <Label>
+                    {t('core:private_apps.select_name', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Label>
 
                   <Select
                     labelId="demo-simple-select-label"
                     id="demo-simple-select"
                     value={name}
-                    label="Groups where you are an admin"
+                    label={t('core:private_apps.select_name', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                     onChange={(e) => setName(e.target.value)}
                   >
-                    <MenuItem value={0}>No name selected</MenuItem>
+                    <MenuItem value={0}>
+                      {t('core:private_apps.no_name_selected', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </MenuItem>
                     {mySortedNames.map((name) => {
                       return (
                         <MenuItem key={name} value={name}>
@@ -766,13 +722,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
               </DialogContent>
 
               <DialogActions>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    setIsOpenPrivateModal(false);
-                    clearFields();
-                  }}
-                >
+                <Button variant="contained" onClick={closeDialog}>
                   {t('core:action.close', {
                     postProcess: 'capitalizeFirstChar',
                   })}

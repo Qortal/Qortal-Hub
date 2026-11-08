@@ -29,6 +29,10 @@ import LockIcon from '@mui/icons-material/Lock';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import {
+  getPinnedAppKey,
+  removeBrokenPinnedApps,
+} from '../../utils/pinnedAppsSettings';
 
 const SortableItem = ({ id, name, app, isDesktop }) => {
   const { openApp } = useHandlePrivateApps();
@@ -154,8 +158,8 @@ export const SortablePinnedApps = ({
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
   const transformPinnedApps = useMemo(() => {
-    // Clone the existing pinned apps list
-    let pinned = [...pinnedApps];
+    // Clone the existing pinned apps list, dropping entries that cannot open
+    let pinned = removeBrokenPinnedApps(pinnedApps);
 
     // Function to add or update `isMine` property
     const addOrUpdateIsMine = (pinnedList, appToCheck) => {
@@ -225,10 +229,10 @@ export const SortablePinnedApps = ({
 
     if (active.id !== over.id) {
       const oldIndex = transformPinnedApps.findIndex(
-        (item) => `${item?.service}-${item?.name}` === active.id
+        (item) => getPinnedAppKey(item) === active.id
       );
       const newIndex = transformPinnedApps.findIndex(
-        (item) => `${item?.service}-${item?.name}` === over.id
+        (item) => getPinnedAppKey(item) === over.id
       );
 
       const newOrder = arrayMove(transformPinnedApps, oldIndex, newIndex);
@@ -244,15 +248,13 @@ export const SortablePinnedApps = ({
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext
-        items={transformPinnedApps.map((app) => `${app?.service}-${app?.name}`)}
-      >
+      <SortableContext items={transformPinnedApps.map(getPinnedAppKey)}>
         {transformPinnedApps.map((app) => (
           <SortableItem
             app={app}
-            id={`${app?.service}-${app?.name}`}
+            id={getPinnedAppKey(app)}
             isDesktop={isDesktop}
-            key={`${app?.service}-${app?.name}`}
+            key={getPinnedAppKey(app)}
             name={app?.name}
           />
         ))}
