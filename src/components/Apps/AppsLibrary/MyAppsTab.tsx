@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Divider,
-  Typography,
-  styled,
-  useTheme,
-} from '@mui/material';
+import { Box, CircularProgress, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
@@ -19,6 +11,14 @@ import { getBaseApiReact } from '../../../App';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { PublishedAppCard } from '../AppCard';
+import {
+  EmptyStateBox,
+  PublishButton,
+  PublishNewContainer,
+  SectionContainer,
+  SectionTitle,
+  StyledDivider,
+} from './LibraryTab-styles';
 
 interface MyAppsTabProps {
   myName: string;
@@ -26,64 +26,6 @@ interface MyAppsTabProps {
   setMode: (mode: string) => void;
   searchValue?: string;
 }
-
-const SectionContainer = styled(Box)({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '24px',
-  width: '100%',
-});
-
-const SectionTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '18px',
-  fontWeight: 600,
-  color: theme.palette.text.primary,
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-}));
-
-const EmptyStateBox = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '40px',
-  borderRadius: '12px',
-  backgroundColor: theme.palette.background.paper,
-  border: `1px dashed ${theme.palette.divider}`,
-  textAlign: 'center',
-  width: '320px',
-  minHeight: '220px',
-}));
-
-const PublishNewContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  gap: '16px',
-  flexWrap: 'wrap',
-}));
-
-const PublishButton = styled(Button)(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '24px 32px',
-  borderRadius: '12px',
-  backgroundColor: theme.palette.background.paper,
-  border: `1px solid ${theme.palette.divider}`,
-  textTransform: 'none',
-  minWidth: '160px',
-  gap: '8px',
-  '&:hover': {
-    backgroundColor: theme.palette.action.hover,
-    borderColor: theme.palette.primary.main,
-  },
-}));
-
-const StyledDivider = styled(Divider)(({ theme }) => ({
-  margin: '16px 0',
-}));
 
 export const MyAppsTab = ({
   myName,
@@ -169,8 +111,7 @@ export const MyAppsTab = ({
   }, [myNames, availableQapps, searchValue]);
 
   const isLoadingNames = myAddress != null && !namesLoaded;
-  const hasNoNames =
-    myAddress != null && namesLoaded && myNames.length === 0;
+  const hasNoNames = myAddress != null && namesLoaded && myNames.length === 0;
 
   if (isLoadingNames) {
     return (

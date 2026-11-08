@@ -736,6 +736,19 @@
     "peer_online_hint": "On võrgus — häälkõne on saadaval"
   },
   "price": "hind",
+  "private_apps": {
+    "actions_title": "ava või avalda privaatrakendus",
+    "details": "{{name}} · {{group}}",
+    "empty": "sa pole veel ühtegi privaatrakendust avaldanud",
+    "group_id": "grupp {{groupId}}",
+    "listing_hint": "siin kuvatakse ainult privaatrakendusi, mis on avaldatud alates sellest Qortal Hubi versioonist",
+    "load_error": "sinu privaatrakendusi ei saa laadida",
+    "max_file_size": "maksimaalne suurus: {{size}} MB",
+    "no_name_selected": "nime pole valitud",
+    "published_title": "minu avaldatud privaatrakendused",
+    "select_name": "vali Qortali nimi",
+    "selected_file": "valitud fail: {{filename}}"
+  },
   "publish": "avalda",
   "q_apps": {
     "about": "rakenduse kohta",
@@ -875,7 +888,7 @@
   },
   "supply": "Üldine QORT varu",
   "tabs": {
-    "add_private": "+ privaatne rakendus",
+    "add_private": "Privaatsed rakendused",
     "categories": "kategooriad",
     "community_apps": "kogukonna rakendused",
     "my_apps": "minu rakendused",

@@ -736,6 +736,19 @@
     "peer_online_hint": "Na rede — chamada de voz disponível"
   },
   "price": "preço",
+  "private_apps": {
+    "actions_title": "acessar ou publicar um aplicativo privado",
+    "details": "{{name}} · {{group}}",
+    "empty": "você ainda não publicou nenhum aplicativo privado",
+    "group_id": "grupo {{groupId}}",
+    "listing_hint": "aqui são listados apenas os aplicativos privados publicados a partir desta versão do Qortal Hub",
+    "load_error": "não foi possível carregar seus aplicativos privados",
+    "max_file_size": "tamanho máximo: {{size}} MB",
+    "no_name_selected": "nenhum nome selecionado",
+    "published_title": "meus aplicativos privados publicados",
+    "select_name": "selecione um nome Qortal",
+    "selected_file": "arquivo selecionado: {{filename}}"
+  },
   "publish": "publicar",
   "q_apps": {
     "about": "sobre este Q-App",
@@ -875,7 +888,7 @@
   },
   "supply": "fornecer",
   "tabs": {
-    "add_private": "+ app privado",
+    "add_private": "Apps privados",
     "categories": "categorias",
     "community_apps": "apps da comunidade",
     "my_apps": "meus apps",

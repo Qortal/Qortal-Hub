@@ -8,6 +8,7 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
+import { serializePinnedAppsForQdn } from '../../utils/pinnedAppsSettings';
 import {
   Box,
   Button,
@@ -102,20 +103,10 @@ export const Save = ({
 
   const hasChanged = useMemo(() => {
     const newChanges = {
-      sortablePinnedApps: pinnedApps.map((item) => {
-        return {
-          name: item?.name,
-          service: item?.service,
-        };
-      }),
+      sortablePinnedApps: serializePinnedAppsForQdn(pinnedApps),
     };
     const oldChanges = {
-      sortablePinnedApps: oldPinnedApps.map((item) => {
-        return {
-          name: item?.name,
-          service: item?.service,
-        };
-      }),
+      sortablePinnedApps: serializePinnedAppsForQdn(oldPinnedApps),
     };
     if (settingsQdnLastUpdated === -100) return false;
     return (
@@ -137,12 +128,7 @@ export const Save = ({
     try {
       setIsLoading(true);
       const data64 = await objectToBase64({
-        sortablePinnedApps: pinnedApps.map((item) => {
-          return {
-            name: item?.name,
-            service: item?.service,
-          };
-        }),
+        sortablePinnedApps: serializePinnedAppsForQdn(pinnedApps),
       });
       const encryptData = await new Promise((res, rej) => {
         window
