@@ -27221,19 +27221,20 @@ export class ReticulumChatManager extends EventEmitter {
       const snapshotScope = this.localGroupAdminIds.has(groupId)
         ? 'full'
         : 'public';
-      const snapshot = this.db.getLatestMetadataSnapshot(
-        groupId,
-        snapshotScope
-      );
+      const snapshot =
+        this.db.getLatestMetadataSnapshot(groupId, snapshotScope) ??
+        (snapshotScope === 'full'
+          ? this.db.getLatestMetadataSnapshot(groupId, 'public')
+          : null);
       return {
         // Keep all projection reads on one SQLite WAL snapshot so another Hub
         // instance cannot make channels and categories come from different
         // committed metadata states.
         channels: this.getChannels(groupId, includeArchived),
         categories: this.getCategories(groupId),
-        // A cached signed snapshot is a coherent layout even when a newer remote
-        // revision is being fetched. Missing categories are valid metadata and
-        // must not be mistaken for an incomplete load.
+        // A public snapshot also provides a usable layout for admins while
+        // full/private metadata is being fetched. It does not grant access to
+        // private channels or represent complete admin state.
         ready: snapshot != null,
         snapshotVersion: snapshot?.version ?? 0,
       };
@@ -29706,6 +29707,93 @@ export class ReticulumChatManager extends EventEmitter {
     );
   }
 
+  private finishMetadataSnapshotProjection(
+    peerHash: string,
+    snapshot: ReticulumChatMetadataSnapshotRecord,
+    expectedScope: 'public' | 'full',
+    advertisedFullSnapshotHash: string,
+    reason: string
+  ): void {
+    const groupId = snapshot.groupId;
+    advertisedFullSnapshotHash ||=
+      this.deferredMetadataSnapshots.get(
+        this.deferredMetadataSnapshotKey(
+          peerHash,
+          groupId,
+          snapshot.snapshotHash
+        )
+      )?.fullSnapshotHash || '';
+    this.enqueueChannelExpiryReconciliationsForGroup(
+      groupId,
+      snapshot.channels.map((channel) => channel.channelId)
+    );
+    const needsAdvertisedFullSnapshot =
+      expectedScope === 'full' &&
+      snapshot.scope === 'public' &&
+      !!advertisedFullSnapshotHash &&
+      !this.db.getMetadataSnapshotByHash(groupId, advertisedFullSnapshotHash);
+    if (needsAdvertisedFullSnapshot) {
+      // Public changes are usable now; retain the bounded retry for private
+      // state separately. Without an advertised full hash a request for
+      // "latest" would only fetch the same public snapshot from this peer.
+      this.deferMetadataSnapshot(
+        peerHash,
+        snapshot,
+        advertisedFullSnapshotHash
+      );
+      this.requestMetadataSnapshotFromPeer(
+        peerHash,
+        groupId,
+        advertisedFullSnapshotHash
+      );
+    } else {
+      this.clearDeferredMetadataSnapshot(
+        peerHash,
+        groupId,
+        snapshot.snapshotHash
+      );
+    }
+    if (expectedScope === 'full') {
+      this.retainMetadataSnapshotDownloadProviders(snapshot);
+    }
+    if (snapshot.scope === 'full') {
+      // A different provider may complete a pending full-snapshot fetch.
+      // Only clear retries for public state already accepted. The advertised
+      // full hash is unsigned and cannot supersede a snapshot still awaiting
+      // validation, even if that hint matches the full snapshot we received.
+      for (const deferred of this.deferredMetadataSnapshots.values()) {
+        if (
+          deferred.snapshot.groupId === groupId &&
+          deferred.snapshot.scope === 'public' &&
+          deferred.fullSnapshotHash === snapshot.snapshotHash &&
+          this.db.getMetadataSnapshotByHash(
+            groupId,
+            deferred.snapshot.snapshotHash
+          )
+        ) {
+          this.clearDeferredMetadataSnapshot(
+            deferred.peerHash,
+            groupId,
+            deferred.snapshot.snapshotHash
+          );
+        }
+      }
+    }
+    this.setMetadataSnapshotState(
+      groupId,
+      needsAdvertisedFullSnapshot
+        ? 'snapshot_stale'
+        : expectedScope === 'full' &&
+            !this.db.getLatestMetadataSnapshot(groupId, 'full')
+          ? 'missing_snapshot'
+          : 'snapshot_current',
+      reason
+    );
+    this.invalidateGroupDigestSnapshot(groupId);
+    this.invalidateStateHeadsCache(groupId);
+    this.emitSummaryChanged(groupId, undefined, { metadataChanged: true });
+  }
+
   private async getBestMetadataSnapshotForSend(
     groupId: number
   ): Promise<ReticulumChatMetadataSnapshotRecord | null> {
@@ -30128,6 +30216,19 @@ export class ReticulumChatManager extends EventEmitter {
         this.routePeerHash(resourceOffer.senderReticulumDestinationHash) ??
         peerHash.trim().toLowerCase();
       if (!sourcePeerHash) return;
+      const storedSnapshot = fullSnapshotHash
+        ? this.db.getMetadataSnapshotByHash(groupId, resourceOffer.snapshotHash)
+        : null;
+      if (storedSnapshot) {
+        // Download deduplication must not discard a newly advertised full
+        // snapshot when we already recovered the public copy from a member.
+        await this.handleMetadataSnapshotOffer(
+          groupId,
+          { s: metadataSnapshotToWire(storedSnapshot), fh: fullSnapshotHash },
+          sourcePeerHash
+        );
+        return;
+      }
       this.enqueueMetadataSnapshotDownload({
         ...resourceOffer,
         sourcePeerHash,
@@ -30164,27 +30265,15 @@ export class ReticulumChatManager extends EventEmitter {
         snapshot,
         advertisedFullSnapshotHash
       );
+      this.retainMetadataSnapshotDownloadProviders(snapshot);
       return;
     }
-    if (snapshot.scope !== expectedScope) {
-      if (expectedScope === 'full') {
-        this.deferMetadataSnapshot(
-          peerHash,
-          snapshot,
-          advertisedFullSnapshotHash
-        );
-        this.requestMetadataSnapshotFromPeer(
-          peerHash,
-          groupId,
-          advertisedFullSnapshotHash
-        );
-      } else {
-        this.clearDeferredMetadataSnapshot(
-          peerHash,
-          groupId,
-          snapshot.snapshotHash
-        );
-      }
+    if (snapshot.scope === 'full' && expectedScope !== 'full') {
+      this.clearDeferredMetadataSnapshot(
+        peerHash,
+        groupId,
+        snapshot.snapshotHash
+      );
       return;
     }
     const signerAdminStatus = await this.getValidatedGroupAdminStatus(
@@ -30197,6 +30286,7 @@ export class ReticulumChatManager extends EventEmitter {
         snapshot,
         advertisedFullSnapshotHash
       );
+      this.retainMetadataSnapshotDownloadProviders(snapshot);
       return;
     }
     if (signerAdminStatus !== 'admin') {
@@ -30215,23 +30305,13 @@ export class ReticulumChatManager extends EventEmitter {
       storedAndProjected ||
       this.db.applyStoredMetadataSnapshotProjection(snapshot);
     if (projected) {
-      this.enqueueChannelExpiryReconciliationsForGroup(
-        snapshot.groupId,
-        snapshot.channels.map((channel) => channel.channelId)
-      );
-      this.clearDeferredMetadataSnapshot(
+      this.finishMetadataSnapshotProjection(
         peerHash,
-        groupId,
-        snapshot.snapshotHash
-      );
-      this.setMetadataSnapshotState(
-        groupId,
-        'snapshot_current',
+        snapshot,
+        expectedScope,
+        advertisedFullSnapshotHash,
         'metadata_snapshot_applied'
       );
-      this.invalidateGroupDigestSnapshot(groupId);
-      this.invalidateStateHeadsCache(groupId);
-      this.emitSummaryChanged(groupId, undefined, { metadataChanged: true });
       loggerLog(
         `[ReticulumChat] metadata_snapshot_applied group=${groupId} version=${snapshot.version} channels=${snapshot.channels.length} categories=${snapshot.categories.length} peer=${peerHash.slice(0, 16)} stored=${storedAndProjected ? 'yes' : 'no'}`
       );
@@ -38701,6 +38781,46 @@ export class ReticulumChatManager extends EventEmitter {
     }
   }
 
+  private retainMetadataSnapshotDownloadProviders(
+    snapshot: ReticulumChatMetadataSnapshotRecord
+  ): void {
+    if (snapshot.scope !== 'public') return;
+    const download = this.metadataSnapshotDownloadItems.get(
+      this.metadataSnapshotDownloadKey(snapshot.groupId, snapshot.snapshotHash)
+    );
+    if (!download) return;
+    // Completion or failure removes download offers. Preserve their full-state
+    // hints once the signed public copy arrives, including via inline delivery
+    // or while signer validation is pending. The deferred handler revalidates
+    // before requesting or applying anything.
+    const offers = [...download.candidates.values()].map(({ offer }) => offer);
+    const activeOffer = download.activeTransferId
+      ? this.metadataSnapshotOffers.get(download.activeTransferId)
+      : undefined;
+    if (activeOffer) offers.push(activeOffer);
+    for (const offer of offers) {
+      const peerHash =
+        offer.sourcePeerHash || offer.senderReticulumDestinationHash || '';
+      if (
+        !offer.fullSnapshotHash ||
+        this.deferredMetadataSnapshots.get(
+          this.deferredMetadataSnapshotKey(
+            peerHash,
+            snapshot.groupId,
+            snapshot.snapshotHash
+          )
+        )?.fullSnapshotHash === offer.fullSnapshotHash ||
+        this.db.getMetadataSnapshotByHash(
+          snapshot.groupId,
+          offer.fullSnapshotHash
+        )
+      ) {
+        continue;
+      }
+      this.deferMetadataSnapshot(peerHash, snapshot, offer.fullSnapshotHash);
+    }
+  }
+
   private async importReceivedMetadataSnapshotResource(
     payload: ReticulumChatResourcePayload,
     useWorkerPrep = false
@@ -38760,28 +38880,16 @@ export class ReticulumChatManager extends EventEmitter {
           snapshot,
           offer.fullSnapshotHash || ''
         );
+        this.retainMetadataSnapshotDownloadProviders(snapshot);
         terminalSuccess = true;
         return;
       }
-      if (snapshot.scope !== expectedScope) {
-        if (expectedScope === 'full') {
-          this.deferMetadataSnapshot(
-            offer.sourcePeerHash || '',
-            snapshot,
-            offer.fullSnapshotHash || ''
-          );
-          this.requestMetadataSnapshotFromPeer(
-            offer.sourcePeerHash || '',
-            offer.groupId,
-            offer.fullSnapshotHash || ''
-          );
-        } else {
-          this.clearDeferredMetadataSnapshot(
-            offer.sourcePeerHash || '',
-            offer.groupId,
-            snapshot.snapshotHash
-          );
-        }
+      if (snapshot.scope === 'full' && expectedScope !== 'full') {
+        this.clearDeferredMetadataSnapshot(
+          offer.sourcePeerHash || '',
+          offer.groupId,
+          snapshot.snapshotHash
+        );
         terminalSuccess = true;
         return;
       }
@@ -38795,6 +38903,7 @@ export class ReticulumChatManager extends EventEmitter {
           snapshot,
           offer.fullSnapshotHash || ''
         );
+        this.retainMetadataSnapshotDownloadProviders(snapshot);
         terminalSuccess = true;
         return;
       }
@@ -38820,25 +38929,13 @@ export class ReticulumChatManager extends EventEmitter {
         this.db.applyStoredMetadataSnapshotProjection(snapshot);
       if (projected) {
         terminalSuccess = true;
-        this.enqueueChannelExpiryReconciliationsForGroup(
-          snapshot.groupId,
-          snapshot.channels.map((channel) => channel.channelId)
-        );
-        this.clearDeferredMetadataSnapshot(
+        this.finishMetadataSnapshotProjection(
           offer.sourcePeerHash || '',
-          offer.groupId,
-          snapshot.snapshotHash
-        );
-        this.setMetadataSnapshotState(
-          offer.groupId,
-          'snapshot_current',
+          snapshot,
+          expectedScope,
+          offer.fullSnapshotHash || '',
           'metadata_snapshot_resource_applied'
         );
-        this.invalidateGroupDigestSnapshot(offer.groupId);
-        this.invalidateStateHeadsCache(offer.groupId);
-        this.emitSummaryChanged(offer.groupId, undefined, {
-          metadataChanged: true,
-        });
         loggerLog(
           `[ReticulumChat] metadata_snapshot_resource_applied group=${offer.groupId} version=${snapshot.version} channels=${snapshot.channels.length} categories=${snapshot.categories.length} peer=${(offer.sourcePeerHash || '').slice(0, 16)} transfer=${payload.transferId} stored=${storedAndProjected ? 'yes' : 'no'}`
         );

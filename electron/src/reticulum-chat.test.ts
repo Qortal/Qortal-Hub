@@ -33716,7 +33716,10 @@ describe('reticulum chat manager', () => {
     );
     expect(
       (adminReceiver as any).db.getLatestMetadataSnapshot(74, 'public')
-    ).toBeNull();
+    ).not.toBeNull();
+    expect(
+      adminReceiver.getChannels(74).map((channel) => channel.channelId)
+    ).toContain('testing');
     await vi.waitUntil(
       () => adminRequests.some((wire) => wire.k === 'metadata_snapshot_req_v3'),
       {
@@ -33742,6 +33745,502 @@ describe('reticulum chat manager', () => {
     receiver.close();
     adminReceiver.close();
   });
+
+  it.each(['inline', 'resource'] as const)(
+    'recovers admin channel additions and updates through a public-only peer (%s)',
+    async (transport) => {
+      const groupId = 758;
+      const signer = createReticulumChatTestSigner();
+      const identity = await signer({});
+      const memberSigner = createReticulumChatTestSigner();
+      const memberIdentity = await memberSigner({});
+      const managers: ReticulumChatManager[] = [];
+      const dbPaths = new Map<ReticulumChatManager, string>();
+      const wires: ReticulumChatWire[] = [];
+      const files = new Map<string, string>();
+      const makeManager = (isAdmin: boolean, dbPath = tempDbPath()) => {
+        const manager = new ReticulumChatManager({
+          dbPath,
+          now: () => 100_000,
+          signLocalFields: isAdmin ? signer : memberSigner,
+          validateGroupMember: async () => true,
+          validateGroupAdmin: async (_groupId, address) =>
+            address === identity.authorAddress,
+          bridge: {
+            on: () => undefined,
+            off: () => undefined,
+            sendReticulumChatDetailed: async (
+              _peer: string,
+              wire: ReticulumChatWire
+            ) => {
+              wires.push(wire);
+              return { ok: true as const };
+            },
+            sendReticulumChatResourceDetailed: async (payload: any) => {
+              files.set(payload.transferId, payload.filePath);
+              return { ok: true as const };
+            },
+            acceptReticulumChatResourceDetailed: async () => ({ ok: true }),
+          } as any,
+        });
+        managers.push(manager);
+        dbPaths.set(manager, dbPath);
+        manager.setLocalGroupMemberships([
+          {
+            groupId,
+            isAdmin,
+            adminStatusAuthoritative: true,
+            localAddress: isAdmin
+              ? identity.authorAddress
+              : memberIdentity.authorAddress,
+          },
+        ]);
+        manager.subscribeGroup(groupId);
+        return manager;
+      };
+      const source = makeManager(true);
+      const relay = makeManager(false);
+      let admin = makeManager(true);
+      const prepareOffer = async (
+        provider: ReticulumChatManager,
+        snapshot: any,
+        fullHash = ''
+      ) => {
+        expect(
+          await (provider as any).sendMetadataSnapshotResourceToPeer(
+            'peer-recipient',
+            groupId,
+            snapshot,
+            'test',
+            fullHash
+          )
+        ).toBe(true);
+        const offer = [...wires]
+          .reverse()
+          .find((wire) => wire.k === 'metadata_snapshot_offer_v3') as Extract<
+          ReticulumChatWire,
+          { k: 'metadata_snapshot_offer_v3' }
+        >;
+        const file = files.get(offer.w!.x)!;
+        return { offer, file };
+      };
+      const deliver = async (
+        provider: ReticulumChatManager,
+        recipient: ReticulumChatManager,
+        snapshot: any,
+        fullHash = '',
+        sourcePeer = provider === relay ? 'peer-relay' : 'peer-source',
+        beforeImport?: () => Promise<void>
+      ) => {
+        const { offer, file } = await prepareOffer(
+          provider,
+          snapshot,
+          fullHash
+        );
+        if (transport === 'inline') {
+          await (recipient as any).handleMetadataSnapshotOffer(
+            groupId,
+            { s: JSON.parse(fs.readFileSync(file, 'utf8')), fh: offer.fh },
+            sourcePeer
+          );
+        } else {
+          await (recipient as any).handleMetadataSnapshotOffer(
+            groupId,
+            offer,
+            sourcePeer
+          );
+          await beforeImport?.();
+          const receivedPath = `${tempDbPath()}.snapshot`;
+          fs.copyFileSync(file, receivedPath);
+          await (recipient as any).importReceivedMetadataSnapshotResource({
+            transferId: offer.w!.x,
+            path: receivedPath,
+          });
+          expect(fs.existsSync(receivedPath)).toBe(false);
+        }
+      };
+      const makeSnapshot = async (version: number) => {
+        const channels: ReticulumGroupChannel[] = [
+          {
+            groupId,
+            channelId: 'updates',
+            categoryId: 'cat-work',
+            name: version === 1 ? 'Updates' : 'Renamed updates',
+            position: 1,
+            archived: false,
+            writeMode: 'members',
+            readMode: 'members',
+            writeModeUpdatedAt: 100,
+            createdBy: identity.authorAddress,
+            createdAt: 100,
+            updatedAt: version * 100,
+          },
+          {
+            groupId,
+            channelId: 'private',
+            name: 'Private',
+            position: 2,
+            archived: false,
+            writeMode: 'admins',
+            readMode: 'admins',
+            writeModeUpdatedAt: 100,
+            createdBy: identity.authorAddress,
+            createdAt: 100,
+            updatedAt: 100,
+          },
+        ];
+        if (version > 1) {
+          channels.push({ ...channels[0], channelId: 'added', name: 'Added' });
+          channels.push({
+            ...channels[1],
+            channelId: 'new-private',
+            name: 'New private',
+            updatedAt: 200,
+          });
+        }
+        const category = {
+          groupId,
+          categoryId: 'cat-work',
+          name: `Work ${version}`,
+          position: 1,
+          createdBy: identity.authorAddress,
+          createdAt: 100,
+          updatedAt: version * 100,
+        };
+        const revisions = channels.map((channel) => ({
+          entityType: 'channel',
+          entityId: channel.channelId,
+          eventId: `${channel.channelId}-${channel.updatedAt}`,
+          eventType: 'channel_update',
+          timestamp: channel.updatedAt,
+          deleted: false,
+          stateHash: hashReticulumChatMetadataEntityState(
+            'channel',
+            channel.channelId,
+            channel
+          ),
+        }));
+        revisions.push({
+          entityType: 'category',
+          entityId: category.categoryId,
+          eventId: `category-${version}`,
+          eventType: 'category_update',
+          timestamp: category.updatedAt,
+          deleted: false,
+          stateHash: hashReticulumChatMetadataEntityState(
+            'category',
+            category.categoryId,
+            category
+          ),
+        });
+        const snapshot = await (source as any).signMetadataSnapshotRecord({
+          groupId,
+          scope: 'full',
+          parentSnapshotHash: '',
+          version,
+          createdAt: version * 1_000,
+          latestEventId: `category-${version}`,
+          latestFeedTimestamp: version * 100,
+          channels,
+          categories: [category],
+          revisions,
+        });
+        expect(snapshot).toBeTruthy();
+        return snapshot;
+      };
+      try {
+        const full = await makeSnapshot(1);
+        const publicSnapshot = await (
+          source as any
+        ).buildPublicMetadataSnapshotFromFull(full);
+        await deliver(source, relay, publicSnapshot);
+        const relayed = await (relay as any).getBestMetadataSnapshotForSend(
+          groupId
+        );
+        expect(relayed.scope).toBe('public');
+        expect(
+          (relay as any).db.getLatestMetadataSnapshot(groupId, 'full')
+        ).toBeNull();
+
+        await deliver(relay, admin, relayed);
+        expect(
+          admin.getChannels(groupId).find((c) => c.channelId === 'updates')
+            ?.name
+        ).toBe('Updates');
+        expect(admin.getCategories(groupId).map((c) => c.name)).toContain(
+          'Work 1'
+        );
+        expect(admin.getChannelMetadataBundle(groupId).ready).toBe(true);
+        expect(admin.getChannelMetadataHistory(groupId)).toEqual([]);
+        expect(
+          (admin as any).db.getLatestMetadataSnapshot(groupId, 'full')
+        ).toBeNull();
+        expect((admin as any).deferredMetadataSnapshots.size).toBe(0);
+        expect(
+          wires.filter((wire) => wire.k === 'metadata_snapshot_req_v3')
+        ).toEqual([]);
+        // A public projection must never be re-signed as complete admin state.
+        expect(
+          await (admin as any).ensureLocalMetadataSnapshot(groupId)
+        ).toBeNull();
+
+        const adminDbPath = dbPaths.get(admin)!;
+        admin.close();
+        admin = makeManager(true, adminDbPath);
+        expect(admin.getChannelMetadataBundle(groupId).ready).toBe(true);
+        expect(
+          admin.getChannels(groupId).find((c) => c.channelId === 'updates')
+            ?.name
+        ).toBe('Updates');
+        expect(
+          (admin as any).db.getLatestMetadataSnapshot(groupId, 'full')
+        ).toBeNull();
+
+        await deliver(source, admin, full);
+        expect(admin.getChannels(groupId).map((c) => c.channelId)).toContain(
+          'private'
+        );
+        const updatedFull = await makeSnapshot(2);
+        const updatedPublic = await (
+          source as any
+        ).buildPublicMetadataSnapshotFromFull(updatedFull);
+        await deliver(source, relay, updatedPublic);
+        await deliver(
+          relay,
+          admin,
+          await (relay as any).getBestMetadataSnapshotForSend(groupId)
+        );
+        expect(
+          admin.getChannels(groupId).find((c) => c.channelId === 'updates')
+            ?.name
+        ).toBe('Renamed updates');
+        expect(admin.getChannels(groupId).map((c) => c.channelId)).toEqual(
+          expect.arrayContaining(['added', 'private'])
+        );
+        expect(admin.getCategories(groupId).map((c) => c.name)).toContain(
+          'Work 2'
+        );
+
+        await deliver(source, admin, updatedPublic, updatedFull.snapshotHash);
+        await vi.waitUntil(() =>
+          wires.some(
+            (wire) =>
+              wire.k === 'metadata_snapshot_req_v3' &&
+              wire.q.h === updatedFull.snapshotHash
+          )
+        );
+        expect((admin as any).deferredMetadataSnapshots.size).toBe(1);
+        // A repeated public offer must not lose the outstanding full hash.
+        await deliver(source, admin, updatedPublic);
+        expect((admin as any).deferredMetadataSnapshots.size).toBe(1);
+        const pendingValidationSnapshot = await (
+          source as any
+        ).buildPublicMetadataSnapshotFromFull(await makeSnapshot(3));
+        const adminValidation = vi
+          .spyOn(admin as any, 'getValidatedGroupAdminStatus')
+          .mockResolvedValueOnce('unknown');
+        try {
+          // The advertised full hash is not signed. It cannot prove that
+          // this newer public snapshot is covered by that full snapshot.
+          await deliver(
+            source,
+            admin,
+            pendingValidationSnapshot,
+            updatedFull.snapshotHash,
+            'peer-pending-validation'
+          );
+        } finally {
+          adminValidation.mockRestore();
+        }
+        expect((admin as any).deferredMetadataSnapshots.size).toBe(2);
+        await deliver(source, admin, updatedFull, '', 'peer-alternate');
+        expect(admin.getChannels(groupId).map((c) => c.channelId)).toContain(
+          'new-private'
+        );
+        expect((admin as any).deferredMetadataSnapshots.size).toBe(1);
+        expect((admin as any).metadataSnapshotRetryTimers.size).toBe(1);
+        expect(admin.getCategories(groupId).map((c) => c.name)).toContain(
+          'Work 2'
+        );
+        await deliver(
+          source,
+          admin,
+          pendingValidationSnapshot,
+          '',
+          'peer-pending-validation'
+        );
+        expect((admin as any).deferredMetadataSnapshots.size).toBe(0);
+        expect((admin as any).metadataSnapshotRetryTimers.size).toBe(0);
+        expect(admin.getCategories(groupId).map((c) => c.name)).toContain(
+          'Work 3'
+        );
+        await deliver(relay, admin, publicSnapshot);
+        expect(
+          admin.getChannels(groupId).find((c) => c.channelId === 'updates')
+            ?.name
+        ).toBe('Renamed updates');
+        expect(admin.getChannels(groupId).map((c) => c.channelId)).toContain(
+          'new-private'
+        );
+        // A non-admin still cannot import the full private layout.
+        await deliver(source, relay, updatedFull);
+        expect(
+          relay.getChannels(groupId).map((c) => c.channelId)
+        ).not.toContain('private');
+        expect(
+          (relay as any).db.getLatestMetadataSnapshot(groupId, 'full')
+        ).toBeNull();
+
+        if (transport === 'resource') {
+          for (const validation of [
+            'ready',
+            'local-unknown',
+            'signer-unknown',
+            'inline-recovery',
+            'inline-active',
+            'inline-local-unknown',
+            'inline-signer-unknown',
+          ]) {
+            const concurrentAdmin = makeManager(true);
+            let validationSpy: ReturnType<typeof vi.spyOn> | undefined;
+            try {
+              await deliver(
+                validation === 'inline-active' ? source : relay,
+                concurrentAdmin,
+                publicSnapshot,
+                validation === 'inline-active' ? full.snapshotHash : '',
+                validation === 'inline-active'
+                  ? 'peer-full-provider'
+                  : 'peer-relay',
+                async () => {
+                  const { offer, file } = await prepareOffer(
+                    source,
+                    publicSnapshot,
+                    validation === 'inline-active' ? '' : full.snapshotHash
+                  );
+                  await (concurrentAdmin as any).handleMetadataSnapshotOffer(
+                    groupId,
+                    offer,
+                    validation === 'inline-active'
+                      ? 'peer-relay'
+                      : 'peer-full-provider'
+                  );
+                  const download = (
+                    concurrentAdmin as any
+                  ).metadataSnapshotDownloadItems.get(
+                    `${groupId}:${publicSnapshot.snapshotHash}`
+                  );
+                  expect(download.candidates.size).toBe(1);
+                  if (validation.startsWith('inline-')) {
+                    if (validation === 'inline-local-unknown') {
+                      validationSpy = vi
+                        .spyOn(
+                          concurrentAdmin as any,
+                          'expectedMetadataSnapshotScope'
+                        )
+                        .mockResolvedValueOnce(null);
+                    } else if (validation === 'inline-signer-unknown') {
+                      validationSpy = vi
+                        .spyOn(
+                          concurrentAdmin as any,
+                          'getValidatedGroupAdminStatus'
+                        )
+                        .mockResolvedValueOnce('unknown');
+                    }
+                    await (concurrentAdmin as any).handleMetadataSnapshotOffer(
+                      groupId,
+                      { s: JSON.parse(fs.readFileSync(file, 'utf8')) },
+                      'peer-inline'
+                    );
+                    // Even if both byte transfers fail, the authenticated
+                    // inline copy is enough to retain the full-state provider.
+                    concurrentAdmin.handleResourceEvent({
+                      status: 'failed',
+                      transferId: download.activeTransferId,
+                      reason: 'test-link-failed',
+                    });
+                    concurrentAdmin.handleResourceEvent({
+                      status: 'failed',
+                      transferId: offer.w!.x,
+                      reason: 'test-link-failed',
+                    });
+                    if (validationSpy) {
+                      expect(
+                        concurrentAdmin.getChannelMetadataBundle(groupId).ready
+                      ).toBe(false);
+                      expect(
+                        (concurrentAdmin as any).deferredMetadataSnapshots.size
+                      ).toBe(2);
+                      validationSpy.mockRestore();
+                      await (
+                        concurrentAdmin as any
+                      ).handleMetadataSnapshotOffer(
+                        groupId,
+                        { s: JSON.parse(fs.readFileSync(file, 'utf8')) },
+                        'peer-inline'
+                      );
+                    }
+                  }
+                  if (validation === 'local-unknown') {
+                    validationSpy = vi
+                      .spyOn(
+                        concurrentAdmin as any,
+                        'expectedMetadataSnapshotScope'
+                      )
+                      .mockResolvedValueOnce(null);
+                  } else if (validation === 'signer-unknown') {
+                    validationSpy = vi
+                      .spyOn(
+                        concurrentAdmin as any,
+                        'getValidatedGroupAdminStatus'
+                      )
+                      .mockResolvedValueOnce('unknown');
+                  }
+                }
+              );
+            } finally {
+              validationSpy?.mockRestore();
+            }
+            if (
+              validation === 'local-unknown' ||
+              validation === 'signer-unknown'
+            ) {
+              expect(
+                (concurrentAdmin as any).deferredMetadataSnapshots.size
+              ).toBe(2);
+              expect(
+                concurrentAdmin.getChannelMetadataBundle(groupId).ready
+              ).toBe(false);
+              await deliver(relay, concurrentAdmin, publicSnapshot);
+            }
+            expect(
+              concurrentAdmin.getChannelMetadataBundle(groupId).ready
+            ).toBe(true);
+            expect([
+              ...(concurrentAdmin as any).deferredMetadataSnapshots.values(),
+            ]).toEqual([
+              expect.objectContaining({
+                peerHash: 'peer-full-provider',
+                fullSnapshotHash: full.snapshotHash,
+              }),
+            ]);
+            expect(
+              (concurrentAdmin as any).metadataSnapshotRetryTimers.size
+            ).toBe(1);
+            await deliver(source, concurrentAdmin, full);
+            expect(
+              concurrentAdmin.getChannels(groupId).map((c) => c.channelId)
+            ).toContain('private');
+            expect(
+              (concurrentAdmin as any).deferredMetadataSnapshots.size
+            ).toBe(0);
+          }
+        }
+      } finally {
+        managers.forEach((manager) => manager.close());
+      }
+    }
+  );
 
   it('bounds concurrent metadata snapshot downloads', async () => {
     const accepted: Array<Record<string, unknown>> = [];
@@ -34263,10 +34762,16 @@ describe('reticulum chat manager', () => {
       RETICULUM_CHAT_QORTAL_LAND_CHANNEL_ID,
     ]);
 
-    // An administrator must not treat a public-only snapshot as complete,
-    // because it intentionally omits admin-private channels.
+    // Public metadata is ready to display for admins too, while the full
+    // private layout remains absent and eligible for separate recovery.
     manager.setLocalGroupMemberships([{ groupId, isAdmin: true }]);
-    expect(manager.getChannelMetadataBundle(groupId).ready).toBe(false);
+    expect(manager.getChannelMetadataBundle(groupId)).toMatchObject({
+      ready: true,
+      snapshotVersion: 7,
+    });
+    expect(
+      (manager as any).db.getLatestMetadataSnapshot(groupId, 'full')
+    ).toBeNull();
     expect(
       (manager as any).db.applyMetadataSnapshot({
         groupId,
