@@ -7,6 +7,7 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../atoms/global';
+import { removeBrokenPinnedApps } from '../utils/pinnedAppsSettings';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../App';
 import { decryptResource } from '../components/Group/Group';
 import {
@@ -48,11 +49,10 @@ const getPublishRecord = async (myName) => {
 
 const getPublish = async (myName) => {
   try {
-    let data;
     const res = await fetch(
       `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${myName}/ext_saved_settings?encoding=base64`
     );
-    data = await res.text();
+    const data = await res.text();
 
     if (!data) throw new Error('Unable to fetch publish');
 
@@ -86,7 +86,9 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
             settings?.sortablePinnedApps &&
             timestamp > settingsLocalLastUpdated
           ) {
-            setSortablePinnedApps(settings.sortablePinnedApps);
+            setSortablePinnedApps(
+              removeBrokenPinnedApps(settings.sortablePinnedApps)
+            );
 
             setSettingsQDNLastUpdated(timestamp || 0);
           } else if (settings?.sortablePinnedApps) {
