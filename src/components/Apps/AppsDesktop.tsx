@@ -91,27 +91,13 @@ import {
   getDialogPaperSx,
   getDialogSecondaryButtonSx,
 } from '../App/dialogSurface';
+import { pickNextTabFromMru, tabsLeftByCloseAll } from './tabSelection';
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
 const MIN_LIBRARY_APPS_BEFORE_SLOW_POLL = 10;
 /** Bounded MRU stack (tab ids only) for "last visited" after closing the active tab */
 const MAX_TAB_MRU_DEPTH = 64;
-
-function pickNextTabFromMru(
-  remainingTabs: { tabId: string }[],
-  mruIds: string[]
-): { tabId: string } | null {
-  if (!remainingTabs.length) return null;
-  const ids = new Set(remainingTabs.map((t) => t.tabId));
-  for (let i = mruIds.length - 1; i >= 0; i--) {
-    const id = mruIds[i];
-    if (ids.has(id)) {
-      return remainingTabs.find((t) => t.tabId === id) ?? null;
-    }
-  }
-  return null;
-}
 
 /** Prefer the tab that was to the right of the closed tab; if closed tab was last, use the new last tab */
 function positionalTabAfterClose(
@@ -812,7 +798,9 @@ export const AppsDesktop = ({
     }
     if (tabs.length >= MAX_OPEN_APP_TABS) {
       setInfoSnack({
-        message: 'Maximum number of tabs reached. Close one to open another.',
+        message: t('core:app_tab.limit_reached', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         type: 'warning',
       });
       setOpenSnack(true);
@@ -897,7 +885,9 @@ export const AppsDesktop = ({
     const data = e.detail?.data;
     if (tabs.length >= MAX_OPEN_APP_TABS) {
       setInfoSnack({
-        message: 'Maximum number of tabs reached. Close one to open another.',
+        message: t('core:app_tab.limit_reached', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         type: 'warning',
       });
       setOpenSnack(true);
@@ -1300,11 +1290,59 @@ export const AppsDesktop = ({
   );
 
   const closeAllTabs = useCallback(() => {
+    // A locked tab asks before it closes (removeTabFunc), so Close All keeps
+    // it open rather than closing it without asking.
+    const { kept: lockedTabs, nextTab } = tabsLeftByCloseAll(
+      tabs,
+      selectedTab?.tabId,
+      recentTabIdsRef.current
+    );
     tabs.forEach((tab) => {
-      if (tab?.tabId) {
+      if (tab?.tabId && !tab.lock) {
         clearSessionPermissionsByTabId(tab.tabId);
       }
     });
+    if (lockedTabs.length > 0) {
+      const keptIds = new Set(lockedTabs.map((tab) => tab.tabId));
+      recentTabIdsRef.current = recentTabIdsRef.current.filter((id) =>
+        keptIds.has(id)
+      );
+      setEnteringTabIds((prev) => prev.filter((id) => keptIds.has(id)));
+      setPendingVisualTabActivationId((prev) =>
+        keptIds.has(prev) ? prev : null
+      );
+      setDelayedVisualActiveTabId((prev) => (keptIds.has(prev) ? prev : null));
+      setIsAddTabFocused(false);
+      setIsAddTabWaitingForPointerMove(false);
+      addTabPointerOriginRef.current = null;
+      setIsNewTabWindow(false);
+      setTabs(lockedTabs);
+      setSelectedTab(nextTab);
+      if (isLocalDevTab(nextTab)) {
+        setDesktopViewMode('dev');
+        setDevMode('viewer');
+      } else {
+        setDesktopViewMode('apps');
+        setMode('viewer');
+      }
+      tabsTokenRef.current += 1;
+      executeEvent('setTabsToNav', {
+        data: {
+          tabs: lockedTabs,
+          selectedTab: nextTab,
+          isNewTabWindow: false,
+          tabsToken: tabsTokenRef.current,
+        },
+      });
+      setInfoSnack({
+        type: 'info',
+        message: t('core:app_tab.locked_kept_open', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      setOpenSnack(true);
+      return;
+    }
     recentTabIdsRef.current = [];
     setTabs([]);
     setSelectedTab(null);
@@ -1332,7 +1370,15 @@ export const AppsDesktop = ({
       setMode('home');
       setDevMode('home');
     }, 0);
-  }, [tabs, returnFromAppsMode, setIsNewTabWindow, setMode, setDevMode]);
+  }, [
+    tabs,
+    selectedTab,
+    t,
+    returnFromAppsMode,
+    setIsNewTabWindow,
+    setMode,
+    setDevMode,
+  ]);
 
   useEffect(() => {
     if (!show) {

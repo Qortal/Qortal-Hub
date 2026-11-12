@@ -173,6 +173,12 @@
   "app_other": "アプリ",
   "app_private": "プライベート",
   "app_service_type": "アプリサービスタイプ",
+  "app_tab": {
+    "close_all": "すべてのタブを閉じる",
+    "duplicate": "タブを複製",
+    "limit_reached": "タブの最大数に達しました。別のタブを開くには、いずれかを閉じてください。",
+    "locked_kept_open": "ロックされたタブは開いたままです。確認するには、1つずつ閉じてください。"
+  },
   "apps_dashboard": "アプリダッシュボード",
   "apps_official": "公式アプリ",
   "aria": {
