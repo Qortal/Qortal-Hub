@@ -1,6 +1,10 @@
+import { localStorageKeyFor } from '../../utils/pinnedAppsStorage';
+
 export function saveToLocalStorage(key, subKey, newValue) {
   try {
-    const existingData = localStorage.getItem(key);
+    // Pinned apps go to the signed-in account's own key.
+    const storageKey = localStorageKeyFor(key);
+    const existingData = localStorage.getItem(storageKey);
     let combinedData = {};
 
     if (existingData) {
@@ -18,7 +22,7 @@ export function saveToLocalStorage(key, subKey, newValue) {
     }
 
     const serializedValue = JSON.stringify(combinedData);
-    localStorage.setItem(key, serializedValue);
+    localStorage.setItem(storageKey, serializedValue);
   } catch (error) {
     console.error('Error saving to localStorage:', error);
   }

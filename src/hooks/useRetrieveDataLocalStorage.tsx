@@ -7,6 +7,12 @@ import {
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { useSetAtom } from 'jotai';
+import { RESET } from 'jotai/utils';
+import {
+  adoptSharedPinnedApps,
+  pinnedAppsStorageKey,
+  setPinnedAppsAccount,
+} from '../utils/pinnedAppsStorage';
 
 function fetchFromLocalStorage(key) {
   try {
@@ -30,13 +36,20 @@ export const useRetrieveDataLocalStorage = (address) => {
   const setSettingsQDNLastUpdated = useSetAtom(settingsQDNLastUpdatedAtom);
   const setOldPinnedApps = useSetAtom(oldPinnedAppsAtom);
 
-  const getSortablePinnedApps = useCallback(() => {
-    const pinnedAppsLocal = fetchFromLocalStorage('ext_saved_settings');
+  const getSortablePinnedApps = useCallback((address) => {
+    setPinnedAppsAccount(address);
+    if (address) adoptSharedPinnedApps(address);
+    const pinnedAppsLocal = fetchFromLocalStorage(
+      pinnedAppsStorageKey(address)
+    );
 
     if (pinnedAppsLocal?.sortablePinnedApps) {
       setSortablePinnedApps(pinnedAppsLocal?.sortablePinnedApps);
       setSettingsLocalLastUpdated(pinnedAppsLocal?.timestamp || -1);
     } else {
+      // Nothing saved for this account: start from the default pins, not
+      // from the list of the account that was signed in before.
+      setSortablePinnedApps(RESET);
       setSettingsLocalLastUpdated(-1);
     }
   }, []);
@@ -55,7 +68,7 @@ export const useRetrieveDataLocalStorage = (address) => {
   }, []);
 
   useEffect(() => {
-    getSortablePinnedApps();
+    getSortablePinnedApps(address);
     getSortablePinnedAppsImportExport();
   }, [getSortablePinnedApps, address]);
 };
