@@ -413,6 +413,8 @@
     "system_settings": "System Settings",
     "system_settings_description": "Control notifications, motion, pinned apps, and blocked accounts.",
     "toggle_privacy_mode": "Toggle privacy mode",
+    "torq_feed": "Torq Feed",
+    "torq_feed_module_desc": "Show the Torq Feed module on Home. Turn off to stop rendering it.",
     "unavailable": "Unavailable",
     "unblock": "Unblock",
     "using_node": "Using Node",

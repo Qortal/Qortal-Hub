@@ -413,6 +413,8 @@
     "system_settings": "Järjestelmäasetukset",
     "system_settings_description": "Hallitse ilmoituksia, liikettä, kiinnitettyjä appeja ja estettyjä tilejä.",
     "toggle_privacy_mode": "Vaihda yksityisyystilaa",
+    "torq_feed": "Torq-syöte",
+    "torq_feed_module_desc": "Näytä Torq-syöte-moduuli etusivulla. Poista käytöstä, jotta sitä ei renderöidä.",
     "unavailable": "Ei saatavilla",
     "unblock": "Poista esto",
     "using_node": "Käytössä oleva noodi",

@@ -27,6 +27,17 @@ import {
 } from './QAppWidgetContainer';
 import { QuitterFeedCard } from './quitter/QuitterFeedCard';
 import {
+  FEED_APPS,
+  type FeedApp,
+  feedAppAtom,
+  saveFeedApp,
+} from './quitter/feedApp';
+import {
+  fetchTorqHiddenUsers,
+  hiddenUserKey,
+  torqFeedItems,
+} from './quitter/torqFeed';
+import {
   fetchQuitterFeedPage,
   fetchQuitterFollowedNames,
 } from './quitter/quitterFeedApi';
@@ -87,6 +98,8 @@ const writeQuitterFeedMode = (storageKey: string, mode: QuitterFeedMode) => {
     // ignore quota / private mode
   }
 };
+
+const NO_FEED_ITEMS: QuitterFeedItem[] = [];
 
 const FOLLOWING_LOAD_TIMEOUT_MS = 40_000;
 const FEED_POLL_INTERVAL_MS = 90_000;
@@ -191,6 +204,11 @@ export const QuitterFeedWidget = ({
     return `${QUITTER_FEED_MODE_STORAGE_PREFIX}${addr}`;
   }, [userInfo?.address]);
   const [feedMode, setFeedMode] = useState<QuitterFeedMode>('following');
+  const [feedApp, setFeedApp] = useAtom(feedAppAtom);
+  // Torq's feed leaves out the users this account hides in Torq.
+  const [torqHiddenKeys, setTorqHiddenKeys] = useState<Set<string>>(
+    () => new Set()
+  );
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
@@ -201,14 +219,56 @@ export const QuitterFeedWidget = ({
   const feedCacheRef = useRef<QuitterDashboardFeedCache | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const previousRefreshTokenRef = useRef(refreshToken);
+  const hiddenUsersRefreshTokenRef = useRef(refreshToken);
   const activeFeedRequestIdRef = useRef(0);
   const activeUpdateRequestIdRef = useRef(0);
   const isUpdateCheckInFlightRef = useRef(false);
   const feedKey = `${feedMode}:${currentUserName ?? ''}`;
 
   const cacheMatches = feedCache?.feedKey === feedKey;
-  const items = cacheMatches ? feedCache.items : [];
-  const pendingItems = cacheMatches ? feedCache.pendingItems : [];
+  const feedItems = cacheMatches ? feedCache.items : NO_FEED_ITEMS;
+  const feedPendingItems = cacheMatches
+    ? feedCache.pendingItems
+    : NO_FEED_ITEMS;
+  // Both apps read the same posts, so switching apps needs no new load. What
+  // the list shows differs: for Torq, posts as Torq shows them (torqFeed.ts).
+  const items = useMemo(
+    () =>
+      feedApp === 'Torq' ? torqFeedItems(feedItems, torqHiddenKeys) : feedItems,
+    [feedApp, feedItems, torqHiddenKeys]
+  );
+  const pendingItems = useMemo(
+    () =>
+      feedApp === 'Torq'
+        ? torqFeedItems(feedPendingItems, torqHiddenKeys)
+        : feedPendingItems,
+    [feedApp, feedPendingItems, torqHiddenKeys]
+  );
+
+  // Torq's hidden users for this account. A manual refresh also picks up the
+  // users hidden in Torq since.
+  useEffect(() => {
+    if (feedApp !== 'Torq' || !currentUserName) {
+      setTorqHiddenKeys((prev) => (prev.size === 0 ? prev : new Set()));
+      return undefined;
+    }
+    const force = hiddenUsersRefreshTokenRef.current !== refreshToken;
+    hiddenUsersRefreshTokenRef.current = refreshToken;
+    const controller = new AbortController();
+    void fetchTorqHiddenUsers(currentUserName, {
+      force,
+      signal: controller.signal,
+    }).then((names) => {
+      if (controller.signal.aborted) return;
+      const keys = new Set(names.map(hiddenUserKey));
+      setTorqHiddenKeys((prev) =>
+        prev.size === keys.size && [...keys].every((key) => prev.has(key))
+          ? prev
+          : keys
+      );
+    });
+    return () => controller.abort();
+  }, [currentUserName, feedApp, refreshToken]);
   const followingEmptyReason = cacheMatches ? feedCache.followingEmptyReason : null;
   const initialFeedState: QuitterDashboardInitialFeedState = cacheMatches
     ? feedCache.initialFeedState
@@ -494,8 +554,8 @@ export const QuitterFeedWidget = ({
           error instanceof FeedLoadTimeoutError
             ? error.message
             : resolvedFeedMode === 'following'
-              ? t('quitter_feed.error_following')
-              : t('quitter_feed.error_generic');
+              ? t('quitter_feed.error_following', { app: feedApp })
+              : t('quitter_feed.error_generic', { app: feedApp });
         const nextCache: QuitterDashboardFeedCache = {
           ...emptyCacheForKey(requestFeedKey),
           error: message,
@@ -674,7 +734,7 @@ export const QuitterFeedWidget = ({
   }, [feedMode, initialFeedState, isInitialLoading, refreshToken]);
 
   useEffect(() => {
-    if (initialFeedState !== 'success' || items.length === 0) {
+    if (initialFeedState !== 'success' || feedItems.length === 0) {
       return undefined;
     }
 
@@ -725,19 +785,22 @@ export const QuitterFeedWidget = ({
 
       activeController?.abort();
     };
-  }, [feedMode, feedKey, initialFeedState, items.length]);
+  }, [feedMode, feedKey, initialFeedState, feedItems.length]);
 
-  const handleOpenPost = useCallback((item: QuitterFeedItem) => {
-    executeEvent('addTab', {
-      data: {
-        identifier: '',
-        name: 'Quitter',
-        path: `post/${encodeURIComponent(item.author)}/${encodeURIComponent(item.identifier)}`,
-        service: 'APP',
-      },
-    });
-    executeEvent('open-apps-mode', {});
-  }, []);
+  const handleOpenPost = useCallback(
+    (item: QuitterFeedItem) => {
+      executeEvent('addTab', {
+        data: {
+          identifier: '',
+          name: feedApp,
+          path: `post/${encodeURIComponent(item.author)}/${encodeURIComponent(item.identifier)}`,
+          service: 'APP',
+        },
+      });
+      executeEvent('open-apps-mode', {});
+    },
+    [feedApp]
+  );
 
   const handleApplyPendingPosts = useCallback(() => {
     const nextPendingItems = pendingItemsRef.current;
@@ -809,6 +872,22 @@ export const QuitterFeedWidget = ({
     writeQuitterFeedMode(feedModeStorageKey, 'general');
   }, [feedModeStorageKey]);
 
+  const handleSelectFeedApp = useCallback(
+    (app: FeedApp) => {
+      if (app === feedApp) {
+        return;
+      }
+
+      setFeedApp(app);
+      saveFeedApp(app);
+      // A load error names the app: try again, so it names the new one.
+      if (initialFeedState === 'error') {
+        handleRetryInitialFeed();
+      }
+    },
+    [feedApp, handleRetryInitialFeed, initialFeedState, setFeedApp]
+  );
+
   const loadingLabel = useMemo(
     () =>
       isFollowingFeed
@@ -846,10 +925,10 @@ export const QuitterFeedWidget = ({
       return t('quitter_feed.empty_message_no_name');
     }
     if (followingEmptyReason === 'no-following') {
-      return t('quitter_feed.empty_message_no_following');
+      return t('quitter_feed.empty_message_no_following', { app: feedApp });
     }
-    return t('quitter_feed.empty_message_no_posts');
-  }, [followingEmptyReason, isFollowingFeed, t]);
+    return t('quitter_feed.empty_message_no_posts', { app: feedApp });
+  }, [feedApp, followingEmptyReason, isFollowingFeed, t]);
   const showStatePanel =
     showInitialLoadingState || showInitialErrorState || showEmptyState;
   const segmentedToggleSx = {
@@ -864,6 +943,32 @@ export const QuitterFeedWidget = ({
       'background-color 140ms ease, border-color 140ms ease, color 140ms ease',
     whiteSpace: 'nowrap',
   } as const;
+  const segmentedGroupSx = {
+    alignItems: 'center',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? alpha(theme.palette.common.white, 0.04)
+        : alpha(theme.palette.text.primary, 0.04),
+    border: `1px solid ${alpha(
+      theme.palette.border.main,
+      theme.palette.mode === 'dark' ? 0.16 : 0.1
+    )}`,
+    borderRadius: '999px',
+    display: 'inline-flex',
+    gap: '4px',
+    p: '2px',
+  } as const;
+  const segmentSx = (active: boolean) => ({
+    ...segmentedToggleSx,
+    backgroundColor: active
+      ? alpha(theme.palette.primary.main, 0.18)
+      : 'transparent',
+    border: `1px solid ${alpha(
+      theme.palette.border.main,
+      active ? (theme.palette.mode === 'dark' ? 0.28 : 0.18) : 0
+    )}`,
+    color: active ? theme.palette.text.primary : theme.palette.text.secondary,
+  });
 
   return (
     <>
@@ -888,87 +993,41 @@ export const QuitterFeedWidget = ({
               pb: '8px',
             }}
           >
-            <Box
-              sx={{
-                alignItems: 'center',
-                backgroundColor:
-                  theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.04)
-                    : alpha(theme.palette.text.primary, 0.04),
-                border: `1px solid ${alpha(
-                  theme.palette.border.main,
-                  theme.palette.mode === 'dark' ? 0.16 : 0.1
-                )}`,
-                borderRadius: '999px',
-                display: 'inline-flex',
-                gap: '4px',
-                p: '2px',
-              }}
-            >
+            <Box sx={segmentedGroupSx}>
               <ButtonBase
+                aria-pressed={feedMode === 'general'}
                 disableRipple
                 onClick={handleSelectGeneralFeed}
-                sx={{
-                  ...segmentedToggleSx,
-                  backgroundColor:
-                    feedMode === 'general'
-                      ? alpha(theme.palette.primary.main, 0.18)
-                      : 'transparent',
-                  border: `1px solid ${alpha(
-                    theme.palette.border.main,
-                    feedMode === 'general'
-                      ? theme.palette.mode === 'dark'
-                        ? 0.28
-                        : 0.18
-                      : 0
-                  )}`,
-                  color:
-                    feedMode === 'general'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary,
-                }}
+                sx={segmentSx(feedMode === 'general')}
               >
                 {t('quitter_feed.tab_general')}
               </ButtonBase>
               <ButtonBase
+                aria-pressed={feedMode === 'following'}
                 disableRipple
                 onClick={handleSelectFollowingFeed}
-                sx={{
-                  ...segmentedToggleSx,
-                  backgroundColor:
-                    feedMode === 'following'
-                      ? alpha(theme.palette.primary.main, 0.18)
-                      : 'transparent',
-                  border: `1px solid ${alpha(
-                    theme.palette.border.main,
-                    feedMode === 'following'
-                      ? theme.palette.mode === 'dark'
-                        ? 0.28
-                        : 0.18
-                      : 0
-                  )}`,
-                  color:
-                    feedMode === 'following'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary,
-                }}
+                sx={segmentSx(feedMode === 'following')}
               >
                 {t('quitter_feed.tab_following')}
               </ButtonBase>
             </Box>
-            <Typography
-              sx={{
-                color: theme.palette.text.secondary,
-                fontSize: '0.67rem',
-                fontWeight: 600,
-                letterSpacing: '0.01em',
-                whiteSpace: 'nowrap',
-              }}
+            <Box
+              aria-label={t('quitter_feed.feed_app')}
+              role="group"
+              sx={segmentedGroupSx}
             >
-              {feedMode === 'following'
-                ? t('quitter_feed.subtitle_personalized')
-                : t('quitter_feed.subtitle_public')}
-            </Typography>
+              {FEED_APPS.map((app) => (
+                <ButtonBase
+                  aria-pressed={feedApp === app}
+                  disableRipple
+                  key={app}
+                  onClick={() => handleSelectFeedApp(app)}
+                  sx={segmentSx(feedApp === app)}
+                >
+                  {app}
+                </ButtonBase>
+              ))}
+            </Box>
           </Box>
 
           {!showStatePanel && items.length > 0 ? (

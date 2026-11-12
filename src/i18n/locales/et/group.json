@@ -413,6 +413,8 @@
     "system_settings": "Süsteemi seaded",
     "system_settings_description": "Halda teavitusi, liikumist, kinnitatud appe ja blokeeritud kontosid.",
     "toggle_privacy_mode": "Lülita privaatsusrežiimi",
+    "torq_feed": "Torq voog",
+    "torq_feed_module_desc": "Kuva avalehel Torqi voo moodul. Lülita välja, et seda ei renderdataks.",
     "unavailable": "Pole saadaval",
     "unblock": "Eemalda blokeering",
     "using_node": "Kasutatav sõlm",

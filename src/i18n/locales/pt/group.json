@@ -413,6 +413,8 @@
     "system_settings": "Definições do sistema",
     "system_settings_description": "Controle notificações, movimento, apps afixadas e contas bloqueadas.",
     "toggle_privacy_mode": "Alternar modo privacidade",
+    "torq_feed": "Feed Torq",
+    "torq_feed_module_desc": "Mostre o módulo Feed Torq no Início. Desative para deixar de o renderizar.",
     "unavailable": "Indisponivel",
     "unblock": "Desbloquear",
     "using_node": "Nó em uso",

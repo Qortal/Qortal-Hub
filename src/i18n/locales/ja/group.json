@@ -413,6 +413,8 @@
     "system_settings": "システム設定",
     "system_settings_description": "通知、モーション、ピン留めアプリ、ブロック済みアカウントを制御します。",
     "toggle_privacy_mode": "プライバシーモードの切替",
+    "torq_feed": "Torq フィード",
+    "torq_feed_module_desc": "ホームに Torq フィードモジュールを表示します。オフにするとレンダリングされません。",
     "unavailable": "利用不可",
     "unblock": "ブロック解除",
     "using_node": "使用中のノード",

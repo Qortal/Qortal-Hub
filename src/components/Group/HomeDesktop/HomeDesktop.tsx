@@ -1,5 +1,6 @@
 import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import { useAtomValue } from 'jotai';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import { alpha, darken } from '@mui/material/styles';
 import {
@@ -41,6 +42,7 @@ import {
   HomeWidgetsPanel,
   canHostHomeWidgets,
 } from '../../HomeWidgets/HomeWidgetsPanel';
+import { feedAppAtom } from '../../Widgets/quitter/feedApp';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
 import { OnlineUsersBadge } from './OnlineUsersBadge';
@@ -512,10 +514,11 @@ export const HomeDesktop = ({
     executeEvent('newTabWindow', {});
     setDesktopViewMode('apps');
   }, [setDesktopViewMode]);
-  const handleOpenEmbeddedQuitter = useCallback(() => {
-    executeEvent('addTab', { data: { service: 'APP', name: 'Quitter' } });
+  const feedApp = useAtomValue(feedAppAtom);
+  const handleOpenFeedApp = useCallback(() => {
+    executeEvent('addTab', { data: { service: 'APP', name: feedApp } });
     executeEvent('open-apps-mode', {});
-  }, []);
+  }, [feedApp]);
   const handleOpenQChatPanel = useCallback(() => {
     returnToQChat(setGroupSection, openQChatTab);
   }, [setGroupSection]);
@@ -995,7 +998,7 @@ export const HomeDesktop = ({
                     }
                     actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
                     height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                    onAction={handleOpenEmbeddedQuitter}
+                    onAction={handleOpenFeedApp}
                     onRefresh={handleRefreshQuitterWidget}
                     onSwap={
                       areBothDashboardModulesVisible
@@ -1005,7 +1008,11 @@ export const HomeDesktop = ({
                     order={quitterCardOrder}
                     panelRef={quitterCardHeightRef}
                     refreshing={isQuitterWidgetRefreshing}
-                    title={td('quitter_feed', 'Quitter Feed')}
+                    title={
+                      feedApp === 'Torq'
+                        ? td('torq_feed', 'Torq Feed')
+                        : td('quitter_feed', 'Quitter Feed')
+                    }
                     widgetId="quitter"
                   >
                     <QuitterFeedWidget

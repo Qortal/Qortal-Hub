@@ -110,6 +110,7 @@ import {
   type AutoLockTimeoutMinutes,
 } from '../../lib/autoLock';
 import { requestHubOnboardingRestart } from '../Onboarding/hubOnboarding';
+import { feedAppAtom } from '../Widgets/quitter/feedApp';
 
 type HomeProfileCardProps = {
   onOpenReceive?: (anchorEl: HTMLElement) => void;
@@ -294,6 +295,7 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
   const [isWidgetsModuleVisible, setIsWidgetsModuleVisible] = useState(() =>
     readStoredBoolean(HOME_WIDGETS_VISIBLE_STORAGE_KEY, true)
   );
+  const feedApp = useAtomValue(feedAppAtom);
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
   const [reticulumManagedConfigEnabled, setReticulumManagedConfigEnabled] =
     useState(true);
@@ -4488,7 +4490,9 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                             letterSpacing: '0.01em',
                           }}
                         >
-                          {td('quitter_feed_module', 'Quitter Feed')}
+                          {feedApp === 'Torq'
+                            ? td('torq_feed', 'Torq Feed')
+                            : td('quitter_feed_module', 'Quitter Feed')}
                         </Typography>
                         <Typography
                           sx={{
@@ -4498,10 +4502,15 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                             mt: 0.4,
                           }}
                         >
-                          {td(
-                            'quitter_feed_module_desc',
-                            'Show the Quitter Feed module on Home. Turn off to stop rendering it.'
-                          )}
+                          {feedApp === 'Torq'
+                            ? td(
+                                'torq_feed_module_desc',
+                                'Show the Torq Feed module on Home. Turn off to stop rendering it.'
+                              )
+                            : td(
+                                'quitter_feed_module_desc',
+                                'Show the Quitter Feed module on Home. Turn off to stop rendering it.'
+                              )}
                         </Typography>
                       </Box>
                       <Switch

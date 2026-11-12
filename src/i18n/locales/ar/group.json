@@ -413,6 +413,8 @@
     "system_settings": "إعدادات النظام",
     "system_settings_description": "تحكّم في الإشعارات والحركة والتطبيقات المثبّتة والحسابات المحظورة.",
     "toggle_privacy_mode": "تبديل وضع الخصوصية",
+    "torq_feed": "موجز Torq",
+    "torq_feed_module_desc": "اعرض وحدة موجز Torq في الصفحة الرئيسية. أوقفها لمنع عرضها.",
     "unavailable": "غير متاح",
     "unblock": "إلغاء الحظر",
     "using_node": "العقدة المستخدمة",

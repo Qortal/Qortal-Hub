@@ -413,6 +413,8 @@
     "system_settings": "Impostazioni di sistema",
     "system_settings_description": "Controlla notifiche, movimento, app appuntate e account bloccati.",
     "toggle_privacy_mode": "Alterna modalità privacy",
+    "torq_feed": "Feed Torq",
+    "torq_feed_module_desc": "Mostra il modulo Feed Torq nella Home. Disattivalo per non renderizzarlo.",
     "unavailable": "Non disponibile",
     "unblock": "Sblocca",
     "using_node": "Nodo in uso",

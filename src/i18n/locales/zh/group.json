@@ -413,6 +413,8 @@
     "system_settings": "系统设置",
     "system_settings_description": "控制通知、动效、固定应用与已屏蔽账户。",
     "toggle_privacy_mode": "切换隐私模式",
+    "torq_feed": "Torq 动态",
+    "torq_feed_module_desc": "在首页显示 Torq 动态模块。关闭后将不再渲染。",
     "unavailable": "不可用",
     "unblock": "解除屏蔽",
     "using_node": "当前节点",

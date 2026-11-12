@@ -413,6 +413,8 @@
     "system_settings": "Paramètres système",
     "system_settings_description": "Contrôlez les notifications, les animations, les apps épinglées et les comptes bloqués.",
     "toggle_privacy_mode": "Activer ou désactiver le mode confidentialité",
+    "torq_feed": "Fil Torq",
+    "torq_feed_module_desc": "Affichez le module Fil Torq sur l’accueil. Désactivez-le pour ne plus le rendre.",
     "unavailable": "Indisponible",
     "unblock": "Débloquer",
     "using_node": "Nœud utilisé",

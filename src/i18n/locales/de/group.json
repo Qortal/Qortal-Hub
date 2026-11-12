@@ -413,6 +413,8 @@
     "system_settings": "Systemeinstellungen",
     "system_settings_description": "Steuere Benachrichtigungen, Bewegung, angeheftete Apps und blockierte Konten.",
     "toggle_privacy_mode": "Privatsphaere-Modus umschalten",
+    "torq_feed": "Torq-Feed",
+    "torq_feed_module_desc": "Zeige das Torq-Feed-Modul auf der Startseite. Deaktiviere es, damit es nicht gerendert wird.",
     "unavailable": "Nicht verfuegbar",
     "unblock": "Entsperren",
     "using_node": "Verwendeter Node",
