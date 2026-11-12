@@ -30,11 +30,49 @@ interface LauncherAppIconProps {
   badge?: ReactNode;
 }
 
+/** A picture as it is being asked for: what it is of, where from, how far. */
+type PictureRequest = {
+  appName: string | null | undefined;
+  src: string | null | undefined;
+  /** The node in use when the picture was asked for. */
+  nodeUrl: string | undefined;
+  /** Where it is asked from: `src`, or the thumbnail the node serves. */
+  address: string | null;
+  /** How many times it was asked for again after a failure. */
+  attempt: number;
+  status: 'loading' | 'loaded' | 'failed';
+  /** True once a try has failed: the logo stands in until a picture shows. */
+  hasFailed: boolean;
+};
+
+const askForPicture = (
+  appName: string | null | undefined,
+  src: string | null | undefined,
+  nodeUrl: string | undefined,
+  attempt = 0,
+  hasFailed = false
+): PictureRequest => ({
+  appName,
+  src,
+  nodeUrl,
+  // The address is built for each try: the node in use may have changed.
+  address:
+    src ||
+    (appName
+      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true${
+          attempt ? `&retry=${attempt}` : ''
+        }`
+      : null),
+  attempt,
+  status: 'loading',
+  hasFailed,
+});
+
 /**
  * The rounded square that holds an app's picture. A node that is busy can
  * fail to answer at first, so its pictures are asked for again a few times,
  * and again when the node changes. The Qortal logo stands in meanwhile, and
- * for good when there is no picture.
+ * for good when there is no picture. A picture that is showing is kept.
  */
 export const LauncherAppIcon = ({
   src,
@@ -42,47 +80,72 @@ export const LauncherAppIcon = ({
   children,
   badge,
 }: LauncherAppIconProps) => {
-  const [attempt, setAttempt] = useState(0);
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'failed'>(
-    'loading'
+  const nodeUrl = useAtomValue(selectedNodeInfoAtom)?.url;
+  const [request, setRequest] = useState(() =>
+    askForPicture(appName, src, nodeUrl)
   );
 
-  const nodeUrl = useAtomValue(selectedNodeInfoAtom)?.url;
+  // Another app starts over, and so does another node for a picture that is
+  // not showing: that node may have what this one did not. This is decided
+  // while rendering, not in an effect. A picture the browser already holds
+  // in memory loads before the effects run, and an effect that set it back
+  // to "loading" then would leave it hidden for good.
+  const isAnotherApp =
+    (request.appName ?? null) !== (appName ?? null) ||
+    (request.src ?? null) !== (src ?? null);
+  const isAnotherNode =
+    request.nodeUrl !== nodeUrl && request.status !== 'loaded';
+  if (isAnotherApp || isAnotherNode) {
+    const next = askForPicture(
+      appName,
+      src,
+      nodeUrl,
+      0,
+      isAnotherApp ? false : request.hasFailed
+    );
+    // The same address is the same picture on the page: it does not load
+    // again, so one that is showing stays as it is.
+    setRequest(
+      next.address === request.address && request.status === 'loaded'
+        ? { ...next, status: 'loaded' }
+        : next
+    );
+  }
 
   useEffect(() => {
-    setAttempt(0);
-    setStatus('loading');
-  }, [appName, src]);
-
-  // Another node may have the picture this one did not.
-  useEffect(() => {
-    setAttempt(0);
-    setStatus((current) => (current === 'loaded' ? current : 'loading'));
-  }, [nodeUrl]);
-
-  useEffect(() => {
-    if (status !== 'failed' || src || !appName) return;
-    if (attempt >= PICTURE_RETRY_DELAYS_MS.length) return;
+    if (request.status !== 'failed' || request.src || !request.appName) return;
+    if (request.attempt >= PICTURE_RETRY_DELAYS_MS.length) return;
     const timer = setTimeout(() => {
-      setAttempt((current) => current + 1);
-      setStatus('loading');
-    }, PICTURE_RETRY_DELAYS_MS[attempt]);
+      setRequest((current) =>
+        current === request
+          ? askForPicture(
+              current.appName,
+              current.src,
+              current.nodeUrl,
+              current.attempt + 1,
+              true
+            )
+          : current
+      );
+    }, PICTURE_RETRY_DELAYS_MS[request.attempt]);
     return () => clearTimeout(timer);
-  }, [appName, attempt, src, status]);
+  }, [request]);
 
-  // The address is built for each try: the node in use may have changed.
-  const picture =
-    src ||
-    (appName
-      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true${
-          attempt ? `&retry=${attempt}` : ''
-        }`
-      : null);
-  const showPicture = !!picture && status !== 'failed' && !children;
+  const { address, status } = request;
+  /** What became of the picture at this address; an older one is ignored. */
+  const settle = (outcome: 'loaded' | 'failed') =>
+    setRequest((current) =>
+      current.address === address
+        ? {
+            ...current,
+            status: outcome,
+            hasFailed: current.hasFailed || outcome === 'failed',
+          }
+        : current
+    );
+  const showPicture = !!address && status !== 'failed' && !children;
   const showLogo =
-    !children &&
-    status !== 'loaded' &&
-    (!picture || status === 'failed' || attempt > 0);
+    !children && status !== 'loaded' && (!address || request.hasFailed);
 
   return (
     <Box
@@ -123,10 +186,10 @@ export const LauncherAppIcon = ({
             alt=""
             component="img"
             draggable={false}
-            key={picture}
-            onError={() => setStatus('failed')}
-            onLoad={() => setStatus('loaded')}
-            src={picture}
+            key={address}
+            onError={() => settle('failed')}
+            onLoad={() => settle('loaded')}
+            src={address}
             sx={{
               height: '100%',
               inset: 0,
