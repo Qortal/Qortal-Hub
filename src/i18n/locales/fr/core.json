@@ -699,6 +699,7 @@
   "name": "nom",
   "name_app": "nom / application",
   "navbar": {
+    "search_library": "Rechercher « {{query}} » dans les Q-Apps",
     "search_placeholder": "Rechercher des Q-Apps ou saisir qortal://",
     "session": {
       "lock_description": "Garder les discussions et les appels connectés",
@@ -707,7 +708,12 @@
       "logout_title": "Se déconnecter",
       "menu_aria": "Options de session",
       "tooltip": "Verrouiller ou se déconnecter"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Site web"
+    },
+    "suggestions": "Suggestions"
   },
   "new_post_in": "nouveau message dans {{ title }}",
   "none": "aucun",

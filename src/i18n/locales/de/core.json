@@ -699,6 +699,7 @@
   "name": "Name",
   "name_app": "Name/App",
   "navbar": {
+    "search_library": "Q-Apps nach „{{query}}“ durchsuchen",
     "search_placeholder": "Q-Apps durchsuchen oder qortal:// eingeben",
     "session": {
       "lock_description": "Chats und Anrufe bleiben verbunden",
@@ -707,7 +708,12 @@
       "logout_title": "Abmelden",
       "menu_aria": "Sitzungsoptionen",
       "tooltip": "Sperren oder abmelden"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Website"
+    },
+    "suggestions": "Vorschläge"
   },
   "new_post_in": "neuer Beitrag in {{ title }}",
   "none": "keiner",

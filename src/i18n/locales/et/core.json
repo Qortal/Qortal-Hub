@@ -699,6 +699,7 @@
   "name": "nimi",
   "name_app": "nimi/rakendus",
   "navbar": {
+    "search_library": "Otsi Q-Appidest „{{query}}“",
     "search_placeholder": "Otsi Q-Appe või sisesta qortal://",
     "session": {
       "lock_description": "Hoia vestlused ja kõned ühendatuna",
@@ -707,7 +708,12 @@
       "logout_title": "Logi välja",
       "menu_aria": "Sessiooni valikud",
       "tooltip": "Lukusta või logi välja"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Veebileht"
+    },
+    "suggestions": "Soovitused"
   },
   "new_post_in": "uus postitus kohas {{ title }}",
   "none": "puudub",

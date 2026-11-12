@@ -699,6 +699,7 @@
   "name": "名前",
   "name_app": "名前/アプリ",
   "navbar": {
+    "search_library": "Q-Apps で「{{query}}」を検索",
     "search_placeholder": "Q-Appsを検索、または qortal:// を入力",
     "session": {
       "lock_description": "チャットと通話の接続を維持します",
@@ -707,7 +708,12 @@
       "logout_title": "ログアウト",
       "menu_aria": "セッションのオプション",
       "tooltip": "ロックまたはログアウト"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Webサイト"
+    },
+    "suggestions": "候補"
   },
   "new_post_in": "{{ title }} の新しい投稿",
   "none": "なし",
