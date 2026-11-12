@@ -484,6 +484,7 @@
       "network_generic": "võrguviga",
       "password_not_matching": "paroolid ei kattu!",
       "password_wrong": "autentimine ebaõnnestus. Vale parool",
+      "private_app_needs_own_node": "see privaatne rakendus avaneb ainult sinu enda haardes, selle API võtmega",
       "publish_app": "rakendust ei saa avaldada",
       "publish_image": "pilti ei saa avaldada",
       "rate": "hinnangut ei saa lisada",
