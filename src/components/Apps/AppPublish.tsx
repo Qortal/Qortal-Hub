@@ -23,12 +23,34 @@ import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
+import {
+  QDN_DESCRIPTION_MAX_BYTES,
+  QDN_TITLE_MAX_BYTES,
+  limitQdnDescription,
+  limitQdnTag,
+  limitQdnTitle,
+  utf8ByteLength,
+} from '../../utils/qdnMetadataLimits';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
 const TAG_MAX_CHARS = 20;
+
+/**
+ * Text state whose setter applies Core's metadata limit, so the form shows what
+ * Core will keep: it cuts the title and description by UTF-8 bytes, not
+ * characters (see utils/qdnMetadataLimits.ts).
+ */
+const useLimitedText = (limit: (value: string) => string) => {
+  const [value, setValue] = useState('');
+  const setLimited = useCallback(
+    (next: string) => setValue(limit(next)),
+    [limit]
+  );
+  return [value, setLimited] as const;
+};
 
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
@@ -86,19 +108,19 @@ export const AppPublish = ({
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(initialName);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useLimitedText(limitQdnTitle);
+  const [description, setDescription] = useLimitedText(limitQdnDescription);
   const [category, setCategory] = useState('');
   const [appType, setAppType] = useState(initialAppType);
   const [file, setFile] = useState(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
-  const [tag1, setTag1] = useState('');
-  const [tag2, setTag2] = useState('');
-  const [tag3, setTag3] = useState('');
-  const [tag4, setTag4] = useState('');
-  const [tag5, setTag5] = useState('');
+  const [tag1, setTag1] = useLimitedText(limitQdnTag);
+  const [tag2, setTag2] = useLimitedText(limitQdnTag);
+  const [tag3, setTag3] = useLimitedText(limitQdnTag);
+  const [tag4, setTag4] = useLimitedText(limitQdnTag);
+  const [tag5, setTag5] = useLimitedText(limitQdnTag);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [isLoading, setIsLoading] = useState('');
@@ -456,7 +478,7 @@ export const AppPublish = ({
             })}
           </InputLabel>
           {activeField === 'title' && (
-            <CounterText>{`${title.length}/${TITLE_MAX_CHARS}`}</CounterText>
+            <CounterText>{`${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`}</CounterText>
           )}
         </LabelRow>
 
@@ -491,7 +513,7 @@ export const AppPublish = ({
             })}
           </InputLabel>
           {activeField === 'description' && (
-            <CounterText>{`${description.length}/${DESCRIPTION_MAX_CHARS}`}</CounterText>
+            <CounterText>{`${utf8ByteLength(description)}/${QDN_DESCRIPTION_MAX_BYTES}`}</CounterText>
           )}
         </LabelRow>
 
