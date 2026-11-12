@@ -484,6 +484,7 @@
       "network_generic": "errore di rete",
       "password_not_matching": "i campi della password non corrispondono!",
       "password_wrong": "impossibile autenticare. Password sbagliata.",
+      "private_app_needs_own_node": "questa app privata si apre solo sul tuo nodo, con la sua chiave API",
       "publish_app": "impossibile pubblicare l'app",
       "publish_image": "impossibile pubblicare l'immagine",
       "rate": "impossibile valutare",

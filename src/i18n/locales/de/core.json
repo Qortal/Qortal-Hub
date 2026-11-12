@@ -484,6 +484,7 @@
       "network_generic": "Netzwerkfehler",
       "password_not_matching": "Passwortfelder stimmen nicht überein!",
       "password_wrong": "authentifizieren nicht. Falsches Passwort",
+      "private_app_needs_own_node": "Diese private App lässt sich nur über deinen eigenen Knoten mit seinem API-Schlüssel öffnen",
       "publish_app": "App kann nicht veröffentlichen",
       "publish_image": "Image kann nicht veröffentlichen",
       "rate": "bewerten nicht",

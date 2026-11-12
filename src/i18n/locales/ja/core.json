@@ -484,6 +484,7 @@
       "network_generic": "ネットワークエラー",
       "password_not_matching": "パスワードフィールドは一致しません！",
       "password_wrong": "認証できません。間違ったパスワード",
+      "private_app_needs_own_node": "このプライベートアプリは、自分のノードとそのAPIキーでのみ開けます",
       "publish_app": "アプリを公開できません",
       "publish_image": "画像を公開できません",
       "rate": "評価できません",

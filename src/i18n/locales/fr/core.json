@@ -484,6 +484,7 @@
       "network_generic": "erreur de réseau",
       "password_not_matching": "Les champs de mot de passe ne correspondent pas!",
       "password_wrong": "Impossible d'authentifier. Mauvais mot de passe",
+      "private_app_needs_own_node": "cette application privée ne s'ouvre que sur votre propre nœud, avec sa clé API",
       "publish_app": "Impossible de publier l'application",
       "publish_image": "Impossible de publier l'image",
       "rate": "incapable de noter",
