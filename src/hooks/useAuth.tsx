@@ -42,6 +42,7 @@ import { ApiKey } from '../types/auth';
 import { useModalGlobal } from './useModalGlobal';
 import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import { saveLastAuthenticatedWalletAddress } from '../utils/lastAuthenticatedWallet';
+import { isLoopbackNodeUrl } from '../utils/loopbackNodeUrl';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
@@ -208,7 +209,9 @@ export const useAuth = () => {
 
         // Assuming the response is in plain text and will be 'true' or 'false'
         const data = await response.text();
-        if (data && data === 'true') {
+        // Core skips the key only for requests from its own machine, so the
+        // bypass counts only for a loopback node URL, not a node on the LAN.
+        if (data && data === 'true' && isLoopbackNodeUrl(baseUrl)) {
           isValid = true;
         } else {
           try {
