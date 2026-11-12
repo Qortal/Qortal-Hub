@@ -22,6 +22,7 @@ import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
 import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
+import { joinNodeEndpoint } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
 import {
@@ -329,19 +330,27 @@ export const isUsingLocal = async () => {
   }
 };
 
+/**
+ * The full node URL for `endpoint`, a path starting with "/", with the node API
+ * key when one is set. Throws for a path the URL parser could rewrite (a "." or
+ * ".." segment, raw or percent-encoded, a control character, or a "#" in the
+ * path) and for one that would leave the node, so text from a Q-App can't
+ * steer the key to another endpoint (see utils/nodeEndpointPath.ts).
+ */
 export const createEndpoint = async (endpoint, customApi?: string) => {
   if (customApi) {
-    return `${customApi}${endpoint}`;
+    return joinNodeEndpoint(customApi, endpoint);
   }
 
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
 
   if (apiKey?.url) {
+    const url = joinNodeEndpoint(apiKey.url, endpoint);
     // Check if the endpoint already contains a query string
     const separator = endpoint.includes('?') ? '&' : '?';
-    return `${apiKey?.url}${endpoint}${separator}apiKey=${apiKey?.apikey}`;
+    return `${url}${separator}apiKey=${apiKey?.apikey}`;
   } else {
-    return `${groupApi}${endpoint}`;
+    return joinNodeEndpoint(groupApi, endpoint);
   }
 };
 
@@ -1483,7 +1492,9 @@ export async function createBuyOrderTx({
         : 'Unable to execute buy order',
       atAddresses: isPirateChain ? [atAddresses[0]] : atAddresses,
       senderAddress: address,
-      node: url,
+      // Without the query: it holds the node API key. Same as the local
+      // trade path (local-trade-funding.ts).
+      node: url.split('?')[0],
     },
   };
 }

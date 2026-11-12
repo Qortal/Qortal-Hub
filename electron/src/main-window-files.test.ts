@@ -9,8 +9,45 @@ import {
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMainWindowFileIpc } from './main-window-files';
+import {
+  installMainWindowFileCleanup,
+  registerMainWindowFileIpc,
+} from './main-window-files';
+
+describe('main window file cleanup lifecycle', () => {
+  it('cleans up after destruction without reading destroyed native objects', () => {
+    const contents = new EventEmitter();
+    let destroyed = false;
+    Object.defineProperty(contents, 'id', {
+      get: () => {
+        if (destroyed) throw new TypeError('Object has been destroyed');
+        return 42;
+      },
+    });
+    const cleanup = vi.fn();
+    installMainWindowFileCleanup(contents as any, cleanup);
+    contents.emit('did-navigate');
+    contents.emit('render-process-gone');
+    destroyed = true;
+    expect(() => contents.emit('destroyed')).not.toThrow();
+    expect(cleanup.mock.calls).toEqual([[42], [42], [42]]);
+  });
+
+  it('ignores blocked navigations and unrelated guest lifecycles', () => {
+    const contents = Object.assign(new EventEmitter(), { id: 42 });
+    const guest = Object.assign(new EventEmitter(), { id: 43 });
+    const cleanup = vi.fn();
+    installMainWindowFileCleanup(contents as any, cleanup);
+    contents.emit('will-navigate');
+    guest.emit('did-navigate');
+    guest.emit('destroyed');
+    expect(cleanup).not.toHaveBeenCalled();
+    contents.emit('destroyed');
+    expect(cleanup).toHaveBeenCalledExactlyOnceWith(42);
+  });
+});
 
 describe('main window file selections', () => {
   let root: string;
