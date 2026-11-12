@@ -30,6 +30,22 @@ Reticulum overlay
 
 Events are signed and stored locally. The UI reads local history from SQLite and receives live events from the manager.
 
+### History age and message expiry
+
+Authenticated group history pages and exact-event downloads (including reply
+recovery) validate old signed events without the live-event 30-day age cutoff.
+The request itself must still be fresh. Event payload hashes, signatures,
+future timestamp limits, group membership, channel permissions and response
+scope checks still apply. Age alone must not count as a peer protocol violation
+or abort a history page.
+
+The database separately enforces channel and message expiry, deletion and
+deduplication. Expired-event markers prevent a downloaded original from coming
+back after expiry settings change. A valid but expired exact-event response
+finishes its pending pull without emitting a message or retrying other peers.
+Live/control traffic and relay-cache admission retain their existing freshness
+limits.
+
 ### Current Background Subscription Flow
 
 When the app loads the user's joined groups, the renderer sends all local group memberships to the main process and subscribes to each group.
@@ -97,6 +113,17 @@ resource_find (rf)
 ```
 
 This is conceptually separate from chat sync. RCHAT overlay messages only discover providers and route provider hints; the byte-range request is sent on the dedicated resource link after a provider is known.
+
+Completed downloads can send signed replica-retention receipts. The wallet
+signing policy allows the exact group and DM receipt fields. DM receipts use
+a compact positional wire format to fit the 383-byte overlay limit: recipient,
+file hash, size, retention deadline, provider peer hash, public key, timestamp,
+and signature. File and peer hashes use the existing compact encodings; the
+conversation ID is reconstructed from the signer and recipient. The signature
+still covers the full original fields, including the conversation ID. Updated
+receivers accept both compact and legacy object receipts, with the same
+signature, sender, scope, and retention checks. Older receivers cannot process
+the compact form; they need an update to record these DM receipts.
 
 ## Problems With The Current Model
 
