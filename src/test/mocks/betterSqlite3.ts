@@ -1542,6 +1542,12 @@ class Statement {
         }
         return { seq };
       }
+      if (this.sql.includes('WHERE event_id = ?')) {
+        const [eventId] = args;
+        return this.store.reticulumChatExpiredEventMarkers.find(
+          (row) => row.event_id === eventId
+        );
+      }
     }
     if (this.sql.includes('FROM rchat_schema_migrations')) {
       const [name] = args;
