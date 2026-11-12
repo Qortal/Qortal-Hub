@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AppLibrarySubTitle,
   AppPublishTagsContainer,
@@ -23,12 +30,39 @@ import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
+import {
+  QDN_DESCRIPTION_MAX_BYTES,
+  QDN_TITLE_MAX_BYTES,
+  limitQdnDescription,
+  limitQdnTag,
+  limitQdnTitle,
+  utf8ByteLength,
+} from '../../utils/qdnMetadataLimits';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
+import {
+  EMPTY_PREFILL,
+  PublishPrefill,
+  loadPublishPrefill,
+} from './appPublishPrefill';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
 const TAG_MAX_CHARS = 20;
+
+/**
+ * Text state whose setter applies Core's metadata limit, so the form shows what
+ * Core will keep: it cuts the title and description by UTF-8 bytes, not
+ * characters (see utils/qdnMetadataLimits.ts).
+ */
+const useLimitedText = (limit: (value: string) => string) => {
+  const [value, setValue] = useState('');
+  const setLimited = useCallback(
+    (next: string) => setValue(limit(next)),
+    [limit]
+  );
+  return [value, setLimited] as const;
+};
 
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
@@ -86,23 +120,29 @@ export const AppPublish = ({
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(initialName);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useLimitedText(limitQdnTitle);
+  const [description, setDescription] = useLimitedText(limitQdnDescription);
   const [category, setCategory] = useState('');
   const [appType, setAppType] = useState(initialAppType);
   const [file, setFile] = useState(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
-  const [tag1, setTag1] = useState('');
-  const [tag2, setTag2] = useState('');
-  const [tag3, setTag3] = useState('');
-  const [tag4, setTag4] = useState('');
-  const [tag5, setTag5] = useState('');
+  const [tag1, setTag1] = useLimitedText(limitQdnTag);
+  const [tag2, setTag2] = useLimitedText(limitQdnTag);
+  const [tag3, setTag3] = useLimitedText(limitQdnTag);
+  const [tag4, setTag4] = useLimitedText(limitQdnTag);
+  const [tag5, setTag5] = useLimitedText(limitQdnTag);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [isLoading, setIsLoading] = useState('');
+  const [prefillPending, setPrefillPending] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
+  // The latest prefill; an answer for an earlier name or type is dropped.
+  const prefillRunRef = useRef(0);
+  // Fields the user changed since that prefill started: it never overwrites them.
+  const editedFieldsRef = useRef(new Set<string>());
+  const markEdited = (field: string) => editedFieldsRef.current.add(field);
   const maxFileSize = appType === 'APP' ? 50 * 1024 * 1024 : 400 * 1024 * 1024; // 50MB or 400MB
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -132,58 +172,70 @@ export const AppPublish = ({
     },
   });
 
-  const getQapp = useCallback(async (name, appType) => {
-    try {
-      setIsLoading('Loading app information');
-      const url = `${getBaseApiReact()}/arbitrary/resources/search?service=${appType}&mode=ALL&name=${name}&includemetadata=true`;
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response?.ok) return;
-      const responseData = await response.json();
-
-      if (responseData?.length > 0) {
-        const myApp = responseData[0];
-        setTitle((myApp?.metadata?.title || '').slice(0, TITLE_MAX_CHARS));
-        setDescription(
-          (myApp?.metadata?.description || '').slice(0, DESCRIPTION_MAX_CHARS)
-        );
-        setCategory(myApp?.metadata?.category || '');
-        const rawTags = myApp?.metadata?.tags;
-        const tags: string[] = Array.isArray(rawTags)
-          ? rawTags
-          : typeof rawTags === 'string'
-            ? rawTags
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : [];
-        setTag1((tags[0] || '').slice(0, TAG_MAX_CHARS));
-        setTag2((tags[1] || '').slice(0, TAG_MAX_CHARS));
-        setTag3((tags[2] || '').slice(0, TAG_MAX_CHARS));
-        setTag4((tags[3] || '').slice(0, TAG_MAX_CHARS));
-        setTag5((tags[4] || '').slice(0, TAG_MAX_CHARS));
-      }
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setIsLoading('');
-    }
-  }, []);
+  /** Fills in the form, except fields the user changed meanwhile. */
+  const applyPrefill = (prefill: PublishPrefill) => {
+    const edited = editedFieldsRef.current;
+    const setters: [string, (value: string) => void, string][] = [
+      ['title', setTitle, prefill.title.slice(0, TITLE_MAX_CHARS)],
+      [
+        'description',
+        setDescription,
+        prefill.description.slice(0, DESCRIPTION_MAX_CHARS),
+      ],
+      ['category', setCategory, prefill.category],
+      ...[setTag1, setTag2, setTag3, setTag4, setTag5].map(
+        (setTag, index) =>
+          [
+            `tag${index + 1}`,
+            setTag,
+            (prefill.tags[index] || '').slice(0, TAG_MAX_CHARS),
+          ] as [string, (value: string) => void, string]
+      ),
+    ];
+    setters.forEach(([field, setValue, value]) => {
+      if (!edited.has(field)) setValue(value);
+    });
+  };
 
   useEffect(() => {
     if (!name || !appType) return;
-    getQapp(name, appType);
+    const run = ++prefillRunRef.current;
+    editedFieldsRef.current = new Set();
+    const controller = new AbortController();
+    setPrefillPending(true);
+
+    loadPublishPrefill(getBaseApiReact(), appType, name, {
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (run !== prefillRunRef.current) return;
+        applyPrefill(result.kind === 'found' ? result.prefill : EMPTY_PREFILL);
+        if (result.kind === 'unavailable') {
+          setInfoSnack({
+            type: 'warning',
+            message: t('core:message.generic.app_details_unavailable', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+          });
+          setOpenSnack(true);
+        }
+      })
+      .catch(() => {
+        // Aborted: a newer name or type, or the form closed.
+      })
+      .finally(() => {
+        if (run === prefillRunRef.current) setPrefillPending(false);
+      });
+
+    return () => controller.abort();
   }, [name, appType]);
 
   const getNames = useCallback(async () => {
     if (!myAddress) return;
     try {
-      setIsLoading('Loading names');
+      setIsLoading(
+        t('core:loading.generic', { postProcess: 'capitalizeFirstChar' })
+      );
       const res = await fetch(
         `${getBaseApiReact()}/names/address/${myAddress}?limit=0`
       );
@@ -229,6 +281,8 @@ export const AppPublish = ({
   ]);
 
   const publishApp = async () => {
+    // Publishing before the form is filled in would replace the app's details.
+    if (prefillPending) return;
     try {
       const data = {
         name,
@@ -456,7 +510,7 @@ export const AppPublish = ({
             })}
           </InputLabel>
           {activeField === 'title' && (
-            <CounterText>{`${title.length}/${TITLE_MAX_CHARS}`}</CounterText>
+            <CounterText>{`${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`}</CounterText>
           )}
         </LabelRow>
 
@@ -464,7 +518,10 @@ export const AppPublish = ({
           value={title}
           onFocus={() => setActiveField('title')}
           onBlur={() => setActiveField(null)}
-          onChange={(e) => setTitle(e.target.value.slice(0, TITLE_MAX_CHARS))}
+          onChange={(e) => {
+            markEdited('title');
+            setTitle(e.target.value.slice(0, TITLE_MAX_CHARS));
+          }}
           sx={{
             border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
@@ -491,7 +548,7 @@ export const AppPublish = ({
             })}
           </InputLabel>
           {activeField === 'description' && (
-            <CounterText>{`${description.length}/${DESCRIPTION_MAX_CHARS}`}</CounterText>
+            <CounterText>{`${utf8ByteLength(description)}/${QDN_DESCRIPTION_MAX_BYTES}`}</CounterText>
           )}
         </LabelRow>
 
@@ -499,9 +556,10 @@ export const AppPublish = ({
           value={description}
           onFocus={() => setActiveField('description')}
           onBlur={() => setActiveField(null)}
-          onChange={(e) =>
-            setDescription(e.target.value.slice(0, DESCRIPTION_MAX_CHARS))
-          }
+          onChange={(e) => {
+            markEdited('description');
+            setDescription(e.target.value.slice(0, DESCRIPTION_MAX_CHARS));
+          }}
           sx={{
             border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
@@ -535,7 +593,10 @@ export const AppPublish = ({
             postProcess: 'capitalizeFirstChar',
           })}
           value={category}
-          onChange={(event) => setCategory(event?.target.value)}
+          onChange={(event) => {
+            markEdited('category');
+            setCategory(event?.target.value);
+          }}
         >
           <MenuItem value="">
             <em
@@ -571,7 +632,10 @@ export const AppPublish = ({
             value={tag1}
             onFocus={() => setActiveField('tag1')}
             onBlur={() => setActiveField(null)}
-            onChange={(e) => setTag1(e.target.value.slice(0, TAG_MAX_CHARS))}
+            onChange={(e) => {
+              markEdited('tag1');
+              setTag1(e.target.value.slice(0, TAG_MAX_CHARS));
+            }}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -591,7 +655,10 @@ export const AppPublish = ({
             value={tag2}
             onFocus={() => setActiveField('tag2')}
             onBlur={() => setActiveField(null)}
-            onChange={(e) => setTag2(e.target.value.slice(0, TAG_MAX_CHARS))}
+            onChange={(e) => {
+              markEdited('tag2');
+              setTag2(e.target.value.slice(0, TAG_MAX_CHARS));
+            }}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -611,7 +678,10 @@ export const AppPublish = ({
             value={tag3}
             onFocus={() => setActiveField('tag3')}
             onBlur={() => setActiveField(null)}
-            onChange={(e) => setTag3(e.target.value.slice(0, TAG_MAX_CHARS))}
+            onChange={(e) => {
+              markEdited('tag3');
+              setTag3(e.target.value.slice(0, TAG_MAX_CHARS));
+            }}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -631,7 +701,10 @@ export const AppPublish = ({
             value={tag4}
             onFocus={() => setActiveField('tag4')}
             onBlur={() => setActiveField(null)}
-            onChange={(e) => setTag4(e.target.value.slice(0, TAG_MAX_CHARS))}
+            onChange={(e) => {
+              markEdited('tag4');
+              setTag4(e.target.value.slice(0, TAG_MAX_CHARS));
+            }}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -651,7 +724,10 @@ export const AppPublish = ({
             value={tag5}
             onFocus={() => setActiveField('tag5')}
             onBlur={() => setActiveField(null)}
-            onChange={(e) => setTag5(e.target.value.slice(0, TAG_MAX_CHARS))}
+            onChange={(e) => {
+              markEdited('tag5');
+              setTag5(e.target.value.slice(0, TAG_MAX_CHARS));
+            }}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -702,7 +778,9 @@ export const AppPublish = ({
         <PublishQAppCTAButton
           sx={{
             alignSelf: 'center',
+            '&.Mui-disabled': { opacity: 0.5 },
           }}
+          disabled={prefillPending}
           onClick={publishApp}
         >
           {t('core:action.publish', { postProcess: 'capitalizeFirstChar' })}
@@ -710,9 +788,11 @@ export const AppPublish = ({
       </AppsWidthLimiter>
 
       <LoadingSnackbar
-        open={!!isLoading}
+        open={!!isLoading || prefillPending}
         info={{
-          message: isLoading,
+          message:
+            isLoading ||
+            t('core:loading.generic', { postProcess: 'capitalizeFirstChar' }),
         }}
       />
       <CustomizedSnackbars

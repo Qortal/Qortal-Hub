@@ -37,6 +37,10 @@ import {
 import { DashboardWidgetFrame } from '../../Widgets/DashboardWidgetFrame';
 import { GroupsWidget } from '../../Widgets/GroupsWidget';
 import { QuitterFeedWidget } from '../../Widgets/QuitterFeedWidget';
+import {
+  HomeWidgetsPanel,
+  canHostHomeWidgets,
+} from '../../HomeWidgets/HomeWidgetsPanel';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
 import { OnlineUsersBadge } from './OnlineUsersBadge';
@@ -64,6 +68,7 @@ import {
   HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
   HOME_SHARED_SIDE_RAIL_WIDTH_XL,
   HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
+  HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './homeDesktopConstants';
 import type {
   HomeCustomizableCardId,
@@ -128,6 +133,9 @@ export const HomeDesktop = ({
   const [isQuitterFeedModuleVisible, setIsQuitterFeedModuleVisible] = useState(
     () =>
       readStoredDashboardModuleVisible(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)
+  );
+  const [isWidgetsModuleVisible, setIsWidgetsModuleVisible] = useState(() =>
+    readStoredDashboardModuleVisible(HOME_WIDGETS_VISIBLE_STORAGE_KEY)
   );
   const [groupWidgetRefreshToken, setGroupWidgetRefreshToken] = useState(0);
   const [isGroupWidgetRefreshing, setIsGroupWidgetRefreshing] = useState(false);
@@ -217,6 +225,9 @@ export const HomeDesktop = ({
       );
       setIsQuitterFeedModuleVisible(
         readStoredDashboardModuleVisible(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)
+      );
+      setIsWidgetsModuleVisible(
+        readStoredDashboardModuleVisible(HOME_WIDGETS_VISIBLE_STORAGE_KEY)
       );
     };
 
@@ -924,6 +935,12 @@ export const HomeDesktop = ({
                 </Box>
               </Box>
             </Box>
+
+            {isWidgetsModuleVisible && canHostHomeWidgets() ? (
+              <ErrorBoundary fallback={null}>
+                <HomeWidgetsPanel active={desktopViewMode === 'home'} />
+              </ErrorBoundary>
+            ) : null}
 
             {isGroupActivityModuleVisible || isQuitterFeedModuleVisible ? (
               <Box

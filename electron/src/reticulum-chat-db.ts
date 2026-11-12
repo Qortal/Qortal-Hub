@@ -4930,6 +4930,9 @@ export class ReticulumChatDatabase {
     );
     if (!authorStreamId) return false;
     if (!this.isAuthorizedMessageMutation(event)) return false;
+    // Expiry is irreversible, even if channel settings later change and a
+    // peer still serves the original signed event during history recovery.
+    if (this.hasExpiredEventMarker(event.eventId)) return false;
     const now = Date.now();
     this.pruneExpiredMessagesThrottled(now);
     const feedTimestamp = this.normalizeFeedTimestamp(event.timestamp, now);
@@ -5593,6 +5596,13 @@ export class ReticulumChatDatabase {
     );
   }
 
+  hasExpiredEventMarker(eventId: string): boolean {
+    if (!eventId) return false;
+    return !!this.db
+      .prepare('SELECT 1 FROM rchat_expired_event_markers WHERE event_id = ?')
+      .get(eventId);
+  }
+
   getRejectedEventMarker(
     groupId: number,
     eventId: string
@@ -5727,7 +5737,7 @@ export class ReticulumChatDatabase {
     const safeRetention = Math.max(1, Math.floor(retentionMs));
     const tx = this.db.transaction(() => {
       // Intermediate builds used this column as a short revalidation timer.
-      // Extend those rows to the full protocol-valid lifetime before pruning.
+      // Extend those rows to the full suppression window before pruning.
       this.db
         .prepare(
           `UPDATE rchat_rejected_event_markers
