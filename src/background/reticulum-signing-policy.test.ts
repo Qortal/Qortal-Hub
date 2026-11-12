@@ -388,6 +388,114 @@ describe('Reticulum wallet signing policy', () => {
     });
   });
 
+  it('allows only the exact author manifest request fields', () => {
+    const request = {
+      type: 'RCHAT_AUTHOR_MANIFEST_REQUEST',
+      transferId: 'a'.repeat(16),
+      groupId: 709,
+      root: 'b'.repeat(64),
+      baseRoot: 'c'.repeat(64),
+      requesterPeerHash: 'd'.repeat(32),
+      providerPeerHash: 'e'.repeat(32),
+      timestamp: Date.now(),
+    };
+    expectAllowed(assertAllowedReticulumSigningPayload, request);
+    for (const key of Object.keys(request)) {
+      const missing: Record<string, unknown> = { ...request };
+      delete missing[key];
+      expect(() => assertAllowedReticulumSigningPayload(missing)).toThrow();
+      expect(() =>
+        assertAllowedReticulumSigningPayload({
+          ...request,
+          [key]: undefined,
+        })
+      ).toThrow();
+    }
+    for (const key of [
+      'authorAddress',
+      'authorPublicKey',
+      'signature',
+      'payload',
+      'transaction',
+    ]) {
+      expect(() =>
+        assertAllowedReticulumSigningPayload({
+          ...request,
+          [key]: 'injected',
+        })
+      ).toThrow();
+    }
+    expect(() =>
+      assertAllowedReticulumSigningPayload({
+        ...request,
+        type: 'RCHAT_AUTHOR_MANIFEST_UNKNOWN',
+      })
+    ).toThrow();
+    expect(() => assertAllowedPresenceSigningPayload(request)).toThrow();
+  });
+
+  it.each(['group', 'dm'] as const)(
+    'allows only the exact %s resource receipt fields',
+    (scope) => {
+      const request: Record<string, unknown> = {
+        ...(scope === 'group'
+          ? { type: 'RCHAT_RESOURCE_RECEIPT', groupId: 716 }
+          : {
+              type: 'RCHAT_DM_RESOURCE_RECEIPT',
+              conversationId: 'conversation',
+              peerAddress: 'peer',
+            }),
+        fileHash: 'a'.repeat(64),
+        sizeBytes: 1024,
+        providerPeerHash: 'b'.repeat(32),
+        retentionUntil: Date.now() + 60_000,
+        timestamp: Date.now(),
+      };
+      expectAllowed(assertAllowedReticulumSigningPayload, request);
+      for (const key of Object.keys(request)) {
+        const missing = { ...request };
+        delete missing[key];
+        expect(() => assertAllowedReticulumSigningPayload(missing)).toThrow();
+        expect(() =>
+          assertAllowedReticulumSigningPayload({ ...request, [key]: undefined })
+        ).toThrow();
+      }
+      for (const key of [
+        'authorAddress',
+        'authorPublicKey',
+        'signature',
+        'payload',
+        'transaction',
+        ...(scope === 'group'
+          ? ['conversationId', 'peerAddress']
+          : ['groupId']),
+      ]) {
+        expect(() =>
+          assertAllowedReticulumSigningPayload({
+            ...request,
+            [key]: 'injected',
+          })
+        ).toThrow();
+      }
+      expect(() =>
+        assertAllowedReticulumSigningPayload({
+          ...request,
+          type:
+            scope === 'group'
+              ? 'RCHAT_DM_RESOURCE_RECEIPT'
+              : 'RCHAT_RESOURCE_RECEIPT',
+        })
+      ).toThrow();
+      expect(() =>
+        assertAllowedReticulumSigningPayload({
+          ...request,
+          type: 'RCHAT_UNKNOWN_RECEIPT',
+        })
+      ).toThrow();
+      expect(() => assertAllowedPresenceSigningPayload(request)).toThrow();
+    }
+  );
+
   it('allows every current typed RCHAT control schema', () => {
     const payloads: Record<string, unknown>[] = [
       {
