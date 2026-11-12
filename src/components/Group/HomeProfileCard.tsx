@@ -100,6 +100,7 @@ import {
   HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY,
   HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
   HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
+  HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './HomeDesktop/homeDesktopConstants';
 import {
   AUTO_LOCK_TIMEOUT_OPTIONS,
@@ -289,6 +290,9 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
     );
   const [isQuitterFeedModuleVisible, setIsQuitterFeedModuleVisible] = useState(
     () => readStoredBoolean(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY, true)
+  );
+  const [isWidgetsModuleVisible, setIsWidgetsModuleVisible] = useState(() =>
+    readStoredBoolean(HOME_WIDGETS_VISIBLE_STORAGE_KEY, true)
   );
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
   const [reticulumManagedConfigEnabled, setReticulumManagedConfigEnabled] =
@@ -713,6 +717,17 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
       setIsQuitterFeedModuleVisible(checked);
       persistDashboardModuleVisibility(
         HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
+        checked
+      );
+    },
+    [persistDashboardModuleVisibility]
+  );
+
+  const handleToggleWidgetsModule = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      setIsWidgetsModuleVisible(checked);
+      persistDashboardModuleVisibility(
+        HOME_WIDGETS_VISIBLE_STORAGE_KEY,
         checked
       );
     },
@@ -4492,6 +4507,55 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                       <Switch
                         checked={isQuitterFeedModuleVisible}
                         onChange={handleToggleQuitterFeedModule}
+                        sx={settingsSwitchSx}
+                      />
+                    </Box>
+
+                    <Box
+                      sx={{
+                        borderTop: `1px solid ${avatarSectionDivider}`,
+                        mx: 1.35,
+                      }}
+                    />
+
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: 1.2,
+                        justifyContent: 'space-between',
+                        px: 1.35,
+                        py: 1.2,
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.01em',
+                          }}
+                        >
+                          {td('widgets_module', 'Widgets')}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '0.75rem',
+                            lineHeight: 1.45,
+                            mt: 0.4,
+                          }}
+                        >
+                          {td(
+                            'widgets_module_desc',
+                            'Show your widgets on Home: small Q-Apps such as a clock or the weather. Turn off to stop running them.'
+                          )}
+                        </Typography>
+                      </Box>
+                      <Switch
+                        checked={isWidgetsModuleVisible}
+                        onChange={handleToggleWidgetsModule}
                         sx={settingsSwitchSx}
                       />
                     </Box>
