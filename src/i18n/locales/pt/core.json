@@ -173,6 +173,12 @@
   "app_other": "aplicações",
   "app_private": "privado",
   "app_service_type": "aplicativo tipo serviço",
+  "app_tab": {
+    "close_all": "fechar todas as abas",
+    "duplicate": "duplicar aba",
+    "limit_reached": "número máximo de abas atingido. Feche uma para abrir outra.",
+    "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar."
+  },
   "apps_dashboard": "apps no Dashboard",
   "apps_official": "Apps oficiais",
   "aria": {

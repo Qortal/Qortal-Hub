@@ -173,6 +173,12 @@
   "app_other": "sovellukset",
   "app_private": "yksityinen",
   "app_service_type": "sovelluksen palvelutyyppi",
+  "app_tab": {
+    "close_all": "sulje kaikki välilehdet",
+    "duplicate": "monista välilehti",
+    "limit_reached": "välilehtien enimmäismäärä saavutettu. Sulje yksi avataksesi uuden.",
+    "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi."
+  },
   "apps_dashboard": "sovellusten hallintapaneeli",
   "apps_official": "viralliset sovellukset",
   "aria": {

@@ -173,6 +173,12 @@
   "app_other": "rakendused",
   "app_private": "privaatne",
   "app_service_type": "rakenduse teenuse tüüp",
+  "app_tab": {
+    "close_all": "sulge kõik vahelehed",
+    "duplicate": "dubleeri vaheleht",
+    "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
+    "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada."
+  },
   "apps_dashboard": "rakenduste juhtpaneel",
   "apps_official": "ametlikud rakendused",
   "aria": {

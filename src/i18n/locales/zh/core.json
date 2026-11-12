@@ -173,6 +173,12 @@
   "app_other": "应用",
   "app_private": "私人的",
   "app_service_type": "应用服务类型",
+  "app_tab": {
+    "close_all": "关闭所有标签页",
+    "duplicate": "复制标签页",
+    "limit_reached": "已达到标签页数量上限。请关闭一个标签页后再打开新的。",
+    "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。"
+  },
   "apps_dashboard": "应用仪表板",
   "apps_official": "官方应用程序",
   "aria": {

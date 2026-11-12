@@ -173,6 +173,12 @@
   "app_other": "app",
   "app_private": "privata",
   "app_service_type": "tipo di servizio app",
+  "app_tab": {
+    "close_all": "chiudi tutte le schede",
+    "duplicate": "duplica scheda",
+    "limit_reached": "numero massimo di schede raggiunto. Chiudine una per aprirne un'altra.",
+    "locked_kept_open": "le schede bloccate restano aperte. Chiudile una alla volta per confermare."
+  },
   "apps_dashboard": "dashboard delle app",
   "apps_official": "app ufficiali",
   "aria": {

@@ -173,6 +173,12 @@
   "app_other": "applications",
   "app_private": "privé",
   "app_service_type": "type de service d'application",
+  "app_tab": {
+    "close_all": "fermer tous les onglets",
+    "duplicate": "dupliquer l'onglet",
+    "limit_reached": "nombre maximal d'onglets atteint. Fermez-en un pour en ouvrir un autre.",
+    "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer."
+  },
   "apps_dashboard": "Tableau de bord Apps",
   "apps_official": "Applications officielles",
   "aria": {

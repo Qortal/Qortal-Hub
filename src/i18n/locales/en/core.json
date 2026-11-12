@@ -173,6 +173,12 @@
   "app_other": "apps",
   "app_private": "private",
   "app_service_type": "app service type",
+  "app_tab": {
+    "close_all": "close all tabs",
+    "duplicate": "duplicate tab",
+    "limit_reached": "maximum number of tabs reached. Close one to open another.",
+    "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm."
+  },
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
   "aria": {
