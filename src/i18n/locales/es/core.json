@@ -501,6 +501,7 @@
       "address_copied": "dirección copiada al portapapeles.",
       "already_voted": "ya has votado.",
       "amount_qort": "cantidad: {{ amount }} QORT",
+      "app_details_unavailable": "no se pudieron cargar el título, la descripción y las etiquetas actuales de esta aplicación. Vuelve a escribirlos antes de publicar o se reemplazarán.",
       "app_notifications_hint": "Las notificaciones de Q-App aparecerán aquí",
       "authenticated_account": "Cuenta autenticada",
       "avatar_publish_fee": "publicar un avatar requiere una tarifa de {{fee}} QORT",

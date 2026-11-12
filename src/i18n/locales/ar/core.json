@@ -501,6 +501,7 @@
       "address_copied": "تم نسخ العنوان إلى الحافظة.",
       "already_voted": "لقد قمت بالتصويت بالفعل.",
       "amount_qort": "المبلغ: {{ amount }} كورتال",
+      "app_details_unavailable": "تعذّر تحميل العنوان والوصف والوسوم الحالية لهذا التطبيق. أعد إدخالها قبل النشر، وإلا فسيتم استبدالها.",
       "app_notifications_hint": "ستظهر إشعارات تطبيقات Q هنا",
       "authenticated_account": "حساب موثق",
       "avatar_publish_fee": "يتطلب نشر الصورة الرمزية رسومًا قدرها {{fee}} QORT",

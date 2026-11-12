@@ -501,6 +501,7 @@
       "address_copied": "アドレスをクリップボードにコピーしました。",
       "already_voted": "あなたはすでに投票しました。",
       "amount_qort": "金額: {{ amount }} QORT",
+      "app_details_unavailable": "このアプリの現在のタイトル、説明、タグを読み込めませんでした。公開する前にもう一度入力してください。入力しないと置き換えられます。",
       "app_notifications_hint": "Q-Appの通知はここに表示されます",
       "authenticated_account": "認証済みアカウント",
       "avatar_publish_fee": "アバターの公開には {{fee}} QORT の手数料が必要です",
