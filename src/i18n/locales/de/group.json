@@ -432,7 +432,9 @@
     "wallet_password": "Wallet-Passwort",
     "wallet_password_placeholder": "Gib dein Wallet-Passwort ein",
     "wallet_password_required": "Gib dein Wallet-Passwort ein, um den privaten Schluessel zu entschluesseln.",
-    "wallet_unavailable_error": "Wallet-Daten sind gerade nicht verfuegbar."
+    "wallet_unavailable_error": "Wallet-Daten sind gerade nicht verfuegbar.",
+    "widgets_module": "Widgets",
+    "widgets_module_desc": "Zeige deine Widgets auf der Startseite: kleine Q-Apps wie eine Uhr oder das Wetter. Deaktiviere es, damit sie nicht mehr laufen."
   },
   "dm": {
     "add_friend_before_calling": "Füge diesen Benutzer als Freund hinzu, bevor du anrufst",
@@ -672,6 +674,35 @@
     "register_name": "Namen registrieren",
     "register_name_pending_hint": "Name wird on-chain gespeichert. Das kann einen Moment dauern.",
     "register_name_workspace_hint": "Ein registrierter Name macht aus diesem Konto eine erkennbare Identität."
+  },
+  "home_widgets": {
+    "add": "hinzufügen",
+    "add_widget": "Widget hinzufügen",
+    "added": "hinzugefügt",
+    "arrange": "anordnen",
+    "arrange_hint": "Ziehe ein Widget, um es zu verschieben, oder seine Ecke, um die Größe zu ändern.",
+    "arrange_widget": "{{title}}: Pfeiltasten verschieben es, Umschalt und Pfeiltasten ändern die Größe, Entf entfernt es.",
+    "by": "von {{name}}",
+    "done": "fertig",
+    "empty": "Lege kleine Q-Apps auf die Startseite: eine Uhr, das Wetter, die neuesten Beiträge deiner Lieblings-Apps.",
+    "error": {
+      "not_allowed": "Widgets können das nicht. Öffne dafür die App (OPEN_NEW_TAB).",
+      "not_on_screen": "Die Startseite wird nicht angezeigt, daher können Widgets das nicht anfragen."
+    },
+    "limit": "Du kannst bis zu {{max}} Widgets auf der Startseite haben.",
+    "load_failed": "{{title}} wurde nicht geladen.",
+    "loading": "{{title}} wird geladen",
+    "open_app": "{{name}} öffnen",
+    "picker_developers": "Q-App-Entwickler: Veröffentlicht ein Widget als APP mit dem Tag go-widget, am besten mit einem Identifier, der mit go-widget beginnt.",
+    "picker_empty": "Noch keine Widgets veröffentlicht.",
+    "picker_error": "Die Widgets konnten nicht geladen werden. Prüfe die Verbindung zum Node.",
+    "picker_none_found": "Keine passenden Widgets.",
+    "picker_note": "Widgets sind kleine Q-Apps auf der Startseite. Sie können Dinge anzeigen und Apps öffnen, aber nichts bezahlen, veröffentlichen oder signieren.",
+    "picker_search": "Widgets suchen",
+    "picker_title": "Widget hinzufügen",
+    "reload": "Widget neu laden",
+    "remove": "Widget entfernen",
+    "title": "Widgets"
   },
   "important_info": "wichtige Informationen",
   "initial": {
