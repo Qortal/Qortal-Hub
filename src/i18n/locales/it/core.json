@@ -502,6 +502,7 @@
       "address_copied": "indirizzo copiato negli appunti.",
       "already_voted": "hai già votato.",
       "amount_qort": "importo: {{ amount }} QORT",
+      "app_details_unavailable": "non è stato possibile caricare titolo, descrizione e tag attuali di questa app. Inseriscili di nuovo prima di pubblicare, altrimenti verranno sostituiti.",
       "app_notifications_hint": "Le notifiche Q-App appariranno qui",
       "authenticated_account": "Account autenticato",
       "avatar_publish_fee": "la pubblicazione di un avatar richiede una commissione di {{fee}} QORT",

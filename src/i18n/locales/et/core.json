@@ -502,6 +502,7 @@
       "address_copied": "aadress kopeeriti lõikelauale.",
       "already_voted": "oled juba hääletanud.",
       "amount_qort": "summa: {{ amount }} QORT",
+      "app_details_unavailable": "selle rakenduse praegust pealkirja, kirjeldust ja silte ei õnnestunud laadida. Sisesta need enne avaldamist uuesti, muidu need asendatakse.",
       "app_notifications_hint": "Q-rakenduse teavitused kuvatakse siin",
       "authenticated_account": "Autenditud konto",
       "avatar_publish_fee": "avatari avaldamine nõuab tasu {{fee}} QORT",
