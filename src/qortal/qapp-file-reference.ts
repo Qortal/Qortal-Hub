@@ -4,6 +4,7 @@ import {
   QAPP_FILE_OPERATION_MS,
   QAPP_FILE_MAX_FILES,
   QAPP_FILE_REQUEST_BYTES,
+  QAppFileUploadError,
   type QAppFileMetadata,
   type QAppFileOperation,
 } from '../../electron/src/qapp-file-protocol';
@@ -122,7 +123,12 @@ export function attachQAppFileClient(
   let nextId = 0;
   let tail = Promise.resolve();
   let waiting:
-    | { id: number; resolve: (value: any) => void; reject: () => void }
+    | {
+        id: number;
+        kind: QAppFileOperation['kind'];
+        resolve: (value: any) => void;
+        reject: (error?: Error) => void;
+      }
     | undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const abort = new AbortController();
@@ -152,7 +158,12 @@ export function attachQAppFileClient(
         new Promise<any>((resolve, reject) => {
           if (disposed) return reject(failure());
           const id = ++nextId;
-          waiting = { id, resolve, reject: () => reject(failure()) };
+          waiting = {
+            id,
+            kind: operation.kind,
+            resolve,
+            reject: (error) => reject(error ?? failure()),
+          };
           timeout = setTimeout(
             fail,
             operation.kind === 'save'
@@ -218,8 +229,19 @@ export function attachQAppFileClient(
         clearTimeout(timeout);
         const pending = waiting;
         waiting = undefined;
-        if (message.error) pending.reject();
-        else pending.resolve(message.result);
+        if (message.error) {
+          // Accept status metadata only for an upload reply on this trusted
+          // port. Never expose a worker's arbitrary error text or endpoint.
+          const uploadError =
+            pending.kind === 'upload' &&
+            message.error === 'QAPP_FILE_UPLOAD_FAILED' &&
+            Number.isInteger(message.status) &&
+            message.status >= 400 &&
+            message.status <= 599
+              ? new QAppFileUploadError(message.status)
+              : undefined;
+          pending.reject(uploadError);
+        } else pending.resolve(message.result);
       } else fail();
     } catch {
       fail();

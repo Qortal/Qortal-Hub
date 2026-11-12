@@ -3,6 +3,7 @@ import {
   fileCounter,
   QAPP_FILE_IDLE_MS,
   QAPP_FILE_OPERATION_MS,
+  QAppFileUploadError,
   requireFileRange,
   type QAppFileOperation,
 } from './qapp-file-protocol';
@@ -181,8 +182,9 @@ export function attachQAppFileExecutor(
       });
       // The chunk endpoint's response body is unused. Do not buffer an arbitrary
       // server response (or leave its stream running between chunks).
-      await response.body?.cancel();
-      if (!response.ok) throw new Error('QAPP_FILE_UPLOAD_FAILED');
+      // A cancellation failure must not hide the node's HTTP refusal.
+      await response.body?.cancel().catch(() => undefined);
+      if (!response.ok) throw new QAppFileUploadError(response.status);
       return null;
     };
     // Reference passing reads no bytes. Native saves stream in Chromium and may
@@ -199,11 +201,13 @@ export function attachQAppFileExecutor(
             );
           else if (!disposed) dispose();
         },
-        () => {
+        (error) => {
           if (!disposed)
             control.postMessage({
               id: message.id,
-              error: 'QAPP_FILE_OPERATION_FAILED',
+              ...(error instanceof QAppFileUploadError
+                ? { error: 'QAPP_FILE_UPLOAD_FAILED', status: error.status }
+                : { error: 'QAPP_FILE_OPERATION_FAILED' }),
             });
         }
       )

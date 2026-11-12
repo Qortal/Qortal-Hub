@@ -10,8 +10,14 @@ import { executeEvent } from '../../utils/events';
 import { fileToBase64 } from '../../utils/fileReading';
 import aesjs from 'aes-js';
 import { checkPublishStorage, requirePublishFile } from './upload-validation';
-import { isWorthRetrying, needsApiKey, nodeAnswerError } from './nodeAnswer';
+import {
+  isWorthRetrying,
+  needsApiKey,
+  nodeAnswerError,
+  nodeAnswerErrorFromStatus,
+} from './nodeAnswer';
 import { isQAppFileReference } from '../../qortal/qapp-file-reference';
+import { QAppFileUploadError } from '../../../electron/src/qapp-file-protocol';
 
 async function encryptAesCtrChunkWithFallback(
   keyBytes,
@@ -138,7 +144,11 @@ async function uploadChunkWithRetry(
         throw await nodeAnswerError(response);
       }
       return; // Success
-    } catch (err) {
+    } catch (error) {
+      const err =
+        error instanceof QAppFileUploadError
+          ? nodeAnswerErrorFromStatus(error.status)
+          : error;
       // A refusal (401/403/4xx) won't change on a retry.
       if (!isWorthRetrying(err)) throw err;
       attempt++;

@@ -112,6 +112,32 @@ afterEach(() => {
 });
 
 describe('multi-resource publish input validation', () => {
+  it.each([401, 403])(
+    'reports the API-key requirement before a multi-publish on HTTP %s',
+    async (status) => {
+      const call = vi.fn();
+      const file = new QAppFileReference(
+        { reference: {}, size: 31, type: 'video/mp4' },
+        0,
+        call
+      );
+      const fetchMock = vi.fn().mockResolvedValue({ ok: false, status });
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(
+        publishMultipleQDNResources(
+          { resources: [{ service: 'VIDEO', file }] },
+          null,
+          true,
+          {}
+        )
+      ).rejects.toThrow('auth:message.error.publish_needs_api_key');
+      expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+        '/arbitrary/check/tmp?totalSize=31'
+      );
+      expect(call).not.toHaveBeenCalled();
+      expect(publishData).not.toHaveBeenCalled();
+    }
+  );
   it.each(['single', 'multiple', 'save'])(
     'does not operate on native files after permission denial (%s)',
     async (action) => {

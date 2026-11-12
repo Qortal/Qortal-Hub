@@ -1,4 +1,5 @@
 import i18n from '../../i18n/i18n';
+import { needsApiKey, nodeAnswerErrorFromStatus } from './nodeAnswer';
 import {
   isQAppFile,
   type QAppFileReference,
@@ -24,6 +25,9 @@ export async function checkPublishStorage(
   );
   const response = await fetch(endpoint);
   if (!response.ok) {
+    if (needsApiKey(response.status)) {
+      throw nodeAnswerErrorFromStatus(response.status);
+    }
     // A failed precheck can also be an invalid request, authorization failure,
     // or service error. Its HTTP status alone does not establish a full disk.
     throw new Error(
