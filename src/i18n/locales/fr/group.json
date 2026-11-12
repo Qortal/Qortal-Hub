@@ -432,7 +432,9 @@
     "wallet_password": "Mot de passe du wallet",
     "wallet_password_placeholder": "Entrez le mot de passe du wallet",
     "wallet_password_required": "Entrez le mot de passe du wallet pour déchiffrer la clé privée.",
-    "wallet_unavailable_error": "Les données du wallet sont indisponibles pour le moment."
+    "wallet_unavailable_error": "Les données du wallet sont indisponibles pour le moment.",
+    "widgets_module": "Widgets",
+    "widgets_module_desc": "Affichez vos widgets sur l’accueil : de petites Q-Apps comme une horloge ou la météo. Désactivez-le pour ne plus les exécuter."
   },
   "dm": {
     "add_friend_before_calling": "Ajoutez cet utilisateur comme ami avant d'appeler",
@@ -672,6 +674,35 @@
     "register_name": "Enregistrez votre nom",
     "register_name_pending_hint": "Enregistrement du nom on-chain. Cela peut prendre un instant.",
     "register_name_workspace_hint": "Un nom enregistré fait de ce compte une identité reconnaissable."
+  },
+  "home_widgets": {
+    "add": "ajouter",
+    "add_widget": "ajouter un widget",
+    "added": "ajouté",
+    "arrange": "organiser",
+    "arrange_hint": "Faites glisser un widget pour le déplacer, ou son coin pour le redimensionner.",
+    "arrange_widget": "{{title}} : les flèches le déplacent, Maj et les flèches le redimensionnent, Suppr le retire.",
+    "by": "par {{name}}",
+    "done": "terminé",
+    "empty": "Placez de petites Q-Apps sur l’accueil : une horloge, la météo, les dernières publications de vos apps préférées.",
+    "error": {
+      "not_allowed": "Les widgets ne peuvent pas faire cela. Ouvrez l’app pour le faire (OPEN_NEW_TAB).",
+      "not_on_screen": "L’accueil n’est pas affiché, les widgets ne peuvent donc pas demander cela."
+    },
+    "limit": "Vous pouvez avoir jusqu’à {{max}} widgets sur l’accueil.",
+    "load_failed": "{{title}} ne s’est pas chargé.",
+    "loading": "Chargement de {{title}}",
+    "open_app": "ouvrir {{name}}",
+    "picker_developers": "Développeurs de Q-Apps : publiez un widget en tant qu’APP avec le tag go-widget, de préférence avec un identifiant commençant par go-widget.",
+    "picker_empty": "Aucun widget publié pour l’instant.",
+    "picker_error": "Impossible de charger les widgets. Vérifiez la connexion au nœud.",
+    "picker_none_found": "Aucun widget ne correspond.",
+    "picker_note": "Les widgets sont de petites Q-Apps sur l’accueil. Ils peuvent afficher des informations et ouvrir des apps, mais ne peuvent rien payer, publier ni signer.",
+    "picker_search": "Rechercher des widgets",
+    "picker_title": "Ajouter un widget",
+    "reload": "recharger le widget",
+    "remove": "retirer le widget",
+    "title": "Widgets"
   },
   "important_info": "informations importantes",
   "initial": {

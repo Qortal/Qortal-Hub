@@ -5,6 +5,12 @@ import {
 import { getSigningContextRevision } from '../utils/chromeStorage';
 import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
 import { sendLocalForeignCoin } from './foreign-coin-send';
+import {
+  foreignCoinPathSegment,
+  foreignFeeType,
+  listNamePathSegment,
+} from './qappNodePaths';
+import { nodePathSegment } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
 import {
   createEndpoint,
@@ -1514,6 +1520,7 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
     });
     throw new Error(errorMsg);
   }
+  const listPath = listNamePathSegment(data.list_name);
   const value = (await getPermission('qAPPAutoLists')) || false;
 
   let skip = false;
@@ -1554,7 +1561,7 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
   }
 
   if (acceptedVar || skip) {
-    const url = await createEndpoint(`/lists/${data.list_name}`);
+    const url = await createEndpoint(`/lists/${listPath}`);
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
@@ -1601,6 +1608,7 @@ export const addListItems = async (data, isFromExtension) => {
 
   const items = data.items;
   const list_name = data.list_name;
+  const listPath = listNamePathSegment(list_name);
 
   const resPermission = await getUserPermission(
     {
@@ -1615,7 +1623,7 @@ export const addListItems = async (data, isFromExtension) => {
   const { accepted } = resPermission;
 
   if (accepted) {
-    const url = await createEndpoint(`/lists/${list_name}`);
+    const url = await createEndpoint(`/lists/${listPath}`);
     const body = {
       items: items,
     };
@@ -1685,6 +1693,7 @@ export const deleteListItems = async (data, isFromExtension) => {
   const item = data?.item;
   const items = data?.items;
   const list_name = data.list_name;
+  const listPath = listNamePathSegment(list_name);
 
   const resPermission = await getUserPermission(
     {
@@ -1699,7 +1708,7 @@ export const deleteListItems = async (data, isFromExtension) => {
   const { accepted } = resPermission;
 
   if (accepted) {
-    const url = await createEndpoint(`/lists/${list_name}`);
+    const url = await createEndpoint(`/lists/${listPath}`);
     const body = {
       items: items || [item],
     };
@@ -4014,6 +4023,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
       })
     );
   }
+  const coinPath = foreignCoinPathSegment(data.coin);
   const value =
     (await getPermission(`getUserWalletInfo-${appInfo?.name}-${data.coin}`)) ||
     false;
@@ -4061,9 +4071,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
     let coin = data.coin;
     let walletKeys = await getUserWalletFunc(coin);
 
-    const _url = await createEndpoint(
-      `/crosschain/` + data.coin.toLowerCase() + `/addressinfos`
-    );
+    const _url = await createEndpoint(`/crosschain/${coinPath}/addressinfos`);
     let _body = { xpub58: walletKeys['publickey'] };
     try {
       const response = await fetch(_url, {
@@ -4128,6 +4136,7 @@ export const getUserWalletTransactions = async (
     });
     throw new Error(errorMsg);
   }
+  const coinPath = foreignCoinPathSegment(data.coin);
 
   const value =
     (await getPermission(
@@ -4193,7 +4202,7 @@ export const getUserWalletTransactions = async (
     }
 
     const _url = await createEndpoint(
-      `/crosschain/` + data.coin.toLowerCase() + `/wallettransactions`
+      `/crosschain/${coinPath}/wallettransactions`
     );
     const _body = publicKey;
     try {
@@ -4255,7 +4264,7 @@ export const getCrossChainServerInfo = async (data) => {
     });
     throw new Error(errorMsg);
   }
-  const _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
+  const _url = `/crosschain/${foreignCoinPathSegment(data.coin)}/serverinfos`;
   try {
     const url = await createEndpoint(_url);
     const response = await fetch(url);
@@ -4325,7 +4334,7 @@ export const startCrossChainServer = async (
     });
     throw new Error(errorMsg);
   }
-  const coin = data.coin.toLowerCase();
+  const coin = foreignCoinPathSegment(data.coin);
   const url = `/crosschain/${coin}/start`;
   try {
     const endpoint = await createEndpoint(url);
@@ -4438,8 +4447,9 @@ export const getForeignFee = async (data) => {
     throw new Error(errorMsg);
   }
 
-  const { coin, type } = data;
-  const url = `/crosschain/${coin.toLowerCase()}/${type}`;
+  const coin = foreignCoinPathSegment(data.coin);
+  const type = foreignFeeType(data.type);
+  const url = `/crosschain/${coin}/${type}`;
 
   try {
     const endpoint = await createEndpoint(url);
@@ -4510,9 +4520,11 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
   }
 
   const { coin, type, value } = data;
+  const coinPath = foreignCoinPathSegment(coin);
+  const feeType = foreignFeeType(type);
 
   const text3 =
-    type === 'feerequired'
+    feeType === 'feerequired'
       ? i18n.t('question:sats', {
           amount: value,
           postProcess: 'capitalizeFirstChar',
@@ -4522,7 +4534,7 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         });
   const text4 =
-    type === 'feerequired'
+    feeType === 'feerequired'
       ? i18n.t('question:message.generic.calculate_fee', {
           amount: value,
           rate: calculateRateFromFee(value, 300),
@@ -4544,7 +4556,7 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
         text1: i18n.t('question:permission.update_foreign_fee', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
+        text2: `type: ${feeType === 'feerequired' ? 'unlocking' : 'locking'}`,
         text3: i18n.t('question:value', {
           value: text3,
           postProcess: 'capitalizeFirstChar',
@@ -4571,7 +4583,7 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
       })
     );
   }
-  const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
+  const url = `/crosschain/${coinPath}/update${feeType}`;
   const valueStringified = JSON.stringify(+value);
 
   const endpoint = await createEndpoint(url);
@@ -4622,8 +4634,8 @@ export const getServerConnectionHistory = async (data) => {
     throw new Error(errorMsg);
   }
 
-  const coin = data.coin.toLowerCase();
-  const url = `/crosschain/${coin.toLowerCase()}/serverconnectionhistory`;
+  const coin = foreignCoinPathSegment(data.coin);
+  const url = `/crosschain/${coin}/serverconnectionhistory`;
 
   try {
     const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
@@ -4697,6 +4709,7 @@ export const setCurrentForeignServer = async (
   }
 
   const { coin, host, port, type } = data;
+  const coinPath = foreignCoinPathSegment(coin);
 
   // Check for session permission
   const hasPermission =
@@ -4752,7 +4765,7 @@ export const setCurrentForeignServer = async (
     connectionType: type,
   };
 
-  const url = `/crosschain/${coin.toLowerCase()}/setcurrentserver`;
+  const url = `/crosschain/${coinPath}/setcurrentserver`;
 
   const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
   const response = await fetch(endpoint, {
@@ -4814,6 +4827,7 @@ export const addForeignServer = async (data, isFromExtension, appInfo?) => {
   }
 
   const { coin, host, port, type } = data;
+  const coinPath = foreignCoinPathSegment(coin);
 
   // Check for session permission
   const hasPermission =
@@ -4865,7 +4879,7 @@ export const addForeignServer = async (data, isFromExtension, appInfo?) => {
     connectionType: type,
   };
 
-  const url = `/crosschain/${coin.toLowerCase()}/addserver`;
+  const url = `/crosschain/${coinPath}/addserver`;
 
   const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
   const response = await fetch(endpoint, {
@@ -4927,6 +4941,7 @@ export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
   }
 
   const { coin, host, port, type } = data;
+  const coinPath = foreignCoinPathSegment(coin);
 
   // Check for session permission
   const hasPermission =
@@ -4978,7 +4993,7 @@ export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
     connectionType: type,
   };
 
-  const url = `/crosschain/${coin.toLowerCase()}/removeserver`;
+  const url = `/crosschain/${coinPath}/removeserver`;
 
   const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
   const response = await fetch(endpoint, {
@@ -5848,7 +5863,9 @@ export const createBuyOrder = async (data, isFromExtension) => {
 
   const atPromises = atAddresses.map((atAddress) =>
     requestQueueGetAtAddresses.enqueue(async () => {
-      const url = await createEndpoint(`/crosschain/trade/${atAddress}`);
+      const url = await createEndpoint(
+        `/crosschain/trade/${nodePathSegment(atAddress)}`
+      );
       const resAddress = await fetch(url);
       const resData = await resAddress.json();
       if (foreignBlockchain !== resData?.foreignBlockchain) {
@@ -6209,7 +6226,9 @@ export const cancelSellOrder = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
-  const url = await createEndpoint(`/crosschain/trade/${data.atAddress}`);
+  const url = await createEndpoint(
+    `/crosschain/trade/${nodePathSegment(data.atAddress)}`
+  );
   const resAddress = await fetch(url);
   const resData = await resAddress.json();
 

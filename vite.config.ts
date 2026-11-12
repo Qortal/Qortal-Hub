@@ -92,6 +92,13 @@ export default defineConfig({
       },
       output: {
         manualChunks(id) {
+          // Rollup puts its CommonJS helpers in the chunk of their first user,
+          // which is Phaser. The main chunk then imports that chunk for the
+          // helpers, so Phaser (1.7 MB, only used by QortalLand) would load
+          // and run at every start. A chunk of their own avoids that.
+          if (id === '\0commonjsHelpers.js') {
+            return 'commonjsHelpers';
+          }
           if (id.includes('node_modules')) {
             if (id.includes('/node_modules/phaser/')) {
               return 'phaser';
