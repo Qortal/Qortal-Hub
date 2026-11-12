@@ -432,7 +432,9 @@
     "wallet_password": "Contrasena de wallet",
     "wallet_password_placeholder": "Introduce tu contrasena de wallet",
     "wallet_password_required": "Introduce tu contrasena de wallet para descifrar la clave privada.",
-    "wallet_unavailable_error": "Los datos de la wallet no estan disponibles ahora."
+    "wallet_unavailable_error": "Los datos de la wallet no estan disponibles ahora.",
+    "widgets_module": "Widgets",
+    "widgets_module_desc": "Muestra tus widgets en Inicio: pequeñas Q-Apps como un reloj o el tiempo. Desactívalo para que dejen de ejecutarse."
   },
   "dm": {
     "add_friend_before_calling": "Añade a este usuario como amigo antes de llamar",
@@ -672,6 +674,35 @@
     "register_name": "Registra tu nombre",
     "register_name_pending_hint": "Guardando el nombre en cadena. Puede tardar un momento.",
     "register_name_workspace_hint": "Un nombre registrado convierte esta cuenta en una identidad reconocible."
+  },
+  "home_widgets": {
+    "add": "agregar",
+    "add_widget": "agregar widget",
+    "added": "agregado",
+    "arrange": "organizar",
+    "arrange_hint": "Arrastra un widget para moverlo, o su esquina para cambiar su tamaño.",
+    "arrange_widget": "{{title}}: las flechas lo mueven, Mayús y las flechas cambian su tamaño, Supr lo elimina.",
+    "by": "de {{name}}",
+    "done": "listo",
+    "empty": "Pon pequeñas Q-Apps en Inicio: un reloj, el tiempo, las últimas publicaciones de tus apps favoritas.",
+    "error": {
+      "not_allowed": "Los widgets no pueden hacer esto. Abre la app para ello (OPEN_NEW_TAB).",
+      "not_on_screen": "Inicio no está visible, así que los widgets no pueden pedir esto."
+    },
+    "limit": "Puedes tener hasta {{max}} widgets en Inicio.",
+    "load_failed": "{{title}} no se cargó.",
+    "loading": "Cargando {{title}}",
+    "open_app": "abrir {{name}}",
+    "picker_developers": "Desarrolladores de Q-Apps: publica un widget como APP con la etiqueta go-widget, mejor con un identificador que empiece por go-widget.",
+    "picker_empty": "Aún no hay widgets publicados.",
+    "picker_error": "No se pudieron cargar los widgets. Comprueba la conexión con el nodo.",
+    "picker_none_found": "Ningún widget coincide.",
+    "picker_note": "Los widgets son pequeñas Q-Apps en Inicio. Pueden mostrar cosas y abrir apps, pero no pueden pagar, publicar ni firmar nada.",
+    "picker_search": "Buscar widgets",
+    "picker_title": "Agregar un widget",
+    "reload": "recargar widget",
+    "remove": "quitar widget",
+    "title": "Widgets"
   },
   "important_info": "información importante",
   "initial": {

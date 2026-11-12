@@ -4,7 +4,10 @@ import {
   isMainWindowUrl,
   requireMainWindowSender,
 } from './main-window-policy';
-import { registerMainWindowFileIpc } from './main-window-files';
+import {
+  installMainWindowFileCleanup,
+  registerMainWindowFileIpc,
+} from './main-window-files';
 import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
@@ -1108,11 +1111,10 @@ export class ElectronCapacitorApp {
       (url) => shell.openExternal(url),
       (error) => loggerError('Main window navigation failed', error)
     );
-    const mainContents = this.MainWindow.webContents;
-    const revokeFiles = () => mainWindowFiles.revoke(mainContents.id);
-    mainContents.on('did-navigate', revokeFiles);
-    mainContents.on('render-process-gone', revokeFiles);
-    mainContents.on('destroyed', revokeFiles);
+    installMainWindowFileCleanup(this.MainWindow.webContents, (contentsId) => {
+      mainWindowFiles.revoke(contentsId);
+      void qappFileSaves?.cleanup();
+    });
     configuredQAppSessions.clear();
     this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
       const prepared = [...preparedQAppGuests.values()].find(
@@ -3037,17 +3039,6 @@ ipcMain.handle('qappFileSave:request', async (event, owner, request) => {
 });
 setInterval(() => { void qappFileSaves?.expire(); }, 30_000).unref();
 app.on('before-quit', () => { void qappFileSaves?.cleanup(); });
-app.on('web-contents-created', (_event, contents) => {
-  // Lifecycle cleanup uses window identity even after its URL has changed.
-  const cleanup = () => {
-    if (myCapacitorApp?.getMainWindow?.()?.webContents.id === contents.id) {
-      void qappFileSaves?.cleanup();
-    }
-  };
-  contents.on('render-process-gone', cleanup);
-  contents.on('destroyed', cleanup);
-  contents.on('did-navigate', cleanup);
-});
 
 async function cleanupQAppOwner(owner: QAppReticulumOwner): Promise<void> {
   for (const attached of attachedQAppGuests.values()) {

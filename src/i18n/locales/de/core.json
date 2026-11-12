@@ -173,6 +173,12 @@
   "app_other": "Apps",
   "app_private": "Privat",
   "app_service_type": "App -Service -Typ",
+  "app_tab": {
+    "close_all": "alle Tabs schließen",
+    "duplicate": "Tab duplizieren",
+    "limit_reached": "maximale Anzahl an Tabs erreicht. Schließe einen, um einen weiteren zu öffnen.",
+    "locked_kept_open": "gesperrte Tabs bleiben offen. Schließe jeden einzeln, um es zu bestätigen."
+  },
   "apps_dashboard": "Apps Dashboard",
   "apps_official": "offizielle Apps",
   "aria": {
@@ -484,6 +490,7 @@
       "network_generic": "Netzwerkfehler",
       "password_not_matching": "Passwortfelder stimmen nicht überein!",
       "password_wrong": "authentifizieren nicht. Falsches Passwort",
+      "private_app_needs_own_node": "Diese private App lässt sich nur über deinen eigenen Knoten mit seinem API-Schlüssel öffnen",
       "publish_app": "App kann nicht veröffentlichen",
       "publish_image": "Image kann nicht veröffentlichen",
       "rate": "bewerten nicht",
@@ -501,6 +508,7 @@
       "address_copied": "adresse in die zwischenablage kopiert.",
       "already_voted": "Sie haben bereits gestimmt.",
       "amount_qort": "betrag: {{ amount }} QORT",
+      "app_details_unavailable": "Titel, Beschreibung und Tags dieser App konnten nicht geladen werden. Gib sie vor dem Veröffentlichen erneut ein, sonst werden sie ersetzt.",
       "app_notifications_hint": "Q-App-Benachrichtigungen werden hier angezeigt",
       "authenticated_account": "Authentifiziertes Konto",
       "avatar_publish_fee": "das veröffentlichen eines avatars kostet eine gebühr von {{fee}} QORT",

@@ -173,6 +173,12 @@
   "app_other": "rakendused",
   "app_private": "privaatne",
   "app_service_type": "rakenduse teenuse tüüp",
+  "app_tab": {
+    "close_all": "sulge kõik vahelehed",
+    "duplicate": "dubleeri vaheleht",
+    "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
+    "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada."
+  },
   "apps_dashboard": "rakenduste juhtpaneel",
   "apps_official": "ametlikud rakendused",
   "aria": {
@@ -484,6 +490,7 @@
       "network_generic": "võrguviga",
       "password_not_matching": "paroolid ei kattu!",
       "password_wrong": "autentimine ebaõnnestus. Vale parool",
+      "private_app_needs_own_node": "see privaatne rakendus avaneb ainult sinu enda haardes, selle API võtmega",
       "publish_app": "rakendust ei saa avaldada",
       "publish_image": "pilti ei saa avaldada",
       "rate": "hinnangut ei saa lisada",
@@ -501,6 +508,7 @@
       "address_copied": "aadress kopeeriti lõikelauale.",
       "already_voted": "oled juba hääletanud.",
       "amount_qort": "summa: {{ amount }} QORT",
+      "app_details_unavailable": "selle rakenduse praegust pealkirja, kirjeldust ja silte ei õnnestunud laadida. Sisesta need enne avaldamist uuesti, muidu need asendatakse.",
       "app_notifications_hint": "Q-rakenduse teavitused kuvatakse siin",
       "authenticated_account": "Autenditud konto",
       "avatar_publish_fee": "avatari avaldamine nõuab tasu {{fee}} QORT",

@@ -10,7 +10,10 @@ const {
   installMainWindowNavigationPolicy,
   requireMainWindowSender,
 } = require('../build/src/main-window-policy');
-const { registerMainWindowFileIpc } = require('../build/src/main-window-files');
+const {
+  installMainWindowFileCleanup,
+  registerMainWindowFileIpc,
+} = require('../build/src/main-window-files');
 const {
   registerMainWindowWalletStorage,
 } = require('../build/src/main-window-storage');
@@ -114,9 +117,11 @@ app.whenReady().then(async () => {
     main.webContents.on('did-create-window', () => {
       childCount++;
     });
-    main.webContents.on('did-navigate', () =>
-      files.revoke(main.webContents.id)
-    );
+    let fileCleanupCount = 0;
+    installMainWindowFileCleanup(main.webContents, (contentsId) => {
+      fileCleanupCount++;
+      files.revoke(contentsId);
+    });
     await main.loadURL(shellUrl);
     const run = (source) => main.webContents.executeJavaScript(source);
     assert.equal(await run('typeof window.electron.readFile'), 'function');
@@ -272,8 +277,15 @@ app.whenReady().then(async () => {
       /restricted/
     );
     assert.equal(fs.readFileSync(secret, 'utf8'), 'synthetic secret');
+    const beforeClose = fileCleanupCount;
+    const destroyed = new Promise((resolve) =>
+      main.webContents.once('destroyed', resolve)
+    );
+    main.destroy();
+    await destroyed;
+    assert.equal(fileCleanupCount, beforeClose + 1);
     console.log(
-      'PASS: navigation, popup/redirect blocking, preload isolation, IPC origin checks, wallet storage, ZIP reads, backup/chunk writes, cleanup, QApp request/reply, and reload'
+      'PASS: navigation, popup/redirect blocking, preload isolation, IPC origin checks, wallet storage, ZIP reads, backup/chunk writes, cleanup, QApp request/reply, reload, and window destruction'
     );
   } catch (error) {
     console.error(error);
