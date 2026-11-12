@@ -484,6 +484,7 @@
       "network_generic": "verkkovirhe",
       "password_not_matching": "salasanat eivät täsmää",
       "password_wrong": "todennus epäonnistui, väärä salasana",
+      "private_app_needs_own_node": "tämä yksityinen sovellus avautuu vain omassa solmussasi sen API-avaimella",
       "publish_app": "sovelluksen julkaisu epäonnistui",
       "publish_image": "kuvan julkaisu epäonnistui",
       "rate": "arviointi epäonnistui",

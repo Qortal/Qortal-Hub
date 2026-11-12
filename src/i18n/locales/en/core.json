@@ -484,6 +484,7 @@
       "network_generic": "network error",
       "password_not_matching": "password fields do not match!",
       "password_wrong": "unable to authenticate. Wrong password",
+      "private_app_needs_own_node": "this private app opens only on your own node, with its API key",
       "publish_app": "unable to publish app",
       "publish_image": "unable to publish image",
       "rate": "unable to rate",
