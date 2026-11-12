@@ -1658,6 +1658,19 @@ export type ReticulumDmResourceReceiptWire =
     b: string;
   };
 
+// The conversation ID is derived from the signer and recipient. Keeping the
+// remaining fields positional avoids exceeding the overlay packet limit.
+export type ReticulumDmResourceReceiptCompactWire = [
+  recipientAddress: string,
+  fileHash: string,
+  sizeBytes: number,
+  retentionUntil: number,
+  providerPeerHash: string,
+  authorPublicKey: string,
+  timestamp: number,
+  signature: string,
+];
+
 export type ReticulumDmPageOfferWire = {
   x: string;
   c: string;
@@ -1977,7 +1990,11 @@ export type ReticulumChatWire =
       sp?: string;
       rk?: string;
     }
-  | { t: 'RCHAT'; k: 'dm_resource_receipt'; w: ReticulumDmResourceReceiptWire }
+  | {
+      t: 'RCHAT';
+      k: 'dm_resource_receipt';
+      w: ReticulumDmResourceReceiptWire | ReticulumDmResourceReceiptCompactWire;
+    }
   | { t: 'RCHAT'; k: 'dm_page_offer'; p: ReticulumDmPageOfferWire }
   | {
       t: 'RCHAT';
@@ -2277,9 +2294,9 @@ const RETICULUM_CHAT_PULL_RETRY_MS = 2_000;
 const RETICULUM_CHAT_PULL_MAX_ATTEMPTS = 8;
 const RETICULUM_CHAT_PULL_QUEUE_CONCURRENCY = 3;
 const RETICULUM_CHAT_PULL_QUEUE_TICK_MS = 250;
-// An authoritative non-member result is final for the complete period in
-// which that event can pass protocol age validation. The small skew margin
-// ensures cleanup cannot race the newest permitted future timestamp.
+// Suppress repeated repairs of rejected events for this bounded retention
+// window. History can outlive it; any later attempt still requires membership
+// validation before storage.
 const RETICULUM_CHAT_REJECTED_EVENT_RETENTION_MS =
   RETICULUM_CHAT_MAX_AGE_MS + RETICULUM_CHAT_MAX_FUTURE_SKEW_MS + 1;
 const RETICULUM_PUBLIC_ACTIVITY_REFRESH_MS = 15 * 60_000;
@@ -2489,6 +2506,8 @@ export function summarizeReticulumPublicGroupActivity(
 }
 const RETICULUM_CHAT_PULL_QUEUE_MAX = 500;
 const RETICULUM_CHAT_PULL_QUEUE_MAX_PER_PEER = 64;
+const RETICULUM_CHAT_REPLY_RECOVERY_MAX_PER_READ = 16;
+const RETICULUM_CHAT_REPLY_RECOVERY_COOLDOWN_MS = 5 * 60_000;
 const RETICULUM_CHAT_TERMINAL_LINKED_EVENT_FAILURES = new Set([
   'unknown_event',
   'event_too_large',
@@ -4255,7 +4274,8 @@ function metadataSnapshotResourceOfferFromWire(
 
 export function validateReticulumChatEventShape(
   event: unknown,
-  now = Date.now()
+  now = Date.now(),
+  context: 'live' | 'history' = 'live'
 ): event is ReticulumChatEvent {
   if (!event || typeof event !== 'object' || Array.isArray(event)) return false;
   const e = event as Partial<ReticulumChatEvent>;
@@ -4272,10 +4292,17 @@ export function validateReticulumChatEventShape(
   if (authorStreamIdFromWire(e.authorStreamId) == null) return false;
   if (!Number.isInteger(e.authorSeq) || (e.authorSeq as number) <= 0)
     return false;
-  if (!Number.isFinite(e.timestamp)) return false;
+  if (!Number.isFinite(e.timestamp) || (e.timestamp as number) <= 0)
+    return false;
   if ((e.timestamp as number) > now + RETICULUM_CHAT_MAX_FUTURE_SKEW_MS)
     return false;
-  if ((e.timestamp as number) < now - RETICULUM_CHAT_MAX_AGE_MS) return false;
+  // A freshly authenticated history request can return an arbitrarily old
+  // signed event. Channel/message expiry is enforced separately by the DB.
+  if (
+    context !== 'history' &&
+    (e.timestamp as number) < now - RETICULUM_CHAT_MAX_AGE_MS
+  )
+    return false;
   if (
     typeof e.eventType !== 'string' ||
     !VALID_EVENT_TYPES.has(e.eventType as ReticulumChatEventType)
@@ -4692,6 +4719,57 @@ export function verifyReticulumDmResourceReceipt(
     wire,
     now,
   });
+}
+
+export function compactReticulumDmResourceReceipt(
+  receipt: ReticulumDmResourceReceiptWire
+): ReticulumDmResourceReceiptCompactWire {
+  return [
+    receipt.b,
+    compactSha256ForWire(receipt.f),
+    receipt.s,
+    receipt.l,
+    compactPeerHashForWire(receipt.sp),
+    receipt.p,
+    receipt.n,
+    receipt.z,
+  ];
+}
+
+export function reticulumDmResourceReceiptFromWire(
+  wire: ReticulumDmResourceReceiptWire | ReticulumDmResourceReceiptCompactWire
+): ReticulumDmResourceReceiptWire | null {
+  if (!Array.isArray(wire)) return wire;
+  if (
+    wire.length !== 8 ||
+    typeof wire[0] !== 'string' ||
+    typeof wire[1] !== 'string' ||
+    typeof wire[2] !== 'number' ||
+    typeof wire[3] !== 'number' ||
+    typeof wire[4] !== 'string' ||
+    typeof wire[5] !== 'string' ||
+    typeof wire[6] !== 'number' ||
+    typeof wire[7] !== 'string'
+  )
+    return null;
+  try {
+    const authorAddress = deriveAddressFromPublicKey(wire[5]);
+    const fileHash = sha256FromWire(wire[1]);
+    if (!authorAddress || !fileHash) return null;
+    return {
+      c: reticulumDmConversationId(authorAddress, wire[0]),
+      b: wire[0],
+      f: fileHash,
+      s: wire[2],
+      l: wire[3],
+      sp: wire[4],
+      p: wire[5],
+      n: wire[6],
+      z: wire[7],
+    };
+  } catch {
+    return null;
+  }
 }
 
 function verifyResourceReceiptFields(input: {
@@ -7021,6 +7099,7 @@ export class ReticulumChatManager extends EventEmitter {
   private groupAdminValidationUnavailableUntil = new Map<string, number>();
   private requestedEventPulls = new Map<string, number>();
   private pendingEventPulls = new Map<string, ReticulumChatPullQueueItem>();
+  private replyRecoveryCooldowns = new Map<string, number>();
   private eventPullPeerPressureLogged = new Set<string>();
   private latestEventPullFallbackTimers = new Map<
     string,
@@ -8355,7 +8434,7 @@ export class ReticulumChatManager extends EventEmitter {
         const result = await this.sendToPeer(peer, {
           t: 'RCHAT',
           k: 'dm_resource_receipt',
-          w: receipt,
+          w: compactReticulumDmResourceReceipt(receipt),
         });
         if (!result.ok) continue;
         sent = true;
@@ -8419,11 +8498,15 @@ export class ReticulumChatManager extends EventEmitter {
   }
 
   private async handleDirectResourceReceipt(
-    receipt: ReticulumDmResourceReceiptWire,
+    wire:
+      | ReticulumDmResourceReceiptWire
+      | ReticulumDmResourceReceiptCompactWire,
     peerHash: string
   ): Promise<void> {
+    const receipt = reticulumDmResourceReceiptFromWire(wire);
     if (
       !this.resourceStore ||
+      !receipt ||
       !verifyReticulumDmResourceReceipt(receipt, this.now())
     )
       return;
@@ -8565,6 +8648,7 @@ export class ReticulumChatManager extends EventEmitter {
     }
     this.clearLatestEventPullFallbackTimers();
     this.latestEventPullFallbackCooldowns.clear();
+    this.replyRecoveryCooldowns.clear();
     if (this.controlRetryTimer) {
       clearTimeout(this.controlRetryTimer);
       this.controlRetryTimer = null;
@@ -14467,6 +14551,7 @@ export class ReticulumChatManager extends EventEmitter {
     if (options.repairNetwork === false) return;
     if (!this.localGroupIds.has(groupId) || !this.subscribedGroups.has(groupId))
       return;
+    this.requestMissingReplyTargets(groupId, localEvents);
     const peers = this.getInterestedPeers(groupId).slice(0, 3);
     if (peers.length === 0) return;
     const normalizedChannelId =
@@ -14502,6 +14587,86 @@ export class ReticulumChatManager extends EventEmitter {
         reason,
         peer
       );
+    }
+  }
+
+  private requestMissingReplyTargets(
+    groupId: number,
+    events: readonly ReticulumChatEvent[]
+  ): void {
+    if (
+      this.isClosed ||
+      !this.signLocalFields ||
+      !this.localGroupIds.has(groupId) ||
+      !this.subscribedGroups.has(groupId)
+    )
+      return;
+    const now = this.now();
+    const canReadChannel = this.localChannelReadPredicate(groupId);
+    const interestedPeers = this.getInterestedPeers(groupId);
+    let queued = 0;
+    for (const event of events) {
+      // Only follow authenticated envelope references from visible roots.
+      // Do not parse reply IDs out of arbitrary message text or recurse through
+      // recovered history: each read has a small, independent repair budget.
+      const eventId = event.replyToEventId;
+      if (
+        event.groupId !== groupId ||
+        !['message', 'attachment_manifest'].includes(event.eventType) ||
+        !canReadChannel(event.channelId) ||
+        this.groupEventIsSilenced(event) ||
+        typeof eventId !== 'string' ||
+        eventId.length < 8 ||
+        eventId === event.eventId ||
+        this.db.hasEvent(eventId) ||
+        this.db.hasExpiredEventMarker(eventId) ||
+        this.db.isEventPayloadScrubbed(eventId) ||
+        this.isRejectedEventPullSuppressed(groupId, eventId)
+      )
+        continue;
+      const key = this.eventPullKey(groupId, eventId);
+      if (
+        this.pendingEventPulls.has(key) ||
+        (this.replyRecoveryCooldowns.get(key) ?? 0) > now
+      )
+        continue;
+      const peers = [
+        ...new Set([
+          ...this.getResourceDiscoveryPeers(event.eventId),
+          ...interestedPeers,
+        ]),
+      ].slice(0, 3);
+      if (peers.length === 0) continue;
+      for (const peer of peers) {
+        this.enqueueEventPull(peer, {
+          eventId,
+          groupId,
+          channelId: event.channelId,
+          authorAddress: '',
+          authorSeq: 0,
+          timestamp: event.timestamp,
+          eventType: 'message',
+          payloadHash: '',
+          mentionAddressHashes: [],
+        });
+      }
+      // Queue pressure must not suppress a repair we did not actually admit.
+      if (!this.pendingEventPulls.has(key)) continue;
+      while (
+        this.replyRecoveryCooldowns.size >= RETICULUM_CHAT_PULL_QUEUE_MAX
+      ) {
+        const oldestKey = this.replyRecoveryCooldowns.keys().next().value;
+        if (oldestKey === undefined) break;
+        this.replyRecoveryCooldowns.delete(oldestKey);
+      }
+      this.replyRecoveryCooldowns.set(
+        key,
+        now + RETICULUM_CHAT_REPLY_RECOVERY_COOLDOWN_MS
+      );
+      loggerLog(
+        `[ReticulumChat] missing_reply_recovery_queued group=${groupId} reply=${event.eventId} target=${eventId} peers=${peers.length}`
+      );
+      if (++queued >= RETICULUM_CHAT_REPLY_RECOVERY_MAX_PER_READ) break;
     }
   }
 
@@ -14838,7 +15003,7 @@ export class ReticulumChatManager extends EventEmitter {
     ) {
       return [];
     }
-    return (
+    const visibleEvents = (
       await this.filterEventsForRequesterReadAccess(
         groupId,
         events,
@@ -14851,6 +15016,8 @@ export class ReticulumChatManager extends EventEmitter {
           !silencedAuthors.has(event.authorAddress)
       )
       .map((event) => this.eventForRenderer(event));
+    this.requestMissingReplyTargets(groupId, visibleEvents);
+    return visibleEvents;
   }
 
   async getMessageWindowPageAroundEvent(
@@ -18414,7 +18581,9 @@ export class ReticulumChatManager extends EventEmitter {
         return;
       case 'dm_resource_receipt':
         void this.handleDirectResourceReceipt(
-          wire.w as ReticulumDmResourceReceiptWire,
+          wire.w as
+            | ReticulumDmResourceReceiptWire
+            | ReticulumDmResourceReceiptCompactWire,
           peerHash
         );
         return;
@@ -26717,10 +26886,11 @@ export class ReticulumChatManager extends EventEmitter {
 
   private acceptEvent(
     candidate: unknown,
-    ownEvent: boolean
+    ownEvent: boolean,
+    context: 'live' | 'history' = 'live'
   ): boolean | Promise<boolean> {
     const now = this.now();
-    if (!validateReticulumChatEventShape(candidate, now)) return false;
+    if (!validateReticulumChatEventShape(candidate, now, context)) return false;
     const event = candidate;
     if (!this.localGroupIds.has(event.groupId)) return false;
     if (!verifyReticulumChatEvent(event)) return false;
@@ -31935,7 +32105,9 @@ export class ReticulumChatManager extends EventEmitter {
         peer,
         'author-manifest-resource'
       );
-      if (!resolved) {
+      // An empty string means the bridge already knows the peer identity.
+      // Only null means identity discovery failed.
+      if (resolved === null) {
         this.failAuthorManifestSync(session.key, 'identity_unavailable');
         return;
       }
@@ -39107,8 +39279,10 @@ export class ReticulumChatManager extends EventEmitter {
           }
           continue;
         }
-        const acceptedEvent =
-          await this.acceptableInboundEventResource(candidate);
+        const acceptedEvent = await this.acceptableInboundEventResource(
+          candidate,
+          sourcePeerHash
+        );
         if (!acceptedEvent) {
           rejectedInvalidCount += 1;
           this.notePeerViolation(sourcePeerHash, 'event_page_invalid_event');
@@ -39617,7 +39791,10 @@ export class ReticulumChatManager extends EventEmitter {
         );
         return;
       }
-      const acceptedEvent = await this.acceptableInboundEventResource(parsed);
+      const acceptedEvent = await this.acceptableInboundEventResource(
+        parsed,
+        offer.sourcePeerHash || payload.peerPresenceHash || ''
+      );
       if (!acceptedEvent) {
         this.retryEventPullAfterResourceFailure(
           offer,
@@ -39680,14 +39857,17 @@ export class ReticulumChatManager extends EventEmitter {
       const sourcePeerHash =
         offer.sourcePeerHash || payload.peerPresenceHash || '';
       this.requestMissingAuthorRangeBeforeAccept(event, sourcePeerHash);
-      if (await this.acceptEvent(parsed, false)) {
+      // Keep history validation through the final admission check, including
+      // rechecking local membership after the asynchronous policy checks.
+      const inserted = await this.acceptEvent(event, false, 'history');
+      if (inserted || this.db.hasExpiredEventMarker(event.eventId)) {
         this.noteEventSourcePeer(event.eventId, sourcePeerHash);
         this.pendingEventPulls.delete(
           this.eventPullKey(event.groupId, event.eventId)
         );
-        this.emitGroupEventIfVisible(event);
+        if (inserted) this.emitGroupEventIfVisible(event);
         this.requestFeedContinuationFromOffer(offer, event, sourcePeerHash);
-        this.advertiseImportedEventState(event);
+        if (inserted) this.advertiseImportedEventState(event);
       } else {
         this.retryEventPullAfterResourceFailure(
           offer,
@@ -39752,15 +39932,36 @@ export class ReticulumChatManager extends EventEmitter {
   }
 
   private async acceptableInboundEventResource(
-    candidate: unknown
+    candidate: unknown,
+    sourcePeerHash = ''
   ): Promise<ReticulumChatEvent | null> {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
       return null;
-    if (!validateReticulumChatEventShape(candidate, this.now())) return null;
     const event = candidate as ReticulumChatEvent;
-    if (!this.localGroupIds.has(event.groupId)) return null;
-    if (!verifyReticulumChatEvent(event)) return null;
-    if (!(await this.canLocalUserReadEvent(event))) return null;
+    const reject = (reason: string): null => {
+      // IDs only: never log message contents, keys, or the received payload.
+      loggerWarn('[ReticulumChat] event_resource_rejected', {
+        eventId:
+          typeof event.eventId === 'string' ? event.eventId.slice(0, 128) : '',
+        groupId: Number.isInteger(event.groupId) ? event.groupId : null,
+        peer: sourcePeerHash.slice(0, 16),
+        reason,
+      });
+      return null;
+    };
+    const now = this.now();
+    if (!validateReticulumChatEventShape(candidate, now, 'history')) {
+      if (Number.isFinite(event.timestamp)) {
+        if (event.timestamp > now + RETICULUM_CHAT_MAX_FUTURE_SKEW_MS)
+          return reject('timestamp_in_future');
+      }
+      return reject('invalid_shape_or_payload');
+    }
+    if (!this.localGroupIds.has(event.groupId))
+      return reject('local_not_member');
+    if (!verifyReticulumChatEvent(event)) return reject('invalid_signature');
+    if (!(await this.canLocalUserReadEvent(event)))
+      return reject('channel_read_forbidden');
     return event;
   }
 

@@ -1,3 +1,4 @@
+import { assertAllowedReticulumSigningPayload } from '../../src/background/reticulum-signing-policy';
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
@@ -49,12 +50,15 @@ import {
   verifyReticulumChatEvent,
   verifyReticulumChatEventRequest,
   verifyReticulumChatLinkedEventRequest,
+  verifyReticulumChatAuthorManifestRequest,
   verifyReticulumChatResourceReceipt,
   verifyReticulumDmEvent,
   verifyReticulumDmNotify,
   verifyReticulumDmProbe,
   verifyReticulumDmRequest,
   verifyReticulumDmResourceReceipt,
+  compactReticulumDmResourceReceipt,
+  reticulumDmResourceReceiptFromWire,
   verifyReticulumMetadataSnapshotRequest,
   verifyReticulumChatReadSyncWire,
   verifyReticulumDirectCallHistoryWire,
@@ -2156,6 +2160,26 @@ describe('reticulum chat protocol', () => {
     const event = signedEvent();
     expect(validateReticulumChatEventShape(event)).toBe(true);
     expect(verifyReticulumChatEvent(event)).toBe(true);
+  });
+
+  it('allows historical timestamps only in history validation and still checks payloads and future skew', () => {
+    const now = Date.now();
+    const old = signedEvent({ timestamp: now - 90 * 24 * 60 * 60_000 });
+    expect(validateReticulumChatEventShape(old, now)).toBe(false);
+    expect(validateReticulumChatEventShape(old, now, 'history')).toBe(true);
+    expect(verifyReticulumChatEvent(old)).toBe(true);
+    for (const timestamp of [-1, 0, NaN, now + 6 * 60_000]) {
+      expect(
+        validateReticulumChatEventShape({ ...old, timestamp }, now, 'history')
+      ).toBe(false);
+    }
+    expect(
+      validateReticulumChatEventShape(
+        { ...old, encryptedPayload: 'tampered' },
+        now,
+        'history'
+      )
+    ).toBe(false);
   });
 
   it('rejects payload hash mismatches before signature verification', () => {
@@ -4419,6 +4443,9 @@ describe('reticulum chat database', () => {
       updatedAt: now + 1,
     });
     db.reconcileChannelMessageExpiries(channel.groupId, channel.channelId);
+    expect(db.getEvent(event.eventId)).toBeNull();
+    // A peer may still retain the original after this channel disables expiry.
+    expect(db.insertEvent(event, false)).toBe(false);
     expect(db.getEvent(event.eventId)).toBeNull();
   });
 
@@ -7763,6 +7790,214 @@ describe('reticulum chat manager', () => {
     legacyReceiver.close();
     streamReceiver.close();
   });
+
+  it.each(['group', 'dm'] as const)(
+    'sends a verified %s resource receipt through the wallet signing policy',
+    async (scope) => {
+      const owner = createDmIdentity();
+      const recipient = createDmIdentity();
+      const conversationId = reticulumDmConversationId(
+        owner.address,
+        recipient.address
+      );
+      const root = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'reticulum-receipt-policy-')
+      );
+      const sourcePath = path.join(root, 'source.bin');
+      fs.writeFileSync(sourcePath, Buffer.from('receipt test file'));
+      const resourceStore = new ReticulumResourceStore({
+        dbPath: path.join(root, 'resources.db'),
+        rootDir: path.join(root, 'resources'),
+      });
+      const manifest = resourceStore.importLocalFile({
+        sourcePath,
+        namespace:
+          scope === 'group' ? 'reticulum-chat-file' : 'reticulum-dm-resource',
+        ownerId: owner.address,
+        fileName: 'source.bin',
+        mimeType: 'application/octet-stream',
+        encrypted: false,
+      });
+      const eventId = 'receipt-policy-event';
+      if (scope === 'group') {
+        resourceStore.recordGroupReference({
+          fileHash: manifest.fileHash,
+          groupId: 716,
+          eventId,
+          ownerId: owner.address,
+        });
+      } else {
+        resourceStore.recordDirectReference({
+          manifest,
+          conversationId,
+          eventId,
+          ownerId: owner.address,
+        });
+      }
+      const providerPeerHash = 'a'.repeat(32);
+      const sourcePeer = 'b'.repeat(32);
+      const sent: Array<{ peer: string; wire: ReticulumChatWire }> = [];
+      const retained = vi.spyOn(resourceStore, 'markReplicaRetention');
+      const manager = new ReticulumChatManager({
+        dbPath: tempDbPath(),
+        resourceStore,
+        validateGroupMember: async () => true,
+        signLocalFields: async (fields) => {
+          assertAllowedReticulumSigningPayload(fields);
+          const signedFields = {
+            ...fields,
+            authorAddress: owner.address,
+            authorPublicKey: owner.publicKey,
+          };
+          return {
+            authorAddress: owner.address,
+            authorPublicKey: owner.publicKey,
+            signature: base58Encode(
+              nacl.sign.detached(
+                new Uint8Array(canonicalizeForSigning(signedFields)),
+                owner.secretKey
+              )
+            ),
+          };
+        },
+        bridge: {
+          on: () => undefined,
+          off: () => undefined,
+          getLocalDestinationHash: () => providerPeerHash,
+          sendReticulumChatDetailed: async (
+            peer: string,
+            wire: ReticulumChatWire
+          ) => {
+            sent.push({ peer, wire });
+            return { ok: true as const };
+          },
+        } as any,
+      });
+      const sendWire = vi.spyOn(manager as any, 'sendToPeer');
+      try {
+        const progress = {
+          contextId: 716,
+          eventId,
+          fileHash: manifest.fileHash,
+          sourcePeerHashes: [sourcePeer, sourcePeer],
+          complete: true,
+          featureData: {
+            conversationId,
+            peerAddress: recipient.address,
+            requesterAddress: owner.address,
+          },
+        };
+        const send = () =>
+          scope === 'group'
+            ? (manager as any).sendGroupResourceReceipts(progress)
+            : (manager as any).sendDirectResourceReceipts(progress);
+        await send();
+        expect(sendWire).toHaveBeenCalledTimes(1);
+        await expect(sendWire.mock.results[0].value).resolves.toEqual({
+          ok: true,
+        });
+        expect(sent).toHaveLength(1);
+        expect(sent[0].peer).toBe(sourcePeer);
+        expect(wireFitsReticulumChat(sent[0].wire)).toBe(true);
+        const receivedWire = (sent[0].wire as any).w;
+        const receipt =
+          scope === 'dm'
+            ? reticulumDmResourceReceiptFromWire(receivedWire)
+            : receivedWire;
+        expect(receipt).toMatchObject({
+          f: manifest.fileHash,
+          s: manifest.sizeBytes,
+        });
+        if (scope === 'group') {
+          expect(sent[0].wire.k).toBe('resource_receipt');
+          expect(verifyReticulumChatResourceReceipt(716, receipt)).toBe(true);
+          expect(verifyReticulumChatResourceReceipt(717, receipt)).toBe(false);
+          expect(
+            verifyReticulumChatResourceReceipt(716, {
+              ...receipt,
+              s: receipt.s + 1,
+            })
+          ).toBe(false);
+        } else {
+          expect(sent[0].wire.k).toBe('dm_resource_receipt');
+          expect(verifyReticulumDmResourceReceipt(receipt)).toBe(true);
+          const receiver = new ReticulumChatManager({
+            dbPath: tempDbPath(),
+            resourceStore,
+          });
+          const record = vi.spyOn(resourceStore, 'recordProviderReceipt');
+          try {
+            receiver.setLocalDmAddresses([recipient.address]);
+            await (receiver as any).handleDirectResourceReceipt(
+              receivedWire,
+              providerPeerHash
+            );
+            expect(record).toHaveBeenCalledWith(
+              expect.objectContaining({
+                fileHash: manifest.fileHash,
+                providerId: providerPeerHash,
+                scopeType: 'dm',
+                scopeId: conversationId,
+              })
+            );
+            // Legacy object receipts remain accepted; both representations
+            // pass through the same signature, scope and sender checks.
+            await (receiver as any).handleDirectResourceReceipt(
+              receipt,
+              providerPeerHash
+            );
+            expect(record).toHaveBeenCalledTimes(2);
+            await (receiver as any).handleDirectResourceReceipt(
+              receivedWire,
+              sourcePeer
+            );
+            const tampered = [...receivedWire];
+            tampered[2] += 1;
+            await (receiver as any).handleDirectResourceReceipt(
+              tampered,
+              providerPeerHash
+            );
+            await (receiver as any).handleDirectResourceReceipt(
+              receivedWire.slice(1),
+              providerPeerHash
+            );
+            expect(record).toHaveBeenCalledTimes(2);
+          } finally {
+            receiver.close();
+          }
+          expect(
+            wireFitsReticulumChat({
+              t: 'RCHAT',
+              k: 'dm_resource_receipt',
+              w: compactReticulumDmResourceReceipt({
+                ...receipt,
+                s: Number.MAX_SAFE_INTEGER,
+                l: Number.MAX_SAFE_INTEGER,
+                n: Number.MAX_SAFE_INTEGER,
+              }),
+            })
+          ).toBe(true);
+          expect(
+            verifyReticulumDmResourceReceipt({
+              ...receipt,
+              b: createDmIdentity().address,
+            })
+          ).toBe(false);
+          expect(
+            verifyReticulumDmResourceReceipt({ ...receipt, s: receipt.s + 1 })
+          ).toBe(false);
+        }
+        expect(retained).toHaveBeenCalledWith(manifest.fileHash, receipt.l);
+        await send();
+        expect(sent).toHaveLength(1);
+        expect(retained).toHaveBeenCalledTimes(1);
+      } finally {
+        manager.close();
+        resourceStore.close();
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
 
   it('records outgoing DM attachment references from the nested message payload', async () => {
     const sender = createDmIdentity();
@@ -26870,6 +27105,121 @@ describe('reticulum chat manager', () => {
     manager.close();
   });
 
+  it.each(['known', 'missing', 'session-failed'] as const)(
+    'handles author manifest identity resolution correctly (%s)',
+    async (mode) => {
+      const peer = 'b'.repeat(32);
+      const localPeer = 'c'.repeat(32);
+      const ensurePeerIdentityKnown = vi.fn(async () => mode !== 'missing');
+      const ensureSession = vi.fn(async () =>
+        mode === 'session-failed'
+          ? { ok: false as const, reason: 'resource_link_timeout' }
+          : { ok: true as const }
+      );
+      const acceptResource = vi.fn(async () => ({ ok: true as const }));
+      const sign = createReticulumChatTestSigner();
+      const manager = new ReticulumChatManager({
+        dbPath: tempDbPath(),
+        // Match the wallet boundary: policy validation happens before signing.
+        signLocalFields: async (fields) => {
+          assertAllowedReticulumSigningPayload(fields);
+          return sign(fields);
+        },
+        validateGroupMember: async () => true,
+        bridge: {
+          on: () => undefined,
+          off: () => undefined,
+          getLocalDestinationHash: () => localPeer,
+          ensurePeerIdentityKnown,
+          ensureReticulumResourceSessionDetailed: ensureSession,
+          acceptReticulumChatResourceDetailed: acceptResource,
+        } as any,
+      });
+      try {
+        manager.setLocalGroupMemberships([56]);
+        manager.subscribeGroup(56);
+        // Exercise the real resolver's bridge-known identity path. Only the
+        // fallback network discovery is stubbed, to model an unreachable peer.
+        const discover = vi
+          .spyOn(manager as any, 'requestReticulumPeerIdentity')
+          .mockResolvedValue(null);
+        const fail = vi.spyOn(manager as any, 'failAuthorManifestSync');
+        const local = await (manager as any).ensureAuthorTreeSnapshot(56);
+        const remote = buildReticulumChatAuthorTreeSnapshot(56, [
+          {
+            authorAddress: 'QremoteManifestAuthor',
+            authorStreamId: TEST_AUTHOR_STREAM_ID,
+            maxSeq: 25,
+          },
+        ]);
+        const key = `56:${remote.root}`;
+        const session = {
+          key,
+          groupId: 56,
+          remoteRoot: remote.root,
+          baseRoot: local.root,
+          baseHeads: [],
+          candidates: [peer],
+          attemptedPeers: new Set<string>(),
+          status: 'active',
+          createdAt: Date.now(),
+          expiresAt: Date.now() + 120_000,
+          retryAt: 0,
+          rounds: 0,
+        };
+        (manager as any).authorManifestSyncs.set(key, session);
+        (manager as any).activeAuthorManifestSyncByGroup.set(56, key);
+        await (manager as any).runAuthorManifestSync(session);
+
+        expect(ensurePeerIdentityKnown).toHaveBeenCalledWith(peer);
+        if (mode === 'missing') {
+          expect(discover).toHaveBeenCalledWith(
+            peer,
+            'author-manifest-resource'
+          );
+          expect(ensureSession).not.toHaveBeenCalled();
+          expect(acceptResource).not.toHaveBeenCalled();
+          expect(fail).toHaveBeenCalledWith(key, 'identity_unavailable');
+          expect(session.status).toBe('backoff');
+        } else {
+          expect(discover).not.toHaveBeenCalled();
+          expect(ensureSession).toHaveBeenCalledWith({
+            peerPresenceHash: peer,
+            reticulumIdentityPublicKeyBase64: '',
+            resourceType: 'reticulum_chat_event',
+            logicalResourceType: 'reticulum_chat_author_manifest',
+          });
+          if (mode === 'session-failed') {
+            expect(acceptResource).not.toHaveBeenCalled();
+            expect(fail).toHaveBeenCalledWith(key, 'resource_link_timeout');
+            expect(session.status).toBe('backoff');
+          } else {
+            expect(fail).not.toHaveBeenCalled();
+            expect(acceptResource).toHaveBeenCalledTimes(1);
+            const request = (acceptResource.mock.calls[0] as any[])[0];
+            expect(request.reticulumIdentityPublicKeyBase64).toBe('');
+            expect(
+              verifyReticulumChatAuthorManifestRequest(request.authMessage)
+            ).toBe(true);
+            expect(request.authMessage).toMatchObject({
+              groupId: 56,
+              root: remote.root,
+              baseRoot: local.root,
+              requesterPeerHash: localPeer,
+              providerPeerHash: peer,
+            });
+            expect(
+              (manager as any).authorManifestTransfers.has(request.transferId)
+            ).toBe(true);
+            expect(session.status).toBe('active');
+          }
+        }
+      } finally {
+        manager.close();
+      }
+    }
+  );
+
   it('verifies an author manifest root before recording dedicated range repairs', async () => {
     const manager = new ReticulumChatManager({
       dbPath: tempDbPath(),
@@ -29538,6 +29888,241 @@ describe('reticulum chat manager', () => {
     expect(validateGroupMember).not.toHaveBeenCalled();
     expect(eventSpy).not.toHaveBeenCalled();
     manager.close();
+  });
+
+  describe('historical event resources', () => {
+    const groupId = 57;
+    const channelId = 'permanent-history';
+    const peer = 'a'.repeat(32);
+    const oldTimestamp = () => Date.now() - 90 * 24 * 60 * 60_000;
+
+    const makeManager = (options: ReticulumChatManagerOptions = {}) => {
+      const manager = new ReticulumChatManager({
+        dbPath: tempDbPath(),
+        validateGroupMember: async () => true,
+        ...options,
+      });
+      manager.setLocalGroupMemberships([groupId]);
+      manager.subscribeGroup(groupId);
+      (manager as any).db.upsertChannel({
+        groupId,
+        channelId,
+        name: channelId,
+        position: 1,
+        archived: false,
+        writeMode: 'members',
+        readMode: 'members',
+        createdBy: 'admin',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      return manager;
+    };
+
+    const importPage = async (
+      manager: ReticulumChatManager,
+      events: ReticulumChatEvent[]
+    ) => {
+      const page = {
+        v: 1,
+        g: groupId,
+        c: channelId,
+        d: 'before',
+        more: false,
+        start: { id: events[0].eventId, ts: events[0].timestamp },
+        end: {
+          id: events[events.length - 1].eventId,
+          ts: events[events.length - 1].timestamp,
+        },
+        wh: (manager as any).db.computeWindowHash(events),
+        events,
+      };
+      const blob = JSON.stringify(page);
+      const transferId = nodeCrypto.randomUUID();
+      const filePath = path.join(
+        path.dirname(tempDbPath()),
+        `${transferId}.json`
+      );
+      fs.writeFileSync(filePath, blob);
+      (manager as any).eventPageOffers.set(transferId, {
+        transferId,
+        groupId,
+        channelId,
+        direction: 'before',
+        pageHash: nodeCrypto.createHash('sha256').update(blob).digest('hex'),
+        sizeBytes: Buffer.byteLength(blob),
+        eventCount: events.length,
+        sourcePeerHash: peer,
+        hasMore: false,
+      });
+      await (manager as any).importReceivedEventPageResource({
+        status: 'received',
+        path: filePath,
+        transferId,
+        peerPresenceHash: peer,
+      });
+    };
+
+    it('imports a page past three old messages without penalizing the provider', async () => {
+      const manager = makeManager();
+      try {
+        const events = signedAuthorEvents(
+          Array.from({ length: 4 }, (_, i) => ({
+            groupId,
+            channelId,
+            authorSeq: i + 1,
+            timestamp: i < 3 ? oldTimestamp() + i : Date.now(),
+          }))
+        );
+        const emitted = vi.fn();
+        manager.on('event', emitted);
+        await importPage(manager, events);
+        expect(
+          manager
+            .getMessageHistory(groupId, channelId, 100, {
+              repairNetwork: false,
+            })
+            .map((event) => event.eventId)
+        ).toEqual(events.map((event) => event.eventId));
+        expect(emitted).toHaveBeenCalledTimes(4);
+        expect((manager as any).peerProtocolViolations.size).toBe(0);
+      } finally {
+        manager.close();
+      }
+    });
+
+    it('honors message and channel expiry and existing deletions while importing old history', async () => {
+      const manager = makeManager();
+      try {
+        const db = (manager as any).db;
+        db.upsertChannel({
+          ...db.getChannel(groupId, channelId),
+          expiryDurationMs: 120 * 24 * 60 * 60_000,
+          updatedAt: Date.now(),
+        });
+        const events = signedAuthorEvents([
+          {
+            eventId: 'old-channel-expired',
+            groupId,
+            channelId,
+            authorSeq: 1,
+            timestamp: Date.now() - 150 * 24 * 60 * 60_000,
+          },
+          {
+            eventId: 'old-message-expired',
+            groupId,
+            channelId,
+            authorSeq: 2,
+            timestamp: oldTimestamp(),
+            encryptedPayload: JSON.stringify({
+              messageText: 'expired',
+              expiryDurationMs: 1_000,
+            }),
+          },
+          {
+            eventId: 'old-deleted-root',
+            groupId,
+            channelId,
+            authorSeq: 3,
+            timestamp: oldTimestamp() + 1,
+          },
+          {
+            eventId: 'old-delete',
+            groupId,
+            channelId,
+            authorSeq: 4,
+            timestamp: oldTimestamp() + 2,
+            eventType: 'delete',
+            targetEventId: 'old-deleted-root',
+          },
+          {
+            eventId: 'old-still-visible',
+            groupId,
+            channelId,
+            authorSeq: 5,
+            timestamp: oldTimestamp() + 3,
+          },
+        ]);
+        db.insertEvent(events[2], false);
+        db.insertEvent(events[3], false);
+        expect(db.isEventPayloadScrubbed(events[2].eventId)).toBe(true);
+        const emitted = vi.fn();
+        manager.on('event', emitted);
+        await importPage(manager, events);
+        expect(db.hasExpiredEventMarker(events[0].eventId)).toBe(true);
+        expect(db.hasExpiredEventMarker(events[1].eventId)).toBe(true);
+        expect(db.hasEvent(events[0].eventId)).toBe(false);
+        expect(db.hasEvent(events[1].eventId)).toBe(false);
+        expect(db.isEventPayloadScrubbed(events[2].eventId)).toBe(true);
+        expect(db.getEvent(events[4].eventId)).not.toBeNull();
+        expect(emitted).toHaveBeenCalledTimes(1);
+        expect(emitted).toHaveBeenCalledWith({
+          event: expect.objectContaining({ eventId: events[4].eventId }),
+        });
+        expect((manager as any).peerProtocolViolations.size).toBe(0);
+      } finally {
+        manager.close();
+      }
+    });
+
+    it.each([
+      'signature',
+      'payload',
+      'future',
+      'non-member',
+      'membership-unavailable',
+      'private',
+      'write-policy',
+      'wrong-channel',
+      'wrong-group',
+    ])('still rejects historical events with %s failures', async (failure) => {
+      const manager = makeManager({
+        validateGroupMember: async () =>
+          failure === 'membership-unavailable'
+            ? null
+            : failure !== 'non-member',
+        validateGroupAdmin: async () => false,
+      });
+      try {
+        const db = (manager as any).db;
+        if (failure === 'private' || failure === 'write-policy') {
+          db.upsertChannel({
+            ...db.getChannel(groupId, channelId),
+            readMode: failure === 'private' ? 'admins' : 'members',
+            writeMode: 'admins',
+            writeModeUpdatedAt: 1,
+            updatedAt: 2,
+          });
+        }
+        const event = signedEvent({
+          groupId,
+          channelId,
+          timestamp: oldTimestamp(),
+          ...(failure === 'future'
+            ? { timestamp: Date.now() + 6 * 60_000 }
+            : {}),
+          ...(failure === 'wrong-channel'
+            ? { channelId: 'another-channel' }
+            : {}),
+          ...(failure === 'wrong-group' ? { groupId: 58 } : {}),
+        });
+        if (failure === 'signature')
+          event.signature = base58Encode(new Uint8Array(64));
+        if (failure === 'payload') event.encryptedPayload = 'tampered';
+        await importPage(manager, [event]);
+        expect(db.hasEvent(event.eventId)).toBe(false);
+        if (failure === 'membership-unavailable') {
+          expect(
+            (manager as any).pendingEventPulls.has(
+              `${groupId}:${event.eventId}`
+            )
+          ).toBe(true);
+          expect((manager as any).peerProtocolViolations.size).toBe(0);
+        }
+      } finally {
+        manager.close();
+      }
+    });
   });
 
   it('stops processing an event page after a bounded protocol rejection burst', async () => {
@@ -36555,6 +37140,284 @@ describe('reticulum chat manager', () => {
     finishSigning?.();
     await flushQueuedWork();
     manager.close();
+  });
+
+  describe('missing reply recovery', () => {
+    const provider = 'b'.repeat(32);
+    const alternate = 'c'.repeat(32);
+    const makeManager = (options: ReticulumChatManagerOptions = {}) => {
+      const manager = new ReticulumChatManager({
+        dbPath: tempDbPath(),
+        signLocalFields: createReticulumChatTestSigner(),
+        validateGroupMember: async () => true,
+        ...options,
+      });
+      manager.setLocalGroupMemberships([743]);
+      manager.subscribeGroup(743);
+      vi.spyOn(manager as any, 'getInterestedPeers').mockReturnValue([
+        provider,
+        alternate,
+      ]);
+      vi.spyOn(manager as any, 'requestStateHeadsFromPeer').mockImplementation(
+        () => {}
+      );
+      vi.spyOn(manager as any, 'requestLinkedHistoryPage').mockResolvedValue(
+        undefined
+      );
+      vi.spyOn(manager as any, 'scheduleEventPullQueue').mockImplementation(
+        () => {}
+      );
+      return manager;
+    };
+    const addReply = (manager: ReticulumChatManager, target: string) => {
+      const reply = signedEvent({ groupId: 743, replyToEventId: target });
+      expect((manager as any).db.insertEvent(reply, false)).toBe(true);
+      return reply;
+    };
+
+    it.each([false, true])(
+      'fetches a 90-day-old missing original over a signed link without reviving expired content (expired=%s)',
+      async (expired) => {
+        const receives: any[] = [];
+        const manager = makeManager({
+          bridge: {
+            on: () => undefined,
+            off: () => undefined,
+            getLocalDestinationHash: () => 'a'.repeat(32),
+            ensurePeerIdentityKnown: async () => true,
+            ensureReticulumResourceSessionDetailed: async () => ({ ok: true }),
+            acceptReticulumChatResourceDetailed: async (payload: any) => {
+              receives.push(payload);
+              return { ok: true };
+            },
+          } as any,
+        });
+        try {
+          const original = signedEvent({
+            eventId: 'missing-reply-original',
+            groupId: 743,
+            channelId: 'permanent-history',
+            timestamp: Date.now() - 90 * 24 * 60 * 60_000,
+            ...(expired
+              ? {
+                  encryptedPayload: JSON.stringify({
+                    messageText: 'expired original',
+                    expiryDurationMs: 1_000,
+                  }),
+                }
+              : {}),
+          });
+          const reply = addReply(manager, original.eventId);
+          const page = manager.getMessageHistoryPage(743, 'general', 10);
+          expect(page.events.map((event) => event.eventId)).toEqual([
+            reply.eventId,
+          ]);
+          expect(page.oldestCursor?.eventId).toBe(reply.eventId);
+          const item = (manager as any).pendingEventPulls.get(
+            `743:${original.eventId}`
+          );
+          expect([...item.peerHashes]).toEqual([provider, alternate]);
+          await (manager as any).requestEventPull(provider, item);
+          expect(
+            verifyReticulumChatLinkedEventRequest(receives[0].authMessage)
+          ).toBe(true);
+          expect(receives[0].authMessage.eventId).toBe(original.eventId);
+          expect(
+            verifyReticulumChatLinkedEventRequest(
+              receives[0].authMessage,
+              receives[0].authMessage.timestamp + 3 * 60_000
+            )
+          ).toBe(false);
+          // The first provider returns an invalid signature. Recovery must use
+          // another provider, never relax the verification requirement.
+          fs.writeFileSync(
+            receives[0].savePath,
+            JSON.stringify({
+              ...original,
+              signature: base58Encode(new Uint8Array(64)),
+            })
+          );
+          await (manager as any).importReceivedEventResource({
+            transferId: receives[0].transferId,
+            path: receives[0].savePath,
+            peerPresenceHash: provider,
+          });
+          expect((manager as any).db.hasEvent(original.eventId)).toBe(false);
+          expect([...item.peerHashes]).toEqual([alternate]);
+          await (manager as any).requestEventPull(alternate, item);
+          const onEvent = vi.fn();
+          manager.on('event', onEvent);
+          fs.writeFileSync(receives[1].savePath, JSON.stringify(original));
+          await (manager as any).importReceivedEventResource({
+            transferId: receives[1].transferId,
+            path: receives[1].savePath,
+            peerPresenceHash: alternate,
+          });
+          expect((manager as any).db.hasEvent(original.eventId)).toBe(!expired);
+          expect(
+            (manager as any).db.hasExpiredEventMarker(original.eventId)
+          ).toBe(expired);
+          if (expired) {
+            expect(onEvent).not.toHaveBeenCalled();
+          } else {
+            expect(onEvent).toHaveBeenCalledWith({
+              event: expect.objectContaining({ eventId: original.eventId }),
+            });
+            expect(
+              manager
+                .getMessageHistory(743, 'permanent-history')
+                .map((event) => event.eventId)
+            ).toContain(original.eventId);
+          }
+          expect(
+            (manager as any).pendingEventPulls.has(`743:${original.eventId}`)
+          ).toBe(false);
+        } finally {
+          manager.close();
+        }
+      }
+    );
+
+    it('deduplicates targets and cools down exhausted attempts across repeated reads', () => {
+      let now = Date.now();
+      const manager = makeManager({ now: () => now });
+      try {
+        addReply(manager, 'shared-missing-target');
+        addReply(manager, 'shared-missing-target');
+        manager.getMessageHistory(743, 'general');
+        expect((manager as any).pendingEventPulls.size).toBe(1);
+        (manager as any).pendingEventPulls.clear();
+        manager.getMessageHistory(743, 'general');
+        expect((manager as any).pendingEventPulls.size).toBe(0);
+        now += 5 * 60_000;
+        manager.getMessageHistory(743, 'general');
+        expect((manager as any).pendingEventPulls.size).toBe(1);
+      } finally {
+        manager.close();
+      }
+    });
+
+    it('skips known and expired originals and honors local-only reads', () => {
+      const manager = makeManager();
+      try {
+        const known = signedEvent({ groupId: 743 });
+        const expired = signedEvent({ groupId: 743 });
+        (manager as any).db.insertEvent(known, false);
+        (manager as any).db.recordExpiredEventMarker(expired);
+        addReply(manager, known.eventId);
+        addReply(manager, expired.eventId);
+        addReply(manager, 'still-missing-original');
+        manager.getMessageHistory(743, 'general', 100, {
+          repairNetwork: false,
+        });
+        expect((manager as any).pendingEventPulls.size).toBe(0);
+        expect((manager as any).db.hasEvent(known.eventId)).toBe(true);
+        expect((manager as any).db.hasExpiredEventMarker(expired.eventId)).toBe(
+          true
+        );
+        manager.getMessageHistory(743, 'general');
+        expect([...(manager as any).pendingEventPulls.keys()]).toEqual([
+          '743:still-missing-original',
+        ]);
+      } finally {
+        manager.close();
+      }
+    });
+
+    it('bounds recovery work and also repairs an anchored history window', async () => {
+      const manager = makeManager();
+      try {
+        Array.from({ length: 20 }, (_, index) =>
+          addReply(manager, `missing-original-${index}`)
+        );
+        manager.getMessageHistory(743, 'general', 100);
+        expect((manager as any).pendingEventPulls.size).toBe(16);
+        manager.getMessageHistory(743, 'general', 100);
+        expect((manager as any).pendingEventPulls.size).toBe(20);
+        const anchored = addReply(manager, 'missing-anchored-original');
+        const window = await manager.getMessageWindowAroundEvent(
+          743,
+          'general',
+          anchored.eventId,
+          { beforeLimit: 0, afterLimit: 0 }
+        );
+        expect(window.map((event) => event.eventId)).toContain(
+          anchored.eventId
+        );
+        expect(
+          (manager as any).pendingEventPulls.has(
+            '743:missing-anchored-original'
+          )
+        ).toBe(true);
+      } finally {
+        manager.close();
+      }
+    });
+
+    it('does not recover references from inaccessible channels', () => {
+      const manager = makeManager();
+      try {
+        (manager as any).db.upsertChannel({
+          groupId: 743,
+          channelId: 'private',
+          name: 'Private',
+          position: 1,
+          archived: false,
+          writeMode: 'admins',
+          readMode: 'admins',
+          writeModeUpdatedAt: 1,
+          createdBy: 'admin',
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        (manager as any).db.insertEvent(
+          signedEvent({
+            groupId: 743,
+            channelId: 'private',
+            replyToEventId: 'private-missing-original',
+          }),
+          false
+        );
+        expect(manager.getMessageHistory(743, 'private')).toEqual([]);
+        manager.getMessageHistory(743, 100);
+        expect((manager as any).pendingEventPulls.size).toBe(0);
+      } finally {
+        manager.close();
+      }
+    });
+
+    it('logs the validation failure and event ID without exposing message content', async () => {
+      const manager = makeManager();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const invalid = signedEvent({
+          groupId: 743,
+          timestamp: Date.now() + 6 * 60_000,
+          encryptedPayload: 'private message contents',
+        });
+        expect(
+          await (manager as any).acceptableInboundEventResource(
+            invalid,
+            provider
+          )
+        ).toBeNull();
+        expect(warn).toHaveBeenCalledWith(
+          '[ReticulumChat] event_resource_rejected',
+          {
+            eventId: invalid.eventId,
+            groupId: 743,
+            peer: provider.slice(0, 16),
+            reason: 'timestamp_in_future',
+          }
+        );
+        expect(JSON.stringify(warn.mock.calls)).not.toContain(
+          invalid.encryptedPayload
+        );
+      } finally {
+        warn.mockRestore();
+        manager.close();
+      }
+    });
   });
 
   it('repairs forward from the newest local message on a normal history read', () => {
