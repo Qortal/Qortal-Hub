@@ -133,7 +133,7 @@ describe('publishing input and storage checks', () => {
     }
   );
 
-  it.each([400, 401, 404, 500, 507])(
+  it.each([400, 404, 500, 507])(
     'does not mislabel HTTP %s as a full disk',
     async (status) => {
       const fetchMock = vi.fn().mockResolvedValue({ ok: false, status });

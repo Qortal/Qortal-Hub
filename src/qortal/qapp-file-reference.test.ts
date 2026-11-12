@@ -4,6 +4,7 @@ import {
   hasQAppFileReferences,
   isQAppFileReference,
 } from './qapp-file-reference';
+import { QAppFileUploadError } from '../../electron/src/qapp-file-protocol';
 
 vi.mock('../i18n/i18n', () => ({ default: { t: (key: string) => key } }));
 const cleanup: (() => void)[] = [];
@@ -37,6 +38,62 @@ function fixture() {
 }
 
 describe('trusted native file capabilities', () => {
+  it('preserves a trusted upload status without exposing worker error text', async () => {
+    const f = fixture();
+    const file = f.prepare();
+    const pending = file.upload({
+      endpoint: 'https://node.invalid/arbitrary/FILE/name/chunk',
+      start: 0,
+      end: 3,
+      index: 0,
+    });
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'QAppFileUploadError',
+      status: 403,
+      message: 'QAPP_FILE_UPLOAD_FAILED',
+    });
+    await Promise.resolve();
+    f.deliver({
+      id: 1,
+      error: 'QAPP_FILE_UPLOAD_FAILED',
+      status: 403,
+      message: 'secret node response',
+      endpoint: 'secret endpoint',
+    });
+    await rejected;
+    expect(await pending.catch((error) => error)).toBeInstanceOf(
+      QAppFileUploadError
+    );
+  });
+  it.each([undefined, '401', 399, 600, 401.5, NaN])(
+    'does not treat an invalid upload status (%s) as a node answer',
+    async (status) => {
+      const f = fixture();
+      const file = f.prepare();
+      const pending = file.upload({
+        endpoint: 'https://node.invalid/arbitrary/FILE/name/chunk',
+        start: 0,
+        end: 3,
+        index: 0,
+      });
+      const rejected = expect(pending).rejects.toThrow(
+        'question:message.error.perform_request'
+      );
+      await Promise.resolve();
+      f.deliver({ id: 1, error: 'QAPP_FILE_UPLOAD_FAILED', status });
+      await rejected;
+    }
+  );
+  it('does not interpret upload status metadata on a save failure', async () => {
+    const f = fixture();
+    const pending = f.prepare().save('file.txt');
+    const rejected = expect(pending).rejects.toThrow(
+      'question:message.error.perform_request'
+    );
+    await Promise.resolve();
+    f.deliver({ id: 1, error: 'QAPP_FILE_UPLOAD_FAILED', status: 403 });
+    await rejected;
+  });
   it('recognizes only authenticated instances and preserves aliases', () => {
     const f = fixture();
     const file = f.prepare();

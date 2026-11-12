@@ -38,17 +38,24 @@ export const coreErrorMessage = (text: string): string => {
   return text;
 };
 
+export const nodeAnswerErrorFromStatus = (
+  status: number,
+  text = ''
+): NodeAnswerError => {
+  const message = needsApiKey(status)
+    ? i18n.t('auth:message.error.publish_needs_api_key', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    : coreErrorMessage(text) || `HTTP ${status}`;
+  return new NodeAnswerError(message, status);
+};
+
 export const nodeAnswerError = async (response: {
   status: number;
   text: () => Promise<string>;
 }): Promise<NodeAnswerError> => {
   const text = await response.text().catch(() => '');
-  const message = needsApiKey(response.status)
-    ? i18n.t('auth:message.error.publish_needs_api_key', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    : coreErrorMessage(text) || `HTTP ${response.status}`;
-  return new NodeAnswerError(message, response.status);
+  return nodeAnswerErrorFromStatus(response.status, text);
 };
 
 /** Network errors and retryable answers are worth another try. */

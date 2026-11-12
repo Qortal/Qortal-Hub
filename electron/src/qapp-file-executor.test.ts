@@ -69,6 +69,88 @@ function fixture(
 }
 
 describe('native file executor', () => {
+  it.each([400, 401, 403, 408, 429, 503])(
+    'returns only the HTTP %s status for a rejected upload',
+    async (status) => {
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const text = vi.fn();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status,
+          body: { cancel },
+          text,
+        })
+      );
+      const f = fixture(5, 1);
+      const ready = f.receive();
+      f.input.postMessage({ file: new Blob(['hello']) });
+      await ready;
+      expect(
+        await f.call({
+          kind: 'upload',
+          file: 0,
+          start: 0,
+          end: 5,
+          index: 0,
+          endpoint:
+            'https://node.invalid/arbitrary/FILE/name/chunk?apiKey=secret',
+        })
+      ).toEqual({ id: 1, error: 'QAPP_FILE_UPLOAD_FAILED', status });
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(text).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not forward a network error message or invent an HTTP status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockRejectedValue(new TypeError('https://node.invalid/?apiKey=secret'))
+    );
+    const f = fixture(5, 1);
+    const ready = f.receive();
+    f.input.postMessage({ file: new Blob(['hello']) });
+    await ready;
+    expect(
+      await f.call({
+        kind: 'upload',
+        file: 0,
+        start: 0,
+        end: 5,
+        index: 0,
+        endpoint: 'https://node.invalid/arbitrary/FILE/name/chunk',
+      })
+    ).toEqual({ id: 1, error: 'QAPP_FILE_OPERATION_FAILED' });
+  });
+
+  it('preserves a refusal even when cancelling its response stream fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        body: { cancel: vi.fn().mockRejectedValue(new Error('stream failed')) },
+      })
+    );
+    const f = fixture(5, 1);
+    const ready = f.receive();
+    f.input.postMessage({ file: new Blob(['hello']) });
+    await ready;
+    expect(
+      await f.call({
+        kind: 'upload',
+        file: 0,
+        start: 0,
+        end: 5,
+        index: 0,
+        endpoint: 'https://node.invalid/arbitrary/FILE/name/chunk',
+      })
+    ).toEqual({ id: 1, error: 'QAPP_FILE_UPLOAD_FAILED', status: 401 });
+  });
+
   it('sends metadata without reading any file, and preserves aliases/cycles', async () => {
     const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
     const f = fixture(5, 1);
