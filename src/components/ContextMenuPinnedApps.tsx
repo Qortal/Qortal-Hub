@@ -9,8 +9,12 @@ import {
 } from '@mui/material';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import { saveToLocalStorage } from './Apps/AppsNavBarDesktop';
-import { sortablePinnedAppsAtom } from '../atoms/global';
+import {
+  settingsLocalLastUpdatedAtom,
+  sortablePinnedAppsAtom,
+} from '../atoms/global';
 import { useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -36,6 +40,8 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
   const startTouchPosition = useRef({ x: 0, y: 0 }); // Track initial touch position
 
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  const { t } = useTranslation(['core']);
 
   const theme = useTheme();
 
@@ -134,6 +140,8 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
         <MenuItem
           onClick={(e) => {
             handleClose(e);
+            // So Save sees the change, as it does for a pin.
+            setSettingsLocalLastUpdated(Date.now());
             setSortablePinnedApps((prev) => {
               if (app?.isPrivate) {
                 const updatedApps = prev.filter(
@@ -179,7 +187,9 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
             />
           </ListItemIcon>
           <Typography sx={{ fontSize: '14px' }} color="text.primary">
-            Unpin app
+            {t('core:action.unpin_app', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
         </MenuItem>
       </CustomStyledMenu>
