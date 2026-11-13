@@ -441,6 +441,21 @@
   "image_embed": "pildi manustamine",
   "items_per_page": "Üksusi lehel:",
   "last_height": "viimane kõrgus",
+  "launcher": {
+    "bookmark_remove": "eemalda järjehoidja",
+    "clear_search": "tühjenda otsing",
+    "enter_opens": "vajuta Enter, et avada {{title}}",
+    "folder_delete": "kustuta kaust",
+    "folder_move_to": "teisalda kausta",
+    "folder_remove_from": "eemalda kaustast",
+    "no_matches": "miski ei vasta otsingule „{{query}}“",
+    "no_matches_hint": "proovi teist nime või kleebi qortal:// link.",
+    "pinned_and_bookmarks": "kinnitatud rakendused ja järjehoidjad",
+    "pinned_empty": "midagi pole veel kinnitatud. Kinnita rakendus allolevast teegist, et see siia jääks.",
+    "pinned_hint": "lohista järjestuse muutmiseks · kausta loomiseks lohista rakendus teise peale · paremklõps avab lisavalikud",
+    "results_apps": "rakendused ja veebilehed",
+    "results_saved": "sinu kinnitatud rakendused ja järjehoidjad"
+  },
   "level": "tase",
   "library": "teek",
   "list": {

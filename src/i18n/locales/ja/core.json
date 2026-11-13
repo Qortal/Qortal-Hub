@@ -441,6 +441,21 @@
   "image_embed": "画像埋め込み",
   "items_per_page": "ページあたりの件数：",
   "last_height": "最後の高さ",
+  "launcher": {
+    "bookmark_remove": "ブックマークを削除",
+    "clear_search": "検索をクリア",
+    "enter_opens": "Enterキーで{{title}}を開く",
+    "folder_delete": "フォルダーを削除",
+    "folder_move_to": "フォルダーに移動",
+    "folder_remove_from": "フォルダーから出す",
+    "no_matches": "「{{query}}」に一致するものはありません",
+    "no_matches_hint": "別の名前を試すか、qortal://リンクを貼り付けてください。",
+    "pinned_and_bookmarks": "ピン留めしたアプリとブックマーク",
+    "pinned_empty": "まだ何もピン留めされていません。下のライブラリからアプリをピン留めすると、ここに表示されます。",
+    "pinned_hint": "ドラッグで並べ替え・アプリを別のアプリに重ねるとフォルダーを作成・右クリックでその他の操作",
+    "results_apps": "アプリとWebサイト",
+    "results_saved": "ピン留めしたアプリとブックマーク"
+  },
   "level": "レベル",
   "library": "図書館",
   "list": {

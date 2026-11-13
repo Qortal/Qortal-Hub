@@ -441,6 +441,21 @@
   "image_embed": "imagem incorporada",
   "items_per_page": "Itens por página:",
   "last_height": "altura total",
+  "launcher": {
+    "bookmark_remove": "remover marcador",
+    "clear_search": "limpar pesquisa",
+    "enter_opens": "pressione Enter para abrir {{title}}",
+    "folder_delete": "eliminar pasta",
+    "folder_move_to": "mover para pasta",
+    "folder_remove_from": "remover da pasta",
+    "no_matches": "nada corresponde a “{{query}}”",
+    "no_matches_hint": "tente outro nome ou cole um link qortal://.",
+    "pinned_and_bookmarks": "aplicações fixadas e marcadores",
+    "pinned_empty": "ainda não há nada fixado. Fixe uma aplicação da biblioteca abaixo para a manter aqui.",
+    "pinned_hint": "arraste para reordenar · solte uma aplicação sobre outra para criar uma pasta · clique com o botão direito para mais opções",
+    "results_apps": "aplicações e sites",
+    "results_saved": "as suas aplicações fixadas e marcadores"
+  },
   "level": "nivel",
   "library": "biblioteca",
   "list": {
