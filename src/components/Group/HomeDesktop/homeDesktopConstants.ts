@@ -46,6 +46,9 @@ export const HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS = {
 export const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 29;
 export const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 322;
 export const HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX = 426;
+// Wide layout: Wallet Activity never gets shorter than its own content (about
+// 251px with a recent payment), even when the panels on the left end higher.
+export const HOME_WALLET_ACTIVITY_MIN_HEIGHT_PX = 260;
 export const HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX = 720;
 export const HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX = 100;
 export const HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX =
@@ -92,11 +95,13 @@ export const HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES: Record<
   compact: 4,
   expanded: 4,
 };
-export const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<WidgetDisplayMode, number> =
-  {
-    compact: 6,
-    expanded: 8,
-  };
+export const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<
+  WidgetDisplayMode,
+  number
+> = {
+  compact: 6,
+  expanded: 8,
+};
 export const WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS =
   7 * 24 * 60 * 60 * 1000;
 export const WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT = 50;
