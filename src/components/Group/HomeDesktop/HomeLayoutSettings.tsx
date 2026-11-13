@@ -1,45 +1,48 @@
-import ArrowDownwardRoundedIcon from '@mui/icons-material/ArrowDownwardRounded';
-import ArrowUpwardRoundedIcon from '@mui/icons-material/ArrowUpwardRounded';
-import {
-  Box,
-  Button,
-  IconButton,
-  Switch,
-  Tooltip,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import DashboardCustomizeRoundedIcon from '@mui/icons-material/DashboardCustomizeRounded';
+import { Box, Button, Switch, Typography, useTheme } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useAtomValue } from 'jotai';
-import { Fragment, type ReactNode } from 'react';
+import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { userInfoAtom } from '../../../atoms/global';
+import { executeEvent } from '../../../utils/events';
+import { HOME_EDIT_LAYOUT_EVENT } from './homeDesktopConstants';
 import {
   HOME_LAYOUT_DEFAULT,
+  HOME_STACK_PANEL_IDS,
   HOME_TOP_PANEL_IDS,
   type HomePanelId,
   isHomePanelShown,
-  moveHomeStackPanel,
   sameHomeLayout,
   useHomeLayout,
   withHomePanelShown,
 } from './homeLayout';
+import { useHomeWindowTitles } from './homeWindows';
 
 type Props = {
   /** The settings dialog's card background, border and row divider. */
   border: string;
   divider: string;
+  /** Closes the settings, so Home shows for Edit Home. */
+  onCloseSettings?: () => void;
   surface: string;
   switchSx: SxProps<Theme>;
 };
 
+const PANEL_IDS: readonly HomePanelId[] = [
+  ...HOME_TOP_PANEL_IDS,
+  ...HOME_STACK_PANEL_IDS,
+];
+
 /**
- * The Modules tab of the account settings: a switch for each Home panel, and
- * the order of the full-width panels under the top part. Saved per account.
+ * The Modules tab of the account settings: a switch for each Home window,
+ * and the way to Edit Home, where the windows are moved and resized. Saved
+ * per account.
  */
 export const HomeLayoutSettings = ({
   border,
   divider,
+  onCloseSettings,
   surface,
   switchSx,
 }: Props) => {
@@ -47,17 +50,8 @@ export const HomeLayoutSettings = ({
   const { t } = useTranslation(['group']);
   const address = useAtomValue(userInfoAtom)?.address;
   const [layout, updateLayout] = useHomeLayout(address);
+  const titles = useHomeWindowTitles();
 
-  const titles: Record<HomePanelId, string> = {
-    featured: t('group:dashboard.featured_q_apps'),
-    feed: t('group:dashboard.torq_feed'),
-    groupActivity: t('group:dashboard.group_activity_module'),
-    qortino: t('group:dashboard.qortino_module'),
-    status: t('group:dashboard.node_status'),
-    tools: t('group:dashboard.quick_tools_module'),
-    wallet: t('group:dashboard.wallet_activity'),
-    widgets: t('group:dashboard.widgets_module'),
-  };
   const descriptions: Record<HomePanelId, string> = {
     featured: t('group:dashboard.featured_q_apps_module_desc'),
     feed: t('group:dashboard.torq_feed_module_desc'),
@@ -75,130 +69,78 @@ export const HomeLayoutSettings = ({
     borderRadius: '12px',
     overflow: 'hidden',
   };
-  const sectionLabelSx = {
-    color: theme.palette.text.secondary,
-    fontSize: '0.72rem',
+  const rowSx = {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 1.2,
+    justifyContent: 'space-between',
+    px: 1.35,
+    py: 1.2,
+  };
+  const titleSx = {
+    color: theme.palette.text.primary,
+    fontSize: '0.82rem',
     fontWeight: 700,
-    letterSpacing: '0.05em',
-    px: 0.5,
-    textTransform: 'uppercase',
-  } as const;
-
-  const row = (id: HomePanelId, controls?: ReactNode) => (
-    <Box
-      sx={{
-        alignItems: 'center',
-        display: 'flex',
-        gap: 1.2,
-        justifyContent: 'space-between',
-        px: 1.35,
-        py: 1.2,
-      }}
-    >
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            letterSpacing: '0.01em',
-          }}
-        >
-          {titles[id]}
-        </Typography>
-        <Typography
-          sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.75rem',
-            lineHeight: 1.45,
-            mt: 0.4,
-          }}
-        >
-          {descriptions[id]}
-        </Typography>
-      </Box>
-      {controls}
-      <Switch
-        checked={isHomePanelShown(layout, id)}
-        disabled={!address}
-        onChange={(_event, checked) =>
-          updateLayout((current) => withHomePanelShown(current, id, checked))
-        }
-        slotProps={{ input: { 'aria-label': titles[id] } }}
-        sx={switchSx}
-      />
-    </Box>
-  );
-
-  const rowDivider = (
-    <Box sx={{ borderTop: `1px solid ${divider}`, mx: 1.35 }} />
-  );
-
-  const moveButton = (
-    id: (typeof layout.stack)[number],
-    offset: -1 | 1,
-    disabled: boolean
-  ) => {
-    const label = t(
-      offset < 0
-        ? 'group:dashboard.move_panel_up'
-        : 'group:dashboard.move_panel_down',
-      { panel: titles[id] }
-    );
-    const Icon = offset < 0 ? ArrowUpwardRoundedIcon : ArrowDownwardRoundedIcon;
-    const button = (
-      <IconButton
-        aria-label={label}
-        disabled={disabled || !address}
-        onClick={() =>
-          updateLayout((current) => moveHomeStackPanel(current, id, offset))
-        }
-        size="small"
-        sx={{ color: theme.palette.text.secondary }}
-      >
-        <Icon sx={{ fontSize: '1.05rem' }} />
-      </IconButton>
-    );
-    // A disabled button fires no events, so the tooltip needs a wrapper.
-    return (
-      <Tooltip title={label}>
-        <Box component="span" sx={{ display: 'inline-flex' }}>
-          {button}
-        </Box>
-      </Tooltip>
-    );
+    letterSpacing: '0.01em',
+  };
+  const descriptionSx = {
+    color: theme.palette.text.secondary,
+    fontSize: '0.75rem',
+    lineHeight: 1.45,
+    mt: 0.4,
   };
 
   return (
     <Box sx={{ display: 'grid', gap: 1.4 }}>
-      <Typography sx={sectionLabelSx}>
-        {t('group:dashboard.home_layout_top')}
-      </Typography>
       <Box sx={cardSx}>
-        {HOME_TOP_PANEL_IDS.map((id, index) => (
+        {PANEL_IDS.map((id, index) => (
           <Fragment key={id}>
-            {index > 0 ? rowDivider : null}
-            {row(id)}
+            {index > 0 ? (
+              <Box sx={{ borderTop: `1px solid ${divider}`, mx: 1.35 }} />
+            ) : null}
+            <Box sx={rowSx}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography sx={titleSx}>{titles[id]}</Typography>
+                <Typography sx={descriptionSx}>{descriptions[id]}</Typography>
+              </Box>
+              <Switch
+                checked={isHomePanelShown(layout, id)}
+                disabled={!address}
+                onChange={(_event, checked) =>
+                  updateLayout((current) =>
+                    withHomePanelShown(current, id, checked)
+                  )
+                }
+                slotProps={{ input: { 'aria-label': titles[id] } }}
+                sx={switchSx}
+              />
+            </Box>
           </Fragment>
         ))}
       </Box>
 
-      <Typography sx={sectionLabelSx}>
-        {t('group:dashboard.home_layout_below')}
-      </Typography>
-      <Box sx={cardSx}>
-        {layout.stack.map((id, index) => (
-          <Fragment key={id}>
-            {index > 0 ? rowDivider : null}
-            {row(
-              id,
-              <Box sx={{ display: 'flex', flexShrink: 0, gap: 0.25 }}>
-                {moveButton(id, -1, index === 0)}
-                {moveButton(id, 1, index === layout.stack.length - 1)}
-              </Box>
-            )}
-          </Fragment>
-        ))}
+      <Box sx={{ ...cardSx, ...rowSx }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={titleSx}>
+            {t('group:dashboard.arrange_home')}
+          </Typography>
+          <Typography sx={descriptionSx}>
+            {t('group:dashboard.arrange_home_desc')}
+          </Typography>
+        </Box>
+        <Button
+          disabled={!address}
+          onClick={() => {
+            onCloseSettings?.();
+            executeEvent(HOME_EDIT_LAYOUT_EVENT, {});
+          }}
+          size="small"
+          startIcon={<DashboardCustomizeRoundedIcon />}
+          sx={{ flexShrink: 0, textTransform: 'none' }}
+          variant="outlined"
+        >
+          {t('group:dashboard.edit_home')}
+        </Button>
       </Box>
 
       <Box

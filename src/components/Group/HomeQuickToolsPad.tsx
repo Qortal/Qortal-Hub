@@ -58,19 +58,24 @@ const QUICK_TOOLS_PANEL_GRADIENT_DEFAULT = {
   angle: 197,
   spread: 76,
 };
-const QUICK_TOOL_GRID_PLACEMENT: Record<
-  string,
-  { gridColumn: string; gridRow: string }
-> = {
-  'lookup-user': { gridColumn: '1', gridRow: '1' },
-  wallets: { gridColumn: '2', gridRow: '1' },
-  apps: { gridColumn: '3', gridRow: '1' },
-  'q-chat': { gridColumn: '4', gridRow: '1' },
-  'backup-wallet': { gridColumn: '1', gridRow: '2' },
-  minting: { gridColumn: '2', gridRow: '2' },
-  notifications: { gridColumn: '3', gridRow: '2' },
-  'qortal-land': { gridColumn: '4', gridRow: '2' },
-};
+/**
+ * The tools in reading order. The grid has 4 columns and 2 rows, or 8 and 1
+ * in a wide, short Home window, or 2 and 4 in a narrow, tall one.
+ */
+const QUICK_TOOL_ORDER = [
+  'lookup-user',
+  'wallets',
+  'apps',
+  'q-chat',
+  'backup-wallet',
+  'minting',
+  'notifications',
+  'qortal-land',
+];
+const HOME_WINDOW_WIDE_AND_SHORT =
+  '@container home-window (min-aspect-ratio: 3 / 1)';
+const HOME_WINDOW_NARROW_AND_TALL =
+  '@container home-window (max-aspect-ratio: 3 / 4)';
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -329,7 +334,7 @@ export const HomeQuickToolsPad = ({
         borderRadius: '14px',
         display: 'flex',
         height: fillHeight ? '100%' : 'auto',
-        minHeight: '164px',
+        minHeight: fillHeight ? 0 : '164px',
         padding: '10px',
         width: '100%',
       }}
@@ -356,6 +361,14 @@ export const HomeQuickToolsPad = ({
           padding: '6px',
           position: 'relative',
           width: '100%',
+          [HOME_WINDOW_WIDE_AND_SHORT]: {
+            gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
+            gridTemplateRows: 'minmax(0, 1fr)',
+          },
+          [HOME_WINDOW_NARROW_AND_TALL]: {
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gridTemplateRows: 'repeat(4, minmax(0, 1fr))',
+          },
           '&::before': {
             content: '""',
             position: 'absolute',
@@ -393,7 +406,7 @@ export const HomeQuickToolsPad = ({
               onClick={(event) => item.onAction(event)}
               onDragStart={item.onDragStart}
               sx={{
-                ...(QUICK_TOOL_GRID_PLACEMENT[item.key] ?? {}),
+                order: QUICK_TOOL_ORDER.indexOf(item.key),
                 alignItems: 'center',
                 background: isDarkMode
                   ? 'linear-gradient(145deg, rgba(53,58,68,0.99) 0%, rgba(41,45,54,1) 48%, rgba(30,34,41,1) 100%)'

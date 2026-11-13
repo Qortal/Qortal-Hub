@@ -6,12 +6,17 @@ import {
   HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
   HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './homeDesktopConstants';
+import {
+  type HomeGridItem,
+  homeDefaultGrid,
+  normalizeHomeGrid,
+  sameHomeGrid,
+} from './homeGrid';
 import { parseHomeCustomizableCardsLayout } from './utils';
 
 /**
- * What Home shows, and the order of the full-width panels under its top part,
- * saved per account. The account card isn't listed: it holds the settings, so
- * switching it off would hide the way back.
+ * What Home shows, and where, saved per account. The account card isn't
+ * listed: it holds the settings, so switching it off would hide the way back.
  */
 export type HomePanelId =
   | 'qortino'
@@ -23,7 +28,7 @@ export type HomePanelId =
   | 'groupActivity'
   | 'feed';
 
-/** The full-width panels under the top part, which can go in any order. */
+/** The full-width panels under the top part of the default layout. */
 export type HomeStackPanelId = Extract<
   HomePanelId,
   'widgets' | 'groupActivity' | 'feed'
@@ -52,8 +57,16 @@ const HOME_PANEL_IDS: readonly HomePanelId[] = [
 export type HomeLayout = {
   /** The panels switched off, in HOME_PANEL_IDS order. */
   hidden: HomePanelId[];
-  /** The full-width panels under the top part, top to bottom. */
+  /**
+   * The full-width panels under the top part, top to bottom: where the
+   * default grid puts them until the account arranges Home itself.
+   */
   stack: HomeStackPanelId[];
+  /**
+   * Where every window is, hidden ones included (they come back where they
+   * were), once the account has arranged Home (homeGrid.ts).
+   */
+  grid?: HomeGridItem[];
 };
 
 export const HOME_LAYOUT_DEFAULT: HomeLayout = {
@@ -105,16 +118,27 @@ export const normalizeHomeLayout = (
   fallback: HomeLayout = HOME_LAYOUT_DEFAULT
 ): HomeLayout => {
   if (!value || typeof value !== 'object') {
-    return { hidden: [...fallback.hidden], stack: [...fallback.stack] };
+    return {
+      hidden: [...fallback.hidden],
+      stack: [...fallback.stack],
+      ...(fallback.grid ? { grid: [...fallback.grid] } : {}),
+    };
   }
-  const { hidden, stack } = value as { hidden?: unknown; stack?: unknown };
+  const { grid, hidden, stack } = value as {
+    grid?: unknown;
+    hidden?: unknown;
+    stack?: unknown;
+  };
+  const normalStack = Array.isArray(stack)
+    ? completeHomeStack(stack)
+    : [...fallback.stack];
+  const normalGrid = normalizeHomeGrid(grid, normalStack) ?? fallback.grid;
   return {
     hidden: Array.isArray(hidden)
       ? HOME_PANEL_IDS.filter((id) => hidden.includes(id))
       : [...fallback.hidden],
-    stack: Array.isArray(stack)
-      ? completeHomeStack(stack)
-      : [...fallback.stack],
+    stack: normalStack,
+    ...(normalGrid ? { grid: [...normalGrid] } : {}),
   };
 };
 
@@ -122,7 +146,12 @@ export const sameHomeLayout = (a: HomeLayout, b: HomeLayout) =>
   a.hidden.length === b.hidden.length &&
   a.hidden.every((id, index) => b.hidden[index] === id) &&
   a.stack.length === b.stack.length &&
-  a.stack.every((id, index) => b.stack[index] === id);
+  a.stack.every((id, index) => b.stack[index] === id) &&
+  sameHomeGrid(a.grid, b.grid);
+
+/** Where every window is: the account's arrangement, or the default one. */
+export const homeLayoutGrid = (layout: HomeLayout): HomeGridItem[] =>
+  layout.grid ?? homeDefaultGrid(layout.stack);
 
 const readDeviceSwitch = (key: string): boolean => {
   try {
@@ -206,87 +235,6 @@ export const withHomePanelShown = (
     panel === id ? !shown : layout.hidden.includes(panel)
   ),
 });
-
-/** Swaps a stack panel with its neighbour above (-1) or below (1). */
-export const moveHomeStackPanel = (
-  layout: HomeLayout,
-  id: HomeStackPanelId,
-  offset: -1 | 1
-): HomeLayout => {
-  const index = layout.stack.indexOf(id);
-  const target = index + offset;
-  if (index === -1 || target < 0 || target >= layout.stack.length) {
-    return layout;
-  }
-  const stack = [...layout.stack];
-  [stack[index], stack[target]] = [stack[target], stack[index]];
-  return { ...layout, stack };
-};
-
-/**
- * The stack's rows as Home lays them out. Group Activity and the feed share a
- * row when nothing shown stands between them, as they always have; any other
- * panel gets a row of its own.
- */
-export const homeStackRows = (
-  stack: readonly HomeStackPanelId[],
-  isShown: (id: HomeStackPanelId) => boolean
-): HomeStackPanelId[][] => {
-  const rows: HomeStackPanelId[][] = [];
-  stack.filter(isShown).forEach((id) => {
-    const last = rows[rows.length - 1];
-    if (
-      last?.length === 1 &&
-      last[0] !== 'widgets' &&
-      id !== 'widgets' &&
-      last[0] !== id
-    ) {
-      last.push(id);
-    } else {
-      rows.push([id]);
-    }
-  });
-  return rows;
-};
-
-type PanelBox = { bottom: number; height: number };
-
-/**
- * Wide layout: the Qortino card's height that ends its column, with Quick
- * Tools under it when shown, where the account column (the account card, then
- * Featured Q-Apps when shown) ends. Never below `minHeight`.
- */
-export const homeQortinoTargetHeight = ({
-  featured,
-  gap,
-  minHeight,
-  profile,
-  tools,
-}: {
-  featured?: PanelBox;
-  gap: number;
-  minHeight: number;
-  profile?: PanelBox;
-  tools?: PanelBox;
-}): number | null => {
-  if (!profile) return null;
-  const accountColumn = profile.height + (featured ? gap + featured.height : 0);
-  const underQortino = tools ? gap + tools.height : 0;
-  return Math.max(minHeight, Math.round(accountColumn - underQortino));
-};
-
-/**
- * Wide layout: Wallet Activity's height that ends the right column where the
- * lowest panel on the left ends, and never below `minHeight`.
- */
-export const homeWalletTargetHeight = (
-  leftBottoms: readonly number[],
-  walletTop: number,
-  minHeight: number
-): number | null =>
-  leftBottoms.length
-    ? Math.max(minHeight, Math.max(...leftBottoms) - walletTop)
-    : null;
 
 /** The account's layout, kept in step with the settings and other windows. */
 export function useHomeLayout(address?: string | null) {

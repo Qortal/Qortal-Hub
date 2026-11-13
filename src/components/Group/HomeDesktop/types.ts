@@ -38,17 +38,3 @@ export type HomeCustomizableCardsLayout = {
   heights: Partial<Record<HomeCustomizableCardId, number>>;
   order: HomeCustomizableCardId[];
 };
-export type HomeLayoutDebugMetric = {
-  bottom: number;
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-};
-export type HomeLayoutDebugKey =
-  | 'accountOverview'
-  | 'featuredApps'
-  | 'info'
-  | 'profileCard'
-  | 'tools'
-  | 'walletActivity';

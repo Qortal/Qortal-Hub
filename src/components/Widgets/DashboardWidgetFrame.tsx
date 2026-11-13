@@ -24,7 +24,6 @@ type DashboardWidgetFrameProps = {
   children: ReactNode;
   contentBackground?: ReactNode;
   contentBorderRadius?: number | string;
-  height: number;
   onAction?: () => void;
   onRefresh?: () => void;
   panelRef?: Ref<HTMLDivElement>;
@@ -40,7 +39,6 @@ export const DashboardWidgetFrame = ({
   children,
   contentBackground = null,
   contentBorderRadius = 5,
-  height,
   onAction,
   onRefresh,
   panelRef,
@@ -65,8 +63,9 @@ export const DashboardWidgetFrame = ({
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
-        height: `${height}px`,
-        minHeight: `${height}px`,
+        // As tall as Home's window around it.
+        height: '100%',
+        minHeight: 0,
         minWidth: 0,
         overflow: 'hidden',
         p: '8px 10px 10px',
