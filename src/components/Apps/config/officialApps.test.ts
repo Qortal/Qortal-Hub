@@ -17,10 +17,15 @@ describe('officialApps', () => {
     expect(isOfficialApp('SUBSCREEN')).toBe(true);
   });
 
-  it('features Torq where it featured Quitter', () => {
+  it('features Torq where it featured Quitter, and Q-Share, Q-Shop, SubWire and Q-Assets', () => {
     expect(isFeaturedApp('Torq')).toBe(true);
     expect(isFeaturedApp('Quitter')).toBe(false);
-    expect(isFeaturedApp('SubWire')).toBe(false);
+    ['Q-Share', 'Q-Shop', 'SubWire', 'Q-Assets'].forEach((name) =>
+      expect(isFeaturedApp(name)).toBe(true)
+    );
+    // Official, but not featured.
+    expect(isFeaturedApp('Subscreen')).toBe(false);
+    expect(isFeaturedApp('Q-Blog')).toBe(false);
   });
 
   it('pins every official app for a new account, once each', () => {

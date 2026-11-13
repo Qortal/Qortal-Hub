@@ -11,7 +11,18 @@ export interface OfficialAppConfig {
 
 export const officialAppsConfig = {
   // Apps featured in the carousel
-  featured: ['Q-Tube', 'Torq', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Wallets'],
+  featured: [
+    'Q-Tube',
+    'Torq',
+    'Q-Mail',
+    'Q-Search',
+    'Q-Trade',
+    'Q-Wallets',
+    'Q-Share',
+    'Q-Shop',
+    'SubWire',
+    'Q-Assets',
+  ],
 
   // All official apps with metadata
   all: [
@@ -22,18 +33,18 @@ export const officialAppsConfig = {
     { name: 'Q-Wallets', icon: 'wallet', featured: true },
     { name: 'Torq', icon: 'social', featured: true },
     { name: 'Names', icon: 'badge' },
-    { name: 'Q-Assets', icon: 'assets' },
+    { name: 'Q-Assets', icon: 'assets', featured: true },
     { name: 'Q-Follow', icon: 'follow' },
     { name: 'Q-Fund', icon: 'fund' },
     { name: 'Q-Manager', icon: 'settings' },
     { name: 'Q-Mintership', icon: 'mint' },
     { name: 'Q-Node', icon: 'node' },
     { name: 'Q-Search', icon: 'search' },
-    { name: 'Q-Share', icon: 'share' },
-    { name: 'Q-Shop', icon: 'shopping' },
+    { name: 'Q-Share', icon: 'share', featured: true },
+    { name: 'Q-Shop', icon: 'shopping', featured: true },
     { name: 'Q-Support', icon: 'support' },
     { name: 'Subscreen', icon: 'video' },
-    { name: 'SubWire', icon: 'article' },
+    { name: 'SubWire', icon: 'article', featured: true },
   ] as OfficialAppConfig[],
 };
 
