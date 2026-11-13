@@ -11,7 +11,7 @@ export interface OfficialAppConfig {
 
 export const officialAppsConfig = {
   // Apps featured in the carousel
-  featured: ['Q-Tube', 'Quitter', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Wallets'],
+  featured: ['Q-Tube', 'Torq', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Wallets'],
 
   // All official apps with metadata
   all: [
@@ -20,7 +20,7 @@ export const officialAppsConfig = {
     { name: 'Q-Trade', icon: 'swap', featured: true },
     { name: 'Q-Tube', icon: 'video', featured: true },
     { name: 'Q-Wallets', icon: 'wallet', featured: true },
-    { name: 'Quitter', icon: 'social', featured: true },
+    { name: 'Torq', icon: 'social', featured: true },
     { name: 'Names', icon: 'badge' },
     { name: 'Q-Assets', icon: 'assets' },
     { name: 'Q-Follow', icon: 'follow' },
@@ -32,6 +32,8 @@ export const officialAppsConfig = {
     { name: 'Q-Share', icon: 'share' },
     { name: 'Q-Shop', icon: 'shopping' },
     { name: 'Q-Support', icon: 'support' },
+    { name: 'Subscreen', icon: 'video' },
+    { name: 'SubWire', icon: 'article' },
   ] as OfficialAppConfig[],
 };
 
