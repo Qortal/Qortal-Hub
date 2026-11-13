@@ -1,0 +1,257 @@
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../Chat/MessageDisplay', () => ({ extractComponents: vi.fn() }));
+
+import type {
+  AppBookmark,
+  AppBookmarkFolder,
+  AppBookmarksForAddress,
+} from '../AppBookmarks/bookmarkTypes';
+import type { LauncherView } from './launcherItems';
+import {
+  type LauncherSyncMark,
+  type SavedLauncher,
+  toSavedBookmarks,
+  toSavedLauncherSettings,
+} from './launcherQdn';
+import {
+  applySavedLauncher,
+  hasUnsavedPins,
+  type LauncherSyncStores,
+} from './launcherQdnSync';
+
+const ADDRESS = 'Qaddress';
+
+const folder = (id: string, name: string): AppBookmarkFolder => ({
+  id,
+  name,
+  createdAt: 10,
+  updatedAt: 20,
+});
+
+const bookmark = (
+  id: string,
+  appName: string,
+  folderId: string | null = null
+): AppBookmark => ({
+  id,
+  name: appName,
+  service: 'APP',
+  appName,
+  path: '',
+  link: `qortal://APP/${appName}`,
+  folderId,
+  createdAt: 30,
+  updatedAt: 40,
+});
+
+const data = (
+  folders: AppBookmarkFolder[],
+  bookmarks: AppBookmark[],
+  updatedAt = 50
+): AppBookmarksForAddress => ({ folders, bookmarks, updatedAt });
+
+const settingsOf = (launcher: SavedLauncher) => ({
+  sortablePinnedApps: [{ name: 'Q-Tube', service: 'APP' }],
+  ...toSavedLauncherSettings(launcher),
+});
+
+const savedOf = (
+  folders: AppBookmarkFolder[],
+  bookmarks: AppBookmark[],
+  order: string[] = []
+): SavedLauncher => ({
+  bookmarks: toSavedBookmarks(data(folders, bookmarks)),
+  order,
+});
+
+/** The stores, with what they were asked to keep. */
+const makeStores = ({
+  local = data([], []),
+  mark = null,
+  view = { order: [], openFolders: [] },
+}: {
+  local?: AppBookmarksForAddress;
+  mark?: LauncherSyncMark | null;
+  view?: LauncherView;
+} = {}) => {
+  const saved = {
+    bookmarks: null as AppBookmarksForAddress | null,
+    view: null as LauncherView | null,
+    mark: null as LauncherSyncMark | null,
+  };
+  const stores: LauncherSyncStores = {
+    loadBookmarks: vi.fn(async () => local),
+    saveBookmarks: vi.fn(async (_address, next) => {
+      saved.bookmarks = { ...next, updatedAt: 999 };
+      return saved.bookmarks;
+    }),
+    loadView: vi.fn(() => view),
+    setView: vi.fn((_address, next) => {
+      saved.view = next;
+    }),
+    loadMark: vi.fn(() => mark),
+    saveMark: vi.fn((_address, next) => {
+      saved.mark = next;
+    }),
+    now: () => 777,
+  };
+  return { saved, stores };
+};
+
+describe('taking in the launcher saved on QDN', () => {
+  it('puts it in place when this device has none', async () => {
+    const { saved, stores } = makeStores();
+    const launcher = savedOf(
+      [folder('f1', 'Media')],
+      [bookmark('b1', 'Q-Tube', 'f1')],
+      ['folder:f1', 'APP-Q-Mail']
+    );
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      settingsOf(launcher),
+      100,
+      stores
+    );
+
+    expect(result.use).toBe('replace');
+    expect(saved.bookmarks?.folders.map((entry) => entry.name)).toEqual([
+      'Media',
+    ]);
+    expect(saved.bookmarks?.bookmarks[0].link).toBe('qortal://APP/Q-Tube');
+    expect(saved.view).toEqual({
+      order: ['folder:f1', 'APP-Q-Mail'],
+      openFolders: [],
+    });
+    // What was taken in, and the bookmarks right after.
+    expect(saved.mark).toEqual({ savedAt: 100, localAt: 999 });
+  });
+
+  it('keeps the folders open that were open here', async () => {
+    const { saved, stores } = makeStores({
+      view: { order: ['APP-Q-Mail'], openFolders: ['f1'] },
+    });
+
+    await applySavedLauncher(
+      ADDRESS,
+      settingsOf(savedOf([folder('f1', 'Media')], [], ['folder:f1'])),
+      100,
+      stores
+    );
+
+    expect(saved.view).toEqual({ order: ['folder:f1'], openFolders: ['f1'] });
+  });
+
+  it('writes nothing when there is nothing newer on QDN', async () => {
+    const { saved, stores } = makeStores({
+      local: data([folder('f1', 'Media')], []),
+      mark: { savedAt: 100, localAt: 50 },
+    });
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      settingsOf(savedOf([folder('f1', 'Media')], [])),
+      100,
+      stores
+    );
+
+    expect(result.use).toBe('keep');
+    expect(stores.saveBookmarks).not.toHaveBeenCalled();
+    expect(stores.setView).not.toHaveBeenCalled();
+    expect(saved.mark).toBeNull();
+  });
+
+  it('writes nothing when the settings hold no launcher', async () => {
+    const { stores } = makeStores();
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      { sortablePinnedApps: [{ name: 'Q-Tube', service: 'APP' }] },
+      100,
+      stores
+    );
+
+    expect(result.use).toBe('keep');
+    expect(result.launcher).toBeNull();
+    expect(stores.saveBookmarks).not.toHaveBeenCalled();
+  });
+
+  it('keeps both when this device changed things that were never saved', async () => {
+    const { saved, stores } = makeStores({
+      local: data(
+        [folder('f2', 'Tools')],
+        [bookmark('b2', 'Q-Mail', 'f2')],
+        80
+      ),
+      mark: { savedAt: 90, localAt: 50 },
+      view: { order: ['folder:f2'], openFolders: ['f2'] },
+    });
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      settingsOf(
+        savedOf(
+          [folder('f1', 'Media')],
+          [bookmark('b1', 'Q-Tube', 'f1')],
+          ['folder:f1']
+        )
+      ),
+      120,
+      stores
+    );
+
+    expect(result.use).toBe('merge');
+    expect(saved.bookmarks?.folders.map((entry) => entry.name)).toEqual([
+      'Media',
+      'Tools',
+    ]);
+    expect(saved.view?.order).toEqual(['folder:f1', 'folder:f2']);
+    expect(saved.mark).toEqual({ savedAt: 120, localAt: 999 });
+  });
+});
+
+describe('whether the pins are saved', () => {
+  const pins = [{ name: 'Q-Tube', service: 'APP' }];
+
+  it('is true for a pin list changed since it was saved', () => {
+    expect(
+      hasUnsavedPins({
+        oldPinnedApps: [],
+        pinnedApps: pins,
+        settingsLocalLastUpdated: 200,
+        settingsQdnLastUpdated: 100,
+      })
+    ).toBe(true);
+  });
+
+  it('is false for the same list, or an older local change', () => {
+    expect(
+      hasUnsavedPins({
+        oldPinnedApps: pins,
+        pinnedApps: pins,
+        settingsLocalLastUpdated: 200,
+        settingsQdnLastUpdated: 100,
+      })
+    ).toBe(false);
+    expect(
+      hasUnsavedPins({
+        oldPinnedApps: [],
+        pinnedApps: pins,
+        settingsLocalLastUpdated: 100,
+        settingsQdnLastUpdated: 200,
+      })
+    ).toBe(false);
+  });
+
+  it('is false while the saved settings could not be read', () => {
+    expect(
+      hasUnsavedPins({
+        oldPinnedApps: [],
+        pinnedApps: pins,
+        settingsLocalLastUpdated: 200,
+        settingsQdnLastUpdated: -100,
+      })
+    ).toBe(false);
+  });
+});

@@ -454,7 +454,11 @@
     "pinned_empty": "non c’è ancora nulla di fissato. Fissa un’app dalla libreria qui sotto per tenerla qui.",
     "pinned_hint": "trascina per riordinare · rilascia un’app su un’altra per creare una cartella · clic destro per altre opzioni",
     "results_apps": "app e siti web",
-    "results_saved": "le tue app fissate e i segnalibri"
+    "results_saved": "le tue app fissate e i segnalibri",
+    "save_later": "non ora",
+    "save_retry": "riprova",
+    "save_text": "le tue app fissate, i segnalibri e le cartelle, disposti così, su ogni dispositivo in cui accedi.",
+    "save_title": "salvare questa disposizione su QDN?"
   },
   "level": "livello",
   "library": "libreria",

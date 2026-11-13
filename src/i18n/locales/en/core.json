@@ -454,7 +454,11 @@
     "pinned_empty": "nothing is pinned yet. Pin an app from the library below to keep it here.",
     "pinned_hint": "drag to reorder · drop one app on another to make a folder · right-click for more",
     "results_apps": "apps and websites",
-    "results_saved": "your pins and bookmarks"
+    "results_saved": "your pins and bookmarks",
+    "save_later": "not now",
+    "save_retry": "try again",
+    "save_text": "your pinned apps, bookmarks and folders, arranged like this, on every device you sign in on.",
+    "save_title": "save this layout to QDN?"
   },
   "level": "level",
   "library": "library",

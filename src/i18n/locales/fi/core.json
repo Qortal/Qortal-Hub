@@ -454,7 +454,11 @@
     "pinned_empty": "mitään ei ole vielä kiinnitetty. Kiinnitä sovellus alla olevasta kirjastosta, niin se pysyy tässä.",
     "pinned_hint": "järjestä vetämällä · luo kansio pudottamalla sovellus toisen päälle · lisää toimintoja hiiren oikealla painikkeella",
     "results_apps": "sovellukset ja verkkosivustot",
-    "results_saved": "kiinnitetyt sovelluksesi ja kirjanmerkkisi"
+    "results_saved": "kiinnitetyt sovelluksesi ja kirjanmerkkisi",
+    "save_later": "ei nyt",
+    "save_retry": "yritä uudelleen",
+    "save_text": "kiinnitetyt sovelluksesi, kirjanmerkkisi ja kansiosi tässä järjestyksessä jokaisella laitteella, jolla kirjaudut sisään.",
+    "save_title": "tallennetaanko tämä asettelu QDN:ään?"
   },
   "level": "taso",
   "library": "kirjasto",

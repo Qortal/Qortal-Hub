@@ -454,7 +454,11 @@
     "pinned_empty": "noch nichts angeheftet. Hefte eine App aus der Bibliothek unten an, damit sie hier bleibt.",
     "pinned_hint": "ziehen zum Umsortieren · eine App auf eine andere ziehen, um einen Ordner zu erstellen · Rechtsklick für mehr",
     "results_apps": "Apps und Webseiten",
-    "results_saved": "deine angehefteten Apps und Lesezeichen"
+    "results_saved": "deine angehefteten Apps und Lesezeichen",
+    "save_later": "nicht jetzt",
+    "save_retry": "erneut versuchen",
+    "save_text": "Ihre angehefteten Apps, Lesezeichen und Ordner – so angeordnet auf jedem Gerät, auf dem Sie sich anmelden.",
+    "save_title": "Diese Anordnung auf QDN speichern?"
   },
   "level": "Ebene",
   "library": "Bibliothek",

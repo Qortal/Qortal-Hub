@@ -454,7 +454,11 @@
     "pinned_empty": "ainda não há nada fixado. Fixe uma aplicação da biblioteca abaixo para a manter aqui.",
     "pinned_hint": "arraste para reordenar · solte uma aplicação sobre outra para criar uma pasta · clique com o botão direito para mais opções",
     "results_apps": "aplicações e sites",
-    "results_saved": "as suas aplicações fixadas e marcadores"
+    "results_saved": "as suas aplicações fixadas e marcadores",
+    "save_later": "agora não",
+    "save_retry": "tentar novamente",
+    "save_text": "as suas aplicações fixadas, marcadores e pastas, organizados assim, em todos os dispositivos em que iniciar sessão.",
+    "save_title": "salvar esta disposição na QDN?"
   },
   "level": "nivel",
   "library": "biblioteca",

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useSetAtom } from 'jotai';
 import {
   EMPTY_LAUNCHER_VIEW,
   type LauncherView,
@@ -43,4 +43,19 @@ export const useLauncherView = (address: string | null | undefined) => {
   );
 
   return [view, setView] as const;
+};
+
+/**
+ * Sets an account's view from outside the launcher, as when the arrangement
+ * saved on QDN is taken in: the launcher shows it at once.
+ */
+export const useSetLauncherViewOf = () => {
+  const setState = useSetAtom(viewStateAtom);
+  return useCallback(
+    (address: string, view: LauncherView) => {
+      setState({ address, view });
+      saveLauncherView(address, view);
+    },
+    [setState]
+  );
 };
