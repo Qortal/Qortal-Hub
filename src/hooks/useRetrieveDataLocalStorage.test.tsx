@@ -1,5 +1,5 @@
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { useRetrieveDataLocalStorage } from './useRetrieveDataLocalStorage';
@@ -32,7 +32,10 @@ const signIn = () => {
 };
 
 beforeEach(() => localStorage.clear());
-afterEach(() => setPinnedAppsAccount(null));
+afterEach(() => {
+  setPinnedAppsAccount(null);
+  vi.restoreAllMocks();
+});
 
 describe('useRetrieveDataLocalStorage', () => {
   it("shows each account its own pins, never the previous account's", () => {
@@ -58,5 +61,23 @@ describe('useRetrieveDataLocalStorage', () => {
 
     session.as('QBob');
     expect(session.pinned()).toEqual(defaultPinnedApps);
+  });
+
+  it('goes on signing in when storage is too full to move the old list', () => {
+    const shared = JSON.stringify({
+      timestamp: 5,
+      sortablePinnedApps: pins('Old'),
+    });
+    localStorage.setItem('ext_saved_settings', shared);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const session = signIn();
+
+    session.as('QAlice');
+
+    expect(session.pinned()).toEqual(defaultPinnedApps);
+    expect(localStorage.getItem('ext_saved_settings')).toBe(shared);
   });
 });

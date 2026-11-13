@@ -27,26 +27,41 @@ export const localStorageKeyFor = (key: string): string =>
  * The list saved under the old shared key moves, once, to the first account
  * that signs in after this change, which is most often its owner. Every other
  * account starts from its own settings saved on QDN.
+ *
+ * It never stops a sign-in: when the copy can't be saved (storage full), the
+ * shared list stays where it is and the move is tried again next time.
  */
 export const adoptSharedPinnedApps = (
   address: string,
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = localStorage
 ): void => {
-  const ownKey = pinnedAppsStorageKey(address);
-  if (storage.getItem(ownKey) !== null) return;
-  const shared = storage.getItem(PINNED_APPS_STORAGE_KEY);
-  if (shared === null) return;
-  storage.setItem(ownKey, shared);
-  storage.removeItem(PINNED_APPS_STORAGE_KEY);
+  try {
+    const ownKey = pinnedAppsStorageKey(address);
+    if (storage.getItem(ownKey) !== null) return;
+    const shared = storage.getItem(PINNED_APPS_STORAGE_KEY);
+    if (shared === null) return;
+    storage.setItem(ownKey, shared);
+    // Only reached once the copy is saved.
+    storage.removeItem(PINNED_APPS_STORAGE_KEY);
+  } catch (error) {
+    console.error('Error moving pinned apps to the account:', error);
+  }
 };
 
-/** When the signed-in account's pins last changed on this device, or -1. */
+/**
+ * When the signed-in account's pins last changed on this device, or -1 when
+ * there is no list: Revert saves `null` with a fresh timestamp, which must not
+ * count as newer than the QDN copy. An empty list counts (all pins removed).
+ */
 export const localPinnedAppsTimestamp = (
   storage: Pick<Storage, 'getItem'> = localStorage
 ): number => {
   try {
     const saved = JSON.parse(storage.getItem(pinnedAppsStorageKey()) ?? 'null');
-    return typeof saved?.timestamp === 'number' ? saved.timestamp : -1;
+    return Array.isArray(saved?.sortablePinnedApps) &&
+      typeof saved.timestamp === 'number'
+      ? saved.timestamp
+      : -1;
   } catch {
     return -1;
   }
