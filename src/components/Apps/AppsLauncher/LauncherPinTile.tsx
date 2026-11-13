@@ -5,7 +5,11 @@ import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import { executeEvent } from '../../../utils/events';
 import type { PinnedApp } from '../../../utils/pinnedAppsSettings';
 import { launcherPinLabel } from './launcherPins';
-import { LauncherAppIcon, LauncherTile } from './LauncherTile';
+import {
+  LAUNCHER_ICON_SIZE_PX,
+  LauncherAppIcon,
+  LauncherTile,
+} from './LauncherTile';
 
 /**
  * Opens a pinned app in a tab. A private app is downloaded and decrypted
@@ -36,18 +40,32 @@ export const useOpenLauncherPin = () => {
 };
 
 /** The picture of a pinned app: its thumbnail, a private app's logo or a lock. */
-export const LauncherPinIcon = ({ app }: { app: PinnedApp }) => {
+export const LauncherPinIcon = ({
+  app,
+  size = LAUNCHER_ICON_SIZE_PX,
+}: {
+  app: PinnedApp;
+  /** How big the picture is; the launcher's tile size by default. */
+  size?: number;
+}) => {
   const privateLogo = app.privateAppProperties?.logo;
+  // The lock and the mark in the corner keep their share of the picture.
+  const lockSize = Math.round(size * 0.46);
+  const badgeLockSize = Math.max(8, Math.round(size * 0.21));
+
   return (
     <LauncherAppIcon
       appName={app.isPrivate ? null : app.name}
       badge={
-        app.isPrivate && privateLogo ? <LockIcon sx={{ fontSize: 12 }} /> : null
+        app.isPrivate && privateLogo ? (
+          <LockIcon sx={{ fontSize: badgeLockSize }} />
+        ) : null
       }
+      size={size}
       src={app.isPrivate ? privateLogo : null}
     >
       {app.isPrivate && !privateLogo ? (
-        <LockIcon sx={{ fontSize: 26 }} />
+        <LockIcon sx={{ fontSize: lockSize }} />
       ) : null}
     </LauncherAppIcon>
   );

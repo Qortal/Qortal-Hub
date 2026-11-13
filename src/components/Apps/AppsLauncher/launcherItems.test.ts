@@ -201,6 +201,24 @@ describe('buildLauncherItems', () => {
     expect(items[2].type === 'bookmark' && items[2].pin).toBe(null);
   });
 
+  it('can keep a pinned app in the row when it is in a folder as well', () => {
+    const data = store(
+      [folder('f1')],
+      [bookmark('b1', 'Q-Tube', { folderId: 'f1' })]
+    );
+    const tube = pin('Q-Tube');
+
+    expect(
+      layoutOf(
+        buildLauncherItems([tube], data, null, { keepAppsOfFolders: true })
+      )
+    ).toEqual([tube.key, 'folder:f1[bookmark:b1]']);
+    // The launcher itself shows it in the folder only.
+    expect(layoutOf(buildLauncherItems([tube], data, null))).toEqual([
+      'folder:f1[bookmark:b1]',
+    ]);
+  });
+
   it('matches the app of a bookmark whatever the case of its name', () => {
     const data = store(
       [folder('f1')],

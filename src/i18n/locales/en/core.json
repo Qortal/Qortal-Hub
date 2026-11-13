@@ -179,6 +179,18 @@
     "limit_reached": "maximum number of tabs reached. Close one to open another.",
     "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm."
   },
+  "apps_bar": {
+    "empty": "Pin an app or add a bookmark, and it shows here.",
+    "label": "Pinned apps and bookmarks",
+    "more": "Show the rest",
+    "rename_hint": "Leave it empty to show the picture only.",
+    "rename_tip": "Right-click an item in the bar to rename it.",
+    "rename_title": "Rename in the bar",
+    "reset_name": "Use its own name",
+    "show": "Show in the title bar",
+    "show_hint": "Your pinned apps and bookmarks, along the top of the window.",
+    "show_names": "Show names"
+  },
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
   "aria": {

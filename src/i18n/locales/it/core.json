@@ -179,6 +179,18 @@
     "limit_reached": "numero massimo di schede raggiunto. Chiudine una per aprirne un'altra.",
     "locked_kept_open": "le schede bloccate restano aperte. Chiudile una alla volta per confermare."
   },
+  "apps_bar": {
+    "empty": "Fissa un’app o aggiungi un segnalibro e comparirà qui.",
+    "label": "App fissate e segnalibri",
+    "more": "Mostra il resto",
+    "rename_hint": "Lascialo vuoto per mostrare solo l’immagine.",
+    "rename_tip": "Fai clic destro su un elemento della barra per rinominarlo.",
+    "rename_title": "Rinomina nella barra",
+    "reset_name": "Usa il suo nome",
+    "show": "Mostra nella barra del titolo",
+    "show_hint": "Le tue app fissate e i tuoi segnalibri, lungo la parte superiore della finestra.",
+    "show_names": "Mostra i nomi"
+  },
   "apps_dashboard": "dashboard delle app",
   "apps_official": "app ufficiali",
   "aria": {

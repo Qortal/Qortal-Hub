@@ -179,6 +179,18 @@
     "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
     "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada."
   },
+  "apps_bar": {
+    "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",
+    "label": "Kinnitatud rakendused ja järjehoidjad",
+    "more": "Näita ülejäänuid",
+    "rename_hint": "Jäta tühjaks, et näidata ainult pilti.",
+    "rename_tip": "Nime muutmiseks tee ribal oleval kirjel paremklõps.",
+    "rename_title": "Nimeta ribal ümber",
+    "reset_name": "Kasuta enda nime",
+    "show": "Näita tiitliribal",
+    "show_hint": "Sinu kinnitatud rakendused ja järjehoidjad mööda akna ülaserva.",
+    "show_names": "Näita nimesid"
+  },
   "apps_dashboard": "rakenduste juhtpaneel",
   "apps_official": "ametlikud rakendused",
   "aria": {

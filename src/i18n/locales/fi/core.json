@@ -179,6 +179,18 @@
     "limit_reached": "välilehtien enimmäismäärä saavutettu. Sulje yksi avataksesi uuden.",
     "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi."
   },
+  "apps_bar": {
+    "empty": "Kiinnitä sovellus tai lisää kirjanmerkki, niin se näkyy tässä.",
+    "label": "Kiinnitetyt sovellukset ja kirjanmerkit",
+    "more": "Näytä loput",
+    "rename_hint": "Jätä tyhjäksi, jos haluat näyttää vain kuvan.",
+    "rename_tip": "Nimeä palkin kohde uudelleen napsauttamalla sitä hiiren oikealla painikkeella.",
+    "rename_title": "Nimeä uudelleen palkissa",
+    "reset_name": "Käytä omaa nimeä",
+    "show": "Näytä otsikkopalkissa",
+    "show_hint": "Kiinnittämäsi sovellukset ja kirjanmerkit ikkunan yläreunassa.",
+    "show_names": "Näytä nimet"
+  },
   "apps_dashboard": "sovellusten hallintapaneeli",
   "apps_official": "viralliset sovellukset",
   "aria": {

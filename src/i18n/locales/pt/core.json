@@ -179,6 +179,18 @@
     "limit_reached": "número máximo de abas atingido. Feche uma para abrir outra.",
     "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar."
   },
+  "apps_bar": {
+    "empty": "Fixe uma aplicação ou adicione um marcador e aparecerá aqui.",
+    "label": "Aplicações fixadas e marcadores",
+    "more": "Mostrar o resto",
+    "rename_hint": "Deixe vazio para mostrar apenas a imagem.",
+    "rename_tip": "Clique com o botão direito num item da barra para o renomear.",
+    "rename_title": "Renomear na barra",
+    "reset_name": "Usar o próprio nome",
+    "show": "Mostrar na barra de título",
+    "show_hint": "As suas aplicações fixadas e marcadores, ao longo do topo da janela.",
+    "show_names": "Mostrar nomes"
+  },
   "apps_dashboard": "apps no Dashboard",
   "apps_official": "Apps oficiais",
   "aria": {

@@ -78,6 +78,16 @@ const validFolderId = (bookmark: AppBookmark, folderIds: Set<string>) =>
     ? bookmark.folderId
     : null;
 
+/** What a row other than the launcher's own needs of these tiles. */
+export type LauncherItemsOptions = {
+  /**
+   * Keep a pinned app in the row even when its start page is bookmarked in a
+   * folder. The launcher does not — there the app moved into the folder —
+   * but the title bar's row does, so every pinned app stays one click away.
+   */
+  keepAppsOfFolders?: boolean;
+};
+
 /**
  * The tiles in order.
  *
@@ -90,7 +100,8 @@ const validFolderId = (bookmark: AppBookmark, folderIds: Set<string>) =>
 export function buildLauncherItems(
   pins: LauncherPin[],
   data: AppBookmarksForAddress | null | undefined,
-  view: LauncherView | null | undefined
+  view: LauncherView | null | undefined,
+  options?: LauncherItemsOptions
 ): LauncherItem[] {
   const folders = data?.folders ?? [];
   const bookmarks = data?.bookmarks ?? [];
@@ -127,7 +138,7 @@ export function buildLauncherItems(
   }
 
   const appItems: LauncherAppItem[] = pins
-    .filter((pin) => !pinsInFolders.has(pin.key))
+    .filter((pin) => options?.keepAppsOfFolders || !pinsInFolders.has(pin.key))
     .map((pin) => ({ type: 'app', key: pin.key, pin }));
   const otherItems: LauncherItem[] = [
     ...folders.map(
