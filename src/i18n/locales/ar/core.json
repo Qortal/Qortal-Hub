@@ -441,6 +441,21 @@
   "image_embed": "تضمين صورة",
   "items_per_page": "عناصر لكل صفحة:",
   "last_height": "آخر ارتفاع",
+  "launcher": {
+    "bookmark_remove": "إزالة الإشارة المرجعية",
+    "clear_search": "مسح البحث",
+    "enter_opens": "اضغط Enter لفتح {{title}}",
+    "folder_delete": "حذف المجلد",
+    "folder_move_to": "نقل إلى مجلد",
+    "folder_remove_from": "إزالة من المجلد",
+    "no_matches": "لا شيء يطابق «{{query}}»",
+    "no_matches_hint": "جرّب اسمًا آخر، أو الصق رابط qortal://.",
+    "pinned_and_bookmarks": "التطبيقات المثبّتة والإشارات المرجعية",
+    "pinned_empty": "لا يوجد شيء مثبّت بعد. ثبّت تطبيقًا من المكتبة أدناه ليبقى هنا.",
+    "pinned_hint": "اسحب لإعادة الترتيب · أفلت تطبيقًا على آخر لإنشاء مجلد · انقر بالزر الأيمن للمزيد",
+    "results_apps": "التطبيقات والمواقع",
+    "results_saved": "تطبيقاتك المثبّتة وإشاراتك المرجعية"
+  },
   "level": "مستوى",
   "library": "مكتبة",
   "list": {

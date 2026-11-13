@@ -441,6 +441,21 @@
   "image_embed": "嵌入图像",
   "items_per_page": "每页条数：",
   "last_height": "最后的高度",
+  "launcher": {
+    "bookmark_remove": "移除书签",
+    "clear_search": "清除搜索",
+    "enter_opens": "按 Enter 键打开{{title}}",
+    "folder_delete": "删除文件夹",
+    "folder_move_to": "移到文件夹",
+    "folder_remove_from": "从文件夹中移出",
+    "no_matches": "没有与“{{query}}”匹配的内容",
+    "no_matches_hint": "请尝试其他名称，或粘贴 qortal:// 链接。",
+    "pinned_and_bookmarks": "已固定的应用和书签",
+    "pinned_empty": "还没有固定任何应用。从下方的应用库中固定一个应用，它就会显示在这里。",
+    "pinned_hint": "拖动可重新排序 · 将一个应用拖到另一个应用上可创建文件夹 · 右键单击查看更多操作",
+    "results_apps": "应用和网站",
+    "results_saved": "已固定的应用和书签"
+  },
   "level": "等级",
   "library": "图书馆",
   "list": {

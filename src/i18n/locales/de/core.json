@@ -441,6 +441,21 @@
   "image_embed": "Bildbett",
   "items_per_page": "Einträge pro Seite:",
   "last_height": "letzte Höhe",
+  "launcher": {
+    "bookmark_remove": "Lesezeichen entfernen",
+    "clear_search": "Suche leeren",
+    "enter_opens": "Enter drücken, um {{title}} zu öffnen",
+    "folder_delete": "Ordner löschen",
+    "folder_move_to": "in Ordner verschieben",
+    "folder_remove_from": "aus dem Ordner entfernen",
+    "no_matches": "nichts passt zu „{{query}}“",
+    "no_matches_hint": "versuche einen anderen Namen oder füge einen qortal://-Link ein.",
+    "pinned_and_bookmarks": "angeheftete Apps und Lesezeichen",
+    "pinned_empty": "noch nichts angeheftet. Hefte eine App aus der Bibliothek unten an, damit sie hier bleibt.",
+    "pinned_hint": "ziehen zum Umsortieren · eine App auf eine andere ziehen, um einen Ordner zu erstellen · Rechtsklick für mehr",
+    "results_apps": "Apps und Webseiten",
+    "results_saved": "deine angehefteten Apps und Lesezeichen"
+  },
   "level": "Ebene",
   "library": "Bibliothek",
   "list": {

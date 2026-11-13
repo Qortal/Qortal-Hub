@@ -24,7 +24,12 @@ import {
   horizontalListSortingStrategy,
   SortableContext,
 } from '@dnd-kit/sortable';
-import { AppsHomeDesktop } from './AppsHomeDesktop';
+import {
+  AppsLauncher,
+  type AppsLauncherRequest,
+  isLauncherShown,
+  isLauncherSubPage,
+} from './AppsLauncher';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
 import { getBaseApiReact } from '../../App';
@@ -50,7 +55,6 @@ import {
   RatingsCacheInitializer,
   useAppRatings,
 } from '../../hooks/useAppRatings';
-import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
@@ -243,10 +247,10 @@ export const AppsDesktop = ({
   const [tabStripCompresses, setTabStripCompresses] = useState(false);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
   const tabAddButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [librarySearchRequest, setLibrarySearchRequest] = useState<{
-    nonce: number;
-    query: string;
-  }>({ nonce: 0, query: '' });
+  const [launcherRequest, setLauncherRequest] = useState<AppsLauncherRequest>({
+    nonce: 0,
+    query: '',
+  });
   const tabsToNavTimeoutRef = useRef<number | null>(null);
   const tabActivationTimeoutRef = useRef<number | null>(null);
   const tabEntryCleanupTimeoutRef = useRef<number | null>(null);
@@ -758,18 +762,12 @@ export const AppsDesktop = ({
 
   useEffect(() => {
     const currentMode = desktopViewMode === 'dev' ? devMode : mode;
+    // 'library' is the launcher itself in Apps mode: nothing to go back to.
     const isSubPage =
       (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
       !selectedTab &&
-      [
-        'category',
-        'appInfo-from-category',
-        'appInfo',
-        'library',
-        'publish',
-        'publish-app',
-        'publish-website',
-      ].includes(currentMode);
+      (isLauncherSubPage(currentMode) ||
+        (desktopViewMode === 'dev' && currentMode === 'library'));
     setAppsSubPageCanGoBack(isSubPage);
   }, [desktopViewMode, devMode, mode, selectedTab, setAppsSubPageCanGoBack]);
 
@@ -1173,6 +1171,12 @@ export const AppsDesktop = ({
     setIsAddTabFocused(true);
     setSelectedTab(null);
     setDesktopViewMode('apps');
+    // Always the launcher, not the app or category page that was open last.
+    if (isLauncherSubPage(mode)) {
+      setPublishEditTarget(null);
+      setMode('home');
+    }
+    setLauncherRequest({ nonce: Date.now(), query: '' });
   };
 
   useEffect(() => {
@@ -1181,7 +1185,7 @@ export const AppsDesktop = ({
     return () => {
       unsubscribeFromEvent('newTabWindow', setNewTabWindowFunc);
     };
-  }, [tabs]);
+  }, [tabs, mode]);
 
   const devModeNewTabWindowFunc = () => {
     setIsNewTabWindow(true);
@@ -1205,7 +1209,7 @@ export const AppsDesktop = ({
       setIsAddTabFocused(true);
       setSelectedTab(null);
       setIsNewTabWindow(false);
-      setLibrarySearchRequest({
+      setLauncherRequest({
         nonce: Date.now(),
         query,
       });
@@ -1244,6 +1248,20 @@ export const AppsDesktop = ({
 
   const appsContentHeight = `calc(100vh - ${appChromeOffsetPx} - ${APPS_HORIZONTAL_TAB_HEIGHT_PX}px)`;
 
+  // One launcher stands where the dashboard and the library used to be: for a
+  // new tab, for the Apps button, and as the page the library pages return to.
+  const showLauncher = isLauncherShown({
+    desktopViewMode,
+    mode,
+    hasSelectedTab: !!selectedTab,
+    isNewTabWindow,
+  });
+
+  const refreshLibrary = useCallback(async () => {
+    await getQapps();
+    refreshRatings();
+  }, [getQapps, refreshRatings]);
+
   const openDashboardFromTabs = useCallback(() => {
     setIsAddTabFocused(true);
     setIsAddTabWaitingForPointerMove(false);
@@ -1251,7 +1269,7 @@ export const AppsDesktop = ({
     setPendingVisualTabActivationId(null);
     setDelayedVisualActiveTabId(null);
     setSelectedTab(null);
-    setLibrarySearchRequest({
+    setLauncherRequest({
       nonce: Date.now(),
       query: '',
     });
@@ -1685,29 +1703,6 @@ export const AppsDesktop = ({
             width: '100%',
           }}
         >
-          {desktopViewMode === 'apps' && mode === 'home' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                height: appsContentHeight,
-                overflow: 'auto',
-                width: '100%',
-              }}
-            >
-              <Spacer height="30px" />
-
-              <AppsHomeDesktop
-                myName={myName}
-                availableQapps={availableQapps}
-                setMode={setMode}
-                myApp={myApp}
-                myWebsite={myWebsite}
-                myAddress={myAddress}
-              />
-            </Box>
-          )}
-
           {desktopViewMode === 'dev' &&
             devMode === 'home' &&
             !isNewTabWindow && (
@@ -1735,21 +1730,17 @@ export const AppsDesktop = ({
               </Box>
             )}
 
-          <AppsLibraryDesktop
+          <AppsLauncher
             availableQapps={availableQapps}
             categories={categories}
             contentHeight={appsContentHeight}
-            externalSearchRequest={librarySearchRequest}
-            getQapps={async () => {
-              await getQapps();
-              refreshRatings();
-            }}
-            hasPublishApp={!!(myApp || myWebsite)}
-            isShow={
-              desktopViewMode === 'apps' && mode === 'library' && !selectedTab
-            }
-            myName={myName}
+            getQapps={refreshLibrary}
+            isShow={showLauncher}
             myAddress={myAddress}
+            myApp={myApp}
+            myName={myName}
+            myWebsite={myWebsite}
+            request={launcherRequest}
             setMode={setMode}
           />
 
@@ -1872,31 +1863,6 @@ export const AppsDesktop = ({
               />
             );
           })}
-
-          {isNewTabWindow &&
-            desktopViewMode === 'apps' &&
-            mode === 'viewer' && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: appsContentHeight,
-                  overflow: 'auto',
-                  width: '100%',
-                }}
-              >
-                <Spacer height="30px" />
-
-                <AppsHomeDesktop
-                  availableQapps={availableQapps}
-                  myApp={myApp}
-                  myName={myName}
-                  myWebsite={myWebsite}
-                  myAddress={myAddress}
-                  setMode={setMode}
-                />
-              </Box>
-            )}
 
           {isNewTabWindow &&
             desktopViewMode === 'dev' &&
