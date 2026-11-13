@@ -173,6 +173,12 @@
   "app_other": "应用",
   "app_private": "私人的",
   "app_service_type": "应用服务类型",
+  "app_tab": {
+    "close_all": "关闭所有标签页",
+    "duplicate": "复制标签页",
+    "limit_reached": "已达到标签页数量上限。请关闭一个标签页后再打开新的。",
+    "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。"
+  },
   "apps_dashboard": "应用仪表板",
   "apps_official": "官方应用程序",
   "aria": {
@@ -484,6 +490,7 @@
       "network_generic": "网络错误",
       "password_not_matching": "密码字段不匹配！",
       "password_wrong": "无法验证。错误的密码",
+      "private_app_needs_own_node": "此私人应用只能通过你自己的节点及其 API 密钥打开",
       "publish_app": "无法发布应用",
       "publish_image": "无法发布图像",
       "rate": "无法评价",
@@ -501,6 +508,7 @@
       "address_copied": "地址已复制到剪贴板。",
       "already_voted": "您已经投票了。",
       "amount_qort": "金额: {{ amount }} QORT",
+      "app_details_unavailable": "无法加载此应用程序当前的标题、描述和标签。发布前请重新填写，否则它们将被替换。",
       "app_notifications_hint": "Q-App 通知将显示在此处",
       "authenticated_account": "已认证账户",
       "avatar_publish_fee": "发布头像需要 {{fee}} QORT 的手续费",

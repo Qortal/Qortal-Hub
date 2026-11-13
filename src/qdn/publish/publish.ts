@@ -10,7 +10,14 @@ import { executeEvent } from '../../utils/events';
 import { fileToBase64 } from '../../utils/fileReading';
 import aesjs from 'aes-js';
 import { checkPublishStorage, requirePublishFile } from './upload-validation';
+import {
+  isWorthRetrying,
+  needsApiKey,
+  nodeAnswerError,
+  nodeAnswerErrorFromStatus,
+} from './nodeAnswer';
 import { isQAppFileReference } from '../../qortal/qapp-file-reference';
+import { QAppFileUploadError } from '../../../electron/src/qapp-file-protocol';
 
 async function encryptAesCtrChunkWithFallback(
   keyBytes,
@@ -93,8 +100,7 @@ async function reusablePost(endpoint, _body) {
     body: _body,
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText);
+    throw await nodeAnswerError(response);
   }
   let data;
   try {
@@ -135,11 +141,16 @@ async function uploadChunkWithRetry(
       }
       const response = await reusablePostStream(endpoint, formData);
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText);
+        throw await nodeAnswerError(response);
       }
       return; // Success
-    } catch (err) {
+    } catch (error) {
+      const err =
+        error instanceof QAppFileUploadError
+          ? nodeAnswerErrorFromStatus(error.status)
+          : error;
+      // A refusal (401/403/4xx) won't change on a retry.
+      if (!isWorthRetrying(err)) throw err;
       attempt++;
       console.warn(
         `Chunk ${index} failed (attempt ${attempt}): ${err.message}`
@@ -167,6 +178,8 @@ async function resuablePostRetry(
 
       return response;
     } catch (err) {
+      // A refusal (401/403/4xx) won't change on a retry.
+      if (!isWorthRetrying(err)) throw err;
       attempt++;
       if (attempt >= maxRetries) {
         throw new Error(
@@ -597,6 +610,9 @@ export const publishData = async ({
     });
 
     if (!response?.ok) {
+      if (needsApiKey(response.status)) {
+        throw await nodeAnswerError(response);
+      }
       const errorText = await response.text();
       throw new Error(`Finalize failed: ${errorText}`);
     }

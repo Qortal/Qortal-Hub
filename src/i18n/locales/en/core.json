@@ -173,6 +173,12 @@
   "app_other": "apps",
   "app_private": "private",
   "app_service_type": "app service type",
+  "app_tab": {
+    "close_all": "close all tabs",
+    "duplicate": "duplicate tab",
+    "limit_reached": "maximum number of tabs reached. Close one to open another.",
+    "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm."
+  },
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
   "aria": {
@@ -484,6 +490,7 @@
       "network_generic": "network error",
       "password_not_matching": "password fields do not match!",
       "password_wrong": "unable to authenticate. Wrong password",
+      "private_app_needs_own_node": "this private app opens only on your own node, with its API key",
       "publish_app": "unable to publish app",
       "publish_image": "unable to publish image",
       "rate": "unable to rate",
@@ -501,6 +508,7 @@
       "address_copied": "address copied to clipboard.",
       "already_voted": "you've already voted.",
       "amount_qort": "amount: {{ amount }} QORT",
+      "app_details_unavailable": "this app's current title, description and tags couldn't be loaded. Fill them in again before publishing, or they will be replaced.",
       "app_notifications_hint": "Q-App notifications will appear here",
       "authenticated_account": "Authenticated account",
       "avatar_publish_fee": "publishing an avatar requires a fee of {{fee}} QORT",

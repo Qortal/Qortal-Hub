@@ -30,6 +30,14 @@ export type QAppFileOperation =
       encryption?: { key: Uint8Array; iv: Uint8Array };
     };
 
+/** Internal upload failure. Only the HTTP status crosses the trusted port. */
+export class QAppFileUploadError extends Error {
+  constructor(readonly status: number) {
+    super('QAPP_FILE_UPLOAD_FAILED');
+    this.name = 'QAppFileUploadError';
+  }
+}
+
 export function requireFileRange(size: number, start: number, end: number) {
   if (
     !Number.isSafeInteger(start) ||

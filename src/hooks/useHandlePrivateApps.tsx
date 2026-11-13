@@ -14,6 +14,7 @@ import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { upsertPrivatePinnedApp } from './privatePinnedApps';
+import { privateAppPreviewUrl } from './privateAppPreview';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
@@ -152,15 +153,24 @@ export const useHandlePrivateApps = () => {
               body: UintToObject?.app,
             });
 
-            if (!response.ok) {
+            const url = privateAppPreviewUrl(
+              getBaseApiReact(),
+              response.ok ? await response.text() : ''
+            );
+            if (!url) {
+              // 401/403: the node builds previews only with its API key.
+              const needsOwnNode =
+                response.status === 401 || response.status === 403;
               throw new Error(
-                t('core:message.error.build_app', {
-                  postProcess: 'capitalizeFirstChar',
-                })
+                t(
+                  needsOwnNode
+                    ? 'core:message.error.private_app_needs_own_node'
+                    : 'core:message.error.build_app',
+                  { postProcess: 'capitalizeFirstChar' }
+                )
               );
             }
-
-            return createEndpoint(await response.text());
+            return url;
           };
 
           const previewUrl = await buildPrivatePreview();

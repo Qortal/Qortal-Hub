@@ -16,9 +16,18 @@ export const QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT =
 const QUITTER_PUBLIC_FEED_SEARCH_LIMIT = 10;
 const QUITTER_WIDGET_ITEM_LIMIT = 6;
 const QUITTER_MAX_PAGINATION_PASSES = 4;
-const QUITTER_FOLLOWING_SCAN_TOTAL_LIMIT = 60;
 const QUITTER_FOLLOW_CANDIDATE_MAX_SIZE = 160;
-const QUITTER_FOLLOW_CANDIDATE_LIMIT = 24;
+/** An unfollow republishes the follow document empty: 32 bytes. */
+const QUITTER_UNFOLLOWED_RESOURCE_SIZE = 32;
+/** Follow documents read per /arbitrary/resources/onchain/data request. */
+const QUITTER_FOLLOW_BATCH_SIZE = 100;
+const QUITTER_FOLLOWING_MAX_NAMES = 400;
+/**
+ * Room for the `name=` filters of one feed search. Core's API server (Jetty)
+ * takes about 8 KB of request line and headers, so the newest follows are
+ * kept within this many characters of query.
+ */
+export const QUITTER_FEED_NAMES_QUERY_BUDGET = 6000;
 const QUITTER_FOLLOWING_CACHE_TTL_MS = 5 * 60 * 1000;
 /** Max entries; LRU eviction. Payloads can be large (e.g. embedded images). */
 const QUITTER_DOCUMENT_PAYLOAD_CACHE_MAX_ENTRIES = 250;
@@ -260,7 +269,23 @@ const fetchJSON = async (url: string, signal?: AbortSignal) => {
 
   return response.json();
 };
-const buildQuitterFeedSearchUrl = (
+/**
+ * The names that fit in one feed search, in order, within
+ * QUITTER_FEED_NAMES_QUERY_BUDGET characters of `&name=` filters.
+ */
+export const quitterFeedNamesWithinBudget = (names: string[]): string[] => {
+  const kept: string[] = [];
+  let used = 0;
+  for (const name of names) {
+    const cost = '&name='.length + encodeURIComponent(name).length;
+    if (used + cost > QUITTER_FEED_NAMES_QUERY_BUDGET) break;
+    kept.push(name);
+    used += cost;
+  }
+  return kept;
+};
+
+export const buildQuitterFeedSearchUrl = (
   searchLimit: number,
   offset: number,
   names: string[] = []
@@ -276,7 +301,17 @@ const buildQuitterFeedSearchUrl = (
     excludeblocked: 'true',
   });
 
-  names.forEach((name) => {
+  const searchNames = quitterFeedNamesWithinBudget(names);
+  if (searchNames.length < names.length) {
+    console.warn(
+      `Quitter feed: searching the newest ${searchNames.length} of ${names.length} followed names`
+    );
+  }
+  if (searchNames.length > 0) {
+    // Core matches `name` as "contains" unless told otherwise.
+    params.set('exactmatchnames', 'true');
+  }
+  searchNames.forEach((name) => {
     params.append('name', name);
   });
 
@@ -580,33 +615,40 @@ export const fetchQuitterFollowedNames = async (
   }
 
   const followedNames = new Set<string>();
+  // Every follow document, newest first (a limit of 0 is no limit).
   const resources = await fetchQuitterUserResources(
     normalizedUserName,
-    QUITTER_FOLLOWING_SCAN_TOTAL_LIMIT,
+    0,
     0,
     signal
   );
 
-  const candidateResources = resources
-    .filter(
-      (resource) =>
-        resource.size <= QUITTER_FOLLOW_CANDIDATE_MAX_SIZE &&
-        resource.size !== 32
-    )
-    .sort((left, right) => left.size - right.size)
-    .slice(0, QUITTER_FOLLOW_CANDIDATE_LIMIT);
+  const candidateResources = resources.filter(
+    (resource) =>
+      resource.size <= QUITTER_FOLLOW_CANDIDATE_MAX_SIZE &&
+      resource.size !== QUITTER_UNFOLLOWED_RESOURCE_SIZE
+  );
 
-  const settled = await fetchFollowedNames(candidateResources, signal);
+  for (
+    let start = 0;
+    start < candidateResources.length &&
+    followedNames.size < QUITTER_FOLLOWING_MAX_NAMES;
+    start += QUITTER_FOLLOW_BATCH_SIZE
+  ) {
+    const batch = candidateResources.slice(
+      start,
+      start + QUITTER_FOLLOW_BATCH_SIZE
+    );
+    for (const result of await fetchFollowedNames(batch, signal)) {
+      if (!result || result === normalizedUserName) {
+        continue;
+      }
 
-  for (const result of settled) {
-    if (!result || result === normalizedUserName) {
-      continue;
+      followedNames.add(result);
     }
-
-    followedNames.add(result);
   }
 
-  const names = [...followedNames];
+  const names = [...followedNames].slice(0, QUITTER_FOLLOWING_MAX_NAMES);
   followedNamesCache.set(normalizedUserName, {
     fetchedAt: Date.now(),
     names,

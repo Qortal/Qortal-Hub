@@ -173,6 +173,12 @@
   "app_other": "aplicaciones",
   "app_private": "privado",
   "app_service_type": "Tipo de servicio de aplicaciones",
+  "app_tab": {
+    "close_all": "cerrar todas las pestañas",
+    "duplicate": "duplicar pestaña",
+    "limit_reached": "se alcanzó el número máximo de pestañas. Cierra una para abrir otra.",
+    "locked_kept_open": "las pestañas bloqueadas siguen abiertas. Ciérralas una por una para confirmar."
+  },
   "apps_dashboard": "Panel de aplicaciones",
   "apps_official": "aplicaciones oficiales",
   "aria": {
@@ -484,6 +490,7 @@
       "network_generic": "error de red",
       "password_not_matching": "¡Los campos de contraseña no coinciden!",
       "password_wrong": "incapaz de autenticarse. Contraseña incorrecta",
+      "private_app_needs_own_node": "esta aplicación privada solo se abre en tu propio nodo, con su clave API",
       "publish_app": "Incapaz de publicar la aplicación",
       "publish_image": "Incapaz de publicar imagen",
       "rate": "incapaz de calificar",
@@ -501,6 +508,7 @@
       "address_copied": "dirección copiada al portapapeles.",
       "already_voted": "ya has votado.",
       "amount_qort": "cantidad: {{ amount }} QORT",
+      "app_details_unavailable": "no se pudieron cargar el título, la descripción y las etiquetas actuales de esta aplicación. Vuelve a escribirlos antes de publicar o se reemplazarán.",
       "app_notifications_hint": "Las notificaciones de Q-App aparecerán aquí",
       "authenticated_account": "Cuenta autenticada",
       "avatar_publish_fee": "publicar un avatar requiere una tarifa de {{fee}} QORT",

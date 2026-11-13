@@ -173,6 +173,12 @@
   "app_other": "アプリ",
   "app_private": "プライベート",
   "app_service_type": "アプリサービスタイプ",
+  "app_tab": {
+    "close_all": "すべてのタブを閉じる",
+    "duplicate": "タブを複製",
+    "limit_reached": "タブの最大数に達しました。別のタブを開くには、いずれかを閉じてください。",
+    "locked_kept_open": "ロックされたタブは開いたままです。確認するには、1つずつ閉じてください。"
+  },
   "apps_dashboard": "アプリダッシュボード",
   "apps_official": "公式アプリ",
   "aria": {
@@ -484,6 +490,7 @@
       "network_generic": "ネットワークエラー",
       "password_not_matching": "パスワードフィールドは一致しません！",
       "password_wrong": "認証できません。間違ったパスワード",
+      "private_app_needs_own_node": "このプライベートアプリは、自分のノードとそのAPIキーでのみ開けます",
       "publish_app": "アプリを公開できません",
       "publish_image": "画像を公開できません",
       "rate": "評価できません",
@@ -501,6 +508,7 @@
       "address_copied": "アドレスをクリップボードにコピーしました。",
       "already_voted": "あなたはすでに投票しました。",
       "amount_qort": "金額: {{ amount }} QORT",
+      "app_details_unavailable": "このアプリの現在のタイトル、説明、タグを読み込めませんでした。公開する前にもう一度入力してください。入力しないと置き換えられます。",
       "app_notifications_hint": "Q-Appの通知はここに表示されます",
       "authenticated_account": "認証済みアカウント",
       "avatar_publish_fee": "アバターの公開には {{fee}} QORT の手数料が必要です",
