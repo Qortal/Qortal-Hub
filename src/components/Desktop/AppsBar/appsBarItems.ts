@@ -24,8 +24,7 @@ import {
  * and shows them in the same order, so the pinned apps, the bookmark folders
  * and the bookmarks stand where the user last arranged them, and a change
  * made on the launcher or in the bookmarks menu shows here too. The bar adds
- * only the names the user gave its items, and keeps every pinned app in the
- * row even when it is in a folder as well.
+ * only the names the user gave its items.
  */
 
 export type AppsBarPinItem = {
@@ -95,10 +94,9 @@ const nameOf = (
  *
  * The launcher works the order out itself (`buildLauncherItems`), so the two
  * agree: a folder moved to the front of the row comes first here too, a
- * bookmark stays behind the app it was put behind, and a bookmark of a
- * pinned app's start page is the pinned app. The one difference is that an
- * app put into a folder still shows in the bar as well — the bar is the
- * quick way to the pinned apps, so none of them leaves it.
+ * bookmark stays behind the app it was put behind, an app put into a folder
+ * shows in that folder and not again beside it, and a bookmark of a pinned
+ * app's start page is the pinned app.
  */
 export function buildAppsBarItems(
   pins: PinnedApp[] | null | undefined,
@@ -137,8 +135,7 @@ export function buildAppsBarItems(
   for (const tile of buildLauncherItems(
     buildLauncherPins(pins, null),
     data,
-    view,
-    { keepAppsOfFolders: true }
+    view
   )) {
     if (tile.type === 'bookmark') {
       const item = bookmarkItem(tile.bookmark, null);

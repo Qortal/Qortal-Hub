@@ -206,7 +206,7 @@ describe('what the apps bar shows', () => {
     ).toEqual([false, null]);
   });
 
-  it('keeps a pinned app in the row when it is in a folder as well', () => {
+  it('shows a pinned app put into a folder in that folder only', () => {
     const items = build(
       [{ service: 'APP', name: 'Q-Tube' }],
       store(
@@ -215,10 +215,25 @@ describe('what the apps bar shows', () => {
       )
     );
 
-    // On the launcher the app moved into the folder; the bar is the quick
-    // way to the pinned apps, so it stays there too.
-    expect(labels(items)).toEqual(['Q-Tube', 'Media']);
+    // It moved into the folder on the launcher, so it is there here too,
+    // and not a second time beside it.
+    expect(labels(items)).toEqual(['Media']);
     expect(labels(folderOf(items, 'Media')?.items ?? [])).toEqual(['Q-Tube']);
+  });
+
+  it('keeps a pinned app that is in no folder', () => {
+    const items = build(
+      [
+        { service: 'APP', name: 'Q-Tube' },
+        { service: 'APP', name: 'Q-Mail' },
+      ],
+      store(
+        [folder('f1', 'Media')],
+        [bookmark('b1', 'Q-Tube', { appName: 'Q-Tube', folderId: 'f1' })]
+      )
+    );
+
+    expect(labels(items)).toEqual(['Q-Mail', 'Media']);
   });
 
   it('shows a page bookmarked both in a folder and outside it once', () => {
