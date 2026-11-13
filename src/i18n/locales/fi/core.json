@@ -714,6 +714,7 @@
   "name": "nimi",
   "name_app": "nimi/sovellus",
   "navbar": {
+    "search_library": "Hae Q-Appeista ”{{query}}”",
     "search_placeholder": "Hae Q-Appeja tai kirjoita qortal://",
     "session": {
       "lock_description": "Pidä keskustelut ja puhelut yhdistettyinä",
@@ -722,7 +723,12 @@
       "logout_title": "Kirjaudu ulos",
       "menu_aria": "Istunnon asetukset",
       "tooltip": "Lukitse tai kirjaudu ulos"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Verkkosivusto"
+    },
+    "suggestions": "Ehdotukset"
   },
   "new_post_in": "uusi julkaisu kohteessa {{ title }}",
   "none": "ei mitään",

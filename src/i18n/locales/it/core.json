@@ -714,6 +714,7 @@
   "name": "nome",
   "name_app": "nome/app",
   "navbar": {
+    "search_library": "Cerca “{{query}}” nelle Q-App",
     "search_placeholder": "Cerca Q-App o inserisci qortal://",
     "session": {
       "lock_description": "Mantieni chat e chiamate connesse",
@@ -722,7 +723,12 @@
       "logout_title": "Esci",
       "menu_aria": "Opzioni della sessione",
       "tooltip": "Blocca o esci"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Sito web"
+    },
+    "suggestions": "Suggerimenti"
   },
   "new_post_in": "nuovo post in {{ title }}",
   "none": "nessuno",

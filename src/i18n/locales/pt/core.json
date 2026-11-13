@@ -714,6 +714,7 @@
   "name": "nome",
   "name_app": "nome/Aplicativo",
   "navbar": {
+    "search_library": "Pesquisar «{{query}}» nas Q-Apps",
     "search_placeholder": "Pesquisar Q-Apps ou introduzir qortal://",
     "session": {
       "lock_description": "Manter as conversas e chamadas ligadas",
@@ -722,7 +723,12 @@
       "logout_title": "Terminar sessão",
       "menu_aria": "Opções da sessão",
       "tooltip": "Bloquear ou terminar sessão"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Site"
+    },
+    "suggestions": "Sugestões"
   },
   "new_post_in": "nova postagem em {{ title }}",
   "none": "nenhum",

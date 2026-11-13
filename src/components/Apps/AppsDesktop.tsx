@@ -75,7 +75,10 @@ import {
   isNewTabWindowAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { publishEditTargetAtom } from '../../atoms/appsAtoms';
+import {
+  availableQappsAtom,
+  publishEditTargetAtom,
+} from '../../atoms/appsAtoms';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
@@ -208,7 +211,7 @@ export const AppsDesktop = ({
   const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
-  const [availableQapps, setAvailableQapps] = useState([]);
+  const [availableQapps, setAvailableQapps] = useAtom(availableQappsAtom);
   const availableQappsCountRef = useRef(0);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);

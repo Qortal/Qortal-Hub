@@ -714,6 +714,7 @@
   "name": "name",
   "name_app": "name/App",
   "navbar": {
+    "search_library": "Search Q-Apps for “{{query}}”",
     "search_placeholder": "Search Q-Apps or enter qortal://",
     "session": {
       "lock_description": "Keep chats and calls connected",
@@ -722,7 +723,12 @@
       "logout_title": "Log out",
       "menu_aria": "Session options",
       "tooltip": "Lock or log out"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Website"
+    },
+    "suggestions": "Suggestions"
   },
   "new_post_in": "new post in {{ title }}",
   "none": "none",

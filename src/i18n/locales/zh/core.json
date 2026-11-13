@@ -714,6 +714,7 @@
   "name": "姓名",
   "name_app": "名称/应用",
   "navbar": {
+    "search_library": "在 Q-Apps 中搜索“{{query}}”",
     "search_placeholder": "搜索 Q-Apps 或输入 qortal://",
     "session": {
       "lock_description": "保持聊天和通话连接",
@@ -722,7 +723,12 @@
       "logout_title": "退出登录",
       "menu_aria": "会话选项",
       "tooltip": "锁定或退出登录"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "网站"
+    },
+    "suggestions": "建议"
   },
   "new_post_in": "{{ title }} 中的新帖子",
   "none": "没有任何",

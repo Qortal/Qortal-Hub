@@ -716,6 +716,7 @@
   "name": "имя",
   "name_app": "имя/приложение",
   "navbar": {
+    "search_library": "Искать «{{query}}» в Q-Apps",
     "search_placeholder": "Поиск Q-Apps или ввод qortal://",
     "session": {
       "lock_description": "Сохранять чаты и звонки подключёнными",
@@ -724,7 +725,12 @@
       "logout_title": "Выйти",
       "menu_aria": "Параметры сеанса",
       "tooltip": "Заблокировать или выйти"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Веб-сайт"
+    },
+    "suggestions": "Подсказки"
   },
   "new_post_in": "новые сообщения в {{ title }}",
   "none": "никто",

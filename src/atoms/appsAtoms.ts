@@ -15,6 +15,12 @@ export const appCategoryFilterAtom = atomWithReset<string>('all');
 export const appStatusFilterAtom = atomWithReset<StatusFilterOption>('all');
 export const appSearchQueryAtom = atomWithReset<string>('');
 
+/**
+ * Every published Q-App and website (default resources), as the Q-Apps
+ * library loads them. The top bar suggests from it too.
+ */
+export const availableQappsAtom = atom<any[]>([]);
+
 
 // Current tab atom
 export type AppsLibraryTab =
