@@ -7,7 +7,6 @@ import '../../i18n/i18n';
 import { userInfoAtom } from '../../atoms/global';
 import { lightTheme } from '../../styles/theme-light';
 import { executeEvent } from '../../utils/events';
-import { feedAppAtom } from './quitter/feedApp';
 import {
   fetchQuitterFeedPage,
   fetchQuitterFollowedNames,
@@ -83,16 +82,13 @@ const renderWidget = (
   return { ...view, refresh: (token: number) => view.rerender(ui(token)) };
 };
 
-const appButton = (name: 'Quitter' | 'Torq') =>
-  screen.getByRole('button', { name });
-
 const openedApps = () =>
   vi
     .mocked(executeEvent)
     .mock.calls.filter(([event]) => event === 'addTab')
     .map(([, payload]) => (payload as { data: { name: string } }).data);
 
-describe('QuitterFeedWidget feed app', () => {
+describe('QuitterFeedWidget as the Torq feed', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.mocked(executeEvent).mockClear();
@@ -117,13 +113,14 @@ describe('QuitterFeedWidget feed app', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the feed as Torq does by default, and opens posts in Torq', async () => {
+  it('shows the feed as Torq does, and opens posts in Torq', async () => {
     const store = makeStore();
     renderWidget(store);
 
     expect(await screen.findByText('hello from alice')).toBeInTheDocument();
-    expect(appButton('Torq')).toHaveAttribute('aria-pressed', 'true');
-    expect(appButton('Quitter')).toHaveAttribute('aria-pressed', 'false');
+    // No choice of app: Quitter is left out.
+    expect(screen.queryByRole('button', { name: 'Quitter' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Torq' })).toBeNull();
     await waitFor(() =>
       expect(screen.queryByText('buy now')).not.toBeInTheDocument()
     );
@@ -138,30 +135,17 @@ describe('QuitterFeedWidget feed app', () => {
     ]);
   });
 
-  it('switches to Quitter at once, shows every post there and remembers the choice', async () => {
+  it('says which feed it is', async () => {
     const store = makeStore();
     renderWidget(store);
     await screen.findByText('hello from alice');
 
-    fireEvent.click(appButton('Quitter'));
-
-    // The same posts, shown as Quitter shows them: no new load.
-    expect(screen.getByText('buy now')).toBeInTheDocument();
-    expect(fetchQuitterFeedPage).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByText('hello from alice qortal://use-embed/GIF/abc')
-    ).toBeInTheDocument();
-    expect(appButton('Quitter')).toHaveAttribute('aria-pressed', 'true');
-    expect(store.get(feedAppAtom)).toBe('Quitter');
-    expect(localStorage.getItem('home_feed_app')).toBe('Quitter');
-
-    fireEvent.click(screen.getByText('buy now'));
-    expect(openedApps()).toEqual([
-      expect.objectContaining({ name: 'Quitter', path: 'post/Spammer/p2' }),
-    ]);
+    expect(screen.getByText('Personalized feed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'General' }));
+    expect(screen.getByText('Public feed')).toBeInTheDocument();
   });
 
-  it('names the chosen app in its messages', async () => {
+  it('names Torq in its messages', async () => {
     vi.mocked(fetchQuitterFollowedNames).mockResolvedValue([]);
     vi.mocked(fetchQuitterFeedPage).mockResolvedValue({
       hasMore: false,
@@ -176,16 +160,9 @@ describe('QuitterFeedWidget feed app', () => {
         'Browse Torq and follow accounts to build your feed.'
       )
     ).toBeInTheDocument();
-
-    fireEvent.click(appButton('Quitter'));
-    expect(
-      await screen.findByText(
-        'Browse Quitter and follow accounts to build your feed.'
-      )
-    ).toBeInTheDocument();
   });
 
-  it('loads again after an error when the app changes, so the error names it', async () => {
+  it('names Torq when the feed fails to load', async () => {
     vi.mocked(fetchQuitterFeedPage).mockRejectedValue(new Error('node down'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const store = makeStore();
@@ -196,16 +173,6 @@ describe('QuitterFeedWidget feed app', () => {
         'The personalized Torq feed is temporarily unavailable. Please try again.'
       )
     ).toBeInTheDocument();
-    expect(fetchQuitterFeedPage).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(appButton('Quitter'));
-
-    expect(
-      await screen.findByText(
-        'The personalized Quitter feed is temporarily unavailable. Please try again.'
-      )
-    ).toBeInTheDocument();
-    expect(fetchQuitterFeedPage).toHaveBeenCalledTimes(2);
   });
 
   it('reads Torq’s hidden users again on a manual refresh', async () => {
@@ -221,14 +188,5 @@ describe('QuitterFeedWidget feed app', () => {
         expect.objectContaining({ force: true })
       )
     );
-  });
-
-  it('asks Torq for nothing while Quitter is chosen', async () => {
-    const store = makeStore();
-    store.set(feedAppAtom, 'Quitter');
-    renderWidget(store);
-
-    expect(await screen.findByText('buy now')).toBeInTheDocument();
-    expect(fetchTorqHiddenUsers).not.toHaveBeenCalled();
   });
 });

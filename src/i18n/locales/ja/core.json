@@ -864,7 +864,6 @@
     "error_timeout": "フィードの読み込みに失敗しました。再試行するか「一般」に戻れます。",
     "error_title_following": "フィードの読み込みに失敗しました",
     "error_title_general": "投稿を読み込めませんでした",
-    "feed_app": "フィードのアプリ",
     "loading_following": "フォロー中のフィードを読み込み中…",
     "loading_general": "フィードを読み込み中…",
     "new_posts_one": "新しい投稿 {{count}} 件",
@@ -874,6 +873,8 @@
     "retry_following": "再試行",
     "retry_general": "再試行",
     "return_to_general": "一般に戻る",
+    "subtitle_personalized": "パーソナライズされたフィード",
+    "subtitle_public": "公開フィード",
     "tab_following": "フォロー中",
     "tab_general": "一般"
   },

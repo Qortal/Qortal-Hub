@@ -864,7 +864,6 @@
     "error_timeout": "Syöteen lataus epäonnistui. Voit yrittää uudelleen tai palata Yleiseen.",
     "error_title_following": "Syöteen lataus epäonnistui",
     "error_title_general": "Julkaisuja ei voitu ladata",
-    "feed_app": "Syötteen sovellus",
     "loading_following": "Ladataan seurattujen syötettä...",
     "loading_general": "Ladataan syötettä...",
     "new_posts_one": "{{count}} uusi julkaisu",
@@ -874,6 +873,8 @@
     "retry_following": "Yritä uudelleen",
     "retry_general": "Yritä uudelleen",
     "return_to_general": "Palaa Yleiseen",
+    "subtitle_personalized": "Personoitu syöte",
+    "subtitle_public": "Julkinen syöte",
     "tab_following": "Seuratut",
     "tab_general": "Yleinen"
   },

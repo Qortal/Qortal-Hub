@@ -80,7 +80,7 @@ import {
 
 const FEATURED_APP_NAMES = [
   'Q-Tube',
-  'Quitter',
+  'Torq',
   'Q-Mail',
   'SubWire',
   'Q-Trade',

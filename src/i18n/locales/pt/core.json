@@ -864,7 +864,6 @@
     "error_timeout": "Falha ao carregar o feed. Podes tentar de novo ou voltar ao Geral.",
     "error_title_following": "Falha ao carregar o feed",
     "error_title_general": "Não foi possível carregar as publicações",
-    "feed_app": "App do feed",
     "loading_following": "A carregar feed de contas seguidas...",
     "loading_general": "A carregar feed...",
     "new_posts_one": "{{count}} publicação nova",
@@ -874,6 +873,8 @@
     "retry_following": "Tentar de novo",
     "retry_general": "Tentar novamente",
     "return_to_general": "Voltar ao Geral",
+    "subtitle_personalized": "Feed personalizado",
+    "subtitle_public": "Feed público",
     "tab_following": "A seguir",
     "tab_general": "Geral"
   },

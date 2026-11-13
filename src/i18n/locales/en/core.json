@@ -864,7 +864,6 @@
     "error_timeout": "Feed load failed. You can try again or return to General.",
     "error_title_following": "Feed load failed",
     "error_title_general": "Unable to load posts",
-    "feed_app": "Feed app",
     "loading_following": "Loading following feed...",
     "loading_general": "Loading feed...",
     "new_posts_one": "{{count}} new post",
@@ -874,6 +873,8 @@
     "retry_following": "Try Again",
     "retry_general": "Retry",
     "return_to_general": "Return to General",
+    "subtitle_personalized": "Personalized feed",
+    "subtitle_public": "Public feed",
     "tab_following": "Following",
     "tab_general": "General"
   },

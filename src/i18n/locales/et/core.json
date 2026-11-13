@@ -864,7 +864,6 @@
     "error_timeout": "Voo laadimine ebaõnnestus. Võid proovida uuesti või naasta Üldise juurde.",
     "error_title_following": "Voo laadimine ebaõnnestus",
     "error_title_general": "Postitusi ei õnnestunud laadida",
-    "feed_app": "Voo rakendus",
     "loading_following": "Jälgimisvoo laadimine...",
     "loading_general": "Voo laadimine...",
     "new_posts_one": "{{count}} uus postitus",
@@ -874,6 +873,8 @@
     "retry_following": "Proovi uuesti",
     "retry_general": "Proovi uuesti",
     "return_to_general": "Tagasi üldisse",
+    "subtitle_personalized": "Isikupärastatud voog",
+    "subtitle_public": "Avalik voog",
     "tab_following": "Jälgitavad",
     "tab_general": "Üldine"
   },

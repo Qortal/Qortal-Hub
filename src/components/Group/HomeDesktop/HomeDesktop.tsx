@@ -1,6 +1,5 @@
 import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
-import { useAtomValue } from 'jotai';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import { alpha, darken } from '@mui/material/styles';
 import {
@@ -42,7 +41,7 @@ import {
   HomeWidgetsPanel,
   canHostHomeWidgets,
 } from '../../HomeWidgets/HomeWidgetsPanel';
-import { feedAppAtom } from '../../Widgets/quitter/feedApp';
+import { TORQ_APP_NAME } from '../../Widgets/quitter/torqFeed';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
 import { OnlineUsersBadge } from './OnlineUsersBadge';
@@ -514,11 +513,10 @@ export const HomeDesktop = ({
     executeEvent('newTabWindow', {});
     setDesktopViewMode('apps');
   }, [setDesktopViewMode]);
-  const feedApp = useAtomValue(feedAppAtom);
   const handleOpenFeedApp = useCallback(() => {
-    executeEvent('addTab', { data: { service: 'APP', name: feedApp } });
+    executeEvent('addTab', { data: { service: 'APP', name: TORQ_APP_NAME } });
     executeEvent('open-apps-mode', {});
-  }, [feedApp]);
+  }, []);
   const handleOpenQChatPanel = useCallback(() => {
     returnToQChat(setGroupSection, openQChatTab);
   }, [setGroupSection]);
@@ -1008,11 +1006,7 @@ export const HomeDesktop = ({
                     order={quitterCardOrder}
                     panelRef={quitterCardHeightRef}
                     refreshing={isQuitterWidgetRefreshing}
-                    title={
-                      feedApp === 'Torq'
-                        ? td('torq_feed', 'Torq Feed')
-                        : td('quitter_feed', 'Quitter Feed')
-                    }
+                    title={td('torq_feed', 'Torq Feed')}
                     widgetId="quitter"
                   >
                     <QuitterFeedWidget

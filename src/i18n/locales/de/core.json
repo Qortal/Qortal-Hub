@@ -864,7 +864,6 @@
     "error_timeout": "Feed-Laden fehlgeschlagen. Du kannst es erneut versuchen oder zu Allgemein zurückkehren.",
     "error_title_following": "Feed-Laden fehlgeschlagen",
     "error_title_general": "Beiträge konnten nicht geladen werden",
-    "feed_app": "Feed-App",
     "loading_following": "Persönlicher Feed wird geladen...",
     "loading_general": "Feed wird geladen...",
     "new_posts_one": "{{count}} neuer Beitrag",
@@ -874,6 +873,8 @@
     "retry_following": "Erneut versuchen",
     "retry_general": "Erneut versuchen",
     "return_to_general": "Zurück zu Allgemein",
+    "subtitle_personalized": "Personalisierter Feed",
+    "subtitle_public": "Öffentlicher Feed",
     "tab_following": "Folge ich",
     "tab_general": "Allgemein"
   },

@@ -1,6 +1,9 @@
 import { getBaseApiReact } from '../../../utils/globalApi';
 import type { QuitterFeedItem } from './quitterFeedTypes';
 
+/** The Q-App Home's feed reads and opens. */
+export const TORQ_APP_NAME = 'Torq';
+
 /**
  * How Torq reads the feed, so Home's Torq feed matches Torq itself:
  * - it leaves out the users the account hides in Torq;

@@ -864,7 +864,6 @@
     "error_timeout": "فشل تحميل الموجز. يمكنك إعادة المحاولة أو العودة إلى العام.",
     "error_title_following": "فشل تحميل الموجز",
     "error_title_general": "تعذّر تحميل المنشورات",
-    "feed_app": "تطبيق الموجز",
     "loading_following": "جاري تحميل موجز المتابَعين...",
     "loading_general": "جاري تحميل الموجز...",
     "new_posts_one": "{{count}} منشور جديد",
@@ -874,6 +873,8 @@
     "retry_following": "حاول مرة أخرى",
     "retry_general": "إعادة المحاولة",
     "return_to_general": "العودة إلى العام",
+    "subtitle_personalized": "موجز مخصّص",
+    "subtitle_public": "موجز عام",
     "tab_following": "المتابَعون",
     "tab_general": "عام"
   },

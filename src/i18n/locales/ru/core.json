@@ -866,7 +866,6 @@
     "error_timeout": "Не удалось загрузить ленту. Можно повторить или вернуться к общей.",
     "error_title_following": "Не удалось загрузить ленту",
     "error_title_general": "Не удалось загрузить публикации",
-    "feed_app": "Приложение ленты",
     "loading_following": "Загрузка ленты подписок...",
     "loading_general": "Загрузка ленты...",
     "new_posts_one": "{{count}} новая публикация",
@@ -876,6 +875,8 @@
     "retry_following": "Попробовать снова",
     "retry_general": "Повторить",
     "return_to_general": "Вернуться к общему",
+    "subtitle_personalized": "Персональная лента",
+    "subtitle_public": "Публичная лента",
     "tab_following": "Подписки",
     "tab_general": "Общее"
   },

@@ -864,7 +864,6 @@
     "error_timeout": "Error al cargar el feed. Puedes reintentar o volver a General.",
     "error_title_following": "Error al cargar el feed",
     "error_title_general": "No se pudieron cargar las publicaciones",
-    "feed_app": "App del feed",
     "loading_following": "Cargando feed siguiendo...",
     "loading_general": "Cargando feed...",
     "new_posts_one": "{{count}} publicación nueva",
@@ -874,6 +873,8 @@
     "retry_following": "Intentar de nuevo",
     "retry_general": "Reintentar",
     "return_to_general": "Volver a General",
+    "subtitle_personalized": "Feed personalizado",
+    "subtitle_public": "Feed público",
     "tab_following": "Siguiendo",
     "tab_general": "General"
   },

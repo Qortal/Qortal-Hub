@@ -864,7 +864,6 @@
     "error_timeout": "Caricamento del feed non riuscito. Puoi riprovare o tornare a Generale.",
     "error_title_following": "Caricamento feed non riuscito",
     "error_title_general": "Impossibile caricare i post",
-    "feed_app": "App del feed",
     "loading_following": "Caricamento feed Seguiti...",
     "loading_general": "Caricamento feed...",
     "new_posts_one": "{{count}} nuovo post",
@@ -874,6 +873,8 @@
     "retry_following": "Riprova",
     "retry_general": "Riprova",
     "return_to_general": "Torna a Generale",
+    "subtitle_personalized": "Feed personalizzato",
+    "subtitle_public": "Feed pubblico",
     "tab_following": "Seguiti",
     "tab_general": "Generale"
   },

@@ -18,7 +18,10 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { quitterDashboardFeedCacheAtom, userInfoAtom } from '../../atoms/global';
+import {
+  quitterDashboardFeedCacheAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import { executeEvent } from '../../utils/events';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
 import {
@@ -27,12 +30,7 @@ import {
 } from './QAppWidgetContainer';
 import { QuitterFeedCard } from './quitter/QuitterFeedCard';
 import {
-  FEED_APPS,
-  type FeedApp,
-  feedAppAtom,
-  saveFeedApp,
-} from './quitter/feedApp';
-import {
+  TORQ_APP_NAME,
   fetchTorqHiddenUsers,
   hiddenUserKey,
   torqFeedItems,
@@ -204,7 +202,6 @@ export const QuitterFeedWidget = ({
     return `${QUITTER_FEED_MODE_STORAGE_PREFIX}${addr}`;
   }, [userInfo?.address]);
   const [feedMode, setFeedMode] = useState<QuitterFeedMode>('following');
-  const [feedApp, setFeedApp] = useAtom(feedAppAtom);
   // Torq's feed leaves out the users this account hides in Torq.
   const [torqHiddenKeys, setTorqHiddenKeys] = useState<Set<string>>(
     () => new Set()
@@ -230,25 +227,21 @@ export const QuitterFeedWidget = ({
   const feedPendingItems = cacheMatches
     ? feedCache.pendingItems
     : NO_FEED_ITEMS;
-  // Both apps read the same posts, so switching apps needs no new load. What
-  // the list shows differs: for Torq, posts as Torq shows them (torqFeed.ts).
+  // Torq publishes posts as Quitter does, so the feed loads them the same
+  // way, then shows them as Torq does (torqFeed.ts).
   const items = useMemo(
-    () =>
-      feedApp === 'Torq' ? torqFeedItems(feedItems, torqHiddenKeys) : feedItems,
-    [feedApp, feedItems, torqHiddenKeys]
+    () => torqFeedItems(feedItems, torqHiddenKeys),
+    [feedItems, torqHiddenKeys]
   );
   const pendingItems = useMemo(
-    () =>
-      feedApp === 'Torq'
-        ? torqFeedItems(feedPendingItems, torqHiddenKeys)
-        : feedPendingItems,
-    [feedApp, feedPendingItems, torqHiddenKeys]
+    () => torqFeedItems(feedPendingItems, torqHiddenKeys),
+    [feedPendingItems, torqHiddenKeys]
   );
 
   // Torq's hidden users for this account. A manual refresh also picks up the
   // users hidden in Torq since.
   useEffect(() => {
-    if (feedApp !== 'Torq' || !currentUserName) {
+    if (!currentUserName) {
       setTorqHiddenKeys((prev) => (prev.size === 0 ? prev : new Set()));
       return undefined;
     }
@@ -268,8 +261,10 @@ export const QuitterFeedWidget = ({
       );
     });
     return () => controller.abort();
-  }, [currentUserName, feedApp, refreshToken]);
-  const followingEmptyReason = cacheMatches ? feedCache.followingEmptyReason : null;
+  }, [currentUserName, refreshToken]);
+  const followingEmptyReason = cacheMatches
+    ? feedCache.followingEmptyReason
+    : null;
   const initialFeedState: QuitterDashboardInitialFeedState = cacheMatches
     ? feedCache.initialFeedState
     : 'loading';
@@ -322,31 +317,37 @@ export const QuitterFeedWidget = ({
     setFeedMode(readQuitterFeedMode(feedModeStorageKey));
   }, [feedModeStorageKey]);
 
-  const commitVisibleItems = useCallback((nextItems: QuitterFeedItem[]) => {
-    itemsRef.current = nextItems;
-    setFeedCache((prev) => {
-      const key = feedKeyRef.current;
-      const next: QuitterDashboardFeedCache =
-        prev?.feedKey === key
-          ? { ...prev, items: nextItems }
-          : { ...emptyCacheForKey(key), items: nextItems };
-      feedCacheRef.current = next;
-      return next;
-    });
-  }, [setFeedCache]);
+  const commitVisibleItems = useCallback(
+    (nextItems: QuitterFeedItem[]) => {
+      itemsRef.current = nextItems;
+      setFeedCache((prev) => {
+        const key = feedKeyRef.current;
+        const next: QuitterDashboardFeedCache =
+          prev?.feedKey === key
+            ? { ...prev, items: nextItems }
+            : { ...emptyCacheForKey(key), items: nextItems };
+        feedCacheRef.current = next;
+        return next;
+      });
+    },
+    [setFeedCache]
+  );
 
-  const commitPendingItems = useCallback((nextItems: QuitterFeedItem[]) => {
-    pendingItemsRef.current = nextItems;
-    setFeedCache((prev) => {
-      const key = feedKeyRef.current;
-      const next: QuitterDashboardFeedCache =
-        prev?.feedKey === key
-          ? { ...prev, pendingItems: nextItems }
-          : { ...emptyCacheForKey(key), pendingItems: nextItems };
-      feedCacheRef.current = next;
-      return next;
-    });
-  }, [setFeedCache]);
+  const commitPendingItems = useCallback(
+    (nextItems: QuitterFeedItem[]) => {
+      pendingItemsRef.current = nextItems;
+      setFeedCache((prev) => {
+        const key = feedKeyRef.current;
+        const next: QuitterDashboardFeedCache =
+          prev?.feedKey === key
+            ? { ...prev, pendingItems: nextItems }
+            : { ...emptyCacheForKey(key), pendingItems: nextItems };
+        feedCacheRef.current = next;
+        return next;
+      });
+    },
+    [setFeedCache]
+  );
 
   useEffect(() => {
     onRefreshStateChange?.(isRefreshing);
@@ -554,8 +555,8 @@ export const QuitterFeedWidget = ({
           error instanceof FeedLoadTimeoutError
             ? error.message
             : resolvedFeedMode === 'following'
-              ? t('quitter_feed.error_following', { app: feedApp })
-              : t('quitter_feed.error_generic', { app: feedApp });
+              ? t('quitter_feed.error_following', { app: TORQ_APP_NAME })
+              : t('quitter_feed.error_generic', { app: TORQ_APP_NAME });
         const nextCache: QuitterDashboardFeedCache = {
           ...emptyCacheForKey(requestFeedKey),
           error: message,
@@ -787,20 +788,17 @@ export const QuitterFeedWidget = ({
     };
   }, [feedMode, feedKey, initialFeedState, feedItems.length]);
 
-  const handleOpenPost = useCallback(
-    (item: QuitterFeedItem) => {
-      executeEvent('addTab', {
-        data: {
-          identifier: '',
-          name: feedApp,
-          path: `post/${encodeURIComponent(item.author)}/${encodeURIComponent(item.identifier)}`,
-          service: 'APP',
-        },
-      });
-      executeEvent('open-apps-mode', {});
-    },
-    [feedApp]
-  );
+  const handleOpenPost = useCallback((item: QuitterFeedItem) => {
+    executeEvent('addTab', {
+      data: {
+        identifier: '',
+        name: TORQ_APP_NAME,
+        path: `post/${encodeURIComponent(item.author)}/${encodeURIComponent(item.identifier)}`,
+        service: 'APP',
+      },
+    });
+    executeEvent('open-apps-mode', {});
+  }, []);
 
   const handleApplyPendingPosts = useCallback(() => {
     const nextPendingItems = pendingItemsRef.current;
@@ -872,22 +870,6 @@ export const QuitterFeedWidget = ({
     writeQuitterFeedMode(feedModeStorageKey, 'general');
   }, [feedModeStorageKey]);
 
-  const handleSelectFeedApp = useCallback(
-    (app: FeedApp) => {
-      if (app === feedApp) {
-        return;
-      }
-
-      setFeedApp(app);
-      saveFeedApp(app);
-      // A load error names the app: try again, so it names the new one.
-      if (initialFeedState === 'error') {
-        handleRetryInitialFeed();
-      }
-    },
-    [feedApp, handleRetryInitialFeed, initialFeedState, setFeedApp]
-  );
-
   const loadingLabel = useMemo(
     () =>
       isFollowingFeed
@@ -925,10 +907,12 @@ export const QuitterFeedWidget = ({
       return t('quitter_feed.empty_message_no_name');
     }
     if (followingEmptyReason === 'no-following') {
-      return t('quitter_feed.empty_message_no_following', { app: feedApp });
+      return t('quitter_feed.empty_message_no_following', {
+        app: TORQ_APP_NAME,
+      });
     }
-    return t('quitter_feed.empty_message_no_posts', { app: feedApp });
-  }, [feedApp, followingEmptyReason, isFollowingFeed, t]);
+    return t('quitter_feed.empty_message_no_posts', { app: TORQ_APP_NAME });
+  }, [followingEmptyReason, isFollowingFeed, t]);
   const showStatePanel =
     showInitialLoadingState || showInitialErrorState || showEmptyState;
   const segmentedToggleSx = {
@@ -1011,23 +995,19 @@ export const QuitterFeedWidget = ({
                 {t('quitter_feed.tab_following')}
               </ButtonBase>
             </Box>
-            <Box
-              aria-label={t('quitter_feed.feed_app')}
-              role="group"
-              sx={segmentedGroupSx}
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '0.67rem',
+                fontWeight: 600,
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
+              }}
             >
-              {FEED_APPS.map((app) => (
-                <ButtonBase
-                  aria-pressed={feedApp === app}
-                  disableRipple
-                  key={app}
-                  onClick={() => handleSelectFeedApp(app)}
-                  sx={segmentSx(feedApp === app)}
-                >
-                  {app}
-                </ButtonBase>
-              ))}
-            </Box>
+              {feedMode === 'following'
+                ? t('quitter_feed.subtitle_personalized')
+                : t('quitter_feed.subtitle_public')}
+            </Typography>
           </Box>
 
           {!showStatePanel && items.length > 0 ? (

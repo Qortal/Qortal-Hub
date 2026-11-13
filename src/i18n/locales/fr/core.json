@@ -864,7 +864,6 @@
     "error_timeout": "Échec du chargement du flux. Vous pouvez réessayer ou revenir au général.",
     "error_title_following": "Échec du chargement du flux",
     "error_title_general": "Impossible de charger les publications",
-    "feed_app": "Application du flux",
     "loading_following": "Chargement du flux suivis…",
     "loading_general": "Chargement du flux…",
     "new_posts_one": "{{count}} nouvelle publication",
@@ -874,6 +873,8 @@
     "retry_following": "Réessayer",
     "retry_general": "Réessayer",
     "return_to_general": "Retour au général",
+    "subtitle_personalized": "Flux personnalisé",
+    "subtitle_public": "Flux public",
     "tab_following": "Abonnements",
     "tab_general": "Général"
   },
