@@ -25,6 +25,8 @@ export type WalletActivityEntry = {
   counterpartyAddress: string;
   counterpartyLabel: string;
   direction: WalletActivityDirection;
+  /** The payment's signature, when known (keys the history list). */
+  signature?: string;
   timestamp: number;
 };
 export type DashboardNodeOption = {

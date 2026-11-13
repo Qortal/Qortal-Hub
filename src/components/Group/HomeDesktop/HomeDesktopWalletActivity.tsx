@@ -3,7 +3,7 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import { alpha } from '@mui/material/styles';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { balanceAtom, userInfoAtom } from '../../../atoms/global';
 import { getBaseApiReact } from '../../../App';
@@ -11,6 +11,10 @@ import { executeEvent } from '../../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { DashboardUtilityPanel } from './DashboardUtilityPanel';
 import { WalletActionButton } from './WalletActionButton';
+import {
+  WalletActivityHistory,
+  WalletActivityHistoryToggle,
+} from './WalletActivityHistory';
 import {
   HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
   WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
@@ -65,6 +69,12 @@ export const HomeDesktopWalletActivity = () => {
   const [isWalletActivityLoading, setIsWalletActivityLoading] = useState(false);
   const [walletActivityRelativeTimeNow, setWalletActivityRelativeTimeNow] =
     useState(() => Date.now());
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const toggleHistory = useCallback(
+    () => setIsHistoryOpen((current) => !current),
+    []
+  );
+  const historyListId = useId();
 
   const walletActivitySecondaryTextColor = alpha(
     theme.palette.text.primary,
@@ -307,6 +317,7 @@ export const HomeDesktopWalletActivity = () => {
 
   useEffect(() => {
     setRecentWalletActivity(null);
+    setIsHistoryOpen(false);
     lastWalletActivityBalanceRef.current = null;
   }, [userAddress]);
 
@@ -347,6 +358,9 @@ export const HomeDesktopWalletActivity = () => {
         gap: '12px',
         height: '100%',
         minHeight: '182px',
+        // A fixed-height card (the wide layout) scrolls its open history;
+        // elsewhere the card grows with it.
+        overflowY: isHistoryOpen ? 'auto' : undefined,
         padding: '14px 16px 16px',
       }}
     >
@@ -422,19 +436,44 @@ export const HomeDesktopWalletActivity = () => {
           pt: 2.2,
         }}
       >
-        <Typography
+        <Box
           sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.64rem',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textAlign: 'left',
-            textTransform: 'uppercase',
+            alignItems: 'center',
+            display: 'flex',
+            gap: 1,
+            justifyContent: 'space-between',
+            minWidth: 0,
           }}
         >
-          {td('recent_transaction', 'Recent Transaction')}
-        </Typography>
-        {isWalletActivityLoading ? (
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '0.64rem',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              minWidth: 0,
+              overflow: 'hidden',
+              textAlign: 'left',
+              textOverflow: 'ellipsis',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isHistoryOpen
+              ? tDashboard('wallet_history')
+              : td('recent_transaction', 'Recent Transaction')}
+          </Typography>
+          <WalletActivityHistoryToggle
+            controls={historyListId}
+            onToggle={toggleHistory}
+            open={isHistoryOpen}
+          />
+        </Box>
+        {/* The open history takes the latest payment's place. A refresh
+            keeps the last entry on screen: swapping it for the loading
+            line changed the card's height under the reader. */}
+        {isHistoryOpen ? null : isWalletActivityLoading &&
+          !recentWalletActivity ? (
           <Typography
             sx={{
               color: theme.palette.text.secondary,
@@ -566,26 +605,36 @@ export const HomeDesktopWalletActivity = () => {
             {td('no_wallet_activity', 'No new wallet activity.')}
           </Typography>
         )}
-        <Box
-          sx={{
-            mt: 'auto',
-            pt: 1.05,
-          }}
-        >
-          <Typography
+        {isHistoryOpen ? null : (
+          <Box
             sx={{
-              color: walletActivitySecondaryTextColor,
-              fontSize: '0.68rem',
-              lineHeight: 1.45,
-              textAlign: 'left',
+              mt: 'auto',
+              pt: 1.05,
             }}
           >
-            {td(
-              'wallet_activity_window',
-              'Latest transaction within the past 7 days'
-            )}
-          </Typography>
-        </Box>
+            <Typography
+              sx={{
+                color: walletActivitySecondaryTextColor,
+                fontSize: '0.68rem',
+                lineHeight: 1.45,
+                textAlign: 'left',
+              }}
+            >
+              {td(
+                'wallet_activity_window',
+                'Latest transaction within the past 7 days'
+              )}
+            </Typography>
+          </Box>
+        )}
+        <WalletActivityHistory
+          id={historyListId}
+          onOpenCounterparty={handleOpenWalletActivityCounterparty}
+          open={isHistoryOpen}
+          refreshKey={balance == null ? null : String(balance)}
+          resolveLabel={resolveWalletActivityAddressLabel}
+          userAddress={userAddress}
+        />
       </Box>
     </DashboardUtilityPanel>
   );
