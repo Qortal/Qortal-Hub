@@ -89,13 +89,19 @@ describe('WalletActivityHistory', () => {
   const respond = (page: unknown[]) =>
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => page });
 
-  const Harness = ({ open }: { open: boolean }) => (
+  const Harness = ({
+    open,
+    refreshKey = '1',
+  }: {
+    open: boolean;
+    refreshKey?: string;
+  }) => (
     <ThemeProvider theme={createTheme()}>
       <WalletActivityHistory
         id="history"
         onOpenCounterparty={() => undefined}
         open={open}
-        refreshKey="1"
+        refreshKey={refreshKey}
         resolveLabel={async (address) =>
           address === ALICE ? 'alice' : address
         }
@@ -160,6 +166,39 @@ describe('WalletActivityHistory', () => {
       fireEvent.click(screen.getByText('Try again'));
     });
     expect(await screen.findByText('No payments yet.')).toBeInTheDocument();
+  });
+
+  it('retries the page that failed: after a failed refresh, the first one', async () => {
+    const first = Array.from({ length: WALLET_HISTORY_PAGE_SIZE }, (_, n) =>
+      payment(n + 1, ALICE, ME)
+    );
+    respond(first);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { rerender } = render(<Harness open />);
+    expect(await screen.findAllByText('alice')).toHaveLength(
+      WALLET_HISTORY_PAGE_SIZE
+    );
+
+    // The balance moved, and refreshing the first page fails.
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
+    rerender(<Harness open refreshKey="2" />);
+    expect(
+      await screen.findByText("Couldn't load the history.", undefined, {
+        timeout: 2000,
+      })
+    ).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1][0]).toContain('offset=0&');
+
+    // Try again asks for the first page again, with the newest payment.
+    respond([
+      payment(0, BOB, ME, '9.00000000'),
+      ...first.slice(0, WALLET_HISTORY_PAGE_SIZE - 1),
+    ]);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Try again'));
+    });
+    expect(fetchMock.mock.calls[2][0]).toContain('offset=0&');
+    expect(await screen.findByText('+9.00 QORT')).toBeInTheDocument();
   });
 });
 

@@ -28,6 +28,11 @@ type HistoryState = {
   offset: number;
   hasMore: boolean;
   status: 'idle' | 'loading' | 'done' | 'error';
+  /**
+   * Whether the request that failed was the first page (a refresh, or the
+   * first load) rather than the next one: Try again asks for the same.
+   */
+  failedFirstPage: boolean;
 };
 
 const EMPTY_HISTORY: HistoryState = {
@@ -35,6 +40,7 @@ const EMPTY_HISTORY: HistoryState = {
   offset: 0,
   hasMore: false,
   status: 'idle',
+  failedFirstPage: false,
 };
 
 type Props = {
@@ -116,12 +122,17 @@ export const WalletActivityHistory = ({
             offset: offset + page.length,
             hasMore: page.length === WALLET_HISTORY_PAGE_SIZE,
             status: 'done',
+            failedFirstPage: false,
           };
         });
       } catch (error) {
         console.error('Failed to load the wallet history:', error);
         if (request !== requestRef.current) return;
-        setHistory((current) => ({ ...current, status: 'error' }));
+        setHistory((current) => ({
+          ...current,
+          status: 'error',
+          failedFirstPage: fromStart,
+        }));
       }
     },
     [resolveLabel, userAddress]
@@ -298,7 +309,7 @@ export const WalletActivityHistory = ({
                 {td('wallet_history_error')}
               </Typography>
               <ButtonBase
-                onClick={() => void load(history.entries.length === 0)}
+                onClick={() => void load(history.failedFirstPage)}
                 sx={{
                   borderRadius: '8px',
                   color: theme.palette.primary.light,
