@@ -441,6 +441,21 @@
   "image_embed": "kuvan upotus",
   "items_per_page": "Kohteita per sivu:",
   "last_height": "viimeisin korkeus",
+  "launcher": {
+    "bookmark_remove": "poista kirjanmerkki",
+    "clear_search": "tyhjennä haku",
+    "enter_opens": "avaa {{title}} painamalla Enter",
+    "folder_delete": "poista kansio",
+    "folder_move_to": "siirrä kansioon",
+    "folder_remove_from": "poista kansiosta",
+    "no_matches": "mikään ei vastaa hakua ”{{query}}”",
+    "no_matches_hint": "kokeile toista nimeä tai liitä qortal://-linkki.",
+    "pinned_and_bookmarks": "kiinnitetyt sovellukset ja kirjanmerkit",
+    "pinned_empty": "mitään ei ole vielä kiinnitetty. Kiinnitä sovellus alla olevasta kirjastosta, niin se pysyy tässä.",
+    "pinned_hint": "järjestä vetämällä · luo kansio pudottamalla sovellus toisen päälle · lisää toimintoja hiiren oikealla painikkeella",
+    "results_apps": "sovellukset ja verkkosivustot",
+    "results_saved": "kiinnitetyt sovelluksesi ja kirjanmerkkisi"
+  },
   "level": "taso",
   "library": "kirjasto",
   "list": {
@@ -699,6 +714,7 @@
   "name": "nimi",
   "name_app": "nimi/sovellus",
   "navbar": {
+    "search_library": "Hae Q-Appeista ”{{query}}”",
     "search_placeholder": "Hae Q-Appeja tai kirjoita qortal://",
     "session": {
       "lock_description": "Pidä keskustelut ja puhelut yhdistettyinä",
@@ -707,7 +723,12 @@
       "logout_title": "Kirjaudu ulos",
       "menu_aria": "Istunnon asetukset",
       "tooltip": "Lukitse tai kirjaudu ulos"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Verkkosivusto"
+    },
+    "suggestions": "Ehdotukset"
   },
   "new_post_in": "uusi julkaisu kohteessa {{ title }}",
   "none": "ei mitään",

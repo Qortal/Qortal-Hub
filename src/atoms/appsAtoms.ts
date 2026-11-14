@@ -1,6 +1,7 @@
 import { atom } from 'jotai';
 import { atomWithReset } from 'jotai/utils';
 import type { AppRatingData } from '../types/ratings';
+import { compareByWeightedRating } from '../utils/appRatingScore';
 
 // Types
 export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' | 'most_rated' | 'recently_updated';
@@ -8,10 +9,17 @@ export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
 // Filter atoms
-export const appSortAtom = atomWithReset<SortOption>('newest');
+// Best rated first: the newest publishes are often tests.
+export const appSortAtom = atomWithReset<SortOption>('highest_rated');
 export const appCategoryFilterAtom = atomWithReset<string>('all');
 export const appStatusFilterAtom = atomWithReset<StatusFilterOption>('all');
 export const appSearchQueryAtom = atomWithReset<string>('');
+
+/**
+ * Every published Q-App and website (default resources), as the Q-Apps
+ * library loads them. The top bar suggests from it too.
+ */
+export const availableQappsAtom = atom<any[]>([]);
 
 
 // Current tab atom
@@ -89,11 +97,14 @@ export const filterAndSortApps = (
       });
       break;
     case 'highest_rated':
-      filtered.sort((a, b) => {
-        const ratingA = ratingsMap?.get(getRatingKey(a))?.averageRating ?? a.averageRating ?? 0;
-        const ratingB = ratingsMap?.get(getRatingKey(b))?.averageRating ?? b.averageRating ?? 0;
-        return ratingB - ratingA;
-      });
+      // Weighted by the number of votes, so one 5-star vote does not outrank
+      // an app that many people rated well.
+      filtered.sort((a, b) =>
+        compareByWeightedRating(
+          ratingsMap?.get(getRatingKey(a)) ?? a,
+          ratingsMap?.get(getRatingKey(b)) ?? b
+        )
+      );
       break;
     case 'most_rated':
       filtered.sort((a, b) => {

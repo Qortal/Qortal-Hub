@@ -441,6 +441,21 @@
   "image_embed": "Image intégrer",
   "items_per_page": "Éléments par page :",
   "last_height": "dernière hauteur",
+  "launcher": {
+    "bookmark_remove": "retirer le favori",
+    "clear_search": "effacer la recherche",
+    "enter_opens": "appuyez sur Entrée pour ouvrir {{title}}",
+    "folder_delete": "supprimer le dossier",
+    "folder_move_to": "déplacer vers un dossier",
+    "folder_remove_from": "retirer du dossier",
+    "no_matches": "rien ne correspond à « {{query}} »",
+    "no_matches_hint": "essayez un autre nom ou collez un lien qortal://.",
+    "pinned_and_bookmarks": "applications épinglées et favoris",
+    "pinned_empty": "rien n’est encore épinglé. Épinglez une application depuis la bibliothèque ci-dessous pour la garder ici.",
+    "pinned_hint": "glissez pour réorganiser · déposez une application sur une autre pour créer un dossier · clic droit pour plus d’options",
+    "results_apps": "applications et sites web",
+    "results_saved": "vos applications épinglées et vos favoris"
+  },
   "level": "niveau",
   "library": "bibliothèque",
   "list": {
@@ -699,6 +714,7 @@
   "name": "nom",
   "name_app": "nom / application",
   "navbar": {
+    "search_library": "Rechercher « {{query}} » dans les Q-Apps",
     "search_placeholder": "Rechercher des Q-Apps ou saisir qortal://",
     "session": {
       "lock_description": "Garder les discussions et les appels connectés",
@@ -707,7 +723,12 @@
       "logout_title": "Se déconnecter",
       "menu_aria": "Options de session",
       "tooltip": "Verrouiller ou se déconnecter"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Site web"
+    },
+    "suggestions": "Suggestions"
   },
   "new_post_in": "nouveau message dans {{ title }}",
   "none": "aucun",

@@ -441,6 +441,21 @@
   "image_embed": "inserción de la imagen",
   "items_per_page": "Elementos por página:",
   "last_height": "última altura",
+  "launcher": {
+    "bookmark_remove": "quitar marcador",
+    "clear_search": "borrar búsqueda",
+    "enter_opens": "pulsa Enter para abrir {{title}}",
+    "folder_delete": "eliminar carpeta",
+    "folder_move_to": "mover a carpeta",
+    "folder_remove_from": "quitar de la carpeta",
+    "no_matches": "nada coincide con «{{query}}»",
+    "no_matches_hint": "prueba con otro nombre o pega un enlace qortal://.",
+    "pinned_and_bookmarks": "aplicaciones fijadas y marcadores",
+    "pinned_empty": "todavía no hay nada fijado. Fija una aplicación de la biblioteca de abajo para tenerla aquí.",
+    "pinned_hint": "arrastra para reordenar · suelta una aplicación sobre otra para crear una carpeta · clic derecho para más opciones",
+    "results_apps": "aplicaciones y sitios web",
+    "results_saved": "tus aplicaciones fijadas y marcadores"
+  },
   "level": "nivel",
   "library": "biblioteca",
   "list": {
@@ -699,6 +714,7 @@
   "name": "nombre",
   "name_app": "nombre/aplicación",
   "navbar": {
+    "search_library": "Buscar «{{query}}» en Q-Apps",
     "search_placeholder": "Buscar Q-Apps o introducir qortal://",
     "session": {
       "lock_description": "Mantener los chats y las llamadas conectados",
@@ -707,7 +723,12 @@
       "logout_title": "Cerrar sesión",
       "menu_aria": "Opciones de sesión",
       "tooltip": "Bloquear o cerrar sesión"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Sitio web"
+    },
+    "suggestions": "Sugerencias"
   },
   "new_post_in": "nueva publicación en {{ title }}",
   "none": "ninguno",
