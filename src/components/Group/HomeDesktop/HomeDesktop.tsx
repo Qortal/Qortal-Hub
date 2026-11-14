@@ -46,54 +46,36 @@ import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
 import { OnlineUsersBadge } from './OnlineUsersBadge';
 import {
-  HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY,
   HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS,
   HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS,
-  HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
   HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX,
-  HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
   HOME_DASHBOARD_VERTICAL_GAP_PX,
   HOME_DASHBOARD_WIDGET_DISPLAY_MODE,
   HOME_DASHBOARD_WIDGET_HEIGHT_PX,
   HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX,
   HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX,
-  HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY,
   HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX,
   HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS,
   HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS,
-  HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
   HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES,
   HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES,
   HOME_QUITTER_WIDGET_SEARCH_LIMITS,
   HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX,
   HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
   HOME_SHARED_SIDE_RAIL_WIDTH_XL,
+  HOME_WALLET_ACTIVITY_MIN_HEIGHT_PX,
   HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
-  HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './homeDesktopConstants';
-import type {
-  HomeCustomizableCardId,
-  HomeCustomizableCardsLayout,
-  HomeLayoutDebugKey,
-  HomeLayoutDebugMetric,
-} from './types';
-import {
-  clampHomeCustomizableCardHeight,
-  measureHomeLayoutDebugMetric,
-  parseHomeCustomizableCardsLayout,
-} from './utils';
+import type { HomeLayoutDebugKey, HomeLayoutDebugMetric } from './types';
+import { measureHomeLayoutDebugMetric } from './utils';
 import { returnToQChat } from './homeNavigation';
-
-const readStoredDashboardModuleVisible = (key: string): boolean => {
-  if (typeof window === 'undefined') return true;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (raw === null) return true;
-    return JSON.parse(raw) !== false;
-  } catch {
-    return true;
-  }
-};
+import {
+  homeQortinoTargetHeight,
+  homeStackRows,
+  homeWalletTargetHeight,
+  isHomePanelShown,
+  useHomeLayout,
+} from './homeLayout';
 
 export const HomeDesktop = ({
   myAddress,
@@ -121,23 +103,16 @@ export const HomeDesktop = ({
   const [qortinoCardTargetHeightPx, setQortinoCardTargetHeightPx] = useState<
     number | null
   >(null);
-  const [customizableCardsLayout, setCustomizableCardsLayout] =
-    useState<HomeCustomizableCardsLayout>(() =>
-      parseHomeCustomizableCardsLayout(
-        localStorage.getItem(HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY)
-      )
-    );
-  const [isGroupActivityModuleVisible, setIsGroupActivityModuleVisible] =
-    useState(() =>
-      readStoredDashboardModuleVisible(HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY)
-    );
-  const [isQuitterFeedModuleVisible, setIsQuitterFeedModuleVisible] = useState(
-    () =>
-      readStoredDashboardModuleVisible(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)
-  );
-  const [isWidgetsModuleVisible, setIsWidgetsModuleVisible] = useState(() =>
-    readStoredDashboardModuleVisible(HOME_WIDGETS_VISIBLE_STORAGE_KEY)
-  );
+  const [homeLayout] = useHomeLayout(myAddress);
+  const showQortino = isHomePanelShown(homeLayout, 'qortino');
+  const showTools = isHomePanelShown(homeLayout, 'tools');
+  const showFeatured = isHomePanelShown(homeLayout, 'featured');
+  const showStatus = isHomePanelShown(homeLayout, 'status');
+  const showWallet = isHomePanelShown(homeLayout, 'wallet');
+  const showQortinoColumn = showQortino || showTools;
+  const showRightRail = showStatus || showWallet;
+  // Measured panels come and go with these, so the measuring starts over.
+  const hiddenPanelsKey = homeLayout.hidden.join(',');
   const [groupWidgetRefreshToken, setGroupWidgetRefreshToken] = useState(0);
   const [isGroupWidgetRefreshing, setIsGroupWidgetRefreshing] = useState(false);
   const [quitterWidgetRefreshToken, setQuitterWidgetRefreshToken] = useState(0);
@@ -167,7 +142,9 @@ export const HomeDesktop = ({
     : null;
 
   const infoPanelMaxExpandedHeightPx =
-    isWideDashboardLayout && resolvedWalletActivityHeightPx != null
+    isWideDashboardLayout &&
+    showWallet &&
+    resolvedWalletActivityHeightPx != null
       ? HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX +
         HOME_DASHBOARD_VERTICAL_GAP_PX +
         resolvedWalletActivityHeightPx +
@@ -207,77 +184,6 @@ export const HomeDesktop = ({
     },
     [groupActivityPanelRef]
   );
-
-  useEffect(() => {
-    localStorage.setItem(
-      HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY,
-      JSON.stringify(customizableCardsLayout)
-    );
-  }, [customizableCardsLayout]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const syncModuleVisibility = () => {
-      setIsGroupActivityModuleVisible(
-        readStoredDashboardModuleVisible(
-          HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY
-        )
-      );
-      setIsQuitterFeedModuleVisible(
-        readStoredDashboardModuleVisible(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)
-      );
-      setIsWidgetsModuleVisible(
-        readStoredDashboardModuleVisible(HOME_WIDGETS_VISIBLE_STORAGE_KEY)
-      );
-    };
-
-    window.addEventListener(
-      HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
-      syncModuleVisibility
-    );
-    window.addEventListener('storage', syncModuleVisibility);
-    return () => {
-      window.removeEventListener(
-        HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
-        syncModuleVisibility
-      );
-      window.removeEventListener('storage', syncModuleVisibility);
-    };
-  }, []);
-
-  useEffect(() => {
-    setCustomizableCardsLayout((currentLayout) => {
-      let changed = false;
-      const nextHeights: Partial<Record<HomeCustomizableCardId, number>> = {
-        ...currentLayout.heights,
-      };
-
-      HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.forEach((cardId) => {
-        const currentHeight = currentLayout.heights[cardId];
-        if (
-          typeof currentHeight !== 'number' ||
-          !Number.isFinite(currentHeight)
-        ) {
-          return;
-        }
-        const clampedHeight = clampHomeCustomizableCardHeight(
-          cardId,
-          currentHeight
-        );
-        if (clampedHeight !== currentHeight) {
-          nextHeights[cardId] = clampedHeight;
-          changed = true;
-        }
-      });
-
-      if (!changed) return currentLayout;
-      return {
-        ...currentLayout,
-        heights: nextHeights,
-      };
-    });
-  }, []);
 
   useLayoutEffect(() => {
     const rootNode = homeLayoutDebugRootRef.current;
@@ -336,46 +242,46 @@ export const HomeDesktop = ({
       }
 
       if (isWideDashboardLayout) {
-        const profileMetric = nextMetrics.profileCard;
-        const leftRowMetric =
-          nextMetrics.featuredApps ?? nextMetrics.tools ?? undefined;
-        const featuredMetric = nextMetrics.featuredApps;
-        const toolsMetric = nextMetrics.tools;
         const walletMetric = nextMetrics.walletActivity;
+        const nextQortinoTargetHeight = homeQortinoTargetHeight({
+          featured: nextMetrics.featuredApps,
+          gap: HOME_DASHBOARD_VERTICAL_GAP_PX,
+          minHeight: HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
+          profile: nextMetrics.profileCard,
+          tools: nextMetrics.tools,
+        });
 
-        if (profileMetric && featuredMetric && toolsMetric) {
-          const nextQortinoTargetHeight = Math.max(
-            HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
-            Math.round(
-              profileMetric.height + featuredMetric.height - toolsMetric.height
+        setQortinoCardTargetHeightPx((currentHeight) =>
+          nextQortinoTargetHeight !== null &&
+          currentHeight !== null &&
+          Math.abs(currentHeight - nextQortinoTargetHeight) < 0.25
+            ? currentHeight
+            : nextQortinoTargetHeight
+        );
+
+        const leftBottoms = [
+          nextMetrics.accountOverview,
+          nextMetrics.tools,
+          nextMetrics.profileCard,
+          nextMetrics.featuredApps,
+        ]
+          .filter(Boolean)
+          .map((metric) => metric.bottom);
+        const nextTargetHeight = walletMetric
+          ? homeWalletTargetHeight(
+              leftBottoms,
+              walletMetric.top,
+              HOME_WALLET_ACTIVITY_MIN_HEIGHT_PX
             )
-          );
+          : null;
 
-          setQortinoCardTargetHeightPx((currentHeight) =>
-            currentHeight !== null &&
-            Math.abs(currentHeight - nextQortinoTargetHeight) < 0.25
-              ? currentHeight
-              : nextQortinoTargetHeight
-          );
-        } else {
-          setQortinoCardTargetHeightPx(null);
-        }
-
-        if (leftRowMetric && walletMetric) {
-          const nextTargetHeight = Math.max(
-            0,
-            leftRowMetric.bottom - walletMetric.top
-          );
-
-          setWalletActivityTargetHeightPx((currentHeight) =>
-            currentHeight !== null &&
-            Math.abs(currentHeight - nextTargetHeight) < 0.25
-              ? currentHeight
-              : nextTargetHeight
-          );
-        } else {
-          setWalletActivityTargetHeightPx(null);
-        }
+        setWalletActivityTargetHeightPx((currentHeight) =>
+          nextTargetHeight !== null &&
+          currentHeight !== null &&
+          Math.abs(currentHeight - nextTargetHeight) < 0.25
+            ? currentHeight
+            : nextTargetHeight
+        );
       } else {
         setQortinoCardTargetHeightPx(null);
         setWalletActivityTargetHeightPx(null);
@@ -476,7 +382,12 @@ export const HomeDesktop = ({
       resizeObserver.disconnect();
       window.removeEventListener('resize', startLayoutStabilizePass);
     };
-  }, [desktopViewMode, isOnboardingComplete, isWideDashboardLayout]);
+  }, [
+    desktopViewMode,
+    hiddenPanelsKey,
+    isOnboardingComplete,
+    isWideDashboardLayout,
+  ]);
 
   useEffect(() => {
     if (!myAddress) {
@@ -500,13 +411,6 @@ export const HomeDesktop = ({
 
   const handleRefreshQuitterWidget = useCallback(() => {
     setQuitterWidgetRefreshToken((value) => value + 1);
-  }, []);
-
-  const handleSwapDashboardWidgets = useCallback(() => {
-    setCustomizableCardsLayout((currentLayout) => ({
-      ...currentLayout,
-      order: [...currentLayout.order].reverse(),
-    }));
   }, []);
 
   const handleOpenAppsPanel = useCallback(() => {
@@ -562,14 +466,6 @@ export const HomeDesktop = ({
       </Typography>
     </Box>
   );
-  const groupActivityCardOrder = Math.max(
-    0,
-    customizableCardsLayout.order.indexOf('groupActivity')
-  );
-  const quitterCardOrder = Math.max(
-    0,
-    customizableCardsLayout.order.indexOf('quitter')
-  );
   const quitterWidgetInitialBatchSize =
     HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
   const quitterWidgetLoadMoreBatchSize =
@@ -578,11 +474,32 @@ export const HomeDesktop = ({
     ];
   const quitterWidgetSearchLimit =
     HOME_QUITTER_WIDGET_SEARCH_LIMITS[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
-  const areBothDashboardModulesVisible =
-    isGroupActivityModuleVisible && isQuitterFeedModuleVisible;
+  const stackRows = homeStackRows(homeLayout.stack, (id) =>
+    id === 'widgets'
+      ? isHomePanelShown(homeLayout, 'widgets') && canHostHomeWidgets()
+      : isHomePanelShown(homeLayout, id)
+  );
+  // Wide layout without the Qortino card: Quick Tools moves up beside the
+  // account card and Featured Q-Apps takes the whole width under both, rather
+  // than leaving the narrow column mostly empty. The two columns' boxes step
+  // aside (display: contents) so their panels sit in the grid directly.
+  const toolsBesideProfile = isWideDashboardLayout && !showQortino && showTools;
+  const rightRailRows = [
+    showStatus ? `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px` : null,
+    showWallet
+      ? resolvedWalletActivityHeightPx != null
+        ? `${resolvedWalletActivityHeightPx}px`
+        : 'auto'
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
   return (
     <LazyMotion features={domAnimation}>
-      {desktopViewMode !== 'home' ? <QortinoMusicPlaybackController /> : null}
+      {/* Keeps Qortino's music playing while its card isn't on screen. */}
+      {desktopViewMode !== 'home' || !showQortino ? (
+        <QortinoMusicPlaybackController />
+      ) : null}
       <Activity mode={desktopViewMode === 'home' ? 'visible' : 'hidden'}>
         <motion.div
           data-tour="hub-home-page"
@@ -629,7 +546,9 @@ export const HomeDesktop = ({
                 width: '100%',
                 [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
                   alignItems: 'stretch',
-                  gridTemplateColumns: `minmax(0, 1fr) ${HOME_SHARED_SIDE_RAIL_WIDTH_XL}`,
+                  gridTemplateColumns: showRightRail
+                    ? `minmax(0, 1fr) ${HOME_SHARED_SIDE_RAIL_WIDTH_XL}`
+                    : 'minmax(0, 1fr)',
                 },
               }}
             >
@@ -669,70 +588,77 @@ export const HomeDesktop = ({
                   {isWideDashboardLayout ? (
                     <Box
                       sx={{
-                        alignItems: 'start',
+                        alignItems: toolsBesideProfile ? 'stretch' : 'start',
                         display: 'grid',
                         gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                        gridTemplateColumns:
-                          HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS.xl,
+                        gridTemplateColumns: showQortinoColumn
+                          ? HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS.xl
+                          : 'minmax(0, 1fr)',
                         width: '100%',
                       }}
                     >
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                          minWidth: 0,
-                          width: '100%',
-                        }}
-                      >
+                      {showQortinoColumn ? (
                         <Box
-                          ref={accountOverviewDebugRef}
                           sx={{
-                            display: 'block',
-                            height:
-                              resolvedQortinoCardHeightPx != null
-                                ? `${resolvedQortinoCardHeightPx}px`
-                                : undefined,
+                            display: toolsBesideProfile ? 'contents' : 'flex',
+                            flexDirection: 'column',
+                            gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
                             minWidth: 0,
-                            position: 'relative',
-                            '& > *': { height: '100%' },
-                          }}
-                        >
-                          {desktopViewMode === 'home' ? (
-                            <ErrorBoundary
-                              fallback={qortinoWorkspaceShellFallback}
-                            >
-                              <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={
-                                  handleGettingStartedComplete
-                                }
-                                onOpenAppsPanel={handleOpenAppsPanel}
-                              />
-                            </ErrorBoundary>
-                          ) : null}
-                        </Box>
-                        <Box
-                          ref={toolsDebugRef}
-                          sx={{
-                            display: 'block',
-                            minWidth: 0,
-                            position: 'relative',
                             width: '100%',
                           }}
                         >
-                          <HomeQuickToolsPad
-                            fillHeight={false}
-                            onOpenApps={handleOpenAppsPanel}
-                            onOpenChat={handleOpenQChatPanel}
-                            onOpenQortalLand={onOpenQortalLand}
-                            onOpenSettings={onOpenSettings}
-                          />
+                          {showQortino ? (
+                            <Box
+                              ref={accountOverviewDebugRef}
+                              sx={{
+                                display: 'block',
+                                height:
+                                  resolvedQortinoCardHeightPx != null
+                                    ? `${resolvedQortinoCardHeightPx}px`
+                                    : undefined,
+                                minWidth: 0,
+                                position: 'relative',
+                                '& > *': { height: '100%' },
+                              }}
+                            >
+                              {desktopViewMode === 'home' ? (
+                                <ErrorBoundary
+                                  fallback={qortinoWorkspaceShellFallback}
+                                >
+                                  <HomeQortinoWorkspaceCard
+                                    onGettingStartedComplete={
+                                      handleGettingStartedComplete
+                                    }
+                                    onOpenAppsPanel={handleOpenAppsPanel}
+                                  />
+                                </ErrorBoundary>
+                              ) : null}
+                            </Box>
+                          ) : null}
+                          {showTools ? (
+                            <Box
+                              ref={toolsDebugRef}
+                              sx={{
+                                display: 'block',
+                                minWidth: 0,
+                                position: 'relative',
+                                width: '100%',
+                              }}
+                            >
+                              <HomeQuickToolsPad
+                                fillHeight={toolsBesideProfile}
+                                onOpenApps={handleOpenAppsPanel}
+                                onOpenChat={handleOpenQChatPanel}
+                                onOpenQortalLand={onOpenQortalLand}
+                                onOpenSettings={onOpenSettings}
+                              />
+                            </Box>
+                          ) : null}
                         </Box>
-                      </Box>
+                      ) : null}
                       <Box
                         sx={{
-                          display: 'flex',
+                          display: toolsBesideProfile ? 'contents' : 'flex',
                           flexDirection: 'column',
                           gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
                           minWidth: 0,
@@ -753,28 +679,33 @@ export const HomeDesktop = ({
                             onOpenReceive={handleOpenReceiveQort}
                           />
                         </Box>
-                        <Box
-                          ref={featuredAppsDebugRef}
-                          sx={{
-                            display: 'flex',
-                            height:
-                              resolvedWideLeftLowerRowPanelHeightPx != null
-                                ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
+                        {showFeatured ? (
+                          <Box
+                            ref={featuredAppsDebugRef}
+                            sx={{
+                              display: 'flex',
+                              gridColumn: toolsBesideProfile
+                                ? '1 / -1'
                                 : undefined,
-                            minWidth: 0,
-                            overflow: 'visible',
-                            position: 'relative',
-                            width: '100%',
-                            '& > *': {
-                              height: '100%',
+                              height:
+                                resolvedWideLeftLowerRowPanelHeightPx != null
+                                  ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
+                                  : undefined,
+                              minWidth: 0,
+                              overflow: 'visible',
                               position: 'relative',
                               width: '100%',
-                              zIndex: 1,
-                            },
-                          }}
-                        >
-                          <HomeFeaturedApps />
-                        </Box>
+                              '& > *': {
+                                height: '100%',
+                                position: 'relative',
+                                width: '100%',
+                                zIndex: 1,
+                              },
+                            }}
+                          >
+                            <HomeFeaturedApps />
+                          </Box>
+                        ) : null}
                       </Box>
                     </Box>
                   ) : (
@@ -783,38 +714,41 @@ export const HomeDesktop = ({
                         sx={{
                           display: 'grid',
                           gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                          gridTemplateColumns:
-                            HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS,
+                          gridTemplateColumns: showQortino
+                            ? HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS
+                            : '1fr',
                           alignItems: 'stretch',
                           width: '100%',
                         }}
                       >
-                        <Box
-                          ref={accountOverviewDebugRef}
-                          sx={{
-                            display: 'block',
-                            height:
-                              resolvedQortinoCardHeightPx != null
-                                ? `${resolvedQortinoCardHeightPx}px`
-                                : undefined,
-                            minWidth: 0,
-                            position: 'relative',
-                            '& > *': { height: '100%' },
-                          }}
-                        >
-                          {desktopViewMode === 'home' ? (
-                            <ErrorBoundary
-                              fallback={qortinoWorkspaceShellFallback}
-                            >
-                              <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={() => {
-                                  setIsOnboardingComplete(true);
-                                }}
-                                onOpenAppsPanel={handleOpenAppsPanel}
-                              />
-                            </ErrorBoundary>
-                          ) : null}
-                        </Box>
+                        {showQortino ? (
+                          <Box
+                            ref={accountOverviewDebugRef}
+                            sx={{
+                              display: 'block',
+                              height:
+                                resolvedQortinoCardHeightPx != null
+                                  ? `${resolvedQortinoCardHeightPx}px`
+                                  : undefined,
+                              minWidth: 0,
+                              position: 'relative',
+                              '& > *': { height: '100%' },
+                            }}
+                          >
+                            {desktopViewMode === 'home' ? (
+                              <ErrorBoundary
+                                fallback={qortinoWorkspaceShellFallback}
+                              >
+                                <HomeQortinoWorkspaceCard
+                                  onGettingStartedComplete={() => {
+                                    setIsOnboardingComplete(true);
+                                  }}
+                                  onOpenAppsPanel={handleOpenAppsPanel}
+                                />
+                              </ErrorBoundary>
+                            ) : null}
+                          </Box>
+                        ) : null}
                         <Box
                           ref={profileCardDebugRef}
                           sx={{
@@ -830,197 +764,197 @@ export const HomeDesktop = ({
                           />
                         </Box>
                       </Box>
-                      <Box
-                        sx={{
-                          display: 'grid',
-                          gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                          gridTemplateColumns:
-                            HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS,
-                          alignItems: 'stretch',
-                          width: '100%',
-                        }}
-                      >
+                      {showTools || showFeatured ? (
                         <Box
-                          ref={toolsDebugRef}
                           sx={{
-                            display: 'block',
-                            minWidth: 0,
-                            position: 'relative',
+                            display: 'grid',
+                            gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                            gridTemplateColumns:
+                              showTools && showFeatured
+                                ? HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS
+                                : '1fr',
+                            alignItems: 'stretch',
                             width: '100%',
                           }}
                         >
-                          <HomeQuickToolsPad
-                            fillHeight={false}
-                            onOpenApps={handleOpenAppsPanel}
-                            onOpenChat={handleOpenQChatPanel}
-                            onOpenQortalLand={onOpenQortalLand}
-                            onOpenSettings={onOpenSettings}
-                          />
+                          {showTools ? (
+                            <Box
+                              ref={toolsDebugRef}
+                              sx={{
+                                display: 'block',
+                                minWidth: 0,
+                                position: 'relative',
+                                width: '100%',
+                              }}
+                            >
+                              <HomeQuickToolsPad
+                                fillHeight={false}
+                                onOpenApps={handleOpenAppsPanel}
+                                onOpenChat={handleOpenQChatPanel}
+                                onOpenQortalLand={onOpenQortalLand}
+                                onOpenSettings={onOpenSettings}
+                              />
+                            </Box>
+                          ) : null}
+                          {showFeatured ? (
+                            <Box
+                              ref={featuredAppsDebugRef}
+                              sx={{
+                                display: 'flex',
+                                height:
+                                  resolvedWideLeftLowerRowPanelHeightPx != null
+                                    ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
+                                    : undefined,
+                                minWidth: 0,
+                                overflow: 'visible',
+                                position: 'relative',
+                                width: '100%',
+                                '& > *': {
+                                  height: '100%',
+                                  position: 'relative',
+                                  width: '100%',
+                                  zIndex: 1,
+                                },
+                              }}
+                            >
+                              <HomeFeaturedApps />
+                            </Box>
+                          ) : null}
                         </Box>
-                        <Box
-                          ref={featuredAppsDebugRef}
-                          sx={{
-                            display: 'flex',
-                            height:
-                              resolvedWideLeftLowerRowPanelHeightPx != null
-                                ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
-                                : undefined,
-                            minWidth: 0,
-                            overflow: 'visible',
-                            position: 'relative',
-                            width: '100%',
-                            '& > *': {
-                              height: '100%',
-                              position: 'relative',
-                              width: '100%',
-                              zIndex: 1,
-                            },
-                          }}
-                        >
-                          <HomeFeaturedApps />
-                        </Box>
-                      </Box>
+                      ) : null}
                     </>
                   )}
                 </Box>
               </Box>
-              <Box
-                ref={rightRailRef}
-                data-home-right-rail=""
-                sx={{
-                  alignContent: 'start',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                  minWidth: 0,
-                  [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
-                    display: 'grid',
+              {showRightRail ? (
+                <Box
+                  ref={rightRailRef}
+                  data-home-right-rail=""
+                  sx={{
+                    alignContent: 'start',
+                    display: 'flex',
+                    flexDirection: 'column',
                     gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                    gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${
-                      resolvedWalletActivityHeightPx != null
-                        ? `${resolvedWalletActivityHeightPx}px`
-                        : 'auto'
-                    }`,
-                    marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px`,
-                  },
-                }}
-              >
-                <Box
-                  ref={infoDebugRef}
-                  sx={{
                     minWidth: 0,
-                    position: 'relative',
-                    width: '100%',
-                    '& > *': { height: '100%' },
+                    [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
+                      display: 'grid',
+                      gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                      gridTemplateRows: rightRailRows,
+                      marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px`,
+                    },
                   }}
                 >
-                  <InfoPreviewPanel
-                    maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
-                  />
+                  {showStatus ? (
+                    <Box
+                      ref={infoDebugRef}
+                      sx={{
+                        minWidth: 0,
+                        position: 'relative',
+                        width: '100%',
+                        '& > *': { height: '100%' },
+                      }}
+                    >
+                      <InfoPreviewPanel
+                        maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
+                      />
+                    </Box>
+                  ) : null}
+                  {showWallet ? (
+                    <Box
+                      ref={walletActivityDebugRef}
+                      sx={{
+                        maxWidth: { xs: '100%', md: '360px' },
+                        position: 'relative',
+                        width: '100%',
+                        minHeight: '182px',
+                        height:
+                          resolvedWalletActivityHeightPx != null
+                            ? `${resolvedWalletActivityHeightPx}px`
+                            : undefined,
+                        '& > *': { height: '100%' },
+                      }}
+                    >
+                      <HomeDesktopWalletActivity />
+                    </Box>
+                  ) : null}
                 </Box>
-                <Box
-                  ref={walletActivityDebugRef}
-                  sx={{
-                    maxWidth: { xs: '100%', md: '360px' },
-                    position: 'relative',
-                    width: '100%',
-                    minHeight: '182px',
-                    height:
-                      resolvedWalletActivityHeightPx != null
-                        ? `${resolvedWalletActivityHeightPx}px`
-                        : undefined,
-                    '& > *': { height: '100%' },
-                  }}
-                >
-                  <HomeDesktopWalletActivity />
-                </Box>
-              </Box>
+              ) : null}
             </Box>
 
-            {isWidgetsModuleVisible && canHostHomeWidgets() ? (
-              <ErrorBoundary fallback={null}>
-                <HomeWidgetsPanel active={desktopViewMode === 'home'} />
-              </ErrorBoundary>
-            ) : null}
-
-            {isGroupActivityModuleVisible || isQuitterFeedModuleVisible ? (
-              <Box
-                sx={{
-                  alignItems: 'start',
-                  display: 'grid',
-                  gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                  gridTemplateColumns: '1fr',
-                  width: '100%',
-                  [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
-                    gridTemplateColumns: areBothDashboardModulesVisible
-                      ? 'repeat(2, minmax(0, 1fr))'
-                      : '1fr',
-                  },
-                }}
-              >
-                {isGroupActivityModuleVisible ? (
-                  <DashboardWidgetFrame
-                    actionIcon={
-                      <ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />
-                    }
-                    actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
-                    height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                    onAction={handleOpenGroupsWidget}
-                    onRefresh={handleRefreshGroupActivity}
-                    onSwap={
-                      areBothDashboardModulesVisible
-                        ? handleSwapDashboardWidgets
-                        : undefined
-                    }
-                    order={groupActivityCardOrder}
-                    panelRef={assignGroupActivityPanelNode}
-                    refreshing={isGroupWidgetRefreshing}
-                    title={t('group:home.group_activity', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    widgetId="groups"
-                  >
-                    <GroupsWidget
-                      displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
-                      myAddress={myAddress}
-                      onRefreshStateChange={setIsGroupWidgetRefreshing}
-                      refreshToken={groupWidgetRefreshToken}
-                    />
-                  </DashboardWidgetFrame>
-                ) : null}
-
-                {isQuitterFeedModuleVisible ? (
-                  <DashboardWidgetFrame
-                    actionIcon={
-                      <OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />
-                    }
-                    actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
-                    height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                    onAction={handleOpenFeedApp}
-                    onRefresh={handleRefreshQuitterWidget}
-                    onSwap={
-                      areBothDashboardModulesVisible
-                        ? handleSwapDashboardWidgets
-                        : undefined
-                    }
-                    order={quitterCardOrder}
-                    panelRef={quitterCardHeightRef}
-                    refreshing={isQuitterWidgetRefreshing}
-                    title={td('torq_feed', 'Torq Feed')}
-                    widgetId="quitter"
-                  >
-                    <QuitterFeedWidget
-                      batchSize={quitterWidgetLoadMoreBatchSize}
-                      displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
-                      initialBatchSize={quitterWidgetInitialBatchSize}
-                      onRefreshStateChange={setIsQuitterWidgetRefreshing}
-                      refreshToken={quitterWidgetRefreshToken}
-                      searchLimit={quitterWidgetSearchLimit}
-                    />
-                  </DashboardWidgetFrame>
-                ) : null}
-              </Box>
-            ) : null}
+            {stackRows.map((row) =>
+              row[0] === 'widgets' ? (
+                <ErrorBoundary fallback={null} key="widgets">
+                  <HomeWidgetsPanel active={desktopViewMode === 'home'} />
+                </ErrorBoundary>
+              ) : (
+                <Box
+                  key={row.join('+')}
+                  sx={{
+                    alignItems: 'start',
+                    display: 'grid',
+                    gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                    gridTemplateColumns: '1fr',
+                    width: '100%',
+                    [theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)]: {
+                      gridTemplateColumns:
+                        row.length === 2 ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                    },
+                  }}
+                >
+                  {row.map((id) =>
+                    id === 'groupActivity' ? (
+                      <DashboardWidgetFrame
+                        key="groupActivity"
+                        actionIcon={
+                          <ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />
+                        }
+                        actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
+                        height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                        onAction={handleOpenGroupsWidget}
+                        onRefresh={handleRefreshGroupActivity}
+                        panelRef={assignGroupActivityPanelNode}
+                        refreshing={isGroupWidgetRefreshing}
+                        title={t('group:home.group_activity', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                        widgetId="groups"
+                      >
+                        <GroupsWidget
+                          displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                          myAddress={myAddress}
+                          onRefreshStateChange={setIsGroupWidgetRefreshing}
+                          refreshToken={groupWidgetRefreshToken}
+                        />
+                      </DashboardWidgetFrame>
+                    ) : (
+                      <DashboardWidgetFrame
+                        key="feed"
+                        actionIcon={
+                          <OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />
+                        }
+                        actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
+                        height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                        onAction={handleOpenFeedApp}
+                        onRefresh={handleRefreshQuitterWidget}
+                        panelRef={quitterCardHeightRef}
+                        refreshing={isQuitterWidgetRefreshing}
+                        title={td('torq_feed', 'Torq Feed')}
+                        widgetId="quitter"
+                      >
+                        <QuitterFeedWidget
+                          batchSize={quitterWidgetLoadMoreBatchSize}
+                          displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                          initialBatchSize={quitterWidgetInitialBatchSize}
+                          onRefreshStateChange={setIsQuitterWidgetRefreshing}
+                          refreshToken={quitterWidgetRefreshToken}
+                          searchLimit={quitterWidgetSearchLimit}
+                        />
+                      </DashboardWidgetFrame>
+                    )
+                  )}
+                </Box>
+              )
+            )}
           </Box>
           <Spacer height="120px" />
         </motion.div>

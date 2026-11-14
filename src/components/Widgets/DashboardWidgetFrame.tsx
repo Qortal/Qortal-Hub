@@ -1,5 +1,4 @@
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import {
   Box,
   ButtonBase,
@@ -10,6 +9,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { ReactNode, Ref } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   dashboardPanelSx,
   handleDashboardPanelPointerLeave,
@@ -27,8 +27,6 @@ type DashboardWidgetFrameProps = {
   height: number;
   onAction?: () => void;
   onRefresh?: () => void;
-  onSwap?: () => void;
-  order?: number;
   panelRef?: Ref<HTMLDivElement>;
   refreshing?: boolean;
   subtitle?: string;
@@ -45,8 +43,6 @@ export const DashboardWidgetFrame = ({
   height,
   onAction,
   onRefresh,
-  onSwap,
-  order,
   panelRef,
   refreshing = false,
   subtitle,
@@ -54,6 +50,10 @@ export const DashboardWidgetFrame = ({
   widgetId,
 }: DashboardWidgetFrameProps) => {
   const theme = useTheme();
+  const { t } = useTranslation(['core']);
+  const refreshLabel = t('core:action.refresh', {
+    postProcess: 'capitalizeFirstChar',
+  });
 
   return (
     <Box
@@ -68,7 +68,6 @@ export const DashboardWidgetFrame = ({
         height: `${height}px`,
         minHeight: `${height}px`,
         minWidth: 0,
-        order,
         overflow: 'hidden',
         p: '8px 10px 10px',
         width: '100%',
@@ -124,9 +123,9 @@ export const DashboardWidgetFrame = ({
           }}
         >
           {onRefresh ? (
-            <Tooltip title="Refresh">
+            <Tooltip title={refreshLabel}>
               <IconButton
-                aria-label="Refresh widget"
+                aria-label={refreshLabel}
                 data-refreshing={refreshing ? 'true' : 'false'}
                 disabled={refreshing}
                 onClick={onRefresh}
@@ -175,28 +174,6 @@ export const DashboardWidgetFrame = ({
                     />
                   ) : null}
                 </Box>
-              </IconButton>
-            </Tooltip>
-          ) : null}
-
-          {onSwap ? (
-            <Tooltip title="Swap position">
-              <IconButton
-                aria-label="Swap widget position"
-                onClick={onSwap}
-                size="small"
-                sx={{
-                  borderRadius: '999px',
-                  color: theme.palette.text.secondary,
-                  height: 28,
-                  width: 28,
-                  '&:hover': {
-                    backgroundColor: theme.palette.action.hover,
-                    color: theme.palette.text.primary,
-                  },
-                }}
-              >
-                <SwapHorizRoundedIcon sx={{ fontSize: '1rem' }} />
               </IconButton>
             </Tooltip>
           ) : null}
