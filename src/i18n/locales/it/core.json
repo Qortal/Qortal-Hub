@@ -441,6 +441,21 @@
   "image_embed": "immagine incorporata",
   "items_per_page": "Elementi per pagina:",
   "last_height": "ultimo blocco",
+  "launcher": {
+    "bookmark_remove": "rimuovi segnalibro",
+    "clear_search": "cancella la ricerca",
+    "enter_opens": "premi Invio per aprire {{title}}",
+    "folder_delete": "elimina cartella",
+    "folder_move_to": "sposta in una cartella",
+    "folder_remove_from": "rimuovi dalla cartella",
+    "no_matches": "nessuna corrispondenza per «{{query}}»",
+    "no_matches_hint": "prova con un altro nome oppure incolla un link qortal://.",
+    "pinned_and_bookmarks": "app fissate e segnalibri",
+    "pinned_empty": "non c’è ancora nulla di fissato. Fissa un’app dalla libreria qui sotto per tenerla qui.",
+    "pinned_hint": "trascina per riordinare · rilascia un’app su un’altra per creare una cartella · clic destro per altre opzioni",
+    "results_apps": "app e siti web",
+    "results_saved": "le tue app fissate e i segnalibri"
+  },
   "level": "livello",
   "library": "libreria",
   "list": {
@@ -699,6 +714,7 @@
   "name": "nome",
   "name_app": "nome/app",
   "navbar": {
+    "search_library": "Cerca “{{query}}” nelle Q-App",
     "search_placeholder": "Cerca Q-App o inserisci qortal://",
     "session": {
       "lock_description": "Mantieni chat e chiamate connesse",
@@ -707,7 +723,12 @@
       "logout_title": "Esci",
       "menu_aria": "Opzioni della sessione",
       "tooltip": "Blocca o esci"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Sito web"
+    },
+    "suggestions": "Suggerimenti"
   },
   "new_post_in": "nuovo post in {{ title }}",
   "none": "nessuno",

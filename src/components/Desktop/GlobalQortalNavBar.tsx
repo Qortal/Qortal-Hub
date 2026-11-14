@@ -12,6 +12,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import useAutocomplete from '@mui/material/useAutocomplete';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -64,6 +65,19 @@ import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { SubscriptionsStatus } from './SubscriptionsStatus';
 import { AppBookmarksButton } from '../Apps/AppBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
+import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { AppSearchSuggestions } from './AppSearchSuggestions';
+import {
+  type AppOpenCounts,
+  readAppOpenCounts,
+  recordAppOpen,
+} from './appOpenCounts';
+import {
+  type AppSearchOption,
+  buildAppSearchOptions,
+  exactAppNameMatch,
+  type SearchableApp,
+} from './appSearchSuggestions';
 
 export const QORTAL_GROUP_CALL_NAV_SLOT_ID = 'qortal-group-call-nav-slot';
 export const DIRECT_VOICE_CALL_NAV_SLOT_ID = 'direct-voice-call-nav-slot';
@@ -783,6 +797,11 @@ export function GlobalQortalNavBar({
   const lastTabsTokenRef = useRef(0);
   const navClearLockUntilRef = useRef(0);
   const inputElementRef = useRef<HTMLInputElement | null>(null);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const availableQapps = useAtomValue(availableQappsAtom);
+  // Suggestions are for what the user types, not for the current link.
+  const [isEditingInput, setIsEditingInput] = useState(false);
+  const [appOpenCounts, setAppOpenCounts] = useState<AppOpenCounts>({});
 
   const setTabsToNav = useCallback((e: CustomEvent) => {
     const nextToken = Number(e.detail?.data?.tabsToken || 0);
@@ -813,6 +832,7 @@ export function GlobalQortalNavBar({
   useEffect(() => {
     const handleClearNavInput = () => {
       setInputValue('');
+      setIsEditingInput(false);
       setIsInputFocused(false);
       isInputFocusedRef.current = false;
       if (inputElementRef.current) {
@@ -836,6 +856,7 @@ export function GlobalQortalNavBar({
       navClearLockUntilRef.current = Date.now() + 250;
       setSelectedTab(null);
       setInputValue('');
+      setIsEditingInput(false);
       setIsInputFocused(false);
       isInputFocusedRef.current = false;
       if (inputElementRef.current) {
@@ -849,6 +870,25 @@ export function GlobalQortalNavBar({
       unsubscribeFromEvent('forceNavClear', handleForceNavClear);
     };
   }, []);
+
+  // How often this account opens each Q-App and website, to rank suggestions.
+  useEffect(() => {
+    const address = userInfo?.address;
+    setAppOpenCounts(readAppOpenCounts(address));
+    if (!address) return undefined;
+
+    const handleAddTab = (e: CustomEvent) => {
+      const data = e.detail?.data;
+      if (!data) return;
+      setAppOpenCounts(recordAppOpen(address, data.service, data.name));
+    };
+
+    subscribeToEvent('addTab', handleAddTab);
+
+    return () => {
+      unsubscribeFromEvent('addTab', handleAddTab);
+    };
+  }, [userInfo?.address]);
 
   const currentNavigation = selectedTab?.tabId
     ? navigationController?.[selectedTab.tabId]
@@ -928,8 +968,8 @@ export function GlobalQortalNavBar({
     setInputValue('');
   }, [currentLink, desktopViewMode]);
 
-  const handleOpenInput = useCallback(() => {
-    const trimmed = inputValue.trim();
+  const handleOpenInput = useCallback((value: string) => {
+    const trimmed = value.trim();
     if (!trimmed) return;
 
     if (parseQortalUseGroupLink(trimmed)) {
@@ -955,7 +995,80 @@ export function GlobalQortalNavBar({
       },
     });
     executeEvent('open-apps-mode', {});
-  }, [inputValue]);
+  }, []);
+
+  const openSearchApp = useCallback((app: SearchableApp) => {
+    const service = app.service.toUpperCase();
+    setIsEditingInput(false);
+    setInputValue(`${QORTAL_PROTOCOL}${service}/${app.name}`);
+    inputElementRef.current?.blur();
+    executeEvent('addTab', { data: { name: app.name, service } });
+    executeEvent('open-apps-mode', {});
+  }, []);
+
+  // Enter or the open button: a Q-App or website typed by its exact name opens
+  // it. Anything else works as before: links open, text searches the library.
+  const submitSearchInput = useCallback(
+    (value: string) => {
+      const exactApp = exactAppNameMatch(value, availableQapps, appOpenCounts);
+      if (exactApp) {
+        openSearchApp(exactApp);
+        return;
+      }
+      handleOpenInput(value);
+    },
+    [appOpenCounts, availableQapps, handleOpenInput, openSearchApp]
+  );
+
+  const appSearchOptions = useMemo(
+    () =>
+      isEditingInput
+        ? buildAppSearchOptions(inputValue, availableQapps, appOpenCounts)
+        : [],
+    [appOpenCounts, availableQapps, inputValue, isEditingInput]
+  );
+
+  const {
+    getInputProps: getSearchInputProps,
+    getListboxProps: getSuggestionListProps,
+    getOptionProps: getSuggestionProps,
+    getRootProps: getSearchRootProps,
+    groupedOptions: suggestionOptions,
+    popupOpen: isSuggestionListOpen,
+  } = useAutocomplete<AppSearchOption, false, false, true>({
+    filterOptions: (options) => options,
+    freeSolo: true,
+    getOptionKey: (option) =>
+      typeof option === 'string'
+        ? option
+        : option.kind === 'app'
+          ? `${option.app.service}:${option.app.name}`
+          : 'library',
+    getOptionLabel: (option) =>
+      typeof option === 'string'
+        ? option
+        : option.kind === 'app'
+          ? option.app.name
+          : option.query,
+    inputValue,
+    onChange: (_event, option) => {
+      if (!option) return;
+      if (typeof option === 'string') {
+        submitSearchInput(option);
+      } else if (option.kind === 'app') {
+        openSearchApp(option.app);
+      } else {
+        handleOpenInput(option.query);
+      }
+    },
+    onInputChange: (_event, value, reason) => {
+      if (reason !== 'input') return;
+      setInputValue(value);
+      setIsEditingInput(true);
+    },
+    options: appSearchOptions,
+    value: null,
+  });
 
   const canCopyCurrentLink = Boolean(currentLink);
   const canPinCurrentApp =
@@ -1458,6 +1571,7 @@ export function GlobalQortalNavBar({
           <Box
             component={motion.div}
             layout
+            ref={searchBoxRef}
             transition={utilityLayoutTransition}
             onMouseEnter={() => setIsInputHovered(true)}
             onMouseLeave={() => setIsInputHovered(false)}
@@ -1494,6 +1608,7 @@ export function GlobalQortalNavBar({
               }}
             />
             <Box
+              {...getSearchRootProps()}
               sx={{
                 alignItems: 'center',
                 display: 'flex',
@@ -1546,25 +1661,23 @@ export function GlobalQortalNavBar({
                 </Box>
               )}
               <InputBase
+                inputProps={{
+                  ...getSearchInputProps(),
+                  'aria-label': t('core:navbar.search_placeholder'),
+                }}
                 inputRef={inputElementRef}
                 value={inputValue}
                 onBlur={() => {
                   isInputFocusedRef.current = false;
                   setIsInputFocused(false);
+                  setIsEditingInput(false);
                 }}
-                onChange={(e) => setInputValue(e.target.value)}
                 onFocus={() => {
                   isInputFocusedRef.current = true;
                   setIsInputFocused(true);
                   window.setTimeout(() => {
                     inputElementRef.current?.select();
                   }, 0);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleOpenInput();
-                  }
                 }}
                 placeholder={t('core:navbar.search_placeholder')}
                 sx={{
@@ -1750,7 +1863,7 @@ export function GlobalQortalNavBar({
 
               <ButtonBase
                 disableRipple
-                onClick={handleOpenInput}
+                onClick={() => submitSearchInput(inputValue)}
                 sx={{
                   alignItems: 'center',
                   borderRadius: '8px',
@@ -1789,6 +1902,14 @@ export function GlobalQortalNavBar({
               </ButtonBase>
             </Box>
           </Box>
+          <AppSearchSuggestions
+            anchorEl={searchBoxRef.current}
+            getListboxProps={getSuggestionListProps}
+            getOptionProps={getSuggestionProps}
+            open={isInputFocused && isSuggestionListOpen}
+            options={suggestionOptions as AppSearchOption[]}
+            query={inputValue}
+          />
           <Box
             id={QORTAL_GROUP_CALL_NAV_SLOT_ID}
             component={motion.div}
