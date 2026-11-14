@@ -14,6 +14,8 @@ declare module '@mui/material/styles' {
       positive: string;
       danger: string;
       unread: string;
+      /** The gold of a node that mints (the Qortal logo's ring). */
+      minting: string;
     };
   }
   interface PaletteOptions {
@@ -25,6 +27,7 @@ declare module '@mui/material/styles' {
       positive?: string;
       danger?: string;
       unread?: string;
+      minting?: string;
     };
   }
 }

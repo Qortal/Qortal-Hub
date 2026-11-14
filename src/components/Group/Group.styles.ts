@@ -20,6 +20,8 @@ export const RootBox = styled(Box)({
 export const MainContentBox = styled(Box)({
   width: '100%',
   height: '100%',
+  // Shrinks beside a side panel that stays open.
+  minWidth: 0,
   position: 'relative',
 });
 
