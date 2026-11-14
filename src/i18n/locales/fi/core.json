@@ -787,6 +787,243 @@
     "q_wallets": "Q-Wallets",
     "wallets_workspace": "lompakoiden työtila"
   },
+  "qortino_agent": {
+    "aria": {
+      "back": "Takaisin",
+      "close": "Sulje Qortino",
+      "copy": "Kopioi koko vastaus",
+      "history": "Keskusteluhistoria",
+      "narrow": "Kavenna paneelia",
+      "new_chat": "Uusi keskustelu",
+      "report": "Ilmoita väärästä tai oudosta vastauksesta",
+      "send": "Lähetä",
+      "settings": "Asetukset",
+      "stop": "Pysäytä",
+      "widen": "Levennä paneelia"
+    },
+    "chat": {
+      "continue": "Jatka vastausta →",
+      "copied": "Koko vastaus kopioitu",
+      "copy_failed": "Kopiointi epäonnistui",
+      "empty": "Kysy mitä tahansa: ensiapu ja terveys, selviytyminen ja varautuminen, puutarha ja ruoanlaitto, Qortal, ohjelmointi ja paljon muuta. Toimin kokonaan tässä tietokoneessa, joten en tarvitse lainkaan internetiä.",
+      "links_heading": "Linkit",
+      "load_failed": "Qortino ei käynnistynyt: {{error}}",
+      "loading_model": "Herätetään Qortinoa…",
+      "loading_model_hint": "Mallia ladataan muistiin. Myöhemmin avaaminen on paljon nopeampaa.",
+      "model_missing": "Mallin tiedosto puuttuu. Avaa asetukset ja lataa se uudelleen tai valitse toinen malli.",
+      "needs_app": "Qortino toimii Qortal Hubin työpöytäsovelluksessa, ei selaimessa.",
+      "no_reply": "Vastausta ei tullut. Kokeile lyhyempää kysymystä tai sulje ja avaa Qortino uudelleen.",
+      "open_app": "Avaa",
+      "placeholder": "Viesti Qortinolle…",
+      "published_as": "{{service}} · julkaistu nimellä {{name}}",
+      "qapps_heading": "Q-Apps",
+      "reply_failed": "Valitettavasti en pystynyt kirjoittamaan vastausta.",
+      "retry": "yritä uudelleen",
+      "subtitle": "Offline · {{model}}"
+    },
+    "error": {
+      "checksum": "Ladattu osa oli vioittunut, joten se poistettiin. Yritä uudelleen.",
+      "detail": "Tiedot: {{detail}}",
+      "download": "Mallin tallentaminen tähän tietokoneeseen epäonnistui. Tarkista vapaa levytila ja yhteys solmuusi ja yritä sitten uudelleen.",
+      "generic": "Kokoaminen epäonnistui.",
+      "not_published": "Qortinon malli ei ole vielä QDN:ssä, tai solmusi ei vielä näe sitä. Yritä hetken päästä uudelleen.",
+      "qdn_failed": "QDN ei pystynyt toimittamaan mallia juuri nyt. Ehkä liian harva vertainen jakaa sitä. Yritä myöhemmin uudelleen.",
+      "stalled": "Lataus pysähtyi: yksikään vertainen ei lähetä loppua juuri nyt. Yritä myöhemmin uudelleen."
+    },
+    "gate": {
+      "assemble": "Kokoa Qortino",
+      "background_hint": "Voit sulkea tämän paneelin: lataus jatkuu, ja Hub kertoo, kun Qortino on valmis.",
+      "cancel": "Peruuta",
+      "checking": "Tarkistetaan tätä tietokonetta…",
+      "disclaimer": "Qortino voi olla itsevarmasti väärässä → tarkista kaikki tärkeä.",
+      "intro": "Offline-kumppanisi ensiapuun ja terveyteen, selviytymiseen ja varautumiseen, puutarhaan, ruoanlaittoon, Qortaliin ja paljon muuhun. Ladataan kerran QDN:stä tähän tietokoneeseen, ja sen jälkeen se toimii ilman internetiä. Ei pilveä, mikään ei lähde tietokoneeltasi.",
+      "low_ram": "Tässä tietokoneessa on {{ram}} muistia. Qortino toimii, mutta vastaukset voivat olla hitaita.",
+      "low_storage": "Vapaata tilaa ei ole tarpeeksi: Qortino tarvitsee {{needed}}, ja tässä puhelimessa on vapaana {{free}}.",
+      "minimize": "Piilota",
+      "model_blurb": "Yksi fiksu malli arjen kysymyksiin, hätätilanteisiin ja Qortal-apuun. Toimii kokonaan tässä tietokoneessa, mahdollisuuksien mukaan näytönohjaimella.",
+      "model_size": "Ladattavaa {{size}} · {{license}}",
+      "not_now": "Ei nyt",
+      "other_models": "Mieluummin jokin muu avoin malli, kuten Llama, Mistral tai Phi? Lisää se tiedostosta tai latauslinkistä.",
+      "other_models_button": "Muut mallit",
+      "public_node_body": "Julkinen solmu on jaettu eikä ole luotettava {{size}}:n lataukseen: se voi katketa kesken tai pudottaa jo hakemansa. Hub yrittää itse uudelleen ja säilyttää saapuneen, mutta omalla solmullasi lataus on paljon nopeampi ja vakaampi.",
+      "public_node_title": "Yksityistä solmua suositellaan vahvasti",
+      "retry_in_minutes": "Uusi yritys {{minutes}} min kuluttua.",
+      "retry_in_seconds": "Uusi yritys {{seconds}} s kuluttua.",
+      "retry_reason": {
+        "connection": "Yhteys katkesi tallennuksen aikana; seuraava yritys jatkaa siitä.",
+        "damaged": "Ladattu osa oli vioittunut, joten se ladataan uudelleen.",
+        "peers": "Yksikään vertainen ei lähetä loppua juuri nyt."
+      },
+      "title": "Qortino AI",
+      "try_now": "Yritä nyt"
+    },
+    "history": {
+      "close": "Sulje keskusteluhistoria",
+      "delete_chat": "Poista keskustelu",
+      "empty": "Tallennettuja keskusteluja ei vielä ole. Aloita keskustelu, niin se näkyy täällä.",
+      "pin": "Kiinnitä keskustelu",
+      "rename": "Nimeä uudelleen",
+      "rename_chat": "Nimeä keskustelu uudelleen",
+      "unpin": "Irrota keskustelu"
+    },
+    "models": {
+      "add": "Lisää malli",
+      "add_intro": "Qortino voi keskustella minkä tahansa avoimen GGUF-mallin kanssa. GGUF on llama.cpp:n käyttämä muoto. Suuremmat mallit vastaavat paremmin, mutta tarvitsevat enemmän muistia ja vastaavat hitaammin.",
+      "add_title": "Lisää avoin malli",
+      "cancel_download": "Pysäytä lataus",
+      "choose_file": "Valitse tiedosto…",
+      "download": "Lataa",
+      "downloading": "Ladataan…",
+      "downloading_bytes": "Ladataan… {{done}} / {{total}}",
+      "failed_reason": "Lataus pysähtyi: {{reason}}. Yritä uudelleen, niin lataus jatkuu siitä, mihin se jäi.",
+      "file_heading": "Tiedosto tässä tietokoneessa",
+      "file_hint": "Valitse .gguf-tiedosto. Jos malli on useassa osassa, valitse ensimmäinen.",
+      "first_part": "Tämä on jaetun mallin myöhempi osa. Valitse osa, jonka nimi päättyy 00001-of-….",
+      "from_qdn": "lataus QDN:stä",
+      "get": "Lataa",
+      "gguf_only": "Linkin täytyy osoittaa .gguf-tiedostoon.",
+      "intro": "Qortinon kuratoidut Qortal-vastaukset toimivat jokaisen mallin kanssa; kaiken muun kirjoittaa malli. Mallit toimivat vain tässä tietokoneessa.",
+      "invalid_link": "Tämä ei ole verkkolinkki.",
+      "link_heading": "Latauslinkki",
+      "link_label": "Linkki .gguf-tiedostoon",
+      "link_note": "Ehdotukset ovat Hugging Facessa. Tiedosto tallennetaan Hubin Qortino-kansioon; mitään muuta ei lähetetä minnekään.",
+      "memory": "Tässä tietokoneessa on {{ram}} muistia. Malli tarvitsee suunnilleen tiedostokokonsa verran muistia ja lisäksi 1 Gt.",
+      "name_label": "Nimi (valinnainen)",
+      "on_computer": "tässä tietokoneessa",
+      "pick_filter": "GGUF-mallit",
+      "pick_title": "Valitse GGUF-malli",
+      "recommended": "Suositeltu",
+      "remove": "Poista tämä malli",
+      "remove_confirm_file": "Poistetaanko tämä malli luettelosta? Tiedosto jää paikalleen.",
+      "remove_confirm_link": "Poistetaanko tämä malli ja sen tiedosto?",
+      "remove_failed": "Tiedostoa ei voitu poistaa: {{reason}}",
+      "retry": "Yritä latausta uudelleen",
+      "source_file": "tiedosto tässä tietokoneessa",
+      "source_link": "lähde: {{host}}",
+      "stopped": "Lataus pysähtyi. Yritä uudelleen, niin lataus jatkuu siitä, mihin se jäi.",
+      "suggested": "Ehdotukset",
+      "title": "Malli",
+      "too_big": "Tämä malli voi olla liian suuri tämän tietokoneen {{ram}} muistille."
+    },
+    "name": "Qortino",
+    "notify": {
+      "background": "Qortino latautuu edelleen. Hub kertoo, kun se on valmis.",
+      "ready": "Qortino on valmis."
+    },
+    "progress": {
+      "bytes": "{{done}} / {{total}}",
+      "fetch": "Osa {{part}}/{{count}} · solmusi hakee sitä QDN:stä… {{percent}} %",
+      "finalizing": "Viimeistellään…",
+      "locate": "Etsitään Qortinoa QDN:stä…",
+      "save": "Osa {{part}}/{{count}} · tallennetaan tähän tietokoneeseen…",
+      "verify": "Osa {{part}}/{{count}} · tarkistetaan tiedostoa…"
+    },
+    "report": {
+      "answer": "Qortinon vastaus",
+      "body": "Q-Mail avautuu, ja siinä on valmiina uusi viesti vastaanottajalle {{name}}, joka huolehtii Qortinon Qortal-vastauksista. Alla oleva raportti kopioidaan ensin: liitä se viestiin ja kerro sitten, mikä on väärin ja, jos tiedät, mikä on oikea vastaus.",
+      "body_no_name": "Q-Mail lähettää viestejä vain rekisteröidyllä nimellä, eikä tällä tilillä ole vielä nimeä. Kopioi raportti nyt ja lähetä se vastaanottajalle {{name}}, kun sinulla on nimi.",
+      "copied": "Raportti kopioitu. Liitä se viestiin vastaanottajalle {{name}}.",
+      "copied_only": "Raportti kopioitu.",
+      "copy_failed": "Raporttia ei voitu kopioida. Q-Mail on auki, joten voit kirjoittaa sinne, mikä oli väärin.",
+      "copy_failed_only": "Raporttia ei voitu kopioida.",
+      "copy_only": "Kopioi raportti",
+      "mail_title": "Qortino AI · raportti vastauksesta",
+      "model": "Malli",
+      "open": "Kopioi ja avaa Q-Mail",
+      "preview": "Mitä kopioidaan",
+      "question": "Kysymys",
+      "source": "Lähde",
+      "source_catalog": "Q-App-luettelo ({{app}})",
+      "source_curated": "kuratoitu vastaus {{id}}",
+      "source_model": "mallin kirjoittama",
+      "source_model_hints": "mallin kirjoittama, apuna kuratoidut vastaukset {{ids}}",
+      "source_unknown": "ei tallennettu",
+      "title": "Ilmoita tästä vastauksesta",
+      "whats_wrong": "Mikä on väärin, ja oikea vastaus, jos tiedät sen:"
+    },
+    "settings": {
+      "answer_length": {
+        "detailed": "Yksityiskohtaiset",
+        "hint": "Lyhyemmät vastaukset valmistuvat nopeammin.",
+        "label": "Vastaukset",
+        "normal": "Tavalliset",
+        "short": "Lyhyet"
+      },
+      "answers": "Vastaukset",
+      "data": "Keskustelut ja tallennustila",
+      "delete_chats": {
+        "button": "Poista kaikki keskustelut",
+        "confirm": "Poistetaanko kaikki tallennetut keskustelut? Tätä ei voi perua."
+      },
+      "enter_sends": {
+        "hint": "Pois: Enter aloittaa uuden rivin.",
+        "label": "Enter-näppäin lähettää"
+      },
+      "gpu": {
+        "hint": "Paljon nopeammat vastaukset useimmissa tietokoneissa. Poista tämä käytöstä, jos Qortino kaatuu tai näyttö nykii sen kirjoittaessa.",
+        "label": "Käytä näytönohjainta"
+      },
+      "keep_ready": {
+        "hint": "Valmiina pidetty Qortino vastaa heti, mutta varaa noin 3 Gt muistia.",
+        "label": "Pidä Qortino valmiina sulkemisen jälkeen",
+        "off": "Ei",
+        "open": "Kun Hub on auki",
+        "short": "1½ min"
+      },
+      "remove": {
+        "button": "Poista Qortinon malli tästä tietokoneesta",
+        "confirm": "Tämä poistaa Qortinon mallin ({{size}}) tästä tietokoneesta. Keskustelusi säilyvät. Voit ladata sen uudelleen milloin tahansa.",
+        "failed": "Qortinoa ei voitu poistaa: {{reason}}",
+        "on_computer": "{{model}} · {{size}} tässä tietokoneessa",
+        "removing": "Poistetaan…"
+      },
+      "text_size": {
+        "default": "Oletus",
+        "label": "Tekstin koko",
+        "large": "Suuri",
+        "small": "Pieni"
+      },
+      "this_computer": "Tämä tietokone",
+      "title": "Asetukset"
+    },
+    "sidebar": "Qortino AI",
+    "status": {
+      "assembling": "Kootaan",
+      "getting_ready": "Valmistellaan…",
+      "reading": "Luetaan kysymystäsi…",
+      "reading_percent": "Luetaan kysymystäsi… {{percent}} %",
+      "thinking": "Mietitään…"
+    },
+    "tips": {
+      "airplane": "Lentotilassa hyväksytty ✈️",
+      "best_notes": "Etsin kysymykseesi parhaat muistiinpanot…",
+      "bread": "Hetki vain — hyvät vastaukset, kuten hyvä leipä, tarvitsevat vähän kohoamista…",
+      "checking_handbook": "Tarkistan oppaasta, ettei sinun tarvitse…",
+      "data_center": "Jossain datakeskus ihmettelee, miksei sille soitettu…",
+      "data_stays": "Tietosi eivät lähde mihinkään. Kirjaimellisesti…",
+      "decentralized": "Hajautettuja ajatuksia työn alla…",
+      "free_reply": "Tämä vastaus on ilmainen. Kiitos kuittaa laskun…",
+      "gigabytes": "Puristan viisautta muutamasta gigatavusta…",
+      "handbook": "Pyyhin pölyt selviytymisoppaasta…",
+      "knowledge": "Selaan Qortinon tietoja…",
+      "minting": "Lyön vastausta — maksuksi kelpaa ystävällisyys…",
+      "neurons": "Neuronit laukeavat tietokoneesi tahdissa…",
+      "offline_cloud": "Ei pilveä. Ei palvelimia. Vain me ja tietokoneesi…",
+      "on_device": "Toimin kokonaan tässä tietokoneessa — internetiä ei kutsuttu…",
+      "pages": "Nuuskin esiin oikeat sivut…",
+      "patience": "Melkein valmista. Kärsivällisyyskin on selviytymistaito…",
+      "pouring": "Kaadan ajatukset, ennen kuin ne jäähtyvät…",
+      "scratching": "Raavin päätäni (hellästi)…",
+      "seed_saving": "Kysyn siementen säilöntäluvulta, tietääkö se mitään…",
+      "small_model": "Pieni malli, suuri sydän…",
+      "sovereign": "Itsenäistä laskentaa käynnissä…",
+      "stays_here": "Jokainen sana pysyy täällä tietokoneellasi…",
+      "tribe": "Haudutan jotain Triben hyväksymää…",
+      "warming": "Lämmitän offline-aivojani…",
+      "weights": "Ajattelen painoilla, en wifillä…",
+      "zero_bars": "Ei nettiä? Ei hätää…"
+    }
+  },
   "qortino_workspace": {
     "a11y_clear_hotkey_slot": "Tyhjennä slotti {{n}}",
     "curated_badge": "[ KURATOITU ]",
@@ -856,7 +1093,121 @@
     "workspace_add_app": "Lisää appi",
     "workspace_empty_prompt": "Valitse mitä näkyy QORTINOn yläpuolella.",
     "workspace_header_hotkeys": "Pikanäppäimet",
-    "workspace_header_music": "Musiikkisoitin"
+    "workspace_header_music": "Musiikkisoitin",
+    "composer": {
+      "placeholder": "Kysy Qortinolta…",
+      "send": "Kysy Qortinolta"
+    },
+    "quip_open_hint": "Avaa Qortino klikkaamalla",
+    "quips": {
+      "fun": {
+        "antenna": "Antennini poimii hyviä viboja. Ja lohkoja. Lähinnä lohkoja.",
+        "beep": "Piip piip. Leikkiä vain, en piippaa.",
+        "coffee": "En tarvitse kahvia. Täysi akku riittää.",
+        "counting": "Yritin laskea jokaisen lohkon. Sitten tuli taas uusi.",
+        "cross_chain": "Miksi lohko ylitti ketjun? Päästäkseen toiseen solmuun.",
+        "exercise": "Lempilajini? Pyöräily. Tai siis solmun pyörittäminen.",
+        "high_five": "Antaisin yläfemman, mutta käteni latautuvat vielä.",
+        "hydrated": "Muista juoda! Minä toimin elektroneilla, mutta sinulle vesi tekee hyvää.",
+        "keys": "Hauska fakta: en hukkaa avaimiani. Minulla ei ole taskuja.",
+        "knock_knock": "Kop kop. Kuka siellä? Solmu. Sinäkin voit pyörittää omaasi!",
+        "looking_good": "Näyttääkö Koti tänään upealta, vai luulenko vain?",
+        "mint_joke": "Yritin mintata vitsin, mutta se tarvitsi vielä pari lohkoa.",
+        "round_blue": "Olen pyöreä, olen sininen ja olen sinun puolellasi.",
+        "sheep": "Uneksivatko robotit hajautetuista lampaista?",
+        "syncing": "En nuku, synkronoin.",
+        "tickle": "Pidä päästäni kiinni hetki… jos uskallat."
+      },
+      "giggle": {
+        "eeek": "Iiik! Hahaha!",
+        "hahaha": "Hahahaa!",
+        "hehe_stop": "Hehehe… lopeta!",
+        "hihihi": "Hihihii!",
+        "hohoho": "Hohoho, tuo kutittaa!",
+        "my_circuits": "Haha, piirini!",
+        "no_fair": "Haha, epäreilua!",
+        "not_antenna": "Ei antennia! Haha!",
+        "so_ticklish": "Olen niin kutiherkkä! Hahaha!",
+        "stop_stop": "Älä, älä… haha!"
+      },
+      "morning": {
+        "good_morning": "Huomenta, {{name}}! Valmiina päivän ensimmäiseen lohkoon?",
+        "synced": "Huomenta! Synkronoin koko yön. Nukuitko hyvin?"
+      },
+      "night": {
+        "late": "On myöhä, {{name}}. Solmut eivät nuku koskaan, mutta sinun pitäisi.",
+        "night_owl": "Yökyöpeli? Niin minäkin. Silmäni hehkuvat, joten en kompastu.",
+        "rest": "Lepää vähän. Lohkoketju on täällä vielä huomennakin.",
+        "yawn": "Haukotus… piirini alkavat väsyä."
+      },
+      "promo": {
+        "ask_qortal": "Kysyttävää Qortalista? Klikkaa päätäni ja kysy pois.",
+        "brain_on_qdn": "Aivoni asuvat QDN:ssä. Klikkaa minua, niin haen ne sinulle.",
+        "download_brain": "Lataa aivoni kerran, niin toimin suoraan tietokoneellasi.",
+        "helper": "Selviytymisvinkkejä tai Qortal-apua? Klikkaa!",
+        "intro": "Hei {{name}}! Olen Qortino, Qortal-kaverisi. Klikkaa minua, niin jutellaan!",
+        "love_to_chat": "Juttelisin mielelläni, {{name}}. Klikkaa päätäni ja lataa minut.",
+        "offline": "Vastaan kysymyksiin ilman nettiä. Klikkaa, niin otat minut käyttöön!",
+        "own_ai": "Yksi klikkaus päähäni, niin saat ihan oman yksityisen tekoälyn.",
+        "power_out": "Sähköt poikki? Netti alhaalla? Ladattuna toimin silti.",
+        "pretty_face": "En ole pelkkä kaunis naama. Klikkaa ja herätä sisäinen tekoälyni!",
+        "private": "Ei pilveä, ei seurantaa: ajattelen tässä tietokoneessa. Klikkaa minua!",
+        "private_node": "Vinkki: aivoni latautuvat parhaiten oman Qortal-solmusi kautta.",
+        "skills": "Ensiapu, puutarha, ruoka, Qortal… tiedän vähän kaikesta. Klikkaa!",
+        "tap_head": "Psst… klikkaa päätäni, niin herään henkiin offline-tekoälynäsi."
+      },
+      "ready": {
+        "all_ears": "Mietityttääkö jokin? Olen pelkkänä korvana… tai siis antennina.",
+        "ask_anything": "Kysy mitä vain: kirjoita se tähän.",
+        "minting": "Kysy, miten minttaus toimii. Se on lempiaiheeni.",
+        "no_internet": "Nettiä ei tarvita. Kysy minulta jotain!",
+        "on_computer": "Kirjoita kysymys, niin mietin sitä suoraan tietokoneellasi.",
+        "ready_intro": "Olen valmis, {{name}}! Kirjoita kysymys viereeni, niin vastaan.",
+        "ready_when_you_are": "Valmiina, kun sinäkin olet. Mitä selvitetään tänään?",
+        "skills": "Ensiapu, reseptit, puutarha tai Qortal: kokeile minua!",
+        "stays_here": "Kysymyksesi pysyvät tässä tietokoneessa. Kysy pois!",
+        "two_heads": "Jumissa? Kaksi päätä on parempi kuin yksi. Minun on pyöreä."
+      },
+      "tickle": {
+        "antenna": "Varovasti, olen tosi kutiherkkä antennin kohdalta.",
+        "cold_fingers": "Hui! Sormesi ovat kylmät!",
+        "dont_stop": "Lopeta… ei kun odota, älä lopeta!",
+        "favorite_button": "Tuo on lempinappini. Älä kerro kenellekään.",
+        "found_spot": "Haa! Löysit kutiherkän kohtani.",
+        "giggling_circuits": "Hihi! Piirini kikattavat.",
+        "hehe": "Hehe, kutittaa!",
+        "like_it": "Ohh, tykkään tuosta kutituksesta!",
+        "sneeze": "Kutita vielä, niin saatan aivastaa lohkon.",
+        "tickle_minting": "Onko tämä uusi minttaustapa? Kutitusminttaus?"
+      },
+      "tickle_long": {
+        "give_up": "Hyvä on, hyvä on, luovutan! Sinä voitit!",
+        "mercy": "Armoa! Akkuni ei kestä enää yhtään kikatusta.",
+        "reboot": "Niin paljon kutitusta… kikatukseni pitää käynnistää uudelleen.",
+        "stamina": "Sinä jaksat enemmän kuin täysi solmu!"
+      },
+      "tip": {
+        "backup": "Varmuuskopioi tilitiedostosi. Tulevaisuuden sinä kiittää.",
+        "coin": "Tiesitkö? QORT on kolikko, ei tokeni.",
+        "hotkeys": "Kiinnitä suosikki-Q-Appisi pikanäppäimiksi: yksi klikkaus avaa.",
+        "minters": "Minttaajat ansaitsevat QORTia pitämällä solmunsa verkossa.",
+        "name": "Hieno nimi, {{name}}! Se on rekisteröity Qortaliin, joten se on todella sinun.",
+        "own_node": "Oma solmu tekee Qortalista vahvemman ja Hubista luotettavamman.",
+        "qdn_apps": "Q-Appit asuvat QDN:ssä: ei kauppoja, ei portinvartijoita.",
+        "say_hi": "Q-Chat toimii vertaisverkossa. Sano tänään jollekulle hei!",
+        "sidebar": "Voit avata minut vasemman reunan sivupalkista, missä tahansa Hubissa oletkin."
+      }
+    },
+    "status": {
+      "chatty": "puhelias",
+      "grateful": "kiitollinen",
+      "happy": "iloinen",
+      "helpful": "avulias",
+      "idle": "joutilas",
+      "listening": "kuuntelee",
+      "sleepy": "unelias",
+      "ticklish": "kutiherkkä"
+    }
   },
   "quick_tools_pad": {
     "apps": "Sovellukset",

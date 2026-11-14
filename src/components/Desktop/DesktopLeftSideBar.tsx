@@ -24,6 +24,7 @@ import {
   enabledDevModeAtom,
   hasUnreadGroupsAtom,
   isNewTabWindowAtom,
+  qortinoAgentOpenAtom,
   supportChatOpenAtom,
 } from '../../atoms/global';
 import { keyframes } from '@mui/material/styles';
@@ -33,6 +34,9 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { openQChatTab, QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
+import qortinoHeadUrl from '../../assets/svgs/QortinoHead.svg';
+import { isQortinoLlmNativeAvailable } from '../../qortinoAgent/qortinoLlm';
+import { toggleQortinoAgentSheet } from '../../qortinoAgent/qortinoSheetNav';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
@@ -307,6 +311,7 @@ export const DesktopSideBar = ({
   } | null>(null);
   const hasUnreadChat = hasUnreadDirects || hasUnreadGroups;
   const effectiveUnreadChat = hasUnreadChat;
+  const qortinoOpen = useAtomValue(qortinoAgentOpenAtom);
   const isQChatActive =
     desktopViewMode === 'apps' &&
     selectedAppsTab?.internal === QCHAT_INTERNAL_TAB_ID;
@@ -590,6 +595,34 @@ export const DesktopSideBar = ({
                   />
                 ) : null}
               </Box>
+
+              {isQortinoLlmNativeAvailable() ? (
+                <Box data-tour="hub-qortino-ai">
+                  <SidebarItem
+                    active={qortinoOpen}
+                    label={t('core:qortino_agent.sidebar', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                    onClick={() => runSidebarAction(toggleQortinoAgentSheet)}
+                  >
+                    <Box
+                      component="img"
+                      alt=""
+                      src={qortinoHeadUrl}
+                      sx={{
+                        filter: qortinoOpen
+                          ? 'none'
+                          : 'grayscale(0.55) saturate(0.7) brightness(0.92)',
+                        height: `${ICON_SIZE_PX + 4}px`,
+                        objectFit: 'contain',
+                        opacity: qortinoOpen ? 1 : 0.86,
+                        transition: 'filter 160ms ease, opacity 160ms ease',
+                        width: `${ICON_SIZE_PX + 4}px`,
+                      }}
+                    />
+                  </SidebarItem>
+                </Box>
+              ) : null}
 
               {isEnabledDevMode ? (
                 <SidebarItem

@@ -192,7 +192,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           );
           return;
         }
-        const constructUrl = `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
+        const constructUrl = `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${Date.now()}`;
         setUrl(constructUrl);
       }
     };
@@ -357,7 +357,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           await waitForNativeNavigation(targetPath, 1000);
         } catch {
           setUrl(
-            `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${Date.now()}&isManualNavigation=false`
           );
         }
       },
