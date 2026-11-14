@@ -441,6 +441,21 @@
   "image_embed": "image embed",
   "items_per_page": "Items per page:",
   "last_height": "last height",
+  "launcher": {
+    "bookmark_remove": "remove bookmark",
+    "clear_search": "clear search",
+    "enter_opens": "press Enter to open {{title}}",
+    "folder_delete": "delete folder",
+    "folder_move_to": "move to folder",
+    "folder_remove_from": "remove from folder",
+    "no_matches": "nothing matches “{{query}}”",
+    "no_matches_hint": "try another name, or paste a qortal:// link.",
+    "pinned_and_bookmarks": "pinned apps and bookmarks",
+    "pinned_empty": "nothing is pinned yet. Pin an app from the library below to keep it here.",
+    "pinned_hint": "drag to reorder · drop one app on another to make a folder · right-click for more",
+    "results_apps": "apps and websites",
+    "results_saved": "your pins and bookmarks"
+  },
   "level": "level",
   "library": "library",
   "list": {
@@ -699,6 +714,7 @@
   "name": "name",
   "name_app": "name/App",
   "navbar": {
+    "search_library": "Search Q-Apps for “{{query}}”",
     "search_placeholder": "Search Q-Apps or enter qortal://",
     "session": {
       "lock_description": "Keep chats and calls connected",
@@ -707,7 +723,12 @@
       "logout_title": "Log out",
       "menu_aria": "Session options",
       "tooltip": "Lock or log out"
-    }
+    },
+    "suggestion_type": {
+      "app": "Q-App",
+      "website": "Website"
+    },
+    "suggestions": "Suggestions"
   },
   "new_post_in": "new post in {{ title }}",
   "none": "none",

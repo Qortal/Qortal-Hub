@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   canSaveSettingToQdnAtom,
   isUsingImportExportSettingsAtom,
@@ -8,6 +8,7 @@ import {
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { removeBrokenPinnedApps } from '../utils/pinnedAppsSettings';
+import { localPinnedAppsTimestamp } from '../utils/pinnedAppsStorage';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../App';
 import { decryptResource } from '../components/Group/Group';
 import {
@@ -75,6 +76,10 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
     isUsingImportExportSettingsAtom
   );
   const setOldPinnedApps = useSetAtom(oldPinnedAppsAtom);
+  // The name whose settings are wanted now: an answer for another one (an
+  // account switched meanwhile) is dropped.
+  const currentNameRef = useRef(myName);
+  currentNameRef.current = myName;
 
   const getSavedSettings = useCallback(
     async (myName, settingsLocalLastUpdated) => {
@@ -82,10 +87,14 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
         const { hasPublishRecord, timestamp } = await getPublishRecord(myName);
         if (hasPublishRecord) {
           const settings = await getPublish(myName);
-          if (
-            settings?.sortablePinnedApps &&
-            timestamp > settingsLocalLastUpdated
-          ) {
+          if (currentNameRef.current !== myName) return;
+          // Compare with the pins as they are now, not as they were when this
+          // fetch started: a pin made meanwhile is newer than the QDN copy.
+          const latestLocal = Math.max(
+            settingsLocalLastUpdated,
+            localPinnedAppsTimestamp()
+          );
+          if (settings?.sortablePinnedApps && timestamp > latestLocal) {
             setSortablePinnedApps(
               removeBrokenPinnedApps(settings.sortablePinnedApps)
             );
