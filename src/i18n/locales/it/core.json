@@ -36,7 +36,7 @@
     "back": "indietro",
     "backup_account": "account di backup",
     "backup_wallet": "wallet di backup",
-    "cancel": "cancella",
+    "cancel": "annulla",
     "cancel_invitation": "annulla l'invito",
     "change": "modifica",
     "change_avatar": "cambia Avatar",
@@ -923,6 +923,7 @@
     "my_apps": "le mie app",
     "official_apps": "app ufficiali"
   },
+  "tag_number": "tag {{number}}",
   "tags": "tag",
   "theme": {
     "dark": "scuro",

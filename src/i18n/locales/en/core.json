@@ -923,6 +923,7 @@
     "my_apps": "my apps",
     "official_apps": "official apps"
   },
+  "tag_number": "tag {{number}}",
   "tags": "tags",
   "theme": {
     "dark": "dark",

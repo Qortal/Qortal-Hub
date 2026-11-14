@@ -28,7 +28,7 @@
     "accept": "aceitar",
     "access": "acessar",
     "access_app": "acessar app",
-    "add": "edicionar",
+    "add": "adicionar",
     "add_attachment": "add attachment",
     "add_custom_framework": "adicionar framework personalizado",
     "add_reaction": "adicionar reação",
@@ -115,7 +115,7 @@
     "resize": "redimensionar",
     "restore": "restaurar",
     "return": "voltar",
-    "save": "savar",
+    "save": "salvar",
     "save_disk": "savar no disco",
     "search": "buscar",
     "search_apps": "buscar apps",
@@ -923,6 +923,7 @@
     "my_apps": "meus apps",
     "official_apps": "apps oficiais"
   },
+  "tag_number": "tag {{number}}",
   "tags": "tags",
   "theme": {
     "dark": "escuro",

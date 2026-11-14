@@ -4,11 +4,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
+import { capitalizeFirstChar } from '../../../i18n/processors';
+import enCore from '../../../i18n/locales/en/core.json';
 
-i18n.init({
+i18n.use(capitalizeFirstChar as any).init({
   lng: 'en',
   fallbackLng: 'en',
-  resources: { en: { core: {} } },
+  resources: { en: { core: { tag_number: enCore.tag_number } } },
 });
 
 vi.mock('../../../App', () => ({
