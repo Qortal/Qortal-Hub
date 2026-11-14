@@ -12,6 +12,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  InputAdornment,
   Menu,
   MenuItem,
   Popover,
@@ -24,13 +25,16 @@ import {
 import { alpha } from '@mui/material/styles';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
 import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
-import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import BookmarkBorderRoundedIcon from '@mui/icons-material/BookmarkBorderRounded';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import BookmarkAddedIcon from '@mui/icons-material/BookmarkAdded';
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DriveFileMoveOutlinedIcon from '@mui/icons-material/DriveFileMoveOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ShortUniqueId from 'short-unique-id';
@@ -56,13 +60,21 @@ import {
   upsertBookmark,
   upsertFolder,
 } from './bookmarkStorage';
+import {
+  BOOKMARK_SEARCH_FROM,
+  bookmarkSubtitle,
+  bookmarksInFolder,
+  folderPictures,
+  searchBookmarks,
+  searchFolders,
+} from './bookmarkList';
+import { BookmarkFolderRow, BookmarkRow } from './BookmarkRow';
 
 const uid = new ShortUniqueId({ length: 10 });
 const BOOKMARK_VIEW_STORAGE_KEY = 'qortal_app_bookmark_view_by_address';
-const bookmarkViewByAddressAtom = atomWithStorage<Record<string, string | null>>(
-  BOOKMARK_VIEW_STORAGE_KEY,
-  {}
-);
+const bookmarkViewByAddressAtom = atomWithStorage<
+  Record<string, string | null>
+>(BOOKMARK_VIEW_STORAGE_KEY, {});
 
 type AppBookmarksButtonProps = {
   address?: string | null;
@@ -111,6 +123,7 @@ export function AppBookmarksButton({
   const [form, setForm] = useState<BookmarkFormState | null>(null);
   const [bookmarkNameError, setBookmarkNameError] = useState(false);
   const [folderName, setFolderName] = useState('');
+  const [query, setQuery] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [renamingFolder, setRenamingFolder] =
     useState<AppBookmarkFolder | null>(null);
@@ -121,8 +134,9 @@ export function AppBookmarksButton({
     left: number;
     top: number;
   } | null>(null);
-  const [moveMenuAnchorEl, setMoveMenuAnchorEl] =
-    useState<HTMLElement | null>(null);
+  const [moveMenuAnchorEl, setMoveMenuAnchorEl] = useState<HTMLElement | null>(
+    null
+  );
   const [menuTarget, setMenuTarget] = useState<
     | { type: 'bookmark'; bookmark: AppBookmark }
     | { type: 'folder'; folder: AppBookmarkFolder }
@@ -145,22 +159,18 @@ export function AppBookmarksButton({
   const isDark = theme.palette.mode === 'dark';
   const currentFolder =
     data.folders.find((folder) => folder.id === currentFolderId) || null;
-  const bookmarkChromeBackground =
-    increaseBackgroundOpacity(
-      chromeBackground || (isDark ? 'rgb(33, 36, 42)' : 'rgb(223, 228, 235)')
-    );
-  const bookmarkFieldBackground =
-    isDark
-      ? 'rgba(28, 31, 37, 0.98)'
-      : 'rgba(232, 236, 241, 0.96)';
-  const bookmarkHoverBackground =
-    isDark
-      ? 'rgba(255, 255, 255, 0.07)'
-      : 'rgba(0, 0, 0, 0.06)';
-  const bookmarkInsetBackground =
-    isDark
-      ? 'rgba(28, 31, 37, 0.82)'
-      : 'rgba(232, 236, 241, 0.88)';
+  const bookmarkChromeBackground = increaseBackgroundOpacity(
+    chromeBackground || (isDark ? 'rgb(33, 36, 42)' : 'rgb(223, 228, 235)')
+  );
+  const bookmarkFieldBackground = isDark
+    ? 'rgba(28, 31, 37, 0.98)'
+    : 'rgba(232, 236, 241, 0.96)';
+  const bookmarkHoverBackground = isDark
+    ? 'rgba(255, 255, 255, 0.07)'
+    : 'rgba(0, 0, 0, 0.06)';
+  const bookmarkInsetBackground = isDark
+    ? 'rgba(28, 31, 37, 0.82)'
+    : 'rgba(232, 236, 241, 0.88)';
   const panelBorderColor = isDark
     ? alpha('#A9BCD8', 0.18)
     : theme.palette.divider;
@@ -250,7 +260,9 @@ export function AppBookmarksButton({
 
   useEffect(() => {
     if (!address || !currentFolderId || !hasLoaded) return;
-    const stillExists = data.folders.some((folder) => folder.id === currentFolderId);
+    const stillExists = data.folders.some(
+      (folder) => folder.id === currentFolderId
+    );
     if (!stillExists) {
       setViewByAddress((prev) => ({ ...prev, [address]: null }));
     }
@@ -259,6 +271,7 @@ export function AppBookmarksButton({
   const setCurrentFolderId = (folderId: string | null) => {
     if (!address) return;
     setViewByAddress((prev) => ({ ...prev, [address]: folderId }));
+    setQuery('');
     setForm(null);
     setBookmarkNameError(false);
     setShowCreateFolder(false);
@@ -302,6 +315,7 @@ export function AppBookmarksButton({
 
   const closePopover = () => {
     setAnchorEl(null);
+    setQuery('');
     setForm(null);
     setBookmarkNameError(false);
     setFolderName('');
@@ -319,7 +333,7 @@ export function AppBookmarksButton({
         service: bookmark.service,
         name: bookmark.appName,
         identifier: bookmark.identifier,
-        path: bookmark.path
+        path: bookmark.path,
       },
     });
     executeEvent('open-apps-mode', {});
@@ -486,78 +500,52 @@ export function AppBookmarksButton({
     setMenuTarget(null);
   };
 
-  const renderBookmarkRow = (bookmark: AppBookmark) => (
-    <ButtonBase
+  const labelOfService = (service: string) =>
+    service === 'WEBSITE'
+      ? t('core:website', { postProcess: 'capitalizeFirstChar' })
+      : t('core:app', { postProcess: 'capitalizeFirstChar' });
+
+  const renderBookmarkRow = (
+    bookmark: AppBookmark,
+    folder?: AppBookmarkFolder | null
+  ) => (
+    <BookmarkRow
+      appName={bookmark.appName}
+      badge={<BookmarkIcon sx={{ fontSize: 10 }} />}
+      hoverBackground={bookmarkHoverBackground}
       key={bookmark.id}
+      moreLabel={t('core:bookmarks.more')}
+      name={bookmark.name}
       onClick={() => openBookmark(bookmark)}
       onContextMenu={(event) =>
         openItemContextMenu(event, { type: 'bookmark', bookmark })
       }
-      sx={{
-        alignItems: 'center',
-        borderRadius: '8px',
-        display: 'flex',
-        gap: 1,
-        justifyContent: 'flex-start',
-        minHeight: 42,
-        px: 1,
-        py: 0.5,
-        textAlign: 'left',
-        width: '100%',
-        '&:hover': {
-          backgroundColor: bookmarkHoverBackground,
-        },
-      }}
-    >
-      <BookmarkBorderIcon
-        sx={{
-          color: theme.palette.text.secondary,
-          flexShrink: 0,
-          fontSize: 18,
-        }}
-      />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          sx={{
-            fontSize: 13,
-            fontWeight: 600,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {bookmark.name}
-        </Typography>
-        <Typography
-          sx={{
-            color: theme.palette.text.secondary,
-            fontSize: 11.5,
-            lineHeight: 1.45,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {bookmark.link}
-        </Typography>
-      </Box>
-      <Tooltip title={t('core:bookmarks.more')}>
-        <IconButton
-          size="small"
-          onClick={(event) =>
-            openItemMenu(event, { type: 'bookmark', bookmark })
-          }
-          sx={{ flexShrink: 0 }}
-        >
-          <MoreVertRoundedIcon sx={{ fontSize: 18 }} />
-        </IconButton>
-      </Tooltip>
-    </ButtonBase>
+      onMore={(event) => openItemMenu(event, { type: 'bookmark', bookmark })}
+      subtitle={
+        // While searching, where it was found matters more than what it is.
+        folder
+          ? `${folder.name} · ${bookmarkSubtitle(bookmark, labelOfService)}`
+          : bookmarkSubtitle(bookmark, labelOfService)
+      }
+    />
   );
 
-  const visibleBookmarks = data.bookmarks.filter(
-    (bookmark) => (bookmark.folderId || null) === currentFolderId
+  const isSearching = query.trim().length > 0;
+  const visibleBookmarks = bookmarksInFolder(data.bookmarks, currentFolderId);
+  const foundBookmarks = searchBookmarks(
+    data.bookmarks,
+    data.folders,
+    query,
+    currentFolderId
   );
+  const foundFolders = currentFolder ? [] : searchFolders(data.folders, query);
+  // Searching reaches every bookmark, so the whole account's count decides.
+  const canSearch =
+    data.bookmarks.length + data.folders.length >= BOOKMARK_SEARCH_FROM;
+  const hasRows = isSearching
+    ? foundBookmarks.length + foundFolders.length > 0
+    : visibleBookmarks.length + (currentFolder ? 0 : data.folders.length) > 0;
+
   const moveOptions =
     menuTarget?.type === 'bookmark'
       ? [
@@ -583,6 +571,7 @@ export function AppBookmarksButton({
       >
         <span>
           <ButtonBase
+            aria-label={buttonTitle}
             disableRipple
             onClick={openPopover}
             disabled={!address}
@@ -678,10 +667,16 @@ export function AppBookmarksButton({
                 disabled={!!form}
                 size="small"
                 startIcon={
-                  isBookmarked ? <BookmarkAddedIcon /> : <BookmarkAddOutlinedIcon />
+                  isBookmarked ? (
+                    <BookmarkAddedIcon />
+                  ) : (
+                    <BookmarkAddOutlinedIcon />
+                  )
                 }
                 onClick={() =>
-                  existingBookmark ? startEdit(existingBookmark) : startAddCurrent()
+                  existingBookmark
+                    ? startEdit(existingBookmark)
+                    : startAddCurrent()
                 }
                 sx={{ borderRadius: '8px', textTransform: 'none' }}
                 variant={isBookmarked ? 'outlined' : 'contained'}
@@ -892,10 +887,14 @@ export function AppBookmarksButton({
                   value={form.folderId || ''}
                   renderValue={() => {
                     const selectedFolder = form.folderId
-                      ? data.folders.find((folder) => folder.id === form.folderId)
+                      ? data.folders.find(
+                          (folder) => folder.id === form.folderId
+                        )
                       : null;
                     return (
-                      <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
+                      <Box
+                        sx={{ alignItems: 'center', display: 'flex', gap: 1 }}
+                      >
                         <FolderOutlinedIcon
                           sx={{
                             color: theme.palette.text.secondary,
@@ -903,7 +902,8 @@ export function AppBookmarksButton({
                           }}
                         />
                         <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
-                          {selectedFolder?.name || t('core:bookmarks.top_level')}
+                          {selectedFolder?.name ||
+                            t('core:bookmarks.top_level')}
                         </Typography>
                       </Box>
                     );
@@ -976,129 +976,163 @@ export function AppBookmarksButton({
 
           {!isLoading && hasLoaded && (
             <>
+              {canSearch && (
+                <TextField
+                  fullWidth
+                  inputProps={{ 'aria-label': t('core:bookmarks.search') }}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t('core:bookmarks.search')}
+                  size="small"
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchRoundedIcon
+                            sx={{
+                              color: theme.palette.text.secondary,
+                              fontSize: 18,
+                            }}
+                          />
+                        </InputAdornment>
+                      ),
+                      endAdornment: isSearching ? (
+                        <InputAdornment position="end">
+                          <Tooltip title={t('core:launcher.clear_search')}>
+                            <IconButton
+                              aria-label={t('core:launcher.clear_search')}
+                              onClick={() => setQuery('')}
+                              size="small"
+                            >
+                              <CloseRoundedIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </InputAdornment>
+                      ) : null,
+                    },
+                  }}
+                  sx={{ ...bookmarkTextFieldSx, mt: 2 }}
+                  value={query}
+                />
+              )}
+
               <Divider sx={{ my: 1.5 }} />
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                {!currentFolder &&
-                  data.folders.map((folder) => {
-                    const count = data.bookmarks.filter(
-                      (bookmark) => bookmark.folderId === folder.id
-                    ).length;
-                    return (
-                      <ButtonBase
-                        key={folder.id}
-                        onClick={() => setCurrentFolderId(folder.id)}
-                        onContextMenu={(event) =>
-                          openItemContextMenu(event, { type: 'folder', folder })
-                        }
-                        sx={{
-                          alignItems: 'center',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          gap: 1,
-                          justifyContent: 'flex-start',
-                          minHeight: 42,
-                          px: 1,
-                          py: 0.5,
-                          textAlign: 'left',
-                          width: '100%',
-                          '&:hover': {
-                            backgroundColor: bookmarkHoverBackground,
-                          },
-                        }}
-                      >
-                        <FolderOutlinedIcon
-                          sx={{
-                            color: theme.palette.text.secondary,
-                            flexShrink: 0,
-                            fontSize: 19,
-                          }}
-                        />
-                        {renamingFolder?.id === folder.id ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.25,
+                  maxHeight: 340,
+                  overflowY: 'auto',
+                  scrollbarColor: `${theme.palette.divider} transparent`,
+                  scrollbarWidth: 'thin',
+                }}
+              >
+                {(isSearching
+                  ? foundFolders
+                  : currentFolder
+                    ? []
+                    : data.folders
+                ).map((folder) => {
+                  const count = data.bookmarks.filter(
+                    (bookmark) => bookmark.folderId === folder.id
+                  ).length;
+                  const isRenaming = renamingFolder?.id === folder.id;
+                  return (
+                    <BookmarkFolderRow
+                      hoverBackground={bookmarkHoverBackground}
+                      key={folder.id}
+                      moreLabel={t('core:bookmarks.more')}
+                      name={
+                        isRenaming ? (
                           <TextField
                             autoFocus
                             fullWidth
                             onClick={(event) => event.stopPropagation()}
                             onKeyDown={(event) => {
+                              event.stopPropagation();
                               if (event.key === 'Enter') saveFolderRename();
+                              if (event.key === 'Escape') {
+                                setRenamingFolder(null);
+                              }
                             }}
-                            size="small"
-                            sx={bookmarkTextFieldSx}
-                            value={renamingFolder.name}
                             onChange={(e) =>
                               setRenamingFolder({
                                 ...renamingFolder,
                                 name: e.target.value,
                               })
                             }
+                            size="small"
+                            sx={bookmarkTextFieldSx}
+                            value={renamingFolder.name}
                           />
                         ) : (
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography
-                              sx={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {folder.name}
-                            </Typography>
-                            <Typography
-                              sx={{
-                                color: theme.palette.text.secondary,
-                                fontSize: 11.5,
-                              }}
-                            >
-                              {t('core:bookmarks.bookmark_count', { count })}
-                            </Typography>
-                          </Box>
-                        )}
-                        {renamingFolder?.id === folder.id ? (
-                          <Button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              saveFolderRename();
-                            }}
-                            size="small"
-                            sx={{ textTransform: 'none' }}
-                          >
-                            {t('core:action.save', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                          </Button>
-                        ) : (
-                          <IconButton
-                            size="small"
-                            onClick={(event) =>
-                              openItemMenu(event, { type: 'folder', folder })
-                            }
-                            sx={{ flexShrink: 0 }}
-                          >
-                            <MoreVertRoundedIcon sx={{ fontSize: 18 }} />
-                          </IconButton>
-                        )}
-                      </ButtonBase>
-                    );
-                  })}
+                          folder.name
+                        )
+                      }
+                      onClick={() =>
+                        isRenaming
+                          ? saveFolderRename()
+                          : setCurrentFolderId(folder.id)
+                      }
+                      onContextMenu={(event) =>
+                        openItemContextMenu(event, { type: 'folder', folder })
+                      }
+                      onMore={(event) =>
+                        openItemMenu(event, { type: 'folder', folder })
+                      }
+                      pictures={folderPictures(folder, data.bookmarks)}
+                      subtitle={t('core:bookmarks.bookmark_count', { count })}
+                    />
+                  );
+                })}
 
-                {visibleBookmarks.map(renderBookmarkRow)}
+                {isSearching
+                  ? foundBookmarks.map((result) =>
+                      renderBookmarkRow(result.bookmark, result.folder)
+                    )
+                  : visibleBookmarks.map((bookmark) =>
+                      renderBookmarkRow(bookmark)
+                    )}
 
-                {visibleBookmarks.length === 0 &&
-                  (currentFolder || data.folders.length === 0) && (
-                  <Typography
+                {!hasRows && (
+                  <Box
                     sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: 13,
+                      alignItems: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 0.75,
                       py: 3,
+                      px: 2,
                       textAlign: 'center',
                     }}
                   >
-                    {currentFolder
-                      ? t('core:bookmarks.no_bookmarks_folder')
-                      : t('core:bookmarks.no_bookmarks')}
-                  </Typography>
+                    <BookmarkBorderRoundedIcon
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.5),
+                        fontSize: 28,
+                      }}
+                    />
+                    <Typography
+                      sx={{ color: theme.palette.text.secondary, fontSize: 13 }}
+                    >
+                      {isSearching
+                        ? t('core:launcher.no_matches', { query: query.trim() })
+                        : currentFolder
+                          ? t('core:bookmarks.no_bookmarks_folder')
+                          : t('core:bookmarks.no_bookmarks')}
+                    </Typography>
+                    {!isSearching && (
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.75),
+                          fontSize: 11.5,
+                        }}
+                      >
+                        {t('core:bookmarks.no_bookmarks_hint')}
+                      </Typography>
+                    )}
+                  </Box>
                 )}
               </Box>
             </>
