@@ -24,6 +24,10 @@ export const officialAppsConfig = {
     'Q-Assets',
   ],
 
+  // These lead the Featured carousel, in this order; the other featured
+  // apps follow, by rating
+  featuredLead: ['Torq', 'Q-Tube', 'SubWire', 'Q-Share', 'Q-Assets'],
+
   // All official apps with metadata
   all: [
     { name: 'Q-Blog', icon: 'article', featured: true },
@@ -63,6 +67,35 @@ export const isFeaturedApp = (appName: string): boolean => {
   return officialAppsConfig.featured
     .map((n) => n.toLowerCase())
     .includes(appName?.toLowerCase());
+};
+
+type FeaturedAppRating = { averageRating?: number; totalVotes?: number };
+
+// The Featured carousel's order: the apps `featuredLead` names first, in its
+// order, then the others by rating, then by votes
+export const sortFeaturedApps = <T extends { name: string }>(
+  apps: readonly T[],
+  ratingOf: (app: T) => FeaturedAppRating | undefined
+): T[] => {
+  const lead = officialAppsConfig.featuredLead.map((name) =>
+    name.toLowerCase()
+  );
+  const leadIndex = (app: T) => {
+    const index = lead.indexOf(app?.name?.toLowerCase());
+    return index === -1 ? lead.length : index;
+  };
+  return [...apps].sort((a, b) => {
+    const byLead = leadIndex(a) - leadIndex(b);
+    if (byLead !== 0) return byLead;
+
+    const ratingA = ratingOf(a);
+    const ratingB = ratingOf(b);
+    const avgA = ratingA?.averageRating || 0;
+    const avgB = ratingB?.averageRating || 0;
+    if (avgB !== avgA) return avgB - avgA;
+
+    return (ratingB?.totalVotes || 0) - (ratingA?.totalVotes || 0);
+  });
 };
 
 // Default pinned apps derived from the official apps list
