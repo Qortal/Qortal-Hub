@@ -4488,7 +4488,7 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                             letterSpacing: '0.01em',
                           }}
                         >
-                          {td('quitter_feed_module', 'Quitter Feed')}
+                          {td('torq_feed', 'Torq Feed')}
                         </Typography>
                         <Typography
                           sx={{
@@ -4499,8 +4499,8 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                           }}
                         >
                           {td(
-                            'quitter_feed_module_desc',
-                            'Show the Quitter Feed module on Home. Turn off to stop rendering it.'
+                            'torq_feed_module_desc',
+                            'Show the Torq Feed module on Home. Turn off to stop rendering it.'
                           )}
                         </Typography>
                       </Box>

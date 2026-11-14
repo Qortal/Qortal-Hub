@@ -147,7 +147,7 @@ const HOTKEY_SLOT_COUNT = 6;
 const HOTKEY_PICKER_SEARCH_DEBOUNCE_MS = 320;
 const CURATED_HOTKEY_APP_NAMES = [
   'Q-Tube',
-  'Quitter',
+  'Torq',
   'Q-Mail',
   'Q-Blog',
   'Q-Trade',
@@ -2488,14 +2488,14 @@ export const HomeQortinoWorkspaceCard = ({
         label: 'Q-Tube',
         run: () => openApp('Q-Tube'),
       },
-      quitter: {
+      torq: {
         description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
-          appName: 'Quitter',
+          appName: 'Torq',
         }),
         icon: ForumRoundedIcon,
-        id: 'quitter',
-        label: 'Quitter',
-        run: () => openApp('Quitter'),
+        id: 'torq',
+        label: 'Torq',
+        run: () => openApp('Torq'),
       },
     }),
     [openApp, qw]

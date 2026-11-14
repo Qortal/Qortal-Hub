@@ -83,7 +83,7 @@ const FEATURED_PREVIEW_CONFIG = {
 type PreviewAppName = keyof typeof FEATURED_PREVIEW_CONFIG;
 const FEATURED_APP_GRID = [
   Q_TUBE_APP_NAME,
-  'Quitter',
+  'Torq',
   'Q-Mail',
   SUBWIRE_APP_NAME,
   'Q-Trade',

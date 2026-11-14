@@ -41,6 +41,7 @@ import {
   HomeWidgetsPanel,
   canHostHomeWidgets,
 } from '../../HomeWidgets/HomeWidgetsPanel';
+import { TORQ_APP_NAME } from '../../Widgets/quitter/torqFeed';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
 import { OnlineUsersBadge } from './OnlineUsersBadge';
@@ -512,8 +513,8 @@ export const HomeDesktop = ({
     executeEvent('newTabWindow', {});
     setDesktopViewMode('apps');
   }, [setDesktopViewMode]);
-  const handleOpenEmbeddedQuitter = useCallback(() => {
-    executeEvent('addTab', { data: { service: 'APP', name: 'Quitter' } });
+  const handleOpenFeedApp = useCallback(() => {
+    executeEvent('addTab', { data: { service: 'APP', name: TORQ_APP_NAME } });
     executeEvent('open-apps-mode', {});
   }, []);
   const handleOpenQChatPanel = useCallback(() => {
@@ -995,7 +996,7 @@ export const HomeDesktop = ({
                     }
                     actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
                     height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                    onAction={handleOpenEmbeddedQuitter}
+                    onAction={handleOpenFeedApp}
                     onRefresh={handleRefreshQuitterWidget}
                     onSwap={
                       areBothDashboardModulesVisible
@@ -1005,7 +1006,7 @@ export const HomeDesktop = ({
                     order={quitterCardOrder}
                     panelRef={quitterCardHeightRef}
                     refreshing={isQuitterWidgetRefreshing}
-                    title={td('quitter_feed', 'Quitter Feed')}
+                    title={td('torq_feed', 'Torq Feed')}
                     widgetId="quitter"
                   >
                     <QuitterFeedWidget
