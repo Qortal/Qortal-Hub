@@ -52,6 +52,7 @@ import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
 import { openLocalPath } from './desktop-shell';
 import { installDisplayMediaPicker } from './display-media-picker';
+import { installTabShortcuts } from './tab-shortcuts';
 import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
   log as loggerLog,
@@ -1115,6 +1116,13 @@ export class ElectronCapacitorApp {
       mainWindowFiles.revoke(contentsId);
       void qappFileSaves?.cleanup();
     });
+    // Tab shortcuts typed in the Hub page or in a Q-App (did-attach-webview)
+    // all go to the Hub page, which owns the tabs.
+    const hubPage = () =>
+      this.MainWindow && !this.MainWindow.isDestroyed()
+        ? this.MainWindow.webContents
+        : null;
+    installTabShortcuts(this.MainWindow.webContents, hubPage, process.platform);
     configuredQAppSessions.clear();
     this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
       const prepared = [...preparedQAppGuests.values()].find(
@@ -1150,6 +1158,8 @@ export class ElectronCapacitorApp {
         maybeStartRendererCpuProfile(guest, 'qapp-guest');
       });
       guest.setWindowOpenHandler(() => ({ action: 'deny' }));
+      // A Q-App's key presses never reach the Hub page.
+      installTabShortcuts(guest, hubPage, process.platform);
       const allowedGuestUrl = (nextUrl: string) => {
         const bound = attachedQAppGuests.get(guest.id)?.prepared;
         const candidates = bound ? [bound] : [...preparedQAppGuests.values()];
