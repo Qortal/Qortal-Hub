@@ -204,6 +204,32 @@ describe('DesktopSideBar', () => {
     }
   });
 
+  it('closes the half circle once the pointer is away, even after its handle', () => {
+    vi.useFakeTimers();
+    try {
+      renderPanel({ layout: 'arc' });
+      const handle = screen.getByLabelText('Move sidebar handle');
+      const arc = document.querySelector(
+        '[data-side-panel-layout="arc"]'
+      ) as HTMLElement;
+      fireEvent.mouseEnter(handle);
+      expect(arc).toHaveStyle({ pointerEvents: 'auto' });
+
+      // Out over the handle, which sits at its widest point, and on.
+      fireEvent.mouseEnter(arc);
+      fireEvent.mouseLeave(arc);
+      fireEvent.mouseEnter(handle);
+      fireEvent.pointerMove(document.body);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(arc).toHaveStyle({ pointerEvents: 'none' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens its editor', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Edit side panel' }));

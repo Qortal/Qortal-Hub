@@ -819,6 +819,7 @@ export const DesktopSideBar = ({
           onEdit={() => setIsEditorOpen(true)}
           onMouseEnter={showSidebarImmediate}
           onMouseLeave={hideSidebar}
+          panelRef={panelRef}
           renderItem={renderItem}
           scale={buttonSize}
           shown={shown}

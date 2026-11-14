@@ -3,6 +3,7 @@ import { Box, IconButton, Tooltip } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   type ReactNode,
+  type Ref,
   type WheelEvent,
   useEffect,
   useMemo,
@@ -83,6 +84,8 @@ type SidePanelArcProps = {
   onEdit: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  /** The half circle itself, to tell whether the pointer is on it. */
+  panelRef?: Ref<HTMLDivElement>;
 };
 
 /**
@@ -105,6 +108,7 @@ export const SidePanelArc = ({
   onEdit,
   onMouseEnter,
   onMouseLeave,
+  panelRef,
 }: SidePanelArcProps) => {
   const theme = useTheme();
   const { length, maxTurn, positions, room } = useMemo(
@@ -133,6 +137,7 @@ export const SidePanelArc = ({
     <Box
       data-side-panel-layout="arc"
       onMouseEnter={onMouseEnter}
+      ref={panelRef}
       onMouseLeave={onMouseLeave}
       onWheel={onWheel}
       sx={{
