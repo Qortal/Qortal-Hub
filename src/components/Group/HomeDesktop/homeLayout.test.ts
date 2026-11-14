@@ -6,16 +6,15 @@ import {
   HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
   HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './homeDesktopConstants';
+import { homeDefaultGrid } from './homeGrid';
 import {
   HOME_LAYOUT_DEFAULT,
   completeHomeStack,
+  homeLayoutGrid,
   homeLayoutStorageKey,
-  homeQortinoTargetHeight,
-  homeStackRows,
-  homeWalletTargetHeight,
-  moveHomeStackPanel,
   normalizeHomeLayout,
   readHomeLayout,
+  sameHomeLayout,
   saveHomeLayout,
   useHomeLayout,
   withHomePanelShown,
@@ -117,115 +116,38 @@ describe('layout changes', () => {
     ]);
     expect(withHomePanelShown(off, 'wallet', true).hidden).toEqual([]);
   });
-
-  it('moves a stack panel one place, and not past either end', () => {
-    const down = moveHomeStackPanel(HOME_LAYOUT_DEFAULT, 'widgets', 1);
-    expect(down.stack).toEqual(['groupActivity', 'widgets', 'feed']);
-    expect(moveHomeStackPanel(down, 'feed', -1).stack).toEqual([
-      'groupActivity',
-      'feed',
-      'widgets',
-    ]);
-    expect(moveHomeStackPanel(HOME_LAYOUT_DEFAULT, 'widgets', -1)).toBe(
-      HOME_LAYOUT_DEFAULT
-    );
-    expect(moveHomeStackPanel(HOME_LAYOUT_DEFAULT, 'feed', 1)).toBe(
-      HOME_LAYOUT_DEFAULT
-    );
-  });
 });
 
-describe('homeStackRows', () => {
-  const all = () => true;
+describe('the arrangement', () => {
+  const arranged = [{ key: 'feed', x: 0, y: 0, w: 24, h: 40 }];
 
-  it('pairs Group Activity and the feed when they are next to each other', () => {
-    expect(homeStackRows(['widgets', 'groupActivity', 'feed'], all)).toEqual([
-      ['widgets'],
-      ['groupActivity', 'feed'],
-    ]);
-    expect(homeStackRows(['feed', 'groupActivity', 'widgets'], all)).toEqual([
-      ['feed', 'groupActivity'],
-      ['widgets'],
-    ]);
+  it('is the default grid, in the stack order, until the account arranges Home', () => {
+    expect(homeLayoutGrid(HOME_LAYOUT_DEFAULT)).toEqual(homeDefaultGrid());
+    const feedFirst = normalizeHomeLayout({
+      stack: ['widgets', 'feed', 'groupActivity'],
+    });
+    expect(homeLayoutGrid(feedFirst)).toEqual(
+      homeDefaultGrid(['widgets', 'feed', 'groupActivity'])
+    );
   });
 
-  it('gives each its own row when another panel stands between them', () => {
-    expect(homeStackRows(['groupActivity', 'widgets', 'feed'], all)).toEqual([
-      ['groupActivity'],
-      ['widgets'],
-      ['feed'],
-    ]);
-    // A switched-off panel between them doesn't count.
-    expect(
-      homeStackRows(
-        ['groupActivity', 'widgets', 'feed'],
-        (id) => id !== 'widgets'
-      )
-    ).toEqual([['groupActivity', 'feed']]);
+  it('is kept with the layout once arranged, and compared', () => {
+    saveHomeLayout(ALICE, {
+      ...HOME_LAYOUT_DEFAULT,
+      grid: normalizeHomeLayout({ grid: arranged }).grid,
+    });
+    const layout = readHomeLayout(ALICE);
+    const feed = homeLayoutGrid(layout).find((item) => item.key === 'feed');
+    expect(feed).toEqual({ key: 'feed', x: 0, y: 0, w: 24, h: 40 });
+    expect(sameHomeLayout(layout, HOME_LAYOUT_DEFAULT)).toBe(false);
+    expect(sameHomeLayout(layout, readHomeLayout(ALICE))).toBe(true);
   });
 
-  it('leaves out switched-off panels', () => {
+  it('drops an arrangement that is not one', () => {
+    expect(normalizeHomeLayout({ grid: 'x' }).grid).toBeUndefined();
     expect(
-      homeStackRows(['widgets', 'groupActivity', 'feed'], (id) => id === 'feed')
-    ).toEqual([['feed']]);
-  });
-});
-
-describe('wide layout heights', () => {
-  const box = (bottom: number, height: number) => ({ bottom, height });
-
-  it('ends the Qortino column where the account column ends', () => {
-    // Account 380 + gap 20 + Featured 426, minus Quick Tools 250 and its gap.
-    expect(
-      homeQortinoTargetHeight({
-        featured: box(0, 426),
-        gap: 20,
-        minHeight: 426,
-        profile: box(0, 380),
-        tools: box(0, 250),
-      })
-    ).toBe(556);
-    // The same as before the panels could be switched off.
-    expect(
-      homeQortinoTargetHeight({
-        featured: box(0, 426),
-        gap: 20,
-        minHeight: 0,
-        profile: box(0, 380),
-        tools: box(0, 250),
-      })
-    ).toBe(380 + 426 - 250);
-  });
-
-  it('takes the whole column without Quick Tools, and keeps a minimum', () => {
-    expect(
-      homeQortinoTargetHeight({
-        featured: box(0, 426),
-        gap: 20,
-        minHeight: 426,
-        profile: box(0, 380),
-      })
-    ).toBe(826);
-    expect(
-      homeQortinoTargetHeight({
-        gap: 20,
-        minHeight: 426,
-        profile: box(0, 380),
-        tools: box(0, 250),
-      })
-    ).toBe(426);
-    expect(homeQortinoTargetHeight({ gap: 20, minHeight: 426 })).toBeNull();
-  });
-
-  it('ends Wallet Activity where the lowest panel on the left ends', () => {
-    expect(homeWalletTargetHeight([900, 940, 920], 600, 260)).toBe(340);
-    expect(homeWalletTargetHeight([], 600, 260)).toBeNull();
-  });
-
-  it('keeps Wallet Activity tall enough for its content', () => {
-    // Only a short panel on the left: the card keeps its minimum.
-    expect(homeWalletTargetHeight([558], 471, 260)).toBe(260);
-    expect(homeWalletTargetHeight([500], 600, 260)).toBe(260);
+      normalizeHomeLayout({ grid: [{ key: 'nope' }] }).grid
+    ).toBeUndefined();
   });
 });
 

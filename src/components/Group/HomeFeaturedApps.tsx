@@ -36,6 +36,10 @@ import {
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
 import {
+  homeWindowNarrowerThan,
+  homeWindowShorterThan,
+} from './HomeDesktop/homeWindows';
+import {
   GROUP_ACTIVITY_BLUE,
   getBlueAmbientLineBackground,
 } from './groupActivityColorSystem';
@@ -94,6 +98,12 @@ const FEATURED_GRID_COL_MAX_PX = 124;
 /** Cap width when space allows; below this the grid scales down proportionally (avoids 3-col + span-2 orphan gaps). */
 const FEATURED_GRID_MAX_WIDTH_PX =
   4 * FEATURED_GRID_COL_MAX_PX + 3 * FEATURED_GRID_GAP_PX;
+/** Home window sizes where the apps change their arrangement. */
+const FEATURED_SNUG_PX = 430;
+const FEATURED_SHORT_PX = 400;
+const FEATURED_TWO_COLUMNS_BELOW_PX = 440;
+const FEATURED_ONE_ROW =
+  '@container home-window (min-width: 900px) and (height < 400px)';
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -509,6 +519,8 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
               letterSpacing: '0.012em',
               lineHeight: 1.45,
               maxWidth: '420px',
+              // A short Home window keeps its room for the apps.
+              [homeWindowShorterThan(FEATURED_SHORT_PX)]: { display: 'none' },
             }}
           >
             {t('group:dashboard.featured_q_apps_subtitle')}
@@ -532,49 +544,68 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
             flex: 1,
             justifyContent: 'center',
             minHeight: 0,
+            overflow: 'hidden',
             padding: '18px 0',
             position: 'relative',
             width: '100%',
+            [homeWindowShorterThan(FEATURED_SNUG_PX)]: { padding: '14px 0' },
+            [homeWindowShorterThan(FEATURED_SHORT_PX)]: { padding: '8px 0' },
           }}
         >
-          <Box
-            sx={{
-              alignItems: 'stretch',
-              display: 'grid',
-              gap: `${FEATURED_GRID_GAP_PX}px`,
-              gridAutoRows: 'minmax(108px, 124px)',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-              justifyContent: 'stretch',
-              marginInline: 'auto',
-              maxWidth: `${FEATURED_GRID_MAX_WIDTH_PX}px`,
-              position: 'relative',
-              width: '100%',
-              zIndex: 1,
-            }}
-          >
-            {FEATURED_APP_GRID.map((appName, index) =>
-              appName ? (
-                <AppTile
-                  key={appName}
-                  appName={appName}
-                  calmMode={isCalmMode}
-                  theme={theme}
-                  expandedPreviewApp={expandedPreviewApp}
-                  onPreviewExpandStart={schedulePreviewExpand}
-                  onPreviewExpandEnd={schedulePreviewCollapse}
-                />
-              ) : (
-                <Box
-                  key={`featured-empty-slot-${index}`}
-                  aria-hidden="true"
-                  sx={{
-                    height: '100%',
-                    visibility: 'hidden',
-                    width: '100%',
-                  }}
-                />
-              )
-            )}
+          {/* When a small Home window can't fit the apps, they scroll. */}
+          <Box sx={{ maxHeight: '100%', overflowY: 'auto', width: '100%' }}>
+            <Box
+              sx={{
+                alignItems: 'stretch',
+                display: 'grid',
+                gap: `${FEATURED_GRID_GAP_PX}px`,
+                gridAutoRows: 'minmax(108px, 124px)',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                justifyContent: 'stretch',
+                marginInline: 'auto',
+                maxWidth: `${FEATURED_GRID_MAX_WIDTH_PX}px`,
+                position: 'relative',
+                width: '100%',
+                zIndex: 1,
+                // Home's window decides the columns: two in a narrow one, all
+                // eight cells in one row in a wide, short one.
+                [homeWindowShorterThan(FEATURED_SHORT_PX)]: {
+                  gridAutoRows: 'minmax(84px, 108px)',
+                },
+                [homeWindowNarrowerThan(FEATURED_TWO_COLUMNS_BELOW_PX)]: {
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  maxWidth: `${2 * FEATURED_GRID_COL_MAX_PX + FEATURED_GRID_GAP_PX}px`,
+                },
+                [FEATURED_ONE_ROW]: {
+                  gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
+                  maxWidth: `${8 * FEATURED_GRID_COL_MAX_PX + 7 * FEATURED_GRID_GAP_PX}px`,
+                },
+              }}
+            >
+              {FEATURED_APP_GRID.map((appName, index) =>
+                appName ? (
+                  <AppTile
+                    key={appName}
+                    appName={appName}
+                    calmMode={isCalmMode}
+                    theme={theme}
+                    expandedPreviewApp={expandedPreviewApp}
+                    onPreviewExpandStart={schedulePreviewExpand}
+                    onPreviewExpandEnd={schedulePreviewCollapse}
+                  />
+                ) : (
+                  <Box
+                    key={`featured-empty-slot-${index}`}
+                    aria-hidden="true"
+                    sx={{
+                      height: '100%',
+                      visibility: 'hidden',
+                      width: '100%',
+                    }}
+                  />
+                )
+              )}
+            </Box>
           </Box>
           {!isCalmMode ? (
             <FeaturedExpandedPreview

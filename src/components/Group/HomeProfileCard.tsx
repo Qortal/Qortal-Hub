@@ -97,6 +97,7 @@ import { Save } from '../Save/Save';
 import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import { HOME_WIDE_DASHBOARD_MIN_WIDTH_PX } from './HomeDesktop/homeDesktopConstants';
 import { HomeLayoutSettings } from './HomeDesktop/HomeLayoutSettings';
+import { homeWindowWiderThan } from './HomeDesktop/homeWindows';
 import {
   AUTO_LOCK_TIMEOUT_OPTIONS,
   DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES,
@@ -203,6 +204,9 @@ const formatReticulumConnectedDuration = (
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
 };
+
+/** From this window width on, the avatar sits beside the account details. */
+const PROFILE_CARD_SIDE_BY_SIDE_PX = 480;
 
 export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
   const { t } = useTranslation(['core', 'group']);
@@ -2132,17 +2136,17 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
         alignItems: 'center',
         borderRadius: '14px',
         display: 'grid',
-        gap: {
-          xs: '18px',
-          lg: '16px',
-        },
-        gridTemplateColumns: {
-          xs: '1fr',
-          lg: '104px minmax(0, 1fr)',
-        },
+        // Home's window decides: the avatar beside the details when it's
+        // wide enough, above them when it isn't.
+        gap: '18px',
+        gridTemplateColumns: '1fr',
         minHeight: '164px',
         padding: '22px 24px',
         width: '100%',
+        [homeWindowWiderThan(PROFILE_CARD_SIDE_BY_SIDE_PX)]: {
+          gap: '16px',
+          gridTemplateColumns: '104px minmax(0, 1fr)',
+        },
       }}
       onMouseMove={handleDashboardPanelPointerMove}
       onMouseLeave={handleDashboardPanelPointerLeave}
@@ -2164,11 +2168,11 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
           flexDirection: 'column',
           gap: '4px',
           justifyContent: 'center',
-          justifySelf: {
-            xs: 'center',
-            lg: 'stretch',
-          },
+          justifySelf: 'center',
           width: '104px',
+          [homeWindowWiderThan(PROFILE_CARD_SIDE_BY_SIDE_PX)]: {
+            justifySelf: 'stretch',
+          },
         }}
       >
         <TiltedCard scaleOnHover={1.1} rotateAmplitude={18}>
@@ -2346,11 +2350,10 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
           justifyContent: 'center',
           gap: '8px',
           minWidth: 0,
-          pl: {
-            xs: 0,
-            lg: '12px',
-          },
           width: '100%',
+          [homeWindowWiderThan(PROFILE_CARD_SIDE_BY_SIDE_PX)]: {
+            pl: '12px',
+          },
         }}
       >
         <Box
@@ -4351,6 +4354,7 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
                 <HomeLayoutSettings
                   border={avatarFieldBorder}
                   divider={avatarSectionDivider}
+                  onCloseSettings={closeAccountSettingsModal}
                   surface={avatarModalSurfaceSoft}
                   switchSx={settingsSwitchSx}
                 />

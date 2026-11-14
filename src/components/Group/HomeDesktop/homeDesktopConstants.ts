@@ -20,51 +20,18 @@ export const SYSTEM_BADGE_SX = {
   whiteSpace: 'nowrap',
 } as const;
 
-export const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
-
-// Home dashboard desktop layout invariants:
-// - Info top aligns visually with Account Overview top.
-// - Account Overview -> Featured Q-Apps gap = 20px.
-// - Info -> Wallet Activity gap = 20px.
-// - Info collapsed height stays fixed to preserve spacing and overlay behavior.
-export const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
-export const HOME_SHARED_SIDE_RAIL_WIDTH_MD = 'minmax(285px, 330px)';
-export const HOME_SHARED_SIDE_RAIL_WIDTH_XL = 'minmax(310px, 360px)';
-export const HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS = {
-  xs: '1fr',
-  md: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
-  xl: `${HOME_SHARED_SIDE_RAIL_WIDTH_XL} minmax(0, 1fr)`,
-} as const;
-export const HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS = {
-  xs: '1fr',
-  lg: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
-} as const;
-// Right rail is offset to visually align Info with Account Overview.
-// The left column includes the "Qortal Hub" eyebrow label above Account Overview,
-// while the right column starts directly with the rail cards, so this offset
-// compensates for that extra left-side content. The alignment is visual, not structural.
-export const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 29;
-export const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 322;
-export const HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX = 426;
-// Wide layout: Wallet Activity never gets shorter than its own content (about
-// 251px with a recent payment), even when the panels on the left end higher.
-export const HOME_WALLET_ACTIVITY_MIN_HEIGHT_PX = 260;
-export const HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX = 720;
-export const HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX = 100;
-export const HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX =
-  GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX +
-  HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX;
 export const HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY =
   'home-dashboard-customizable-cards-layout-v1';
 export const HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT =
   'home-dashboard-module-visibility-change';
+/** Starts editing Home's layout (executeEvent; the Modules settings send it). */
+export const HOME_EDIT_LAYOUT_EVENT = 'homeEditLayout';
 export const HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY =
   'home-dashboard-module-group-activity-visible';
 export const HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY =
   'home-dashboard-module-quitter-feed-visible';
 export const HOME_WIDGETS_VISIBLE_STORAGE_KEY =
   'home-dashboard-module-widgets-visible';
-export const HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX = 60;
 export const HOME_DASHBOARD_WIDGET_HEIGHT_PX = 612;
 export const HOME_DASHBOARD_WIDGET_DISPLAY_MODE: WidgetDisplayMode = 'expanded';
 export const HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS: Record<
