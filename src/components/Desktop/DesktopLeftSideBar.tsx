@@ -28,6 +28,8 @@ import { coreInfoSurfaceSx } from './coreInfoSurface';
 import { NodeStateLogo } from './NodeStateLogo';
 import { useNodeState } from './nodeState';
 import { SidePanelAppIcon } from './SidePanelAppIcon';
+import { ARC_OUTER_PX, SidePanelArc } from './SidePanelArc';
+import { sidePanelItemLabel } from './sidePanelLabels';
 import { SidePanelEditor } from './SidePanelEditor';
 import {
   isSidePanelItemShown,
@@ -275,9 +277,11 @@ const SidebarItem = ({
     }),
   } as const;
 
+  const className = ['sidePanelItem', itemClassName].filter(Boolean).join(' ');
+
   if (!onClick) {
     return (
-      <Box className={itemClassName} data-theme={dataTheme} sx={sharedSx}>
+      <Box className={className} data-theme={dataTheme} sx={sharedSx}>
         {content}
       </Box>
     );
@@ -285,7 +289,7 @@ const SidebarItem = ({
 
   return (
     <ButtonBase
-      className={itemClassName}
+      className={className}
       data-theme={dataTheme}
       disableRipple
       onClick={onClick}
@@ -313,8 +317,31 @@ export const DesktopSideBar = ({
   const address = useAtomValue(userInfoAtom)?.address;
   const [panel, updatePanel] = useSidePanelSettings(address);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  // Always open: beside the content, which makes room for it.
-  const alwaysOpen = panel.show === 'always';
+  const isArc = panel.layout === 'arc';
+  // Always open: beside the content, which makes room for it. The half
+  // circle would take too much of it, so it only opens at the left edge.
+  const alwaysOpen = panel.show === 'always' && !isArc;
+  // The room the panel is placed in, measured: fixed boxes here sit in
+  // Group's wrappers, under the title and navigation bars, not the window.
+  const roomRef = useRef<HTMLDivElement | null>(null);
+  const [roomHeight, setRoomHeight] = useState(() =>
+    typeof window === 'undefined' ? 0 : window.innerHeight
+  );
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    const measure = () => {
+      if (room.clientHeight > 0) setRoomHeight(room.clientHeight);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, []);
   const [isVisible, setIsVisible] = useState(false);
   const shown = alwaysOpen || isVisible || isEditorOpen;
   const [selectedAppsTab, setSelectedAppsTab] = useState<any>(null);
@@ -376,10 +403,12 @@ export const DesktopSideBar = ({
   const panelWidthRef = useRef(panelWidth);
   panelWidthRef.current = panelWidth;
   const handleHeightRef = useRef(handleHeight);
+  const isArcRef = useRef(isArc);
+  isArcRef.current = isArc;
   // Over the content: the Apps tab strip moves aside for it. Always open,
-  // it isn't over anything.
+  // it isn't over anything, and the half circle stays clear of the strip.
   const emitOverlayState = (nextVisible: boolean) => {
-    const over = nextVisible && !alwaysOpenRef.current;
+    const over = nextVisible && !alwaysOpenRef.current && !isArcRef.current;
     executeEvent('sidebarOverlayVisibility', {
       data: {
         isVisible: over,
@@ -388,10 +417,10 @@ export const DesktopSideBar = ({
     });
   };
   useEffect(() => {
-    if (alwaysOpen) emitOverlayState(false);
-    // Only when the mode changes.
+    if (alwaysOpen || isArc) emitOverlayState(false);
+    // Only when the mode or the layout changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alwaysOpen]);
+  }, [alwaysOpen, isArc]);
   useEffect(() => {
     // Resized while over the content: the tab strip moves aside as far.
     if (isVisible) emitOverlayState(true);
@@ -518,6 +547,17 @@ export const DesktopSideBar = ({
 
   const background = panel.background;
   const handleFill = panel.handleBackground;
+  // The half circle, a bit smaller or bigger with the buttons.
+  const arcOuter = Math.round(ARC_OUTER_PX * buttonSize);
+  // The half circle opens where the edge handle is, kept inside the room
+  // it has (under the title and navigation bars).
+  const arcCenterY = (() => {
+    const middle = roomHeight / 2;
+    const low = arcOuter + 8;
+    const high = roomHeight - arcOuter - 8;
+    if (high < low) return middle;
+    return Math.min(high, Math.max(low, nudgeTop + handleHeight / 2));
+  })();
   const isQdnActive = (item: { service: string; name: string }) =>
     desktopViewMode === 'apps' &&
     selectedAppsTab?.service === item.service &&
@@ -694,6 +734,19 @@ export const DesktopSideBar = ({
 
   return (
     <>
+      <Box
+        aria-hidden
+        ref={roomRef}
+        sx={{
+          bottom: 0,
+          left: 0,
+          pointerEvents: 'none',
+          position: 'fixed',
+          top: 0,
+          visibility: 'hidden',
+          width: 0,
+        }}
+      />
       {alwaysOpen ? (
         // The panel's room beside the content.
         <Box
@@ -724,92 +777,116 @@ export const DesktopSideBar = ({
         />
       )}
 
-      <Box
-        sx={{
-          position: 'fixed',
-          left: 0,
-          // From the top of the room under the title and navigation bars:
-          // Group's wrappers are what fixed boxes here sit in.
-          top: 0,
-          bottom: 0,
-          width: `${panelWidth}px`,
-          backgroundColor: alpha(sidebarSurfaceColor, background),
-          // A see-through panel blurs what's behind it, so its buttons
-          // stay readable.
-          backdropFilter:
-            background > 0 && background < 1 ? 'blur(10px)' : 'none',
-          borderRight: `1px solid ${alpha(theme.palette.border.subtle, background)}`,
-          boxShadow:
-            background >= 0.5 && !alwaysOpen ? sidebarSurfaceShadow : 'none',
-          opacity: shown ? 1 : 0,
-          transform: shown ? 'translateX(0)' : 'translateX(-100%)',
-          pointerEvents: 'none',
-          transition: `transform ${OVERLAY_TRANSITION}, opacity ${OVERLAY_TRANSITION}, box-shadow 200ms ease, background-color 200ms ease`,
-          overflow: shown ? 'visible' : 'hidden',
-          // Always open, it's part of the page: dialogs and menus go over it.
-          zIndex: alwaysOpen ? 1100 : 9998,
-        }}
-      >
+      {isArc ? (
+        <SidePanelArc
+          background={background}
+          centerY={arcCenterY}
+          editDisabled={!address}
+          editLabel={t('core:side_panel.edit', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          items={panel.items.filter(
+            (item) =>
+              isSidePanelItemShown(item) &&
+              (item.kind !== 'dev' || isEnabledDevMode)
+          )}
+          labelOf={(item) => sidePanelItemLabel(item, t)}
+          onEdit={() => setIsEditorOpen(true)}
+          onMouseEnter={showSidebarImmediate}
+          onMouseLeave={hideSidebar}
+          renderItem={renderItem}
+          scale={buttonSize}
+          shown={shown}
+          surfaceColor={sidebarSurfaceColor}
+        />
+      ) : (
         <Box
-          data-side-panel={panel.show}
-          onMouseEnter={alwaysOpen ? undefined : showSidebarImmediate}
-          onMouseLeave={alwaysOpen ? undefined : hideSidebar}
           sx={{
-            position: 'absolute',
+            position: 'fixed',
             left: 0,
+            // From the top of the room under the title and navigation
+            // bars: Group's wrappers are what fixed boxes here sit in.
             top: 0,
             bottom: 0,
             width: `${panelWidth}px`,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            // Centred while the buttons fit; from the top, scrolling, when
-            // they don't.
-            justifyContent: 'safe center',
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            pointerEvents: shown ? 'auto' : 'none',
-            scrollbarWidth: 'none',
-            '&::-webkit-scrollbar': { display: 'none' },
-            '& > *': { flexShrink: 0 },
+            backgroundColor: alpha(sidebarSurfaceColor, background),
+            // A see-through panel blurs what's behind it, so its buttons
+            // stay readable.
+            backdropFilter:
+              background > 0 && background < 1 ? 'blur(10px)' : 'none',
+            borderRight: `1px solid ${alpha(theme.palette.border.subtle, background)}`,
+            boxShadow:
+              background >= 0.5 && !alwaysOpen ? sidebarSurfaceShadow : 'none',
+            opacity: shown ? 1 : 0,
+            transform: shown ? 'translateX(0)' : 'translateX(-100%)',
+            pointerEvents: 'none',
+            transition: `transform ${OVERLAY_TRANSITION}, opacity ${OVERLAY_TRANSITION}, box-shadow 200ms ease, background-color 200ms ease`,
+            overflow: shown ? 'visible' : 'hidden',
+            // Always open, it's part of the page: dialogs and menus go over it.
+            zIndex: alwaysOpen ? 1100 : 9998,
           }}
         >
           <Box
+            data-side-panel={panel.show}
+            onMouseEnter={alwaysOpen ? undefined : showSidebarImmediate}
+            onMouseLeave={alwaysOpen ? undefined : hideSidebar}
             sx={{
-              alignItems: 'center',
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${panelWidth}px`,
               display: 'flex',
               flexDirection: 'column',
-              gap: 0.35,
-              px: 1,
-              py: 1.5,
-              // Every button, the language's and the theme's too, a bit
-              // smaller or bigger as the account chose.
-              zoom: buttonSize,
+              alignItems: 'center',
+              // Centred while the buttons fit; from the top, scrolling, when
+              // they don't.
+              justifyContent: 'safe center',
+              overflowX: 'hidden',
+              overflowY: 'auto',
+              pointerEvents: shown ? 'auto' : 'none',
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
               '& > *': { flexShrink: 0 },
             }}
           >
-            {panel.items.filter(isSidePanelItemShown).map(renderItem)}
-            <Tooltip
-              placement="right"
-              title={t('core:side_panel.edit', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.35,
+                px: 1,
+                py: 1.5,
+                // Every button, the language's and the theme's too, a bit
+                // smaller or bigger as the account chose.
+                zoom: buttonSize,
+                '& > *': { flexShrink: 0 },
+              }}
             >
-              <IconButton
-                aria-label={t('core:side_panel.edit', {
+              {panel.items.filter(isSidePanelItemShown).map(renderItem)}
+              <Tooltip
+                placement="right"
+                title={t('core:side_panel.edit', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-                disabled={!address}
-                onClick={() => setIsEditorOpen(true)}
-                size="small"
-                sx={{ color: theme.palette.text.secondary, mt: 1 }}
               >
-                <TuneRoundedIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
+                <IconButton
+                  aria-label={t('core:side_panel.edit', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  disabled={!address}
+                  onClick={() => setIsEditorOpen(true)}
+                  size="small"
+                  sx={{ color: theme.palette.text.secondary, mt: 1 }}
+                >
+                  <TuneRoundedIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
-      </Box>
+      )}
 
       {panel.items.some(
         (item) => item.kind === 'info' && !isSidePanelItemShown(item)
@@ -879,7 +956,7 @@ export const DesktopSideBar = ({
             cursor: isDraggingNudge ? 'grabbing' : 'grab',
             height: `${handleHeight}px`,
             // Beside the panel while it shows, its editor open too.
-            left: shown ? `${panelWidth}px` : 0,
+            left: shown ? `${isArc ? arcOuter : panelWidth}px` : 0,
             position: 'fixed',
             touchAction: 'none',
             top: `${nudgeTop}px`,

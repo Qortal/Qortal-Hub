@@ -49,6 +49,7 @@ import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.webp';
 import { appTitle, rankAppSearchMatches } from './appSearchSuggestions';
 import { SidePanelAppIcon } from './SidePanelAppIcon';
+import { sidePanelItemLabel } from './sidePanelLabels';
 import {
   isSidePanelItemShown,
   isSidePanelQdnItem,
@@ -123,36 +124,7 @@ export const SidePanelEditor = ({
     [availableQapps, query, settings.items]
   );
 
-  const labelOf = (item: SidePanelItem): string => {
-    switch (item.kind) {
-      case 'home':
-        return t('core:home', { postProcess: 'capitalizeFirstChar' });
-      case 'apps':
-        return t('core:app_other', { postProcess: 'capitalizeFirstChar' });
-      case 'qchat':
-        return 'Q-Chat';
-      case 'dev':
-        return t('core:dev_mode', { postProcess: 'capitalizeFirstChar' });
-      case 'divider':
-        return t('core:side_panel.divider', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      case 'info':
-        return t('core:side_panel.node_information', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      case 'language':
-        return t('core:side_panel.language', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      case 'theme':
-        return t('core:side_panel.theme', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      default:
-        return item.name;
-    }
-  };
+  const labelOf = (item: SidePanelItem): string => sidePanelItemLabel(item, t);
 
   const iconOf = (item: SidePanelItem): ReactNode => {
     switch (item.kind) {
@@ -217,8 +189,9 @@ export const SidePanelEditor = ({
   } as const;
   const rowLabelSx = { color: 'text.secondary', fontSize: '0.78rem' } as const;
   const percent = (value: number) => `${value}%`;
-  // Always open, the panel has no handle at the edge.
-  const hasHandle = settings.show === 'hover';
+  // Always open, the bar has no handle at the edge; the half circle always
+  // opens from it.
+  const hasHandle = settings.show === 'hover' || settings.layout === 'arc';
 
   return (
     <Dialog fullWidth maxWidth="xs" onClose={onClose} open={open}>
@@ -236,7 +209,8 @@ export const SidePanelEditor = ({
               const show = event.target.value === 'always' ? 'always' : 'hover';
               onChange((current) => ({ ...current, show }));
             }}
-            value={settings.show}
+            // The half circle only opens at the left edge.
+            value={settings.layout === 'arc' ? 'hover' : settings.show}
           >
             <FormControlLabel
               control={<Radio size="small" />}
@@ -245,8 +219,48 @@ export const SidePanelEditor = ({
             />
             <FormControlLabel
               control={<Radio size="small" />}
+              disabled={settings.layout === 'arc'}
               label={t('core:side_panel.show_always')}
               value="always"
+            />
+          </RadioGroup>
+          {settings.layout === 'arc' ? (
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+              {t('core:side_panel.layout_arc_hover_only')}
+            </Typography>
+          ) : null}
+        </Box>
+
+        <Box>
+          <Typography id="side-panel-layout" sx={sectionTitleSx}>
+            {t('core:side_panel.layout')}
+          </Typography>
+          <RadioGroup
+            aria-labelledby="side-panel-layout"
+            onChange={(event) => {
+              const layout = event.target.value === 'arc' ? 'arc' : 'bar';
+              onChange((current) => ({ ...current, layout }));
+            }}
+            value={settings.layout}
+          >
+            <FormControlLabel
+              control={<Radio size="small" />}
+              label={t('core:side_panel.layout_bar')}
+              value="bar"
+            />
+            <FormControlLabel
+              control={<Radio size="small" />}
+              label={
+                <Box>
+                  {t('core:side_panel.layout_arc')}
+                  <Typography
+                    sx={{ color: 'text.secondary', fontSize: '0.75rem' }}
+                  >
+                    {t('core:side_panel.layout_arc_hint')}
+                  </Typography>
+                </Box>
+              }
+              value="arc"
             />
           </RadioGroup>
         </Box>

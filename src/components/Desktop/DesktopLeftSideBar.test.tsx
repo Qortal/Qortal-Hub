@@ -121,6 +121,31 @@ describe('DesktopSideBar', () => {
     expect(getComputedStyle(handle).background).toBe('rgba(255, 255, 255, 0)');
   });
 
+  it('can be a half circle, which only opens at the left edge', () => {
+    renderPanel({ layout: 'arc', show: 'always' });
+    expect(screen.getByLabelText('Move sidebar handle')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-side-panel-layout="arc"]')
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-side-panel-slot="home"]')
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Edit side panel' })
+    ).toBeInTheDocument();
+  });
+
+  it('leaves hidden buttons out of the half circle too', () => {
+    renderPanel({
+      items: [{ kind: 'home' }, { hidden: true, kind: 'theme' }],
+      layout: 'arc',
+    });
+    expect(
+      document.querySelector('[data-side-panel-slot="home"]')
+    ).not.toBeNull();
+    expect(document.querySelector('[data-side-panel-slot="theme"]')).toBeNull();
+  });
+
   it('opens its editor', () => {
     renderPanel();
     fireEvent.click(screen.getByRole('button', { name: 'Edit side panel' }));

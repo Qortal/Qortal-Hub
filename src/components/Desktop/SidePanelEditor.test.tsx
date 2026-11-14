@@ -137,6 +137,13 @@ describe('SidePanelEditor', () => {
     expect(lastSettings(onSettings).handleBackground).toBe(0);
   });
 
+  it('sets the edge handle for the half circle, which opens from it', () => {
+    renderEditor({ ...SIDE_PANEL_DEFAULT, layout: 'arc', show: 'always' });
+    expect(
+      screen.getByRole('slider', { name: /edge handle height/i })
+    ).toBeInTheDocument();
+  });
+
   it('has no edge handle to set while the panel stays open', () => {
     renderEditor({ ...SIDE_PANEL_DEFAULT, show: 'always' });
     expect(screen.queryByRole('slider', { name: /edge handle/i })).toBeNull();
@@ -151,6 +158,19 @@ describe('SidePanelEditor', () => {
       screen.getByRole('radio', { name: 'Always, next to the content' })
     );
     expect(lastSettings(onSettings).show).toBe('always');
+  });
+
+  it('switches to the half circle', () => {
+    const onSettings = renderEditor();
+    fireEvent.click(screen.getByRole('radio', { name: /A half circle/ }));
+    expect(lastSettings(onSettings).layout).toBe('arc');
+    // It only opens at the left edge.
+    expect(
+      screen.getByRole('radio', { name: 'Always, next to the content' })
+    ).toBeDisabled();
+    expect(
+      screen.getByText('The half circle only opens at the left edge.')
+    ).toBeInTheDocument();
   });
 
   it('adds a Q-App from the search, and removes it', () => {
