@@ -18,7 +18,10 @@ import {
   useQortinoModels,
   type ActiveQortinoModel,
 } from '../../../qortinoAgent/models';
-import { ensureQortinoModel } from '../../../qortinoAgent/modelSession';
+import {
+  ensureQortinoModel,
+  releaseQortinoModelAfterClose,
+} from '../../../qortinoAgent/modelSession';
 import { clearPendingQortinoQuestion } from '../../../qortinoAgent/pendingQuestion';
 import { getQortinoSettings } from '../../../qortinoAgent/settings';
 import {
@@ -115,16 +118,36 @@ export function QortinoAgentPanel() {
     setReady(true);
   }, [loadChat]);
 
+  const wasOpenRef = useRef(false);
   useEffect(() => {
     if (!open) {
       // Closed from anywhere (its button, the sidebar, Escape, a report):
       // a question from Home the chat never took is not asked next time.
       setSettingsOpen(false);
       clearPendingQortinoQuestion();
+      if (wasOpenRef.current) {
+        wasOpenRef.current = false;
+        // Checks still running for this opening start nothing now.
+        refreshGenRef.current += 1;
+        // A model this opening started loading, with no chat to let go of
+        // it (closed before the chat came up), goes as the settings say.
+        releaseQortinoModelAfterClose();
+      }
       return;
     }
+    wasOpenRef.current = true;
     void refresh();
   }, [open, refresh]);
+
+  // Taken away while open (signing out): the same as a close.
+  useEffect(
+    () => () => {
+      if (!wasOpenRef.current) return;
+      refreshGenRef.current += 1;
+      releaseQortinoModelAfterClose();
+    },
+    []
+  );
 
   // Another model chosen in settings: get its chat code in.
   useEffect(() => {

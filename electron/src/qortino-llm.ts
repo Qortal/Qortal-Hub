@@ -16,6 +16,7 @@ import os from 'os';
 import path from 'path';
 import { myCapacitorApp } from '.';
 import { requireMainWindowSender } from './main-window-policy';
+import { sessionHop } from './qortino-llm-net';
 import {
   QORTINO_RENDERER_EVENT_CHANNEL,
   type QortinoRendererEventName,
@@ -298,6 +299,9 @@ export function registerQortinoLlmIpcHandlers(): void {
                 cache: 'no-store',
               })) as typeof fetch)
           : undefined,
+        // With the node's API key: redirects one by one, the key only on
+        // the node's own origin.
+        hop: hubSession ? sessionHop(hubSession) : undefined,
         events: {
           onProgress: (bytesReceived, bytesTotal) =>
             sendToHub('downloadProgress', {

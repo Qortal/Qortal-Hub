@@ -6,6 +6,7 @@ import {
   cleanupStorage,
   DownloadCancelledError,
   downloadToFile,
+  fetchKeepingKeyOnOrigin,
   isDownloadTarget,
   isLoadableModelPath,
   modelFileNameFromUrl,
@@ -292,6 +293,23 @@ describe('downloading a model', () => {
     expect(fs.existsSync(`${target}.part`)).toBe(false);
   });
 
+  it('refuses redirects for a keyed download it cannot follow hop by hop', async () => {
+    const seen: string[] = [];
+    const impl = (async (_url: string, init?: RequestInit) => {
+      seen.push(String(init?.redirect));
+      return new Response(body, { status: 200 });
+    }) as unknown as typeof fetch;
+    await downloadToFile({
+      url: 'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/id',
+      apiKey: 'secret',
+      target: path.join(root, 'models', 'k.gguf'),
+      signal: new AbortController().signal,
+      events: { onProgress: () => undefined },
+      fetchImpl: impl,
+    });
+    expect(seen).toEqual(['error']);
+  });
+
   it('only fetches web links', async () => {
     await expect(
       downloadToFile({
@@ -301,5 +319,95 @@ describe('downloading a model', () => {
         events: { onProgress: () => undefined },
       })
     ).rejects.toThrow('Only http and https');
+  });
+});
+
+describe("the node's API key and redirects", () => {
+  const ok = () => ({ response: new Response('ok', { status: 200 }) });
+
+  it('keeps the key on the node, and drops it once a redirect leaves', async () => {
+    const calls: Array<[string, Record<string, string>]> = [];
+    const routes: Record<string, string> = {
+      'http://127.0.0.1:12391/a': '/b',
+      'http://127.0.0.1:12391/b': 'https://cdn.example/file',
+      'https://cdn.example/file': 'http://127.0.0.1:12391/c',
+    };
+    await fetchKeepingKeyOnOrigin(
+      'http://127.0.0.1:12391/a',
+      { 'X-API-KEY': 'secret', Range: 'bytes=5-' },
+      new AbortController().signal,
+      async (url, headers) => {
+        calls.push([url, headers]);
+        return routes[url] ? { redirect: routes[url] } : ok();
+      }
+    );
+    expect(calls.map(([url, headers]) => [url, headers['X-API-KEY']])).toEqual([
+      ['http://127.0.0.1:12391/a', 'secret'],
+      // Same origin: still the node.
+      ['http://127.0.0.1:12391/b', 'secret'],
+      // Another origin: no key, and none again after it.
+      ['https://cdn.example/file', undefined],
+      ['http://127.0.0.1:12391/c', undefined],
+    ]);
+    // Other headers go on as they were.
+    expect(calls.every(([, headers]) => headers.Range === 'bytes=5-')).toBe(
+      true
+    );
+  });
+
+  it('treats another port or scheme as another origin, whatever the case of the header', async () => {
+    const sent: Array<string | undefined> = [];
+    await fetchKeepingKeyOnOrigin(
+      'http://127.0.0.1:12391/a',
+      { 'x-api-key': 'secret' },
+      new AbortController().signal,
+      async (url, headers) => {
+        sent.push(headers['x-api-key']);
+        if (url.endsWith('/a'))
+          return { redirect: 'https://127.0.0.1:12391/b' };
+        if (url.endsWith('/b')) return { redirect: 'https://127.0.0.1:9999/c' };
+        return ok();
+      }
+    );
+    expect(sent).toEqual(['secret', undefined, undefined]);
+  });
+
+  it('refuses a redirect to anything but a web link, and endless ones', async () => {
+    await expect(
+      fetchKeepingKeyOnOrigin(
+        'http://127.0.0.1:12391/a',
+        { 'X-API-KEY': 'secret' },
+        new AbortController().signal,
+        async () => ({ redirect: 'file:///etc/passwd' })
+      )
+    ).rejects.toThrow('not a web link');
+    await expect(
+      fetchKeepingKeyOnOrigin(
+        'http://127.0.0.1:12391/a',
+        {},
+        new AbortController().signal,
+        async (url) => ({ redirect: `${url}x` })
+      )
+    ).rejects.toThrow('Too many redirects');
+  });
+
+  it('downloads a keyed file through the hops', async () => {
+    const seen: Array<string | undefined> = [];
+    const target = path.join(root, 'models', 'h.gguf');
+    await downloadToFile({
+      url: 'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/id',
+      apiKey: 'secret',
+      target,
+      signal: new AbortController().signal,
+      events: { onProgress: () => undefined },
+      hop: async (url, headers) => {
+        seen.push(headers['X-API-KEY']);
+        return url.includes('/arbitrary/')
+          ? { redirect: 'https://mirror.example/id' }
+          : { response: new Response('0123456789', { status: 200 }) };
+      },
+    });
+    expect(seen).toEqual(['secret', undefined]);
+    expect(fs.readFileSync(target, 'utf8')).toBe('0123456789');
   });
 });

@@ -42,10 +42,22 @@ function qortinoChatMounted(): boolean {
  * again: a load or read already running is joined, not started twice, and a
  * release scheduled by an earlier draft is cancelled.
  */
+/**
+ * The newest warm-up, and whether the Home box still wants Qortino: a draft
+ * left while its install check was still running must not start a load that
+ * nothing will release.
+ */
+let warmEpoch = 0;
+let draftWantsModel = false;
+
 export async function warmQortinoForHomeDraft(): Promise<void> {
   if (!isQortinoLlmInferenceAvailable()) return;
+  const epoch = (warmEpoch += 1);
+  draftWantsModel = true;
   try {
     const install = await loadInstallState();
+    // Let go of meanwhile, or a newer warm-up took over: no load for this one.
+    if (epoch !== warmEpoch || !draftWantsModel) return;
     const model = resolveActiveQortinoModel(
       install.installed ? install.llmPath : null
     );
@@ -55,6 +67,7 @@ export async function warmQortinoForHomeDraft(): Promise<void> {
       nCtx: model.contextTokens,
       gpu: getQortinoSettings().useGpu,
     });
+    if (epoch !== warmEpoch || !draftWantsModel) return;
     await warmQortinoSystemPrompt(
       buildSystemPrompt(getQortinoSettings().answerLength)
     );
@@ -65,10 +78,19 @@ export async function warmQortinoForHomeDraft(): Promise<void> {
 
 /** The draft was left without sending: free the model as the settings say. */
 export function releaseQortinoAfterHomeDraft(): void {
+  draftWantsModel = false;
   if (qortinoChatMounted()) return;
   const { keepReady } = getQortinoSettings();
   if (keepReady === 'open') return;
+  // A load started for the draft is still running, or already done: either
+  // way the release below covers it (modelSession releases a load in flight).
   releaseQortinoModelSoon(
     keepReady === 'off' ? RELEASE_HOME_DRAFT_OFF_MS : RELEASE_AFTER_CLOSE_MS
   );
+}
+
+/** Test hook. */
+export function resetHomeDraftWarmupForTests(): void {
+  warmEpoch = 0;
+  draftWantsModel = false;
 }

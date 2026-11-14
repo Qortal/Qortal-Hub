@@ -302,6 +302,54 @@ export function describeFetchError(error: unknown): string {
   return detail && detail !== message ? `${message} (${detail})` : message;
 }
 
+/** The header a Qortal node takes its API key in. */
+export const NODE_API_KEY_HEADER = 'X-API-KEY';
+const MAX_REDIRECTS = 10;
+
+/**
+ * One request, without following a redirect: either the response, or where
+ * the server redirects to (resolved against `url` by the caller).
+ */
+export type DownloadHop = (
+  url: string,
+  headers: Record<string, string>,
+  signal: AbortSignal
+) => Promise<{ redirect: string } | { response: Response }>;
+
+/**
+ * Follow redirects one hop at a time, so the node's API key only ever goes
+ * to the node it belongs to: on a redirect to another origin (scheme, host
+ * or port) the key is left out of that request and every one after it. A
+ * redirect to anything but http(s) is refused.
+ */
+export async function fetchKeepingKeyOnOrigin(
+  url: string,
+  headers: Record<string, string>,
+  signal: AbortSignal,
+  hop: DownloadHop
+): Promise<Response> {
+  const keyOrigin = new URL(url).origin;
+  let current = url;
+  let sent = { ...headers };
+  for (let redirects = 0; ; redirects += 1) {
+    const step = await hop(current, sent, signal);
+    if ('response' in step) return step.response;
+    if (redirects >= MAX_REDIRECTS) throw new Error('Too many redirects');
+    const next = new URL(step.redirect, current);
+    if (next.protocol !== 'http:' && next.protocol !== 'https:') {
+      throw new Error('Redirected to something that is not a web link');
+    }
+    if (next.origin !== keyOrigin) {
+      sent = Object.fromEntries(
+        Object.entries(sent).filter(
+          ([name]) => name.toLowerCase() !== NODE_API_KEY_HEADER.toLowerCase()
+        )
+      );
+    }
+    current = next.href;
+  }
+}
+
 export class DownloadCancelledError extends Error {
   constructor() {
     super('cancelled');
@@ -321,7 +369,14 @@ export async function downloadToFile(options: {
   apiKey?: string;
   signal: AbortSignal;
   events: DownloadEvents;
+  /** For links without a key: redirects are followed as usual. */
   fetchImpl?: typeof fetch;
+  /**
+   * For downloads with the node's API key: one request at a time, so the
+   * key stays on the node's origin (fetchKeepingKeyOnOrigin). Without it, a
+   * keyed download refuses redirects.
+   */
+  hop?: DownloadHop;
 }): Promise<{ path: string; bytesWritten: number }> {
   const { target, signal, events } = options;
   const doFetch = options.fetchImpl ?? fetch;
@@ -340,11 +395,31 @@ export async function downloadToFile(options: {
   const attempt = async (resume: boolean) => {
     const start = resume ? ((await fileSize(partPath)) ?? 0) : 0;
     const headers: Record<string, string> = {};
-    if (options.apiKey) headers['X-API-KEY'] = options.apiKey;
+    if (options.apiKey) headers[NODE_API_KEY_HEADER] = options.apiKey;
     if (start > 0) headers.Range = `bytes=${start}-`;
     let res: Response;
     try {
-      res = await doFetch(parsed.href, { headers, redirect: 'follow', signal });
+      if (!options.apiKey) {
+        res = await doFetch(parsed.href, {
+          headers,
+          redirect: 'follow',
+          signal,
+        });
+      } else if (options.hop) {
+        res = await fetchKeepingKeyOnOrigin(
+          parsed.href,
+          headers,
+          signal,
+          options.hop
+        );
+      } else {
+        // No way to follow redirects one by one: none at all with the key.
+        res = await doFetch(parsed.href, {
+          headers,
+          redirect: 'error',
+          signal,
+        });
+      }
     } catch (error) {
       if (signal.aborted) throw error;
       // fetch() says only "fetch failed"; the reason is in its cause.

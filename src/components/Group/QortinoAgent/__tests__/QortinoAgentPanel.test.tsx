@@ -11,6 +11,7 @@ const store = vi.hoisted(() => ({
 }));
 const session = vi.hoisted(() => ({
   ensureQortinoModel: vi.fn(async () => {}),
+  releaseQortinoModelAfterClose: vi.fn(),
 }));
 
 vi.mock('../../../../qortinoAgent/store', () => store);
@@ -120,6 +121,62 @@ describe("Qortino's panel", () => {
       jotai.set(qortinoAgentOpenAtom, false);
     });
     expect(getPendingQortinoQuestion()).toBeNull();
+  });
+
+  it('starts no model load when closed while its checks still run', async () => {
+    addFileModel({ path: '/m/phi.gguf', name: 'phi.gguf', size: 10 });
+    let answer!: (state: { installed: boolean }) => void;
+    store.loadInstallState.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    const jotai = renderPanel();
+    await act(async () => {
+      jotai.set(qortinoAgentOpenAtom, false);
+    });
+    await act(async () => {
+      answer({ installed: false });
+    });
+    expect(session.ensureQortinoModel).not.toHaveBeenCalled();
+  });
+
+  it('lets go of a model it started loading when closed before the chat', async () => {
+    addFileModel({ path: '/m/phi.gguf', name: 'phi.gguf', size: 10 });
+    const jotai = renderPanel();
+    await screen.findByText('chat with phi');
+    expect(session.ensureQortinoModel).toHaveBeenCalled();
+    await act(async () => {
+      jotai.set(qortinoAgentOpenAtom, false);
+    });
+    expect(session.releaseQortinoModelAfterClose).toHaveBeenCalled();
+  });
+
+  it('acts as closed when taken away while open (signing out)', async () => {
+    addFileModel({ path: '/m/phi.gguf', name: 'phi.gguf', size: 10 });
+    let answer!: (state: { installed: boolean }) => void;
+    store.loadInstallState.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    const jotai = createStore();
+    jotai.set(qortinoAgentOpenAtom, true);
+    const { unmount } = render(
+      <JotaiProvider store={jotai}>
+        <ThemeProvider theme={createTheme()}>
+          <QortinoAgentPanel />
+        </ThemeProvider>
+      </JotaiProvider>
+    );
+    unmount();
+    expect(session.releaseQortinoModelAfterClose).toHaveBeenCalled();
+    await act(async () => {
+      answer({ installed: false });
+    });
+    expect(session.ensureQortinoModel).not.toHaveBeenCalled();
   });
 
   it('widens and remembers it', async () => {
