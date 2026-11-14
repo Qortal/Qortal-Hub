@@ -39,6 +39,7 @@ export const darkThemeOptions: ThemeOptions = {
       positive: 'rgb(94, 176, 73)',
       danger: 'rgb(177, 70, 70)',
       unread: 'rgb(66, 151, 226)',
+      minting: 'rgb(232, 190, 92)',
     },
   },
 
