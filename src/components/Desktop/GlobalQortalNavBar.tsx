@@ -1370,6 +1370,9 @@ export function GlobalQortalNavBar({
           >
             <ButtonBase
               disableRipple
+              aria-label={t('core:action.back', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               onClick={() => {
                 if (isDevMode) {
                   executeEvent('devModeNavigateBack', {});
