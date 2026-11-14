@@ -942,6 +942,7 @@
     "my_apps": "minu rakendused",
     "official_apps": "ametlikud rakendused"
   },
+  "tag_number": "silt {{number}}",
   "tags": "sildid",
   "theme": {
     "dark": "tume",

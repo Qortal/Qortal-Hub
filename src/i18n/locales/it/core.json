@@ -36,7 +36,7 @@
     "back": "indietro",
     "backup_account": "account di backup",
     "backup_wallet": "wallet di backup",
-    "cancel": "cancella",
+    "cancel": "annulla",
     "cancel_invitation": "annulla l'invito",
     "change": "modifica",
     "change_avatar": "cambia Avatar",
@@ -451,7 +451,7 @@
   "group_call_you": "Tu",
   "group_list_call_active": "Chiamata vocale in corso",
   "group_list_call_youre_in": "Sei in questa chiamata",
-  "home": "casa",
+  "home": "home",
   "identifier": "identificativo",
   "image_embed": "immagine incorporata",
   "items_per_page": "Elementi per pagina:",
@@ -942,6 +942,7 @@
     "my_apps": "le mie app",
     "official_apps": "app ufficiali"
   },
+  "tag_number": "tag {{number}}",
   "tags": "tag",
   "theme": {
     "dark": "scuro",

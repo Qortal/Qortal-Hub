@@ -451,7 +451,7 @@
   "group_call_you": "Sinä",
   "group_list_call_active": "Äänipuhelu käynnissä",
   "group_list_call_youre_in": "Olet tässä puhelussa",
-  "home": "koti",
+  "home": "etusivu",
   "identifier": "tunniste",
   "image_embed": "kuvan upotus",
   "items_per_page": "Kohteita per sivu:",
@@ -942,6 +942,7 @@
     "my_apps": "omat sovellukset",
     "official_apps": "viralliset sovellukset"
   },
+  "tag_number": "tunniste {{number}}",
   "tags": "tunnisteet",
   "theme": {
     "dark": "tumma",
