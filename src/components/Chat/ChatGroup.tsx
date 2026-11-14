@@ -90,7 +90,7 @@ import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
 import { getFee, isExtMsg } from '../../background/background.ts';
-import { appHeighOffset, appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { appHeighOffsetNow, appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
@@ -1868,7 +1868,10 @@ export const ChatGroup = ({
         : 800;
     const maxHeight =
       typeof window !== 'undefined'
-        ? Math.max(Q_MANAGER_MIN_HEIGHT, window.innerHeight - appHeighOffset)
+        ? Math.max(
+            Q_MANAGER_MIN_HEIGHT,
+            window.innerHeight - appHeighOffsetNow()
+          )
         : 600;
     return {
       width: Math.min(
@@ -1901,7 +1904,7 @@ export const ChatGroup = ({
   const maxQManagerWidth = Math.max(Q_MANAGER_MIN_WIDTH, windowSize.width);
   const maxQManagerHeight = Math.max(
     Q_MANAGER_MIN_HEIGHT,
-    windowSize.height - appHeighOffset
+    windowSize.height - appHeighOffsetNow()
   );
 
   const clampQManagerSize = useCallback(
@@ -1919,7 +1922,7 @@ export const ChatGroup = ({
   );
 
   const qManagerPosition = useMemo(() => {
-    const anchorBottom = qManagerAnchorRect?.bottom ?? appHeighOffset + 50;
+    const anchorBottom = qManagerAnchorRect?.bottom ?? appHeighOffsetNow() + 50;
     const anchorCenter =
       qManagerAnchorRect !== null
         ? qManagerAnchorRect.left + qManagerAnchorRect.width / 2
@@ -1933,7 +1936,7 @@ export const ChatGroup = ({
         )
       ),
       y: Math.max(
-        appHeighOffset + 8,
+        appHeighOffsetNow() + 8,
         Math.min(windowSize.height - qManagerSize.height - 8, anchorBottom + 8)
       ),
     };
@@ -2778,15 +2781,10 @@ export const ChatGroup = ({
     if (!reticulumChatEnabled) return {};
     return projectReticulumReactionReferences(
       reticulumChatEvents.filter(
-        (event: any) =>
-          !isReticulumHiddenAuthor(event?.authorAddress)
+        (event: any) => !isReticulumHiddenAuthor(event?.authorAddress)
       )
     );
-  }, [
-    isReticulumHiddenAuthor,
-    reticulumChatEnabled,
-    reticulumChatEvents,
-  ]);
+  }, [isReticulumHiddenAuthor, reticulumChatEnabled, reticulumChatEvents]);
   const renderedChatReferences = useMemo(() => {
     if (!reticulumChatEnabled) return chatReferences;
     const next: Record<string, any> = {};
@@ -5632,8 +5630,7 @@ export const ChatGroup = ({
         const nextHistory = buildReticulumInitialHistoryState(
           conversionResults.map((result) => result.item),
           {
-            shouldExclude: (item) =>
-              isReticulumHiddenAuthor(item?.sender),
+            shouldExclude: (item) => isReticulumHiddenAuthor(item?.sender),
             reconcileItem: (item) => {
               const specialId = reticulumHistoryItemSpecialId(item);
               const hasPendingOptimisticMatch = Boolean(
@@ -5735,8 +5732,7 @@ export const ChatGroup = ({
         {
           initialMessages: messages,
           initialChatReferences: chatReferences,
-          shouldExclude: (item) =>
-            isReticulumHiddenAuthor(item?.sender),
+          shouldExclude: (item) => isReticulumHiddenAuthor(item?.sender),
           reconcileItem: (item) => {
             const specialId = reticulumHistoryItemSpecialId(item);
             const hasPendingOptimisticMatch = Boolean(
@@ -6948,7 +6944,7 @@ export const ChatGroup = ({
     executeEvent('reticulumAdminKeysOpenState', {
       open: Boolean(
         isReticulumChannelAdmin &&
-          (reticulumAdminAnchorEl || reticulumAdminAnchorPosition)
+        (reticulumAdminAnchorEl || reticulumAdminAnchorPosition)
       ),
     });
   }, [
@@ -12680,7 +12676,7 @@ export const ChatGroup = ({
         }}
         open={Boolean(
           isReticulumChannelAdmin &&
-            (reticulumAdminAnchorEl || reticulumAdminAnchorPosition)
+          (reticulumAdminAnchorEl || reticulumAdminAnchorPosition)
         )}
         hideBackdrop
         disableAutoFocus

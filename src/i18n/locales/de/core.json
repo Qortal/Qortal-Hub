@@ -179,6 +179,18 @@
     "limit_reached": "maximale Anzahl an Tabs erreicht. Schließe einen, um einen weiteren zu öffnen.",
     "locked_kept_open": "gesperrte Tabs bleiben offen. Schließe jeden einzeln, um es zu bestätigen."
   },
+  "apps_bar": {
+    "empty": "Heften Sie eine App an oder fügen Sie ein Lesezeichen hinzu, dann erscheint es hier.",
+    "label": "Angeheftete Apps und Lesezeichen",
+    "more": "Rest anzeigen",
+    "rename_hint": "Leer lassen, um nur das Bild zu zeigen.",
+    "rename_tip": "Klicken Sie mit der rechten Maustaste auf einen Eintrag in der Leiste, um ihn umzubenennen.",
+    "rename_title": "In der Leiste umbenennen",
+    "reset_name": "Eigenen Namen verwenden",
+    "show": "In der Titelleiste anzeigen",
+    "show_hint": "Ihre angehefteten Apps und Lesezeichen, oben am Fenster entlang.",
+    "show_names": "Namen anzeigen"
+  },
   "apps_dashboard": "Apps Dashboard",
   "apps_official": "offizielle Apps",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "Neuer Ordner",
     "no_bookmarks": "Noch keine Lesezeichen.",
     "no_bookmarks_folder": "Keine Lesezeichen in diesem Ordner.",
+    "no_bookmarks_hint": "Öffnen Sie eine Seite und legen Sie sie mit „Seite hinzufügen“ hier ab.",
+    "open_folder": "Ordner öffnen",
     "qortal_link": "Qortal-Link",
     "qortal_link_placeholder": "qortal://APP/Name/Pfad",
     "remove": "Entfernen",
     "rename": "Umbenennen",
     "save_location_without_query": "Speichere einen Q-App-Ort ohne Abfrageparameter.",
+    "search": "Lesezeichen durchsuchen",
     "title": "Lesezeichen",
     "top_level": "Oberste Ebene"
   },

@@ -1,11 +1,11 @@
 import { Typography, Box } from '@mui/material';
 import { styled } from '@mui/system';
-import { appHeighOffset } from '../../Desktop/CustomTitleBar';
+import { appHeighOffsetPx } from '../../Desktop/CustomTitleBar';
 
 export const MailContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
-  height: `calc(100vh - ${78 + appHeighOffset}px)`,
+  height: `calc(100vh - 78px - ${appHeighOffsetPx})`,
   overflow: 'hidden',
   width: '100%',
 }));

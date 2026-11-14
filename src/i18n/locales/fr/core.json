@@ -179,6 +179,18 @@
     "limit_reached": "nombre maximal d'onglets atteint. Fermez-en un pour en ouvrir un autre.",
     "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer."
   },
+  "apps_bar": {
+    "empty": "Épinglez une application ou ajoutez un favori, et il apparaîtra ici.",
+    "label": "Applications épinglées et favoris",
+    "more": "Afficher le reste",
+    "rename_hint": "Laissez vide pour n’afficher que l’image.",
+    "rename_tip": "Faites un clic droit sur un élément de la barre pour le renommer.",
+    "rename_title": "Renommer dans la barre",
+    "reset_name": "Utiliser son propre nom",
+    "show": "Afficher dans la barre de titre",
+    "show_hint": "Vos applications épinglées et vos favoris, en haut de la fenêtre.",
+    "show_names": "Afficher les noms"
+  },
   "apps_dashboard": "Tableau de bord Apps",
   "apps_official": "Applications officielles",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "Nouveau dossier",
     "no_bookmarks": "Aucun favori pour le moment.",
     "no_bookmarks_folder": "Aucun favori dans ce dossier.",
+    "no_bookmarks_hint": "Ouvrez une page et utilisez « Ajouter la page » pour la garder ici.",
+    "open_folder": "Ouvrir le dossier",
     "qortal_link": "Lien Qortal",
     "qortal_link_placeholder": "qortal://APP/Nom/chemin",
     "remove": "Retirer",
     "rename": "Renommer",
     "save_location_without_query": "Enregistre un emplacement de Q-App sans paramètres de requête.",
+    "search": "Rechercher dans les favoris",
     "title": "Favoris",
     "top_level": "Niveau supérieur"
   },

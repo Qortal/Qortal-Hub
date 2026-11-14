@@ -179,6 +179,18 @@
     "limit_reached": "se alcanzó el número máximo de pestañas. Cierra una para abrir otra.",
     "locked_kept_open": "las pestañas bloqueadas siguen abiertas. Ciérralas una por una para confirmar."
   },
+  "apps_bar": {
+    "empty": "Fija una aplicación o añade un marcador y aparecerá aquí.",
+    "label": "Aplicaciones fijadas y marcadores",
+    "more": "Mostrar el resto",
+    "rename_hint": "Déjalo vacío para mostrar solo la imagen.",
+    "rename_tip": "Haz clic derecho en un elemento de la barra para renombrarlo.",
+    "rename_title": "Renombrar en la barra",
+    "reset_name": "Usar su propio nombre",
+    "show": "Mostrar en la barra de título",
+    "show_hint": "Tus aplicaciones fijadas y marcadores, a lo largo de la parte superior de la ventana.",
+    "show_names": "Mostrar nombres"
+  },
   "apps_dashboard": "Panel de aplicaciones",
   "apps_official": "aplicaciones oficiales",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "Nueva carpeta",
     "no_bookmarks": "Aún no hay marcadores.",
     "no_bookmarks_folder": "No hay marcadores en esta carpeta.",
+    "no_bookmarks_hint": "Abre una página y usa «Agregar página» para guardarla aquí.",
+    "open_folder": "Abrir carpeta",
     "qortal_link": "Enlace de Qortal",
     "qortal_link_placeholder": "qortal://APP/Nombre/ruta",
     "remove": "Quitar",
     "rename": "Renombrar",
     "save_location_without_query": "Guarda una ubicación de Q-App sin parámetros de consulta.",
+    "search": "Buscar marcadores",
     "title": "Marcadores",
     "top_level": "Nivel superior"
   },

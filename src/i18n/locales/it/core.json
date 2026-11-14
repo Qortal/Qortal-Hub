@@ -179,6 +179,18 @@
     "limit_reached": "numero massimo di schede raggiunto. Chiudine una per aprirne un'altra.",
     "locked_kept_open": "le schede bloccate restano aperte. Chiudile una alla volta per confermare."
   },
+  "apps_bar": {
+    "empty": "Fissa un’app o aggiungi un segnalibro e comparirà qui.",
+    "label": "App fissate e segnalibri",
+    "more": "Mostra il resto",
+    "rename_hint": "Lascialo vuoto per mostrare solo l’immagine.",
+    "rename_tip": "Fai clic destro su un elemento della barra per rinominarlo.",
+    "rename_title": "Rinomina nella barra",
+    "reset_name": "Usa il suo nome",
+    "show": "Mostra nella barra del titolo",
+    "show_hint": "Le tue app fissate e i tuoi segnalibri, lungo la parte superiore della finestra.",
+    "show_names": "Mostra i nomi"
+  },
   "apps_dashboard": "dashboard delle app",
   "apps_official": "app ufficiali",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "Nuova cartella",
     "no_bookmarks": "Nessun segnalibro.",
     "no_bookmarks_folder": "Nessun segnalibro in questa cartella.",
+    "no_bookmarks_hint": "Apri una pagina e usa «Aggiungi pagina» per tenerla qui.",
+    "open_folder": "Apri cartella",
     "qortal_link": "Link Qortal",
     "qortal_link_placeholder": "qortal://APP/Nome/percorso",
     "remove": "Rimuovi",
     "rename": "Rinomina",
     "save_location_without_query": "Salva una posizione Q-App senza parametri di query.",
+    "search": "Cerca nei segnalibri",
     "title": "Segnalibri",
     "top_level": "Livello principale"
   },

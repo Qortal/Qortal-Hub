@@ -179,6 +179,18 @@
     "limit_reached": "タブの最大数に達しました。別のタブを開くには、いずれかを閉じてください。",
     "locked_kept_open": "ロックされたタブは開いたままです。確認するには、1つずつ閉じてください。"
   },
+  "apps_bar": {
+    "empty": "アプリをピン留めするかブックマークを追加すると、ここに表示されます。",
+    "label": "ピン留めしたアプリとブックマーク",
+    "more": "残りを表示",
+    "rename_hint": "空にすると画像だけが表示されます。",
+    "rename_tip": "バーの項目を右クリックすると名前を変更できます。",
+    "rename_title": "バーでの名前を変更",
+    "reset_name": "元の名前を使う",
+    "show": "タイトルバーに表示",
+    "show_hint": "ピン留めしたアプリとブックマークをウィンドウ上部に並べます。",
+    "show_names": "名前を表示"
+  },
   "apps_dashboard": "アプリダッシュボード",
   "apps_official": "公式アプリ",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "新しいフォルダー",
     "no_bookmarks": "ブックマークはまだありません。",
     "no_bookmarks_folder": "このフォルダーにブックマークはありません。",
+    "no_bookmarks_hint": "ページを開き、「ページを追加」でここに保存できます。",
+    "open_folder": "フォルダーを開く",
     "qortal_link": "Qortal リンク",
     "qortal_link_placeholder": "qortal://APP/名前/パス",
     "remove": "削除",
     "rename": "名前を変更",
     "save_location_without_query": "クエリパラメータなしで Q-App の場所を保存します。",
+    "search": "ブックマークを検索",
     "title": "ブックマーク",
     "top_level": "トップレベル"
   },
