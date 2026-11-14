@@ -303,35 +303,67 @@ export type LauncherSyncMark = {
   savedAt: number;
   /** The time of its bookmarks right after that. */
   localAt: number;
+  /**
+   * Where its tiles stood right after that. The arrangement keeps no time of
+   * its own, so this is what says whether it was changed since.
+   */
+  order?: string[];
+  /**
+   * Whether this device holds bookmarks, folders or an arrangement that were
+   * never saved, as a merge leaves it. What was never saved must not be put
+   * aside for the saved launcher at the next update.
+   */
+  unsaved?: boolean;
 };
+
+/** Whether the tiles stand where they stood when the mark was written. */
+const sameOrderAsMark = (mark: LauncherSyncMark, order: string[]) =>
+  mark.order
+    ? mark.order.length === order.length &&
+      mark.order.every((key, index) => key === order[index])
+    : // A mark from before the arrangement was kept: only one here is a change.
+      order.length === 0;
 
 /**
  * What to do with the launcher found on QDN.
  *
  * - `keep`: nothing new on QDN for this device, or nothing there.
- * - `replace`: this device has nothing, or nothing changed since it last took
- *   the saved launcher in; the saved one takes its place, so what was removed
- *   on another device goes here too.
- * - `merge`: this device changed things that were never saved, or never took
- *   a saved launcher in; both are kept.
+ * - `replace`: this device has nothing, or neither its bookmarks nor its
+ *   arrangement changed since it last took the saved launcher in; the saved
+ *   one takes its place, so what was removed on another device goes here too.
+ * - `merge`: this device changed things that were never saved, holds what an
+ *   earlier merge kept, or never took a saved launcher in; both are kept.
  */
 export function chooseSavedLauncherUse({
   local,
+  order = [],
   mark,
   saved,
   savedAt,
 }: {
   local: AppBookmarksForAddress | null;
+  /** Where this device's tiles stand now. */
+  order?: string[];
   mark: LauncherSyncMark | null;
   saved: SavedLauncher | null;
   savedAt: number;
 }): 'keep' | 'replace' | 'merge' {
   if (!saved) return 'keep';
   if (mark && savedAt <= mark.savedAt) return 'keep';
-  if (!local || (!local.folders.length && !local.bookmarks.length)) {
+  const hasOwn =
+    (!!local && (!!local.folders.length || !!local.bookmarks.length)) ||
+    order.length > 0;
+  if (!hasOwn) return 'replace';
+  // What a merge kept here was never saved: it would be lost by a replace.
+  if (mark?.unsaved) return 'merge';
+  if (
+    mark &&
+    local &&
+    local.updatedAt <= mark.localAt &&
+    sameOrderAsMark(mark, order)
+  ) {
     return 'replace';
   }
-  if (mark && local.updatedAt <= mark.localAt) return 'replace';
   return 'merge';
 }
 
@@ -354,7 +386,12 @@ export function loadLauncherSyncMark(
     ) {
       return null;
     }
-    return { savedAt: stored.savedAt, localAt: stored.localAt };
+    return {
+      savedAt: stored.savedAt,
+      localAt: stored.localAt,
+      ...(Array.isArray(stored.order) ? { order: textsOf(stored.order) } : {}),
+      ...(stored.unsaved ? { unsaved: true } : {}),
+    };
   } catch {
     return null;
   }

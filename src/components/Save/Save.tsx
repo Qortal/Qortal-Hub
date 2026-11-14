@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import {
   hasSettingsChangedAtom,
   isUsingImportExportSettingsAtom,
-  oldPinnedAppsAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
   userInfoAtom,
 } from '../../atoms/global';
 import { useHasUnsavedLauncher } from '../Apps/AppsLauncher/launcherQdnSync';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
+import { useRevertSettings } from './useRevertSettings';
 import { useSaveSettingsToQdn } from './useSaveSettingsToQdn';
 import {
   Box,
@@ -89,8 +89,6 @@ export const Save = ({
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
-  const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
-
   const [openDialog, setOpenDialog] = useState(false);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
@@ -101,6 +99,7 @@ export const Save = ({
   const { data: bookmarks } = useLauncherBookmarks(myAddress, true);
   const hasChanged = useHasUnsavedLauncher(myAddress, bookmarks);
   const saveSettings = useSaveSettingsToQdn(myAddress, myName);
+  const revertSettings = useRevertSettings(myAddress);
 
   useEffect(() => {
     setHasSettingsChangedAtom(hasChanged);
@@ -140,9 +139,9 @@ export const Save = ({
   };
 
   const revertChanges = () => {
-    setPinnedApps(oldPinnedApps);
-    saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', null);
     setOpenDialog(false);
+    // The pins, and with them the bookmarks, the folders and the arrangement.
+    void revertSettings();
   };
 
   return (

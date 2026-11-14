@@ -18,6 +18,8 @@ import {
   applySavedLauncher,
   hasUnsavedPins,
   type LauncherSyncStores,
+  revertToSavedLauncher,
+  type SavedLauncherState,
 } from './launcherQdnSync';
 
 const ADDRESS = 'Qaddress';
@@ -63,6 +65,18 @@ const savedOf = (
 ): SavedLauncher => ({
   bookmarks: toSavedBookmarks(data(folders, bookmarks)),
   order,
+});
+
+/** What the settings on QDN were last seen to hold. */
+const savedState = (
+  launcher: SavedLauncher | null,
+  savedAt = 100,
+  address: string | null = ADDRESS
+): SavedLauncherState => ({
+  address,
+  status: launcher ? 'saved' : 'none',
+  launcher,
+  savedAt,
 });
 
 /** The stores, with what they were asked to keep. */
@@ -124,8 +138,13 @@ describe('taking in the launcher saved on QDN', () => {
       order: ['folder:f1', 'APP-Q-Mail'],
       openFolders: [],
     });
-    // What was taken in, and the bookmarks right after.
-    expect(saved.mark).toEqual({ savedAt: 100, localAt: 999 });
+    // What was taken in, the bookmarks right after, and where they stood.
+    expect(saved.mark).toEqual({
+      savedAt: 100,
+      localAt: 999,
+      order: ['folder:f1', 'APP-Q-Mail'],
+      unsaved: false,
+    });
   });
 
   it('keeps the folders open that were open here', async () => {
@@ -140,7 +159,11 @@ describe('taking in the launcher saved on QDN', () => {
       stores
     );
 
-    expect(saved.view).toEqual({ order: ['folder:f1'], openFolders: ['f1'] });
+    // The tile this device had arranged stays, after the saved ones.
+    expect(saved.view).toEqual({
+      order: ['folder:f1', 'APP-Q-Mail'],
+      openFolders: ['f1'],
+    });
   });
 
   it('writes nothing when there is nothing newer on QDN', async () => {
@@ -207,7 +230,134 @@ describe('taking in the launcher saved on QDN', () => {
       'Tools',
     ]);
     expect(saved.view?.order).toEqual(['folder:f1', 'folder:f2']);
-    expect(saved.mark).toEqual({ savedAt: 120, localAt: 999 });
+    // The folder of this device has never been saved.
+    expect(saved.mark).toEqual({
+      savedAt: 120,
+      localAt: 999,
+      order: ['folder:f1', 'folder:f2'],
+      unsaved: true,
+    });
+  });
+
+  it('keeps what a merge kept, at the next update', async () => {
+    // Nothing changed here since that merge, but it left a folder that was
+    // never saved: the update must not put the saved launcher in its place.
+    const { saved, stores } = makeStores({
+      local: data([folder('f2', 'Tools')], [], 999),
+      mark: {
+        savedAt: 120,
+        localAt: 999,
+        order: ['folder:f1', 'folder:f2'],
+        unsaved: true,
+      },
+      view: { order: ['folder:f1', 'folder:f2'], openFolders: [] },
+    });
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      settingsOf(savedOf([folder('f1', 'Media')], [], ['folder:f1'])),
+      130,
+      stores
+    );
+
+    expect(result.use).toBe('merge');
+    expect(saved.bookmarks?.folders.map((entry) => entry.name)).toEqual([
+      'Media',
+      'Tools',
+    ]);
+    expect(saved.mark?.unsaved).toBe(true);
+  });
+
+  it('merges when only the tiles were moved here', async () => {
+    // The bookmarks are as they were taken in; the arrangement is not.
+    const { saved, stores } = makeStores({
+      local: data([folder('f1', 'Media')], [], 50),
+      mark: { savedAt: 90, localAt: 50, order: ['folder:f1', 'APP-Q-Mail'] },
+      view: { order: ['APP-Q-Mail', 'folder:f1'], openFolders: [] },
+    });
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      settingsOf(savedOf([folder('f1', 'Media')], [], ['folder:f1'])),
+      120,
+      stores
+    );
+
+    expect(result.use).toBe('merge');
+    expect(saved.view?.order).toEqual(['folder:f1', 'APP-Q-Mail']);
+  });
+
+  it('has nothing unsaved when the merge kept nothing new', async () => {
+    const { saved, stores } = makeStores({
+      local: data([folder('f1', 'Media')], [], 80),
+      mark: null,
+      view: { order: ['folder:f1'], openFolders: [] },
+    });
+
+    const result = await applySavedLauncher(
+      ADDRESS,
+      settingsOf(savedOf([folder('f1', 'Media')], [], ['folder:f1'])),
+      120,
+      stores
+    );
+
+    expect(result.use).toBe('merge');
+    expect(saved.mark?.unsaved).toBe(false);
+  });
+});
+
+describe('putting the launcher back to what was saved', () => {
+  it('puts back the bookmarks, the folders and the arrangement', async () => {
+    const { saved, stores } = makeStores({
+      local: data([folder('f2', 'Tools')], [bookmark('b2', 'Q-Mail', 'f2')]),
+      view: { order: ['folder:f2'], openFolders: ['f2'] },
+    });
+    const launcher = savedOf(
+      [folder('f1', 'Media')],
+      [bookmark('b1', 'Q-Tube', 'f1')],
+      ['folder:f1']
+    );
+
+    expect(await revertToSavedLauncher(ADDRESS, savedState(launcher), stores)) //
+      .toBe(true);
+
+    expect(saved.bookmarks?.folders.map((entry) => entry.name)).toEqual([
+      'Media',
+    ]);
+    expect(saved.bookmarks?.bookmarks.map((entry) => entry.id)).toEqual(['b1']);
+    expect(saved.view).toEqual({ order: ['folder:f1'], openFolders: ['f2'] });
+    // Back to what is saved: nothing of this device's own is left.
+    expect(saved.mark).toEqual({
+      savedAt: 100,
+      localAt: 999,
+      order: ['folder:f1'],
+      unsaved: false,
+    });
+  });
+
+  it('leaves what is here when the settings hold no launcher', async () => {
+    const { stores } = makeStores({
+      local: data([folder('f2', 'Tools')], []),
+    });
+
+    expect(await revertToSavedLauncher(ADDRESS, savedState(null), stores)) //
+      .toBe(false);
+    expect(stores.saveBookmarks).not.toHaveBeenCalled();
+    expect(stores.setView).not.toHaveBeenCalled();
+  });
+
+  it("leaves what is here when the saved one is another account's", async () => {
+    const { stores } = makeStores();
+    const launcher = savedOf([folder('f1', 'Media')], []);
+
+    expect(
+      await revertToSavedLauncher(
+        ADDRESS,
+        savedState(launcher, 100, 'Qother'),
+        stores
+      )
+    ).toBe(false);
+    expect(stores.saveBookmarks).not.toHaveBeenCalled();
   });
 });
 

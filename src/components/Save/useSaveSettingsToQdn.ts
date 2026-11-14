@@ -14,10 +14,17 @@ import {
   getPublishRecord,
 } from '../../hooks/useQortalGetSaveSettings';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
-import { serializePinnedAppsForQdn } from '../../utils/pinnedAppsSettings';
+import {
+  mergePinnedApps,
+  type PinnedApp,
+  removeBrokenPinnedApps,
+  serializePinnedAppsForQdn,
+} from '../../utils/pinnedAppsSettings';
+import { PINNED_APPS_STORAGE_KEY } from '../../utils/pinnedAppsStorage';
 import { loadBookmarksForAddress } from '../Apps/AppBookmarks/bookmarkStorage';
 import type { AppBookmarksForAddress } from '../Apps/AppBookmarks/bookmarkTypes';
 import { loadLauncherView } from '../Apps/AppsLauncher/launcherItems';
+import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import {
   type SavedLauncher,
   saveLauncherSyncMark,
@@ -67,8 +74,10 @@ const errorOf = (reason: unknown, fallback: string) => {
  * bookmarks, the bookmark folders and the order of the launcher's tiles.
  *
  * - Settings saved on another device since they were read here are taken
- *   in first, so they are not written over. With `overwrite`, settings that
- *   could not be read are written over.
+ *   in first, so they are not written over: their bookmarks and arrangement
+ *   are taken in, and the pins they hold are added to this device's own, so
+ *   an app pinned there is not removed by saving a change made here. With
+ *   `overwrite`, settings that could not be read are written over.
  * - It asks to confirm, with the fee, before it publishes. `canceled` means
  *   that was declined; a failure throws, with a message to show.
  */
@@ -77,6 +86,7 @@ export const useSaveSettingsToQdn = (
   name: string | null | undefined
 ) => {
   const pinnedApps = useAtomValue(sortablePinnedAppsAtom);
+  const setPinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setOldPinnedApps = useSetAtom(oldPinnedAppsAtom);
   const setSettingsQdnLastUpdated = useSetAtom(settingsQDNLastUpdatedAtom);
   const savedLauncher = useAtomValue(savedLauncherAtom);
@@ -93,6 +103,7 @@ export const useSaveSettingsToQdn = (
         postProcess: 'capitalizeFirstChar',
       });
 
+      let pins = pinnedApps;
       if (address && name && !overwrite) {
         const known =
           savedLauncher.address === address ? savedLauncher.savedAt : 0;
@@ -102,6 +113,25 @@ export const useSaveSettingsToQdn = (
           // Settings that cannot be read are not written over unasked.
           if (!settings) throw new Error(failure);
           await takeIn(address, { settings, savedAt: record.timestamp });
+          // An app pinned on another device is kept: it would otherwise be
+          // removed by publishing this device's older list.
+          const merged = mergePinnedApps(
+            pins,
+            removeBrokenPinnedApps(
+              (settings as { sortablePinnedApps?: PinnedApp[] })
+                ?.sortablePinnedApps
+            )
+          );
+          if (merged.length !== pins.length) {
+            pins = merged;
+            setPinnedApps(merged);
+            // Kept here too, so the next sign-in starts from the whole list.
+            saveToLocalStorage(
+              PINNED_APPS_STORAGE_KEY,
+              'sortablePinnedApps',
+              merged
+            );
+          }
         }
       }
 
@@ -124,7 +154,7 @@ export const useSaveSettingsToQdn = (
           : null;
 
       const data64 = await objectToBase64({
-        sortablePinnedApps: serializePinnedAppsForQdn(pinnedApps),
+        sortablePinnedApps: serializePinnedAppsForQdn(pins),
         ...(launcher ? toSavedLauncherSettings(launcher) : {}),
       });
       const encrypted = await sendMessage(
@@ -170,7 +200,7 @@ export const useSaveSettingsToQdn = (
       if (!response?.identifier) throw new Error(failure);
 
       const savedAt = Date.now();
-      setOldPinnedApps(pinnedApps);
+      setOldPinnedApps(pins);
       setSettingsQdnLastUpdated(savedAt);
       if (address && launcher) {
         setSavedLauncher({ address, status: 'saved', launcher, savedAt });
@@ -178,6 +208,9 @@ export const useSaveSettingsToQdn = (
           saveLauncherSyncMark(address, {
             savedAt,
             localAt: bookmarks.updatedAt,
+            order: launcher.order,
+            // Everything this device has is now saved.
+            unsaved: false,
           });
         }
       }
@@ -189,6 +222,7 @@ export const useSaveSettingsToQdn = (
       pinnedApps,
       savedLauncher,
       setOldPinnedApps,
+      setPinnedApps,
       setSavedLauncher,
       setSettingsQdnLastUpdated,
       show,

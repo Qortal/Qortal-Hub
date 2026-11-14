@@ -385,6 +385,70 @@ describe('what to do with what was found', () => {
       })
     ).toBe('merge');
   });
+
+  it('merges when only the tiles were moved here', () => {
+    const local = data([folder('f1', 'Media')], [], 50);
+    const mark = { savedAt: 90, localAt: 50, order: ['folder:f1'] };
+
+    expect(
+      chooseSavedLauncherUse({
+        local,
+        order: ['folder:f1', 'APP-Q-Mail'],
+        mark,
+        saved,
+        savedAt: 120,
+      })
+    ).toBe('merge');
+    // Where they stood when it was taken in: nothing to keep.
+    expect(
+      chooseSavedLauncherUse({
+        local,
+        order: ['folder:f1'],
+        mark,
+        saved,
+        savedAt: 120,
+      })
+    ).toBe('replace');
+  });
+
+  it('merges while this device holds what a merge kept', () => {
+    expect(
+      chooseSavedLauncherUse({
+        local: data([folder('f1', 'Media')], [], 50),
+        order: ['folder:f1'],
+        mark: {
+          savedAt: 90,
+          localAt: 50,
+          order: ['folder:f1'],
+          unsaved: true,
+        },
+        saved,
+        savedAt: 120,
+      })
+    ).toBe('merge');
+  });
+
+  it('takes the saved one for a device with nothing of its own', () => {
+    // An arrangement of its own counts, even with no bookmarks.
+    expect(
+      chooseSavedLauncherUse({
+        local: data([], [], 50),
+        order: [],
+        mark: null,
+        saved,
+        savedAt: 120,
+      })
+    ).toBe('replace');
+    expect(
+      chooseSavedLauncherUse({
+        local: data([], [], 50),
+        order: ['APP-Q-Mail'],
+        mark: null,
+        saved,
+        savedAt: 120,
+      })
+    ).toBe('merge');
+  });
 });
 
 describe('the mark of what was taken in', () => {
@@ -398,6 +462,36 @@ describe('the mark of what was taken in', () => {
       savedAt: 10,
       localAt: 20,
     });
+  });
+
+  it('keeps where the tiles stood and what is unsaved', () => {
+    saveLauncherSyncMark('Qaddress', {
+      savedAt: 10,
+      localAt: 20,
+      order: ['folder:f1', 'APP-Q-Mail'],
+      unsaved: true,
+    });
+
+    expect(loadLauncherSyncMark('Qaddress')).toEqual({
+      savedAt: 10,
+      localAt: 20,
+      order: ['folder:f1', 'APP-Q-Mail'],
+      unsaved: true,
+    });
+  });
+
+  it('leaves out an arrangement and a flag that are not what they should be', () => {
+    localStorage.setItem(
+      launcherSyncMarkKey('Qodd'),
+      JSON.stringify({ savedAt: 1, localAt: 2, order: 'folder:f1' })
+    );
+    expect(loadLauncherSyncMark('Qodd')).toEqual({ savedAt: 1, localAt: 2 });
+
+    localStorage.setItem(
+      launcherSyncMarkKey('Qmixed'),
+      JSON.stringify({ savedAt: 1, localAt: 2, order: ['a', 7, 'b'] })
+    );
+    expect(loadLauncherSyncMark('Qmixed')?.order).toEqual(['a', 'b']);
   });
 
   it('has none for another account, or for what is damaged', () => {

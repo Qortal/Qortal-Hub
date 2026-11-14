@@ -102,15 +102,16 @@ export async function applySavedLauncher(
   const now = stores.now();
   const launcher = readSavedLauncher(settings, now);
   const local = await stores.loadBookmarks(address);
+  const view = stores.loadView(address);
   const use = chooseSavedLauncherUse({
     local,
+    order: view.order,
     mark: stores.loadMark(address),
     saved: launcher,
     savedAt,
   });
   if (use === 'keep' || !launcher) return { use: 'keep', launcher };
 
-  const view = stores.loadView(address);
   const next =
     use === 'replace'
       ? {
@@ -120,25 +121,74 @@ export async function applySavedLauncher(
       : mergeSavedLauncher({ data: local, order: view.order }, launcher, now);
   const stored = await stores.saveBookmarks(address, next.data);
   stores.setView(address, { ...view, order: next.order });
-  stores.saveMark(address, { savedAt, localAt: stored.updatedAt });
+  stores.saveMark(address, {
+    savedAt,
+    localAt: stored.updatedAt,
+    order: next.order,
+    // What a merge kept beyond the saved launcher has never been saved: the
+    // next update must keep it until it is.
+    unsaved:
+      use === 'merge' &&
+      !sameSavedLauncher(currentSavedLauncher(next.data, next.order), launcher),
+  });
   return { use, launcher };
 }
 
-// One at a time: the login read and a save can both take settings in.
-let takingIn: Promise<unknown> = Promise.resolve();
-
-const takeInOneAtATime = (
+/**
+ * Puts the launcher back to what the account's settings on QDN hold: the
+ * bookmarks, the folders and where the tiles stand. Settings that hold no
+ * launcher leave this device's own alone — there is nothing to go back to,
+ * since the Hub that saved them did not know about them.
+ */
+export async function revertToSavedLauncher(
   address: string,
-  settings: unknown,
-  savedAt: number,
+  saved: SavedLauncherState,
   stores: LauncherSyncStores
-) => {
-  const run = takingIn.then(() =>
-    applySavedLauncher(address, settings, savedAt, stores)
+): Promise<boolean> {
+  if (
+    saved.address !== address ||
+    saved.status !== 'saved' ||
+    !saved.launcher
+  ) {
+    return false;
+  }
+  const { launcher } = saved;
+  const view = stores.loadView(address);
+  const stored = await stores.saveBookmarks(
+    address,
+    fromSavedBookmarks(launcher.bookmarks, stores.now())
   );
-  takingIn = run.catch(() => undefined);
+  stores.setView(address, { ...view, order: launcher.order });
+  stores.saveMark(address, {
+    savedAt: saved.savedAt,
+    localAt: stored.updatedAt,
+    order: launcher.order,
+    unsaved: false,
+  });
+  return true;
+}
+
+// One at a time: the login read, a save and Revert all write these stores.
+let running: Promise<unknown> = Promise.resolve();
+
+const oneAtATime = <T>(work: () => Promise<T>): Promise<T> => {
+  const run = running.then(work);
+  running = run.catch(() => undefined);
   return run;
 };
+
+/** The stores the launcher really uses; tests hand in their own. */
+const liveStores = (
+  setView: (address: string, view: LauncherView) => void
+): LauncherSyncStores => ({
+  loadBookmarks: loadBookmarksForAddress,
+  saveBookmarks: saveBookmarksForAddress,
+  loadView: (account) => loadLauncherView(account),
+  setView,
+  loadMark: (account) => loadLauncherSyncMark(account),
+  saveMark: (account, mark) => saveLauncherSyncMark(account, mark),
+  now: Date.now,
+});
 
 /**
  * Takes in what the account's QDN settings hold for the launcher, and keeps
@@ -147,6 +197,7 @@ const takeInOneAtATime = (
 export const useTakeInSavedLauncher = () => {
   const setSavedLauncher = useSetAtom(savedLauncherAtom);
   const setViewOf = useSetLauncherViewOf();
+  const stores = useMemo(() => liveStores(setViewOf), [setViewOf]);
 
   return useCallback(
     async (
@@ -156,19 +207,8 @@ export const useTakeInSavedLauncher = () => {
       let launcher: SavedLauncher | null = null;
       const savedAt = found?.savedAt ?? 0;
       if (found) {
-        ({ launcher } = await takeInOneAtATime(
-          address,
-          found.settings,
-          savedAt,
-          {
-            loadBookmarks: loadBookmarksForAddress,
-            saveBookmarks: saveBookmarksForAddress,
-            loadView: (account) => loadLauncherView(account),
-            setView: setViewOf,
-            loadMark: (account) => loadLauncherSyncMark(account),
-            saveMark: (account, mark) => saveLauncherSyncMark(account, mark),
-            now: Date.now,
-          }
+        ({ launcher } = await oneAtATime(() =>
+          applySavedLauncher(address, found.settings, savedAt, stores)
         ));
       }
       setSavedLauncher((state) =>
@@ -183,7 +223,25 @@ export const useTakeInSavedLauncher = () => {
             }
       );
     },
-    [setSavedLauncher, setViewOf]
+    [setSavedLauncher, stores]
+  );
+};
+
+/**
+ * Puts the launcher back to what is saved on QDN, for Revert. It answers
+ * whether there was a saved launcher to go back to.
+ */
+export const useRevertSavedLauncher = () => {
+  const saved = useAtomValue(savedLauncherAtom);
+  const setViewOf = useSetLauncherViewOf();
+  const stores = useMemo(() => liveStores(setViewOf), [setViewOf]);
+
+  return useCallback(
+    async (address: string | null | undefined) =>
+      address
+        ? oneAtATime(() => revertToSavedLauncher(address, saved, stores))
+        : false,
+    [saved, stores]
   );
 };
 
