@@ -88,6 +88,8 @@ const OVERLAY_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 const SIDEBAR_OPEN_DELAY_MS = 0;
 const SIDEBAR_CLOSE_DELAY_MS = 140;
 const SIDEBAR_NUDGE_POSITION_KEY = 'qortal-hub-sidebar-nudge-top-v1';
+/** Menus, dialogs and tooltips, which open in portals outside the panel. */
+const SIDEBAR_POPUPS = '.MuiModal-root, .MuiPopper-root';
 
 export const clampSidebarNudgeTop = (
   value: number,
@@ -360,6 +362,8 @@ export const DesktopSideBar = ({
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const nudgeTopRef = useRef(nudgeTop);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const handleRef = useRef<HTMLDivElement | null>(null);
   const nudgeDragRef = useRef<{
     offsetY: number;
     pointerId: number;
@@ -506,6 +510,27 @@ export const DesktopSideBar = ({
     fn();
     if (!alwaysOpen) hideSidebar();
   };
+
+  // Opened by the pointer, the panel closes once the pointer is away from
+  // it, its handle and any menu or tooltip it opened. Leaving the panel over
+  // its handle, or from a menu, sends the panel itself no mouseleave.
+  useEffect(() => {
+    if (!isVisible || alwaysOpen) return;
+    const onPointerMove = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const isNear =
+        !!target &&
+        (!!panelRef.current?.contains(target) ||
+          !!handleRef.current?.contains(target) ||
+          !!target.closest(SIDEBAR_POPUPS));
+      if (isNear || closeTimerRef.current !== null) return;
+      hideSidebar();
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    return () => window.removeEventListener('pointermove', onPointerMove);
+    // hideSidebar works through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, alwaysOpen]);
 
   useEffect(() => {
     nudgeTopRef.current = nudgeTop;
@@ -801,6 +826,7 @@ export const DesktopSideBar = ({
         />
       ) : (
         <Box
+          ref={panelRef}
           sx={{
             position: 'fixed',
             left: 0,
@@ -913,6 +939,7 @@ export const DesktopSideBar = ({
         <Box
           aria-label="Move sidebar handle"
           onMouseEnter={showSidebarImmediate}
+          ref={handleRef}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             event.preventDefault();

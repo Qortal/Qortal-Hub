@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
@@ -144,6 +144,64 @@ describe('DesktopSideBar', () => {
       document.querySelector('[data-side-panel-slot="home"]')
     ).not.toBeNull();
     expect(document.querySelector('[data-side-panel-slot="theme"]')).toBeNull();
+  });
+
+  it('closes once the pointer is away, even after leaving over its handle', () => {
+    vi.useFakeTimers();
+    try {
+      renderPanel();
+      const handle = screen.getByLabelText('Move sidebar handle');
+      const column = document.querySelector(
+        '[data-side-panel="hover"]'
+      ) as HTMLElement;
+      fireEvent.mouseEnter(handle);
+      expect(column).toHaveStyle({ pointerEvents: 'auto' });
+
+      // From the panel back over its handle: the handle keeps it open.
+      fireEvent.mouseEnter(column);
+      fireEvent.mouseLeave(column);
+      fireEvent.mouseEnter(handle);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(column).toHaveStyle({ pointerEvents: 'auto' });
+
+      // Then onto the page, which sends the panel no mouseleave.
+      fireEvent.pointerMove(document.body);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(column).toHaveStyle({ pointerEvents: 'none' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stays open while the pointer is on it, its handle or a menu it opened', () => {
+    vi.useFakeTimers();
+    const menu = document.createElement('div');
+    menu.className = 'MuiModal-root';
+    document.body.appendChild(menu);
+    try {
+      renderPanel();
+      const handle = screen.getByLabelText('Move sidebar handle');
+      const column = document.querySelector(
+        '[data-side-panel="hover"]'
+      ) as HTMLElement;
+      fireEvent.mouseEnter(handle);
+
+      fireEvent.pointerMove(screen.getByText('Home'));
+      fireEvent.pointerMove(handle);
+      fireEvent.pointerMove(menu);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(column).toHaveStyle({ pointerEvents: 'auto' });
+    } finally {
+      menu.remove();
+      vi.useRealTimers();
+    }
   });
 
   it('opens its editor', () => {
