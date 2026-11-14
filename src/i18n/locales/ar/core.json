@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "الواجهات البعيدة المتصلة",
     "data_peers": "أقران QDN (البيانات)",
     "information": "معلومات Core",
+    "minting": "جاري التعدين",
+    "not_minting": "لا يتم التعدين",
     "p2p_active_overlay_peers": "أقران P2P Hub",
     "p2p_health": "حالة P2P Hub",
     "p2p_health_bad": "سيئة",
     "p2p_health_good": "جيدة",
     "p2p_health_low": "منخفضة",
+    "p2p_peers_out_in": "{{out}} صادر · {{in}} وارد",
     "peers": "السيرفرات المتصلة",
     "version": "نسخة Core"
   },
@@ -731,6 +734,11 @@
     "suggestions": "اقتراحات"
   },
   "new_post_in": "منشور جديد في {{ title }}",
+  "node_state": {
+    "minting": "جاري التعدين على النود الخاص بك",
+    "own": "جاري استخدام النود الخاص بك",
+    "public": "جاري استخدام نود عام"
+  },
   "none": "لا شيء",
   "not_available": "غير متاح",
   "note": "ملاحظة",

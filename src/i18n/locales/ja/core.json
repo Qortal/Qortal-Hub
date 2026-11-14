@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "接続中のリモートインターフェース",
     "data_peers": "QDN (データ) ピア",
     "information": "Core 情報",
+    "minting": "鋳造中",
+    "not_minting": "鋳造していません",
     "p2p_active_overlay_peers": "P2P ハブのピア",
     "p2p_health": "P2P ハブの状態",
     "p2p_health_bad": "不良",
     "p2p_health_good": "良好",
     "p2p_health_low": "低い",
+    "p2p_peers_out_in": "送信 {{out}} · 受信 {{in}}",
     "peers": "コネクテッドピア",
     "version": "Core バージョン"
   },
@@ -731,6 +734,11 @@
     "suggestions": "候補"
   },
   "new_post_in": "{{ title }} の新しい投稿",
+  "node_state": {
+    "minting": "自分のノードで鋳造中",
+    "own": "自分のノードを使用中",
+    "public": "パブリックノードを使用中"
+  },
   "none": "なし",
   "not_available": "該当なし",
   "note": "注記",

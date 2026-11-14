@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "已连接的远程接口",
     "data_peers": "QDN (数据) 节点",
     "information": "Core 信息",
+    "minting": "铸造中",
+    "not_minting": "未铸造",
     "p2p_active_overlay_peers": "P2P Hub 节点",
     "p2p_health": "P2P Hub 状态",
     "p2p_health_bad": "差",
     "p2p_health_good": "良好",
     "p2p_health_low": "低",
+    "p2p_peers_out_in": "出站 {{out}} · 入站 {{in}}",
     "peers": "连接的同行",
     "version": "Core 版本"
   },
@@ -731,6 +734,11 @@
     "suggestions": "建议"
   },
   "new_post_in": "{{ title }} 中的新帖子",
+  "node_state": {
+    "minting": "正在您自己的节点上铸造",
+    "own": "正在使用您自己的节点",
+    "public": "正在使用公共节点"
+  },
   "none": "没有任何",
   "not_available": "不适用",
   "note": "笔记",

@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "Verbundene Remote-Schnittstellen",
     "data_peers": "QDN (Daten) Peers",
     "information": "Core-Informationen",
+    "minting": "prägt",
+    "not_minting": "prägt nicht",
     "p2p_active_overlay_peers": "P2P-Hub-Peers",
     "p2p_health": "P2P-Hub-Zustand",
     "p2p_health_bad": "Schlecht",
     "p2p_health_good": "Gut",
     "p2p_health_low": "Niedrig",
+    "p2p_peers_out_in": "{{out}} aus · {{in}} ein",
     "peers": "Gefahrene Kollegen",
     "version": "Core-Version"
   },
@@ -731,6 +734,11 @@
     "suggestions": "Vorschläge"
   },
   "new_post_in": "neuer Beitrag in {{ title }}",
+  "node_state": {
+    "minting": "Prägung auf deinem eigenen Node",
+    "own": "Dein eigener Node wird verwendet",
+    "public": "Ein öffentlicher Node wird verwendet"
+  },
   "none": "keiner",
   "not_available": "k.a.",
   "note": "Notiz",

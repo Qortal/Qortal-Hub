@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "Yhdistetyt etäliittymät",
     "data_peers": "QDN (data) vertaiset",
     "information": "Core-tiedot",
+    "minting": "minttaa",
+    "not_minting": "ei minttaa",
     "p2p_active_overlay_peers": "P2P-keskittimen vertaiset",
     "p2p_health": "P2P-keskittimen tila",
     "p2p_health_bad": "Huono",
     "p2p_health_good": "Hyvä",
     "p2p_health_low": "Matala",
+    "p2p_peers_out_in": "{{out}} lähtevää · {{in}} saapuvaa",
     "peers": "yhdistetyt vertaiset",
     "version": "Core-versio"
   },
@@ -731,6 +734,11 @@
     "suggestions": "Ehdotukset"
   },
   "new_post_in": "uusi julkaisu kohteessa {{ title }}",
+  "node_state": {
+    "minting": "Minttaa omalla solmullasi",
+    "own": "Käytetään omaa solmuasi",
+    "public": "Käytetään julkista solmua"
+  },
   "none": "ei mitään",
   "not_available": "ei saatavilla",
   "note": "muistiinpano",
