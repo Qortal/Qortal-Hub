@@ -1793,6 +1793,11 @@ export const AppsDesktop = ({
                 }}
               >
                 <AppPublish
+                  key={
+                    publishEditTarget
+                      ? `update-${publishEditTarget.service}-${publishEditTarget.name}`
+                      : mode
+                  }
                   categories={categories}
                   myAddress={myAddress}
                   myName={myName}
@@ -1806,6 +1811,7 @@ export const AppsDesktop = ({
                     mode === 'publish-website' ||
                     !!publishEditTarget
                   }
+                  isUpdate={!!publishEditTarget}
                 />
               </Box>
             )}

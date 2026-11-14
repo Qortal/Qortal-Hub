@@ -798,6 +798,29 @@
     "selected_file": "valittu tiedosto: {{filename}}"
   },
   "publish": "julkaise",
+  "publish_source": {
+    "changed_files": "{{date}} jälkeen muuttuneita tiedostoja: {{number}}",
+    "choose_another": "valitse jokin muu",
+    "choose_folder": "valitse kansio",
+    "read_error": "valittua kansiota tai tiedostoa ei voitu lukea",
+    "same_file": "sama tiedosto kuin viime kerralla",
+    "same_folder": "sama kansio kuin viime kerralla",
+    "selected_file": "valittu tiedosto: {{name}}",
+    "selected_folder": "valittu kansio: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "ei voitu tarkistaa, oletko yhä ryhmän {{group}} ylläpitäjä. Yritä myöhemmin uudelleen.",
+    "checking_admin": "tarkistetaan, oletko yhä ryhmän {{group}} ylläpitäjä…",
+    "current_unavailable": "nykyistä versiota ei voitu ladata, joten sovelluksen nimeä ja logoa ei voi säilyttää. Syötä ne uudelleen.",
+    "filled_from_profile": "tämän sovelluksen tietoja ei voitu ladata verkosta, joten ne täytettiin tämän tietokoneen edellisestä julkaisusta. Tarkista ne ennen julkaisua.",
+    "identifier_locked": "tunnistetta ei voi muuttaa päivityksessä: eri tunniste julkaisisi uuden sovelluksen.",
+    "is_admin": "olet ryhmän {{group}} ylläpitäjä",
+    "last_published": "julkaistu viimeksi tältä tietokoneelta: {{date}}",
+    "loading_current": "ladataan nykyistä versiota…",
+    "logo_kept": "logo säilytetään nykyisestä versiosta",
+    "not_admin": "et ole enää ryhmän {{group}} ylläpitäjä, joten tätä sovellusta ei voi päivittää tältä tililtä.",
+    "title": "päivitä {{name}}"
+  },
   "q_apps": {
     "about": "tietoa tästä Q-sovelluksesta",
     "q_mail": "Q-Mail",

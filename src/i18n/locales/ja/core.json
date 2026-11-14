@@ -798,6 +798,29 @@
     "selected_file": "選択したファイル: {{filename}}"
   },
   "publish": "公開",
+  "publish_source": {
+    "changed_files": "{{date}}以降に変更されたファイル: {{number}}",
+    "choose_another": "別のものを選択",
+    "choose_folder": "フォルダーを選択",
+    "read_error": "選択したフォルダーまたはファイルを読み込めませんでした",
+    "same_file": "前回と同じファイル",
+    "same_folder": "前回と同じフォルダー",
+    "selected_file": "選択したファイル: {{name}}",
+    "selected_folder": "選択したフォルダー: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "{{group}}の管理者であることを確認できませんでした。後でもう一度お試しください。",
+    "checking_admin": "{{group}}の管理者であることを確認しています…",
+    "current_unavailable": "現在のバージョンを読み込めなかったため、アプリ名とロゴを引き継げません。もう一度入力してください。",
+    "filled_from_profile": "このアプリの詳細をネットワークから読み込めなかったため、このPCからの前回の公開内容で入力しました。公開する前に確認してください。",
+    "identifier_locked": "更新では識別子を変更できません。別の識別子にすると新しいアプリとして公開されます。",
+    "is_admin": "あなたは{{group}}の管理者です",
+    "last_published": "このPCからの前回の公開: {{date}}",
+    "loading_current": "現在のバージョンを読み込んでいます…",
+    "logo_kept": "ロゴは現在のバージョンから引き継ぎます",
+    "not_admin": "あなたは{{group}}の管理者ではなくなったため、このアカウントからこのアプリを更新できません。",
+    "title": "{{name}}を更新"
+  },
   "q_apps": {
     "about": "このq-appについて",
     "q_mail": "Q-Mail",

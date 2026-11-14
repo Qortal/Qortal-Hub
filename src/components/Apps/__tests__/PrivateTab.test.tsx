@@ -8,24 +8,48 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../PublishedPrivateApps', () => ({
-  PublishedPrivateApps: ({ refreshKey }: { refreshKey: number }) => (
-    <div data-testid="published-list">{`refresh-${refreshKey}`}</div>
+  PublishedPrivateApps: ({
+    refreshKey,
+    onUpdate,
+  }: {
+    refreshKey: number;
+    onUpdate: (app: unknown) => void;
+  }) => (
+    <div data-testid="published-list">
+      {`refresh-${refreshKey}`}
+      <button
+        onClick={() =>
+          onUpdate({
+            name: 'alice',
+            identifier: 'q-notes',
+            service: 'DOCUMENT',
+            groupId: 42,
+            timestamp: null,
+          })
+        }
+      >
+        update-q-notes
+      </button>
+    </div>
   ),
 }));
 
 vi.mock('../AppsPrivate', () => ({
   AppsPrivate: ({
     action,
+    updateTarget,
     onClose,
     onPublished,
   }: {
     action: string | null;
+    updateTarget: { identifier: string } | null;
     onClose: () => void;
     onPublished: () => void;
   }) =>
     action ? (
       <div data-testid="private-dialog">
         {action}
+        {updateTarget ? `:${updateTarget.identifier}` : ''}
         <button onClick={onClose}>close-dialog</button>
         <button onClick={onPublished}>published</button>
       </div>
@@ -63,6 +87,23 @@ describe('PrivateTab', () => {
 
     await user.click(screen.getByText('core:action.publish_app'));
     expect(screen.getByTestId('private-dialog')).toHaveTextContent('publish');
+  });
+
+  it('opens the update dialog for an app in the list, and forgets it on close', async () => {
+    const user = userEvent.setup();
+    renderTab();
+
+    await user.click(screen.getByText('update-q-notes'));
+    expect(screen.getByTestId('private-dialog')).toHaveTextContent(
+      'update:q-notes'
+    );
+
+    await user.click(screen.getByText('close-dialog'));
+    await user.click(screen.getByText('core:action.publish_app'));
+    expect(screen.getByTestId('private-dialog')).toHaveTextContent(/^publish/);
+    expect(screen.getByTestId('private-dialog')).not.toHaveTextContent(
+      'q-notes'
+    );
   });
 
   it('refreshes the published list after a publish', async () => {

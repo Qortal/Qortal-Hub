@@ -798,6 +798,29 @@
     "selected_file": "fichier sélectionné : {{filename}}"
   },
   "publish": "publier",
+  "publish_source": {
+    "changed_files": "fichiers modifiés depuis le {{date}} : {{number}}",
+    "choose_another": "en choisir un autre",
+    "choose_folder": "choisir un dossier",
+    "read_error": "le dossier ou le fichier sélectionné n'a pas pu être lu",
+    "same_file": "même fichier que la dernière fois",
+    "same_folder": "même dossier que la dernière fois",
+    "selected_file": "fichier sélectionné : {{name}}",
+    "selected_folder": "dossier sélectionné : {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "impossible de vérifier que vous êtes toujours administrateur de {{group}}. Réessayez plus tard.",
+    "checking_admin": "vérification que vous êtes toujours administrateur de {{group}}…",
+    "current_unavailable": "la version actuelle n'a pas pu être chargée, son nom d'application et son logo ne peuvent donc pas être conservés. Saisissez-les à nouveau.",
+    "filled_from_profile": "les détails de cette application n'ont pas pu être chargés depuis le réseau, ils ont donc été remplis à partir de la dernière publication depuis ce PC. Vérifiez-les avant de publier.",
+    "identifier_locked": "l'identifiant ne peut pas être modifié lors d'une mise à jour : un autre identifiant publierait une nouvelle application.",
+    "is_admin": "vous êtes administrateur de {{group}}",
+    "last_published": "dernière publication depuis ce PC : {{date}}",
+    "loading_current": "chargement de la version actuelle…",
+    "logo_kept": "logo conservé de la version actuelle",
+    "not_admin": "vous n'êtes plus administrateur de {{group}}, cette application ne peut donc pas être mise à jour depuis ce compte.",
+    "title": "mettre à jour {{name}}"
+  },
   "q_apps": {
     "about": "À propos de ce Q-App",
     "q_mail": "Q-Mail",
