@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "Ühendatud kaugliidesed",
     "data_peers": "QDN (andmed) sõlmed",
     "information": "Core teave",
+    "minting": "mindib",
+    "not_minting": "ei mindi",
     "p2p_active_overlay_peers": "P2P-jaoturi sõlmed",
     "p2p_health": "P2P-jaoturi seisund",
     "p2p_health_bad": "Halb",
     "p2p_health_good": "Hea",
     "p2p_health_low": "Madal",
+    "p2p_peers_out_in": "{{out}} väljuvat · {{in}} sisenevat",
     "peers": "ühendatud sõlmed",
     "version": "Core versioon"
   },
@@ -731,6 +734,11 @@
     "suggestions": "Soovitused"
   },
   "new_post_in": "uus postitus kohas {{ title }}",
+  "node_state": {
+    "minting": "Mintimine sinu oma sõlmes",
+    "own": "Kasutad oma sõlme",
+    "public": "Kasutad avalikku sõlme"
+  },
   "none": "puudub",
   "not_available": "pole saadaval",
   "note": "märkus",

@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "Interfaces distantes connectées",
     "data_peers": "pairs QDN (données)",
     "information": "informations Core",
+    "minting": "frappe",
+    "not_minting": "ne frappe pas",
     "p2p_active_overlay_peers": "Pairs du Hub P2P",
     "p2p_health": "État du Hub P2P",
     "p2p_health_bad": "Mauvais",
     "p2p_health_good": "Bon",
     "p2p_health_low": "Faible",
+    "p2p_peers_out_in": "{{out}} sortants · {{in}} entrants",
     "peers": "pairs connectés",
     "version": "version Core"
   },
@@ -731,6 +734,11 @@
     "suggestions": "Suggestions"
   },
   "new_post_in": "nouveau message dans {{ title }}",
+  "node_state": {
+    "minting": "Frappe sur votre propre nœud",
+    "own": "Utilisation de votre propre nœud",
+    "public": "Utilisation d'un nœud public"
+  },
   "none": "aucun",
   "not_available": "n/d",
   "note": "note",

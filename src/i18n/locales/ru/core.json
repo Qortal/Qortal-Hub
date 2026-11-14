@@ -342,11 +342,14 @@
     "connected_remote_interfaces": "Подключённые удалённые интерфейсы",
     "data_peers": "QDN (данные) узлы",
     "information": "информация Core",
+    "minting": "добыча",
+    "not_minting": "без добычи",
     "p2p_active_overlay_peers": "Узлы P2P Hub",
     "p2p_health": "Состояние P2P Hub",
     "p2p_health_bad": "Плохое",
     "p2p_health_good": "Хорошее",
     "p2p_health_low": "Низкое",
+    "p2p_peers_out_in": "{{out}} исх. · {{in}} вх.",
     "peers": "Подключенные сверстники",
     "version": "версия Core"
   },
@@ -733,6 +736,11 @@
     "suggestions": "Подсказки"
   },
   "new_post_in": "новые сообщения в {{ title }}",
+  "node_state": {
+    "minting": "Добыча на вашем собственном узле",
+    "own": "Используется ваш собственный узел",
+    "public": "Используется публичный узел"
+  },
   "none": "никто",
   "not_available": "н/д",
   "note": "примечание",

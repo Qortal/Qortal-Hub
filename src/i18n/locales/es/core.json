@@ -340,11 +340,14 @@
     "connected_remote_interfaces": "Interfaces remotas conectadas",
     "data_peers": "compañeros QDN (datos)",
     "information": "información de Core",
+    "minting": "acuñando",
+    "not_minting": "sin acuñar",
     "p2p_active_overlay_peers": "Pares del Hub P2P",
     "p2p_health": "Estado del Hub P2P",
     "p2p_health_bad": "Malo",
     "p2p_health_good": "Bueno",
     "p2p_health_low": "Bajo",
+    "p2p_peers_out_in": "{{out}} salientes · {{in}} entrantes",
     "peers": "compañeros conectados",
     "version": "versión de Core"
   },
@@ -731,6 +734,11 @@
     "suggestions": "Sugerencias"
   },
   "new_post_in": "nueva publicación en {{ title }}",
+  "node_state": {
+    "minting": "Acuñando en tu propio nodo",
+    "own": "Usando tu propio nodo",
+    "public": "Usando un nodo público"
+  },
   "none": "ninguno",
   "not_available": "n/d",
   "note": "nota",
