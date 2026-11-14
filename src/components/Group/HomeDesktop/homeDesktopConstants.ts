@@ -100,6 +100,11 @@ export const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<WidgetDisplayMode, number
 export const WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS =
   7 * 24 * 60 * 60 * 1000;
 export const WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT = 50;
+/**
+ * A Wallet Activity card at least this tall shows the history by itself, in
+ * place of the latest payment, until the user opens or closes it.
+ */
+export const WALLET_ACTIVITY_HISTORY_OPEN_MIN_HEIGHT_PX = 440;
 export const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
 
 export const DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY =

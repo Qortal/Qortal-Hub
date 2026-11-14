@@ -17,6 +17,7 @@ import {
 } from './WalletActivityHistory';
 import {
   HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
+  WALLET_ACTIVITY_HISTORY_OPEN_MIN_HEIGHT_PX,
   WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
 } from './homeDesktopConstants';
 import type { WalletActivityEntry, WalletActivityTransaction } from './types';
@@ -44,6 +45,25 @@ function getRightRailRectFromElement(element: HTMLElement | null) {
   return rail.getBoundingClientRect();
 }
 
+/** Whether the element is at least `minHeight` px tall, as it is resized. */
+const useIsAtLeastTall = (node: HTMLElement | null, minHeight: number) => {
+  const [isTall, setIsTall] = useState(false);
+
+  useEffect(() => {
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const height =
+        entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
+      setIsTall(height >= minHeight);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [minHeight, node]);
+
+  return isTall;
+};
+
 export const HomeDesktopWalletActivity = () => {
   const theme = useTheme();
   const userInfo = useAtomValue(userInfoAtom);
@@ -69,10 +89,18 @@ export const HomeDesktopWalletActivity = () => {
   const [isWalletActivityLoading, setIsWalletActivityLoading] = useState(false);
   const [walletActivityRelativeTimeNow, setWalletActivityRelativeTimeNow] =
     useState(() => Date.now());
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  // A tall card shows the history by itself; once the user opens or closes
+  // it, their choice stands.
+  const [cardNode, setCardNode] = useState<HTMLDivElement | null>(null);
+  const isCardTall = useIsAtLeastTall(
+    cardNode,
+    WALLET_ACTIVITY_HISTORY_OPEN_MIN_HEIGHT_PX
+  );
+  const [historyChoice, setHistoryChoice] = useState<boolean | null>(null);
+  const isHistoryOpen = historyChoice ?? isCardTall;
   const toggleHistory = useCallback(
-    () => setIsHistoryOpen((current) => !current),
-    []
+    () => setHistoryChoice(!isHistoryOpen),
+    [isHistoryOpen]
   );
   const historyListId = useId();
 
@@ -317,7 +345,7 @@ export const HomeDesktopWalletActivity = () => {
 
   useEffect(() => {
     setRecentWalletActivity(null);
-    setIsHistoryOpen(false);
+    setHistoryChoice(null);
     lastWalletActivityBalanceRef.current = null;
   }, [userAddress]);
 
@@ -352,15 +380,13 @@ export const HomeDesktopWalletActivity = () => {
 
   return (
     <DashboardUtilityPanel
+      panelBoxRef={setCardNode}
       title={td('wallet_activity', 'Wallet Activity')}
       theme={theme}
       sx={{
         gap: '12px',
         height: '100%',
         minHeight: '182px',
-        // A fixed-height card (the wide layout) scrolls its open history;
-        // elsewhere the card grows with it.
-        overflowY: isHistoryOpen ? 'auto' : undefined,
         padding: '14px 16px 16px',
       }}
     >

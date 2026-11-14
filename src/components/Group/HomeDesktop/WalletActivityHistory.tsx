@@ -155,7 +155,15 @@ export const WalletActivityHistory = ({
   return (
     <Box
       id={id}
-      sx={{ display: open ? 'flex' : 'none', flexDirection: 'column' }}
+      sx={{
+        display: open ? 'flex' : 'none',
+        flexDirection: 'column',
+        // A fixed-height card keeps its buttons in view: the list takes the
+        // rest of it and scrolls there. Elsewhere the card grows with it.
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+      }}
     >
       {open ? (
         <>

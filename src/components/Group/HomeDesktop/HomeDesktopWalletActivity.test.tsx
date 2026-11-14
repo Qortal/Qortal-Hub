@@ -31,6 +31,29 @@ const reply = (body: unknown, status = 200): Reply => ({
   status,
 });
 
+/** Every observed element reports this height, as a resized card would. */
+const stubCardHeight = (height: number) => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      private readonly callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+      observe(target: Element) {
+        const entry = {
+          borderBoxSize: [{ blockSize: height, inlineSize: 360 }],
+          contentRect: { height, width: 360 },
+          target,
+        } as unknown as ResizeObserverEntry;
+        this.callback([entry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+};
+
 describe('HomeDesktopWalletActivity history', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   // The latest payment, which the card shows on its own above the history.
@@ -121,6 +144,30 @@ describe('HomeDesktopWalletActivity history', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('+7.00 QORT')).toHaveLength(1);
     expect(screen.queryByText('-3.00 QORT')).not.toBeInTheDocument();
+  });
+
+  it('shows the history by itself in a tall card, until it is closed', async () => {
+    stubCardHeight(520);
+    renderCard();
+
+    expect(await screen.findByText('-3.00 QORT')).toBeInTheDocument();
+    expect(historyButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByText('Recent Transaction')).not.toBeInTheDocument();
+
+    fireEvent.click(historyButton());
+
+    expect(historyButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('Recent Transaction')).toBeInTheDocument();
+    expect(screen.queryByText('-3.00 QORT')).not.toBeInTheDocument();
+  });
+
+  it('keeps a shorter card on the latest payment', async () => {
+    stubCardHeight(300);
+    renderCard();
+
+    expect(await screen.findByText('alice')).toBeInTheDocument();
+    expect(historyButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(historyRequests()).toEqual([]);
   });
 
   it('closes the history when the account changes, and loads the new one', async () => {
