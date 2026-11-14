@@ -70,6 +70,7 @@ import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
 import { QortinoNotificationHost } from './components/Snackbar/QortinoNotificationHost';
+import { QortinoAgentHost } from './components/Group/QortinoAgent/QortinoAgentHost';
 import { getWallets, storeWallets } from './background/background.ts';
 import {
   executeEvent,
@@ -2011,6 +2012,10 @@ function App() {
             rawWallet={rawWallet}
           />
         )}
+
+        {extState === 'authenticated' && isMainWindow ? (
+          <QortinoAgentHost />
+        ) : null}
 
         <QortinoNotificationHost
           open={openSnack}

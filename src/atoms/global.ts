@@ -980,3 +980,11 @@ export const qortalGroupSelfGcallRoomIdAtom = atom<string | null>(null);
 
 /** UI-only address → primaryName cache for active Qortal group call participants. */
 export const qortalGroupCallPrimaryNamesAtom = atom<Record<string, string>>({});
+
+/**
+ * Qortino AI's panel (src/components/Group/QortinoAgent/QortinoAgentPanel).
+ * - open: the panel is shown
+ * - parked: hidden, with its chat and the loaded model kept
+ */
+export const qortinoAgentOpenAtom = atom(false);
+export const qortinoAgentParkedAtom = atom(false);

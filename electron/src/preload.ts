@@ -2803,6 +2803,65 @@ try {
     });
   }
 
+  // Qortino AI: the model on this computer (electron/src/qortino-llm.ts).
+  type QortinoEventListener = (payload: unknown) => void;
+  const qortinoListeners = new Map<string, Set<QortinoEventListener>>();
+  let qortinoEventsAttached = false;
+  const attachQortinoEvents = () => {
+    if (qortinoEventsAttached) return;
+    qortinoEventsAttached = true;
+    ipcRenderer.on(
+      'qortino:event',
+      (_event, message: { event?: string; payload?: unknown }) => {
+        const listeners = message?.event
+          ? qortinoListeners.get(message.event)
+          : undefined;
+        if (!listeners) return;
+        for (const listener of [...listeners]) {
+          try {
+            listener(message.payload);
+          } catch (error) {
+            loggerError('[qortino] listener failed', error);
+          }
+        }
+      }
+    );
+  };
+  const qortinoInvoke =
+    (channel: string) =>
+    (options?: unknown): Promise<any> =>
+      ipcRenderer.invoke(channel, options ?? {});
+  contextBridge.exposeInMainWorld('qortinoLlm', {
+    getDeviceTier: qortinoInvoke('qortino:getDeviceTier'),
+    getStoragePaths: qortinoInvoke('qortino:getStoragePaths'),
+    fileExists: qortinoInvoke('qortino:fileExists'),
+    sha256File: qortinoInvoke('qortino:sha256File'),
+    cleanupStorage: qortinoInvoke('qortino:cleanupStorage'),
+    downloadUrl: qortinoInvoke('qortino:downloadUrl'),
+    cancelDownload: qortinoInvoke('qortino:cancelDownload'),
+    otherModelPath: qortinoInvoke('qortino:otherModelPath'),
+    removeOtherModel: qortinoInvoke('qortino:removeOtherModel'),
+    pickModelFile: qortinoInvoke('qortino:pickModelFile'),
+    loadModel: qortinoInvoke('qortino:loadModel'),
+    warmup: qortinoInvoke('qortino:warmup'),
+    complete: qortinoInvoke('qortino:complete'),
+    cancel: qortinoInvoke('qortino:cancel'),
+    unload: qortinoInvoke('qortino:unload'),
+    info: qortinoInvoke('qortino:info'),
+    on: (eventName: string, listener: QortinoEventListener) => {
+      attachQortinoEvents();
+      let listeners = qortinoListeners.get(eventName);
+      if (!listeners) {
+        listeners = new Set();
+        qortinoListeners.set(eventName, listeners);
+      }
+      listeners.add(listener);
+      return () => {
+        qortinoListeners.get(eventName)?.delete(listener);
+      };
+    },
+  });
+
   // WebRTC DM calls use this even when the legacy P2P transport is disabled.
   // Keeping it outside the legacy block ensures direct calls receive their
   // STUN configuration without re-enabling any legacy data channel behavior.

@@ -797,17 +797,6 @@ export const AppsDesktop = ({
         return;
       }
     }
-    if (tabs.length >= MAX_OPEN_APP_TABS) {
-      setInfoSnack({
-        message: t('core:app_tab.limit_reached', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        type: 'warning',
-      });
-      setOpenSnack(true);
-      return;
-    }
-
     if (data?.navigateIfAlreadyOpen) {
       const { navigateIfAlreadyOpen, path, ...tabIdentity } = data;
       const existingTab = tabs.find(
@@ -835,6 +824,18 @@ export const AppsDesktop = ({
         return;
       }
     }
+    // Only a new tab needs a free slot: an open one is reused above.
+    if (tabs.length >= MAX_OPEN_APP_TABS) {
+      setInfoSnack({
+        message: t('core:app_tab.limit_reached', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        type: 'warning',
+      });
+      setOpenSnack(true);
+      return;
+    }
+
     const newTab = {
       ...data,
       tabId: uid.rnd(),

@@ -787,6 +787,243 @@
     "q_wallets": "Q-Wallets",
     "wallets_workspace": "espacio de trabajo de carteras"
   },
+  "qortino_agent": {
+    "aria": {
+      "back": "Atrás",
+      "close": "Cerrar Qortino",
+      "copy": "Copiar la respuesta completa",
+      "history": "Historial de chats",
+      "narrow": "Estrechar el panel",
+      "new_chat": "Nuevo chat",
+      "report": "Informar sobre una respuesta errónea o extraña",
+      "send": "Enviar",
+      "settings": "Ajustes",
+      "stop": "Detener",
+      "widen": "Ensanchar el panel"
+    },
+    "chat": {
+      "continue": "Continuar respuesta →",
+      "copied": "Respuesta completa copiada",
+      "copy_failed": "No se pudo copiar",
+      "empty": "Pregúntame lo que quieras: primeros auxilios y salud, supervivencia y preparación, huerto y cocina, Qortal, programación y más. Funciono por completo en este ordenador, así que trabajo sin nada de internet.",
+      "links_heading": "Enlaces",
+      "load_failed": "Qortino no pudo iniciarse: {{error}}",
+      "loading_model": "Despertando a Qortino…",
+      "loading_model_hint": "Cargando el modelo en memoria. Las siguientes aperturas son mucho más rápidas.",
+      "model_missing": "Falta el archivo del modelo. Abre los ajustes para volver a descargarlo o para elegir otro modelo.",
+      "needs_app": "Qortino funciona en la app de escritorio Qortal Hub, no en un navegador.",
+      "no_reply": "No llegó ninguna respuesta. Prueba con una pregunta más corta, o cierra y vuelve a abrir Qortino.",
+      "open_app": "Abrir",
+      "placeholder": "Escribe a Qortino…",
+      "published_as": "{{service}} · publicado como {{name}}",
+      "qapps_heading": "Q-Apps",
+      "reply_failed": "Lo siento, no pude escribir una respuesta.",
+      "retry": "reintentar",
+      "subtitle": "Sin conexión · {{model}}"
+    },
+    "error": {
+      "checksum": "Una parte descargada estaba dañada, así que se eliminó. Inténtalo de nuevo.",
+      "detail": "Detalles: {{detail}}",
+      "download": "No se pudo guardar el modelo en este ordenador. Revisa el espacio libre en disco y la conexión con tu nodo, y vuelve a intentarlo.",
+      "generic": "El montaje falló.",
+      "not_published": "El modelo de Qortino aún no está en QDN, o tu nodo todavía no lo ve. Inténtalo de nuevo un poco más tarde.",
+      "qdn_failed": "QDN no pudo entregar el modelo ahora mismo. Quizá muy pocos pares lo alojan. Inténtalo más tarde.",
+      "stalled": "La descarga dejó de avanzar: ahora mismo ningún par envía el resto. Inténtalo más tarde."
+    },
+    "gate": {
+      "assemble": "Montar Qortino",
+      "background_hint": "Puedes cerrar este panel: la descarga sigue y Hub te avisará cuando Qortino esté listo.",
+      "cancel": "Cancelar",
+      "checking": "Comprobando este ordenador…",
+      "disclaimer": "Qortino puede equivocarse con total seguridad → comprueba todo lo importante.",
+      "intro": "Tu compañero sin conexión para primeros auxilios y salud, supervivencia y preparación, huerto, cocina, Qortal y mucho más. Se descarga una vez desde QDN en este ordenador y luego funciona sin internet. Sin nube, nada sale de tu ordenador.",
+      "low_ram": "Este ordenador tiene {{ram}} de memoria. Qortino funcionará, pero las respuestas pueden ser lentas.",
+      "low_storage": "No hay suficiente espacio libre: Qortino necesita {{needed}} y este teléfono tiene {{free}} libres.",
+      "minimize": "Ocultar",
+      "model_blurb": "Un modelo inteligente para preguntas del día a día, emergencias y ayuda con Qortal. Funciona por completo en este ordenador, en la tarjeta gráfica cuando puede.",
+      "model_size": "{{size}} para descargar · {{license}}",
+      "not_now": "Ahora no",
+      "other_models": "¿Prefieres otro modelo abierto, como Llama, Mistral o Phi? Añádelo desde un archivo o un enlace de descarga.",
+      "other_models_button": "Otros modelos",
+      "public_node_body": "El nodo público es compartido y no es fiable para una descarga de {{size}}: puede cortarse a mitad o borrar lo que ya había traído. Hub sigue intentándolo solo y conserva lo que llegó, pero con tu propio nodo es mucho más rápido y estable.",
+      "public_node_title": "Se recomienda mucho un nodo privado",
+      "retry_in_minutes": "Se volverá a intentar en {{minutes}} min.",
+      "retry_in_seconds": "Se volverá a intentar en {{seconds}} s.",
+      "retry_reason": {
+        "connection": "La conexión se cortó mientras se guardaba; el siguiente intento sigue desde ahí.",
+        "damaged": "Una parte descargada estaba dañada, así que se volverá a descargar.",
+        "peers": "Ahora mismo ningún par envía el resto."
+      },
+      "title": "Qortino AI",
+      "try_now": "Intentar ahora"
+    },
+    "history": {
+      "close": "Cerrar historial de chats",
+      "delete_chat": "Eliminar chat",
+      "empty": "Aún no hay chats guardados. Empieza una conversación y aparecerá aquí.",
+      "pin": "Fijar chat",
+      "rename": "Renombrar",
+      "rename_chat": "Renombrar chat",
+      "unpin": "Desfijar chat"
+    },
+    "models": {
+      "add": "Añadir un modelo",
+      "add_intro": "Qortino puede hablar con cualquier modelo abierto en formato GGUF, el formato que usa llama.cpp. Los modelos más grandes responden mejor, pero necesitan más memoria y responden más despacio.",
+      "add_title": "Añadir un modelo abierto",
+      "cancel_download": "Detener la descarga",
+      "choose_file": "Elegir un archivo…",
+      "download": "Descargar",
+      "downloading": "Descargando…",
+      "downloading_bytes": "Descargando… {{done}} / {{total}}",
+      "failed_reason": "La descarga se detuvo: {{reason}}. Vuelve a intentarlo para seguir desde donde se quedó.",
+      "file_heading": "Un archivo en este ordenador",
+      "file_hint": "Elige un archivo .gguf. Si el modelo está en varias partes, elige la primera.",
+      "first_part": "Esta es una parte posterior de un modelo dividido. Elige la parte cuyo nombre termina en 00001-of-….",
+      "from_qdn": "descarga desde QDN",
+      "get": "Descargar",
+      "gguf_only": "El enlace debe apuntar a un archivo .gguf.",
+      "intro": "Las respuestas sobre Qortal curadas por Qortino funcionan con cualquier modelo; el modelo escribe todo lo demás. Los modelos solo se ejecutan en este ordenador.",
+      "invalid_link": "Eso no es un enlace web.",
+      "link_heading": "Un enlace de descarga",
+      "link_label": "Enlace a un archivo .gguf",
+      "link_note": "Las sugerencias están en Hugging Face. El archivo se guarda en la carpeta de Qortino de Hub; no se envía nada más a ningún sitio.",
+      "memory": "Este ordenador tiene {{ram}} de memoria. Un modelo necesita más o menos el tamaño de su archivo, más 1 GB.",
+      "name_label": "Nombre (opcional)",
+      "on_computer": "en este ordenador",
+      "pick_filter": "Modelos GGUF",
+      "pick_title": "Elegir un modelo GGUF",
+      "recommended": "Recomendado",
+      "remove": "Quitar este modelo",
+      "remove_confirm_file": "¿Quitar este modelo de la lista? El archivo se queda donde está.",
+      "remove_confirm_link": "¿Quitar este modelo y borrar su archivo?",
+      "remove_failed": "No se pudo eliminar el archivo: {{reason}}",
+      "retry": "Reintentar la descarga",
+      "source_file": "archivo en este ordenador",
+      "source_link": "desde {{host}}",
+      "stopped": "La descarga se detuvo. Vuelve a intentarlo para seguir desde donde se quedó.",
+      "suggested": "Sugerencias",
+      "title": "Modelo",
+      "too_big": "Puede que este modelo sea demasiado grande para los {{ram}} de memoria de este ordenador."
+    },
+    "name": "Qortino",
+    "notify": {
+      "background": "Qortino sigue descargándose. Hub te avisará cuando esté listo.",
+      "ready": "Qortino está listo."
+    },
+    "progress": {
+      "bytes": "{{done}} / {{total}}",
+      "fetch": "Parte {{part}} de {{count}} · tu nodo la está trayendo de QDN… {{percent}} %",
+      "finalizing": "Terminando…",
+      "locate": "Buscando a Qortino en QDN…",
+      "save": "Parte {{part}} de {{count}} · guardando en este ordenador…",
+      "verify": "Parte {{part}} de {{count}} · comprobando el archivo…"
+    },
+    "report": {
+      "answer": "Respuesta de Qortino",
+      "body": "Q-Mail se abre con un mensaje nuevo para {{name}}, quienes se ocupan de las respuestas de Qortino sobre Qortal. Primero se copia el informe de abajo: pégalo en el mensaje y luego explica qué está mal y, si la sabes, cuál es la respuesta correcta.",
+      "body_no_name": "Q-Mail solo envía mensajes desde un nombre registrado, y esta cuenta todavía no tiene uno. Copia el informe ahora y envíalo a {{name}} cuando tengas un nombre.",
+      "copied": "Informe copiado. Pégalo en el mensaje para {{name}}.",
+      "copied_only": "Informe copiado.",
+      "copy_failed": "No se pudo copiar el informe. Q-Mail está abierto, así que puedes escribir allí qué estaba mal.",
+      "copy_failed_only": "No se pudo copiar el informe.",
+      "copy_only": "Copiar informe",
+      "mail_title": "Qortino AI · informe sobre una respuesta",
+      "model": "Modelo",
+      "open": "Copiar y abrir Q-Mail",
+      "preview": "Lo que se copia",
+      "question": "Pregunta",
+      "source": "Fuente",
+      "source_catalog": "catálogo de Q-Apps ({{app}})",
+      "source_curated": "respuesta curada {{id}}",
+      "source_model": "escrita por el modelo",
+      "source_model_hints": "escrita por el modelo, con las respuestas curadas {{ids}}",
+      "source_unknown": "sin registrar",
+      "title": "Informar sobre esta respuesta",
+      "whats_wrong": "Qué está mal y, si la sabes, cuál es la respuesta correcta:"
+    },
+    "settings": {
+      "answer_length": {
+        "detailed": "Detalladas",
+        "hint": "Las respuestas más cortas están listas antes.",
+        "label": "Respuestas",
+        "normal": "Normales",
+        "short": "Cortas"
+      },
+      "answers": "Respuestas",
+      "data": "Chats y almacenamiento",
+      "delete_chats": {
+        "button": "Eliminar todos los chats",
+        "confirm": "¿Eliminar todos los chats guardados? No se puede deshacer."
+      },
+      "enter_sends": {
+        "hint": "Desactivado: Intro empieza una línea nueva.",
+        "label": "La tecla Intro envía"
+      },
+      "gpu": {
+        "hint": "Respuestas mucho más rápidas en la mayoría de los ordenadores. Desactívala si Qortino se cuelga o la pantalla da tirones mientras escribe.",
+        "label": "Usar la tarjeta gráfica"
+      },
+      "keep_ready": {
+        "hint": "Si se mantiene listo, Qortino responde al instante pero ocupa unos 3 GB de memoria.",
+        "label": "Mantener Qortino listo al cerrar",
+        "off": "No",
+        "open": "Mientras Hub esté abierto",
+        "short": "1½ min"
+      },
+      "remove": {
+        "button": "Quitar el modelo de Qortino de este ordenador",
+        "confirm": "Esto elimina el modelo de Qortino ({{size}}) de este ordenador. Tus chats se conservan. Puedes volver a descargarlo cuando quieras.",
+        "failed": "No se pudo quitar Qortino: {{reason}}",
+        "on_computer": "{{model}} · {{size}} en este ordenador",
+        "removing": "Quitando…"
+      },
+      "text_size": {
+        "default": "Predeterminado",
+        "label": "Tamaño del texto",
+        "large": "Grande",
+        "small": "Pequeño"
+      },
+      "this_computer": "Este ordenador",
+      "title": "Ajustes"
+    },
+    "sidebar": "Qortino AI",
+    "status": {
+      "assembling": "Montando",
+      "getting_ready": "Preparándose…",
+      "reading": "Leyendo tu pregunta…",
+      "reading_percent": "Leyendo tu pregunta… {{percent}} %",
+      "thinking": "Dándole vueltas…"
+    },
+    "tips": {
+      "airplane": "Aprobado en modo avión ✈️",
+      "best_notes": "Buscando las mejores notas para tu pregunta…",
+      "bread": "Un momento — las buenas respuestas, como el buen pan, necesitan subir un poco…",
+      "checking_handbook": "Consultando el manual para que tú no tengas que hacerlo…",
+      "data_center": "En algún lugar, un centro de datos se pregunta por qué no lo llamaron…",
+      "data_stays": "Tus datos no van a ninguna parte. Literalmente…",
+      "decentralized": "Pensamientos descentralizados en curso…",
+      "free_reply": "Esta respuesta es gratis. Con un gracias queda pagada…",
+      "gigabytes": "Exprimiendo sabiduría de unos pocos gigabytes…",
+      "handbook": "Desempolvando el manual de supervivencia…",
+      "knowledge": "Hojeando el saber de Qortino…",
+      "minting": "Acuñando una respuesta — se acepta pago en amabilidad…",
+      "neurons": "Neuronas disparando a la velocidad de tu ordenador…",
+      "offline_cloud": "Sin nube. Sin servidores. Solo nosotros y tu ordenador…",
+      "on_device": "Trabajando por completo en este ordenador — internet no estaba invitado…",
+      "pages": "Olfateando las páginas correctas…",
+      "patience": "Ya casi está. La paciencia también es una habilidad de supervivencia…",
+      "pouring": "Sirviendo las ideas antes de que se enfríen…",
+      "scratching": "Rascándome la cabeza (con cuidado)…",
+      "seed_saving": "Preguntando al capítulo de guardar semillas si sabe algo…",
+      "small_model": "Modelo pequeño, gran corazón…",
+      "sovereign": "Computación soberana trabajando…",
+      "stays_here": "Cada palabra se queda aquí mismo, en tu ordenador…",
+      "tribe": "Preparando algo con el visto bueno de la Tribe…",
+      "warming": "Calentando mi cerebro sin conexión…",
+      "weights": "Pensando con pesos, no con wifi…",
+      "zero_bars": "¿Sin internet? Sin problema…"
+    }
+  },
   "qortino_workspace": {
     "a11y_clear_hotkey_slot": "Borrar ranura {{n}}",
     "curated_badge": "[ CURADO ]",
@@ -856,7 +1093,121 @@
     "workspace_add_app": "Añadir app",
     "workspace_empty_prompt": "Elige lo que aparece encima de QORTINO.",
     "workspace_header_hotkeys": "Atajos",
-    "workspace_header_music": "Reproductor de música"
+    "workspace_header_music": "Reproductor de música",
+    "composer": {
+      "placeholder": "Pregúntale a Qortino…",
+      "send": "Preguntar a Qortino"
+    },
+    "quip_open_hint": "Haz clic para abrir Qortino",
+    "quips": {
+      "fun": {
+        "antenna": "Mi antena capta buenas vibras. Y bloques. Sobre todo bloques.",
+        "beep": "Bip bup. Es broma, yo no hago bip.",
+        "coffee": "No necesito café. Con la batería llena me basta.",
+        "counting": "Intenté contar todos los bloques. Luego llegó otro.",
+        "cross_chain": "¿Por qué el bloque cruzó la cadena? Para llegar al otro nodo.",
+        "exercise": "¿Mi deporte favorito? Correr un nodo.",
+        "high_five": "¡Choca esos cinco! Ups, mis brazos aún se están descargando.",
+        "hydrated": "¡Hidrátate! Yo funciono con electrones, pero a ti el agua te sienta bien.",
+        "keys": "Dato curioso: nunca pierdo las llaves. No tengo bolsillos.",
+        "knock_knock": "Toc, toc. ¿Quién es? Un nodo. ¡Tú también puedes correr uno!",
+        "looking_good": "¿Soy yo, o esta pantalla de Inicio se ve genial hoy?",
+        "mint_joke": "Intenté acuñar un chiste, pero le faltaban unos bloques.",
+        "round_blue": "Soy redondo, soy azul y estoy de tu lado.",
+        "sheep": "¿Sueñan los robots con ovejas descentralizadas?",
+        "syncing": "No duermo, sincronizo.",
+        "tickle": "Sujétame la cabeza un segundo… si te atreves."
+      },
+      "giggle": {
+        "eeek": "¡Aaay! ¡Jajaja!",
+        "hahaha": "¡Jajaja!",
+        "hehe_stop": "Jejeje… ¡basta!",
+        "hihihi": "¡Jijiji!",
+        "hohoho": "¡Jojojo, qué cosquillas!",
+        "my_circuits": "¡Jaja, mis circuitos!",
+        "no_fair": "¡Jaja, no es justo!",
+        "not_antenna": "¡La antena no! ¡Jaja!",
+        "so_ticklish": "¡Tengo muchas cosquillas! ¡Jajaja!",
+        "stop_stop": "Para, para… ¡jaja!"
+      },
+      "morning": {
+        "good_morning": "¡Buenos días, {{name}}! ¿Arrancamos con el primer bloque del día?",
+        "synced": "¡Buenos días! Sincronicé toda la noche. ¿Dormiste bien?"
+      },
+      "night": {
+        "late": "Es tarde, {{name}}. Los nodos nunca duermen, pero tú deberías.",
+        "night_owl": "¿Trasnochando? Yo también. Mis ojos brillan, nunca tropiezo.",
+        "rest": "Descansa un poco. La blockchain seguirá aquí mañana.",
+        "yawn": "Bostezo… mis circuitos tienen sueño."
+      },
+      "promo": {
+        "ask_qortal": "¿Dudas sobre Qortal? Haz clic en mi cabeza y pregunta.",
+        "brain_on_qdn": "Mi cerebro vive en QDN. Haz clic en mí y te lo traigo.",
+        "download_brain": "Descarga mi cerebro una vez y funcionaré aquí mismo, en tu ordenador.",
+        "helper": "¿Supervivencia o Qortal? ¡Haz clic en mí y pregunta!",
+        "intro": "¡Hola, {{name}}! Soy Qortino, tu compañero de Qortal. ¡Haz clic en mí para charlar!",
+        "love_to_chat": "Me encantaría charlar, {{name}}. Haz clic en mi cabeza para descargarme.",
+        "offline": "Puedo responder sin nada de internet. ¡Haz clic en mí para configurarme!",
+        "own_ai": "Un clic en mi cabeza y tendrás tu propia IA privada.",
+        "power_out": "¿Sin luz? ¿Sin internet? Una vez descargado, sigo funcionando.",
+        "pretty_face": "No soy solo una cara bonita. ¡Haz clic y despierta la IA que llevo dentro!",
+        "private": "Sin nube ni rastreo: pienso aquí mismo, en este ordenador. ¡Haz clic en mí!",
+        "private_node": "Consejo: mi cerebro se descarga mejor desde tu propio nodo Qortal.",
+        "skills": "Primeros auxilios, huerto, cocina, Qortal… sé un poco de todo. ¡Haz clic en mí!",
+        "tap_head": "Psst… haz clic en mi cabeza y cobraré vida como tu IA sin conexión."
+      },
+      "ready": {
+        "all_ears": "¿Te pica la curiosidad? Soy todo oídos… bueno, toda antena.",
+        "ask_anything": "Pregúntame lo que quieras: escríbelo aquí.",
+        "minting": "Pregúntame cómo funciona el minting. ¡Me encanta!",
+        "no_internet": "No hace falta internet. ¡Pregúntame algo!",
+        "on_computer": "Escribe una pregunta y la pensaré aquí mismo, en tu ordenador.",
+        "ready_intro": "¡Estoy listo, {{name}}! Escribe una pregunta a mi lado y te respondo.",
+        "ready_when_you_are": "Listo cuando tú lo estés. ¿Qué descubrimos hoy?",
+        "skills": "Primeros auxilios, recetas, huerto, Qortal: ¡pruébame!",
+        "stays_here": "Tus preguntas no salen de este ordenador. ¡Adelante!",
+        "two_heads": "¿Te atascas? Dos cabezas piensan mejor que una. La mía es redonda."
+      },
+      "tickle": {
+        "antenna": "Cuidado, tengo muchas cosquillas en la antena.",
+        "cold_fingers": "¡Uy! ¡Tienes los dedos helados!",
+        "dont_stop": "Para… no, espera, ¡no pares!",
+        "favorite_button": "Es mi botón favorito. No se lo digas a nadie.",
+        "found_spot": "¡Ja! Encontraste mi punto de cosquillas.",
+        "giggling_circuits": "¡Jiji! Mis circuitos se están riendo.",
+        "hehe": "¡Jeje, qué cosquillas!",
+        "like_it": "¡Ohh, me gustan esas cosquillas!",
+        "sneeze": "Sigue con las cosquillas y puede que estornude un bloque.",
+        "tickle_minting": "¿Es un nuevo tipo de minting? ¿Minting a cosquillas?"
+      },
+      "tickle_long": {
+        "give_up": "¡Bueno, bueno, me rindo! ¡Tú ganas!",
+        "mercy": "¡Piedad! Mi batería no aguanta más risas.",
+        "reboot": "Tantas cosquillas… tengo que reiniciar mis risitas.",
+        "stamina": "¡Tienes más aguante que un nodo completo!"
+      },
+      "tip": {
+        "backup": "Haz copia de tu archivo de cuenta. Tu yo del futuro lo agradecerá.",
+        "coin": "¿Sabías que QORT es una moneda y no un token?",
+        "hotkeys": "Fija tus Q-Apps favoritas como atajos y ábrelas con un clic.",
+        "minters": "Los minters ganan QORT manteniendo su nodo en línea.",
+        "name": "¡Bonito nombre, {{name}}! Registrado en Qortal: tuyo de verdad.",
+        "own_node": "Tener tu propio nodo hace a Qortal más fuerte y a Hub más fiable.",
+        "qdn_apps": "Las Q-Apps viven en QDN: sin tiendas de apps ni porteros.",
+        "say_hi": "Q-Chat funciona de igual a igual. ¡Saluda hoy a alguien!",
+        "sidebar": "Puedes abrirme desde la barra lateral de la izquierda, estés donde estés en Hub."
+      }
+    },
+    "status": {
+      "chatty": "hablador",
+      "grateful": "agradecido",
+      "happy": "feliz",
+      "helpful": "servicial",
+      "idle": "tranquilo",
+      "listening": "escuchando",
+      "sleepy": "soñoliento",
+      "ticklish": "cosquilloso"
+    }
   },
   "quick_tools_pad": {
     "apps": "Aplicaciones",

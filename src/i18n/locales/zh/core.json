@@ -787,6 +787,243 @@
     "q_wallets": "Q-Wallets",
     "wallets_workspace": "钱包工作区"
   },
+  "qortino_agent": {
+    "aria": {
+      "back": "返回",
+      "close": "关闭 Qortino",
+      "copy": "复制完整回答",
+      "history": "聊天记录",
+      "narrow": "收窄面板",
+      "new_chat": "新聊天",
+      "report": "报告错误或奇怪的回答",
+      "send": "发送",
+      "settings": "设置",
+      "stop": "停止",
+      "widen": "加宽面板"
+    },
+    "chat": {
+      "continue": "继续回答 →",
+      "copied": "已复制完整回答",
+      "copy_failed": "无法复制",
+      "empty": "什么都可以问我：急救与健康、生存与应急准备、种菜与烹饪、Qortal、编程等等。我完全在这台电脑上运行，所以完全不需要互联网。",
+      "links_heading": "链接",
+      "load_failed": "Qortino 无法启动：{{error}}",
+      "loading_model": "正在唤醒 Qortino…",
+      "loading_model_hint": "正在把模型载入内存。之后再打开会快很多。",
+      "model_missing": "模型文件缺失。请打开设置重新下载，或选择其他模型。",
+      "needs_app": "Qortino 在 Qortal Hub 桌面应用中运行，不能在浏览器中运行。",
+      "no_reply": "没有收到回答。请试试更短的问题，或者关闭后重新打开 Qortino。",
+      "open_app": "打开",
+      "placeholder": "给 Qortino 发消息…",
+      "published_as": "{{service}} · 以 {{name}} 发布",
+      "qapps_heading": "Q-Apps",
+      "reply_failed": "抱歉，我没能写出回答。",
+      "retry": "重试",
+      "subtitle": "离线 · {{model}}"
+    },
+    "error": {
+      "checksum": "下载的部分已损坏，已将其删除。请重试。",
+      "detail": "详情：{{detail}}",
+      "download": "无法把模型保存到这台电脑。请检查磁盘可用空间和与你节点的连接，然后重试。",
+      "generic": "组装失败。",
+      "not_published": "Qortino 的模型还不在 QDN 上，或者你的节点还看不到它。请稍后再试。",
+      "qdn_failed": "QDN 现在无法提供模型。可能托管它的节点太少。请稍后再试。",
+      "stalled": "下载停滞了：目前没有节点在发送剩余部分。请稍后再试。"
+    },
+    "gate": {
+      "assemble": "组装 Qortino",
+      "background_hint": "你可以关闭这个面板：下载会继续，Qortino 准备好后 Hub 会通知你。",
+      "cancel": "取消",
+      "checking": "正在检查这台电脑…",
+      "disclaimer": "Qortino 可能很自信地答错 → 重要的事情请务必核实。",
+      "intro": "你的离线伙伴，帮你处理急救与健康、生存与应急准备、种菜、烹饪、Qortal 等等。从 QDN 下载到这台电脑上一次，之后不需要互联网就能使用。没有云端，任何内容都不会离开你的电脑。",
+      "low_ram": "这台电脑有 {{ram}} 内存。Qortino 可以运行，但回答可能较慢。",
+      "low_storage": "可用空间不足：Qortino 需要 {{needed}}，这部手机只剩 {{free}}。",
+      "minimize": "隐藏",
+      "model_blurb": "一个聪明的模型，用于日常问题、紧急情况和 Qortal 帮助。完全在这台电脑上运行，条件允许时使用显卡。",
+      "model_size": "需下载 {{size}} · {{license}}",
+      "not_now": "以后再说",
+      "other_models": "更想用其他开放模型，比如 Llama、Mistral 或 Phi？可以从文件或下载链接添加。",
+      "other_models_button": "其他模型",
+      "public_node_body": "公共节点是共享的，下载 {{size}} 的文件并不可靠：可能中途中断，或删除已经获取的数据。Hub 会自动重试并保留已下载的部分，但用你自己的节点会快得多，也稳定得多。",
+      "public_node_title": "强烈建议使用私人节点",
+      "retry_in_minutes": "{{minutes}} 分钟后重试。",
+      "retry_in_seconds": "{{seconds}} 秒后重试。",
+      "retry_reason": {
+        "connection": "保存时连接中断了；下次尝试会从中断处继续。",
+        "damaged": "下载的某个部分已损坏，将重新下载。",
+        "peers": "目前没有节点在发送剩余部分。"
+      },
+      "title": "Qortino AI",
+      "try_now": "立即重试"
+    },
+    "history": {
+      "close": "关闭聊天记录",
+      "delete_chat": "删除聊天",
+      "empty": "还没有保存的聊天。开始一段对话，它就会出现在这里。",
+      "pin": "置顶聊天",
+      "rename": "重命名",
+      "rename_chat": "重命名聊天",
+      "unpin": "取消置顶"
+    },
+    "models": {
+      "add": "添加模型",
+      "add_intro": "Qortino 可以与任何 GGUF 格式（llama.cpp 使用的格式）的开放模型对话。模型越大回答越好，但需要更多内存，回答也更慢。",
+      "add_title": "添加开放模型",
+      "cancel_download": "停止下载",
+      "choose_file": "选择文件…",
+      "download": "下载",
+      "downloading": "正在下载…",
+      "downloading_bytes": "正在下载… {{done}} / {{total}}",
+      "failed_reason": "下载已停止：{{reason}}。重试即可从中断处继续。",
+      "file_heading": "这台电脑上的文件",
+      "file_hint": "选择一个 .gguf 文件。如果模型分为多个部分，请选择第一个。",
+      "first_part": "这是分卷模型的后续部分。请选择名称以 00001-of-… 结尾的那一部分。",
+      "from_qdn": "从 QDN 下载",
+      "get": "下载",
+      "gguf_only": "链接必须指向 .gguf 文件。",
+      "intro": "Qortino 精选的 Qortal 回答适用于所有模型；其余内容都由模型撰写。模型只在这台电脑上运行。",
+      "invalid_link": "这不是网页链接。",
+      "link_heading": "下载链接",
+      "link_label": ".gguf 文件链接",
+      "link_note": "建议的模型位于 Hugging Face。文件保存在 Hub 的 Qortino 文件夹中；不会向任何地方发送其他内容。",
+      "memory": "这台电脑有 {{ram}} 内存。一个模型大约需要与其文件大小相当的内存，再加 1 GB。",
+      "name_label": "名称（可选）",
+      "on_computer": "在这台电脑上",
+      "pick_filter": "GGUF 模型",
+      "pick_title": "选择 GGUF 模型",
+      "recommended": "推荐",
+      "remove": "移除此模型",
+      "remove_confirm_file": "从列表中移除此模型？文件会保留在原处。",
+      "remove_confirm_link": "移除此模型并删除其文件？",
+      "remove_failed": "无法删除文件：{{reason}}",
+      "retry": "重新尝试下载",
+      "source_file": "这台电脑上的文件",
+      "source_link": "来自 {{host}}",
+      "stopped": "下载已停止。重试即可从中断处继续。",
+      "suggested": "建议",
+      "title": "模型",
+      "too_big": "对这台电脑的 {{ram}} 内存来说，这个模型可能太大了。"
+    },
+    "name": "Qortino",
+    "notify": {
+      "background": "Qortino 仍在下载。准备好后 Hub 会通知你。",
+      "ready": "Qortino 已就绪。"
+    },
+    "progress": {
+      "bytes": "{{done}} / {{total}}",
+      "fetch": "第 {{part}}/{{count}} 部分 · 你的节点正在从 QDN 获取… {{percent}}%",
+      "finalizing": "正在完成…",
+      "locate": "正在 QDN 上查找 Qortino…",
+      "save": "第 {{part}}/{{count}} 部分 · 正在保存到这台电脑…",
+      "verify": "第 {{part}}/{{count}} 部分 · 正在检查文件…"
+    },
+    "report": {
+      "answer": "Qortino 的回答",
+      "body": "Q-Mail 会打开一封发给 {{name}} 的新邮件，他们负责 Qortino 关于 Qortal 的回答。下面的报告会先被复制：把它粘贴到邮件中，然后说明哪里有错；如果你知道，也请写上正确答案。",
+      "body_no_name": "Q-Mail 只能从已注册的名称发送邮件，而这个账户还没有名称。现在先复制报告，等你有了名称再发给 {{name}}。",
+      "copied": "报告已复制。请把它粘贴到发给 {{name}} 的邮件中。",
+      "copied_only": "报告已复制。",
+      "copy_failed": "无法复制报告。Q-Mail 已打开，你可以直接在那里写下哪里有错。",
+      "copy_failed_only": "无法复制报告。",
+      "copy_only": "复制报告",
+      "mail_title": "Qortino AI · 回答报告",
+      "model": "模型",
+      "open": "复制并打开 Q-Mail",
+      "preview": "将要复制的内容",
+      "question": "问题",
+      "source": "来源",
+      "source_catalog": "Q-App 目录（{{app}}）",
+      "source_curated": "精选回答 {{id}}",
+      "source_model": "由模型撰写",
+      "source_model_hints": "由模型撰写，参考了精选回答 {{ids}}",
+      "source_unknown": "未记录",
+      "title": "报告这个回答",
+      "whats_wrong": "哪里有错？如果你知道，也请写上正确答案："
+    },
+    "settings": {
+      "answer_length": {
+        "detailed": "详细",
+        "hint": "回答越短，完成得越快。",
+        "label": "回答",
+        "normal": "普通",
+        "short": "简短"
+      },
+      "answers": "回答",
+      "data": "聊天与存储",
+      "delete_chats": {
+        "button": "删除所有聊天",
+        "confirm": "删除所有已保存的聊天？此操作无法撤销。"
+      },
+      "enter_sends": {
+        "hint": "关闭时：回车键换行。",
+        "label": "回车键发送"
+      },
+      "gpu": {
+        "hint": "在大多数电脑上回答会快得多。如果 Qortino 崩溃，或它输出时屏幕卡顿，请关闭此项。",
+        "label": "使用显卡"
+      },
+      "keep_ready": {
+        "hint": "保持就绪时 Qortino 会立即回答，但会占用约 3 GB 内存。",
+        "label": "关闭后让 Qortino 保持就绪",
+        "off": "不保持",
+        "open": "Hub 打开期间",
+        "short": "1.5 分钟"
+      },
+      "remove": {
+        "button": "从这台电脑移除 Qortino 的模型",
+        "confirm": "这会从这台电脑删除 Qortino 的模型（{{size}}）。你的聊天会保留。你可以随时重新下载。",
+        "failed": "无法移除 Qortino：{{reason}}",
+        "on_computer": "{{model}} · 这台电脑上 {{size}}",
+        "removing": "正在移除…"
+      },
+      "text_size": {
+        "default": "默认",
+        "label": "文字大小",
+        "large": "大",
+        "small": "小"
+      },
+      "this_computer": "这台电脑",
+      "title": "设置"
+    },
+    "sidebar": "Qortino AI",
+    "status": {
+      "assembling": "组装中",
+      "getting_ready": "正在准备…",
+      "reading": "正在阅读你的问题…",
+      "reading_percent": "正在阅读你的问题… {{percent}}%",
+      "thinking": "正在思考…"
+    },
+    "tips": {
+      "airplane": "飞行模式认证 ✈️",
+      "best_notes": "正在为你的问题匹配最好的笔记…",
+      "bread": "稍等——好答案就像好面包，需要发酵一会儿…",
+      "checking_handbook": "替你翻翻手册，你就不用自己翻了…",
+      "data_center": "某个数据中心正纳闷，怎么没人找它…",
+      "data_stays": "你的数据哪儿也不去。真的…",
+      "decentralized": "去中心化思考进行中…",
+      "free_reply": "这个回答免费。说声谢谢就算结账了…",
+      "gigabytes": "从几个 GB 里榨出智慧…",
+      "handbook": "正在掸掉求生手册上的灰…",
+      "knowledge": "正在翻阅 Qortino 的知识…",
+      "minting": "正在铸造一个回答——接受以善意付款…",
+      "neurons": "神经元正以你电脑的速度放电…",
+      "offline_cloud": "没有云端。没有服务器。只有我们和你的电脑…",
+      "on_device": "完全在这台电脑上运行——互联网没被邀请…",
+      "pages": "正在嗅出合适的页面…",
+      "patience": "快好了。耐心也是一种求生技能…",
+      "pouring": "趁热把想法倒出来…",
+      "scratching": "挠挠头（轻轻地）…",
+      "seed_saving": "正在问问留种那一章知不知道些什么…",
+      "small_model": "模型虽小，心意很大…",
+      "sovereign": "主权计算运行中…",
+      "stays_here": "每一个字都留在你的电脑上…",
+      "tribe": "正在酝酿 Tribe 会点赞的东西…",
+      "warming": "正在预热我的离线大脑…",
+      "weights": "靠权重思考，不靠 Wi-Fi…",
+      "zero_bars": "没有网络？没问题…"
+    }
+  },
   "qortino_workspace": {
     "a11y_clear_hotkey_slot": "清除插槽 {{n}}",
     "curated_badge": "[ 精选 ]",
@@ -856,7 +1093,121 @@
     "workspace_add_app": "添加应用",
     "workspace_empty_prompt": "选择显示在 QORTINO 上方的内容。",
     "workspace_header_hotkeys": "快捷键",
-    "workspace_header_music": "音乐播放器"
+    "workspace_header_music": "音乐播放器",
+    "composer": {
+      "placeholder": "问问Qortino…",
+      "send": "向Qortino提问"
+    },
+    "quip_open_hint": "点击打开Qortino",
+    "quips": {
+      "fun": {
+        "antenna": "我的天线能接收正能量。还有区块。主要是区块。",
+        "beep": "哔哔啵啵。开玩笑的，我才不会哔哔叫。",
+        "coffee": "我不需要咖啡。电量满格就够了。",
+        "counting": "我想数清每一个区块，结果又来了一个。",
+        "cross_chain": "区块为什么要过链？为了去另一个节点呀。",
+        "exercise": "我最喜欢的运动？跑节点。",
+        "high_five": "想跟你击个掌，可我的手臂还在下载中。",
+        "hydrated": "记得喝水！我靠电子运转，但水对你有好处。",
+        "keys": "冷知识：我从来不丢钥匙。因为我没有口袋。",
+        "knock_knock": "咚咚咚。谁呀？一个节点。你也可以跑一个！",
+        "looking_good": "是我的错觉吗？今天的主页看起来特别棒。",
+        "mint_joke": "我想铸造一个笑话，结果还差几个区块。",
+        "round_blue": "我圆圆的，蓝蓝的，永远站在你这边。",
+        "sheep": "机器人会梦见去中心化的羊吗？",
+        "syncing": "我没在睡觉，我在同步。",
+        "tickle": "按住我的头一秒钟……如果你敢的话。"
+      },
+      "giggle": {
+        "eeek": "呀！哈哈哈！",
+        "hahaha": "哈哈哈！",
+        "hehe_stop": "嘿嘿嘿……别挠了！",
+        "hihihi": "嘻嘻嘻！",
+        "hohoho": "哇哈哈，好痒！",
+        "my_circuits": "哈哈，我的电路！",
+        "no_fair": "哈哈，犯规啦！",
+        "not_antenna": "别碰天线！哈哈！",
+        "so_ticklish": "我好怕痒！哈哈哈！",
+        "stop_stop": "停停停……哈哈！"
+      },
+      "morning": {
+        "good_morning": "早上好，{{name}}！准备好迎接今天的新区块了吗？",
+        "synced": "早！我同步了一整夜。你睡得好吗？"
+      },
+      "night": {
+        "late": "很晚了，{{name}}。节点从不睡觉，但你该睡了。",
+        "night_owl": "夜猫子？我也是。我的眼睛会发光，所以从不摔跤。",
+        "rest": "休息一下吧。区块链明天还在这儿。",
+        "yawn": "哈欠……我的电路开始犯困了。"
+      },
+      "promo": {
+        "ask_qortal": "对Qortal有疑问？点点我的头，尽管问。",
+        "brain_on_qdn": "我的大脑住在QDN上。点我，我去帮你取回来。",
+        "download_brain": "把我的大脑下载一次，我就能直接在你的电脑上运行。",
+        "helper": "需要求生技巧或Qortal解答？点我！",
+        "intro": "嗨，{{name}}！我是Qortino，你的Qortal小伙伴。点我聊天吧！",
+        "love_to_chat": "好想和你聊天，{{name}}。点点我的头把我下载下来吧。",
+        "offline": "完全没网也能回答问题。点我来设置吧！",
+        "own_ai": "点一下我的头，你就拥有专属的私人AI。",
+        "power_out": "停电了？断网了？只要下载好了，我照样能用。",
+        "pretty_face": "我可不只是长得好看。点我唤醒里面的AI！",
+        "private": "不上云，不追踪：我就在这台电脑上思考。点我吧！",
+        "private_node": "小提示：通过你自己的Qortal节点下载我的大脑最顺畅。",
+        "skills": "急救、种菜、做饭、Qortal……样样都懂一点。点我吧！",
+        "tap_head": "悄悄告诉你：点点我的头，我就会变身成你的离线AI。"
+      },
+      "ready": {
+        "all_ears": "有什么好奇的？我洗耳恭听……呃，是洗天线恭听。",
+        "ask_anything": "什么都可以问我：在这里输入就行。",
+        "minting": "问问我铸造是怎么回事吧。这个话题我最爱了。",
+        "no_internet": "不用联网。问我点什么吧！",
+        "on_computer": "输入问题，我就在你的电脑上好好想一想。",
+        "ready_intro": "我准备好了，{{name}}！在我旁边输入问题，我来回答。",
+        "ready_when_you_are": "随时待命。今天想搞清楚什么？",
+        "skills": "急救、菜谱、种菜还是Qortal：来考考我！",
+        "stays_here": "你的问题只留在这台电脑上。尽管问吧！",
+        "two_heads": "卡住了？两个脑袋总比一个强。我的是圆的。"
+      },
+      "tickle": {
+        "antenna": "小心点，我的天线附近特别怕痒。",
+        "cold_fingers": "哎呀！你的手指好冰！",
+        "dont_stop": "别挠了……不对，等等，别停！",
+        "favorite_button": "这是我最喜欢的按钮。别告诉别人哦。",
+        "found_spot": "哈！你找到我的痒痒肉了。",
+        "giggling_circuits": "嘻嘻！我的电路在咯咯笑。",
+        "hehe": "嘿嘿，好痒！",
+        "like_it": "噢，我喜欢这样挠痒痒！",
+        "sneeze": "再挠下去，我可能会打个喷嚏，喷出一个区块。",
+        "tickle_minting": "这是新的铸造方式吗？挠痒痒铸造？"
+      },
+      "tickle_long": {
+        "give_up": "好啦好啦，我投降！你赢了！",
+        "mercy": "饶了我吧！我的电池再也笑不动了。",
+        "reboot": "被挠了这么久……我得把笑声重启一下。",
+        "stamina": "你的耐力比全节点还强！"
+      },
+      "tip": {
+        "backup": "备份你的账户文件。未来的你会感谢现在的你。",
+        "coin": "你知道吗？QORT是原生币，不是代币。",
+        "hotkeys": "把喜欢的Q-Apps固定为快捷键，点一下就能打开。",
+        "minters": "铸造者只要保持节点在线，就能赚取QORT。",
+        "name": "好名字，{{name}}！它注册在Qortal上，真正属于你。",
+        "own_node": "运行你自己的节点，能让Qortal更强大，让Hub更可靠。",
+        "qdn_apps": "Q-Apps住在QDN上：没有应用商店，没有把关人。",
+        "say_hi": "Q-Chat是点对点的。今天跟谁打个招呼吧！",
+        "sidebar": "无论你在Hub的哪里，都可以从左侧边栏打开我。"
+      }
+    },
+    "status": {
+      "chatty": "话痨",
+      "grateful": "感激",
+      "happy": "开心",
+      "helpful": "热心",
+      "idle": "悠闲",
+      "listening": "在听",
+      "sleepy": "犯困",
+      "ticklish": "怕痒"
+    }
   },
   "quick_tools_pad": {
     "apps": "应用",
