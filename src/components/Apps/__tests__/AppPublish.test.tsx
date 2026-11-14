@@ -9,12 +9,15 @@ import {
 } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
-import i18n from 'i18next';
+import i18n, { createInstance } from 'i18next';
+import { capitalizeFirstChar } from '../../../i18n/processors';
+import enCore from '../../../i18n/locales/en/core.json';
 
-i18n.init({
+// Only the tag label is translated; other keys render as their key.
+i18n.use(capitalizeFirstChar as any).init({
   lng: 'en',
   fallbackLng: 'en',
-  resources: { en: { core: {} } },
+  resources: { en: { core: { tag_number: enCore.tag_number } } },
 });
 
 const theme = createTheme();
@@ -306,7 +309,7 @@ describe('AppPublish – prefill', () => {
     renderForm();
 
     await waitFor(() => expect(pending).toHaveLength(1));
-    const publish = screen.getByRole('button', { name: /action\.publish/ });
+    const publish = screen.getByRole('button', { name: /action\.publish/i });
     expect(publish).toBeDisabled();
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), {
@@ -385,5 +388,61 @@ describe('AppPublish – prefill', () => {
       )
     );
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('');
+  });
+});
+
+// ── Tag labels: one translated key, numbered ──────────────────────────────
+
+describe('AppPublish – tag labels', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The names never arrive: these tests look at the tag fields only.
+    global.fetch = vi.fn(
+      () => new Promise(() => {})
+    ) as unknown as typeof fetch;
+  });
+
+  it('labels the five tag fields from core:tag_number', () => {
+    renderForm({ initialName: '' });
+
+    [1, 2, 3, 4, 5].forEach((number) => {
+      expect(
+        screen.getByRole('textbox', { name: `Tag ${number}` })
+      ).toHaveAttribute('placeholder', `Tag ${number}`);
+    });
+  });
+
+  it('names the focused tag in its length counter', () => {
+    renderForm({ initialName: '' });
+
+    const field = screen.getByRole('textbox', { name: 'Tag 2' });
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: 'abc' } });
+
+    expect(screen.getByText('Tag 2: 3/20')).toBeInTheDocument();
+  });
+
+  it('shows the tag labels in the language in use', async () => {
+    const spanish = createInstance();
+    await spanish.use(capitalizeFirstChar as any).init({
+      lng: 'es',
+      resources: { es: { core: { tag_number: 'etiqueta {{number}}' } } },
+    });
+
+    render(
+      <ThemeProvider theme={theme}>
+        <I18nextProvider i18n={spanish}>
+          <AppPublish {...defaultProps} initialName="" />
+        </I18nextProvider>
+      </ThemeProvider>
+    );
+
+    const field = screen.getByRole('textbox', { name: 'Etiqueta 3' });
+    expect(field).toHaveAttribute('placeholder', 'Etiqueta 3');
+    fireEvent.focus(field);
+    expect(screen.getByText('Etiqueta 3: 0/20')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'Tag 3' })
+    ).not.toBeInTheDocument();
   });
 });

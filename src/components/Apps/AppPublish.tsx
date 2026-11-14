@@ -256,18 +256,20 @@ export const AppPublish = ({
   }, [initialName]);
 
   const mySortedNames = useSortedMyNames(names, myName);
+  const tagLabel = (number: number) =>
+    t('core:tag_number', { number, postProcess: 'capitalizeFirstChar' });
   const activeTagInfo = useMemo(() => {
     switch (activeField) {
       case 'tag1':
-        return { label: 'Tag 1', length: tag1.length };
+        return { number: 1, length: tag1.length };
       case 'tag2':
-        return { label: 'Tag 2', length: tag2.length };
+        return { number: 2, length: tag2.length };
       case 'tag3':
-        return { label: 'Tag 3', length: tag3.length };
+        return { number: 3, length: tag3.length };
       case 'tag4':
-        return { label: 'Tag 4', length: tag4.length };
+        return { number: 4, length: tag4.length };
       case 'tag5':
-        return { label: 'Tag 5', length: tag5.length };
+        return { number: 5, length: tag5.length };
       default:
         return null;
     }
@@ -623,7 +625,7 @@ export const AppPublish = ({
             })}
           </InputLabel>
           {activeTagInfo && (
-            <CounterText>{`${activeTagInfo.label}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`}</CounterText>
+            <CounterText>{`${tagLabel(activeTagInfo.number)}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`}</CounterText>
           )}
         </LabelRow>
 
@@ -643,9 +645,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 1"
+            placeholder={tagLabel(1)}
             inputProps={{
-              'aria-label': 'Tag 1',
+              'aria-label': tagLabel(1),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -666,9 +668,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 2"
+            placeholder={tagLabel(2)}
             inputProps={{
-              'aria-label': 'Tag 2',
+              'aria-label': tagLabel(2),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -689,9 +691,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 3"
+            placeholder={tagLabel(3)}
             inputProps={{
-              'aria-label': 'Tag 3',
+              'aria-label': tagLabel(3),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -712,9 +714,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 4"
+            placeholder={tagLabel(4)}
             inputProps={{
-              'aria-label': 'Tag 4',
+              'aria-label': tagLabel(4),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -735,9 +737,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 5"
+            placeholder={tagLabel(5)}
             inputProps={{
-              'aria-label': 'Tag 5',
+              'aria-label': tagLabel(5),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,

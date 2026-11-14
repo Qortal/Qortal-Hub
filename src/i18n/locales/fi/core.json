@@ -923,6 +923,7 @@
     "my_apps": "omat sovellukset",
     "official_apps": "viralliset sovellukset"
   },
+  "tag_number": "tunniste {{number}}",
   "tags": "tunnisteet",
   "theme": {
     "dark": "tumma",

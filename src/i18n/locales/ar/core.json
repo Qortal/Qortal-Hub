@@ -923,6 +923,7 @@
     "my_apps": "تطبيقاتي",
     "official_apps": "التطبيقات الرسمية"
   },
+  "tag_number": "وسم {{number}}",
   "tags": "الوسوم",
   "theme": {
     "dark": "داكن",

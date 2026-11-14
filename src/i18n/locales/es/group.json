@@ -425,7 +425,7 @@
     "wallet_activity_relative_minutes_ago_one": "Hace {{count}} minuto",
     "wallet_activity_relative_minutes_ago_other": "Hace {{count}} minutos",
     "wallet_activity_unknown_address": "Dirección desconocida",
-    "wallet_activity_window": "Última transacci?n en los ?ltimos 7 días",
+    "wallet_activity_window": "Última transacción en los últimos 7 días",
     "wallet_address": "Direccion de wallet",
     "wallet_decrypt_error": "No pudimos descifrar tu wallet con esa contrasena.",
     "wallet_decrypt_error_with_message": "No pudimos descifrar tu wallet: {{message}}",
