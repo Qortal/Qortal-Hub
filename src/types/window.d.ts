@@ -4,6 +4,7 @@ import type {
   AudioSurfaceCommandResultEnvelope,
   AudioSurfaceEvent,
 } from '../lib/group-call/audioSurfaceBridge';
+import type { TabShortcutAction } from '../../electron/src/tab-shortcuts';
 
 declare global {
   interface ReticulumCalendarRecurrenceInput {
@@ -148,6 +149,9 @@ declare global {
         callback: (state: { isMaximized: boolean }) => void
       ) => () => void;
       onSystemLockRequested?: (callback: () => void) => () => void;
+      onTabShortcut?: (
+        callback: (action: TabShortcutAction) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
       onDisplayMediaRequest?: (callback: (request: { requestId: string; origin: string }) => void) => () => void;
       onDisplayMediaCancel?: (callback: (requestId: string) => void) => () => void;

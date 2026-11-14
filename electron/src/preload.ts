@@ -16,6 +16,7 @@ import {
 } from './group-call-ipc-contract';
 import { isMainWindowUrl } from './main-window-policy';
 import { openExternalHttp } from './desktop-shell';
+import { subscribeTabShortcuts, type TabShortcutAction } from './tab-shortcuts';
 
 // A preload runs again after navigation. Never expose shell capabilities to
 // remote pages, opaque documents, or subframes, even if navigation is forced
@@ -496,6 +497,9 @@ try {
       ipcRenderer.on('system:lock-requested', handler);
       return () => ipcRenderer.removeListener('system:lock-requested', handler);
     },
+    // Tab shortcuts, from the Hub page or a Q-App (see tab-shortcuts.ts).
+    onTabShortcut: (callback: (action: TabShortcutAction) => void) =>
+      subscribeTabShortcuts(ipcRenderer, callback),
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
     onDisplayMediaRequest: (callback: (request: { requestId: string; origin: string }) => void) => {
       const handler = (_event, request) => callback(request);

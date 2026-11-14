@@ -99,6 +99,7 @@ import {
   getDialogSecondaryButtonSx,
 } from '../App/dialogSurface';
 import { pickNextTabFromMru, tabsLeftByCloseAll } from './tabSelection';
+import { useTabShortcuts } from './useTabShortcuts';
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
@@ -1277,6 +1278,15 @@ export const AppsDesktop = ({
     setMode('home');
     setIsNewTabWindow(false);
   }, [setIsNewTabWindow, setMode]);
+
+  useTabShortcuts({
+    isNewTabWindow,
+    maxTabs: MAX_OPEN_APP_TABS,
+    openNewTab: openDashboardFromTabs,
+    selectedTab,
+    show,
+    tabs,
+  });
 
   const returnFromAppsMode = useCallback(() => {
     executeEvent('return-from-apps-mode', {});
