@@ -556,7 +556,11 @@ function App() {
   const [creationStep, setCreationStep] = useState(1);
   const getIndividualUserInfo = useHandleUserInfo();
   useRetrieveDataLocalStorage(userInfo?.address);
-  useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
+  useQortalGetSaveSettings(
+    userInfo?.name,
+    extState === 'authenticated',
+    userInfo?.address
+  );
   const setEnableAuthWhenSyncing = useSetAtom(enableAuthWhenSyncingAtom);
 
   const [isOpenMinting, setIsOpenMinting] = useState(false);

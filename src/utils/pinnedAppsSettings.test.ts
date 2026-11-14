@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getPinnedAppKey,
   isBrokenPinnedApp,
+  mergePinnedApps,
   removeBrokenPinnedApps,
   serializePinnedAppsForQdn,
 } from './pinnedAppsSettings';
@@ -77,5 +78,43 @@ describe('pinnedAppsSettings', () => {
 
     expect(new Set(keys).size).toBe(3);
     expect(getPinnedAppKey(publicApp)).toBe('APP-Q-Tube');
+  });
+});
+
+describe('keeping the pins of another device', () => {
+  const pin = (name: string) => ({ name, service: 'APP' });
+
+  it('adds the saved ones this device does not have, at the end', () => {
+    expect(
+      mergePinnedApps([pin('Q-Tube'), pin('Q-Blog')], [pin('Q-Mail')])
+    ).toEqual([pin('Q-Tube'), pin('Q-Blog'), pin('Q-Mail')]);
+  });
+
+  it("keeps this device's own order, and each app once", () => {
+    expect(
+      mergePinnedApps(
+        [pin('Q-Blog'), pin('Q-Tube')],
+        [pin('Q-Tube'), pin('Q-Blog')]
+      )
+    ).toEqual([pin('Q-Blog'), pin('Q-Tube')]);
+  });
+
+  it('tells a private app of another by what it opens', () => {
+    const mine = privateApp('mine');
+    const theirs = privateApp('theirs');
+
+    expect(mergePinnedApps([mine], [privateApp('mine'), theirs])).toEqual([
+      mine,
+      theirs,
+    ]);
+  });
+
+  it('leaves out broken entries, and takes nothing for no list', () => {
+    expect(mergePinnedApps([pin('Q-Tube'), {}], [{}, pin('Q-Mail')])).toEqual([
+      pin('Q-Tube'),
+      pin('Q-Mail'),
+    ]);
+    expect(mergePinnedApps([pin('Q-Tube')], null)).toEqual([pin('Q-Tube')]);
+    expect(mergePinnedApps(null, undefined)).toEqual([]);
   });
 });

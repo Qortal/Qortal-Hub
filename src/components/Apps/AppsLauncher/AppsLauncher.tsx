@@ -43,6 +43,7 @@ import {
 } from './launcherSearch';
 import { LauncherSearchField } from './LauncherSearchField';
 import { LauncherSearchResults } from './LauncherSearchResults';
+import { LauncherSaveWindow } from './LauncherSaveWindow';
 import { useLauncherBookmarks } from './useLauncherBookmarks';
 
 const HEADER_PADDING_TOP_PX = 20;
@@ -394,6 +395,7 @@ const AppsLauncherPage = ({
         display: isShow ? 'flex' : 'none',
         height: contentHeight || '100%',
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
       <Box
@@ -542,6 +544,11 @@ const AppsLauncherPage = ({
           </Box>
         </Box>
       </Box>
+      <LauncherSaveWindow
+        bookmarks={bookmarks}
+        myAddress={myAddress}
+        myName={myName}
+      />
     </AppsLibraryContainer>
   );
 };

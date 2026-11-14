@@ -21,6 +21,11 @@ vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://localhost:12391',
 }));
 
+// Saving to QDN has its own tests; here it only has to exist.
+vi.mock('../../Save/useSaveSettingsToQdn', () => ({
+  useSaveSettingsToQdn: () => vi.fn(),
+}));
+
 // The address parser lives in a chat component with a long import chain. This
 // stand-in reads the two addresses used here; launcherSearch.test.ts runs the
 // real one.

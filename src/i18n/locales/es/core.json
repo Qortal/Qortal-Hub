@@ -454,7 +454,11 @@
     "pinned_empty": "todavía no hay nada fijado. Fija una aplicación de la biblioteca de abajo para tenerla aquí.",
     "pinned_hint": "arrastra para reordenar · suelta una aplicación sobre otra para crear una carpeta · clic derecho para más opciones",
     "results_apps": "aplicaciones y sitios web",
-    "results_saved": "tus aplicaciones fijadas y marcadores"
+    "results_saved": "tus aplicaciones fijadas y marcadores",
+    "save_later": "ahora no",
+    "save_retry": "reintentar",
+    "save_text": "tus aplicaciones fijadas, marcadores y carpetas, ordenados así, en cada dispositivo en el que inicies sesión.",
+    "save_title": "¿Guardar esta disposición en QDN?"
   },
   "level": "nivel",
   "library": "biblioteca",

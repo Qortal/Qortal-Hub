@@ -454,7 +454,11 @@
     "pinned_empty": "midagi pole veel kinnitatud. Kinnita rakendus allolevast teegist, et see siia jääks.",
     "pinned_hint": "lohista järjestuse muutmiseks · kausta loomiseks lohista rakendus teise peale · paremklõps avab lisavalikud",
     "results_apps": "rakendused ja veebilehed",
-    "results_saved": "sinu kinnitatud rakendused ja järjehoidjad"
+    "results_saved": "sinu kinnitatud rakendused ja järjehoidjad",
+    "save_later": "mitte praegu",
+    "save_retry": "proovi uuesti",
+    "save_text": "sinu kinnitatud rakendused, järjehoidjad ja kaustad selles järjekorras igas seadmes, kuhu sisse logid.",
+    "save_title": "kas salvestada see paigutus QDN-i?"
   },
   "level": "tase",
   "library": "teek",

@@ -43,6 +43,26 @@ export const getPinnedAppKey = (app: PinnedApp) => {
 };
 
 /**
+ * This device's pins with those found in the saved settings, so that a pin
+ * made on another device is not removed by saving a change made here. This
+ * device's order comes first; a pin only the saved list has goes at the end.
+ */
+export const mergePinnedApps = <T extends PinnedApp>(
+  apps: T[] | null | undefined,
+  saved: T[] | null | undefined
+): T[] => {
+  const merged = removeBrokenPinnedApps(apps);
+  const keys = new Set(merged.map(getPinnedAppKey));
+  for (const app of removeBrokenPinnedApps(saved)) {
+    const key = getPinnedAppKey(app);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    merged.push(app);
+  }
+  return merged;
+};
+
+/**
  * Shape a pinned app takes in the QDN settings publish. Private apps keep what
  * is needed to reopen them; the logo is left out to keep the publish small and
  * comes back the next time the app is opened.

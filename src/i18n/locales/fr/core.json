@@ -454,7 +454,11 @@
     "pinned_empty": "rien n’est encore épinglé. Épinglez une application depuis la bibliothèque ci-dessous pour la garder ici.",
     "pinned_hint": "glissez pour réorganiser · déposez une application sur une autre pour créer un dossier · clic droit pour plus d’options",
     "results_apps": "applications et sites web",
-    "results_saved": "vos applications épinglées et vos favoris"
+    "results_saved": "vos applications épinglées et vos favoris",
+    "save_later": "pas maintenant",
+    "save_retry": "réessayer",
+    "save_text": "vos applications épinglées, favoris et dossiers, disposés ainsi, sur chaque appareil où vous vous connectez.",
+    "save_title": "enregistrer cette disposition sur QDN ?"
   },
   "level": "niveau",
   "library": "bibliothèque",
