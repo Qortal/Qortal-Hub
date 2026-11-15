@@ -1,27 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  Tooltip,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import LockIcon from '@mui/icons-material/Lock';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Box } from '@mui/material';
+import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
+import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../App';
 import { memberGroupsAtom } from '../../atoms/global';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
-import { formatTimestamp } from '../../utils/time';
 import {
   buildMyPrivateAppsSearchUrl,
   PublishedPrivateApp,
   toPublishedPrivateApps,
 } from './privateAppMetadata';
-import { EmptyStateBox, SectionTitle } from './AppsLibrary/LibraryTab-styles';
+import { LibraryActionButton } from './AppCard/libraryCardParts';
+import { PRIVATE_SKELETON } from './AppsLibrary/libraryLayout';
+import {
+  LibraryEmptyState,
+  LibrarySection,
+  LibrarySkeleton,
+} from './AppsLibrary/LibrarySection';
+import { cap } from './AppsLibrary/libraryStyles';
+import { libraryViewAtom } from './AppsLibrary/libraryView';
+import { PrivateAppItem, PrivateAppList } from './AppsLibrary/PrivateAppItem';
 
 interface PublishedPrivateAppsProps {
   myAddress: string;
@@ -32,13 +32,14 @@ export const PublishedPrivateApps = ({
   myAddress,
   refreshKey = 0,
 }: PublishedPrivateAppsProps) => {
-  const theme = useTheme();
   const { t } = useTranslation(['core', 'group']);
+  const view = useAtomValue(libraryViewAtom);
   const { openApp } = useHandlePrivateApps();
   const memberGroups = useAtomValue(memberGroupsAtom);
   const [apps, setApps] = useState<PublishedPrivateApp[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   const groupNames = useMemo(() => {
     const map = new Map<number, string>();
@@ -50,13 +51,15 @@ export const PublishedPrivateApps = ({
     return map;
   }, [memberGroups]);
 
-  const loadApps = useCallback(async () => {
+  // An error stays on screen until a load succeeds, so a retry that fails
+  // again leaves the Retry button where it was, with focus on it.
+  const loadApps = useCallback(async (): Promise<boolean> => {
     if (!myAddress) {
       setApps([]);
-      return;
+      setHasError(false);
+      return true;
     }
     setIsLoading(true);
-    setHasError(false);
     try {
       const namesResponse = await fetch(
         `${getBaseApiReact()}/names/address/${myAddress}?limit=0`
@@ -67,155 +70,121 @@ export const PublishedPrivateApps = ({
         : [];
       if (!names.length) {
         setApps([]);
-        return;
+        setHasError(false);
+        return true;
       }
       const response = await fetch(
         buildMyPrivateAppsSearchUrl(getBaseApiReact(), names)
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setApps(toPublishedPrivateApps(await response.json()));
+      setHasError(false);
+      return true;
     } catch (error) {
       console.error(error);
       setHasError(true);
+      return false;
     } finally {
       setIsLoading(false);
     }
   }, [myAddress]);
 
+  const handleRetry = async () => {
+    if (isLoading) return;
+    // Retry goes once the apps are back: focus moves to the section's title
+    // instead of falling back to the top of the page.
+    if (await loadApps()) headingRef.current?.focus();
+  };
+
   useEffect(() => {
     loadApps();
   }, [loadApps, refreshKey]);
 
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        width: '100%',
-        maxWidth: '720px',
-      }}
-    >
-      <SectionTitle>
-        <LockIcon sx={{ fontSize: '20px' }} />
-        {t('core:private_apps.published_title', {
-          postProcess: 'capitalizeFirstChar',
-        })}
+  const title = t('core:private_apps.published_title', cap);
+  // A reload keeps the apps on screen, dimmed, while the node answers.
+  const isFirstLoad = isLoading && apps.length === 0;
 
-        <Tooltip
-          title={t('core:action.refresh', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        >
-          <span>
-            <IconButton
-              aria-label={t('core:action.refresh', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              disabled={isLoading}
-              onClick={loadApps}
-              size="small"
-            >
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </SectionTitle>
-
-      <Typography
-        sx={{ color: theme.palette.text.secondary, fontSize: '13px' }}
+  let content;
+  if (hasError) {
+    content = (
+      <LibraryEmptyState
+        action={
+          <LibraryActionButton
+            busy={isLoading}
+            kind="secondary"
+            onClick={handleRetry}
+          >
+            {t('core:retry', cap)}
+          </LibraryActionButton>
+        }
+        compact
+        icon={<ErrorOutlineRoundedIcon />}
+        title={t('core:private_apps.load_error', cap)}
+        tone="error"
+      />
+    );
+  } else if (isFirstLoad) {
+    content = <LibrarySkeleton {...PRIVATE_SKELETON} count={2} view={view} />;
+  } else if (apps.length === 0) {
+    content = (
+      <LibraryEmptyState
+        compact
+        icon={<LockRoundedIcon />}
+        title={t('core:private_apps.empty', cap)}
+      />
+    );
+  } else {
+    content = (
+      <Box
+        aria-busy={isLoading || undefined}
+        sx={{
+          opacity: isLoading ? 0.6 : 1,
+          transition: 'opacity 160ms',
+        }}
       >
-        {t('core:private_apps.listing_hint', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </Typography>
-
-      {isLoading && (
-        <Box
-          sx={{ display: 'flex', justifyContent: 'center', padding: '16px' }}
-        >
-          <CircularProgress size={24} />
-        </Box>
-      )}
-
-      {!isLoading && hasError && (
-        <Typography sx={{ color: theme.palette.error.main }}>
-          {t('core:private_apps.load_error', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
-      )}
-
-      {!isLoading && !hasError && apps.length === 0 && (
-        <EmptyStateBox>
-          <LockIcon sx={{ fontSize: '48px', color: 'text.disabled', mb: 2 }} />
-          <Typography
-            sx={{ fontSize: '16px', color: theme.palette.text.secondary }}
-          >
-            {t('core:private_apps.empty', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </EmptyStateBox>
-      )}
-
-      {!isLoading &&
-        !hasError &&
-        apps.map((app) => (
-          <Box
-            key={`${app.name}/${app.service}/${app.identifier}`}
-            sx={{
-              alignItems: 'center',
-              backgroundColor: theme.palette.background.paper,
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: '12px',
-              display: 'flex',
-              gap: '12px',
-              padding: '12px 16px',
-            }}
-          >
-            <LockIcon sx={{ color: theme.palette.text.secondary }} />
-
-            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <Typography noWrap sx={{ fontWeight: 600 }}>
-                {app.identifier}
-              </Typography>
-
-              <Typography
-                noWrap
-                sx={{ color: theme.palette.text.secondary, fontSize: '13px' }}
-              >
-                {t('core:private_apps.details', {
-                  name: app.name,
-                  group:
-                    groupNames.get(app.groupId) ??
-                    t('core:private_apps.group_id', { groupId: app.groupId }),
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                {app.timestamp ? ` · ${formatTimestamp(app.timestamp)}` : ''}
-              </Typography>
-            </Box>
-
-            <Button
-              variant="contained"
-              size="small"
-              onClick={() =>
-                openApp(
-                  {
-                    name: app.name,
-                    service: app.service,
-                    identifier: app.identifier,
-                    groupId: app.groupId,
-                  },
-                  true,
-                  undefined
-                )
-              }
+        <PrivateAppList label={title} view={view}>
+          {apps.map((app) => (
+            <Box
+              key={`${app.name}/${app.service}/${app.identifier}`}
+              role="listitem"
+              sx={{ minWidth: 0 }}
             >
-              {t('core:action.open', { postProcess: 'capitalizeFirstChar' })}
-            </Button>
-          </Box>
-        ))}
-    </Box>
+              <PrivateAppItem
+                app={app}
+                groupName={
+                  groupNames.get(app.groupId) ??
+                  t('core:private_apps.group_id', { groupId: app.groupId })
+                }
+                onOpen={() =>
+                  openApp(
+                    {
+                      name: app.name,
+                      service: app.service,
+                      identifier: app.identifier,
+                      groupId: app.groupId,
+                    },
+                    true,
+                    undefined
+                  )
+                }
+                view={view}
+              />
+            </Box>
+          ))}
+        </PrivateAppList>
+      </Box>
+    );
+  }
+
+  return (
+    <LibrarySection
+      count={!isFirstLoad && !hasError ? apps.length : undefined}
+      headingRef={headingRef}
+      hint={t('core:private_apps.listing_hint', cap)}
+      icon={<LockRoundedIcon />}
+      title={title}
+    >
+      {content}
+    </LibrarySection>
   );
 };

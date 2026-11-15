@@ -1,20 +1,30 @@
-import { useCallback, useMemo } from 'react';
-import { atom, useAtomValue } from 'jotai';
-import { Box, Typography, useTheme } from '@mui/material';
+import { useMemo } from 'react';
+import { useAtomValue } from 'jotai';
+import { Button } from '@mui/material';
+import FilterAltOffRoundedIcon from '@mui/icons-material/FilterAltOffRounded';
+import PublicRoundedIcon from '@mui/icons-material/PublicRounded';
 import { useTranslation } from 'react-i18next';
 import { AppsWidthLimiter } from '../Apps-styles';
-import { AppCardEnhanced } from '../AppCard';
 import { SortOption, StatusFilterOption } from '../Filters';
-import { officialAppList } from '../config/officialApps';
 import { filterAndSortApps } from '../../../atoms/appsAtoms';
-import { ratingsStoreAtom } from '../../../hooks/useAppRatings';
-import type { AppRatingData } from '../../../types/ratings';
-import { VirtualAppGrid } from './VirtualAppGrid';
-
-const CARD_MIN_WIDTH = 320;
-const GRID_GAP = 16;
-const CARD_HEIGHT = 220;
-const EMPTY_RATINGS_MAP = new Map<string, AppRatingData>();
+import { AppCollection } from './AppCollection';
+import { communityAppsOf } from './libraryApps';
+import { APP_SKELETON } from './libraryLayout';
+import {
+  LibraryEmptyState,
+  LibraryResultsStatus,
+  LibrarySection,
+  LibraryWaiting,
+} from './LibrarySection';
+import {
+  cap,
+  formatLibraryNumber,
+  libraryAccent,
+  libraryFocusRing,
+} from './libraryStyles';
+import { libraryViewAtom } from './libraryView';
+import type { LibraryStatus } from './useLibraryStatus';
+import { useRatingsForSort } from './useRatingsForSort';
 
 interface CommunityAppsTabProps {
   availableQapps: any[];
@@ -26,9 +36,10 @@ interface CommunityAppsTabProps {
   scrollParent?: HTMLElement | null;
   /** False while the tab is hidden but kept mounted. */
   isActive?: boolean;
+  /** Sets the category and status back to all. */
+  onClearFilters?: () => void;
+  libraryStatus?: LibraryStatus;
 }
-
-const getAppKey = (app: any) => `${app?.service}-${app?.name}`;
 
 export const CommunityAppsTab = ({
   availableQapps,
@@ -39,26 +50,18 @@ export const CommunityAppsTab = ({
   statusValue,
   scrollParent,
   isActive = true,
+  onClearFilters,
+  libraryStatus = 'loading',
 }: CommunityAppsTabProps) => {
-  const theme = useTheme();
-  const { t } = useTranslation(['core']);
-  const isRatingSort =
-    sortValue === 'highest_rated' || sortValue === 'most_rated';
-  const ratingsForSortAtom = useMemo(
-    () =>
-      atom((get) =>
-        isRatingSort ? get(ratingsStoreAtom) : EMPTY_RATINGS_MAP
-      ),
-    [isRatingSort]
-  );
-  const ratingsStore = useAtomValue(ratingsForSortAtom);
+  const { t, i18n } = useTranslation(['core']);
+  const view = useAtomValue(libraryViewAtom);
+  const ratingsStore = useRatingsForSort(sortValue);
 
-  // Filter out official apps to show only community apps
-  const communityApps = useMemo(() => {
-    return availableQapps.filter(
-      (app) => !officialAppList.includes(app?.name?.toLowerCase())
-    );
-  }, [availableQapps]);
+  // Everything that is not an official Q-App.
+  const communityApps = useMemo(
+    () => communityAppsOf(availableQapps),
+    [availableQapps]
+  );
 
   // Apply all filters and sorting (ratings-aware)
   const filteredAndSortedApps = useMemo(() => {
@@ -69,43 +72,97 @@ export const CommunityAppsTab = ({
       search: searchValue,
       ratingsMap: ratingsStore,
     });
-  }, [communityApps, searchValue, categoryValue, statusValue, sortValue, ratingsStore]);
+  }, [
+    communityApps,
+    searchValue,
+    categoryValue,
+    statusValue,
+    sortValue,
+    ratingsStore,
+  ]);
 
-  const renderApp = useCallback(
-    (app: any) => <AppCardEnhanced app={app} myName={myName} />,
-    [myName]
-  );
+  const title = t('core:tabs.community_apps', cap);
+  const total = communityApps.length;
+  const shown = filteredAndSortedApps.length;
+  const isFiltered =
+    (categoryValue && categoryValue !== 'all') || statusValue !== 'all';
+  const locale = i18n?.language;
+  // Waiting is for the node's list. Once it has come, a list without any
+  // community app is a result too, not a load that never ends.
+  const isWaiting = (availableQapps?.length ?? 0) === 0;
+  const resultsMessage = !isFiltered
+    ? ''
+    : shown === 0
+      ? t('core:launcher.library.no_filter_matches', cap)
+      : t('core:launcher.library.status_apps_shown', {
+          postProcess: 'capitalizeFirstChar',
+          shown: formatLibraryNumber(shown, locale),
+          total: formatLibraryNumber(total, locale),
+        });
 
   return (
-    <AppsWidthLimiter sx={{ flex: 1, minHeight: 0 }}>
-      {filteredAndSortedApps.length > 0 ? (
-        <Box sx={{ width: '100%', paddingBottom: '20px' }}>
-          <VirtualAppGrid
+    <AppsWidthLimiter sx={{ alignItems: 'stretch', flex: 1, gap: '16px' }}>
+      <LibrarySection
+        count={
+          total === 0
+            ? undefined
+            : isFiltered
+              ? t('core:launcher.library.count_filtered', {
+                  shown: formatLibraryNumber(shown, locale),
+                  total: formatLibraryNumber(total, locale),
+                })
+              : total
+        }
+        hint={t('core:launcher.library.community_hint', cap)}
+        icon={<PublicRoundedIcon />}
+        title={title}
+      >
+        {isWaiting ? (
+          <LibraryWaiting
+            {...APP_SKELETON}
+            count={8}
+            status={libraryStatus}
+            view={view}
+          />
+        ) : shown === 0 ? (
+          <LibraryEmptyState
+            action={
+              onClearFilters && isFiltered ? (
+                <Button
+                  disableRipple
+                  onClick={onClearFilters}
+                  startIcon={<FilterAltOffRoundedIcon />}
+                  sx={(theme) => ({
+                    borderRadius: '12px',
+                    color: libraryAccent(theme),
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    '&.Mui-focusVisible': libraryFocusRing(theme, 2),
+                  })}
+                  variant="text"
+                >
+                  {t('core:launcher.library.clear_filters', cap)}
+                </Button>
+              ) : null
+            }
+            icon={<FilterAltOffRoundedIcon />}
+            title={
+              isFiltered
+                ? t('core:launcher.library.no_filter_matches', cap)
+                : t('core:message.generic.no_results', cap)
+            }
+          />
+        ) : (
+          <AppCollection
             active={isActive}
-            gap={GRID_GAP}
-            getKey={getAppKey}
-            items={filteredAndSortedApps}
-            minColumnWidth={CARD_MIN_WIDTH}
-            renderItem={renderApp}
-            rowHeight={CARD_HEIGHT}
+            apps={filteredAndSortedApps}
+            label={title}
+            myName={myName}
             scrollElement={scrollParent ?? null}
           />
-        </Box>
-      ) : (
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            padding: '40px',
-          }}
-        >
-          <Typography sx={{ color: theme.palette.text.secondary }}>
-            {t('core:message.generic.no_results', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </Box>
-      )}
+        )}
+        {isWaiting ? null : <LibraryResultsStatus message={resultsMessage} />}
+      </LibrarySection>
     </AppsWidthLimiter>
   );
 };
