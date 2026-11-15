@@ -8,6 +8,7 @@ import {
   sortablePinnedAppsAtom,
   userInfoAtom,
 } from '../../../atoms/global';
+import { shownAppPageAtom } from '../../../atoms/appsAtoms';
 import { getFee } from '../../../background/background';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../../constants/constants';
 import { useAppRating } from '../../../hooks/useAppRatings';
@@ -91,6 +92,15 @@ export const AppPage = ({
     [service, app?.name]
   );
   const base = getBaseApiReact();
+
+  // On screen: the top bar shows this page's link.
+  const setShownAppPage = useSetAtom(shownAppPageAtom);
+  useEffect(() => {
+    if (!ref.name) return;
+    setShownAppPage(ref);
+    return () =>
+      setShownAppPage((current) => (current === ref ? null : current));
+  }, [ref, setShownAppPage]);
 
   const pageData = useAppPageData(ref);
   const ownedNames = useOwnedNames(myAddress);

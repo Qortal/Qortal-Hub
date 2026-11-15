@@ -47,6 +47,7 @@ vi.mock('../../Snackbar/Snackbar', () => ({
 
 import { AppInfo } from '../AppInfo';
 import { userInfoAtom } from '../../../atoms/global';
+import { shownAppPageAtom } from '../../../atoms/appsAtoms';
 import { executeEvent } from '../../../utils/events';
 import { clearAppPageCache } from './useAppPage';
 
@@ -174,6 +175,26 @@ afterEach(() => {
 });
 
 describe('the app page', () => {
+  it('tells the top bar its link while it is on screen', () => {
+    const store = createStore();
+    store.set(userInfoAtom, { name: 'Me', address: 'QMe' });
+    const view = render(
+      <Provider store={store}>
+        <ThemeProvider theme={createTheme()}>
+          <I18nextProvider i18n={i18n}>
+            <AppInfo app={{ name: 'Q-Blog', service: 'APP' }} myName="Me" />
+          </I18nextProvider>
+        </ThemeProvider>
+      </Provider>
+    );
+    expect(store.get(shownAppPageAtom)).toEqual({
+      service: 'APP',
+      name: 'Q-Blog',
+    });
+    view.unmount();
+    expect(store.get(shownAppPageAtom)).toBeNull();
+  });
+
   it('shows the listing, the page and screenshots', async () => {
     routes();
     renderPage();

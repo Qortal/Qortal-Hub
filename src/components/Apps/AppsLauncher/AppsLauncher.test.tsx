@@ -342,6 +342,25 @@ describe('AppsLauncher', () => {
     });
   });
 
+  it("opens an app's page from its qortal://use-app-page link", async () => {
+    const user = userEvent.setup();
+    await renderLauncher();
+
+    await user.type(searchBox(), 'qortal://use-app-page/APP/Q-Shop');
+    expect(
+      screen.getByRole('button', { name: /core:action.open_as_qortal_link/ })
+    ).toBeVisible();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() =>
+      expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', {
+        data: { name: 'Q-Shop', service: 'APP' },
+      })
+    );
+    expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
+    expect(searchBox()).toHaveValue('');
+  });
+
   it('says so when nothing matches, and Enter opens nothing', async () => {
     const user = userEvent.setup();
     await renderLauncher();

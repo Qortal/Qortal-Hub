@@ -6,6 +6,7 @@ import {
 } from '../../../utils/appRatingScore';
 import { extractComponents } from '../../Chat/MessageDisplay';
 import { isOfficialApp } from '../config/officialApps';
+import { parseAppPageLink } from '../AppPage/appPageLink';
 
 /** A Q-App or website as the node lists it (`/arbitrary/resources/search`). */
 export type LauncherApp = {
@@ -30,7 +31,9 @@ export type LauncherLink =
       identifier?: string;
       path?: string;
     }
-  | { kind: 'group'; link: string };
+  | { kind: 'group'; link: string }
+  /** An app's or website's page: `qortal://use-app-page/<SERVICE>/<name>`. */
+  | { kind: 'page'; link: string; service: string; name: string };
 
 const PROTOCOL_PATTERN = /^qortal:\/\//i;
 /** `APP/Q-Tube` or `WEBSITE/name/page`, the short way to write an address. */
@@ -54,6 +57,8 @@ export function parseLauncherLink(input: string): LauncherLink | null {
     return null;
   }
 
+  const page = parseAppPageLink(link);
+  if (page) return { kind: 'page', link, ...page };
   if (parseQortalUseGroupLink(link)) return { kind: 'group', link };
 
   const parts = extractComponents(link);

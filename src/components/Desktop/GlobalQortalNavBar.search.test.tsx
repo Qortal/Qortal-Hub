@@ -1,10 +1,16 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
-import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
 import { userInfoAtom } from '../../atoms/global';
 import { lightTheme } from '../../styles/theme-light';
 import { executeEvent } from '../../utils/events';
@@ -34,7 +40,12 @@ const catalog = [
 ];
 
 type Heard = { data: unknown; event: string };
-const EVENTS = ['addTab', 'open-apps-mode', 'openAppsLibrarySearch'];
+const EVENTS = [
+  'addTab',
+  'open-apps-mode',
+  'openAppsLibrarySearch',
+  'selectedAppInfo',
+];
 let heard: Heard[] = [];
 const listeners = EVENTS.map((event) => {
   const listener = (e: Event) =>
@@ -42,14 +53,18 @@ const listeners = EVENTS.map((event) => {
   return { event, listener };
 });
 
-const renderBar = () => {
+const renderBar = (
+  desktopViewMode = 'home',
+  prepare?: (store: ReturnType<typeof createStore>) => void
+) => {
   const store = createStore();
   store.set(userInfoAtom, { address: 'QViewer', name: 'Viewer' });
   store.set(availableQappsAtom, catalog);
+  prepare?.(store);
   render(
     <Provider store={store}>
       <ThemeProvider theme={lightTheme}>
-        <GlobalQortalNavBar desktopViewMode="home" />
+        <GlobalQortalNavBar desktopViewMode={desktopViewMode} />
       </ThemeProvider>
     </Provider>
   );
@@ -76,6 +91,11 @@ const opened = () =>
   heard
     .filter(({ event }) => event === 'addTab')
     .map(({ data }) => data as Record<string, string>);
+
+const pagesShown = () =>
+  heard
+    .filter(({ event }) => event === 'selectedAppInfo')
+    .map(({ data }) => data);
 
 const librarySearches = () =>
   heard
@@ -170,6 +190,25 @@ describe('GlobalQortalNavBar search suggestions', () => {
     expect(opened()).toEqual([
       expect.objectContaining({ name: 'Q-Tube', service: 'APP' }),
     ]);
+  });
+
+  it("opens an app's page from its link, without searching the library", async () => {
+    const input = renderBar();
+    type(input, 'qortal://use-app-page/APP/Q-Shop');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(pagesShown()).toEqual([{ name: 'Q-Shop', service: 'APP' }])
+    );
+    expect(librarySearches()).toEqual([]);
+    expect(opened()).toEqual([]);
+  });
+
+  it("shows the link of an app's page that is on screen", () => {
+    const input = renderBar('apps', (store) =>
+      store.set(shownAppPageAtom, { service: 'APP', name: 'Q-Shop' })
+    );
+    expect(input).toHaveValue('qortal://use-app-page/APP/Q-Shop');
   });
 
   it('ranks the apps this account opens most first', () => {

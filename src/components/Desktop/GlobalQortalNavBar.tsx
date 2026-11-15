@@ -48,6 +48,7 @@ import {
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
 import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
+import { buildAppPageLink, openAppPageLink } from '../Apps/AppPage/appPageLink';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
 import {
@@ -65,7 +66,7 @@ import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { SubscriptionsStatus } from './SubscriptionsStatus';
 import { AppBookmarksButton } from '../Apps/AppBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
-import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
 import { AppSearchSuggestions } from './AppSearchSuggestions';
 import {
   type AppOpenCounts,
@@ -897,6 +898,14 @@ export function GlobalQortalNavBar({
   const currentLink = useMemo(() => {
     return currentNavigation?.currentLink || '';
   }, [currentNavigation]);
+  // A Q-App's or website's page has a link of its own: the bar shows it, and
+  // copies it, while the page is on screen. Bookmarks and pins stay with tabs.
+  const shownAppPage = useAtomValue(shownAppPageAtom);
+  const shownLink =
+    currentLink ||
+    (desktopViewMode === 'apps' && shownAppPage
+      ? buildAppPageLink(shownAppPage.service, shownAppPage.name)
+      : '');
   const bookmarkSelectedTab = useMemo(() => {
     const parsedLink = currentLink
       ? extractComponents(normalizeQortalInput(currentLink))
@@ -960,17 +969,20 @@ export function GlobalQortalNavBar({
     if (isInputFocusedRef.current) return;
     if (
       (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
-      currentLink
+      shownLink
     ) {
-      setInputValue(currentLink);
+      setInputValue(shownLink);
       return;
     }
     setInputValue('');
-  }, [currentLink, desktopViewMode]);
+  }, [shownLink, desktopViewMode]);
 
   const handleOpenInput = useCallback((value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
+
+    // qortal://use-app-page/<SERVICE>/<name>: the app's page, not the app.
+    if (openAppPageLink(trimmed)) return;
 
     if (parseQortalUseGroupLink(trimmed)) {
       void openQortalUseGroupLink(trimmed);
@@ -1070,11 +1082,11 @@ export function GlobalQortalNavBar({
     value: null,
   });
 
-  const canCopyCurrentLink = Boolean(currentLink);
+  const canCopyCurrentLink = Boolean(shownLink);
   const canPinCurrentApp =
     desktopViewMode === 'apps' && Boolean(pinnedCandidate);
   const handleCopyCurrentLink = useCallback(() => {
-    if (!currentLink) return;
+    if (!shownLink) return;
     if (!navigator.clipboard?.writeText) {
       setInfoSnackGlobal({
         compact: true,
@@ -1089,7 +1101,7 @@ export function GlobalQortalNavBar({
       return;
     }
     navigator.clipboard
-      .writeText(currentLink)
+      .writeText(shownLink)
       .then(() => {
         setInfoSnackGlobal({
           compact: true,
@@ -1112,7 +1124,7 @@ export function GlobalQortalNavBar({
         });
         setOpenSnackGlobal(true);
       });
-  }, [currentLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
+  }, [shownLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
   const handleTogglePinnedApp = useCallback(() => {
     if (!pinnedCandidate) return;
 
