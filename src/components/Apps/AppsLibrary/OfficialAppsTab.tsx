@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { AppCardEnhanced, FeaturedAppBanner } from '../AppCard';
-import { isFeaturedApp, officialAppList } from '../config/officialApps';
+import {
+  isFeaturedApp,
+  officialAppList,
+  sortFeaturedApps,
+} from '../config/officialApps';
 import {
   featuredRatingsMapAtomFamily,
   getCacheKey,
@@ -96,26 +100,16 @@ export const OfficialAppsTab = ({
     });
   }, [officialApps, fetchRating]);
 
-  // Get featured apps sorted by rating (depends only on featured ratings map)
-  const featuredApps = useMemo(() => {
-    return [...featuredAppsBase].sort((a, b) => {
-      const keyA = getCacheKey(a.name, a.service);
-      const keyB = getCacheKey(b.name, b.service);
-      const ratingA = ratingsForFeaturedMap[keyA];
-      const ratingB = ratingsForFeaturedMap[keyB];
-
-      const avgA = ratingA?.averageRating || 0;
-      const avgB = ratingB?.averageRating || 0;
-
-      if (avgB !== avgA) {
-        return avgB - avgA;
-      }
-
-      const countA = ratingA?.totalVotes || 0;
-      const countB = ratingB?.totalVotes || 0;
-      return countB - countA;
-    });
-  }, [featuredAppsBase, ratingsForFeaturedMap]);
+  // Get featured apps: the configured lead first, then sorted by rating
+  // (depends only on featured ratings map)
+  const featuredApps = useMemo(
+    () =>
+      sortFeaturedApps(
+        featuredAppsBase,
+        (app) => ratingsForFeaturedMap[getCacheKey(app.name, app.service)]
+      ),
+    [featuredAppsBase, ratingsForFeaturedMap]
+  );
 
   return (
     <AppsWidthLimiter>
