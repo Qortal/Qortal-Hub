@@ -7,11 +7,17 @@ import {
   HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './homeDesktopConstants';
 import {
+  type HomeGridItem,
+  type HomeWindowId,
   homeDefaultGrid,
   homeGridRowsFor,
+  homeGridShown,
   homeWidgetWindowId,
+  mergeHomeGrid,
+  moveHomeWindow,
 } from './homeGrid';
 import {
+  type HomeLayout,
   HOME_LAYOUT_DEFAULT,
   completeHomeStack,
   homeLayoutGrid,
@@ -312,5 +318,68 @@ describe('widget windows in the Home layout', () => {
     );
     expect(sized.widgetWindows?.[0].sizedBy).toBe('user');
     expect(withHomeWidgetWindowHeight(sized, clockId, 400)).toBe(sized);
+  });
+
+  describe('with a panel hidden', () => {
+    const shownIn = (layout: HomeLayout) => (key: HomeWindowId) =>
+      !(layout.hidden as readonly HomeWindowId[]).includes(key);
+    /** What Home shows. */
+    const shownGrid = (layout: HomeLayout) =>
+      homeGridShown(homeLayoutGrid(layout), shownIn(layout));
+    const withoutClock = (items: readonly HomeGridItem[]) =>
+      items.filter((item) => item.key !== clockId);
+    const qortinoIn = (layout: HomeLayout) =>
+      homeLayoutGrid(layout).find((item) => item.key === 'qortino');
+
+    /**
+     * Qortino hidden, then Featured Q-Apps moved to the top left, where
+     * Quick Tools had risen into the room Qortino left: Edit Home's own
+     * steps, then what gets saved.
+     */
+    const featuredOnTop = (start: HomeLayout) => {
+      const layout = withHomePanelShown(start, 'qortino', false);
+      const grid = homeLayoutGrid(layout);
+      const moved = moveHomeWindow(
+        homeGridShown(grid, shownIn(layout)),
+        'featured',
+        0,
+        0
+      );
+      return normalizeHomeLayout(
+        withHomeGrid(layout, mergeHomeGrid(grid, moved))
+      );
+    };
+
+    it('adds a widget without moving what shows', () => {
+      const layout = featuredOnTop(HOME_LAYOUT_DEFAULT);
+      const before = shownGrid(layout);
+      expect(before.find((item) => item.key === 'featured')).toMatchObject({
+        x: 0,
+        y: 0,
+      });
+
+      const added = normalizeHomeLayout(withHomeWidgetWindow(layout, clock));
+
+      expect(withoutClock(shownGrid(added))).toEqual(before);
+      // The widget goes under what shows...
+      expect(placeOf(added)).toMatchObject({ x: 0, y: 147 });
+      // ...and Qortino keeps its place, for when it's shown again.
+      expect(qortinoIn(added)).toEqual(qortinoIn(layout));
+    });
+
+    it('gives a widget the height it asks for without moving what shows', () => {
+      const layout = featuredOnTop(
+        withHomeWidgetWindow(HOME_LAYOUT_DEFAULT, clock)
+      );
+      const before = shownGrid(layout);
+
+      const asked = normalizeHomeLayout(
+        withHomeWidgetWindowHeight(layout, clockId, 300)
+      );
+
+      expect(placeOf(asked)?.h).toBe(homeGridRowsFor(300));
+      expect(withoutClock(shownGrid(asked))).toEqual(withoutClock(before));
+      expect(qortinoIn(asked)).toEqual(qortinoIn(layout));
+    });
   });
 });

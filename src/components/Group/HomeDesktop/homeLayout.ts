@@ -13,9 +13,11 @@ import {
 import {
   type HomeGridItem,
   type HomeWidgetWindowId,
+  type HomeWindowId,
   homeDefaultGrid,
   homeGridRowsFor,
   homeWidgetWindowId,
+  mergeHomeGrid,
   normalizeHomeGrid,
   resizeHomeWindow,
   sameHomeGrid,
@@ -240,7 +242,8 @@ export const sameHomeLayout = (a: HomeLayout, b: HomeLayout) =>
 
 /**
  * Where every window is: the account's arrangement, or the default one, with
- * the widget windows it lacks under everything.
+ * the widget windows it lacks under everything. Only the shown windows make
+ * room for them: the hidden ones keep their places (normalizeHomeGrid).
  */
 export const homeLayoutGrid = (layout: HomeLayout): HomeGridItem[] => {
   const grid = layout.grid ?? homeDefaultGrid(layout.stack);
@@ -248,7 +251,7 @@ export const homeLayoutGrid = (layout: HomeLayout): HomeGridItem[] => {
   if (widgets.every((id) => grid.some((item) => item.key === id))) {
     return grid;
   }
-  return normalizeHomeGrid(grid, layout.stack, widgets) ?? grid;
+  return normalizeHomeGrid(grid, layout.stack, widgets, layout.hidden) ?? grid;
 };
 
 /** A widget added in a window of its own, under everything. */
@@ -319,7 +322,8 @@ export const withHomeGrid = (
 
 /**
  * The height a widget asked for (GO_WIDGET_SET_SIZE), in CSS px, given to
- * its window unless the user has sized it. The same layout back when
+ * its window unless the user has sized it. Only the shown windows make room
+ * for it: the hidden ones keep their places. The same layout back when
  * nothing changes.
  */
 export const withHomeWidgetWindowHeight = (
@@ -334,12 +338,18 @@ export const withHomeWidgetWindowHeight = (
   const grid = homeLayoutGrid(layout);
   const item = grid.find((entry) => entry.key === id);
   if (!item) return layout;
-  const resized = resizeHomeWindow(grid, id, item.w, homeGridRowsFor(heightPx));
+  const hidden: readonly HomeWindowId[] = layout.hidden;
+  const resized = resizeHomeWindow(
+    grid.filter((entry) => !hidden.includes(entry.key)),
+    id,
+    item.w,
+    homeGridRowsFor(heightPx)
+  );
   const after = resized.find((entry) => entry.key === id);
   if (!after || after.h === item.h) return layout;
   return {
     ...layout,
-    grid: resized,
+    grid: mergeHomeGrid(grid, resized),
     widgetWindows: (layout.widgetWindows ?? []).map((entry) =>
       entry === widget ? { ...entry, sizedBy: 'widget' as const } : entry
     ),
