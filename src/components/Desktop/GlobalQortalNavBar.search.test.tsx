@@ -279,6 +279,11 @@ describe('GlobalQortalNavBar search suggestions', () => {
   it("opens an app's page from its link, without searching the library", async () => {
     const input = renderBar();
     type(input, 'qortal://use-app-page/APP/Q-Shop');
+
+    // Offered as a link, like any other.
+    expect(suggestions()).toEqual([
+      'qortal://use-app-page/APP/Q-ShopOpen link',
+    ]);
     fireEvent.keyDown(input, { key: 'Enter' });
 
     // The page is asked for once the apps view shows (a 0 ms timer).

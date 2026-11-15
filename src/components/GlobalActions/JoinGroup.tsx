@@ -1,5 +1,9 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
-import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
 import {
   Box,
   ButtonBase,
@@ -23,6 +27,9 @@ export const JoinGroup = () => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const [memberGroups] = useAtom(memberGroupsAtom);
+  // Read when a join link opens, after the listener was set up.
+  const memberGroupsRef = useRef(memberGroups);
+  memberGroupsRef.current = memberGroups;
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [groupInfo, setGroupInfo] = useState(null);
@@ -33,8 +40,17 @@ export const JoinGroup = () => {
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
 
   const handleJoinGroup = async (e) => {
-    setGroupInfo(null);
     const groupId = e?.detail?.groupId;
+    // A member opening the group's link goes to the group: there is nothing
+    // to join.
+    if (
+      groupId &&
+      memberGroupsRef.current?.some((group) => +group?.groupId === +groupId)
+    ) {
+      executeEvent('openGroupMessage', { from: String(groupId) });
+      return;
+    }
+    setGroupInfo(null);
     if (groupId) {
       try {
         setIsOpen(true);

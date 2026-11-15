@@ -10,7 +10,8 @@ import {
 } from '@mui/material';
 import { getBaseApiReact } from '../../../App';
 import { appIconUrl } from './appPageQdn';
-import { openPageTextLink, splitTextLinks } from './appPageLink';
+import { openTextLink } from '../../../utils/qortalLink/openQortalLink';
+import { splitTextLinks } from './appPageLink';
 
 export const SectionCard = ({
   children,
@@ -168,7 +169,7 @@ export const LinkifiedText = ({
           <Link
             component="button"
             key={index}
-            onClick={() => void openPageTextLink(part.value)}
+            onClick={() => void openTextLink(part.value)}
             sx={{
               font: 'inherit',
               textAlign: 'left',

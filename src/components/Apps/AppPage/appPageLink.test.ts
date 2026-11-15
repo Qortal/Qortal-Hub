@@ -1,24 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../utils/events', () => ({ executeEvent: vi.fn() }));
-vi.mock('../../../utils/openExternalHttp', () => ({
-  openHttpUrlExternally: vi.fn(),
-}));
-vi.mock('../../../utils/openQortalUseGroupLink', () => ({
-  openQortalUseGroupLink: vi.fn(async (link: string) =>
-    link.startsWith('qortal://use-group/')
-  ),
-}));
 
 import { executeEvent } from '../../../utils/events';
-import { openHttpUrlExternally } from '../../../utils/openExternalHttp';
 import {
   buildAppOpenLink,
   buildAppPageLink,
   openAppPageLink,
-  openPageTextLink,
   parseAppPageLink,
-  parseQortalResourceLink,
   splitTextLinks,
 } from './appPageLink';
 
@@ -86,30 +75,5 @@ describe('links in page text', () => {
     expect(splitTextLinks('no links')).toEqual([
       { kind: 'text', value: 'no links' },
     ]);
-  });
-
-  it('open in the right place', async () => {
-    await openPageTextLink('https://example.com');
-    expect(openHttpUrlExternally).toHaveBeenCalledWith('https://example.com');
-
-    await openPageTextLink('qortal://APP/Q-Tube/channel/1?identifier=abc&x=1');
-    expect(executeEvent).toHaveBeenCalledWith('addTab', {
-      data: {
-        service: 'APP',
-        name: 'Q-Tube',
-        identifier: 'abc',
-        path: 'channel/1?x=1',
-      },
-    });
-
-    vi.mocked(executeEvent).mockClear();
-    await openPageTextLink('qortal://use-group/action-join/groupid-5');
-    expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
-  });
-
-  it('read plain resource links only', () => {
-    expect(parseQortalResourceLink('qortal://use-group/x')).toBeNull();
-    expect(parseQortalResourceLink('qortal://APP')).toBeNull();
-    expect(parseQortalResourceLink('https://x')).toBeNull();
   });
 });
