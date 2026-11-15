@@ -61,6 +61,7 @@ export const HomeLayoutSettings = ({
     tools: t('group:dashboard.quick_tools_module_desc'),
     wallet: t('group:dashboard.wallet_activity_module_desc'),
     widgets: t('group:dashboard.widgets_module_desc'),
+    workspace: t('group:dashboard.workspace_module_desc'),
   };
 
   const cardSx = {

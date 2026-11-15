@@ -50,6 +50,7 @@ describe('HomeLayoutSettings', () => {
   it('has a switch for every window but the account card', () => {
     renderSettings();
     const names = [
+      'Workspace',
       'Qortino',
       'Quick Tools',
       'Featured Q-Apps',
@@ -77,6 +78,7 @@ describe('HomeLayoutSettings', () => {
     expect(stored()).toEqual({
       hidden: ['featured'],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: 2,
     });
   });
 
@@ -110,6 +112,7 @@ describe('HomeLayoutSettings', () => {
     expect(stored()).toEqual({
       hidden: [],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: 2,
     });
     expect(reset).toBeDisabled();
   });

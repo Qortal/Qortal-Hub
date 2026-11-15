@@ -35,7 +35,6 @@ import {
   HOME_GRID_MIN_WIDTH_PX,
   HOME_GRID_TWO_COLUMNS_MIN_WIDTH_PX,
   HOME_WINDOW_IDS,
-  HOME_WINDOW_MIN_SIZE,
   type HomeGridItem,
   type HomeWindowId,
   homeGridCellAt,
@@ -46,6 +45,8 @@ import {
   homeGridRowsFor,
   homeGridShown,
   homeGridSizeFor,
+  homeWindowMinSize,
+  isHomeWorkspaceCopyId,
   mergeHomeGrid,
   moveHomeWindow,
   resizeHomeWindow,
@@ -81,11 +82,22 @@ type Drag = {
   moved: boolean;
 };
 
+export type HomeGridWindowAction = {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+};
+
 export type HomeGridWindow = {
   id: HomeWindowId;
   /** The window's name, for the edit controls. */
   title: string;
   node: ReactNode;
+  /**
+   * Buttons of its own in the edit controls. A copy of the Workspace has a
+   * remove button among them instead of the hide button.
+   */
+  actions?: readonly HomeGridWindowAction[];
 };
 
 type HomeGridProps = {
@@ -285,6 +297,23 @@ export const HomeGrid = ({
     return callback;
   };
 
+  // A window added while editing (a copy of the Workspace) is scrolled into
+  // view: it may land below the screen.
+  const knownWindowsRef = useRef<ReadonlySet<HomeWindowId> | null>(null);
+  useEffect(() => {
+    const known = knownWindowsRef.current;
+    knownWindowsRef.current = new Set(windows.map((window) => window.id));
+    if (!known || !editing) return;
+    const added = windows.find(
+      (window) => isHomeWorkspaceCopyId(window.id) && !known.has(window.id)
+    );
+    if (!added) return;
+    frameRefs.current.get(added.id)?.scrollIntoView?.({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
+  }, [editing, reduceMotion, windows]);
+
   // What's shown: the drag's layout while one is going on (with the
   // content-sized windows at their measured height), else the saved one.
   const layout =
@@ -353,7 +382,7 @@ export const HomeGrid = ({
       next = moveHomeWindow(drag.start, drag.key, cell.x, cell.y);
     } else {
       const min = homeGridRectPx(
-        { x: 0, y: 0, ...HOME_WINDOW_MIN_SIZE[drag.key] },
+        { x: 0, y: 0, ...homeWindowMinSize(drag.key) },
         columnWidth
       );
       const widthPx =
@@ -565,6 +594,11 @@ export const HomeGrid = ({
   };
 
   const gridHeight = homeGridHeightPx(placed);
+  // Home's own windows, then the Workspace's copies in the order they came.
+  const windowOrder: HomeWindowId[] = [
+    ...HOME_WINDOW_IDS,
+    ...windows.map((window) => window.id).filter(isHomeWorkspaceCopyId),
+  ];
   const draggedItem = dragKey ? placedByKey.get(dragKey) : undefined;
   const transition =
     editing && !reduceMotion ? `left 200ms ${EASE}, top 200ms ${EASE}` : 'none';
@@ -760,14 +794,20 @@ export const HomeGrid = ({
 
   const editControls = (window: HomeGridWindow, held: boolean) => {
     const { id, title } = window;
-    const hideable = id !== 'account';
+    // A copy of the Workspace is removed (Delete too), not hidden.
+    const isCopy = isHomeWorkspaceCopyId(id);
+    const hideable = id !== 'account' && !isCopy;
+    const actions = window.actions ?? [];
+    const hasButtons = hideable || actions.length > 0;
     const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
     return (
       <Box
         aria-label={t(
-          hideable
-            ? 'group:dashboard.edit_window'
-            : 'group:dashboard.edit_window_no_hide',
+          isCopy
+            ? 'group:dashboard.edit_window_removable'
+            : hideable
+              ? 'group:dashboard.edit_window'
+              : 'group:dashboard.edit_window_no_hide',
           { window: title }
         )}
         onKeyDown={(event) => onWindowKeyDown(event, id)}
@@ -814,8 +854,8 @@ export const HomeGrid = ({
             maxWidth: '100%',
             minWidth: 0,
             pl: 0.75,
-            pr: hideable ? 0.25 : 1.25,
-            py: hideable ? 0.25 : 0.5,
+            pr: hasButtons ? 0.25 : 1.25,
+            py: hasButtons ? 0.25 : 0.5,
           }}
         >
           <DragIndicatorRoundedIcon
@@ -844,6 +884,19 @@ export const HomeGrid = ({
               </IconButton>
             </Tooltip>
           ) : null}
+          {actions.map((action) => (
+            <Tooltip key={action.label} title={action.label}>
+              <IconButton
+                aria-label={action.label}
+                onClick={action.onClick}
+                onPointerDown={(event) => event.stopPropagation()}
+                size="small"
+                sx={{ color: theme.palette.text.secondary, p: '4px' }}
+              >
+                {action.icon}
+              </IconButton>
+            </Tooltip>
+          ))}
         </Box>
         {auto
           ? handle(
@@ -899,7 +952,7 @@ export const HomeGrid = ({
             }}
           />
         ) : null}
-        {HOME_WINDOW_IDS.map((id) => {
+        {windowOrder.map((id) => {
           const window = windowsById.get(id);
           const item = placedByKey.get(id);
           if (!window || !item) return null;

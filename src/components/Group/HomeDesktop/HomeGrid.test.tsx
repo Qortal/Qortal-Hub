@@ -164,6 +164,53 @@ describe('HomeGrid', () => {
     expect(onHideWindow).toHaveBeenCalledTimes(2);
   });
 
+  it('gives a window buttons of its own, and removes a copy of the Workspace rather than hiding it', () => {
+    const copy = 'workspace:k1' as const;
+    const duplicate = vi.fn();
+    const remove = vi.fn();
+    const { onHideWindow } = renderGrid({
+      grid: [...GRID, { key: copy, x: 0, y: 60, w: 6, h: 26 }],
+      windows: [
+        ...GRID.map((item) => ({
+          id: item.key,
+          node: <div />,
+          title: TITLES[item.key] ?? item.key,
+        })),
+        {
+          actions: [
+            {
+              icon: <span />,
+              label: 'Duplicate Workspace 2',
+              onClick: duplicate,
+            },
+            { icon: <span />, label: 'Remove Workspace 2', onClick: remove },
+          ],
+          id: copy,
+          node: <div>copy content</div>,
+          title: 'Workspace 2',
+        },
+      ],
+    });
+    expect(screen.getByText('copy content')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+
+    expect(
+      screen.queryByRole('button', { name: 'Hide Workspace 2' })
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Duplicate Workspace 2' })
+    );
+    expect(duplicate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Workspace 2' }));
+    expect(remove).toHaveBeenCalledTimes(1);
+    // Delete takes it off Home too.
+    const controls = screen.getByRole('group', {
+      name: /^Workspace 2: drag it.* Delete removes it\.$/,
+    });
+    fireEvent.keyDown(controls, { key: 'Delete' });
+    expect(onHideWindow).toHaveBeenLastCalledWith(copy);
+  });
+
   it('shows a hidden window again, and resets the layout', () => {
     const { onResetGrid, onShowWindow } = renderGrid({
       hiddenWindows: [{ id: 'groupActivity', title: 'Group Activity' }],

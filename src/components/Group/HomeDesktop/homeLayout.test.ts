@@ -6,18 +6,27 @@ import {
   HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
   HOME_WIDGETS_VISIBLE_STORAGE_KEY,
 } from './homeDesktopConstants';
-import { homeDefaultGrid } from './homeGrid';
+import { homeDefaultGrid, homeWorkspaceCopyId } from './homeGrid';
 import {
   HOME_LAYOUT_DEFAULT,
+  HOME_LAYOUT_VERSION,
+  HOME_STACK_PANEL_IDS,
+  HOME_TOP_PANEL_IDS,
+  type HomeLayout,
+  HOME_WORKSPACE_COPY_LIMIT,
   completeHomeStack,
   homeLayoutGrid,
   homeLayoutStorageKey,
+  isHomePanelShownNow,
   normalizeHomeLayout,
+  normalizeHomeWorkspaces,
   readHomeLayout,
   sameHomeLayout,
   saveHomeLayout,
   useHomeLayout,
   withHomePanelShown,
+  withHomeWorkspaceCopy,
+  withoutHomeWorkspaceCopy,
 } from './homeLayout';
 
 const ALICE = 'QaliceAddress00000000000000000000';
@@ -33,10 +42,12 @@ describe('normalizeHomeLayout', () => {
       normalizeHomeLayout({
         hidden: ['feed', 'nope', 'qortino', 'feed', 7],
         stack: ['feed', 'widgets', 'groupActivity'],
+        version: HOME_LAYOUT_VERSION,
       })
     ).toEqual({
       hidden: ['qortino', 'feed'],
       stack: ['feed', 'widgets', 'groupActivity'],
+      version: HOME_LAYOUT_VERSION,
     });
   });
 
@@ -48,19 +59,22 @@ describe('normalizeHomeLayout', () => {
   });
 
   it('keeps a hidden panel from moving the shown ones', () => {
-    // Quick Tools rose into the room Qortino left, and the layout was saved.
+    // Quick Tools rose into the room the Workspace and Qortino left, and the
+    // layout was saved.
     const grid = homeDefaultGrid().map((item) =>
       item.key === 'tools' ? { ...item, y: 0 } : item
     );
     const layout = normalizeHomeLayout({
       grid,
-      hidden: ['qortino'],
+      hidden: ['workspace', 'qortino'],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: HOME_LAYOUT_VERSION,
     });
     const at = (key: string) => layout.grid?.find((item) => item.key === key);
     expect(at('tools')).toMatchObject({ x: 0, y: 0 });
-    // Qortino keeps its place, for when it's shown again.
-    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 46 });
+    // They keep their places, for when they're shown again.
+    expect(at('workspace')).toMatchObject({ x: 0, y: 0, h: 23 });
+    expect(at('qortino')).toMatchObject({ x: 0, y: 23, h: 23 });
   });
 
   it('puts a panel the stored order lacks back after its usual neighbour', () => {
@@ -82,6 +96,148 @@ describe('normalizeHomeLayout', () => {
   });
 });
 
+describe('a layout from before the Workspace was a window of its own', () => {
+  const STACK = ['widgets', 'groupActivity', 'feed'];
+  // Qortino's window, the Workspace at its top, over Quick Tools.
+  const BEFORE = [
+    { key: 'qortino', x: 0, y: 0, w: 6, h: 46 },
+    { key: 'tools', x: 0, y: 46, w: 6, h: 18 },
+  ];
+  const rectOf = (layout: { grid?: { key: string }[] }, key: string) =>
+    layout.grid?.find((item) => item.key === key);
+
+  it('hides the Workspace with Qortino, as Qortino’s switch did', () => {
+    const older = normalizeHomeLayout({ hidden: ['qortino'], stack: STACK });
+    expect(older.hidden).toEqual(['workspace', 'qortino']);
+    expect(older.version).toBe(HOME_LAYOUT_VERSION);
+    // A layout saved since: Qortino alone.
+    const current = normalizeHomeLayout({
+      hidden: ['qortino'],
+      stack: STACK,
+      version: HOME_LAYOUT_VERSION,
+    });
+    expect(current.hidden).toEqual(['qortino']);
+  });
+
+  it('gives the Workspace the top of Qortino’s window, where it was', () => {
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({ grid: BEFORE, hidden: ['qortino'], stack: STACK })
+    );
+    const layout = readHomeLayout(ALICE);
+    expect(layout.hidden).toEqual(['workspace', 'qortino']);
+    expect(rectOf(layout, 'workspace')).toMatchObject({ x: 0, y: 0, h: 23 });
+    expect(rectOf(layout, 'qortino')).toMatchObject({ x: 0, y: 23, h: 23 });
+    // Quick Tools shows at the top, as it did with Qortino hidden.
+    expect(rectOf(layout, 'tools')).toMatchObject({ x: 0, y: 0, h: 18 });
+  });
+
+  it('saves what Home changes as it is: hiding Qortino keeps the Workspace', () => {
+    saveHomeLayout(ALICE, { hidden: [], stack: [...STACK] as never });
+    saveHomeLayout(
+      ALICE,
+      withHomePanelShown(readHomeLayout(ALICE), 'qortino', false)
+    );
+    expect(readHomeLayout(ALICE).hidden).toEqual(['qortino']);
+    expect(
+      JSON.parse(localStorage.getItem(homeLayoutStorageKey(ALICE)) ?? '{}')
+        .version
+    ).toBe(HOME_LAYOUT_VERSION);
+  });
+});
+
+describe('copies of the Workspace', () => {
+  const copyId = homeWorkspaceCopyId('k1');
+
+  it('adds a copy right under the window duplicated, as big as it', () => {
+    const layout = withHomeWorkspaceCopy(
+      HOME_LAYOUT_DEFAULT,
+      'workspace',
+      'k1'
+    );
+    expect(layout.workspaces).toEqual(['k1']);
+    const grid = homeLayoutGrid(layout);
+    expect(grid.find((item) => item.key === copyId)).toEqual({
+      key: copyId,
+      x: 0,
+      y: 23,
+      w: 6,
+      h: 23,
+    });
+    expect(grid.find((item) => item.key === 'qortino')).toMatchObject({
+      y: 46,
+    });
+    // Saved and read back, it stays.
+    saveHomeLayout(ALICE, layout);
+    expect(sameHomeLayout(readHomeLayout(ALICE), layout)).toBe(true);
+  });
+
+  it('adds one only under the limit, with a key of its own', () => {
+    let layout = HOME_LAYOUT_DEFAULT;
+    for (let index = 0; index < HOME_WORKSPACE_COPY_LIMIT; index += 1) {
+      layout = withHomeWorkspaceCopy(layout, 'workspace', `k${index}`);
+    }
+    expect(layout.workspaces).toHaveLength(HOME_WORKSPACE_COPY_LIMIT);
+    expect(withHomeWorkspaceCopy(layout, 'workspace', 'more')).toBe(layout);
+    const one = withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace', 'k1');
+    expect(withHomeWorkspaceCopy(one, 'workspace', 'k1')).toBe(one);
+    expect(
+      withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace', 'not ok')
+    ).toBe(HOME_LAYOUT_DEFAULT);
+    // Without a key given, each gets a new one.
+    const two = withHomeWorkspaceCopy(
+      withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace'),
+      'workspace'
+    );
+    expect(new Set(two.workspaces).size).toBe(2);
+  });
+
+  it('takes a copy off Home: the windows under it rise', () => {
+    const layout = withHomeWorkspaceCopy(
+      HOME_LAYOUT_DEFAULT,
+      'workspace',
+      'k1'
+    );
+    const removed = withoutHomeWorkspaceCopy(layout, copyId);
+    expect(removed.workspaces).toBeUndefined();
+    const grid = homeLayoutGrid(removed);
+    expect(grid.find((item) => item.key === copyId)).toBeUndefined();
+    expect(grid.find((item) => item.key === 'qortino')).toMatchObject({
+      y: 23,
+    });
+  });
+
+  it('drops what a layout lists badly, and a copy it does not list', () => {
+    expect(
+      normalizeHomeWorkspaces(['a', 'a', 'b c', 7, '', 'x'.repeat(40), 'b'])
+    ).toEqual(['a', 'b']);
+    expect(normalizeHomeWorkspaces('a')).toEqual([]);
+    const layout = normalizeHomeLayout({
+      grid: [...homeDefaultGrid(), { key: copyId, x: 0, y: 0, w: 6, h: 26 }],
+      hidden: [],
+      version: HOME_LAYOUT_VERSION,
+    });
+    expect(layout.workspaces).toBeUndefined();
+    expect(layout.grid?.some((item) => item.key === copyId)).toBe(false);
+  });
+
+  it('puts a listed copy the arrangement lacks under everything', () => {
+    const layout = normalizeHomeLayout({
+      hidden: [],
+      version: HOME_LAYOUT_VERSION,
+      workspaces: ['k1'],
+    });
+    expect(homeLayoutGrid(layout).find((item) => item.key === copyId)).toEqual({
+      key: copyId,
+      x: 0,
+      y: 147,
+      w: 6,
+      h: 23,
+    });
+    expect(sameHomeLayout(layout, HOME_LAYOUT_DEFAULT)).toBe(false);
+  });
+});
+
 describe('readHomeLayout', () => {
   it('starts an account from the switches kept for the whole PC', () => {
     localStorage.setItem(HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY, 'false');
@@ -94,6 +250,7 @@ describe('readHomeLayout', () => {
     expect(readHomeLayout(ALICE)).toEqual({
       hidden: ['groupActivity'],
       stack: ['widgets', 'feed', 'groupActivity'],
+      version: HOME_LAYOUT_VERSION,
     });
   });
 
@@ -104,11 +261,13 @@ describe('readHomeLayout', () => {
     expect(readHomeLayout(ALICE)).toEqual({
       hidden: ['qortino'],
       stack: ['feed', 'widgets', 'groupActivity'],
+      version: HOME_LAYOUT_VERSION,
     });
     // Bob hasn't changed anything: he still starts from the PC's switches.
     expect(readHomeLayout(BOB)).toEqual({
       hidden: ['feed'],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: HOME_LAYOUT_VERSION,
     });
     // Saving doesn't touch the PC-wide switches.
     expect(localStorage.getItem(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY)).toBe(
@@ -131,6 +290,40 @@ describe('layout changes', () => {
       'wallet',
     ]);
     expect(withHomePanelShown(off, 'wallet', true).hidden).toEqual([]);
+  });
+});
+
+describe('while Getting started shows', () => {
+  const HOME_PANEL_IDS = [...HOME_TOP_PANEL_IDS, ...HOME_STACK_PANEL_IDS];
+  const shownNow = (layout: HomeLayout, gettingStarted: boolean) =>
+    HOME_PANEL_IDS.filter((id) =>
+      isHomePanelShownNow(layout, id, { gettingStarted })
+    );
+
+  it('lets the Workspace make way, and nothing else', () => {
+    const layout = HOME_LAYOUT_DEFAULT;
+    expect(shownNow(layout, false)).toEqual(HOME_PANEL_IDS);
+    expect(shownNow(layout, true)).toEqual(
+      HOME_PANEL_IDS.filter((id) => id !== 'workspace')
+    );
+    // Not in the layout: the Workspace comes back once it's done.
+    expect(layout.hidden).toEqual([]);
+  });
+
+  it('keeps the Workspace when Qortino, and Getting started with him, is hidden', () => {
+    const layout = withHomePanelShown(HOME_LAYOUT_DEFAULT, 'qortino', false);
+    expect(
+      isHomePanelShownNow(layout, 'workspace', { gettingStarted: true })
+    ).toBe(true);
+  });
+
+  it('keeps a Workspace hidden in the layout hidden', () => {
+    const layout = withHomePanelShown(HOME_LAYOUT_DEFAULT, 'workspace', false);
+    for (const gettingStarted of [false, true]) {
+      expect(isHomePanelShownNow(layout, 'workspace', { gettingStarted })).toBe(
+        false
+      );
+    }
   });
 });
 
@@ -186,6 +379,7 @@ describe('useHomeLayout', () => {
     ).toEqual({
       hidden: ['featured'],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: HOME_LAYOUT_VERSION,
     });
   });
 
