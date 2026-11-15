@@ -130,7 +130,8 @@ const scrollParentOf = (node: HTMLElement | null): HTMLElement | null => {
   return null;
 };
 
-const usePageVisible = () => {
+/** The Hub's window is visible (not minimized or behind another). */
+export const usePageVisible = () => {
   const [visible, setVisible] = useState(
     () =>
       typeof document === 'undefined' || document.visibilityState !== 'hidden'
@@ -154,13 +155,23 @@ export const canHostHomeWidgets = (): boolean =>
 type HomeWidgetsPanelProps = {
   /** Home is the view showing. */
   active: boolean;
+  /**
+   * Widgets on Home in windows of their own: they count towards the limit,
+   * and the picker shows them as added.
+   */
+  elsewhere?: readonly { name: string; identifier: string | null }[];
 };
+
+const NOWHERE_ELSE: readonly { name: string; identifier: string | null }[] = [];
 
 /**
  * Home's widgets: small Q-Apps the user picked, on a grid they arrange
  * (Arrange: drag a widget to move it, its corner to resize it).
  */
-export const HomeWidgetsPanel = ({ active }: HomeWidgetsPanelProps) => {
+export const HomeWidgetsPanel = ({
+  active,
+  elsewhere = NOWHERE_ELSE,
+}: HomeWidgetsPanelProps) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { t } = useTranslation(['core', 'group']);
@@ -550,7 +561,7 @@ export const HomeWidgetsPanel = ({ active }: HomeWidgetsPanelProps) => {
     setWidgets((list) => applyWidgetLayout(layoutForColumns(list, cols), next));
   };
 
-  const full = widgets.length >= HOME_WIDGET_LIMIT;
+  const full = widgets.length + elsewhere.length >= HOME_WIDGET_LIMIT;
   const gridHeight = gridHeightPx(layout);
   const draggedItem = dragKey ? layoutByKey.get(dragKey) : undefined;
   const transition = reduceMotion
@@ -1023,7 +1034,7 @@ export const HomeWidgetsPanel = ({ active }: HomeWidgetsPanelProps) => {
         </>
       )}
       <HomeWidgetPicker
-        added={widgets}
+        added={[...widgets, ...elsewhere]}
         onAdd={addWidget}
         onClose={() => setPickerOpen(false)}
         open={pickerOpen}
