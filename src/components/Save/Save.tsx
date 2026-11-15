@@ -1,14 +1,15 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
-import isEqual from 'lodash/isEqual'; // TODO Import deep comparison utility
+import { useEffect, useState } from 'react';
 import {
   hasSettingsChangedAtom,
   isUsingImportExportSettingsAtom,
-  oldPinnedAppsAtom,
-  settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
+  userInfoAtom,
 } from '../../atoms/global';
-import { serializePinnedAppsForQdn } from '../../utils/pinnedAppsSettings';
+import { useHasUnsavedLauncher } from '../Apps/AppsLauncher/launcherQdnSync';
+import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
+import { useRevertSettings } from './useRevertSettings';
+import { useSaveSettingsToQdn } from './useSaveSettingsToQdn';
 import {
   Box,
   Button,
@@ -18,8 +19,6 @@ import {
   useTheme,
 } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
-import { QORTAL_APP_CONTEXT } from '../../App';
-import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { SaveIcon } from '../../assets/Icons/SaveIcon';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
@@ -34,8 +33,7 @@ import {
   uint8ArrayToObject,
 } from '../../encryption/encryption.ts';
 import { useTranslation } from 'react-i18next';
-import { useAtom, useSetAtom } from 'jotai';
-import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants.ts';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   dialogInfoCardSx,
   getDialogPaperSx,
@@ -82,10 +80,7 @@ export const Save = ({
   iconSx = undefined,
 }) => {
   const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
-  const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useAtom(
-    settingsQDNLastUpdatedAtom
-  );
-  const [settingsLocalLastUpdated] = useAtom(settingsLocalLastUpdatedAtom);
+  const settingsQdnLastUpdated = useAtomValue(settingsQDNLastUpdatedAtom);
   const setHasSettingsChangedAtom = useSetAtom(hasSettingsChangedAtom);
   const [isUsingImportExportSettings, setIsUsingImportExportSettings] = useAtom(
     isUsingImportExportSettingsAtom
@@ -94,108 +89,35 @@ export const Save = ({
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
-  const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
-
   const [openDialog, setOpenDialog] = useState(false);
-  const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
 
-  const hasChanged = useMemo(() => {
-    const newChanges = {
-      sortablePinnedApps: serializePinnedAppsForQdn(pinnedApps),
-    };
-    const oldChanges = {
-      sortablePinnedApps: serializePinnedAppsForQdn(oldPinnedApps),
-    };
-    if (settingsQdnLastUpdated === -100) return false;
-    return (
-      !isEqual(oldChanges, newChanges) &&
-      settingsQdnLastUpdated < settingsLocalLastUpdated
-    );
-  }, [
-    oldPinnedApps,
-    pinnedApps,
-    settingsQdnLastUpdated,
-    settingsLocalLastUpdated,
-  ]);
+  const myAddress = useAtomValue(userInfoAtom)?.address ?? null;
+  // The bookmarks and folders are saved with the pins: a change to them is
+  // a change to save too.
+  const { data: bookmarks } = useLauncherBookmarks(myAddress, true);
+  const hasChanged = useHasUnsavedLauncher(myAddress, bookmarks);
+  const saveSettings = useSaveSettingsToQdn(myAddress, myName);
+  const revertSettings = useRevertSettings(myAddress);
 
   useEffect(() => {
     setHasSettingsChangedAtom(hasChanged);
   }, [hasChanged]);
 
-  const saveToQdn = async () => {
+  const saveToQdn = async ({ overwrite = false } = {}) => {
     try {
       setIsLoading(true);
-      const data64 = await objectToBase64({
-        sortablePinnedApps: serializePinnedAppsForQdn(pinnedApps),
-      });
-      const encryptData = await new Promise((res, rej) => {
-        window
-          .sendMessage(
-            'ENCRYPT_DATA',
-            {
-              data64,
-            },
-            TIME_MINUTES_1_IN_MILLISECONDS
-          )
-          .then((response) => {
-            if (response.error) {
-              rej(response?.message);
-              return;
-            } else {
-              res(response);
-            }
-          })
-          .catch((error) => {
-            console.error('Failed qortalRequest', error);
-          });
-      });
-      if (encryptData && !encryptData?.error) {
-        const fee = await getFee('ARBITRARY');
-
-        await show({
-          message: t('core:message.question.publish_qdn', {
+      const outcome = await saveSettings({ overwrite });
+      if (outcome === 'saved') {
+        setInfoSnack({
+          type: 'success',
+          message: t('core:message.success.published_qdn', {
             postProcess: 'capitalizeFirstChar',
           }),
-          publishFee: fee.fee + ' QORT',
         });
-        const response = await new Promise((res, rej) => {
-          window
-            .sendMessage('publishOnQDN', {
-              data: encryptData,
-              identifier: 'ext_saved_settings',
-              service: 'DOCUMENT_PRIVATE',
-              uploadType: 'base64',
-            })
-            .then((response) => {
-              if (!response?.error) {
-                res(response);
-                return;
-              }
-              rej(response.error);
-            })
-            .catch((error) => {
-              rej(
-                error.message ||
-                  t('core:message.error.generic', {
-                    postProcess: 'capitalizeFirstChar',
-                  })
-              );
-            });
-        });
-        if (response?.identifier) {
-          setOldPinnedApps(pinnedApps);
-          setSettingsQdnLastUpdated(Date.now());
-          setInfoSnack({
-            type: 'success',
-            message: t('core:message.success.published_qdn', {
-              postProcess: 'capitalizeFirstChar',
-            }),
-          });
-          setOpenSnack(true);
-          setAnchorEl(null);
-        }
+        setOpenSnack(true);
+        setOpenDialog(false);
       }
     } catch (error) {
       setInfoSnack({
@@ -217,9 +139,9 @@ export const Save = ({
   };
 
   const revertChanges = () => {
-    setPinnedApps(oldPinnedApps);
-    saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', null);
     setOpenDialog(false);
+    // The pins, and with them the bookmarks, the folders and the arrangement.
+    void revertSettings();
   };
 
   return (
@@ -405,7 +327,7 @@ export const Save = ({
                       <LoadingButton
                         size="small"
                         loading={isLoading}
-                        onClick={saveToQdn}
+                        onClick={() => saveToQdn()}
                         variant="contained"
                         sx={getDialogPrimaryButtonSx(theme)}
                       >
@@ -512,7 +434,7 @@ export const Save = ({
                         <LoadingButton
                           size="small"
                           loading={isLoading}
-                          onClick={saveToQdn}
+                          onClick={() => saveToQdn({ overwrite: true })}
                           variant="contained"
                           sx={getDialogPrimaryButtonSx(theme)}
                         >
