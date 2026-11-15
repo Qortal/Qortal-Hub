@@ -673,6 +673,7 @@
       "search_in_category": "{{category}}内を検索",
       "status_apps_shown": "表示中のQ-AppとWebサイト: {{shown}} / {{total}}",
       "status_categories_shown": "表示中のカテゴリ: {{shown}} / {{total}}",
+      "top_rated_hint": "コミュニティの評価トップ{{number}}",
       "view_grid": "グリッド",
       "view_label": "表示形式",
       "view_list": "リスト"

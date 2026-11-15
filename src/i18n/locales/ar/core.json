@@ -701,6 +701,7 @@
       "search_in_category": "البحث في {{category}}",
       "status_apps_shown": "تطبيقات Q-App والمواقع المعروضة: {{shown}} من {{total}}",
       "status_categories_shown": "الفئات المعروضة: {{shown}} من {{total}}",
+      "top_rated_hint": "أفضل {{number}} حسب تقييمات المجتمع",
       "view_grid": "شبكة",
       "view_label": "طريقة العرض",
       "view_list": "قائمة"

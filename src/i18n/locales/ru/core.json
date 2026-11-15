@@ -689,6 +689,7 @@
       "search_in_category": "поиск в категории «{{category}}»",
       "status_apps_shown": "показано Q-App и сайтов: {{shown}} из {{total}}",
       "status_categories_shown": "показано категорий: {{shown}} из {{total}}",
+      "top_rated_hint": "топ-{{number}} по оценкам сообщества",
       "view_grid": "сетка",
       "view_label": "вид",
       "view_list": "список"

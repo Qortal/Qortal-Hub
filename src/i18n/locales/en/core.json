@@ -673,6 +673,7 @@
       "search_in_category": "search in {{category}}",
       "status_apps_shown": "Q-Apps and websites shown: {{shown}} of {{total}}",
       "status_categories_shown": "categories shown: {{shown}} of {{total}}",
+      "top_rated_hint": "top {{number}} rated by the community",
       "view_grid": "grid",
       "view_label": "layout",
       "view_list": "list"

@@ -673,6 +673,7 @@
       "search_in_category": "cerca in {{category}}",
       "status_apps_shown": "Q-App e siti web mostrati: {{shown}} di {{total}}",
       "status_categories_shown": "categorie mostrate: {{shown}} di {{total}}",
+      "top_rated_hint": "la top {{number}} secondo i voti della community",
       "view_grid": "griglia",
       "view_label": "visualizzazione",
       "view_list": "elenco"
