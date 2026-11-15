@@ -8,6 +8,7 @@ import { userInfoAtom } from '../../atoms/global';
 import { darkTheme } from '../../styles/theme-dark';
 import { executeEvent } from '../../utils/events';
 import { DesktopSideBar } from './DesktopLeftSideBar';
+import { ARC_OUTER_PX } from './SidePanelArc';
 import { sidePanelStorageKey } from './sidePanel';
 
 vi.mock('../CoreSyncStatus', () => ({
@@ -121,6 +122,31 @@ describe('DesktopSideBar', () => {
     expect(getComputedStyle(handle).background).toBe('rgba(255, 255, 255, 0)');
   });
 
+  it('can be a half circle, which only opens at the left edge', () => {
+    renderPanel({ layout: 'arc', show: 'always' });
+    expect(screen.getByLabelText('Move sidebar handle')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-side-panel-layout="arc"]')
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[data-side-panel-slot="home"]')
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Edit side panel' })
+    ).toBeInTheDocument();
+  });
+
+  it('leaves hidden buttons out of the half circle too', () => {
+    renderPanel({
+      items: [{ kind: 'home' }, { hidden: true, kind: 'theme' }],
+      layout: 'arc',
+    });
+    expect(
+      document.querySelector('[data-side-panel-slot="home"]')
+    ).not.toBeNull();
+    expect(document.querySelector('[data-side-panel-slot="theme"]')).toBeNull();
+  });
+
   it('closes once the pointer is away, even after leaving over its handle', () => {
     vi.useFakeTimers();
     try {
@@ -179,6 +205,32 @@ describe('DesktopSideBar', () => {
     }
   });
 
+  it('closes the half circle once the pointer is away, even after its handle', () => {
+    vi.useFakeTimers();
+    try {
+      renderPanel({ layout: 'arc' });
+      const handle = screen.getByLabelText('Move sidebar handle');
+      const arc = document.querySelector(
+        '[data-side-panel-layout="arc"]'
+      ) as HTMLElement;
+      fireEvent.mouseEnter(handle);
+      expect(arc).toHaveStyle({ pointerEvents: 'auto' });
+
+      // Out over the handle, which sits at its widest point, and on.
+      fireEvent.mouseEnter(arc);
+      fireEvent.mouseLeave(arc);
+      fireEvent.mouseEnter(handle);
+      fireEvent.pointerMove(document.body);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(arc).toHaveStyle({ pointerEvents: 'none' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens from anywhere along the left edge when its handle is off', () => {
     vi.useFakeTimers();
     try {
@@ -199,6 +251,31 @@ describe('DesktopSideBar', () => {
       });
 
       expect(column).toHaveStyle({ pointerEvents: 'auto' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens the half circle where the pointer meets the edge, without its handle', () => {
+    vi.useFakeTimers();
+    try {
+      renderPanel({ edgeHandle: false, layout: 'arc' });
+      const edge = document.querySelector(
+        '[data-side-panel-edge="edge"]'
+      ) as HTMLElement;
+
+      fireEvent.mouseEnter(edge, { clientY: 500 });
+      act(() => {
+        vi.advanceTimersByTime(10);
+      });
+
+      const arc = document.querySelector(
+        '[data-side-panel-layout="arc"]'
+      ) as HTMLElement;
+      expect(arc).toHaveStyle({
+        pointerEvents: 'auto',
+        top: `${500 - ARC_OUTER_PX}px`,
+      });
     } finally {
       vi.useRealTimers();
     }
