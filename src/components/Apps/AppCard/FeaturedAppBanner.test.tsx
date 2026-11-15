@@ -274,4 +274,53 @@ describe('FeaturedAppBanner', () => {
     );
     expect(screen.getAllByRole('article')).toHaveLength(apps.length);
   });
+
+  it("says the community's top rated are rated by the community, with a star", () => {
+    const { container, rerender } = render(
+      <ThemeProvider theme={createTheme()}>
+        <FeaturedAppBanner featuredApps={apps} />
+      </ThemeProvider>
+    );
+    expect(
+      screen.getByText('core:launcher.library.featured_hint')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-testid="AutoAwesomeRoundedIcon"]')
+    ).not.toBeNull();
+
+    rerender(
+      <ThemeProvider theme={createTheme()}>
+        <FeaturedAppBanner featuredApps={apps} variant="top-rated" />
+      </ThemeProvider>
+    );
+    expect(
+      screen.getByText('core:launcher.library.top_rated_hint')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('core:launcher.library.featured_hint')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="StarRoundedIcon"]')
+    ).not.toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'core:official_apps.featured' })
+    ).toBeInTheDocument();
+  });
+
+  it("opens an app's page as one of a category's when on a category's page", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <FeaturedAppBanner
+          featuredApps={apps}
+          isFromCategory
+          variant="top-rated"
+        />
+      </ThemeProvider>
+    );
+    await user.click(screen.getByRole('button', { name: 'Q-Tube' }));
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfoCategory', {
+      data: apps[1],
+    });
+  });
 });

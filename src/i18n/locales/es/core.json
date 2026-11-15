@@ -489,6 +489,7 @@
       "search_in_category": "buscar en {{category}}",
       "status_apps_shown": "Q-Apps y sitios web mostrados: {{shown}} de {{total}}",
       "status_categories_shown": "categorías mostradas: {{shown}} de {{total}}",
+      "top_rated_hint": "el top {{number}} según las valoraciones de la comunidad",
       "view_grid": "cuadrícula",
       "view_label": "vista",
       "view_list": "lista"

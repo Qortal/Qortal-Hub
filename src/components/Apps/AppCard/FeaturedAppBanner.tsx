@@ -14,6 +14,7 @@ import { alpha } from '@mui/material/styles';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../../utils/events';
 import {
@@ -26,6 +27,7 @@ import { LibrarySection } from '../AppsLibrary/LibrarySection';
 import {
   cap,
   cardSurfaceSx,
+  formatLibraryNumber,
   INSTANT_TOOLTIP,
   libraryFocusRing,
   libraryMuted,
@@ -39,12 +41,27 @@ const DRAG_THRESHOLD_PX = 6;
 
 interface FeaturedAppBannerProps {
   featuredApps: any[];
+  /**
+   * 'official': official apps to start with, chosen for Qortal Hub.
+   * 'top-rated': the best rated by the community, which the row says.
+   */
+  variant?: 'official' | 'top-rated';
+  /** On a category's page: an app's page goes back to the category. */
+  isFromCategory?: boolean;
+  sx?: Record<string, any>;
 }
 
 function featuredAppsAreEqual(
   prev: FeaturedAppBannerProps,
   next: FeaturedAppBannerProps
 ): boolean {
+  if (
+    prev.variant !== next.variant ||
+    prev.isFromCategory !== next.isFromCategory ||
+    prev.sx !== next.sx
+  ) {
+    return false;
+  }
   if (prev.featuredApps === next.featuredApps) return true;
   const a = prev.featuredApps;
   const b = next.featuredApps;
@@ -130,13 +147,18 @@ const FeaturedCard = ({
 };
 
 /**
- * The official apps worth starting with, in a row that scrolls sideways: by
- * the arrows (a page at a time), a trackpad, Shift and the wheel, a touch
- * screen, or a mouse drag. It snaps to a card and scrolls smoothly unless
- * the system asks for less motion.
+ * The official apps worth starting with, or the community's best rated, in a
+ * row that scrolls sideways: by the arrows (a page at a time), a trackpad,
+ * Shift and the wheel, a touch screen, or a mouse drag. It snaps to a card
+ * and scrolls smoothly unless the system asks for less motion.
  */
-const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
-  const { t } = useTranslation(['core']);
+const FeaturedAppBannerInner = ({
+  featuredApps,
+  variant = 'official',
+  isFromCategory = false,
+  sx,
+}: FeaturedAppBannerProps) => {
+  const { t, i18n } = useTranslation(['core']);
   const reduce = usePrefersReducedMotion();
   const trackRef = useRef<HTMLUListElement | null>(null);
   const trackId = useId();
@@ -326,9 +348,15 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
     executeEvent('addTab', { data: app });
   }, []);
 
-  const handleViewDetails = useCallback((app: any) => {
-    executeEvent('selectedAppInfo', { data: app });
-  }, []);
+  const handleViewDetails = useCallback(
+    (app: any) => {
+      executeEvent(
+        isFromCategory ? 'selectedAppInfoCategory' : 'selectedAppInfo',
+        { data: app }
+      );
+    },
+    [isFromCategory]
+  );
 
   if (!featuredApps || featuredApps.length === 0) {
     return null;
@@ -384,8 +412,22 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
           </>
         ) : null
       }
-      hint={t('core:launcher.library.featured_hint', cap)}
-      icon={<AutoAwesomeRoundedIcon />}
+      hint={
+        variant === 'top-rated'
+          ? t('core:launcher.library.top_rated_hint', {
+              number: formatLibraryNumber(featuredApps.length, i18n?.language),
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('core:launcher.library.featured_hint', cap)
+      }
+      icon={
+        variant === 'top-rated' ? (
+          <StarRoundedIcon />
+        ) : (
+          <AutoAwesomeRoundedIcon />
+        )
+      }
+      sx={sx}
       title={t('core:official_apps.featured', cap)}
     >
       <Box

@@ -489,6 +489,7 @@
       "search_in_category": "otsi kategooriast {{category}}",
       "status_apps_shown": "näidatud Q-Appe ja veebilehti: {{shown}} / {{total}}",
       "status_categories_shown": "näidatud kategooriaid: {{shown}} / {{total}}",
+      "top_rated_hint": "kogukonna hinnangul parimad {{number}}",
       "view_grid": "ruudustik",
       "view_label": "paigutus",
       "view_list": "loend"

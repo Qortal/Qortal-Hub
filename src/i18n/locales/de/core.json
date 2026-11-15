@@ -489,6 +489,7 @@
       "search_in_category": "in {{category}} suchen",
       "status_apps_shown": "angezeigte Q-Apps und Webseiten: {{shown}} von {{total}}",
       "status_categories_shown": "angezeigte Kategorien: {{shown}} von {{total}}",
+      "top_rated_hint": "die Top {{number}} nach Bewertungen der Community",
       "view_grid": "Raster",
       "view_label": "Ansicht",
       "view_list": "Liste"
