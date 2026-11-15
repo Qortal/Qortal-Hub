@@ -37,6 +37,12 @@ describe('widgetRequestVerdict', () => {
     expect(widgetRequestVerdict('WHICH_UI', false)).toEqual({ kind: 'allow' });
   });
 
+  it('allows foreign-coin fees and server lists at any time', () => {
+    for (const action of ['GET_FOREIGN_FEE', 'GET_CROSSCHAIN_SERVER_INFO']) {
+      expect(widgetRequestVerdict(action, false)).toEqual({ kind: 'allow' });
+    }
+  });
+
   it('opens apps and asks the user only while Home is showing', () => {
     for (const action of [
       'OPEN_NEW_TAB',
@@ -68,8 +74,6 @@ describe('widgetRequestVerdict', () => {
     'MOQ_SESSION_OPEN',
     'SCREEN_CAPTURE_SELECT',
     'GET_USER_WALLET',
-    'GET_FOREIGN_FEE',
-    'GET_CROSSCHAIN_SERVER_INFO',
     'SOMETHING_NEW',
     42,
   ])('refuses %s, even while Home is showing', (action) => {

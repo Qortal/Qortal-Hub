@@ -23,6 +23,7 @@ import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { openQChatTab } from '../../utils/openQChatTab';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qTradeLogo from '../../assets/Icons/q-trade-logo.webp';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import BorderGlow from '../common/BorderGlow';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 import {
@@ -1140,7 +1141,14 @@ const AppTile = ({
           {isQChat ? (
             <MessagingIconFilled height={31} width={31} color="currentColor" />
           ) : (
-            appName.charAt(0)
+            // Without a picture, the Qortal logo, as the launcher shows it.
+            <Box
+              alt=""
+              component="img"
+              draggable={false}
+              src={LogoSelected}
+              sx={{ height: 'auto', width: '58%' }}
+            />
           )}
         </Avatar>
 

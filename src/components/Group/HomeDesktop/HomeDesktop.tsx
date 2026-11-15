@@ -3,7 +3,9 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import LibraryAddRoundedIcon from '@mui/icons-material/LibraryAddRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { alpha } from '@mui/material/styles';
+import { useAtomValue } from 'jotai';
 import {
   Activity,
   type ReactNode,
@@ -43,6 +45,12 @@ import {
   HomeWidgetsPanel,
   canHostHomeWidgets,
 } from '../../HomeWidgets/HomeWidgetsPanel';
+import { HomeWidgetPicker } from '../../HomeWidgets/HomeWidgetPicker';
+import { HomeWidgetWindow } from '../../HomeWidgets/HomeWidgetWindow';
+import {
+  HOME_WIDGET_LIMIT,
+  savedHomeWidgetsAtom,
+} from '../../HomeWidgets/homeWidgets';
 import { TORQ_APP_NAME } from '../../Widgets/quitter/torqFeed';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
@@ -61,15 +69,21 @@ import {
   isHomePanelShown,
   isHomePanelShownNow,
   useHomeLayout,
+  withHomeGrid,
   withHomePanelShown,
+  withHomeWidgetWindow,
+  withHomeWidgetWindowHeight,
   withHomeWorkspaceCopy,
+  withoutHomeWidgetWindow,
   withoutHomeWorkspaceCopy,
 } from './homeLayout';
 import {
   HOME_WINDOW_IDS,
   type HomeFixedWindowId,
   type HomeWindowId,
+  homeWidgetWindowId,
   homeWorkspaceCopyId,
+  isHomeWidgetWindowId,
   isHomeWorkspaceCopyId,
 } from './homeGrid';
 import {
@@ -166,6 +180,17 @@ export const HomeDesktop = ({
   const theme = useTheme();
   const titles = useHomeWindowTitles();
   const homeActive = desktopViewMode === 'home';
+  const [isEditingHome, setIsEditingHome] = useState(false);
+  const [isWidgetPickerOpen, setIsWidgetPickerOpen] = useState(false);
+  const [widgetReloadKeys, setWidgetReloadKeys] = useState<
+    Record<string, number>
+  >({});
+  const canHostWidgets = canHostHomeWidgets();
+  // Widgets in windows of their own; the Widgets window keeps the others.
+  const widgetWindows = canHostWidgets ? (homeLayout.widgetWindows ?? []) : [];
+  const panelWidgets = useAtomValue(savedHomeWidgetsAtom);
+  const widgetsOnHome = [...panelWidgets, ...widgetWindows];
+  const homeFull = widgetsOnHome.length >= HOME_WIDGET_LIMIT;
 
   const handleOpenReceiveQort = useCallback(
     (target: HTMLElement | null) => {
@@ -273,7 +298,7 @@ export const HomeDesktop = ({
     wallet: () => <HomeDesktopWalletActivity />,
     widgets: () => (
       <ErrorBoundary fallback={null}>
-        <HomeWidgetsPanel active={homeActive} />
+        <HomeWidgetsPanel active={homeActive} elsewhere={widgetWindows} />
       </ErrorBoundary>
     ),
     groupActivity: () => (
@@ -318,6 +343,67 @@ export const HomeDesktop = ({
       </DashboardWidgetFrame>
     ),
   };
+  const widgetWindowEntries: HomeGridWindow[] = widgetWindows.map(
+    (widget, index) => {
+      const id = homeWidgetWindowId(widget);
+      return {
+        actions: [
+          {
+            icon: <OpenInNewRoundedIcon sx={{ fontSize: 16 }} />,
+            label: t('group:home_widgets.open_app', {
+              name: widget.name,
+              postProcess: 'capitalizeFirstChar',
+            }),
+            onClick: () => {
+              executeEvent('addTab', {
+                data: { service: 'APP', name: widget.name },
+              });
+              executeEvent('open-apps-mode', {});
+            },
+          },
+          {
+            icon: <RefreshRoundedIcon sx={{ fontSize: 16 }} />,
+            label: t('group:home_widgets.reload', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+            onClick: () =>
+              setWidgetReloadKeys((current) => ({
+                ...current,
+                [id]: (current[id] ?? 0) + 1,
+              })),
+          },
+          {
+            icon: <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />,
+            label: t('group:home_widgets.remove', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+            onClick: () =>
+              updateHomeLayout((current) =>
+                withoutHomeWidgetWindow(current, id)
+              ),
+          },
+        ],
+        id,
+        node: (
+          <ErrorBoundary fallback={null}>
+            <HomeWidgetWindow
+              active={homeActive}
+              interactive={!isEditingHome}
+              loadDelayMs={index * 250}
+              onAskHeight={(heightPx) =>
+                updateHomeLayout((current) =>
+                  withHomeWidgetWindowHeight(current, id, heightPx)
+                )
+              }
+              reloadKey={widgetReloadKeys[id] ?? 0}
+              widget={widget}
+            />
+          </ErrorBoundary>
+        ),
+        title: widget.title ?? widget.name,
+      };
+    }
+  );
   // Duplicate: a new, empty Workspace right under this one.
   const duplicateActions = (
     id: HomeWindowId,
@@ -364,6 +450,7 @@ export const HomeDesktop = ({
         title: titles[id],
       })
     ),
+    ...widgetWindowEntries,
     ...copyWindows,
   ];
   const workspacePlaces: QortinoWorkspacePlace[] = [
@@ -443,6 +530,19 @@ export const HomeDesktop = ({
           >
             <HomeGrid
               active={homeActive}
+              addWidget={
+                canHostWidgets
+                  ? {
+                      description: homeFull
+                        ? t('group:home_widgets.limit', {
+                            max: HOME_WIDGET_LIMIT,
+                          })
+                        : t('group:dashboard.add_widget_window_desc'),
+                      disabled: homeFull,
+                      onAdd: () => setIsWidgetPickerOpen(true),
+                    }
+                  : undefined
+              }
               grid={grid}
               headerEnd={
                 <Box sx={headerLabelSx}>
@@ -456,10 +556,18 @@ export const HomeDesktop = ({
               }
               hiddenWindows={hiddenWindows}
               onChangeGrid={(next) =>
-                updateHomeLayout((current) => ({ ...current, grid: next }))
+                updateHomeLayout((current) => withHomeGrid(current, next))
               }
+              onEditingChange={setIsEditingHome}
               onHideWindow={(id) => {
                 if (id === 'account') return;
+                if (isHomeWidgetWindowId(id)) {
+                  // A widget's window is removed, not hidden.
+                  updateHomeLayout((current) =>
+                    withoutHomeWidgetWindow(current, id)
+                  );
+                  return;
+                }
                 if (isHomeWorkspaceCopyId(id)) {
                   // A copy of the Workspace is removed, not hidden.
                   updateHomeLayout((current) =>
@@ -475,13 +583,32 @@ export const HomeDesktop = ({
                 updateHomeLayout((current) => ({ ...current, grid: undefined }))
               }
               onShowWindow={(id) => {
-                if (id === 'account' || isHomeWorkspaceCopyId(id)) return;
+                if (
+                  id === 'account' ||
+                  isHomeWidgetWindowId(id) ||
+                  isHomeWorkspaceCopyId(id)
+                ) {
+                  return;
+                }
                 updateHomeLayout((current) =>
                   withHomePanelShown(current, id, true)
                 );
               }}
               windows={windows}
             />
+            {canHostWidgets ? (
+              <HomeWidgetPicker
+                added={widgetsOnHome}
+                onAdd={(listing) => {
+                  updateHomeLayout((current) =>
+                    withHomeWidgetWindow(current, listing)
+                  );
+                  setIsWidgetPickerOpen(false);
+                }}
+                onClose={() => setIsWidgetPickerOpen(false)}
+                open={isWidgetPickerOpen}
+              />
+            ) : null}
           </Box>
           <Spacer height="120px" />
         </motion.div>

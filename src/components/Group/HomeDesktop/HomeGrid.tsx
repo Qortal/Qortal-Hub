@@ -46,6 +46,7 @@ import {
   homeGridShown,
   homeGridSizeFor,
   homeWindowMinSize,
+  isHomeWidgetWindowId,
   isHomeWorkspaceCopyId,
   mergeHomeGrid,
   moveHomeWindow,
@@ -94,8 +95,9 @@ export type HomeGridWindow = {
   title: string;
   node: ReactNode;
   /**
-   * Buttons of its own in the edit controls. A copy of the Workspace has a
-   * remove button among them instead of the hide button.
+   * Buttons of its own in the edit controls. A widget's window and a copy
+   * of the Workspace have a remove button among them instead of the hide
+   * button: they're removed, not hidden.
    */
   actions?: readonly HomeGridWindowAction[];
 };
@@ -103,6 +105,16 @@ export type HomeGridWindow = {
 type HomeGridProps = {
   /** Home is the view showing: editing stops when it isn't. */
   active: boolean;
+  /**
+   * The tile under the windows while editing, which adds a widget in a
+   * window of its own. Left out where widgets can't run.
+   */
+  addWidget?: {
+    disabled?: boolean;
+    /** Why it's disabled, or what it does. */
+    description: string;
+    onAdd: () => void;
+  };
   /** Where every window is, hidden ones included. */
   grid: readonly HomeGridItem[];
   /** Shown in the header row's left and right ends while not editing. */
@@ -112,6 +124,8 @@ type HomeGridProps = {
   hiddenWindows: readonly { id: HomeWindowId; title: string }[];
   onChangeGrid: (grid: HomeGridItem[]) => void;
   onHideWindow: (id: HomeWindowId) => void;
+  /** Edit Home started or stopped. */
+  onEditingChange?: (editing: boolean) => void;
   onResetGrid: () => void;
   onShowWindow: (id: HomeWindowId) => void;
   /** The windows shown, in any order. */
@@ -147,11 +161,13 @@ const scrollParentOf = (node: HTMLElement | null): HTMLElement | null => {
  */
 export const HomeGrid = ({
   active,
+  addWidget,
   grid,
   headerEnd,
   headerStart,
   hiddenWindows,
   onChangeGrid,
+  onEditingChange,
   onHideWindow,
   onResetGrid,
   onShowWindow,
@@ -264,6 +280,11 @@ export const HomeGrid = ({
     subscribeToEvent(HOME_EDIT_LAYOUT_EVENT, start);
     return () => unsubscribeFromEvent(HOME_EDIT_LAYOUT_EVENT, start);
   }, []);
+  const onEditingChangeRef = useRef(onEditingChange);
+  onEditingChangeRef.current = onEditingChange;
+  useEffect(() => {
+    onEditingChangeRef.current?.(editing);
+  }, [editing]);
   useEffect(() => {
     if (!editing || menuAnchor) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -297,15 +318,17 @@ export const HomeGrid = ({
     return callback;
   };
 
-  // A window added while editing (a copy of the Workspace) is scrolled into
-  // view: it may land below the screen.
+  // A window added while editing (a widget's window or a copy of the
+  // Workspace) is scrolled into view: it may land below the screen.
   const knownWindowsRef = useRef<ReadonlySet<HomeWindowId> | null>(null);
   useEffect(() => {
     const known = knownWindowsRef.current;
     knownWindowsRef.current = new Set(windows.map((window) => window.id));
     if (!known || !editing) return;
     const added = windows.find(
-      (window) => isHomeWorkspaceCopyId(window.id) && !known.has(window.id)
+      (window) =>
+        (isHomeWidgetWindowId(window.id) || isHomeWorkspaceCopyId(window.id)) &&
+        !known.has(window.id)
     );
     if (!added) return;
     frameRefs.current.get(added.id)?.scrollIntoView?.({
@@ -594,9 +617,11 @@ export const HomeGrid = ({
   };
 
   const gridHeight = homeGridHeightPx(placed);
-  // Home's own windows, then the Workspace's copies in the order they came.
+  // Home's own windows, then the widgets' in the order they were added, then
+  // the Workspace's copies in the order they came.
   const windowOrder: HomeWindowId[] = [
     ...HOME_WINDOW_IDS,
+    ...windows.map((window) => window.id).filter(isHomeWidgetWindowId),
     ...windows.map((window) => window.id).filter(isHomeWorkspaceCopyId),
   ];
   const draggedItem = dragKey ? placedByKey.get(dragKey) : undefined;
@@ -794,22 +819,28 @@ export const HomeGrid = ({
 
   const editControls = (window: HomeGridWindow, held: boolean) => {
     const { id, title } = window;
-    // A copy of the Workspace is removed (Delete too), not hidden.
+    const isWidget = isHomeWidgetWindowId(id);
+    // A widget's window and a copy of the Workspace are removed (a copy with
+    // Delete too), not hidden.
     const isCopy = isHomeWorkspaceCopyId(id);
-    const hideable = id !== 'account' && !isCopy;
+    const hideable = id !== 'account' && !isWidget && !isCopy;
     const actions = window.actions ?? [];
     const hasButtons = hideable || actions.length > 0;
     const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
     return (
       <Box
-        aria-label={t(
-          isCopy
-            ? 'group:dashboard.edit_window_removable'
-            : hideable
-              ? 'group:dashboard.edit_window'
-              : 'group:dashboard.edit_window_no_hide',
-          { window: title }
-        )}
+        aria-label={
+          isWidget
+            ? t('group:home_widgets.arrange_widget', { title })
+            : t(
+                isCopy
+                  ? 'group:dashboard.edit_window_removable'
+                  : hideable
+                    ? 'group:dashboard.edit_window'
+                    : 'group:dashboard.edit_window_no_hide',
+                { window: title }
+              )
+        }
         onKeyDown={(event) => onWindowKeyDown(event, id)}
         onLostPointerCapture={(event) => endDrag(event, true)}
         onPointerCancel={(event) => endDrag(event, true)}
@@ -1019,6 +1050,57 @@ export const HomeGrid = ({
           />
         ) : null}
       </Box>
+      {editing && addWidget ? (
+        <Box
+          aria-disabled={addWidget.disabled || undefined}
+          component="button"
+          disabled={addWidget.disabled}
+          onClick={addWidget.onAdd}
+          sx={{
+            alignItems: 'center',
+            backgroundColor: alpha(accent, isDark ? 0.06 : 0.04),
+            border: `2px dashed ${alpha(accent, addWidget.disabled ? 0.25 : 0.5)}`,
+            borderRadius: `${WINDOW_RADIUS_PX}px`,
+            color: theme.palette.text.primary,
+            cursor: addWidget.disabled ? 'default' : 'pointer',
+            display: 'flex',
+            font: 'inherit',
+            gap: 1.5,
+            justifyContent: 'center',
+            minHeight: '76px',
+            mt: '20px',
+            opacity: addWidget.disabled ? 0.6 : 1,
+            px: 2,
+            py: 1.5,
+            textAlign: 'left',
+            transition: 'background-color 140ms ease, border-color 140ms ease',
+            width: '100%',
+            '&:hover:not(:disabled)': {
+              backgroundColor: alpha(accent, isDark ? 0.12 : 0.08),
+              borderColor: alpha(accent, 0.8),
+            },
+            '&:focus-visible': {
+              boxShadow: `0 0 0 3px ${alpha(accent, 0.5)}`,
+              outline: 'none',
+            },
+          }}
+          type="button"
+        >
+          <AddRoundedIcon sx={{ color: accent, fontSize: 26 }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              {t('group:home_widgets.add_widget', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: '0.78rem' }}
+            >
+              {addWidget.description}
+            </Typography>
+          </Box>
+        </Box>
+      ) : null}
     </Box>
   );
 };
