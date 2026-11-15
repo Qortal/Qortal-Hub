@@ -1,3 +1,4 @@
+import { executeEvent } from '../../../utils/events';
 import { getBaseApiReact } from '../../../utils/globalApi';
 import type { QuitterFeedItem } from './quitterFeedTypes';
 
@@ -166,6 +167,21 @@ export const torqPostLink = (author: string, identifier: string): string =>
   `qortal://APP/Torq/post/${encodeURIComponent(
     author
   )}/${encodeURIComponent(identifier)}`;
+
+/** Open a post in Torq, in a Q-Apps tab. */
+export const openTorqPost = (author: string, identifier: string): void => {
+  executeEvent('addTab', {
+    data: {
+      identifier: '',
+      name: TORQ_APP_NAME,
+      path: `post/${encodeURIComponent(author)}/${encodeURIComponent(
+        identifier
+      )}`,
+      service: 'APP',
+    },
+  });
+  executeEvent('open-apps-mode', {});
+};
 
 const QORTAL_URL_RE = /qortal:\/\/[^\s<>"']+/gi;
 const TRAILING_PUNCTUATION_RE = /[.,;:!?)\]]+$/;
