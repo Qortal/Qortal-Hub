@@ -88,6 +88,7 @@ import {
   type LauncherMenuTarget,
   LauncherTileMenu,
 } from './LauncherTileMenu';
+import { useCountLauncherEdit } from './launcherQdnSync';
 import { useLauncherView } from './useLauncherView';
 
 // The same ids as the bookmarks menu makes.
@@ -141,6 +142,7 @@ export const LauncherSaved = ({
   const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
   const [view, setView] = useLauncherView(myAddress);
+  const countEdit = useCountLauncherEdit(myAddress);
   const openPin = useOpenLauncherPin();
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -251,17 +253,24 @@ export const LauncherSaved = ({
         setSettingsLocalLastUpdated(Date.now());
       }
       if (storeChanged) onBookmarksChange(arrangement.data);
+      const orderChanged =
+        arrangement.view.order.length !== view.order.length ||
+        arrangement.view.order.some((key, index) => key !== view.order[index]);
       setView(arrangement.view);
+      // Something to save to QDN: the window that offers it shows.
+      if (pinsChanged || storeChanged || orderChanged) countEdit();
       return true;
     },
     [
       bookmarks,
+      countEdit,
       onBookmarksChange,
       pins,
       pinsByKey,
       setPinnedApps,
       setSettingsLocalLastUpdated,
       setView,
+      view.order,
     ]
   );
 
@@ -303,9 +312,11 @@ export const LauncherSaved = ({
       setRenamingFolderId(null);
       if (name === null || !bookmarks) return;
       const renamed = renameFolder(bookmarks, folder.id, name, Date.now());
-      if (renamed !== bookmarks) onBookmarksChange(renamed);
+      if (renamed === bookmarks) return;
+      onBookmarksChange(renamed);
+      countEdit();
     },
-    [bookmarks, onBookmarksChange]
+    [bookmarks, countEdit, onBookmarksChange]
   );
 
   const deleteFolder = useCallback(

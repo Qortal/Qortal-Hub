@@ -52,9 +52,9 @@ i18n.init({
           featured_q_chat_subtitle:
             'Your conversations, your groups, your network.\nPowered by Reticulum\nValidated on Qortal Blockchain',
           featured_q_tube_eyebrow: 'Always on',
-          featured_q_tube_keyword_cat_videos: 'cat. videos.',
           featured_q_tube_keyword_decentralized: 'decentralized.',
           featured_q_tube_keyword_platform: 'platform.',
+          featured_q_tube_keyword_video_sharing: 'video. sharing.',
           featured_q_tube_subtitle:
             'Network-hosted video drops, weird clips, and creator rabbit holes.',
           open_q_app: 'Open Q-App',

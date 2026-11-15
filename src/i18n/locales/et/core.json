@@ -179,6 +179,18 @@
     "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
     "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada."
   },
+  "apps_bar": {
+    "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",
+    "label": "Kinnitatud rakendused ja järjehoidjad",
+    "more": "Näita ülejäänuid",
+    "rename_hint": "Jäta tühjaks, et näidata ainult pilti.",
+    "rename_tip": "Nime muutmiseks tee ribal oleval kirjel paremklõps.",
+    "rename_title": "Nimeta ribal ümber",
+    "reset_name": "Kasuta enda nime",
+    "show": "Näita tiitliribal",
+    "show_hint": "Sinu kinnitatud rakendused ja järjehoidjad mööda akna ülaserva.",
+    "show_names": "Näita nimesid"
+  },
   "apps_dashboard": "rakenduste juhtpaneel",
   "apps_official": "ametlikud rakendused",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "Uus kaust",
     "no_bookmarks": "Järjehoidjaid veel pole.",
     "no_bookmarks_folder": "Selles kaustas pole järjehoidjaid.",
+    "no_bookmarks_hint": "Ava leht ja salvesta see siia nupuga „Lisa leht“.",
+    "open_folder": "Ava kaust",
     "qortal_link": "Qortali link",
     "qortal_link_placeholder": "qortal://APP/Nimi/tee",
     "remove": "Eemalda",
     "rename": "Nimeta ümber",
     "save_location_without_query": "Salvesta Q-Appi asukoht ilma päringuparameetriteta.",
+    "search": "Otsi järjehoidjatest",
     "title": "Järjehoidjad",
     "top_level": "Ülemine tase"
   },
@@ -454,7 +469,11 @@
     "pinned_empty": "midagi pole veel kinnitatud. Kinnita rakendus allolevast teegist, et see siia jääks.",
     "pinned_hint": "lohista järjestuse muutmiseks · kausta loomiseks lohista rakendus teise peale · paremklõps avab lisavalikud",
     "results_apps": "rakendused ja veebilehed",
-    "results_saved": "sinu kinnitatud rakendused ja järjehoidjad"
+    "results_saved": "sinu kinnitatud rakendused ja järjehoidjad",
+    "save_later": "mitte praegu",
+    "save_retry": "proovi uuesti",
+    "save_text": "sinu kinnitatud rakendused, järjehoidjad ja kaustad selles järjekorras igas seadmes, kuhu sisse logid.",
+    "save_title": "kas salvestada see paigutus QDN-i?"
   },
   "level": "tase",
   "library": "teek",
@@ -923,6 +942,7 @@
     "my_apps": "minu rakendused",
     "official_apps": "ametlikud rakendused"
   },
+  "tag_number": "silt {{number}}",
   "tags": "sildid",
   "theme": {
     "dark": "tume",

@@ -1142,7 +1142,7 @@ const AppTile = ({
                 {t('group:dashboard.featured_q_tube_keyword_decentralized')}
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
-                {t('group:dashboard.featured_q_tube_keyword_cat_videos')}
+                {t('group:dashboard.featured_q_tube_keyword_video_sharing')}
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
                 {t('group:dashboard.featured_q_tube_keyword_platform')}
