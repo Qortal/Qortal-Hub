@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import type { PendingVote } from './appVotes';
+import type { PendingReview } from './appReviews';
 import { normalizeAppService } from './appPageIds';
 
 /** One key per app, the same however the name is cased. */
@@ -37,3 +38,11 @@ export const watchPendingVoteOnPage = (key: string) => {
 
 export const isPendingVoteWatchedOnPage = (key: string) =>
   votesWatchedOnPage.has(key);
+
+/** Reviews and replies sent from this Hub, not listed yet, per app. */
+export const pendingReviewsAtom = atom<Record<string, PendingReview[]>>({});
+
+/** The app whose page asked the user to review it after their vote. */
+export const reviewPromptAtom = atom<{ key: string; rating: number } | null>(
+  null
+);

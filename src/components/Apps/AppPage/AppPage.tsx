@@ -15,6 +15,7 @@ import { AppPageHero } from './AppPageHero';
 import { AppScreenshots, GalleryShot } from './AppScreenshots';
 import { AppAboutSection } from './AppAboutSection';
 import { AppRatingsPanel } from './AppRatingsPanel';
+import { AppReviewsSection } from './AppReviewsSection';
 import { AppDetailsCard } from './AppDetailsCard';
 import {
   AppPageEditorDialog,
@@ -27,6 +28,7 @@ import type { ShotDraft } from './ScreenshotsEditor';
 import { normalizeAppService } from './appPageIds';
 import { useAppListing, useAppPageData, useOwnedNames } from './useAppPage';
 import { useAppVotes } from './useAppVotes';
+import { useAppReviews, ReviewActionResult } from './useAppReviews';
 import { useIconAccent } from './useIconAccent';
 
 type Snack = { type: string; message: string } | null;
@@ -90,6 +92,7 @@ export const AppPage = ({
 
   const pageData = useAppPageData(ref);
   const votes = useAppVotes(ref, { address: myAddress, name: myName });
+  const reviews = useAppReviews(ref, { name: myName });
   const ownedNames = useOwnedNames(myAddress);
   const isPublisher = ownedNames.some(
     (name) => name.toLowerCase() === ref.name.toLowerCase()
@@ -101,6 +104,7 @@ export const AppPage = ({
     open: false,
     tab: 'page',
   });
+  const [prompt, setPrompt] = useState<number | null>(null);
   const [snack, setSnack] = useState<Snack>(null);
   const [snackOpen, setSnackOpen] = useState(false);
   const notify = useCallback((type: string, message: string) => {
@@ -190,6 +194,12 @@ export const AppPage = ({
     setSettingsLocalLastUpdated(Date.now());
   };
 
+  const ratingByAddress = useMemo(
+    () => new Map(votes.voters.map((voter) => [voter.address, voter.rating])),
+    [votes.voters]
+  );
+  const myRating = votes.pending?.rating ?? votes.mine?.rating ?? null;
+
   const rate = async (rating: number) => {
     const result = await votes.vote(rating);
     if (result.ok === true) {
@@ -197,9 +207,16 @@ export const AppPage = ({
         'success',
         t('core:app_page.rating.sent', { postProcess: 'capitalizeFirstChar' })
       );
+      setPrompt(rating);
     } else if (!result.cancelled && result.message) {
       notify('error', result.message);
     }
+  };
+
+  const onReviewResult = (result: ReviewActionResult, success: string) => {
+    if (result.ok === true) notify('success', success);
+    else if (!result.cancelled && result.message)
+      notify('error', result.message);
   };
 
   const openEditor = (tab: EditorTab) => setEditor({ open: true, tab });
@@ -224,6 +241,28 @@ export const AppPage = ({
       pollExists={votes.pollExists}
       summary={votes.summary}
       voters={votes.voters}
+    />
+  );
+  const reviewsSection = (
+    <AppReviewsSection
+      appName={ref.name}
+      appTitle={title}
+      failed={reviews.failed}
+      hasMore={reviews.hasMore}
+      loading={reviews.loading}
+      myName={myName}
+      myRating={myRating}
+      myReview={reviews.myReview}
+      onDismissPrompt={() => setPrompt(null)}
+      onLoadMore={reviews.loadMore}
+      onResult={onReviewResult}
+      onRetry={reviews.reload}
+      prompt={prompt}
+      ratingByAddress={ratingByAddress}
+      removeItem={reviews.removeItem}
+      submitReply={reviews.submitReply}
+      submitReview={reviews.submitReview}
+      threads={reviews.threads}
     />
   );
   const details = (
@@ -278,9 +317,10 @@ export const AppPage = ({
           shots={gallery}
         />
 
-        {/* The about card keeps its place in the tree in both layouts, so
-            it stays as it was (read more included) when the page gets wider
-            or narrower. Only the ratings and details move. */}
+        {/* The about card and the reviews keep their places in the tree in
+            both layouts (the slots between them are empty when wide), so
+            what is typed in them is kept when the page gets wider or
+            narrower. Only the ratings and details move. */}
         <Box
           sx={
             wide
@@ -296,6 +336,7 @@ export const AppPage = ({
           <Box sx={{ minWidth: 0 }}>
             {about}
             {!wide && ratings}
+            {reviewsSection}
             {!wide && details}
           </Box>
           {wide && (

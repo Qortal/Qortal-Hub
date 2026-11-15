@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   alpha,
   Avatar,
@@ -7,6 +7,7 @@ import {
   keyframes,
   Link,
   Paper,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -298,6 +299,34 @@ export const formatLongDate = (timestamp: number, language: string) => {
   } catch {
     return new Date(timestamp).toLocaleDateString();
   }
+};
+
+/** "3 days ago", with the full date on hover. */
+export const RelativeTime = ({
+  timestamp,
+  sx = {},
+}: {
+  timestamp: number;
+  sx?: object;
+}) => {
+  const { i18n } = useTranslation();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  if (!timestamp) return null;
+  return (
+    <Tooltip title={formatLongDate(timestamp, i18n.language)}>
+      <Typography
+        component="time"
+        dateTime={new Date(timestamp).toISOString()}
+        sx={{ color: 'text.secondary', fontSize: '13px', ...sx }}
+      >
+        {formatRelative(timestamp, i18n.language, now)}
+      </Typography>
+    </Tooltip>
+  );
 };
 
 /** Text with its http(s) and qortal:// links clickable. */

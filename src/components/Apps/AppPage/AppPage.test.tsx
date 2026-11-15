@@ -57,8 +57,12 @@ vi.mock('../../Snackbar/Snackbar', () => ({
 import { AppInfo } from '../AppInfo';
 import { userInfoAtom } from '../../../atoms/global';
 import { executeEvent } from '../../../utils/events';
+import { appReviewKey, replyIdentifier, replyPrefixOf } from './appPageIds';
 import { clearAppPageCache } from './useAppPage';
+import { clearReviewRecordCache } from './useAppReviews';
 
+const KEY = appReviewKey('APP', 'Q-Blog');
+const REPLY = replyIdentifier(KEY, 'abcdef');
 const addressOf = (key: string) => `Q${key.length}.${key.charCodeAt(0)}`;
 const CREATOR_KEY = 'CREATORKEY';
 
@@ -145,7 +149,38 @@ const routes = (overrides: Record<string, unknown> = {}) => {
         (optionName) => ({ optionName })
       ),
     },
+    [`identifier=${KEY}&`]: [
+      {
+        name: 'Alice',
+        identifier: KEY,
+        created: 1_700_000_100_000,
+        metadata: { description: 'Great for writing' },
+      },
+    ],
+    [`identifier=${replyPrefixOf(KEY)}&`]: [
+      {
+        name: 'Q-Blog',
+        identifier: REPLY,
+        created: 1_700_000_200_000,
+        metadata: { title: 'Alice', description: 'Thank you!' },
+      },
+    ],
+    [`/arbitrary/COMMENT/Alice/${KEY}`]: {
+      v: 1,
+      kind: 'review',
+      text: 'Great for writing, and fast.',
+      created: 1,
+    },
+    [`/arbitrary/COMMENT/Q-Blog/${REPLY}`]: {
+      v: 1,
+      kind: 'reply',
+      text: 'Thank you!',
+      parent: { name: 'Alice', identifier: KEY },
+      created: 2,
+    },
     '/names/address/': [{ name: 'Me' }],
+    '/names/Alice': { name: 'Alice', owner: addressOf('AAAA') },
+    '/names/Q-Blog': { name: 'Q-Blog', owner: 'QOwner' },
     ...overrides,
   };
   return vi
@@ -195,6 +230,7 @@ const renderPage = (me = { name: 'Me', address: 'QMe' }) => {
 
 beforeEach(() => {
   clearAppPageCache();
+  clearReviewRecordCache();
   vi.mocked(executeEvent).mockClear();
   getFee.mockReset().mockResolvedValue({ fee: '0.01' });
   show.mockReset().mockResolvedValue(undefined);
@@ -206,7 +242,7 @@ afterEach(() => {
 });
 
 describe('the app page', () => {
-  it('shows the listing, the page, screenshots and ratings', async () => {
+  it('shows the listing, the page, screenshots, ratings and reviews', async () => {
     routes();
     renderPage();
     expect(
@@ -223,6 +259,19 @@ describe('the app page', () => {
     expect(screen.getByRole('button', { name: 'Editor' })).toBeInTheDocument();
     // 3 + 5 + the creator's initial 5: 13 / 3.
     expect(await screen.findByText('4.3')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Great for writing, and fast.')
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Thank you!')).toBeInTheDocument();
+    // Alice's stars are her vote in the poll (5).
+    const review = screen
+      .getByText('Great for writing, and fast.')
+      .closest('article')!;
+    expect(
+      await within(review).findByRole('img', {
+        name: 'app_page.rating.stars_label',
+      })
+    ).toBeInTheDocument();
     // Only the publisher gets the edit button.
     expect(
       screen.queryByRole('button', { name: 'app_page.edit.open' })
@@ -252,7 +301,7 @@ describe('the app page', () => {
     ).toBeInTheDocument();
   });
 
-  it('counts a vote at once', async () => {
+  it('counts a vote at once and asks for a review', async () => {
     routes();
     renderPage();
     await screen.findByText('4.3');
@@ -273,6 +322,33 @@ describe('the app page', () => {
     // (13 + 1) / 4, before the node has the vote.
     expect(await screen.findByText('3.5')).toBeInTheDocument();
     expect(screen.getByText('app_page.rating.pending')).toBeInTheDocument();
+    expect(
+      await screen.findByText('app_page.reviews.prompt_title')
+    ).toBeInTheDocument();
+
+    const box = screen.getAllByPlaceholderText(
+      'app_page.reviews.placeholder'
+    )[0];
+    fireEvent.change(box, { target: { value: 'Clean and quick' } });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'app_page.reviews.post' })
+      );
+    });
+    await waitFor(() =>
+      expect(window.sendMessage).toHaveBeenCalledWith(
+        'publishOnQDN',
+        expect.objectContaining({
+          service: 'COMMENT',
+          identifier: KEY,
+          name: 'Me',
+        })
+      )
+    );
+    expect(await screen.findByText('Clean and quick')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('app_page.reviews.pending').length
+    ).toBeGreaterThan(0);
   });
 
   it("doesn't vote when the fee is declined", async () => {
@@ -284,7 +360,7 @@ describe('the app page', () => {
       fireEvent.click(screen.getAllByRole('radio')[0]);
     });
     expect(window.sendMessage).not.toHaveBeenCalled();
-    expect(screen.queryByText('app_page.rating.pending')).toBeNull();
+    expect(screen.queryByText('app_page.reviews.prompt_title')).toBeNull();
   });
 
   it('lets the publisher edit the page', async () => {
@@ -300,17 +376,17 @@ describe('the app page', () => {
       'identifier=qhub_app_': [],
       '/polls/app-library-APP-rating-Q-Blog': { message: 'POLL_NO_EXISTS' },
       '/polls/votes/app-library-APP-rating-Q-Blog': {},
+      [`identifier=${KEY}&`]: [],
+      [`identifier=${replyPrefixOf(KEY)}&`]: [],
     });
     renderPage();
     expect(await screen.findByText('Your blog on Qortal')).toBeInTheDocument();
-    // Loaded: the About's placeholder lines are gone.
-    await waitFor(() =>
-      expect(document.querySelector('.MuiSkeleton-root')).toBeNull()
-    );
+    expect(
+      await screen.findByText('app_page.reviews.empty_invite')
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: 'app_page.screenshots.title' })
     ).toBeNull();
-    expect(screen.getByText('app_page.rating.rate_prompt')).toBeInTheDocument();
   });
 });
 
@@ -479,6 +555,104 @@ describe('ratings on the page', () => {
     );
     expect(show).not.toHaveBeenCalled();
   });
+
+  it('says so when the fee cannot be looked up, instead of doing nothing', async () => {
+    routes();
+    renderPage();
+    await screen.findByText('Great for writing, and fast.');
+    getFee.mockRejectedValue(new Error('Node unreachable'));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'app_page.reviews.reply' })[0]
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText('app_page.reviews.reply_placeholder'),
+      { target: { value: 'Agreed' } }
+    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'app_page.reviews.post_reply' })
+      );
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Node unreachable'
+    );
+    expect(show).not.toHaveBeenCalled();
+  });
+});
+
+describe('your own review', () => {
+  const withMine = (record: unknown) =>
+    routes({
+      [`identifier=${KEY}&`]: (url: string) =>
+        url.includes('name=Me&')
+          ? [
+              {
+                name: 'Me',
+                identifier: KEY,
+                created: 1_700_000_050_000,
+                metadata: { description: 'My first take' },
+              },
+            ]
+          : [
+              {
+                name: 'Alice',
+                identifier: KEY,
+                created: 1_700_000_100_000,
+                metadata: { description: 'Great for writing' },
+              },
+            ],
+      [`/arbitrary/COMMENT/Me/${KEY}`]: record,
+    });
+
+  it('is found even when it is not on the first page', async () => {
+    withMine({ v: 1, kind: 'review', text: 'My first take, in full.' });
+    renderPage();
+    expect(
+      await screen.findByText('My first take, in full.')
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'app_page.reviews.edit_yours' })
+    ).toBeEnabled();
+    // Two reviews: the sort menu shows, named for screen readers.
+    expect(
+      screen.getByRole('combobox', { name: 'app_page.reviews.sort' })
+    ).toBeInTheDocument();
+  });
+
+  it("can't be edited from the cut-short snippet while it loads", async () => {
+    withMine(new Response('Data unavailable', { status: 404 }));
+    renderPage();
+    expect(await screen.findByText('My first take')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'app_page.reviews.edit_yours' })
+    ).toBeDisabled();
+    const card = screen.getByText('My first take').closest('article')!;
+    expect(
+      within(card).getByRole('button', { name: 'action.edit' })
+    ).toBeDisabled();
+  });
+
+  it('is offered for an update after a vote, labelled as one', async () => {
+    withMine({ v: 1, kind: 'review', text: 'My first take, in full.' });
+    renderPage();
+    await screen.findByText('My first take, in full.');
+    await screen.findByText('4.3');
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[1]);
+    });
+    expect(
+      await screen.findByText('app_page.reviews.prompt_update')
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByPlaceholderText('app_page.reviews.placeholder')[0]
+    ).toHaveValue('My first take, in full.');
+    expect(
+      screen.getByRole('button', { name: 'app_page.reviews.update' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'app_page.reviews.post' })
+    ).toBeNull();
+  });
 });
 
 describe('across page widths', () => {
@@ -511,38 +685,50 @@ describe('across page widths', () => {
       width = next;
       observers.forEach((callback) => callback());
     });
-  const aboutCard = () =>
-    document.querySelector('[aria-labelledby="app-page-about"]')!;
-  /** Two columns put the ratings in a column of their own, beside the about. */
-  const ratingsBesideAbout = () =>
-    document.getElementById('app-page-ratings-card')!.parentElement !==
-    aboutCard().parentElement;
+  /** Two columns put the ratings beside the reviews, after them in the page. */
+  const ratingsAfterReviews = () => {
+    const ratings = document.getElementById('app-page-ratings-card')!;
+    const reviews = document.querySelector(
+      '[aria-labelledby="app-page-reviews"]'
+    )!;
+    return !!(
+      reviews.compareDocumentPosition(ratings) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  };
 
-  it('keeps the about card as it was when the page gets narrower or wider', async () => {
+  it('keeps a review being written when the page gets narrower or wider', async () => {
     routes();
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
-    const about = aboutCard();
-    expect(ratingsBesideAbout()).toBe(true);
+    await screen.findByText('Great for writing, and fast.');
+    const write = await screen.findByRole('button', {
+      name: 'app_page.reviews.write',
+    });
+    await waitFor(() => expect(write).toBeEnabled());
+    fireEvent.click(write);
+    const box = (await screen.findAllByRole('textbox')).find(
+      (element) => element.tagName === 'TEXTAREA'
+    )!;
+    fireEvent.change(box, { target: { value: 'My half-written review' } });
 
     // One column, then two again.
     resize(800);
-    expect(ratingsBesideAbout()).toBe(false);
-    expect(aboutCard()).toBe(about);
+    expect(ratingsAfterReviews()).toBe(false);
+    expect(screen.getByDisplayValue('My half-written review')).toBe(box);
     resize(1200);
-    expect(ratingsBesideAbout()).toBe(true);
-    expect(aboutCard()).toBe(about);
+    expect(ratingsAfterReviews()).toBe(true);
+    expect(screen.getByDisplayValue('My half-written review')).toBe(box);
   });
 
   it('keeps its layout while it measures 0 wide (hidden or collapsed)', async () => {
     routes();
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
-    expect(ratingsBesideAbout()).toBe(true);
+    await screen.findByText('Great for writing, and fast.');
+    expect(ratingsAfterReviews()).toBe(true);
 
     resize(0);
-    expect(ratingsBesideAbout()).toBe(true);
+    expect(ratingsAfterReviews()).toBe(true);
     resize(1200);
-    expect(ratingsBesideAbout()).toBe(true);
+    expect(ratingsAfterReviews()).toBe(true);
   });
 });
