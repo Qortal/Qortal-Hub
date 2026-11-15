@@ -25,11 +25,13 @@ export const WIDGET_INFO = 'GO_WIDGET_INFO';
 export const WIDGET_VISIBILITY = 'GO_WIDGET_VISIBILITY';
 
 /**
- * Harmless at any time: public node facts and the frame's bookkeeping.
- * Foreign-coin look-ups (fees, server lists) are left to the full app.
+ * Harmless at any time: public node facts, foreign-coin fees and servers,
+ * and the frame's bookkeeping.
  */
 const ALWAYS = new Set([
+  'GET_CROSSCHAIN_SERVER_INFO',
   'GET_DAY_SUMMARY',
+  'GET_FOREIGN_FEE',
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
   'GET_PRIMARY_NAME',
