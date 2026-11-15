@@ -35,7 +35,6 @@ import {
   HOME_GRID_MIN_WIDTH_PX,
   HOME_GRID_TWO_COLUMNS_MIN_WIDTH_PX,
   HOME_WINDOW_IDS,
-  HOME_WINDOW_MIN_SIZE,
   type HomeGridItem,
   type HomeWindowId,
   homeGridCellAt,
@@ -46,6 +45,8 @@ import {
   homeGridRowsFor,
   homeGridShown,
   homeGridSizeFor,
+  homeWindowMinSize,
+  isHomeWidgetWindowId,
   mergeHomeGrid,
   moveHomeWindow,
   resizeHomeWindow,
@@ -81,16 +82,37 @@ type Drag = {
   moved: boolean;
 };
 
+export type HomeGridWindowAction = {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+};
+
 export type HomeGridWindow = {
   id: HomeWindowId;
   /** The window's name, for the edit controls. */
   title: string;
   node: ReactNode;
+  /**
+   * Buttons of its own in the edit controls. A widget's window has its own
+   * instead of the hide button: it's removed, not hidden.
+   */
+  actions?: readonly HomeGridWindowAction[];
 };
 
 type HomeGridProps = {
   /** Home is the view showing: editing stops when it isn't. */
   active: boolean;
+  /**
+   * The tile under the windows while editing, which adds a widget in a
+   * window of its own. Left out where widgets can't run.
+   */
+  addWidget?: {
+    disabled?: boolean;
+    /** Why it's disabled, or what it does. */
+    description: string;
+    onAdd: () => void;
+  };
   /** Where every window is, hidden ones included. */
   grid: readonly HomeGridItem[];
   /** Shown in the header row's left and right ends while not editing. */
@@ -100,6 +122,8 @@ type HomeGridProps = {
   hiddenWindows: readonly { id: HomeWindowId; title: string }[];
   onChangeGrid: (grid: HomeGridItem[]) => void;
   onHideWindow: (id: HomeWindowId) => void;
+  /** Edit Home started or stopped. */
+  onEditingChange?: (editing: boolean) => void;
   onResetGrid: () => void;
   onShowWindow: (id: HomeWindowId) => void;
   /** The windows shown, in any order. */
@@ -135,11 +159,13 @@ const scrollParentOf = (node: HTMLElement | null): HTMLElement | null => {
  */
 export const HomeGrid = ({
   active,
+  addWidget,
   grid,
   headerEnd,
   headerStart,
   hiddenWindows,
   onChangeGrid,
+  onEditingChange,
   onHideWindow,
   onResetGrid,
   onShowWindow,
@@ -252,6 +278,11 @@ export const HomeGrid = ({
     subscribeToEvent(HOME_EDIT_LAYOUT_EVENT, start);
     return () => unsubscribeFromEvent(HOME_EDIT_LAYOUT_EVENT, start);
   }, []);
+  const onEditingChangeRef = useRef(onEditingChange);
+  onEditingChangeRef.current = onEditingChange;
+  useEffect(() => {
+    onEditingChangeRef.current?.(editing);
+  }, [editing]);
   useEffect(() => {
     if (!editing || menuAnchor) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -284,6 +315,23 @@ export const HomeGrid = ({
     }
     return callback;
   };
+
+  // A widget's window added while editing is scrolled into view: it goes
+  // under everything, maybe below the screen.
+  const knownWindowsRef = useRef<ReadonlySet<HomeWindowId> | null>(null);
+  useEffect(() => {
+    const known = knownWindowsRef.current;
+    knownWindowsRef.current = new Set(windows.map((window) => window.id));
+    if (!known || !editing) return;
+    const added = windows.find(
+      (window) => isHomeWidgetWindowId(window.id) && !known.has(window.id)
+    );
+    if (!added) return;
+    frameRefs.current.get(added.id)?.scrollIntoView?.({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
+  }, [editing, reduceMotion, windows]);
 
   // What's shown: the drag's layout while one is going on (with the
   // content-sized windows at their measured height), else the saved one.
@@ -353,7 +401,7 @@ export const HomeGrid = ({
       next = moveHomeWindow(drag.start, drag.key, cell.x, cell.y);
     } else {
       const min = homeGridRectPx(
-        { x: 0, y: 0, ...HOME_WINDOW_MIN_SIZE[drag.key] },
+        { x: 0, y: 0, ...homeWindowMinSize(drag.key) },
         columnWidth
       );
       const widthPx =
@@ -565,6 +613,11 @@ export const HomeGrid = ({
   };
 
   const gridHeight = homeGridHeightPx(placed);
+  // Home's own windows, then the widgets' in the order they were added.
+  const windowOrder: HomeWindowId[] = [
+    ...HOME_WINDOW_IDS,
+    ...windows.map((window) => window.id).filter(isHomeWidgetWindowId),
+  ];
   const draggedItem = dragKey ? placedByKey.get(dragKey) : undefined;
   const transition =
     editing && !reduceMotion ? `left 200ms ${EASE}, top 200ms ${EASE}` : 'none';
@@ -760,16 +813,23 @@ export const HomeGrid = ({
 
   const editControls = (window: HomeGridWindow, held: boolean) => {
     const { id, title } = window;
-    const hideable = id !== 'account';
+    const isWidget = isHomeWidgetWindowId(id);
+    const hideable = id !== 'account' && !isWidget;
+    const actions = window.actions ?? [];
+    const hasButtons = hideable || actions.length > 0;
     const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
     return (
       <Box
-        aria-label={t(
-          hideable
-            ? 'group:dashboard.edit_window'
-            : 'group:dashboard.edit_window_no_hide',
-          { window: title }
-        )}
+        aria-label={
+          isWidget
+            ? t('group:home_widgets.arrange_widget', { title })
+            : t(
+                hideable
+                  ? 'group:dashboard.edit_window'
+                  : 'group:dashboard.edit_window_no_hide',
+                { window: title }
+              )
+        }
         onKeyDown={(event) => onWindowKeyDown(event, id)}
         onLostPointerCapture={(event) => endDrag(event, true)}
         onPointerCancel={(event) => endDrag(event, true)}
@@ -814,8 +874,8 @@ export const HomeGrid = ({
             maxWidth: '100%',
             minWidth: 0,
             pl: 0.75,
-            pr: hideable ? 0.25 : 1.25,
-            py: hideable ? 0.25 : 0.5,
+            pr: hasButtons ? 0.25 : 1.25,
+            py: hasButtons ? 0.25 : 0.5,
           }}
         >
           <DragIndicatorRoundedIcon
@@ -844,6 +904,19 @@ export const HomeGrid = ({
               </IconButton>
             </Tooltip>
           ) : null}
+          {actions.map((action) => (
+            <Tooltip key={action.label} title={action.label}>
+              <IconButton
+                aria-label={action.label}
+                onClick={action.onClick}
+                onPointerDown={(event) => event.stopPropagation()}
+                size="small"
+                sx={{ color: theme.palette.text.secondary, p: '4px' }}
+              >
+                {action.icon}
+              </IconButton>
+            </Tooltip>
+          ))}
         </Box>
         {auto
           ? handle(
@@ -899,7 +972,7 @@ export const HomeGrid = ({
             }}
           />
         ) : null}
-        {HOME_WINDOW_IDS.map((id) => {
+        {windowOrder.map((id) => {
           const window = windowsById.get(id);
           const item = placedByKey.get(id);
           if (!window || !item) return null;
@@ -966,6 +1039,57 @@ export const HomeGrid = ({
           />
         ) : null}
       </Box>
+      {editing && addWidget ? (
+        <Box
+          aria-disabled={addWidget.disabled || undefined}
+          component="button"
+          disabled={addWidget.disabled}
+          onClick={addWidget.onAdd}
+          sx={{
+            alignItems: 'center',
+            backgroundColor: alpha(accent, isDark ? 0.06 : 0.04),
+            border: `2px dashed ${alpha(accent, addWidget.disabled ? 0.25 : 0.5)}`,
+            borderRadius: `${WINDOW_RADIUS_PX}px`,
+            color: theme.palette.text.primary,
+            cursor: addWidget.disabled ? 'default' : 'pointer',
+            display: 'flex',
+            font: 'inherit',
+            gap: 1.5,
+            justifyContent: 'center',
+            minHeight: '76px',
+            mt: '20px',
+            opacity: addWidget.disabled ? 0.6 : 1,
+            px: 2,
+            py: 1.5,
+            textAlign: 'left',
+            transition: 'background-color 140ms ease, border-color 140ms ease',
+            width: '100%',
+            '&:hover:not(:disabled)': {
+              backgroundColor: alpha(accent, isDark ? 0.12 : 0.08),
+              borderColor: alpha(accent, 0.8),
+            },
+            '&:focus-visible': {
+              boxShadow: `0 0 0 3px ${alpha(accent, 0.5)}`,
+              outline: 'none',
+            },
+          }}
+          type="button"
+        >
+          <AddRoundedIcon sx={{ color: accent, fontSize: 26 }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              {t('group:home_widgets.add_widget', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: '0.78rem' }}
+            >
+              {addWidget.description}
+            </Typography>
+          </Box>
+        </Box>
+      ) : null}
     </Box>
   );
 };

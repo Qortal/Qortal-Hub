@@ -1150,21 +1150,22 @@ export const AppsDesktop = ({
     setPendingTabToRemove(null);
   };
 
-  useEffect(() => {
-    subscribeToEvent('removeTab', removeTabFunc);
-
-    return () => {
-      unsubscribeFromEvent('removeTab', removeTabFunc);
-    };
-  }, [tabs]);
+  // Closing goes by this render's tabs and selection. Selecting a tab
+  // changes only the selection, so a listener subscribed with the tab list
+  // would still see the tab that was on screen when the list last changed.
+  const removeTabFuncRef = useRef(removeTabFunc);
+  removeTabFuncRef.current = removeTabFunc;
 
   useEffect(() => {
-    subscribeToEvent('removeTabDevMode', removeTabFunc);
+    const onRemoveTab = (e) => removeTabFuncRef.current(e);
+    subscribeToEvent('removeTab', onRemoveTab);
+    subscribeToEvent('removeTabDevMode', onRemoveTab);
 
     return () => {
-      unsubscribeFromEvent('removeTabDevMode', removeTabFunc);
+      unsubscribeFromEvent('removeTab', onRemoveTab);
+      unsubscribeFromEvent('removeTabDevMode', onRemoveTab);
     };
-  }, [tabs]);
+  }, []);
 
   const setNewTabWindowFunc = (e) => {
     setIsNewTabWindow(true);
