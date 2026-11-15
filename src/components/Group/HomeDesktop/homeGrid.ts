@@ -386,23 +386,38 @@ export const resizeHomeWindow = (
 /**
  * The windows Home shows, as it lays them out: the hidden ones left out, the
  * ones whose height follows their content at their measured height, and
- * everything risen into the room that leaves.
+ * everything risen into the room that leaves. A window right under one whose
+ * height follows its content, and came out shorter than its place, keeps its
+ * bottom and takes the rows left (Featured Q-Apps under a short account
+ * card), so the columns stay level. Under a taller one, it goes down.
  */
 export const homeGridShown = (
   grid: readonly HomeGridItem[],
   shown: (key: HomeWindowId) => boolean,
   measuredRows: Partial<Record<HomeWindowId, number>> = {}
-): HomeGridItem[] =>
-  settleHomeGrid(
-    grid
-      .filter((item) => shown(item.key))
-      .map((item) => {
-        const rows = measuredRows[item.key];
-        return rows && HOME_AUTO_HEIGHT_WINDOWS.has(item.key)
-          ? { ...item, h: clamp(rows, 1, HOME_GRID_MAX_MEASURED_H) }
-          : item;
-      })
+): HomeGridItem[] => {
+  const items = grid.filter((item) => shown(item.key));
+  const sized = items.map((item) => {
+    const rows = measuredRows[item.key];
+    return rows && HOME_AUTO_HEIGHT_WINDOWS.has(item.key)
+      ? { ...item, h: clamp(rows, 1, HOME_GRID_MAX_MEASURED_H) }
+      : item;
+  });
+  return settleHomeGrid(
+    sized.map((item) => {
+      if (HOME_AUTO_HEIGHT_WINDOWS.has(item.key)) return item;
+      const aboveIndex = items.findIndex(
+        (other) =>
+          other.x === item.x &&
+          other.w === item.w &&
+          other.y + other.h === item.y
+      );
+      if (aboveIndex < 0) return item;
+      const left = items[aboveIndex].h - sized[aboveIndex].h;
+      return left > 0 ? { ...item, y: item.y - left, h: item.h + left } : item;
+    })
   );
+};
 
 /** A changed layout of the shown windows, with the hidden ones kept. */
 export const mergeHomeGrid = (

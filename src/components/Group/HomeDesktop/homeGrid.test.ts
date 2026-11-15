@@ -148,6 +148,20 @@ describe('homeGridShown', () => {
     expect(rect(shown, 'feed')).toEqual([12, 109, 12, 63]);
   });
 
+  it('keeps Featured Q-Apps level with the other columns under a short account card', () => {
+    const grid = homeDefaultGrid();
+    const shown = homeGridShown(grid, () => true, { account: 16 });
+    expect(rect(shown, 'account')).toEqual([6, 0, 12, 16]);
+    // It takes the 4 rows the card leaves, and ends where it did.
+    expect(rect(shown, 'featured')).toEqual([6, 16, 12, 48]);
+    const bottom = (key: HomeWindowId) => {
+      const item = at(shown, key)!;
+      return item.y + item.h;
+    };
+    expect(bottom('featured')).toBe(bottom('wallet'));
+    expect(bottom('featured')).toBe(bottom('tools'));
+  });
+
   it('gives a window that follows its content all of its measured height', () => {
     // Four tall widgets, one over another: about 2,900 px.
     const shown = homeGridShown(homeDefaultGrid(), () => true, {
