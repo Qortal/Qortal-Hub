@@ -6,10 +6,12 @@ import {
   type SidePanelSettings,
   withSidePanelQdnItem,
 } from '../Desktop/sidePanel';
+import { homeWidgetWindowId } from '../Group/HomeDesktop/homeGrid';
 import {
   homeLayoutStorageKey,
   readHomeLayout,
   saveHomeLayout,
+  withHomeWidgetWindow,
 } from '../Group/HomeDesktop/homeLayout';
 import {
   chooseSavedPartUse,
@@ -145,6 +147,25 @@ describe('toSavedLayoutSettings', () => {
     expect(
       toSavedLayoutSettings(readLocalLayouts(ALICE), NO_SAVED_LAYOUTS)
     ).toEqual({});
+  });
+
+  it("saves the widgets in windows of their own with Home's layout", () => {
+    const clock = { name: 'GO Clock', identifier: null };
+    saveHomeLayout(ALICE, withHomeWidgetWindow(readHomeLayout(ALICE), clock));
+    const fields = toSavedLayoutSettings(
+      readLocalLayouts(ALICE),
+      NO_SAVED_LAYOUTS
+    );
+
+    // Another device, which never changed its layout, takes it in.
+    localStorage.clear();
+    takeInSavedLayouts(ALICE, fields);
+
+    const layout = readHomeLayout(ALICE);
+    expect(layout.widgetWindows).toEqual([clock]);
+    expect(layout.grid?.map((item) => item.key)).toContain(
+      homeWidgetWindowId(clock)
+    );
   });
 });
 

@@ -235,6 +235,35 @@ describe('when the layout changed', () => {
     expect(readHomeLayout(ALICE).changedAt).toBe(500);
     now.mockRestore();
   });
+
+  it('counts a widget window added or removed, and the height its widget asks for', () => {
+    const clock = { name: 'GO Clock', identifier: null };
+    const clockId = homeWidgetWindowId(clock);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    saveHomeLayout(ALICE, withHomeWidgetWindow(readHomeLayout(ALICE), clock));
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    now.mockReturnValue(2_000);
+    const askHeight = () =>
+      saveHomeLayout(
+        ALICE,
+        withHomeWidgetWindowHeight(readHomeLayout(ALICE), clockId, 140)
+      );
+    askHeight();
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    // The same height again changes nothing.
+    now.mockReturnValue(3_000);
+    askHeight();
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    saveHomeLayout(
+      ALICE,
+      withoutHomeWidgetWindow(readHomeLayout(ALICE), clockId)
+    );
+    expect(readHomeLayout(ALICE).changedAt).toBe(3_000);
+    now.mockRestore();
+  });
 });
 
 describe('widget windows in the Home layout', () => {
