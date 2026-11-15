@@ -229,6 +229,63 @@ describe('QuitterFeedWidget as the Torq feed', () => {
     expect(texts).toEqual(['my new post', 'hello from alice']);
   });
 
+  const followingAuthors = () =>
+    vi
+      .mocked(fetchQuitterFeedPage)
+      .mock.calls.map(([options]) => options?.allowedAuthors);
+
+  it('shows Your own posts in Following, also one just made in the composer', async () => {
+    const sendMessage = vi.fn(async () => [{ signature: 'sig' }]);
+    window.sendMessage = sendMessage;
+    const store = makeStore();
+    renderWidget(store);
+    await screen.findByText('hello from alice');
+    // Following is the default tab. Your name comes first, before a long
+    // follow list can push it out of the search.
+    expect(followingAuthors()[0]).toEqual(['Viewer', 'Alice', 'Spammer']);
+
+    vi.mocked(fetchQuitterFeedPage).mockResolvedValue({
+      hasMore: false,
+      items: [
+        post('Viewer', 'mine', 'my new post'),
+        post('Alice', 'p1', 'hello from alice'),
+      ],
+      nextOffset: 0,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Post to Torq' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Post text' }), {
+      target: { value: 'my new post' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+
+    expect(await screen.findByText('my new post')).toBeInTheDocument();
+    expect(screen.getByText('Personalized feed')).toBeInTheDocument();
+    expect(followingAuthors().at(-1)).toEqual(['Viewer', 'Alice', 'Spammer']);
+  });
+
+  it('asks for Your posts once when You follow Yourself', async () => {
+    vi.mocked(fetchQuitterFollowedNames).mockResolvedValue(['Alice', 'viewer']);
+    const store = makeStore();
+    renderWidget(store);
+    await screen.findByText('hello from alice');
+
+    expect(followingAuthors()[0]).toEqual(['Viewer', 'Alice']);
+  });
+
+  it('shows Your posts in Following before You follow anyone', async () => {
+    vi.mocked(fetchQuitterFollowedNames).mockResolvedValue([]);
+    vi.mocked(fetchQuitterFeedPage).mockResolvedValue({
+      hasMore: false,
+      items: [post('Viewer', 'mine', 'my first post')],
+      nextOffset: 0,
+    });
+    const store = makeStore();
+    renderWidget(store);
+
+    expect(await screen.findByText('my first post')).toBeInTheDocument();
+    expect(followingAuthors()[0]).toEqual(['Viewer']);
+  });
+
   it('says posting needs a name when the account has none', async () => {
     const store = createStore();
     store.set(userInfoAtom, { address: 'QViewer', name: '' });
