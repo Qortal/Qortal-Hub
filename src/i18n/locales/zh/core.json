@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "应用",
     "backup_wallet": "备份钱包",
+    "detail": {
+      "apps": "浏览并打开 Q-Apps",
+      "backup_wallet": "保存账户文件",
+      "minting": "铸造状态和密钥",
+      "notifications_muted": "桌面提醒已静音",
+      "notifications_on": "桌面提醒已开启",
+      "q_chat": "消息和群组",
+      "qortal_land": "在群组中见面、游玩",
+      "user_search": "查找名称或地址",
+      "wallets": "QORT 及其他币种"
+    },
     "extras": "更多",
     "hint_minting_panel": "成为铸造者后即可使用此面板。请前往 Q-Mintership 开始。",
     "hint_notifications_desktop_only": "仅静音桌面提醒，中心内的通知仍会继续。",
     "minting": "铸造",
+    "notifications": "通知",
     "notifications_enable": "开启通知",
     "notifications_mute": "静音通知",
     "q_chat": "Q-Chat",

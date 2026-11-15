@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "Rakendused",
     "backup_wallet": "Varunda rahakott",
+    "detail": {
+      "apps": "Sirvi ja ava Q-Appe",
+      "backup_wallet": "Salvesta oma kontofail",
+      "minting": "Mintingu olek ja võtmed",
+      "notifications_muted": "Töölauahoiatused summutatud",
+      "notifications_on": "Töölauahoiatused sees",
+      "q_chat": "Sõnumid ja grupid",
+      "qortal_land": "Kohtu ja mängi gruppides",
+      "user_search": "Leia nimi või aadress",
+      "wallets": "QORT ja muud mündid"
+    },
     "extras": "Lisad",
     "hint_minting_panel": "See paneel avaneb pärast minteriks saamist. Alusta külastades Q-Mintershipi!",
     "hint_notifications_desktop_only": "See summutab ainult töölauahoiatused. Keskusesisesed teavitused jätkuvad.",
     "minting": "Minting",
+    "notifications": "Teavitused",
     "notifications_enable": "Luba teavitused",
     "notifications_mute": "Summuta teavitused",
     "q_chat": "Q-Chat",

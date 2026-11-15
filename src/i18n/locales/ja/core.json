@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "アプリ",
     "backup_wallet": "ウォレットをバックアップ",
+    "detail": {
+      "apps": "Q-Apps を探して開く",
+      "backup_wallet": "アカウントファイルを保存",
+      "minting": "ミンティングの状態と鍵",
+      "notifications_muted": "デスクトップ通知ミュート中",
+      "notifications_on": "デスクトップ通知オン",
+      "q_chat": "メッセージとグループ",
+      "qortal_land": "グループで集まって遊ぶ",
+      "user_search": "名前やアドレスを検索",
+      "wallets": "QORT とその他のコイン"
+    },
     "extras": "その他",
     "hint_minting_panel": "ミンターになるとこのパネルが使えます。まずは Q-Mintership へどうぞ。",
     "hint_notifications_desktop_only": "デスクトップ通知のみをミュートします。ハブ内の通知は続きます。",
     "minting": "ミンティング",
+    "notifications": "通知",
     "notifications_enable": "通知をオン",
     "notifications_mute": "通知をオフ",
     "q_chat": "Q-Chat",

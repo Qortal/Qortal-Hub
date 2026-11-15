@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "Apps",
     "backup_wallet": "Sauvegarder le portefeuille",
+    "detail": {
+      "apps": "Parcourir et ouvrir des Q-Apps",
+      "backup_wallet": "Enregistrer le fichier de votre compte",
+      "minting": "Statut et clés de minting",
+      "notifications_muted": "Alertes bureau coupées",
+      "notifications_on": "Alertes bureau activées",
+      "q_chat": "Messages et groupes",
+      "qortal_land": "Se retrouver et jouer en groupe",
+      "user_search": "Trouver un nom ou une adresse",
+      "wallets": "QORT et autres pièces"
+    },
     "extras": "Extras",
     "hint_minting_panel": "Ce panneau se déverrouille quand vous êtes minter. Passez sur Q-Mintership pour commencer !",
     "hint_notifications_desktop_only": "Cela désactive uniquement les alertes sur le bureau. Les notifications dans le concentrateur continuent.",
     "minting": "Minting",
+    "notifications": "Notifications",
     "notifications_enable": "Activer les notifications",
     "notifications_mute": "Couper les notifications",
     "q_chat": "Q-Chat",

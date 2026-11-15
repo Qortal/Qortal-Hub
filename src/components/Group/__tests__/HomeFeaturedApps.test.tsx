@@ -73,6 +73,7 @@ import {
   FEATURED_PREVIEW_EXPAND_DELAY_MS,
   HomeFeaturedApps,
 } from '../HomeFeaturedApps';
+import { featuredMoreApps } from '../featuredMoreApps';
 import {
   HUB_ONBOARDING_QCHAT_CARD_LOCK_ATTRIBUTE,
   HUB_ONBOARDING_QCHAT_CARD_LOCK_EVENT,
@@ -243,5 +244,142 @@ describe('HomeFeaturedApps', () => {
     });
 
     expect(screen.getByText('Featured Q-Apps')).toBeInTheDocument();
+  });
+
+  describe('in a bigger Home window', () => {
+    const MORE_APPS = featuredMoreApps(FEATURED_APP_NAMES);
+    let resizeTiles: (height: number) => void;
+    let observed: Element[];
+    let disconnected: boolean;
+
+    beforeEach(() => {
+      observed = [];
+      disconnected = false;
+      // jsdom has no layout: this stands in for the tiles area's size. Its
+      // grid still has 4 columns of rows up to 124 px (from its styles).
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: ResizeObserverCallback) {
+            resizeTiles = (height) =>
+              act(() => {
+                callback(
+                  [{ contentRect: { height } } as ResizeObserverEntry],
+                  this as unknown as ResizeObserver
+                );
+              });
+          }
+          observe(target: Element) {
+            observed.push(target);
+          }
+          unobserve() {}
+          disconnect() {
+            disconnected = true;
+          }
+        }
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    const moreAppShown = (appName: string) =>
+      screen.queryByRole('button', { name: appName }) !== null;
+
+    it('shows no more apps at the default size', () => {
+      window.sessionStorage.setItem(
+        'dashboard-featured-qchat-preview-seen',
+        '1'
+      );
+      renderComponent();
+      expect(observed).toHaveLength(1);
+
+      // Two rows of 124 px and a 12 px gap, in about 262 px.
+      resizeTiles(262);
+      expect(MORE_APPS.some(moreAppShown)).toBe(false);
+    });
+
+    it('shows more official apps in whole rows, after its own', () => {
+      window.sessionStorage.setItem(
+        'dashboard-featured-qchat-preview-seen',
+        '1'
+      );
+      const { unmount } = renderComponent();
+
+      // A third row fits: four more apps.
+      resizeTiles(396);
+      for (const appName of MORE_APPS.slice(0, 4)) {
+        expect(
+          screen.getByRole('button', { name: appName })
+        ).toBeInTheDocument();
+      }
+      expect(moreAppShown(MORE_APPS[4])).toBe(false);
+      // In reading order, after the window's own tiles.
+      const tiles = ['Q-Chat', ...MORE_APPS.slice(0, 4)].map((name) =>
+        screen.getByRole('button', { name })
+      );
+      for (let index = 1; index < tiles.length; index += 1) {
+        expect(
+          tiles[index - 1].compareDocumentPosition(tiles[index]) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      }
+
+      // A row and a bit is still one row.
+      resizeTiles(531);
+      expect(MORE_APPS.slice(0, 4).every(moreAppShown)).toBe(true);
+      expect(moreAppShown(MORE_APPS[4])).toBe(false);
+
+      // Smaller again: they go.
+      resizeTiles(395);
+      expect(MORE_APPS.some(moreAppShown)).toBe(false);
+
+      unmount();
+      expect(disconnected).toBe(true);
+    });
+
+    it('opens a further app like the others', () => {
+      window.sessionStorage.setItem(
+        'dashboard-featured-qchat-preview-seen',
+        '1'
+      );
+      renderComponent();
+      resizeTiles(396);
+
+      fireEvent.click(screen.getByRole('button', { name: MORE_APPS[0] }));
+      expect(mockExecuteEvent).toHaveBeenCalledWith('addTab', {
+        data: { service: 'APP', name: MORE_APPS[0] },
+      });
+    });
+
+    it('fades the further apps out with the others during a preview', () => {
+      vi.useFakeTimers();
+      window.sessionStorage.setItem(
+        'dashboard-featured-qchat-preview-seen',
+        '1'
+      );
+      renderComponent();
+      resizeTiles(396);
+      expect(moreAppShown(MORE_APPS[0])).toBe(true);
+
+      fireEvent.mouseEnter(screen.getByRole('button', { name: 'Q-Chat' }));
+      act(() => {
+        vi.advanceTimersByTime(FEATURED_PREVIEW_EXPAND_DELAY_MS + 1);
+      });
+      expect(
+        screen.getByRole('button', { name: 'Open Q-Chat' })
+      ).toBeInTheDocument();
+      // Hidden like Torq, the window's own normal tile.
+      expect(moreAppShown('Torq')).toBe(false);
+      expect(moreAppShown(MORE_APPS[0])).toBe(false);
+
+      fireEvent.mouseLeave(screen.getByRole('button', { name: 'Open Q-Chat' }));
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(moreAppShown('Torq')).toBe(true);
+      expect(moreAppShown(MORE_APPS[0])).toBe(true);
+    });
   });
 });

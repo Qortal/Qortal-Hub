@@ -36,6 +36,12 @@ import {
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
 import {
+  countGridTracks,
+  featuredMoreApps,
+  featuredMoreAppsFit,
+  largestPx,
+} from './featuredMoreApps';
+import {
   homeWindowNarrowerThan,
   homeWindowShorterThan,
 } from './HomeDesktop/homeWindows';
@@ -93,6 +99,15 @@ const FEATURED_APP_GRID = [
   'Q-Trade',
   Q_CHAT_APP_NAME,
 ] as const;
+/** The cells those apps take: Q-Tube and Q-Chat are two cells wide. */
+const FEATURED_APP_GRID_CELLS = FEATURED_APP_GRID.reduce<number>(
+  (cells, appName) =>
+    cells +
+    (appName === Q_TUBE_APP_NAME || appName === Q_CHAT_APP_NAME ? 2 : 1),
+  0
+);
+/** More official apps, for a window with room for whole rows of them. */
+const FEATURED_MORE_APPS = featuredMoreApps(FEATURED_APP_GRID);
 const FEATURED_GRID_GAP_PX = 12;
 const FEATURED_GRID_COL_MAX_PX = 124;
 /** Cap width when space allows; below this the grid scales down proportionally (avoids 3-col + span-2 orphan gaps). */
@@ -171,6 +186,9 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
       return false;
     }
   });
+  const tilesAreaRef = useRef<HTMLDivElement | null>(null);
+  const tilesGridRef = useRef<HTMLDivElement | null>(null);
+  const [moreAppsShown, setMoreAppsShown] = useState(0);
   const featuredFooterStripBackground =
     theme.palette.mode === 'dark'
       ? `radial-gradient(140% 252% at 50% 54%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.225)} 0%, ${alpha(
@@ -376,6 +394,39 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
     }
   }, [isCalmMode]);
 
+  // A taller window shows more official apps after these, in whole rows
+  // that fit without scrolling. The tiles area takes the room the window
+  // leaves it, whatever its tiles, so the apps added can't change what is
+  // measured here.
+  useEffect(() => {
+    const area = tilesAreaRef.current;
+    const grid = tilesGridRef.current;
+    if (!area || !grid || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      const gridStyle = window.getComputedStyle(grid);
+      // The grid's height is its content's, so its rows are as tall as
+      // grid-auto-rows lets them be. A tile is the fallback.
+      const tile = grid.querySelector<HTMLElement>(':scope > button');
+      setMoreAppsShown(
+        featuredMoreAppsFit({
+          availableHeight: entry.contentRect.height,
+          baseCells: FEATURED_APP_GRID_CELLS,
+          columns: countGridTracks(gridStyle.gridTemplateColumns),
+          gap: FEATURED_GRID_GAP_PX,
+          moreApps: FEATURED_MORE_APPS.length,
+          rowHeight:
+            largestPx(gridStyle.gridAutoRows) || (tile?.offsetHeight ?? 0),
+        })
+      );
+    });
+    observer.observe(area);
+
+    return () => observer.disconnect();
+  }, []);
+
   const schedulePreviewExpand = (appName: PreviewAppName) => {
     if (onboardingCardLocked) return;
     if (isCalmMode) return;
@@ -538,6 +589,7 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
         }}
       >
         <Box
+          ref={tilesAreaRef}
           sx={{
             alignItems: 'center',
             display: 'flex',
@@ -552,9 +604,19 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
             [homeWindowShorterThan(FEATURED_SHORT_PX)]: { padding: '8px 0' },
           }}
         >
-          {/* When a small Home window can't fit the apps, they scroll. */}
-          <Box sx={{ maxHeight: '100%', overflowY: 'auto', width: '100%' }}>
+          {/* When a small Home window can't fit the apps, they scroll. More
+              apps only show when everything fits, so while they do, nothing
+              scrolls: not even for the frame before a window that just got
+              smaller drops some of them. */}
+          <Box
+            sx={{
+              maxHeight: '100%',
+              overflowY: moreAppsShown > 0 ? 'hidden' : 'auto',
+              width: '100%',
+            }}
+          >
             <Box
+              ref={tilesGridRef}
               sx={{
                 alignItems: 'stretch',
                 display: 'grid',
@@ -605,6 +667,17 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
                   />
                 )
               )}
+              {FEATURED_MORE_APPS.slice(0, moreAppsShown).map((appName) => (
+                <AppTile
+                  key={appName}
+                  appName={appName}
+                  calmMode={isCalmMode}
+                  theme={theme}
+                  expandedPreviewApp={expandedPreviewApp}
+                  onPreviewExpandStart={schedulePreviewExpand}
+                  onPreviewExpandEnd={schedulePreviewCollapse}
+                />
+              ))}
             </Box>
           </Box>
           {!isCalmMode ? (

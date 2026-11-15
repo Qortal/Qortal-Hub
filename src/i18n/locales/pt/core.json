@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "Aplicações",
     "backup_wallet": "Cópia de segurança da carteira",
+    "detail": {
+      "apps": "Explora e abre Q-Apps",
+      "backup_wallet": "Guarda o ficheiro da tua conta",
+      "minting": "Estado e chaves de minting",
+      "notifications_muted": "Alertas da área de trabalho silenciados",
+      "notifications_on": "Alertas da área de trabalho ativos",
+      "q_chat": "Mensagens e grupos",
+      "qortal_land": "Encontra-te e joga em grupo",
+      "user_search": "Encontra um nome ou endereço",
+      "wallets": "QORT e outras moedas"
+    },
     "extras": "Extras",
     "hint_minting_panel": "Este painel desbloqueia quando fores um minter. Passa pelo Q-Mintership para começar!",
     "hint_notifications_desktop_only": "Só silencia alertas na área de trabalho. As notificações no hub continuam.",
     "minting": "Minting",
+    "notifications": "Notificações",
     "notifications_enable": "Ativar notificações",
     "notifications_mute": "Silenciar notificações",
     "q_chat": "Q-Chat",

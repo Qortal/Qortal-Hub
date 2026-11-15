@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "التطبيقات",
     "backup_wallet": "نسخ احتياطي للمحفظة",
+    "detail": {
+      "apps": "تصفّح Q-Apps وافتحها",
+      "backup_wallet": "احفظ ملف حسابك",
+      "minting": "حالة Minting والمفاتيح",
+      "notifications_muted": "تنبيهات سطح المكتب مكتومة",
+      "notifications_on": "تنبيهات سطح المكتب مفعّلة",
+      "q_chat": "الرسائل والمجموعات",
+      "qortal_land": "التقِ والعب ضمن المجموعات",
+      "user_search": "ابحث عن اسم أو عنوان",
+      "wallets": "QORT وعملات أخرى"
+    },
     "extras": "إضافات",
     "hint_minting_panel": "يُفتَح هذا اللوح عندما تصبح مانِع عملات. ازرَ Q-Mintership للبدء!",
     "hint_notifications_desktop_only": "يكتم ذلك تنبيهات سطح المكتب فقط. إشعارات داخل المركز لا تزال تعمل.",
     "minting": "Minting",
+    "notifications": "الإشعارات",
     "notifications_enable": "تشغيل الإشعارات",
     "notifications_mute": "كتم الإشعارات",
     "q_chat": "Q-Chat",

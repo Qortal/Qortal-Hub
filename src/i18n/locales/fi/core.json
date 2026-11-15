@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "Sovellukset",
     "backup_wallet": "Varmuuskopioi lompakko",
+    "detail": {
+      "apps": "Selaa ja avaa Q-Appeja",
+      "backup_wallet": "Tallenna tilitiedostosi",
+      "minting": "Minttauksen tila ja avaimet",
+      "notifications_muted": "Työpöytähälytykset mykistetty",
+      "notifications_on": "Työpöytähälytykset päällä",
+      "q_chat": "Viestit ja ryhmät",
+      "qortal_land": "Tapaa ja pelaa ryhmissä",
+      "user_search": "Etsi nimi tai osoite",
+      "wallets": "QORT ja muut kolikot"
+    },
     "extras": "Lisät",
     "hint_minting_panel": "Tämä paneeli avautuu, kun olet minttaaja. Aloita käymällä Q-Mintershipissä!",
     "hint_notifications_desktop_only": "Tämä mykistää vain työpöytähälytykset. Keskuksen sisäiset ilmoitukset jatkuvat.",
     "minting": "Minttaus",
+    "notifications": "Ilmoitukset",
     "notifications_enable": "Ota ilmoitukset käyttöön",
     "notifications_mute": "Mykistä ilmoitukset",
     "q_chat": "Q-Chat",

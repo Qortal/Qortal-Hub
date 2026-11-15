@@ -880,10 +880,22 @@
   "quick_tools_pad": {
     "apps": "Apps",
     "backup_wallet": "Wallet sichern",
+    "detail": {
+      "apps": "Q-Apps durchsuchen und öffnen",
+      "backup_wallet": "Deine Kontodatei sichern",
+      "minting": "Minting-Status und Schlüssel",
+      "notifications_muted": "Desktop-Hinweise stumm",
+      "notifications_on": "Desktop-Hinweise an",
+      "q_chat": "Nachrichten und Gruppen",
+      "qortal_land": "In Gruppen treffen und spielen",
+      "user_search": "Namen oder Adresse finden",
+      "wallets": "QORT und andere Coins"
+    },
     "extras": "Extras",
     "hint_minting_panel": "Dieses Panel schaltet sich frei, sobald du Minter bist. Schau bei Q-Mintership vorbei!",
     "hint_notifications_desktop_only": "Nur Desktop-Warnhinweise werden stumm geschaltet. Benachrichtigungen im Hub laufen weiter.",
     "minting": "Minting",
+    "notifications": "Benachrichtigungen",
     "notifications_enable": "Benachrichtigungen aktivieren",
     "notifications_mute": "Benachrichtigungen stumm schalten",
     "q_chat": "Q-Chat",
