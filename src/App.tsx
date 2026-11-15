@@ -134,6 +134,8 @@ import {
   CustomTitleBar,
   CUSTOM_TITLE_BAR_HEIGHT,
 } from './components/Desktop/CustomTitleBar';
+import { AppsBar } from './components/Desktop/AppsBar/AppsBar';
+import { useAppsBarSettings } from './components/Desktop/AppsBar/useAppsBar';
 import { isDisabledLegacy } from './constants/featureFlags';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
@@ -2059,6 +2061,12 @@ function App() {
     </>
   );
 
+  // The pinned apps and bookmarks in the title bar, when the account turned
+  // them on in the bookmarks menu.
+  const appsBarAddress =
+    extState === 'authenticated' && isMainWindow ? userInfo?.address : null;
+  const { settings: appsBarSettings } = useAppsBarSettings(appsBarAddress);
+
   const titleBarRightNav: CustomTitleBarRightNavProps | null =
     extState === 'authenticated' && isMainWindow
       ? {
@@ -2087,7 +2095,14 @@ function App() {
         ['--electron-title-bar-height' as string]: `${CUSTOM_TITLE_BAR_HEIGHT}px`,
       }}
     >
-      <CustomTitleBar rightNav={titleBarRightNav} />
+      <CustomTitleBar
+        appsBar={
+          appsBarAddress && appsBarSettings.enabled ? (
+            <AppsBar address={appsBarAddress} />
+          ) : null
+        }
+        rightNav={titleBarRightNav}
+      />
       <QAppScreenCapturePermission active={extState === 'authenticated' && isMainWindow} />
       {extState === 'authenticated' && isMainWindow && (
         <GlobalQortalNavBar
