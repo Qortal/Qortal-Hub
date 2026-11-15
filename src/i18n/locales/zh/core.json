@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "{{name}} 的图标",
+      "no_ratings": "暂无评分",
+      "rating_summary_one": "{{average}} · {{count}} 个评分",
+      "rating_summary_other": "{{average}} · {{count}} 个评分",
       "type_app": "Q-App",
       "type_website": "网站",
       "updated_time": "{{time}}更新",
@@ -245,6 +248,27 @@
       "source": "源代码",
       "support": "支持",
       "website": "网站"
+    },
+    "rating": {
+      "average_label": "平均评分 {{average}} 分（满分 5 分）",
+      "count_one": "{{count}} 个评分",
+      "count_other": "{{count}} 个评分",
+      "pending": "你的投票正在提交。大约一分钟后所有人都能看到。",
+      "pending_first": "你的第一次评分正在提交。打包进区块后（大约一分钟）即可更改。",
+      "pick": "你的评分",
+      "pick_star_one": "评为 {{count}} 星",
+      "pick_star_other": "评为 {{count}} 星",
+      "rate_prompt": "为它评分",
+      "sent": "感谢评分！",
+      "stars_label_one": "{{count}} 星",
+      "stars_label_other": "{{count}} 星",
+      "title": "评分",
+      "word_1": "不适合我",
+      "word_2": "有待改进",
+      "word_3": "还行",
+      "word_4": "很不错",
+      "word_5": "超喜欢！",
+      "yours": "你的评分"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +299,17 @@
       "title": "分享"
     },
     "version_older": "此版本号是在应用最近一次更新之前设置的。",
+    "voters": {
+      "all": "全部 · {{total}}",
+      "first_rating": "首位评分者",
+      "none": "还没有人给出这个星级。",
+      "open": "投票者 · {{total}}",
+      "public_note": "投票在 Qortal 区块链上是公开的：任何人都能看到谁投了票，以及投了什么。",
+      "show_star": "{{stars}} ★ 的投票：{{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "投票者",
+      "you": "你"
+    },
     "whats_new": {
       "title": "新功能"
     }

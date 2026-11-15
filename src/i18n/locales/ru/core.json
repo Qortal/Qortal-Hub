@@ -242,6 +242,11 @@
     },
     "hero": {
       "icon_alt": "значок {{name}}",
+      "no_ratings": "оценок пока нет",
+      "rating_summary_few": "{{average}} · {{count}} оценки",
+      "rating_summary_many": "{{average}} · {{count}} оценок",
+      "rating_summary_one": "{{average}} · {{count}} оценка",
+      "rating_summary_other": "{{average}} · {{count}} оценки",
       "type_app": "Q-App",
       "type_website": "сайт",
       "updated_time": "обновлено {{time}}",
@@ -251,6 +256,33 @@
       "source": "исходный код",
       "support": "поддержка",
       "website": "сайт"
+    },
+    "rating": {
+      "average_label": "средняя оценка {{average}} из 5",
+      "count_few": "{{count}} оценки",
+      "count_many": "{{count}} оценок",
+      "count_one": "{{count}} оценка",
+      "count_other": "{{count}} оценки",
+      "pending": "ваш голос уже в пути. Все увидят его примерно через минуту.",
+      "pending_first": "ваша первая оценка уже в пути. Изменить её можно, когда она попадёт в блок, — примерно через минуту.",
+      "pick": "ваша оценка",
+      "pick_star_few": "оценить на {{count}} звезды",
+      "pick_star_many": "оценить на {{count}} звёзд",
+      "pick_star_one": "оценить на {{count}} звезду",
+      "pick_star_other": "оценить на {{count}} звезды",
+      "rate_prompt": "оцените",
+      "sent": "спасибо за оценку!",
+      "stars_label_few": "{{count}} звезды",
+      "stars_label_many": "{{count}} звёзд",
+      "stars_label_one": "{{count}} звезда",
+      "stars_label_other": "{{count}} звезды",
+      "title": "оценки",
+      "word_1": "не моё",
+      "word_2": "надо доработать",
+      "word_3": "нормально",
+      "word_4": "очень хорошо",
+      "word_5": "обожаю!",
+      "yours": "ваша оценка"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -281,6 +313,17 @@
       "title": "поделиться"
     },
     "version_older": "этот номер версии был указан до последнего обновления приложения.",
+    "voters": {
+      "all": "все · {{total}}",
+      "first_rating": "первая оценка",
+      "none": "пока никто не поставил столько звёзд.",
+      "open": "кто голосовал · {{total}}",
+      "public_note": "голоса публичны в блокчейне Qortal: любой может увидеть, кто и как голосовал.",
+      "show_star": "голоса за {{stars}} ★: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "кто голосовал",
+      "you": "вы"
+    },
     "whats_new": {
       "title": "что нового"
     }

@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "{{name}}のアイコン",
+      "no_ratings": "まだ評価はありません",
+      "rating_summary_one": "{{average}}・{{count}}件の評価",
+      "rating_summary_other": "{{average}}・{{count}}件の評価",
       "type_app": "Q-App",
       "type_website": "Webサイト",
       "updated_time": "{{time}}に更新",
@@ -245,6 +248,27 @@
       "source": "ソースコード",
       "support": "サポート",
       "website": "Webサイト"
+    },
+    "rating": {
+      "average_label": "平均評価：5点中{{average}}点",
+      "count_one": "{{count}}件の評価",
+      "count_other": "{{count}}件の評価",
+      "pending": "投票を送信中です。1分ほどですべての人に表示されます。",
+      "pending_first": "最初の評価を送信中です。ブロックに取り込まれたら（1分ほど）変更できます。",
+      "pick": "あなたの評価",
+      "pick_star_one": "星{{count}}つで評価",
+      "pick_star_other": "星{{count}}つで評価",
+      "rate_prompt": "評価する",
+      "sent": "評価ありがとうございます！",
+      "stars_label_one": "星{{count}}つ",
+      "stars_label_other": "星{{count}}つ",
+      "title": "評価",
+      "word_1": "自分には合わない",
+      "word_2": "改善の余地あり",
+      "word_3": "まあまあ",
+      "word_4": "とても良い",
+      "word_5": "大好き！",
+      "yours": "あなたの評価"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +299,17 @@
       "title": "共有"
     },
     "version_older": "このバージョン番号は、アプリの最新の更新より前に設定されたものです。",
+    "voters": {
+      "all": "すべて・{{total}}",
+      "first_rating": "最初に評価した人",
+      "none": "まだこの星の数をつけた人はいません。",
+      "open": "投票した人・{{total}}",
+      "public_note": "投票はQortalブロックチェーン上で公開されています。誰がどのように投票したかは誰でも確認できます。",
+      "show_star": "{{stars}}★の投票：{{total}}件",
+      "stars_filter": "{{stars}}★・{{total}}",
+      "title": "投票した人",
+      "you": "あなた"
+    },
     "whats_new": {
       "title": "新機能"
     }

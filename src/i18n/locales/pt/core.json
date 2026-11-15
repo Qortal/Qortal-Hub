@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "ícone de {{name}}",
+      "no_ratings": "ainda sem avaliações",
+      "rating_summary_one": "{{average}} · {{count}} avaliação",
+      "rating_summary_other": "{{average}} · {{count}} avaliações",
       "type_app": "Q-App",
       "type_website": "site",
       "updated_time": "atualizado {{time}}",
@@ -245,6 +248,27 @@
       "source": "código-fonte",
       "support": "suporte",
       "website": "site"
+    },
+    "rating": {
+      "average_label": "avaliação média: {{average}} de 5",
+      "count_one": "{{count}} avaliação",
+      "count_other": "{{count}} avaliações",
+      "pending": "seu voto está a caminho. Todos poderão vê-lo em cerca de um minuto.",
+      "pending_first": "sua primeira avaliação está a caminho. Você poderá alterá-la quando estiver em um bloco, em cerca de um minuto.",
+      "pick": "sua avaliação",
+      "pick_star_one": "avaliar com {{count}} estrela",
+      "pick_star_other": "avaliar com {{count}} estrelas",
+      "rate_prompt": "dê sua avaliação",
+      "sent": "obrigado pela avaliação!",
+      "stars_label_one": "{{count}} estrela",
+      "stars_label_other": "{{count}} estrelas",
+      "title": "avaliações",
+      "word_1": "não é para mim",
+      "word_2": "precisa melhorar",
+      "word_3": "nada mal",
+      "word_4": "muito bom",
+      "word_5": "adorei!",
+      "yours": "sua avaliação"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +299,17 @@
       "title": "compartilhar"
     },
     "version_older": "este número de versão foi definido antes da última atualização do app.",
+    "voters": {
+      "all": "todos · {{total}}",
+      "first_rating": "primeira avaliação",
+      "none": "ninguém deu esse número de estrelas ainda.",
+      "open": "quem votou · {{total}}",
+      "public_note": "os votos são públicos na blockchain do Qortal: qualquer pessoa pode ver quem votou e como.",
+      "show_star": "votos de {{stars}} ★: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "quem votou",
+      "you": "você"
+    },
     "whats_new": {
       "title": "novidades"
     }

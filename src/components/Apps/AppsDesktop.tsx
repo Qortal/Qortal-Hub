@@ -55,6 +55,7 @@ import {
   RatingsCacheInitializer,
   useAppRatings,
 } from '../../hooks/useAppRatings';
+import { PendingVotesWatcher } from './AppPage/PendingVotesWatcher';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
@@ -1563,6 +1564,8 @@ export const AppsDesktop = ({
       }}
     >
       <RatingsCacheInitializer />
+      {/* A vote whose app page closed before the node had it. */}
+      <PendingVotesWatcher />
       <Box
         sx={{
           display: 'flex',
