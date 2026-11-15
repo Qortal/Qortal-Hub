@@ -40,11 +40,14 @@ export const CoreSyncStatus = ({
   renderIcon,
   useExternalTooltip = false,
   panelOnly = false,
+  iconOnly = false,
 }: {
   renderIcon?: React.ReactNode;
   useExternalTooltip?: boolean;
   /** Only the information, laid out in place (in a popover), no icon. */
   panelOnly?: boolean;
+  /** Only the icon: the information shows elsewhere (a tooltip of its own). */
+  iconOnly?: boolean;
 }) => {
   const nodeInfos = useAtomValue(nodeInfosAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
@@ -428,6 +431,7 @@ export const CoreSyncStatus = ({
     );
 
     if (panelOnly) return panelNode;
+    if (iconOnly) return iconNode;
 
     if (useExternalTooltip) {
       return (
