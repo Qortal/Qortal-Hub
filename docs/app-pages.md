@@ -91,3 +91,9 @@ The capture goes through `qappGuest:shot` in main, which takes one request,
 itself prepared for that owner. It returns a PNG of the guest's view, at most
 1,600 pixels on the longest side; the renderer re-encodes it to WebP like any
 other picture. Nothing runs inside the app.
+
+When publishing, the screenshots are optional, and nothing is published for
+them unless the publisher adds some: taken by hand in the dialog or chosen from
+files. For an update of an app that has screenshots, the publisher keeps them
+(the default), changes them (starting from the current ones), or takes them off
+the page, which publishes an empty list.

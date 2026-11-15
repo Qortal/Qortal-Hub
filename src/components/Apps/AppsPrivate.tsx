@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import {
+  alpha,
   Avatar,
   Box,
   Button,
@@ -14,16 +15,22 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
-  Input,
+  IconButton,
   MenuItem,
-  Select,
+  TextField,
   Typography,
   useTheme,
 } from '@mui/material';
+import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
+import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
+import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
+import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
-import { Spacer } from '../../common/Spacer';
-import { PublishQAppInfo } from './Apps-styles';
 import ImageUploader from '../../common/ImageUploader';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
@@ -39,7 +46,6 @@ import {
 } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
-import { Label } from '../../styles/App-styles.ts';
 import { filterPrivateGroups } from './privateGroups';
 import { buildPrivateAppDescription } from './privateAppMetadata';
 import {
@@ -59,6 +65,8 @@ import {
 } from './publishProfiles';
 import { PublishSource } from './publishSource';
 import { PublishSourcePicker, formatPublishDate } from './PublishSourcePicker';
+import { FormSection } from './PublishFormParts';
+import { NameAvatar } from './AppPage/AppPageParts';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
@@ -453,36 +461,49 @@ export const AppsPrivate = ({
   }, [getNames, isOpen]);
 
   const changedSince = profileChangedSince(profile);
+  const capital = { postProcess: 'capitalizeFirstChar' };
+
+  // The fee, shown before publishing as in the main publish form.
+  const [unitFee, setUnitFee] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isOpen || action === 'access') return;
+    let alive = true;
+    Promise.resolve(getFee('ARBITRARY'))
+      .then((fee) => {
+        const value = Number(fee?.fee);
+        if (alive && Number.isFinite(value)) setUnitFee(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [isOpen, action]);
+
+  const logoPreview = useMemo(
+    () =>
+      logo && typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(logo)
+        : null,
+    [logo]
+  );
+  useEffect(
+    () => () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    },
+    [logoPreview]
+  );
+
+  const fieldSx = { '& .MuiOutlinedInput-root': { borderRadius: '12px' } };
 
   const sourceSection = (
-    <>
-      <PublishQAppInfo
-        sx={{
-          backgroundColor: theme.palette.background.paper,
-          fontSize: '14px',
-        }}
-      >
-        {t('core:message.generic.select_zip', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </PublishQAppInfo>
-
-      <Spacer height="10px" />
-
-      <PublishQAppInfo
-        sx={{
-          backgroundColor: theme.palette.background.paper,
-          fontSize: '14px',
-        }}
-      >
-        {t('core:private_apps.max_file_size', {
-          size: maxFileSize / (1024 * 1024),
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </PublishQAppInfo>
-
-      <Spacer height="18px" />
-
+    <FormSection
+      hint={t('core:private_apps.max_file_size', {
+        size: maxFileSize / (1024 * 1024),
+        ...capital,
+      })}
+      number={2}
+      title={t('core:publish_form.section_files', capital)}
+    >
       <PublishSourcePicker
         changedSince={changedSince}
         maxSize={maxFileSize}
@@ -492,660 +513,562 @@ export const AppsPrivate = ({
         source={source}
         surface="dialog"
       />
-    </>
+      {isUpdate && profile?.publishedAt ? (
+        <Typography
+          sx={{
+            color: theme.palette.text.secondary,
+            fontSize: '13px',
+            mt: 1.5,
+          }}
+        >
+          {t('core:publish_update.last_published', {
+            date: formatPublishDate(profile.publishedAt, i18n?.language),
+            ...capital,
+          })}
+        </Typography>
+      ) : null}
+    </FormSection>
   );
 
+  const logoBlock = (
+    <Box
+      sx={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 1.5 }}
+    >
+      <Avatar
+        alt={newPrivateAppValues?.name}
+        src={
+          logoPreview ||
+          (currentLogo ? `data:image/png;base64,${currentLogo}` : undefined)
+        }
+        sx={{
+          bgcolor: alpha(theme.palette.primary.main, 0.15),
+          borderRadius: '16px',
+          color:
+            theme.palette.mode === 'dark'
+              ? theme.palette.primary.light
+              : theme.palette.primary.dark,
+          height: 56,
+          width: 56,
+        }}
+        variant="rounded"
+      >
+        <ImageRoundedIcon />
+      </Avatar>
+      <ImageUploader onPick={(file) => setLogo(file)}>
+        <Button
+          startIcon={<AddPhotoAlternateRoundedIcon />}
+          sx={{ borderRadius: '12px', fontWeight: 600, textTransform: 'none' }}
+          variant="outlined"
+        >
+          {t('core:action.choose_logo', capital)}
+        </Button>
+      </ImageUploader>
+      <Typography sx={{ color: 'text.secondary', fontSize: '13px' }}>
+        {logo
+          ? logo.name
+          : currentLogo
+            ? t('core:publish_update.logo_kept', capital)
+            : t('core:private_publish.logo_hint', capital)}
+      </Typography>
+    </Box>
+  );
+
+  // The colour is in the frame and the icon; the text stays text.primary,
+  // so it's readable on the light theme's darker dialog paper too.
+  const statusIconSx = { flexShrink: 0, fontSize: 20, mt: '1px' };
   const adminMessage = {
     checking: {
       color: theme.palette.text.secondary,
+      icon: <CircularProgress size={16} sx={{ flexShrink: 0, mt: '2px' }} />,
       text: t('core:publish_update.checking_admin', {
         group: updateGroupName,
-        postProcess: 'capitalizeFirstChar',
+        ...capital,
       }),
     },
     admin: {
-      color: theme.palette.text.secondary,
+      color: theme.palette.success.main,
+      icon: <CheckCircleRoundedIcon color="success" sx={statusIconSx} />,
       text: t('core:publish_update.is_admin', {
         group: updateGroupName,
-        postProcess: 'capitalizeFirstChar',
+        ...capital,
       }),
     },
     not_admin: {
       color: theme.palette.error.main,
+      icon: <ErrorOutlineRoundedIcon color="error" sx={statusIconSx} />,
       text: t('core:publish_update.not_admin', {
         group: updateGroupName,
-        postProcess: 'capitalizeFirstChar',
+        ...capital,
       }),
     },
     unknown: {
       color: theme.palette.warning.main,
+      icon: <WarningAmberRoundedIcon color="warning" sx={statusIconSx} />,
       text: t('core:publish_update.admin_unknown', {
         group: updateGroupName,
-        postProcess: 'capitalizeFirstChar',
+        ...capital,
       }),
     },
   }[adminStatus];
+
+  const title =
+    action === 'access'
+      ? t('core:action.access_app', capital)
+      : isUpdate
+        ? t('core:publish_update.title', {
+            name: updateTarget.identifier,
+            ...capital,
+          })
+        : t('core:action.publish_app', capital);
+  const intro =
+    action === 'access'
+      ? t('core:private_publish.intro_access', capital)
+      : isUpdate
+        ? t('core:private_publish.intro_update', capital)
+        : t('core:private_publish.intro_publish', capital);
+
+  const accessDisabled =
+    !privateAppValues.name ||
+    !privateAppValues.service ||
+    !privateAppValues.identifier ||
+    !privateAppValues?.groupId;
+  const publishDisabled = isUpdate
+    ? adminStatus !== 'admin' ||
+      currentVersion === 'loading' ||
+      !source ||
+      (!logo && !currentLogo) ||
+      !newPrivateAppValues.name
+    : !name ||
+      name === 0 ||
+      !source ||
+      !logo ||
+      !newPrivateAppValues.name ||
+      !newPrivateAppValues.service ||
+      !newPrivateAppValues.identifier ||
+      !selectedGroup;
 
   return (
     <>
       {isOpen && (
         <Dialog
-          open={isOpen}
-          onClose={closeDialog}
           aria-labelledby="private-app-dialog-title"
+          fullWidth={true}
+          maxWidth="md"
+          onClose={closeDialog}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (action === 'access') {
-                if (
-                  !privateAppValues.name ||
-                  !privateAppValues.service ||
-                  !privateAppValues.identifier ||
-                  !privateAppValues?.groupId
-                )
-                  return;
-                addPrivateApp();
-              }
+            if (e.key === 'Enter' && action === 'access') {
+              if (accessDisabled) return;
+              addPrivateApp();
             }
           }}
-          maxWidth="md"
-          fullWidth={true}
+          open={isOpen}
           slotProps={{
             paper: {
-              style: {
-                backgroundColor: theme.palette.background.paper,
+              sx: {
+                backgroundColor: theme.palette.background.default,
+                backgroundImage: 'none',
+                borderRadius: '20px',
                 boxShadow: 'none',
               },
             },
           }}
         >
-          <DialogTitle id="private-app-dialog-title">
-            {action === 'access'
-              ? t('core:action.access_app', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-              : isUpdate
-                ? t('core:publish_update.title', {
-                    name: updateTarget.identifier,
-                    postProcess: 'capitalizeFirstChar',
-                  })
-                : t('core:action.publish_app', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-          </DialogTitle>
+          <Box
+            sx={{
+              alignItems: 'flex-start',
+              background: `linear-gradient(160deg, ${alpha(theme.palette.primary.main, 0.14)}, transparent 70%)`,
+              display: 'flex',
+              gap: 1.75,
+              pb: 1.5,
+              pt: 3,
+              px: 3,
+            }}
+          >
+            <Box
+              aria-hidden
+              sx={{
+                alignItems: 'center',
+                backgroundColor: alpha(theme.palette.primary.main, 0.18),
+                borderRadius: '14px',
+                color:
+                  theme.palette.mode === 'dark'
+                    ? theme.palette.primary.light
+                    : theme.palette.primary.dark,
+                display: 'flex',
+                flexShrink: 0,
+                height: 44,
+                justifyContent: 'center',
+                width: 44,
+              }}
+            >
+              <LockRoundedIcon />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                component="h2"
+                id="private-app-dialog-title"
+                sx={{
+                  fontSize: '22px',
+                  fontWeight: 750,
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {title}
+              </Typography>
+              <Typography sx={{ color: 'text.secondary', fontSize: '13.5px' }}>
+                {intro}
+              </Typography>
+            </Box>
+            <IconButton
+              aria-label={t('core:action.close', capital)}
+              onClick={closeDialog}
+            >
+              <CloseRoundedIcon />
+            </IconButton>
+          </Box>
 
-          {action === 'access' && (
-            <>
-              <DialogContent>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <Label>
-                    {t('group:action.select_group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Label>
-                    {t('group:message.generic.only_private_groups', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Select
-                    labelId="demo-simple-select-label"
-                    id="demo-simple-select"
+          <DialogContent sx={{ pt: 1.5 }}>
+            {action === 'access' && (
+              <FormSection
+                hint={t('group:message.generic.only_private_groups', capital)}
+                title={t('core:private_publish.section_find', capital)}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <TextField
+                    label={t('group:action.select_group', capital)}
+                    onChange={(e) =>
+                      setPrivateAppValues((prev) => ({
+                        ...prev,
+                        groupId: Number(e.target.value),
+                      }))
+                    }
+                    select
+                    sx={fieldSx}
                     value={privateAppValues?.groupId}
-                    label={t('group:group.group_other', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    onChange={(e) => {
-                      setPrivateAppValues((prev) => {
-                        return {
-                          ...prev,
-                          groupId: e.target.value,
-                        };
-                      });
-                    }}
                   >
                     <MenuItem value={0}>
-                      {t('group:message.generic.no_selection', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
+                      {t('group:message.generic.no_selection', capital)}
                     </MenuItem>
-
-                    {myGroupsPrivate?.map((group) => {
-                      return (
-                        <MenuItem key={group?.groupId} value={group?.groupId}>
-                          {group?.groupName}
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
-                </Box>
-
-                <Spacer height="10px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:name', { postProcess: 'capitalizeFirstChar' })}
-                  </Label>
-
-                  <Input
-                    placeholder={t('core:name', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    value={privateAppValues?.name}
+                    {myGroupsPrivate?.map((group) => (
+                      <MenuItem key={group?.groupId} value={group?.groupId}>
+                        {group?.groupName}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    label={t('core:name', capital)}
                     onChange={(e) =>
-                      setPrivateAppValues((prev) => {
-                        return {
-                          ...prev,
-                          name: e.target.value,
-                        };
-                      })
-                    }
-                  />
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:identifier', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Input
-                    placeholder={t('core:identifier', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    value={privateAppValues?.identifier}
-                    onChange={(e) =>
-                      setPrivateAppValues((prev) => {
-                        return {
-                          ...prev,
-                          identifier: e.target.value,
-                        };
-                      })
-                    }
-                  />
-                </Box>
-              </DialogContent>
-
-              <DialogActions>
-                <Button variant="contained" onClick={closeDialog}>
-                  {t('core:action.close', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-
-                <Button
-                  disabled={
-                    !privateAppValues.name ||
-                    !privateAppValues.service ||
-                    !privateAppValues.identifier ||
-                    !privateAppValues?.groupId
-                  }
-                  variant="contained"
-                  onClick={() => addPrivateApp()}
-                  autoFocus
-                >
-                  {t('core:action.access', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-              </DialogActions>
-            </>
-          )}
-
-          {action === 'publish' && (
-            <>
-              <DialogContent>
-                {sourceSection}
-                <Spacer height="20px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <Label>
-                    {t('core:private_apps.select_name', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Select
-                    labelId="demo-simple-select-label"
-                    id="demo-simple-select"
-                    value={name}
-                    label={t('core:private_apps.select_name', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    onChange={(e) => setName(e.target.value)}
-                  >
-                    <MenuItem value={0}>
-                      {t('core:private_apps.no_name_selected', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </MenuItem>
-                    {mySortedNames.map((name) => {
-                      return (
-                        <MenuItem key={name} value={name}>
-                          {name}
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
-                </Box>
-                <Spacer height="20px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <Label>
-                    {t('group:action.select_group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Label>
-                    {t('group:message.generic.admin_only', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Select
-                    labelId="demo-simple-select-label"
-                    id="demo-simple-select"
-                    value={selectedGroup}
-                    label={t('group:group.groups_admin', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    onChange={(e) => setSelectedGroup(e.target.value)}
-                  >
-                    <MenuItem value={0}>
-                      {t('group:message.generic.no_selection', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </MenuItem>
-
-                    {myGroupsWhereIAmAdmin?.map((group) => {
-                      return (
-                        <MenuItem key={group?.groupId} value={group?.groupId}>
-                          {group?.groupName}
-                        </MenuItem>
-                      );
-                    })}
-                  </Select>
-                </Box>
-
-                <Spacer height="20px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:identifier', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-
-                  <Input
-                    placeholder={t('core:identifier', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    value={newPrivateAppValues?.identifier}
-                    onChange={(e) =>
-                      setNewPrivateAppValues((prev) => {
-                        return {
-                          ...prev,
-                          identifier: e.target.value,
-                        };
-                      })
-                    }
-                  />
-                </Box>
-
-                <Spacer height="10px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:app_name', { postProcess: 'capitalizeFirstChar' })}
-                  </Label>
-
-                  <Input
-                    placeholder={t('core:app_name', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    value={newPrivateAppValues?.name}
-                    onChange={(e) =>
-                      setNewPrivateAppValues((prev) => {
-                        return {
-                          ...prev,
-                          name: e.target.value,
-                        };
-                      })
-                    }
-                  />
-                </Box>
-
-                <Spacer height="10px" />
-
-                <ImageUploader onPick={(file) => setLogo(file)}>
-                  <Button variant="contained">
-                    {t('core:action.choose_logo', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                </ImageUploader>
-
-                {logo?.name}
-
-                <Spacer height="25px" />
-              </DialogContent>
-
-              <DialogActions>
-                <Button variant="contained" onClick={closeDialog}>
-                  {t('core:action.close', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-
-                <Button
-                  disabled={
-                    !name ||
-                    name === 0 ||
-                    !source ||
-                    !logo ||
-                    !newPrivateAppValues.name ||
-                    !newPrivateAppValues.service ||
-                    !newPrivateAppValues.identifier ||
-                    !selectedGroup
-                  }
-                  variant="contained"
-                  onClick={() => publishPrivateApp()}
-                  autoFocus
-                >
-                  {t('core:action.publish', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-              </DialogActions>
-            </>
-          )}
-
-          {isUpdate && (
-            <>
-              <DialogContent>
-                <Typography
-                  role="status"
-                  sx={{ color: adminMessage.color, fontSize: '14px' }}
-                >
-                  {adminMessage.text}
-                </Typography>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:name', { postProcess: 'capitalizeFirstChar' })}
-                  </Label>
-                  <Input
-                    disabled
-                    inputProps={{
-                      'aria-label': t('core:name', {
-                        postProcess: 'capitalizeFirstChar',
-                      }),
-                    }}
-                    value={updateTarget.name}
-                  />
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:identifier', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-                  <Input
-                    disabled
-                    inputProps={{
-                      'aria-label': t('core:identifier', {
-                        postProcess: 'capitalizeFirstChar',
-                      }),
-                    }}
-                    value={updateTarget.identifier}
-                  />
-                  <Typography
-                    sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: '13px',
-                    }}
-                  >
-                    {t('core:publish_update.identifier_locked', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('group:group.group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Label>
-                  <Input
-                    disabled
-                    inputProps={{
-                      'aria-label': t('group:group.group', {
-                        postProcess: 'capitalizeFirstChar',
-                      }),
-                    }}
-                    value={updateGroupName}
-                  />
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                    marginTop: '15px',
-                  }}
-                >
-                  <Label>
-                    {t('core:app_name', { postProcess: 'capitalizeFirstChar' })}
-                  </Label>
-                  <Input
-                    inputProps={{
-                      'aria-label': t('core:app_name', {
-                        postProcess: 'capitalizeFirstChar',
-                      }),
-                    }}
-                    onChange={(e) => {
-                      appNameEditedRef.current = true;
-                      setNewPrivateAppValues((prev) => ({
+                      setPrivateAppValues((prev) => ({
                         ...prev,
                         name: e.target.value,
-                      }));
-                    }}
-                    placeholder={t('core:app_name', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    value={newPrivateAppValues?.name}
+                      }))
+                    }
+                    sx={fieldSx}
+                    value={privateAppValues?.name}
+                  />
+                  <TextField
+                    label={t('core:identifier', capital)}
+                    onChange={(e) =>
+                      setPrivateAppValues((prev) => ({
+                        ...prev,
+                        identifier: e.target.value,
+                      }))
+                    }
+                    sx={fieldSx}
+                    value={privateAppValues?.identifier}
                   />
                 </Box>
+              </FormSection>
+            )}
 
-                {currentVersion === 'loading' && (
+            {action === 'publish' && (
+              <>
+                <FormSection
+                  hint={t('group:message.generic.admin_only', capital)}
+                  number={1}
+                  title={t('core:private_publish.section_name_group', capital)}
+                >
                   <Box
                     sx={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      gap: '8px',
-                      marginTop: '10px',
+                      display: 'grid',
+                      gap: 2,
+                      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
                     }}
                   >
-                    <CircularProgress size={16} />
-                    <Typography sx={{ fontSize: '14px' }}>
-                      {t('core:publish_update.loading_current', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
+                    <TextField
+                      label={t('core:private_apps.select_name', capital)}
+                      onChange={(e) => setName(e.target.value)}
+                      select
+                      sx={fieldSx}
+                      value={name}
+                    >
+                      <MenuItem value={0}>
+                        {t('core:private_apps.no_name_selected', capital)}
+                      </MenuItem>
+                      {mySortedNames.map((item) => (
+                        <MenuItem key={item} value={item}>
+                          <Box
+                            component="span"
+                            sx={{
+                              alignItems: 'center',
+                              display: 'flex',
+                              gap: 1,
+                            }}
+                          >
+                            <NameAvatar decorative name={item} size={24} />
+                            {item}
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      label={t('group:action.select_group', capital)}
+                      onChange={(e) => setSelectedGroup(Number(e.target.value))}
+                      select
+                      sx={fieldSx}
+                      value={selectedGroup}
+                    >
+                      <MenuItem value={0}>
+                        {t('group:message.generic.no_selection', capital)}
+                      </MenuItem>
+                      {myGroupsWhereIAmAdmin?.map((group) => (
+                        <MenuItem key={group?.groupId} value={group?.groupId}>
+                          {group?.groupName}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Box>
-                )}
-
-                {currentVersion === 'failed' && (
-                  <Typography
-                    sx={{
-                      color: theme.palette.warning.main,
-                      fontSize: '14px',
-                      marginTop: '10px',
-                    }}
-                  >
-                    {t('core:publish_update.current_unavailable', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                )}
-
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '10px',
-                    marginTop: '15px',
-                  }}
-                >
-                  {!logo && currentLogo && (
-                    <Avatar
-                      alt={newPrivateAppValues?.name}
-                      src={`data:image/png;base64,${currentLogo}`}
-                      variant="rounded"
-                    />
-                  )}
-                  <ImageUploader onPick={(file) => setLogo(file)}>
-                    <Button variant="contained">
-                      {t('core:action.choose_logo', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Button>
-                  </ImageUploader>
-                  <Typography sx={{ fontSize: '14px' }}>
-                    {logo
-                      ? logo.name
-                      : currentLogo
-                        ? t('core:publish_update.logo_kept', {
-                            postProcess: 'capitalizeFirstChar',
-                          })
-                        : null}
-                  </Typography>
-                </Box>
-
-                <Spacer height="20px" />
+                </FormSection>
 
                 {sourceSection}
 
-                {profile?.publishedAt ? (
+                <FormSection
+                  number={3}
+                  title={t('core:private_publish.section_details', capital)}
+                >
+                  <Box
+                    sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                  >
+                    <TextField
+                      label={t('core:app_name', capital)}
+                      onChange={(e) =>
+                        setNewPrivateAppValues((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      sx={fieldSx}
+                      value={newPrivateAppValues?.name}
+                    />
+                    <TextField
+                      helperText={t(
+                        'core:private_publish.identifier_hint',
+                        capital
+                      )}
+                      label={t('core:identifier', capital)}
+                      onChange={(e) =>
+                        setNewPrivateAppValues((prev) => ({
+                          ...prev,
+                          identifier: e.target.value,
+                        }))
+                      }
+                      sx={fieldSx}
+                      value={newPrivateAppValues?.identifier}
+                    />
+                    {logoBlock}
+                  </Box>
+                </FormSection>
+              </>
+            )}
+
+            {isUpdate && (
+              <>
+                <Box
+                  sx={{
+                    alignItems: 'flex-start',
+                    backgroundColor: alpha(adminMessage.color, 0.1),
+                    border: `1px solid ${alpha(adminMessage.color, 0.35)}`,
+                    borderRadius: '12px',
+                    display: 'flex',
+                    gap: 1.25,
+                    mb: 2,
+                    px: 2,
+                    py: 1.25,
+                  }}
+                >
+                  {adminMessage.icon}
                   <Typography
+                    role="status"
+                    sx={{ color: 'text.primary', fontSize: '14px' }}
+                  >
+                    {adminMessage.text}
+                  </Typography>
+                </Box>
+
+                <FormSection
+                  hint={t('core:publish_update.identifier_locked', capital)}
+                  number={1}
+                  title={t('core:private_publish.section_app', capital)}
+                >
+                  <Box
                     sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: '13px',
-                      marginTop: '15px',
+                      display: 'grid',
+                      gap: 2,
+                      gridTemplateColumns: {
+                        xs: '1fr',
+                        sm: 'repeat(3, minmax(0, 1fr))',
+                      },
                     }}
                   >
-                    {t('core:publish_update.last_published', {
-                      date: formatPublishDate(
-                        profile.publishedAt,
-                        i18n?.language
-                      ),
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                ) : null}
+                    <TextField
+                      disabled
+                      label={t('core:name', capital)}
+                      sx={fieldSx}
+                      value={updateTarget.name}
+                    />
+                    <TextField
+                      disabled
+                      label={t('core:identifier', capital)}
+                      sx={fieldSx}
+                      value={updateTarget.identifier}
+                    />
+                    <TextField
+                      disabled
+                      label={t('group:group.group', capital)}
+                      sx={fieldSx}
+                      value={updateGroupName}
+                    />
+                  </Box>
+                </FormSection>
 
-                <Spacer height="25px" />
-              </DialogContent>
+                {sourceSection}
 
-              <DialogActions>
-                <Button variant="contained" onClick={closeDialog}>
-                  {t('core:action.close', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-
-                <Button
-                  disabled={
-                    adminStatus !== 'admin' ||
-                    currentVersion === 'loading' ||
-                    !source ||
-                    (!logo && !currentLogo) ||
-                    !newPrivateAppValues.name
-                  }
-                  variant="contained"
-                  onClick={() => publishPrivateApp()}
+                <FormSection
+                  number={3}
+                  title={t('core:private_publish.section_details', capital)}
                 >
-                  {t('core:action.publish', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
+                  <Box
+                    sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                  >
+                    <TextField
+                      label={t('core:app_name', capital)}
+                      onChange={(e) => {
+                        appNameEditedRef.current = true;
+                        setNewPrivateAppValues((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }));
+                      }}
+                      sx={fieldSx}
+                      value={newPrivateAppValues?.name}
+                    />
+                    {currentVersion === 'loading' && (
+                      <Box
+                        sx={{ alignItems: 'center', display: 'flex', gap: 1 }}
+                      >
+                        <CircularProgress size={16} />
+                        <Typography sx={{ fontSize: '14px' }}>
+                          {t('core:publish_update.loading_current', capital)}
+                        </Typography>
+                      </Box>
+                    )}
+                    {currentVersion === 'failed' && (
+                      <Box
+                        sx={{
+                          alignItems: 'flex-start',
+                          display: 'flex',
+                          gap: 1,
+                        }}
+                      >
+                        <WarningAmberRoundedIcon
+                          color="warning"
+                          sx={statusIconSx}
+                        />
+                        <Typography
+                          sx={{ color: 'text.primary', fontSize: '14px' }}
+                        >
+                          {t(
+                            'core:publish_update.current_unavailable',
+                            capital
+                          )}
+                        </Typography>
+                      </Box>
+                    )}
+                    {logoBlock}
+                  </Box>
+                </FormSection>
+              </>
+            )}
+          </DialogContent>
+
+          <DialogActions
+            // Wraps on a phone: the fee above, Close and Publish below.
+            disableSpacing
+            sx={{
+              borderTop: `1px solid ${theme.palette.divider}`,
+              columnGap: 1,
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              px: 3,
+              py: 1.5,
+              rowGap: 1,
+            }}
+          >
+            <Box sx={{ alignItems: 'baseline', display: 'flex', gap: 1 }}>
+              {action !== 'access' && unitFee !== null && (
+                <>
+                  <Typography
+                    sx={{ color: 'text.secondary', fontSize: '13px' }}
+                  >
+                    {t('core:publish_form.summary_fee', capital)}
+                  </Typography>
+                  <Typography sx={{ fontSize: '14px', fontWeight: 700 }}>
+                    {`${unitFee.toFixed(2)} QORT`}
+                  </Typography>
+                </>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+              <Button onClick={closeDialog} sx={{ textTransform: 'none' }}>
+                {t('core:action.close', capital)}
+              </Button>
+              {action === 'access' ? (
+                <Button
+                  autoFocus
+                  disableElevation
+                  disabled={accessDisabled}
+                  onClick={() => addPrivateApp()}
+                  startIcon={<LockOpenRoundedIcon />}
+                  sx={{
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    px: 3,
+                    textTransform: 'none',
+                  }}
+                  variant="contained"
+                >
+                  {t('core:action.access', capital)}
                 </Button>
-              </DialogActions>
-            </>
-          )}
+              ) : (
+                <Button
+                  autoFocus={!isUpdate}
+                  disableElevation
+                  disabled={publishDisabled}
+                  onClick={() => publishPrivateApp()}
+                  startIcon={<CloudUploadRoundedIcon />}
+                  sx={{
+                    borderRadius: '12px',
+                    fontWeight: 700,
+                    px: 3,
+                    textTransform: 'none',
+                  }}
+                  variant="contained"
+                >
+                  {t('core:action.publish', capital)}
+                </Button>
+              )}
+            </Box>
+          </DialogActions>
         </Dialog>
       )}
     </>
