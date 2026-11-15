@@ -20,6 +20,9 @@ import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.webp';
+import qortalLogoMinting from '../../assets/sidebar/qortal-logo-official-minting.webp';
+import { NodeStateLogo } from './NodeStateLogo';
+import { useNodeState } from './nodeState';
 import {
   enabledDevModeAtom,
   hasUnreadGroupsAtom,
@@ -290,6 +293,7 @@ export const DesktopSideBar = ({
   const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const nodeState = useNodeState();
   const [isVisible, setIsVisible] = useState(false);
   const [selectedAppsTab, setSelectedAppsTab] = useState<any>(null);
   const [isInfoActive, setIsInfoActive] = useState(false);
@@ -497,11 +501,6 @@ export const DesktopSideBar = ({
             justifyContent: 'center',
             overflow: 'visible',
             pointerEvents: isVisible ? 'auto' : 'none',
-            '& .sidebarItem:hover .sidebarInfoLogo, & .sidebarItem:focus-visible .sidebarInfoLogo, & .sidebarItem.isOpen .sidebarInfoLogo':
-              {
-                filter: 'grayscale(0) saturate(1) brightness(1) contrast(1)',
-                opacity: 1,
-              },
           }}
         >
           <Box
@@ -646,22 +645,15 @@ export const DesktopSideBar = ({
                   <CoreSyncStatus
                     useExternalTooltip
                     renderIcon={
-                      <img
+                      // Grey on the public node, blue on the user's own,
+                      // with its small cube in gold while it mints.
+                      <NodeStateLogo
+                        alt={t(`core:node_state.${nodeState}`)}
+                        highlighted={isInfoActive}
+                        mintingSrc={qortalLogoMinting}
+                        size={ICON_SIZE_PX}
                         src={qortalLogoOfficial}
-                        alt="Qortal Info"
-                        className="sidebarInfoLogo"
-                        style={{
-                          width: `${ICON_SIZE_PX}px`,
-                          height: `${ICON_SIZE_PX}px`,
-                          objectFit: 'contain',
-                          filter: isInfoActive
-                            ? 'grayscale(0) saturate(1) brightness(1) contrast(1)'
-                            : 'grayscale(0.82) saturate(0.32) brightness(0.82) contrast(0.9)',
-                          opacity: isInfoActive ? 1 : 0.78,
-                          transform: isInfoActive ? 'scale(1.02)' : 'scale(1)',
-                          transition:
-                            'filter 0.2s ease, opacity 0.2s ease, transform 0.2s ease',
-                        }}
+                        state={nodeState}
                       />
                     }
                   />
