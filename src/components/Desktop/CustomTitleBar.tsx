@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -18,11 +18,41 @@ export const APP_NAV_BAR_HEIGHT = 48;
 /** Left offset so title-bar nav aligns with content vertical line (DesktopLeftSideBar width). */
 const TITLE_BAR_LEFT_OFFSET_PX = 70;
 const TITLE_BAR_MENU_WIDTH_PX = 40;
+/** How tall the title bar is while the apps bar is in it. */
+export const APPS_BAR_TITLE_BAR_HEIGHT = 44;
+/** How much taller than `TITLE_BAR_HEIGHT` the title bar is, for CSS. */
+export const TITLE_BAR_EXTRA_VAR = '--qortal-title-bar-extra';
 export const CUSTOM_TITLE_BAR_HEIGHT = TITLE_BAR_HEIGHT;
-export const appHeighOffsetPx = `${TITLE_BAR_HEIGHT}px`;
+
+const titleBarExtraCss = `var(${TITLE_BAR_EXTRA_VAR}, 0px)`;
+
+/**
+ * How much of the window the chrome takes. The title bar grows when the apps
+ * bar is in it, so these are worked out as they are used: in CSS through the
+ * variable above, and in script through the two functions below.
+ */
+export const appHeighOffsetPx = `calc(${TITLE_BAR_HEIGHT}px + ${titleBarExtraCss})`;
 export const appHeighOffset = TITLE_BAR_HEIGHT;
-export const appChromeOffsetPx = `${TITLE_BAR_HEIGHT + APP_NAV_BAR_HEIGHT}px`;
+export const appChromeOffsetPx = `calc(${TITLE_BAR_HEIGHT + APP_NAV_BAR_HEIGHT}px + ${titleBarExtraCss})`;
 export const appChromeOffset = TITLE_BAR_HEIGHT + APP_NAV_BAR_HEIGHT;
+
+let titleBarExtraHeight = 0;
+
+/** The title bar says how much taller than its own height it is. */
+export function setTitleBarExtraHeight(pixels: number) {
+  titleBarExtraHeight = Math.max(0, pixels);
+  if (typeof document === 'undefined') return;
+  document.documentElement.style.setProperty(
+    TITLE_BAR_EXTRA_VAR,
+    `${titleBarExtraHeight}px`
+  );
+}
+
+/** The height of the title bar as it is now. */
+export const appHeighOffsetNow = () => appHeighOffset + titleBarExtraHeight;
+
+/** The height of the title bar and the nav bar as they are now. */
+export const appChromeOffsetNow = () => appChromeOffset + titleBarExtraHeight;
 export const titleBarIconButtonProps = {
   disableFocusRipple: true,
   tabIndex: -1,
@@ -77,8 +107,13 @@ const tooltipSlotProps = (theme: {
 
 export function CustomTitleBar(props?: {
   rightNav?: CustomTitleBarRightNavProps | null;
+  /**
+   * The account's pinned apps and bookmarks, to show in this bar. With one,
+   * the bar is taller and the title moves out of the middle to make room.
+   */
+  appsBar?: ReactNode;
 }) {
-  const { rightNav } = props ?? {};
+  const { appsBar, rightNav } = props ?? {};
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);
   const isElectron = useIsElectron();
@@ -86,6 +121,15 @@ export function CustomTitleBar(props?: {
   const [isMaximized, setIsMaximized] = useState(false);
 
   const isMac = platform === 'darwin';
+
+  const hasAppsBar = !!appsBar;
+  const barHeight = hasAppsBar ? APPS_BAR_TITLE_BAR_HEIGHT : TITLE_BAR_HEIGHT;
+
+  useEffect(() => {
+    // What the rest of the window has to leave for the chrome.
+    setTitleBarExtraHeight(barHeight - TITLE_BAR_HEIGHT);
+    return () => setTitleBarExtraHeight(0);
+  }, [barHeight]);
 
   const refreshMaximized = useCallback(() => {
     if (typeof window.electronAPI?.getWindowState !== 'function') return;
@@ -235,7 +279,7 @@ export function CustomTitleBar(props?: {
           color: controlColor,
           borderRadius: 0,
           width: 46,
-          height: TITLE_BAR_HEIGHT,
+          height: barHeight,
           padding: 0,
           '&:hover': { backgroundColor: controlHover },
         }}
@@ -251,7 +295,7 @@ export function CustomTitleBar(props?: {
           color: controlColor,
           borderRadius: 0,
           width: 46,
-          height: TITLE_BAR_HEIGHT,
+          height: barHeight,
           padding: 0,
           '&:hover': { backgroundColor: controlHover },
         }}
@@ -271,7 +315,7 @@ export function CustomTitleBar(props?: {
           color: controlColor,
           borderRadius: 0,
           width: 46,
-          height: TITLE_BAR_HEIGHT,
+          height: barHeight,
           padding: 0,
           '&:hover': {
             backgroundColor: '#e81123',
@@ -294,7 +338,7 @@ export function CustomTitleBar(props?: {
         color: controlColor,
         borderRadius: 0,
         width: 40,
-        height: TITLE_BAR_HEIGHT,
+        height: barHeight,
         padding: 0,
         WebkitAppRegion: 'no-drag',
         transition:
@@ -311,6 +355,35 @@ export function CustomTitleBar(props?: {
     </IconButton>
   );
 
+  const titleBadge = (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.75,
+      }}
+    >
+      <Box
+        component="img"
+        src={QortalLogo}
+        alt=""
+        sx={{ height: 20, width: 'auto', display: 'block' }}
+      />
+      <Typography
+        variant="body2"
+        sx={{
+          fontSize: 13,
+          fontWeight: 600,
+          letterSpacing: '0.02em',
+          lineHeight: 1,
+          color: theme.palette.text.primary,
+        }}
+      >
+        Qortal Hub
+      </Typography>
+    </Box>
+  );
+
   const titleContent = (
     <Box
       sx={{
@@ -325,34 +398,28 @@ export function CustomTitleBar(props?: {
         pointerEvents: 'none',
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.75,
-        }}
-      >
-        <Box
-          component="img"
-          src={QortalLogo}
-          alt=""
-          sx={{ height: 20, width: 'auto', display: 'block' }}
-        />
-        <Typography
-          variant="body2"
-          sx={{
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: '0.02em',
-            lineHeight: 1,
-            color: theme.palette.text.primary,
-          }}
-        >
-          Qortal Hub
-        </Typography>
-      </Box>
+      {titleBadge}
     </Box>
   );
+
+  // With the apps bar in it the middle is taken, so the title sits on the
+  // left, after the menu button.
+  const titleAtTheLeft = (
+    <Box
+      sx={{
+        alignItems: 'center',
+        display: 'flex',
+        flexShrink: 0,
+        pl: 1,
+        pr: 0.5,
+      }}
+    >
+      {titleBadge}
+    </Box>
+  );
+
+  /** What fills the middle: the apps bar, or nothing but room to drag. */
+  const middle = hasAppsBar ? appsBar : <Box sx={{ flex: 1 }} />;
 
   const tooltipTitle = (text: string) => (
     <span
@@ -387,13 +454,13 @@ export function CustomTitleBar(props?: {
         boxShadow: toolbarShadow,
         display: 'flex',
         flexDirection: 'row',
-        height: TITLE_BAR_HEIGHT,
-        minHeight: TITLE_BAR_HEIGHT,
+        height: barHeight,
+        minHeight: barHeight,
         width: '100%',
         ...(isElectron && { WebkitAppRegion: 'drag' }),
       }}
     >
-      {titleContent}
+      {!hasAppsBar && titleContent}
       {isElectron &&
         (isMac ? (
           <>
@@ -401,29 +468,38 @@ export function CustomTitleBar(props?: {
               <>
                 {macWindowControls}
                 {menuButton}
+                {hasAppsBar && titleAtTheLeft}
               </>
             )}
-            <Box sx={{ flex: 1 }} />
+            {middle}
             <Box sx={{ width: 52 }} />
           </>
         ) : (
           <>
-            {leftPushCluster(<>{menuButton}</>)}
-            <Box sx={{ flex: 1 }} />
+            {leftPushCluster(
+              <>
+                {menuButton}
+                {hasAppsBar && titleAtTheLeft}
+              </>
+            )}
+            {middle}
             {winWindowControls}
           </>
         ))}
       {!isElectron && (
         <>
           {leftPushCluster(
-            <Box
-              sx={{
-                width: TITLE_BAR_LEFT_OFFSET_PX,
-                minWidth: TITLE_BAR_LEFT_OFFSET_PX,
-              }}
-            />
+            <>
+              <Box
+                sx={{
+                  width: TITLE_BAR_LEFT_OFFSET_PX,
+                  minWidth: TITLE_BAR_LEFT_OFFSET_PX,
+                }}
+              />
+              {hasAppsBar && titleAtTheLeft}
+            </>
           )}
-          <Box sx={{ flex: 1 }} />
+          {middle}
         </>
       )}
     </Box>

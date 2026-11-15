@@ -114,6 +114,30 @@ describe('HomeLayoutSettings', () => {
     expect(reset).toBeDisabled();
   });
 
+  it('keeps the widgets in windows of their own when it resets', () => {
+    const clock = { name: 'GO Clock', identifier: null };
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({
+        grid: [{ key: 'widget:GO%20Clock:', x: 0, y: 0, w: 6, h: 20 }],
+        hidden: ['qortino'],
+        stack: ['widgets', 'groupActivity', 'feed'],
+        widgetWindows: [clock],
+      })
+    );
+    renderSettings();
+    const reset = screen.getByRole('button', { name: 'Reset to default' });
+
+    fireEvent.click(reset);
+
+    expect(stored()).toEqual({
+      hidden: [],
+      stack: ['widgets', 'groupActivity', 'feed'],
+      widgetWindows: [clock],
+    });
+    expect(reset).toBeDisabled();
+  });
+
   it('changes nothing without an account', () => {
     renderSettings(null);
     expect(panelSwitch('Qortino')).toBeDisabled();
