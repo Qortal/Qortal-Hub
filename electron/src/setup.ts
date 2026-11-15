@@ -9,6 +9,10 @@ import {
   registerMainWindowFileIpc,
 } from './main-window-files';
 import {
+  PUBLISH_PROFILES_FILE,
+  registerPublishProfileIpc,
+} from './publish-profiles';
+import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
   foreignWalletPublicKey,
@@ -1634,6 +1638,13 @@ const mainWindowFiles = registerMainWindowFileIpc({
   ipcMain,
   dialog,
   checkSender: requireMainShellEvent,
+});
+
+registerPublishProfileIpc({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  getFilePath: () => path.join(app.getPath('userData'), PUBLISH_PROFILES_FILE),
+  onError: (error) => loggerError('Publish profiles', error),
 });
 
 // Helper to get or create the shared settings directory

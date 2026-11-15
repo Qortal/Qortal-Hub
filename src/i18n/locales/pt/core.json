@@ -906,6 +906,29 @@
     "selected_file": "arquivo selecionado: {{filename}}"
   },
   "publish": "publicar",
+  "publish_source": {
+    "changed_files": "arquivos alterados desde {{date}}: {{number}}",
+    "choose_another": "escolher outro",
+    "choose_folder": "escolher pasta",
+    "read_error": "não foi possível ler a pasta ou o arquivo selecionado",
+    "same_file": "mesmo arquivo da última vez",
+    "same_folder": "mesma pasta da última vez",
+    "selected_file": "arquivo selecionado: {{name}}",
+    "selected_folder": "pasta selecionada: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "não foi possível verificar se você ainda é administrador de {{group}}. Tente novamente mais tarde.",
+    "checking_admin": "verificando se você ainda é administrador de {{group}}…",
+    "current_unavailable": "não foi possível carregar a versão atual, então o nome do app e a logo não podem ser mantidos. Preencha-os novamente.",
+    "filled_from_profile": "não foi possível carregar da rede os detalhes deste aplicativo, então eles foram preenchidos com a última publicação deste PC. Confira-os antes de publicar.",
+    "identifier_locked": "o identificador não pode ser alterado em uma atualização: um identificador diferente publicaria um novo aplicativo.",
+    "is_admin": "você é administrador de {{group}}",
+    "last_published": "última publicação deste PC: {{date}}",
+    "loading_current": "carregando a versão atual…",
+    "logo_kept": "logo mantida da versão atual",
+    "not_admin": "você não é mais administrador de {{group}}, então este aplicativo não pode ser atualizado a partir desta conta.",
+    "title": "atualizar {{name}}"
+  },
   "q_apps": {
     "about": "sobre este Q-App",
     "q_mail": "Q-Mail",
