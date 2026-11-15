@@ -294,7 +294,10 @@ const fetchDualIdentifierSearch = async (
   const enjoyTracks =
     enjoyResult.status === 'fulfilled' ? enjoyResult.value : [];
 
-  if (earbumpResult.status === 'rejected' && enjoyResult.status === 'rejected') {
+  if (
+    earbumpResult.status === 'rejected' &&
+    enjoyResult.status === 'rejected'
+  ) {
     throw earbumpResult.reason;
   }
 
@@ -430,4 +433,30 @@ export const fetchEarbumpTrackById = async (
 
   const tracks = await fetchTrackSearch(params, options?.signal);
   return tracks[0] ?? null;
+};
+
+/**
+ * An artist's EarBump songs, newest first, as EarBump's artist page lists
+ * them (its `all-songs/<artist>` links): the songs whose author is the
+ * artist, case aside. The node's search finds the artist's name in the
+ * songs' descriptions, where EarBump keeps the author.
+ */
+export const fetchEarbumpArtistTracks = async (
+  artist: string,
+  options?: { limit?: number; signal?: AbortSignal }
+) => {
+  const wanted = artist.trim().toLowerCase();
+  if (!wanted) return [];
+
+  const tracks = await fetchTrackSearch(
+    buildSearchParams(artist.trim(), { limit: options?.limit ?? 100 }),
+    options?.signal
+  );
+  return tracks
+    .filter((track) => track.artist.trim().toLowerCase() === wanted)
+    .sort(
+      (a, b) =>
+        (b.updated ?? b.created) - (a.updated ?? a.created) ||
+        a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+    );
 };

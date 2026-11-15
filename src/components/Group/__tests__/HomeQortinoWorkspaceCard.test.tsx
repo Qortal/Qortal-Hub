@@ -13,7 +13,12 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
 import { createStore, Provider as JotaiProvider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { balanceAtom, txListAtom, userInfoAtom } from '../../../atoms/global';
+import {
+  balanceAtom,
+  resourceDownloadControllerAtom,
+  txListAtom,
+  userInfoAtom,
+} from '../../../atoms/global';
 import ErrorBoundary from '../../../common/ErrorBoundary';
 import {
   HomeQortinoWorkspaceCard,
@@ -248,7 +253,7 @@ describe('HomeQortinoWorkspaceCard', () => {
       await waitFor(() => {
         expect(card.workspace(0).getByText('Hotkeys')).toBeInTheDocument();
       });
-      expect(card.workspace(1).getByText('Music player')).toBeInTheDocument();
+      expect(card.workspace(1).getByText('Player')).toBeInTheDocument();
       expect(card.workspace(1).queryByText('Hotkeys')).not.toBeInTheDocument();
     });
 
@@ -263,7 +268,7 @@ describe('HomeQortinoWorkspaceCard', () => {
       });
 
       await waitFor(() => {
-        expect(card.workspace(0).getByText('Music player')).toBeInTheDocument();
+        expect(card.workspace(0).getByText('Player')).toBeInTheDocument();
       });
       expect(card.workspace(1).getByText(EMPTY_PROMPT)).toBeInTheDocument();
     });
@@ -277,7 +282,7 @@ describe('HomeQortinoWorkspaceCard', () => {
         workspaces: twoWindows(),
       });
       await waitFor(() => {
-        expect(card.workspace(1).getByText('Music player')).toBeInTheDocument();
+        expect(card.workspace(1).getByText('Player')).toBeInTheDocument();
       });
 
       // The first Workspace's "+".
@@ -288,10 +293,10 @@ describe('HomeQortinoWorkspaceCard', () => {
           'In Workspace 2 now. Picked here, it moves here.'
         )
       ).toBeInTheDocument();
-      fireEvent.click(within(picker).getByText('Music player'));
+      fireEvent.click(within(picker).getByText('Player'));
 
       await waitFor(() => {
-        expect(card.workspace(0).getByText('Music player')).toBeInTheDocument();
+        expect(card.workspace(0).getByText('Player')).toBeInTheDocument();
       });
       expect(card.workspace(1).getByText(EMPTY_PROMPT)).toBeInTheDocument();
       await waitFor(() => {
@@ -313,7 +318,7 @@ describe('HomeQortinoWorkspaceCard', () => {
         workspaces: twoWindows(),
       });
       await waitFor(() => {
-        expect(card.workspace(1).getByText('Music player')).toBeInTheDocument();
+        expect(card.workspace(1).getByText('Player')).toBeInTheDocument();
       });
 
       card.rerenderPlaces([card.places[0]]);
@@ -337,6 +342,319 @@ describe('HomeQortinoWorkspaceCard', () => {
       await waitFor(() => {
         expect(lastSaved()).toMatchObject({ mode: 'hotkeys' });
       });
+    });
+  });
+
+  describe('the player plays links', () => {
+    const QTUBE_LINK = 'qortal://APP/Q-Tube/video/BigPicture/qtube_vid_gold';
+    const QSHARE_LINK = 'qortal://APP/Q-Share/share/PixelMage/qshare_file_john';
+    const EARBUMP_LINK =
+      'qortal://app/earbump/playlists/Music%20Fan/earbump_playlist_road_trip';
+
+    /** QDN with a Q-Tube video's and a Q-Share song's details. */
+    const qdnFetch = vi.fn(async (url: string) => {
+      const json = (value: unknown) => ({
+        json: () => Promise.resolve(value),
+        ok: true,
+      });
+      if (url.endsWith('/DOCUMENT/BigPicture/qtube_vid_gold_metadata')) {
+        return json({
+          title: 'Gold vs. treasuries',
+          videoReference: {
+            identifier: 'qtube_vid_gold',
+            name: 'BigPicture',
+            service: 'VIDEO',
+          },
+          videoType: 'video/mp4',
+        });
+      }
+      if (url.endsWith('/DOCUMENT/PixelMage/qshare_file_john_metadata')) {
+        return json({
+          files: [
+            {
+              identifier: 'qshare_file_john_mp3',
+              mimetype: 'audio/mpeg',
+              name: 'PixelMage',
+              service: 'FILE',
+            },
+          ],
+          title: 'Through the Bible',
+        });
+      }
+      if (url.endsWith('/PLAYLIST/Music%20Fan/earbump_playlist_road_trip')) {
+        return json({
+          songs: [
+            {
+              author: 'Sun64',
+              identifier: 'earbump_song_crazy',
+              name: 'Sun64',
+              service: 'AUDIO',
+              title: 'Crazy Insane',
+            },
+            {
+              author: 'Sun64',
+              identifier: 'earbump_song_wind',
+              name: 'Sun64',
+              service: 'AUDIO',
+              title: 'Second Wind',
+            },
+          ],
+          title: 'Road trip',
+        });
+      }
+      if (url.includes('/DOCUMENT/')) return { json: () => null, ok: false };
+      return json([]);
+    });
+
+    const playLink = async (link: string) => {
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Play a link' })
+      );
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.change(
+        within(dialog).getByRole('textbox', { name: 'Play a link' }),
+        {
+          target: { value: link },
+        }
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Play' }));
+      return dialog;
+    };
+
+    beforeEach(() => {
+      localStorage.setItem(`${LS_KEY}_QADDR`, 'completed');
+    });
+
+    it('plays a Q-Tube video in the player, and goes back to the music', async () => {
+      const card = renderCard({
+        name: 'b-test',
+        qortinoSettings: workspaceState({ mode: 'music' }),
+      });
+      global.fetch = qdnFetch as unknown as typeof fetch;
+
+      await playLink(QTUBE_LINK);
+
+      await waitFor(() => {
+        expect(
+          card.workspace().getByText('Gold vs. treasuries')
+        ).toBeInTheDocument();
+      });
+      // The node gets it ready first.
+      expect(
+        card.workspace().getByText('Preparing the video on your node... 0%')
+      ).toBeInTheDocument();
+      // The player is titled Player for a video too.
+      expect(card.workspace().getByText('Player')).toBeInTheDocument();
+      expect(downloadResource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identifier: 'qtube_vid_gold',
+          name: 'BigPicture',
+          service: 'VIDEO',
+        })
+      );
+      await waitFor(() => {
+        expect(lastSaved()).toMatchObject({
+          mediaLink: { kind: 'video', link: QTUBE_LINK },
+          musicPlaying: false,
+        });
+      });
+
+      // Once the dialog is gone, the rest of the page is there again.
+      fireEvent.click(
+        await card.workspace().findByRole('button', { name: 'Back to EarBump' })
+      );
+      await waitFor(() => {
+        expect(lastSaved()).not.toHaveProperty('mediaLink');
+      });
+      expect(
+        card.workspace().queryByText('Gold vs. treasuries')
+      ).not.toBeInTheDocument();
+      expect(card.workspace().getByText('Player')).toBeInTheDocument();
+    });
+
+    it('gets a video again that it stopped getting, but not one that failed', async () => {
+      const card = renderCard({
+        name: 'b-test',
+        qortinoSettings: workspaceState({ mode: 'music' }),
+      });
+      global.fetch = qdnFetch as unknown as typeof fetch;
+      // Back to EarBump stopped getting it earlier.
+      act(() => {
+        card.store.set(resourceDownloadControllerAtom, {
+          'VIDEO-BigPicture-qtube_vid_gold': {
+            cancelledByScope: 'music-player',
+            status: { status: 'FAILED_TO_DOWNLOAD' },
+          },
+        });
+      });
+
+      await playLink(QTUBE_LINK);
+      expect(
+        await card
+          .workspace()
+          .findByText('Preparing the video on your node... 0%')
+      ).toBeInTheDocument();
+      expect(downloadResource).toHaveBeenCalledWith(
+        expect.objectContaining({ identifier: 'qtube_vid_gold' })
+      );
+
+      // The node couldn't get it.
+      act(() => {
+        card.store.set(resourceDownloadControllerAtom, {
+          'VIDEO-BigPicture-qtube_vid_gold': {
+            status: { status: 'FAILED_TO_DOWNLOAD' },
+          },
+        });
+      });
+      expect(
+        await card
+          .workspace()
+          .findByText('This video could not finish loading on your node.')
+      ).toBeInTheDocument();
+    });
+
+    it('plays a video that is ready with the player’s own controls', async () => {
+      const card = renderCard({
+        name: 'b-test',
+        qortinoSettings: workspaceState({ mode: 'music' }),
+      });
+      global.fetch = qdnFetch as unknown as typeof fetch;
+      act(() => {
+        card.store.set(resourceDownloadControllerAtom, {
+          'VIDEO-BigPicture-qtube_vid_gold': { status: { status: 'READY' } },
+        });
+      });
+
+      await playLink(QTUBE_LINK);
+
+      const window = card.workspace();
+      await waitFor(() => {
+        expect(
+          window.getByRole('button', { name: 'Play' })
+        ).toBeInTheDocument();
+      });
+      const video = document.querySelector('video');
+      expect(video).toHaveAttribute(
+        'src',
+        'http://localhost:12391/arbitrary/VIDEO/BigPicture/qtube_vid_gold'
+      );
+      // Not the browser's controls: the player's.
+      expect(video).not.toHaveAttribute('controls');
+      for (const name of [
+        'Back 10 seconds',
+        'Forward 10 seconds',
+        'Mute',
+        /^full screen$/i,
+      ]) {
+        expect(window.getByRole('button', { name })).toBeInTheDocument();
+      }
+      fireEvent.click(window.getByRole('button', { name: 'Mute' }));
+      expect(
+        window.getByRole('button', { name: 'Unmute' })
+      ).toBeInTheDocument();
+      expect(video?.muted).toBe(true);
+    });
+
+    it('plays a Q-Share song as the player’s track', async () => {
+      const card = renderCard({
+        name: 'b-test',
+        qortinoSettings: workspaceState({ mode: 'music' }),
+      });
+      global.fetch = qdnFetch as unknown as typeof fetch;
+
+      await playLink(QSHARE_LINK);
+
+      await waitFor(() => {
+        expect(
+          card.workspace().getByText('Through the Bible')
+        ).toBeInTheDocument();
+      });
+      expect(card.workspace().getByText('PixelMage')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(lastSaved()).toMatchObject({
+          mediaLink: { kind: 'audio', service: 'FILE' },
+          musicPlaying: true,
+        });
+      });
+      expect(downloadResource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          identifier: 'qshare_file_john_mp3',
+          service: 'FILE',
+        })
+      );
+    });
+
+    it('plays an EarBump playlist from its first song, and goes through it', async () => {
+      const card = renderCard({
+        name: 'b-test',
+        qortinoSettings: workspaceState({ mode: 'music' }),
+      });
+      global.fetch = qdnFetch as unknown as typeof fetch;
+
+      await playLink(EARBUMP_LINK);
+
+      await waitFor(() => {
+        expect(card.workspace().getByText('Crazy Insane')).toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(lastSaved()).toMatchObject({
+          mediaLink: {
+            identifier: 'earbump_song_crazy',
+            kind: 'audio',
+            service: 'AUDIO',
+            trackIndex: 0,
+          },
+          musicPlaying: true,
+        });
+      });
+
+      // Next is the playlist's second song, and then round to the first.
+      const next = () =>
+        card
+          .workspace()
+          .getAllByTestId('SkipNextRoundedIcon')[0]
+          .closest('button') as HTMLButtonElement;
+      fireEvent.click(next());
+      await waitFor(() => {
+        expect(card.workspace().getByText('Second Wind')).toBeInTheDocument();
+      });
+      expect(lastSaved()).toMatchObject({
+        mediaLink: { identifier: 'earbump_song_wind', trackIndex: 1 },
+      });
+      fireEvent.click(next());
+      await waitFor(() => {
+        expect(lastSaved()).toMatchObject({
+          mediaLink: { identifier: 'earbump_song_crazy', trackIndex: 0 },
+        });
+      });
+    });
+
+    it('says why a link can’t be played', async () => {
+      renderCard({
+        name: 'b-test',
+        qortinoSettings: workspaceState({ mode: 'music' }),
+      });
+      global.fetch = qdnFetch as unknown as typeof fetch;
+
+      const dialog = await playLink('qortal://APP/Q-Mail');
+      expect(
+        await within(dialog).findByText(
+          'That isn’t a link the player can play.'
+        )
+      ).toBeInTheDocument();
+
+      fireEvent.change(
+        within(dialog).getByRole('textbox', { name: 'Play a link' }),
+        {
+          target: { value: 'qortal://APP/Q-Tube/video/BigPicture/gone' },
+        }
+      );
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Play' }));
+      expect(
+        await within(dialog).findByText(
+          'Couldn’t find it on QDN. Try again in a moment.'
+        )
+      ).toBeInTheDocument();
     });
   });
 
