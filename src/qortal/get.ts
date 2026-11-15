@@ -91,6 +91,7 @@ import {
   TIME_SECONDS_2_IN_MILLISECONDS,
   TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../constants/constants.ts';
+import { createPermissionPromptQueue } from './permissionPromptQueue';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
@@ -528,31 +529,44 @@ const handleMessage = (event) => {
 
 window.addEventListener('message', handleMessage);
 
+// The approval dialog shows one request at a time. A request that comes while
+// another one is on screen waits its turn instead of taking its place, within
+// the same minute it always had from when the app asked.
+const askPermissionInTurn = createPermissionPromptQueue();
+
 async function getUserPermission(payload, isFromExtension) {
-  return new Promise((resolve) => {
-    const requestId = generatePermissionRequestId();
-    responseResolvers.set(requestId, resolve); // Store resolver by requestId
-    const targetOrigin = window.location.origin;
+  return askPermissionInTurn(
+    (expiresAt) =>
+      new Promise((resolve) => {
+        const requestId = generatePermissionRequestId();
+        responseResolvers.set(requestId, resolve); // Store resolver by requestId
+        const targetOrigin = window.location.origin;
 
-    // Send the request message
-    window.postMessage(
-      {
-        action: 'QORTAL_REQUEST_PERMISSION',
-        payload,
-        requestId,
-        isFromExtension,
-      },
-      targetOrigin
-    );
+        // Send the request message. The dialog counts down to expiresAt.
+        window.postMessage(
+          {
+            action: 'QORTAL_REQUEST_PERMISSION',
+            payload: { ...payload, expiresAt },
+            requestId,
+            isFromExtension,
+          },
+          targetOrigin
+        );
 
-    // Optional timeout to handle no response scenario
-    setTimeout(() => {
-      if (responseResolvers.has(requestId)) {
-        responseResolvers.get(requestId)(false); // Resolve with `false` if no response
-        responseResolvers.delete(requestId);
-      }
-    }, TIME_MINUTES_1_IN_MILLISECONDS);
-  });
+        // No answer: the dialog's own countdown declines the request a moment
+        // earlier, this only covers a dialog that never opened.
+        setTimeout(
+          () => {
+            if (responseResolvers.has(requestId)) {
+              responseResolvers.get(requestId)(false); // Resolve with `false` if no response
+              responseResolvers.delete(requestId);
+            }
+          },
+          Math.max(0, expiresAt - Date.now())
+        );
+      }),
+    false
+  );
 }
 
 export const authorizeRnsDestination = async (
