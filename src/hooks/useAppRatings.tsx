@@ -292,6 +292,20 @@ const initializeObserver = (onBatchFetch: (keys: string[]) => void) => {
 };
 
 /**
+ * Reports every card being watched once more. An IntersectionObserver only
+ * reports changes, so a card already on screen while the bulk fetch was still
+ * running (or after a refresh emptied the store) would otherwise keep waiting
+ * for its rating until it scrolls out and back in.
+ */
+const recheckObservedElements = () => {
+  if (!sharedObserver) return;
+  observedElements.forEach((_key, element) => {
+    sharedObserver?.unobserve(element);
+    sharedObserver?.observe(element);
+  });
+};
+
+/**
  * Runs the ratings cache load from IndexedDB and hydrates the store once per app session.
  * Mount once (e.g. in AppsDesktop); uses only useSetAtom so it does not re-render when the store updates.
  */
@@ -312,6 +326,7 @@ function RatingsCacheInitializerInner() {
       // Step 2: old node — intersection observer handles per-app lazy loads
       if (bulkEndpointAvailable === false) {
         bulkFetchComplete = true;
+        recheckObservedElements();
         return;
       }
 
@@ -319,7 +334,11 @@ function RatingsCacheInitializerInner() {
       const bulkData = await fetchAllRatingsFromAPI();
       bulkFetchComplete = true; // mark complete regardless of success/failure
 
-      if (bulkData === null) return;
+      if (bulkData === null) {
+        // Cards seen while the bulk fetch ran fetch one by one now.
+        recheckObservedElements();
+        return;
+      }
 
       // Merge: bulk data wins for freshness; IndexedDB-only entries are kept
       setRatingsStore((prev) => {
@@ -331,6 +350,8 @@ function RatingsCacheInitializerInner() {
         ratingsStoreRef.current = next;
         return next;
       });
+      // Cards on screen without a poll get their empty rating now.
+      recheckObservedElements();
     };
 
     initialize();
@@ -530,17 +551,20 @@ export const useAppRatings = () => {
     const bulkData = await fetchAllRatingsFromAPI();
     bulkFetchComplete = true;
 
-    if (!bulkData || bulkData.size === 0) return;
-
-    setRatingsStore((prev) => {
-      const next = new Map(prev);
-      bulkData.forEach((data, key) => {
-        next.set(key, data);
+    if (bulkData && bulkData.size > 0) {
+      setRatingsStore((prev) => {
+        const next = new Map(prev);
+        bulkData.forEach((data, key) => {
+          next.set(key, data);
+        });
+        saveRatingsCacheToDB(next);
+        ratingsStoreRef.current = next;
+        return next;
       });
-      saveRatingsCacheToDB(next);
-      ratingsStoreRef.current = next;
-      return next;
-    });
+    }
+    // The cards already on screen ask again: apps without a poll get their
+    // empty rating, and an old node fetches them one by one.
+    recheckObservedElements();
   }, [setRatingsStore]);
 
   return {
