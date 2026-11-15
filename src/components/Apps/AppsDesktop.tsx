@@ -621,6 +621,11 @@ export const AppsDesktop = ({
   const selectedAppInfoFunc = (e) => {
     const data = e.detail?.data;
     setSelectedAppInfo(data);
+    // A page link may come while an app's tab is on screen, as from chat:
+    // the page shows only with no tab selected.
+    setSelectedTab(null);
+    setIsNewTabWindow(false);
+    setIsAddTabFocused(true);
     setMode('appInfo');
   };
 

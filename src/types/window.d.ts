@@ -391,6 +391,11 @@ declare global {
       qappGuestRelease?: (
         owner: { tabId: string; name: string; service: string }
       ) => Promise<boolean>;
+      /** Captures the guest Hub prepared for `owner`: a PNG, at most 1600 px. */
+      qappGuestShot?: (
+        owner: { tabId: string; name: string; service: string },
+        request: { action: 'capture' }
+      ) => Promise<{ png: Uint8Array; width: number; height: number }>;
       onQAppReticulumEvent?: (callback: (payload: any) => void) => () => void;
       qappFileSave?: (owner: any, request: any) => Promise<any>;
       privateChannelOpen?: (

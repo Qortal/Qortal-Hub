@@ -171,6 +171,114 @@
   },
   "app_name": "アプリ名",
   "app_other": "アプリ",
+  "app_page": {
+    "about": {
+      "read_less": "閉じる",
+      "read_more": "続きを読む"
+    },
+    "capture": {
+      "capture_failed": "スクリーンショットを撮影できませんでした。少し待ってからもう一度お試しください。",
+      "capture_this": "この画面を撮影",
+      "count": "スクリーンショット：{{slots}}枚中{{done}}枚",
+      "full": "これ以上は追加できません。別の画面を撮影するには、どれか1枚を削除してください。",
+      "instructions": "アプリはタブで開いたときと同じようにここで動作します。見せたい画面に移動して撮影してください。スクリーンショットごとに同じ操作を繰り返します。あなたが公開するまで、何も公開されません。",
+      "loading": "アプリを開いています…",
+      "needs_desktop": "スクリーンショットの撮影にはQortal Hubのデスクトップアプリが必要です。画像を選ぶことはできます。",
+      "not_ready": "アプリが開きませんでした。このウィンドウを閉じて、もう一度お試しください。",
+      "preview_failed": "ノードでこのzipファイルのプレビューを作成できませんでした。",
+      "title": "スクリーンショットを撮影",
+      "use_one": "{{count}}枚を使用",
+      "use_other": "{{count}}枚を使用"
+    },
+    "details": {
+      "type": "種類",
+      "version": "バージョン"
+    },
+    "edit": {
+      "about": "概要（詳しい説明）",
+      "choose_icon": "画像を選択",
+      "confirm": "これらの変更（{{parts}}）をQDNに公開しますか？変更ごとに個別に公開されます。",
+      "error_app_not_ready": "ノードにこのアプリのファイルがまだありません。一度アプリを開いてから、もう一度お試しください。",
+      "error_app_too_large": "アプリが大きすぎるため、ここからは再公開できません。公開フォームでアプリのフォルダーから公開してください。",
+      "error_file_missing": "アプリのファイルの1つをノードから読み込めませんでした。後でもう一度お試しください。",
+      "error_files_unknown": "ノードがこのアプリのファイル一覧を返さないため、ここからは再公開できません。公開フォームでアプリのフォルダーから公開してください。",
+      "error_page_too_large": "ページの文章がQDNには長すぎます。「概要」または「新機能」を短くしてください。",
+      "error_shot_unavailable": "QDNからスクリーンショットを読み込めませんでした。少し待ってからもう一度お試しください。",
+      "files_progress": "ノードからアプリのファイルを読み込み中：{{done}}/{{total}}",
+      "hint": "変更した部分はそれぞれ個別に公開されます。アプリ本体が再アップロードされるのは、掲載情報を変更したときだけです。",
+      "icon_hint": "アイコンは名前「{{name}}」の画像です。そのため、この名前の画像が表示されるすべての場所で変わります。",
+      "link_invalid": "https://またはqortal://のリンクを使用してください",
+      "links": "リンク",
+      "listing_description": "簡単な説明",
+      "listing_hint": "タイトル、簡単な説明、カテゴリ、タグは、アプリ自身のQDNエントリーに含まれます。保存するとアプリが再公開されます。Hubがノードからアプリのファイル（{{size}}）を読み込み、新しい情報と一緒に送信します。アプリ本体は変わりません。",
+      "listing_title": "タイトル",
+      "next_version": "{{version}}を使用",
+      "no_changes": "まだ変更はありません",
+      "open": "ページを編集",
+      "page_cleared": "ページの文章は空のまま公開されます",
+      "page_unreadable": "ノードはこのページのテキストを一覧に載せていますが、読み込めませんでした。そのため、今はここから変更できません。公開すると空の内容で置き換わってしまいます。しばらくしてからもう一度お試しください。",
+      "part_icon": "アイコン",
+      "part_listing": "掲載情報",
+      "part_page": "ページの文章",
+      "part_screenshots": "スクリーンショット",
+      "publish_one": "{{count}}件の変更を公開",
+      "publish_other": "{{count}}件の変更を公開",
+      "saved": "公開しました。1〜2分で他の人にも変更が表示されます。",
+      "screenshots_hint": "画像は5枚まで。アプリから撮影するか、自分で選んでください。各画像は再エンコードされるため、画像そのもの以外は残りません。",
+      "screenshots_removed": "今公開すると、すべてのスクリーンショットがページから削除されます。",
+      "shots_unreadable": "ノードはこのページのスクリーンショットを一覧に載せていますが、読み込めませんでした。そのため、今はここから変更できません。公開すると置き換わってしまいます。しばらくしてからもう一度お試しください。",
+      "tab_icon": "アイコン",
+      "tab_listing": "掲載情報",
+      "tab_page": "ページ",
+      "tab_screenshots": "スクリーンショット",
+      "title": "{{name}}のページを編集",
+      "version_hint": "任意（例：1.4.2）"
+    },
+    "hero": {
+      "icon_alt": "{{name}}のアイコン",
+      "type_app": "Q-App",
+      "type_website": "Webサイト",
+      "updated_time": "{{time}}に更新",
+      "version": "バージョン{{version}}"
+    },
+    "links": {
+      "source": "ソースコード",
+      "support": "サポート",
+      "website": "Webサイト"
+    },
+    "reviews": {
+      "characters": "{{length}} / {{limit}}"
+    },
+    "screenshots": {
+      "add": "スクリーンショットを追加",
+      "alt": "{{name}}のスクリーンショット{{index}}",
+      "alt_editor": "スクリーンショット{{index}}",
+      "caption": "キャプション",
+      "caption_placeholder": "キャプション（任意）",
+      "choose": "画像を選択",
+      "counter": "{{current}} / {{total}}",
+      "limit_hint": "{{limit}}枚中{{done}}枚",
+      "move_earlier": "前に移動",
+      "move_later": "後ろに移動",
+      "next": "次のスクリーンショット",
+      "not_an_image": "{{name}}はPNG、JPEG、WebP形式の画像ではありません。",
+      "previous": "前のスクリーンショット",
+      "scroll_back": "前へスクロール",
+      "scroll_more": "他のスクリーンショットを見る",
+      "take": "スクリーンショットを撮影",
+      "title": "スクリーンショット",
+      "too_big": "{{name}}は15 MBを超えています。"
+    },
+    "share": {
+      "copy_app_link": "アプリへのリンクをコピー",
+      "copy_page_link": "このページへのリンクをコピー",
+      "title": "共有"
+    },
+    "version_older": "このバージョン番号は、アプリの最新の更新より前に設定されたものです。",
+    "whats_new": {
+      "title": "新機能"
+    }
+  },
   "app_private": "プライベート",
   "app_service_type": "アプリサービスタイプ",
   "app_tab": {

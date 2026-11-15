@@ -742,6 +742,8 @@ try {
       ipcRenderer.invoke('qappGuest:prepare', owner, url, isDevMode),
     qappGuestRelease: (owner) =>
       ipcRenderer.invoke('qappGuest:release', owner),
+    qappGuestShot: (owner, request) =>
+      ipcRenderer.invoke('qappGuest:shot', owner, request),
     onQAppReticulumEvent: (callback: (payload: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
         callback(payload);

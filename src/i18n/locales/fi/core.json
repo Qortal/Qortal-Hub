@@ -171,6 +171,114 @@
   },
   "app_name": "sovelluksen nimi",
   "app_other": "sovellukset",
+  "app_page": {
+    "about": {
+      "read_less": "näytä vähemmän",
+      "read_more": "lue lisää"
+    },
+    "capture": {
+      "capture_failed": "kuvakaappausta ei voitu ottaa. Yritä hetken kuluttua uudelleen.",
+      "capture_this": "kaappaa tämä näkymä",
+      "count": "kuvakaappauksia {{done}}/{{slots}}",
+      "full": "lisää ei mahdu: poista yksi kuvakaappaus, niin voit kaapata uuden.",
+      "instructions": "Sovellus toimii tässä samoin kuin välilehdellä. Siirry näkymään, jonka haluat näyttää, ja kaappaa se; toimi samoin jokaisen kuvakaappauksen kohdalla. Mitään ei julkaista ennen kuin julkaiset.",
+      "loading": "avataan sovellusta…",
+      "needs_desktop": "kuvakaappausten ottaminen vaatii Qortal Hubin työpöytäsovelluksen. Voit silti valita kuvia.",
+      "not_ready": "sovellus ei avautunut. Sulje tämä ikkuna ja yritä uudelleen.",
+      "preview_failed": "solmusi ei pystynyt luomaan esikatselua tästä zip-tiedostosta.",
+      "title": "ota kuvakaappauksia",
+      "use_one": "käytä {{count}} kuvakaappaus",
+      "use_other": "käytä {{count}} kuvakaappausta"
+    },
+    "details": {
+      "type": "tyyppi",
+      "version": "versio"
+    },
+    "edit": {
+      "about": "tietoja (pidempi kuvaus)",
+      "choose_icon": "valitse kuva",
+      "confirm": "julkaistaanko nämä muutokset QDN:ään: {{parts}}? Jokainen julkaistaan erikseen.",
+      "error_app_not_ready": "solmullasi ei ole vielä tämän sovelluksen tiedostoja. Avaa sovellus kerran ja yritä sitten uudelleen.",
+      "error_app_too_large": "sovellus on liian suuri julkaistavaksi uudelleen täältä. Julkaise se sen kansiosta julkaisulomakkeessa.",
+      "error_file_missing": "yhtä sovelluksen tiedostoista ei voitu lukea solmustasi. Yritä myöhemmin uudelleen.",
+      "error_files_unknown": "solmusi ei listaa tämän sovelluksen tiedostoja, joten sitä ei voi julkaista uudelleen täältä. Julkaise se sen kansiosta julkaisulomakkeessa.",
+      "error_page_too_large": "sivun teksti on liian pitkä QDN:ää varten. Lyhennä Tietoja- tai Mitä uutta -osiota.",
+      "error_shot_unavailable": "kuvakaappausta ei voitu hakea QDN:stä. Yritä hetken kuluttua uudelleen.",
+      "files_progress": "luetaan sovelluksen tiedostoja solmustasi: {{done}}/{{total}}",
+      "hint": "Jokainen muuttamasi osa julkaistaan erikseen. Itse sovellus lähetetään uudelleen vain, kun muutat sen perustietoja.",
+      "icon_hint": "Kuvake on nimen {{name}} kuva, joten se vaihtuu kaikkialla, missä tämän nimen kuva näkyy.",
+      "link_invalid": "käytä https://- tai qortal://-linkkiä",
+      "links": "linkit",
+      "listing_description": "lyhyt kuvaus",
+      "listing_hint": "Otsikko, lyhyt kuvaus, kategoria ja tunnisteet kuuluvat sovelluksen omaan QDN-merkintään. Niiden tallentaminen julkaisee sovelluksen uudelleen: Hub lukee sen tiedostot ({{size}}) solmustasi ja lähettää ne uusien tietojen kanssa. Itse sovellus pysyy samana.",
+      "listing_title": "otsikko",
+      "next_version": "käytä versiota {{version}}",
+      "no_changes": "ei vielä muutoksia",
+      "open": "muokkaa sivua",
+      "page_cleared": "sivun teksti julkaistaan tyhjänä",
+      "page_unreadable": "solmusi listaa tämän sivun tekstin, mutta ei voinut lukea sitä, joten sitä ei voi nyt muuttaa täältä: julkaisu korvaisi sen tyhjillä kentillä. Yritä hetken päästä uudelleen.",
+      "part_icon": "kuvake",
+      "part_listing": "perustiedot",
+      "part_page": "sivun teksti",
+      "part_screenshots": "kuvakaappaukset",
+      "publish_one": "julkaise {{count}} muutos",
+      "publish_other": "julkaise {{count}} muutosta",
+      "saved": "julkaistu. Muut näkevät muutokset minuutin tai parin kuluttua.",
+      "screenshots_hint": "Enintään 5 kuvaa. Ota ne sovelluksesta tai valitse omasi; jokainen koodataan uudelleen, joten vain itse kuva säilyy.",
+      "screenshots_removed": "jos julkaiset nyt, kaikki kuvakaappaukset poistetaan sivulta.",
+      "shots_unreadable": "solmusi listaa tämän sivun kuvakaappaukset, mutta ei voinut lukea niitä, joten niitä ei voi nyt muuttaa täältä: julkaisu korvaisi ne. Yritä hetken päästä uudelleen.",
+      "tab_icon": "kuvake",
+      "tab_listing": "perustiedot",
+      "tab_page": "sivu",
+      "tab_screenshots": "kuvakaappaukset",
+      "title": "muokkaa kohteen {{name}} sivua",
+      "version_hint": "valinnainen, esimerkiksi 1.4.2"
+    },
+    "hero": {
+      "icon_alt": "kohteen {{name}} kuvake",
+      "type_app": "Q-App",
+      "type_website": "verkkosivusto",
+      "updated_time": "päivitetty {{time}}",
+      "version": "versio {{version}}"
+    },
+    "links": {
+      "source": "lähdekoodi",
+      "support": "tuki",
+      "website": "verkkosivusto"
+    },
+    "reviews": {
+      "characters": "{{length}} / {{limit}}"
+    },
+    "screenshots": {
+      "add": "lisää kuvakaappauksia",
+      "alt": "kohteen {{name}} kuvakaappaus {{index}}",
+      "alt_editor": "kuvakaappaus {{index}}",
+      "caption": "kuvateksti",
+      "caption_placeholder": "kuvateksti (valinnainen)",
+      "choose": "valitse kuvia",
+      "counter": "{{current}} / {{total}}",
+      "limit_hint": "{{done}}/{{limit}}",
+      "move_earlier": "siirrä aiemmaksi",
+      "move_later": "siirrä myöhemmäksi",
+      "next": "seuraava kuvakaappaus",
+      "not_an_image": "{{name}} ei ole PNG-, JPEG- tai WebP-kuva.",
+      "previous": "edellinen kuvakaappaus",
+      "scroll_back": "vieritä takaisin",
+      "scroll_more": "näytä lisää kuvakaappauksia",
+      "take": "ota kuvakaappauksia",
+      "title": "kuvakaappaukset",
+      "too_big": "{{name}} on yli 15 MB."
+    },
+    "share": {
+      "copy_app_link": "kopioi sovelluksen linkki",
+      "copy_page_link": "kopioi tämän sivun linkki",
+      "title": "jaa"
+    },
+    "version_older": "tämä versionumero asetettiin ennen sovelluksen viimeisintä päivitystä.",
+    "whats_new": {
+      "title": "mitä uutta"
+    }
+  },
   "app_private": "yksityinen",
   "app_service_type": "sovelluksen palvelutyyppi",
   "app_tab": {

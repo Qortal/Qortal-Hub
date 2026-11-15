@@ -171,6 +171,114 @@
   },
   "app_name": "nombre de la aplicación",
   "app_other": "aplicaciones",
+  "app_page": {
+    "about": {
+      "read_less": "mostrar menos",
+      "read_more": "leer más"
+    },
+    "capture": {
+      "capture_failed": "no se pudo tomar la captura de pantalla. Inténtalo de nuevo en un momento.",
+      "capture_this": "capturar esta pantalla",
+      "count": "{{done}} de {{slots}} capturas",
+      "full": "no hay espacio para más: quita una captura para tomar otra.",
+      "instructions": "La app funciona aquí igual que en una pestaña. Ve a una pantalla que quieras mostrar y captúrala; haz lo mismo con cada captura. No se publica nada hasta que tú publiques.",
+      "loading": "abriendo la app…",
+      "needs_desktop": "para tomar capturas se necesita la app de escritorio de Qortal Hub. Aun así, puedes elegir imágenes.",
+      "not_ready": "la app no se abrió. Cierra esta ventana y vuelve a intentarlo.",
+      "preview_failed": "tu nodo no pudo crear una vista previa de este archivo zip.",
+      "title": "tomar capturas de pantalla",
+      "use_one": "usar {{count}} captura",
+      "use_other": "usar {{count}} capturas"
+    },
+    "details": {
+      "type": "tipo",
+      "version": "versión"
+    },
+    "edit": {
+      "about": "acerca de (descripción detallada)",
+      "choose_icon": "elegir una imagen",
+      "confirm": "¿Publicar estos cambios en QDN: {{parts}}? Cada uno es una publicación aparte.",
+      "error_app_not_ready": "tu nodo aún no tiene los archivos de esta app. Abre la app una vez y vuelve a intentarlo.",
+      "error_app_too_large": "la app es demasiado grande para volver a publicarla desde aquí. Publícala desde su carpeta en el formulario de publicación.",
+      "error_file_missing": "no se pudo leer uno de los archivos de la app desde tu nodo. Vuelve a intentarlo más tarde.",
+      "error_files_unknown": "tu nodo no tiene la lista de archivos de esta app, así que no se puede volver a publicar desde aquí. Publícala desde su carpeta en el formulario de publicación.",
+      "error_page_too_large": "el texto de la página es demasiado largo para QDN. Acorta «Acerca de» o «Novedades».",
+      "error_shot_unavailable": "no se pudo volver a leer una captura desde QDN. Inténtalo de nuevo en un momento.",
+      "files_progress": "leyendo los archivos de la app desde tu nodo: {{done}} de {{total}}",
+      "hint": "Cada parte que cambies se publica por separado. La app solo se vuelve a subir cuando cambias los datos de su ficha.",
+      "icon_hint": "El icono es la imagen del nombre {{name}}, así que cambia en todos los lugares donde se muestra la imagen de ese nombre.",
+      "link_invalid": "usa un enlace https:// o qortal://",
+      "links": "enlaces",
+      "listing_description": "descripción corta",
+      "listing_hint": "El título, la descripción corta, la categoría y las etiquetas forman parte de la propia entrada QDN de la app. Al guardarlos, la app se vuelve a publicar: Hub lee sus archivos ({{size}}) desde tu nodo y los envía con los nuevos datos. La app en sí no cambia.",
+      "listing_title": "título",
+      "next_version": "usar {{version}}",
+      "no_changes": "aún no hay cambios",
+      "open": "editar página",
+      "page_cleared": "el texto de la página se publicará vacío",
+      "page_unreadable": "tu nodo muestra el texto de esta página, pero no pudo leerlo, así que ahora no se puede cambiar desde aquí: publicar lo reemplazaría con campos vacíos. Inténtalo de nuevo dentro de un rato.",
+      "part_icon": "icono",
+      "part_listing": "datos de la ficha",
+      "part_page": "texto de la página",
+      "part_screenshots": "capturas de pantalla",
+      "publish_one": "publicar {{count}} cambio",
+      "publish_other": "publicar {{count}} cambios",
+      "saved": "publicado. Los demás verán los cambios en un par de minutos.",
+      "screenshots_hint": "Hasta 5 imágenes. Tómalas desde la app o elige las tuyas; cada una se vuelve a codificar, así que solo se conserva la imagen.",
+      "screenshots_removed": "si publicas ahora, se quitarán todas las capturas de la página.",
+      "shots_unreadable": "tu nodo muestra las capturas de esta página, pero no pudo leerlas, así que ahora no se pueden cambiar desde aquí: publicar las reemplazaría. Inténtalo de nuevo dentro de un rato.",
+      "tab_icon": "icono",
+      "tab_listing": "ficha",
+      "tab_page": "página",
+      "tab_screenshots": "capturas",
+      "title": "editar la página de {{name}}",
+      "version_hint": "opcional, por ejemplo 1.4.2"
+    },
+    "hero": {
+      "icon_alt": "icono de {{name}}",
+      "type_app": "Q-App",
+      "type_website": "sitio web",
+      "updated_time": "actualizado {{time}}",
+      "version": "versión {{version}}"
+    },
+    "links": {
+      "source": "código fuente",
+      "support": "soporte",
+      "website": "sitio web"
+    },
+    "reviews": {
+      "characters": "{{length}} / {{limit}}"
+    },
+    "screenshots": {
+      "add": "añadir capturas",
+      "alt": "captura {{index}} de {{name}}",
+      "alt_editor": "captura {{index}}",
+      "caption": "leyenda",
+      "caption_placeholder": "leyenda (opcional)",
+      "choose": "elegir imágenes",
+      "counter": "{{current}} / {{total}}",
+      "limit_hint": "{{done}} de {{limit}}",
+      "move_earlier": "mover antes",
+      "move_later": "mover después",
+      "next": "captura siguiente",
+      "not_an_image": "{{name}} no es una imagen PNG, JPEG o WebP.",
+      "previous": "captura anterior",
+      "scroll_back": "volver atrás",
+      "scroll_more": "ver más capturas",
+      "take": "tomar capturas",
+      "title": "capturas de pantalla",
+      "too_big": "{{name}} supera los 15 MB."
+    },
+    "share": {
+      "copy_app_link": "copiar el enlace de la app",
+      "copy_page_link": "copiar el enlace de esta página",
+      "title": "compartir"
+    },
+    "version_older": "este número de versión se fijó antes de la última actualización de la app.",
+    "whats_new": {
+      "title": "novedades"
+    }
+  },
   "app_private": "privado",
   "app_service_type": "Tipo de servicio de aplicaciones",
   "app_tab": {
