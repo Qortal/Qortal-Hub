@@ -11,6 +11,7 @@ import {
   HOME_LAYOUT_DEFAULT,
   HOME_STACK_PANEL_IDS,
   HOME_TOP_PANEL_IDS,
+  type HomeLayout,
   type HomePanelId,
   isHomePanelShown,
   sameHomeLayout,
@@ -51,6 +52,12 @@ export const HomeLayoutSettings = ({
   const address = useAtomValue(userInfoAtom)?.address;
   const [layout, updateLayout] = useHomeLayout(address);
   const titles = useHomeWindowTitles();
+  // Reset puts Home's own windows back; the widgets added in windows of
+  // their own stay, as the Widgets window's widgets do.
+  const resetLayout = (current: HomeLayout): HomeLayout => ({
+    ...HOME_LAYOUT_DEFAULT,
+    ...(current.widgetWindows ? { widgetWindows: current.widgetWindows } : {}),
+  });
 
   const descriptions: Record<HomePanelId, string> = {
     featured: t('group:dashboard.featured_q_apps_module_desc'),
@@ -158,8 +165,8 @@ export const HomeLayoutSettings = ({
           {t('group:dashboard.home_layout_saved_per_account')}
         </Typography>
         <Button
-          disabled={!address || sameHomeLayout(layout, HOME_LAYOUT_DEFAULT)}
-          onClick={() => updateLayout(() => HOME_LAYOUT_DEFAULT)}
+          disabled={!address || sameHomeLayout(layout, resetLayout(layout))}
+          onClick={() => updateLayout(resetLayout)}
           size="small"
           sx={{ flexShrink: 0, textTransform: 'none' }}
         >
