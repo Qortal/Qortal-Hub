@@ -485,6 +485,73 @@ export const homeGridShown = (
       })
   );
 
+/**
+ * The Workspace right above or under Qortino, in the same columns, as in
+ * the default layout: the two rows they share.
+ */
+const workspaceAndQortino = (grid: readonly HomeGridItem[]) => {
+  const workspace = grid.find((item) => item.key === 'workspace');
+  const qortino = grid.find((item) => item.key === 'qortino');
+  if (!workspace || !qortino) return null;
+  if (workspace.x !== qortino.x || workspace.w !== qortino.w) return null;
+  const above = workspace.y + workspace.h === qortino.y;
+  const under = qortino.y + qortino.h === workspace.y;
+  if (!above && !under) return null;
+  return { above, qortino, workspace };
+};
+
+/**
+ * Home's grid while Getting started shows in Qortino's window: the
+ * Workspace makes way, and Qortino's window takes its rows as well as its
+ * own, at that height, so the rest of Home stays where it is. Nothing
+ * changes unless the Workspace sits right above or under Qortino.
+ */
+export const homeGridForGettingStarted = (
+  grid: readonly HomeGridItem[]
+): HomeGridItem[] => {
+  const pair = workspaceAndQortino(grid);
+  if (!pair) return [...grid];
+  const { qortino, workspace } = pair;
+  const y = Math.min(workspace.y, qortino.y);
+  return grid.map((item) =>
+    item.key === 'qortino' ? { ...item, y, h: workspace.h + qortino.h } : item
+  );
+};
+
+/**
+ * A grid changed while Getting started showed (homeGridForGettingStarted),
+ * as it is kept: Qortino back in its own rows, next to the Workspace's.
+ * Moved or resized meanwhile, it keeps the change, less the Workspace's
+ * rows.
+ */
+export const homeGridAfterGettingStarted = (
+  changed: readonly HomeGridItem[],
+  stored: readonly HomeGridItem[]
+): HomeGridItem[] => {
+  const pair = workspaceAndQortino(stored);
+  if (!pair) return [...changed];
+  const { above, qortino, workspace } = pair;
+  const shown = homeGridForGettingStarted(stored).find(
+    (item) => item.key === 'qortino'
+  );
+  return changed.map((item) => {
+    if (item.key !== 'qortino' || !shown) return item;
+    if (
+      item.x === shown.x &&
+      item.y === shown.y &&
+      item.w === shown.w &&
+      item.h === shown.h
+    ) {
+      return qortino;
+    }
+    return {
+      ...item,
+      y: above ? item.y + workspace.h : item.y,
+      h: Math.max(homeWindowMinSize('qortino').h, item.h - workspace.h),
+    };
+  });
+};
+
 /** A changed layout of the shown windows, with the hidden ones kept. */
 export const mergeHomeGrid = (
   stored: readonly HomeGridItem[],

@@ -81,6 +81,8 @@ import {
   HOME_WINDOW_IDS,
   type HomeFixedWindowId,
   type HomeWindowId,
+  homeGridAfterGettingStarted,
+  homeGridForGettingStarted,
   homeWidgetWindowId,
   homeWorkspaceCopyId,
   isHomeWidgetWindowId,
@@ -439,12 +441,30 @@ export const HomeDesktop = ({
       title,
     };
   });
+  const storedGrid = useMemo(() => homeLayoutGrid(homeLayout), [homeLayout]);
+  // While the Workspace makes way for Getting started, Qortino's window
+  // takes its rows too, at that height: the rest of Home stays where it is,
+  // and nothing moves when the Workspace comes back.
+  const workspaceMakingWay =
+    gettingStartedShown &&
+    isShown('qortino') &&
+    isHomePanelShown(homeLayout, 'workspace');
+  const grid = useMemo(
+    () =>
+      workspaceMakingWay ? homeGridForGettingStarted(storedGrid) : storedGrid,
+    [storedGrid, workspaceMakingWay]
+  );
+  const qortinoFills =
+    workspaceMakingWay &&
+    grid.find((item) => item.key === 'qortino')?.h !==
+      storedGrid.find((item) => item.key === 'qortino')?.h;
   const windows: HomeGridWindow[] = [
     ...HOME_WINDOW_IDS.filter((id) => id === 'account' || isShown(id)).map(
       (id) => ({
         ...(id === 'workspace'
           ? { actions: duplicateActions(id, titles[id]) }
           : {}),
+        ...(id === 'qortino' && qortinoFills ? { fill: true } : {}),
         id,
         node: content[id](),
         title: titles[id],
@@ -469,7 +489,6 @@ export const HomeDesktop = ({
       !isHomePanelShown(homeLayout, id) &&
       (id !== 'widgets' || canHostHomeWidgets())
   ).map((id) => ({ id, title: titles[id] }));
-  const grid = useMemo(() => homeLayoutGrid(homeLayout), [homeLayout]);
   const headerLabelSx = {
     color: theme.palette.text.secondary,
     fontSize: '0.74rem',
@@ -556,7 +575,14 @@ export const HomeDesktop = ({
               }
               hiddenWindows={hiddenWindows}
               onChangeGrid={(next) =>
-                updateHomeLayout((current) => withHomeGrid(current, next))
+                updateHomeLayout((current) =>
+                  withHomeGrid(
+                    current,
+                    qortinoFills
+                      ? homeGridAfterGettingStarted(next, storedGrid)
+                      : next
+                  )
+                )
               }
               onEditingChange={setIsEditingHome}
               onHideWindow={(id) => {

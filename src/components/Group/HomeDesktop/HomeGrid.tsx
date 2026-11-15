@@ -100,6 +100,11 @@ export type HomeGridWindow = {
    * button: they're removed, not hidden.
    */
   actions?: readonly HomeGridWindowAction[];
+  /**
+   * Fills its place on the grid, even a window whose height usually follows
+   * its content (Qortino while Getting started shows in it).
+   */
+  fill?: boolean;
 };
 
 type HomeGridProps = {
@@ -259,9 +264,22 @@ export const HomeGrid = ({
     () => new Map(windows.map((window) => [window.id, window])),
     [windows]
   );
+  // The windows whose height follows their content now, and how tall that
+  // is: a window that fills its place keeps the place's height.
+  const followsContent = (id: HomeWindowId) =>
+    HOME_AUTO_HEIGHT_WINDOWS.has(id) && !windowsById.get(id)?.fill;
+  const contentRows = useMemo(() => {
+    const rows: Partial<Record<HomeWindowId, number>> = {};
+    for (const [id, value] of Object.entries(measuredRows)) {
+      if (!windowsById.get(id as HomeWindowId)?.fill) {
+        rows[id as HomeWindowId] = value;
+      }
+    }
+    return rows;
+  }, [measuredRows, windowsById]);
   const shownLayout = useMemo(
-    () => homeGridShown(grid, (id) => windowsById.has(id), measuredRows),
-    [grid, measuredRows, windowsById]
+    () => homeGridShown(grid, (id) => windowsById.has(id), contentRows),
+    [contentRows, grid, windowsById]
   );
 
   // Editing.
@@ -342,8 +360,8 @@ export const HomeGrid = ({
   const layout =
     useMemo(
       () =>
-        dragLayout ? homeGridShown(dragLayout, () => true, measuredRows) : null,
-      [dragLayout, measuredRows]
+        dragLayout ? homeGridShown(dragLayout, () => true, contentRows) : null,
+      [contentRows, dragLayout]
     ) ?? shownLayout;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -568,7 +586,7 @@ export const HomeGrid = ({
     );
     let next: HomeGridItem[] | null = null;
     if (event.shiftKey) {
-      const rows = HOME_AUTO_HEIGHT_WINDOWS.has(key) ? 0 : KEYBOARD_RESIZE_ROWS;
+      const rows = followsContent(key) ? 0 : KEYBOARD_RESIZE_ROWS;
       const change: Record<string, [number, number]> = {
         ArrowDown: [0, rows],
         ArrowLeft: [-1, 0],
@@ -826,7 +844,7 @@ export const HomeGrid = ({
     const hideable = id !== 'account' && !isWidget && !isCopy;
     const actions = window.actions ?? [];
     const hasButtons = hideable || actions.length > 0;
-    const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
+    const auto = followsContent(id);
     return (
       <Box
         aria-label={
@@ -995,7 +1013,7 @@ export const HomeGrid = ({
             held && dragKind === 'move' && start ? start : item,
             columnPx
           );
-          const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
+          const auto = followsContent(id);
           return (
             <Box
               data-home-window={id}

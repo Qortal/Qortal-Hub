@@ -3,9 +3,11 @@ import {
   type HomeGridItem,
   type HomeWindowId,
   homeDefaultGrid,
+  homeGridAfterGettingStarted,
   homeGridCellAt,
   homeGridColumnPx,
   homeGridFlow,
+  homeGridForGettingStarted,
   homeGridHeightPx,
   homeGridRectPx,
   homeGridRowsFor,
@@ -225,6 +227,66 @@ describe('copies of the Workspace', () => {
       [copy]
     );
     expect(rect(grid, copy)).toEqual([0, 0, 5, 16]);
+  });
+});
+
+describe('while Getting started shows', () => {
+  const stack = ['widgets', 'groupActivity', 'feed'] as const;
+  const bottomOf = (items: readonly HomeGridItem[], key: HomeWindowId) => {
+    const item = at(items, key);
+    return item ? item.y + item.h : -1;
+  };
+
+  it("gives Qortino's window the Workspace's rows as well as its own", () => {
+    const grid = homeDefaultGrid([...stack]);
+    const during = homeGridForGettingStarted(grid);
+    const workspace = at(grid, 'workspace')!;
+    const qortino = at(grid, 'qortino')!;
+    expect(at(during, 'qortino')).toEqual({
+      ...qortino,
+      y: workspace.y,
+      h: workspace.h + qortino.h,
+    });
+    // It ends where it did, so Quick Tools and the rest stay put.
+    expect(bottomOf(during, 'qortino')).toBe(bottomOf(grid, 'qortino'));
+    expect(during.filter((item) => item.key !== 'qortino')).toEqual(
+      grid.filter((item) => item.key !== 'qortino')
+    );
+    // Shown without the Workspace, nothing rises or moves down.
+    const shown = homeGridShown(during, (key) => key !== 'workspace');
+    for (const item of shown) {
+      expect(item).toEqual(at(during, item.key));
+    }
+  });
+
+  it('changes nothing when the Workspace is somewhere else', () => {
+    const grid = moveHomeWindow(
+      homeDefaultGrid([...stack]),
+      'workspace',
+      18,
+      0
+    );
+    expect(homeGridForGettingStarted(grid)).toEqual(grid);
+  });
+
+  it("keeps Qortino in its own rows in what's saved meanwhile", () => {
+    const grid = homeDefaultGrid([...stack]);
+    const during = homeGridForGettingStarted(grid);
+    // Another window moved in Edit Home (the Workspace not shown): Qortino's
+    // place is kept as it was.
+    const shown = homeGridShown(during, (key) => key !== 'workspace');
+    const moved = mergeHomeGrid(during, moveHomeWindow(shown, 'wallet', 18, 0));
+    expect(at(homeGridAfterGettingStarted(moved, grid), 'qortino')).toEqual(
+      at(grid, 'qortino')
+    );
+    // Qortino's window made wider: kept, in its own rows.
+    const wider = during.map((item) =>
+      item.key === 'qortino' ? { ...item, w: item.w + 2 } : item
+    );
+    expect(at(homeGridAfterGettingStarted(wider, grid), 'qortino')).toEqual({
+      ...at(grid, 'qortino')!,
+      w: at(grid, 'qortino')!.w + 2,
+    });
   });
 });
 

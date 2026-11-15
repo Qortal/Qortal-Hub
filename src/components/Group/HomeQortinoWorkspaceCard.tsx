@@ -156,6 +156,11 @@ const QORTINO_MASCOT_SIZE = Math.round(
 const QORTINO_MASCOT_STAGE_PADDING_X = 26;
 const QORTINO_MASCOT_STAGE_PADDING_Y = 28;
 const QORTINO_MASCOT_VERTICAL_LIFT_PX = 12;
+/**
+ * Qortino's size while Getting started shows over him: his window keeps the
+ * rows the Workspace and he share, so he gets a little smaller.
+ */
+const QORTINO_COMPACT_MASCOT_ZOOM = 0.82;
 const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 251;
 const HOTKEY_SLOT_COUNT = 6;
 const HOTKEY_PICKER_SEARCH_DEBOUNCE_MS = 320;
@@ -5024,6 +5029,7 @@ export const HomeQortinoWorkspaceCard = ({
         background: workspaceBayBackground,
         display: 'flex',
         flexDirection: 'column',
+        flexShrink: 0,
         height: `${workspaceBayHeightPx}px`,
         minHeight: 0,
         px: 2.15,
@@ -5523,6 +5529,7 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const renderQortinoCompanionPreviewSection = useCallback(
     ({
+      compact = false,
       displayedMessage,
       isTickled,
       isListening,
@@ -5536,6 +5543,11 @@ export const HomeQortinoWorkspaceCard = ({
       showConfetti = false,
       statusLabel,
     }: {
+      /**
+       * Under Getting started: Qortino in the room it leaves, a little
+       * smaller, with his name over his bubble.
+       */
+      compact?: boolean;
       displayedMessage: string | null;
       isTickled: boolean;
       isListening: boolean;
@@ -5550,6 +5562,107 @@ export const HomeQortinoWorkspaceCard = ({
       statusLabel: string;
     }) => {
       const shouldShowQortinoConfetti = showConfetti;
+      // Qortino's name and status.
+      const nameAndStatus = (
+        <Box
+          sx={{
+            alignItems: 'flex-start',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            mb: compact ? 0 : 1.05,
+            mt: compact ? 0 : '10px',
+            ...(compact ? { alignSelf: 'stretch' } : {}),
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: compact ? 'center' : 'flex-start',
+              display: 'flex',
+              // Compact: the status before the name, on one line.
+              flexDirection: compact ? 'row-reverse' : 'column',
+              gap: compact ? '6px' : '3px',
+              minWidth: '78px',
+            }}
+          >
+            <Typography
+              sx={{
+                color: workspaceLabelColor,
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                transform: compact
+                  ? 'none'
+                  : `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
+                textTransform: 'uppercase',
+              }}
+            >
+              QORTINO
+            </Typography>
+            <Box
+              sx={{
+                alignSelf: compact ? 'center' : 'flex-start',
+                overflow: 'visible',
+                position: 'relative',
+                transform: compact
+                  ? 'none'
+                  : `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
+              }}
+            >
+              <Box
+                sx={{
+                  border: '1px solid transparent',
+                  borderRadius: '4px',
+                  px: '3px',
+                  py: '1px',
+                  visibility: 'hidden',
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: 'transparent',
+                    fontSize: '0.58rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {QORTINO_STATUS_REFERENCE_LABEL}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
+                  border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
+                  borderRadius: '4px',
+                  boxShadow: `inset 0 1px 0 ${alpha(
+                    theme.palette.common.white,
+                    isDarkMode ? 0.08 : 0.22
+                  )}`,
+                  position: 'absolute',
+                  px: '3px',
+                  py: '1px',
+                  right: 0,
+                  top: 0,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: isDarkMode
+                      ? alpha('#FFFFFF', 0.98)
+                      : alpha('#2A4F86', 0.95),
+                    fontSize: '0.58rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {statusLabel}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      );
 
       return (
         <Box
@@ -5584,8 +5697,16 @@ export const HomeQortinoWorkspaceCard = ({
             // A little under the 23 rows Qortino's window starts with
             // (HOME_GRID_QORTINO_H), whatever the fonts, so the left column
             // ends level with the others.
-            pb: 1,
+            pb: compact ? 0.5 : 1,
             pt: 0,
+            ...(compact
+              ? {
+                  display: 'flex',
+                  flex: '1 1 auto',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                }
+              : {}),
           }}
         >
           <DotPattern
@@ -5642,110 +5763,29 @@ export const HomeQortinoWorkspaceCard = ({
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: '100%',
-              transform: `translateY(${-qortinoCompanionLift}px)`,
+              height: compact ? 'auto' : '100%',
+              transform: compact
+                ? 'none'
+                : `translateY(${-qortinoCompanionLift}px)`,
             }}
           >
+            {compact ? null : nameAndStatus}
             <Box
               sx={{
-                alignItems: 'flex-start',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                mb: 1.05,
-                mt: '10px',
-                position: 'relative',
-                zIndex: 1,
-              }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'flex-start',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '3px',
-                  minWidth: '78px',
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: workspaceLabelColor,
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.14em',
-                    transform: `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  QORTINO
-                </Typography>
-                <Box
-                  sx={{
-                    alignSelf: 'flex-start',
-                    overflow: 'visible',
-                    position: 'relative',
-                    transform: `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      border: '1px solid transparent',
-                      borderRadius: '4px',
-                      px: '3px',
-                      py: '1px',
-                      visibility: 'hidden',
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: 'transparent',
-                        fontSize: '0.58rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {QORTINO_STATUS_REFERENCE_LABEL}
-                    </Typography>
-                  </Box>
-                  <Box
-                    sx={{
-                      background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
-                      border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
-                      borderRadius: '4px',
-                      boxShadow: `inset 0 1px 0 ${alpha(
-                        theme.palette.common.white,
-                        isDarkMode ? 0.08 : 0.22
-                      )}`,
-                      position: 'absolute',
-                      px: '3px',
-                      py: '1px',
-                      right: 0,
-                      top: 0,
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: isDarkMode
-                          ? alpha('#FFFFFF', 0.98)
-                          : alpha('#2A4F86', 0.95),
-                        fontSize: '0.58rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {statusLabel}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-            <Box
-              sx={{
-                alignItems: 'end',
+                alignItems: compact ? 'center' : 'end',
                 columnGap: 1,
                 display: 'grid',
-                gridTemplateColumns: `${qortinoMascotStageWidth}px minmax(0, 1fr)`,
-                mt: '-11px',
-                minHeight: `${Math.max(qortinoMascotStageHeight, 96)}px`,
+                gridTemplateColumns: `${
+                  compact
+                    ? Math.round(
+                        qortinoMascotStageWidth * QORTINO_COMPACT_MASCOT_ZOOM
+                      )
+                    : qortinoMascotStageWidth
+                }px minmax(0, 1fr)`,
+                mt: compact ? 0 : '-11px',
+                minHeight: compact
+                  ? 0
+                  : `${Math.max(qortinoMascotStageHeight, 96)}px`,
                 position: 'relative',
                 zIndex: 1,
               }}
@@ -5761,6 +5801,7 @@ export const HomeQortinoWorkspaceCard = ({
                   touchAction: 'none',
                   transform: `translateY(${qortinoMascotCenteredOffsetY}px)`,
                   width: `${qortinoMascotStageWidth}px`,
+                  ...(compact ? { zoom: QORTINO_COMPACT_MASCOT_ZOOM } : {}),
                 }}
                 onDragOver={onMascotDragOver}
                 onDrop={onMascotDrop}
@@ -5783,13 +5824,14 @@ export const HomeQortinoWorkspaceCard = ({
                   alignItems: 'start',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 1.02,
+                  gap: compact ? 0.75 : 1.02,
                   justifyContent: 'center',
-                  minHeight: `${qortinoMascotStageHeight}px`,
+                  minHeight: compact ? 0 : `${qortinoMascotStageHeight}px`,
                   minWidth: 0,
                   width: '100%',
                 }}
               >
+                {compact ? nameAndStatus : null}
                 {displayedMessage ? (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
@@ -5902,6 +5944,7 @@ export const HomeQortinoWorkspaceCard = ({
   );
 
   const qortinoCompanionSection = renderQortinoCompanionPreviewSection({
+    compact: isOnboardingVisible,
     displayedMessage: qortinoDisplayedMessage,
     isTickled: isQortinoTickled,
     isListening: isMusicOn && workspaceState.musicPlaying,
@@ -6138,7 +6181,13 @@ export const HomeQortinoWorkspaceCard = ({
     <Box
       ref={panelRef}
       data-qortino-part="qortino"
-      sx={windowPanelSx}
+      sx={
+        // Under Getting started Home gives the window a height of its own
+        // (homeGridForGettingStarted): it fills it.
+        isOnboardingVisible
+          ? { ...windowPanelSx, height: '100%' }
+          : windowPanelSx
+      }
       onMouseMove={handleDashboardPanelPointerMove}
       onMouseLeave={handleDashboardPanelPointerLeave}
     >
