@@ -83,13 +83,17 @@ export const HOME_WINDOW_MIN_SIZE: Record<
   feed: { w: 7, h: 34 },
 };
 
-/** The top of the default layout: today's three columns. */
+/**
+ * The top of the default layout: today's three columns. Quick Tools is tall
+ * enough for each key's name under its icon (HomeQuickToolsPad), Qortino gets
+ * the rest.
+ */
 const HOME_GRID_TOP: Record<
   Exclude<HomeWindowId, HomeStackPanelId>,
   GridRect
 > = {
-  qortino: { x: 0, y: 0, w: 6, h: 46 },
-  tools: { x: 0, y: 46, w: 6, h: 18 },
+  qortino: { x: 0, y: 0, w: 6, h: 43 },
+  tools: { x: 0, y: 43, w: 6, h: 21 },
   account: { x: 6, y: 0, w: 12, h: 20 },
   featured: { x: 6, y: 20, w: 12, h: 44 },
   status: { x: 18, y: 0, w: 6, h: 33 },

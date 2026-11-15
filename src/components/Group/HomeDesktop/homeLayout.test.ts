@@ -60,7 +60,7 @@ describe('normalizeHomeLayout', () => {
     const at = (key: string) => layout.grid?.find((item) => item.key === key);
     expect(at('tools')).toMatchObject({ x: 0, y: 0 });
     // Qortino keeps its place, for when it's shown again.
-    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 46 });
+    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 43 });
   });
 
   it('puts a panel the stored order lacks back after its usual neighbour', () => {

@@ -35,8 +35,9 @@ const column = (): HomeGridItem[] => [
 describe('homeDefaultGrid', () => {
   it('lays Home out as before: three columns, then the stack', () => {
     const grid = homeDefaultGrid();
-    expect(rect(grid, 'qortino')).toEqual([0, 0, 6, 46]);
-    expect(rect(grid, 'tools')).toEqual([0, 46, 6, 18]);
+    expect(rect(grid, 'qortino')).toEqual([0, 0, 6, 43]);
+    // Tall enough for the names on its buttons.
+    expect(rect(grid, 'tools')).toEqual([0, 43, 6, 21]);
     expect(rect(grid, 'account')).toEqual([6, 0, 12, 20]);
     expect(rect(grid, 'featured')).toEqual([6, 20, 12, 44]);
     expect(rect(grid, 'status')).toEqual([18, 0, 6, 33]);
@@ -127,7 +128,7 @@ describe('homeGridShown', () => {
     const shown = homeGridShown(grid, (key) => key !== 'qortino');
     expect(at(shown, 'qortino')).toBeUndefined();
     // Quick Tools rises beside the account card.
-    expect(rect(shown, 'tools')).toEqual([0, 0, 6, 18]);
+    expect(rect(shown, 'tools')).toEqual([0, 0, 6, 21]);
     expect(rect(shown, 'feed')).toEqual([12, 84, 12, 63]);
   });
 
@@ -177,7 +178,7 @@ describe('saving with hidden windows', () => {
 
     expect(homeGridShown(saved, isShown)).toEqual(preview);
     // Qortino keeps its place, for when it's shown again.
-    expect(rect(saved, 'qortino')).toEqual([0, 0, 6, 46]);
+    expect(rect(saved, 'qortino')).toEqual([0, 0, 6, 43]);
   });
 });
 
@@ -186,12 +187,12 @@ describe('mergeHomeGrid', () => {
     const stored = homeDefaultGrid();
     const shown = homeGridShown(stored, (key) => key !== 'qortino');
     const merged = mergeHomeGrid(stored, shown);
-    expect(rect(merged, 'qortino')).toEqual([0, 0, 6, 46]);
-    expect(rect(merged, 'tools')).toEqual([0, 0, 6, 18]);
+    expect(rect(merged, 'qortino')).toEqual([0, 0, 6, 43]);
+    expect(rect(merged, 'tools')).toEqual([0, 0, 6, 21]);
     // Shown again, Qortino takes its place back over Quick Tools.
     const again = homeGridShown(merged, () => true);
-    expect(rect(again, 'qortino')).toEqual([0, 0, 6, 46]);
-    expect(rect(again, 'tools')).toEqual([0, 46, 6, 18]);
+    expect(rect(again, 'qortino')).toEqual([0, 0, 6, 43]);
+    expect(rect(again, 'tools')).toEqual([0, 43, 6, 21]);
   });
 });
 
@@ -264,14 +265,14 @@ describe('homeGridFlow', () => {
   it('flows windows into two columns, wide ones across both', () => {
     const flowed = homeGridFlow(homeDefaultGrid(), 2);
     // Reading order: Qortino, account, Status, Featured, Wallet, Tools...
-    expect(rect(flowed, 'qortino')).toEqual([0, 0, 1, 46]);
+    expect(rect(flowed, 'qortino')).toEqual([0, 0, 1, 43]);
     expect(rect(flowed, 'account')).toEqual([1, 0, 1, 20]);
     expect(rect(flowed, 'status')).toEqual([1, 20, 1, 33]);
-    expect(rect(flowed, 'featured')).toEqual([0, 46, 1, 44]);
+    expect(rect(flowed, 'featured')).toEqual([0, 43, 1, 44]);
     expect(rect(flowed, 'wallet')).toEqual([1, 53, 1, 31]);
-    expect(rect(flowed, 'tools')).toEqual([1, 84, 1, 18]);
+    expect(rect(flowed, 'tools')).toEqual([1, 84, 1, 21]);
     // Widgets spans both, under the lower column.
-    expect(rect(flowed, 'widgets')).toEqual([0, 102, 2, 20]);
+    expect(rect(flowed, 'widgets')).toEqual([0, 105, 2, 20]);
   });
 
   it('puts every window in one column on a narrow window', () => {

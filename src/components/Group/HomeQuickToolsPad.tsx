@@ -89,12 +89,39 @@ const HOME_WINDOW_NARROW_AND_TALL =
  * then the tool's name, then a detail line too, as the button grows. The
  * text goes under the icon, or beside it on a button at least twice as
  * wide as it is tall.
+ *
+ * The sizes are inside the button's border, as its container queries see
+ * them. At Home's default size for Quick Tools a button is about 60–72 ×
+ * 72 px (the Hub about 1,340–1,520 px wide): it shows the name, on one
+ * line. The detail waits for a button the window was made bigger for in
+ * Edit Home (QUICK_TOOL_DETAIL_UNDER_MIN_PX, or beside the icon on a wide
+ * one).
  */
+export const QUICK_TOOL_NAME_UNDER_MIN_PX = { height: 56, width: 56 };
+export const QUICK_TOOL_DETAIL_UNDER_MIN_PX = { height: 96, width: 130 };
 const QUICK_TOOL_WIDE = '@container quick-tool (min-aspect-ratio: 2 / 1)';
-const QUICK_TOOL_NAME_UNDER =
-  '@container quick-tool (max-aspect-ratio: 2 / 1) and (min-width: 72px) and (min-height: 60px)';
-const QUICK_TOOL_DETAIL_UNDER =
-  '@container quick-tool (max-aspect-ratio: 2 / 1) and (min-width: 130px) and (min-height: 96px)';
+const QUICK_TOOL_NAME_UNDER = `@container quick-tool (max-aspect-ratio: 2 / 1) and (min-width: ${QUICK_TOOL_NAME_UNDER_MIN_PX.width}px) and (min-height: ${QUICK_TOOL_NAME_UNDER_MIN_PX.height}px)`;
+/** Big enough for the detail under the name, both in their own size. */
+const QUICK_TOOL_DETAIL_UNDER = `@container quick-tool (max-aspect-ratio: 2 / 1) and (min-width: ${QUICK_TOOL_DETAIL_UNDER_MIN_PX.width}px) and (min-height: ${QUICK_TOOL_DETAIL_UNDER_MIN_PX.height}px)`;
+/** The pad's borders and paddings around its keys, both sides, in px. */
+const QUICK_TOOLS_FRAME_PX = 2 * (1 + 10 + 1 + 6);
+const QUICK_TOOLS_GAP_PX = 7;
+/** Each button's border. */
+const QUICK_TOOL_BORDER_PX = 1;
+
+/**
+ * A key's size inside its border, as its container queries see it, in a
+ * Quick Tools window this big, with its keys in 4 columns and 2 rows (a
+ * window neither 3 times wider than tall nor taller than wide).
+ */
+export const quickToolKeySize = (widthPx: number, heightPx: number) => ({
+  height:
+    (heightPx - QUICK_TOOLS_FRAME_PX - QUICK_TOOLS_GAP_PX) / 2 -
+    2 * QUICK_TOOL_BORDER_PX,
+  width:
+    (widthPx - QUICK_TOOLS_FRAME_PX - 3 * QUICK_TOOLS_GAP_PX) / 4 -
+    2 * QUICK_TOOL_BORDER_PX,
+});
 const QUICK_TOOL_NAME_BESIDE =
   '@container quick-tool (min-aspect-ratio: 2 / 1) and (min-width: 110px) and (min-height: 28px)';
 const QUICK_TOOL_DETAIL_BESIDE =
@@ -105,12 +132,24 @@ const QUICK_TOOL_DETAIL_BESIDE =
  * the text, so an icon without text stays in the middle.
  */
 const QUICK_TOOL_TEXT_BESIDE_END_PADDING = '8px';
-/** Long names end in an ellipsis rather than breaking inside a word. */
+/**
+ * The name's size under the icon: as big as the button's width lets a
+ * name ~6.9 times as wide as its type is tall be ("Notifications", "Backup
+ * Wallet"), from 0.52rem up to 0.7rem; about 0.6rem at the default size.
+ * 100cqi is the button's width inside its border, 6px the face's sides.
+ */
+const QUICK_TOOL_NAME_FITTED_FONT_SIZE =
+  'clamp(0.52rem, calc((100cqi - 6px) / 6.9), 0.7rem)';
+/**
+ * Long names end in an ellipsis rather than breaking inside a word, and
+ * text on two lines is balanced, so no word is left alone on the second.
+ */
 const QUICK_TOOL_TEXT_SX = {
   maxWidth: '100%',
   overflow: 'hidden',
   overflowWrap: 'normal',
   textOverflow: 'ellipsis',
+  textWrap: 'balance',
   WebkitBoxOrient: 'vertical',
   WebkitLineClamp: 2,
   wordBreak: 'normal',
@@ -411,7 +450,7 @@ export const HomeQuickToolsPad = ({
             ? 'inset 0 1px 0 rgba(255,255,255,0.055), inset 0 -1px 0 rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.018), 0 0 0 1px rgba(0,0,0,0.18), 0 8px 18px rgba(0,0,0,0.16)'
             : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(102,112,132,0.2), inset 0 0 0 1px rgba(255,255,255,0.28), 0 0 0 1px rgba(120,132,156,0.08), 0 8px 18px rgba(84,96,120,0.11)',
           display: 'grid',
-          gap: '7px',
+          gap: `${QUICK_TOOLS_GAP_PX}px`,
           gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
           gridTemplateRows: 'repeat(2, minmax(0, 1fr))',
           minHeight: 0,
@@ -469,7 +508,7 @@ export const HomeQuickToolsPad = ({
                 background: isDarkMode
                   ? 'linear-gradient(145deg, rgba(53,58,68,0.99) 0%, rgba(41,45,54,1) 48%, rgba(30,34,41,1) 100%)'
                   : 'linear-gradient(145deg, rgba(251,253,255,0.99) 0%, rgba(232,237,245,0.99) 48%, rgba(216,223,234,1) 100%)',
-                border: `1px solid ${
+                border: `${QUICK_TOOL_BORDER_PX}px solid ${
                   isDarkMode
                     ? alpha(item.accent, item.isActive ? 0.16 : 0.06)
                     : alpha(theme.palette.text.primary, 0.072)
@@ -560,11 +599,33 @@ export const HomeQuickToolsPad = ({
                     whiteSpace: 'nowrap',
                   },
                 },
+                // The name alone at first (the default size), on one line,
+                // with the face's sides narrower to give it room. Its type
+                // follows the button's width, so the longest names
+                // ("Notifications", "Backup Wallet") fit from a Hub about
+                // 1,340 px wide; a longer one ends in an ellipsis.
                 [QUICK_TOOL_NAME_UNDER]: {
+                  '& .quick-tool-face': { gap: '3px', paddingInline: '3px' },
                   '& .quick-tool-text': { display: 'flex' },
+                  '& .quick-tool-name': {
+                    fontSize: QUICK_TOOL_NAME_FITTED_FONT_SIZE,
+                    letterSpacing: '-0.015em',
+                    WebkitLineClamp: 1,
+                  },
                 },
+                // The detail too once the window is made bigger.
                 [QUICK_TOOL_DETAIL_UNDER]: {
-                  '& .quick-tool-detail': { display: '-webkit-box' },
+                  '& .quick-tool-face': { gap: '4px', paddingInline: '6px' },
+                  '& .quick-tool-name': {
+                    fontSize: '0.7rem',
+                    letterSpacing: 'normal',
+                    WebkitLineClamp: 2,
+                  },
+                  '& .quick-tool-detail': {
+                    display: '-webkit-box',
+                    fontSize: '0.64rem',
+                    lineHeight: 1.2,
+                  },
                 },
                 [QUICK_TOOL_NAME_BESIDE]: {
                   '& .quick-tool-text': { display: 'flex' },
