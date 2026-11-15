@@ -851,8 +851,21 @@
       "menu_aria": "Opzioni della sessione",
       "tooltip": "Blocca o esci"
     },
+    "suggestion_action": {
+      "new_tab": "Nuova scheda",
+      "open_link": "Apri link",
+      "switch_to_tab": "Vai alla scheda"
+    },
+    "suggestion_group": {
+      "apps": "Q-App e siti web",
+      "names": "Nomi",
+      "saved": "App fissate e segnalibri",
+      "tabs": "Schede aperte"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Segnalibro",
+      "name": "Nome",
       "website": "Sito web"
     },
     "suggestions": "Suggerimenti"

@@ -859,8 +859,21 @@
       "menu_aria": "خيارات الجلسة",
       "tooltip": "القفل أو تسجيل الخروج"
     },
+    "suggestion_action": {
+      "new_tab": "علامة تبويب جديدة",
+      "open_link": "فتح الرابط",
+      "switch_to_tab": "الانتقال إلى علامة التبويب"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps ومواقع الويب",
+      "names": "الأسماء",
+      "saved": "التطبيقات المثبّتة والإشارات المرجعية",
+      "tabs": "علامات التبويب المفتوحة"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "إشارة مرجعية",
+      "name": "اسم",
       "website": "موقع ويب"
     },
     "suggestions": "اقتراحات"
