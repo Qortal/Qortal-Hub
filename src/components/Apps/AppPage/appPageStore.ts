@@ -1,11 +1,23 @@
 import { atom } from 'jotai';
 import type { PendingVote } from './appVotes';
 import type { PendingReview } from './appReviews';
-import { normalizeAppService } from './appPageIds';
+import { normalizeAppIdentifier, normalizeAppService } from './appPageIds';
 
-/** One key per app, the same however the name is cased. */
-export const appStoreKey = (service: string, name: string) =>
-  `${normalizeAppService(service)}:${String(name || '').toLowerCase()}`;
+/**
+ * One key per app, the same however the name is cased. A widget (an APP
+ * under an identifier of its own) adds its identifier after a line break,
+ * which no name can hold.
+ */
+export const appStoreKey = (
+  service: string,
+  name: string,
+  identifier?: string | null
+) => {
+  const own = normalizeAppIdentifier(identifier);
+  return `${normalizeAppService(service)}:${String(name || '').toLowerCase()}${
+    own ? `\n${own}` : ''
+  }`;
+};
 
 /** The key of a vote sent by `address` on the app. */
 export const pendingVoteKey = (

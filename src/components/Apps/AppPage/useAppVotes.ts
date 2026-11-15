@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../../App';
@@ -6,7 +13,7 @@ import { getFee } from '../../../background/background';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../../constants/constants';
 import { useAppRating } from '../../../hooks/useAppRatings';
 import type { PollInfo } from '../../../types/ratings';
-import { normalizeAppService } from './appPageIds';
+import { normalizeAppIdentifier, normalizeAppService } from './appPageIds';
 import {
   pendingVoteKey,
   pendingVotesAtom,
@@ -19,8 +26,10 @@ import {
   isPendingVoteConfirmed,
   PENDING_VOTE_CHECK_MS,
   PENDING_VOTE_TTL,
+  type PendingVote,
   PollVotes,
   ratingPollName,
+  ratingName,
   RatingSummary,
   summarizeVoteCounts,
   summaryFromVoters,
@@ -45,14 +54,20 @@ export type VoteResult =
 
 /**
  * The app's rating poll: who voted what, the user's own vote, and a summary
- * that already counts a vote the user just sent.
+ * that already counts a vote the user just sent. A widget has a poll of its
+ * own: give its identifier.
  */
 export const useAppVotes = (
-  app: { service?: string; name?: string },
+  app: { service?: string; name?: string; identifier?: string | null },
   me: { address?: string; name?: string }
 ) => {
   const service = normalizeAppService(app?.service);
-  const name = app?.name || '';
+  const identifier = normalizeAppIdentifier(app?.identifier);
+  // The poll's subject: the app's name, or `<name>-id-<identifier>` for a
+  // widget. The library's ratings and the pending votes go by it too.
+  const name = app?.name ? ratingName(app.name, identifier) : '';
+  // How the poll's description names it: `<name>/<identifier>` for a widget.
+  const label = identifier ? `${app.name}/${identifier}` : name;
   const key = pendingVoteKey(me?.address, service, name);
   const { t } = useTranslation(['core']);
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -117,16 +132,30 @@ export const useAppVotes = (
     [key, setPendingVotes]
   );
 
-  // Drop the pending vote once the node shows it.
+  // Drop the pending vote once the node shows it. The library counts it
+  // until then (optimisticRatings), so its rating is fetched first: the cards
+  // and the Featured rows go from the pending vote to the node's without
+  // losing it in between. A newer vote sent meanwhile stays.
+  const confirmingRef = useRef<PendingVote | null>(null);
   useEffect(() => {
     if (!pending) return;
     if (isPendingVoteConfirmed(pending, mine)) {
-      dropPending();
-      refreshCardRating();
+      if (confirmingRef.current === pending) return;
+      confirmingRef.current = pending;
+      Promise.resolve(refreshCardRating())
+        .catch(() => null)
+        .finally(() =>
+          setPendingVotes((previous) => {
+            if (previous[key] !== pending) return previous;
+            const next = { ...previous };
+            delete next[key];
+            return next;
+          })
+        );
     } else if (Date.now() - pending.sentAt > PENDING_VOTE_TTL) {
       dropPending();
     }
-  }, [dropPending, mine, pending, refreshCardRating]);
+  }, [dropPending, key, mine, pending, refreshCardRating, setPendingVotes]);
 
   // Until then, look again every block or so (about a minute apart), and
   // give up when it's too old. Not tied to `mine`: a first vote leaves it
@@ -191,7 +220,7 @@ export const useAppVotes = (
           await sendBackground('createPoll', {
             pollName,
             pollDescription: t('core:message.generic.rating', {
-              name,
+              name: label,
               service,
               postProcess: 'capitalizeFirstChar',
             }),
@@ -221,6 +250,8 @@ export const useAppVotes = (
             sentAt: Date.now(),
             name,
             service,
+            // The library moves this vote from the voter's earlier one.
+            replaces: mine && !mine.isInitial ? mine.rating : null,
           },
         }));
         return { ok: true };
@@ -241,6 +272,7 @@ export const useAppVotes = (
     },
     [
       key,
+      label,
       me?.address,
       me?.name,
       mine,

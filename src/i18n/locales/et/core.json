@@ -676,7 +676,8 @@
       "top_rated_hint": "kogukonna hinnangul parimad {{number}}",
       "view_grid": "ruudustik",
       "view_label": "paigutus",
-      "view_list": "loend"
+      "view_list": "loend",
+      "widgets_hint": "väikesed Q-Appid avalehe jaoks: hinda neid, loe, mida teised arvavad, ja lisa need, mis sulle meeldivad"
     },
     "no_matches": "miski ei vasta otsingule „{{query}}“",
     "no_matches_hint": "proovi teist nime või kleebi qortal:// link.",
@@ -1167,7 +1168,8 @@
     "categories": "kategooriad",
     "community_apps": "kogukonna rakendused",
     "my_apps": "minu rakendused",
-    "official_apps": "ametlikud rakendused"
+    "official_apps": "ametlikud rakendused",
+    "widgets": "vidinad"
   },
   "tag_number": "silt {{number}}",
   "tags": "sildid",
@@ -1280,6 +1282,15 @@
     "loading": "Laadimine",
     "loading_message": "Värskete avalike andmete toomine vaikimisi Qortali sõlmest.",
     "retry": "Proovi uuesti"
+  },
+  "widgets": {
+    "add_to_home": "lisa avalehele",
+    "added_to_home": "{{title}} on nüüd avalehel.",
+    "on_home": "avalehel",
+    "qdn_resource": "QDN-i ressurss",
+    "remove_from_home": "eemalda avalehelt",
+    "removed_from_home": "{{title}} pole enam avalehel.",
+    "type": "vidin"
   },
   "zip": "zip"
 }

@@ -109,6 +109,25 @@ describe('a vote whose app page has closed', () => {
     expect(store.get(pendingVotesAtom)[key]).toBeUndefined();
   });
 
+  it('stays counted until the rating has been fetched again', async () => {
+    node(() => true);
+    let finish: (value: unknown) => void = () => {};
+    fetchRating.mockImplementation(
+      () => new Promise((resolve) => (finish = resolve))
+    );
+    const store = renderWatcher(sentVote());
+
+    await nextCheck();
+    expect(fetchRating).toHaveBeenCalledWith('Q-Blog', 'APP', true);
+    // The library still counts it (optimisticRatings) while the rating loads.
+    expect(store.get(pendingVotesAtom)[key]).toBeDefined();
+
+    await act(async () => {
+      finish(null);
+    });
+    expect(store.get(pendingVotesAtom)[key]).toBeUndefined();
+  });
+
   it('is dropped when too old, and the rating is fetched once more', async () => {
     node(() => false);
     const store = renderWatcher({

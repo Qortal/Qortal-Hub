@@ -676,7 +676,8 @@
       "top_rated_hint": "le top {{number}} selon les notes de la communauté",
       "view_grid": "grille",
       "view_label": "affichage",
-      "view_list": "liste"
+      "view_list": "liste",
+      "widgets_hint": "de petites Q-Apps pour l’accueil : notez-les, lisez ce qu’en pensent les autres et ajoutez celles qui vous plaisent"
     },
     "no_matches": "rien ne correspond à « {{query}} »",
     "no_matches_hint": "essayez un autre nom ou collez un lien qortal://.",
@@ -1167,7 +1168,8 @@
     "categories": "catégories",
     "community_apps": "apps communautaires",
     "my_apps": "mes apps",
-    "official_apps": "apps officielles"
+    "official_apps": "apps officielles",
+    "widgets": "widgets"
   },
   "tag_number": "balise {{number}}",
   "tags": "balises",
@@ -1280,6 +1282,15 @@
     "loading": "Chargement",
     "loading_message": "Récupération des dernières données publiques depuis le nœud Qortal par défaut.",
     "retry": "Réessayer"
+  },
+  "widgets": {
+    "add_to_home": "ajouter à l’accueil",
+    "added_to_home": "{{title}} est maintenant sur l’accueil.",
+    "on_home": "sur l’accueil",
+    "qdn_resource": "ressource QDN",
+    "remove_from_home": "retirer de l’accueil",
+    "removed_from_home": "{{title}} n’est plus sur l’accueil.",
+    "type": "widget"
   },
   "zip": "fermeture éclair"
 }

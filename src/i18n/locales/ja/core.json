@@ -676,7 +676,8 @@
       "top_rated_hint": "コミュニティの評価トップ{{number}}",
       "view_grid": "グリッド",
       "view_label": "表示形式",
-      "view_list": "リスト"
+      "view_list": "リスト",
+      "widgets_hint": "ホーム用の小さなQ-App。評価したり、ほかの人の感想を読んだりして、気に入ったものを追加できます"
     },
     "no_matches": "「{{query}}」に一致するものはありません",
     "no_matches_hint": "別の名前を試すか、qortal://リンクを貼り付けてください。",
@@ -1167,7 +1168,8 @@
     "categories": "カテゴリ",
     "community_apps": "コミュニティアプリ",
     "my_apps": "マイアプリ",
-    "official_apps": "公式アプリ"
+    "official_apps": "公式アプリ",
+    "widgets": "ウィジェット"
   },
   "tag_number": "タグ{{number}}",
   "tags": "タグ",
@@ -1280,6 +1282,15 @@
     "loading": "読み込み中",
     "loading_message": "既定の Qortal ノードから最新の公開データを取得しています。",
     "retry": "再試行"
+  },
+  "widgets": {
+    "add_to_home": "ホームに追加",
+    "added_to_home": "{{title}} をホームに追加しました。",
+    "on_home": "ホームに追加済み",
+    "qdn_resource": "QDNリソース",
+    "remove_from_home": "ホームから削除",
+    "removed_from_home": "{{title}} をホームから削除しました。",
+    "type": "ウィジェット"
   },
   "zip": "ジップ"
 }

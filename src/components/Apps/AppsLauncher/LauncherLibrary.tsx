@@ -21,6 +21,7 @@ import {
   MyAppsTab,
   OfficialAppsTab,
   PrivateTab,
+  WidgetsTab,
 } from '../AppsLibrary';
 import { communityAppsOf } from '../AppsLibrary/libraryApps';
 import { LibraryRefreshButton } from '../AppsLibrary/LibraryRefreshButton';
@@ -47,6 +48,7 @@ const LIBRARY_TABS: AppsLibraryTabValue[] = [
   'official',
   'community',
   'categories',
+  'widgets',
   'my-apps',
   'private',
 ];
@@ -192,6 +194,15 @@ export const LauncherLibrary = ({
             myName={myName}
           />
         );
+      case 'widgets':
+        return (
+          <WidgetsTab
+            isActive={isActive && currentTab === 'widgets'}
+            libraryRefreshKey={libraryRefreshKey}
+            scrollParent={scrollElement}
+            sortValue={sortOption}
+          />
+        );
       case 'my-apps':
         return (
           <MyAppsTab
@@ -307,7 +318,7 @@ export const LauncherLibrary = ({
           </Box>
         </Box>
 
-        {currentTab === 'community' ? (
+        {currentTab === 'community' || currentTab === 'widgets' ? (
           <Box
             sx={{
               alignItems: 'center',
@@ -320,36 +331,46 @@ export const LauncherLibrary = ({
             }}
           >
             <SortDropdown onChange={setSortOption} value={sortOption} />
-            <CategoryFilter
-              buttonRef={categoryPillRef}
-              categories={categories}
-              counts={communityCounts}
-              onChange={setCategoryFilter}
-              value={categoryFilter}
-            />
-            <StatusFilter onChange={setStatusFilter} value={statusFilter} />
-            {isFiltered ? (
-              <Button
-                disableRipple
-                onClick={clearFilters}
-                startIcon={<FilterAltOffRoundedIcon />}
-                sx={(theme) => ({
-                  borderRadius: '12px',
-                  color: libraryAccent(theme),
-                  fontSize: '13.5px',
-                  fontWeight: 600,
-                  height: 34,
-                  px: 1.25,
-                  textTransform: 'none',
-                  '& .MuiButton-startIcon .MuiSvgIcon-root': { fontSize: 16 },
-                  '&:hover': {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.08),
-                  },
-                  '&.Mui-focusVisible': libraryFocusRing(theme, 2),
-                })}
-              >
-                {t('core:launcher.library.clear_filters', cap)}
-              </Button>
+            {/* Widgets are few: they sort, but have no filters yet. */}
+            {currentTab === 'community' ? (
+              <>
+                <CategoryFilter
+                  buttonRef={categoryPillRef}
+                  categories={categories}
+                  counts={communityCounts}
+                  onChange={setCategoryFilter}
+                  value={categoryFilter}
+                />
+                <StatusFilter onChange={setStatusFilter} value={statusFilter} />
+                {isFiltered ? (
+                  <Button
+                    disableRipple
+                    onClick={clearFilters}
+                    startIcon={<FilterAltOffRoundedIcon />}
+                    sx={(theme) => ({
+                      borderRadius: '12px',
+                      color: libraryAccent(theme),
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      height: 34,
+                      px: 1.25,
+                      textTransform: 'none',
+                      '& .MuiButton-startIcon .MuiSvgIcon-root': {
+                        fontSize: 16,
+                      },
+                      '&:hover': {
+                        backgroundColor: alpha(
+                          theme.palette.primary.main,
+                          0.08
+                        ),
+                      },
+                      '&.Mui-focusVisible': libraryFocusRing(theme, 2),
+                    })}
+                  >
+                    {t('core:launcher.library.clear_filters', cap)}
+                  </Button>
+                ) : null}
+              </>
             ) : null}
           </Box>
         ) : null}

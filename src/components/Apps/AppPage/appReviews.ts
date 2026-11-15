@@ -1,6 +1,7 @@
 import { limitQdnDescription } from '../../../utils/qdnMetadataLimits';
 import {
   appReviewKey,
+  normalizeAppIdentifier,
   normalizeAppService,
   replyIdentifier,
   replyPrefixOf,
@@ -16,6 +17,10 @@ import { bytesToBase64 } from './blobBytes';
  */
 
 export const REVIEW_LIMITS = { review: 2000, reply: 1000 };
+
+/** The review identifier of the app, or of the widget when it has its own. */
+export const reviewKeyOf = (app: AppRef): string =>
+  appReviewKey(app.service, app.name, app.identifier);
 
 export type ReviewKind = 'review' | 'reply';
 
@@ -96,17 +101,23 @@ export const parseReviewRecord = (raw: unknown): ReviewRecord | null => {
 export const serializeReviewRecord = (
   record: ReviewRecord,
   app: AppRef
-): string =>
-  JSON.stringify({
+): string => {
+  const identifier = normalizeAppIdentifier(app.identifier);
+  return JSON.stringify({
     v: 1,
     kind: record.kind,
-    app: { service: normalizeAppService(app.service), name: app.name },
+    app: {
+      service: normalizeAppService(app.service),
+      name: app.name,
+      ...(identifier ? { identifier } : {}),
+    },
     text: record.deleted ? '' : record.text.trim(),
     ...(record.parent ? { parent: record.parent } : {}),
     created: record.created,
     ...(record.edited ? { edited: record.edited } : {}),
     ...(record.deleted ? { deleted: true } : {}),
   });
+};
 
 /** What the node's search shows of the text: QDN's 240-byte description. */
 export const reviewSnippet = (text: string): string =>
@@ -139,7 +150,7 @@ export const searchAppReviews = async (
     signal?: AbortSignal;
   } = {}
 ): Promise<ReviewSearchPage> => {
-  const key = appReviewKey(app.service, app.name);
+  const key = reviewKeyOf(app);
   const prefix = kind === 'reply' ? replyPrefixOf(key) : key;
   // mode=ALL: by default Core keeps only one resource per name and service.
   const url =
@@ -372,7 +383,7 @@ export const publishReview = async (
   text: string,
   { created, now = Date.now() }: { created?: number; now?: number } = {}
 ): Promise<SentReview> => {
-  const identifier = appReviewKey(app.service, app.name);
+  const identifier = reviewKeyOf(app);
   const record: ReviewRecord = {
     kind: 'review',
     text: text.trim().slice(0, REVIEW_LIMITS.review),
@@ -392,7 +403,7 @@ export const publishReply = async (
   text: string,
   now = Date.now()
 ): Promise<SentReview> => {
-  const identifier = replyIdentifier(appReviewKey(app.service, app.name));
+  const identifier = replyIdentifier(reviewKeyOf(app));
   const record: ReviewRecord = {
     kind: 'reply',
     text: text.trim().slice(0, REVIEW_LIMITS.reply),
@@ -419,7 +430,7 @@ export const deleteReviewItem = async (
       item.kind === 'reply' && item.parentName
         ? {
             name: item.parentName,
-            identifier: appReviewKey(app.service, app.name),
+            identifier: reviewKeyOf(app),
           }
         : null,
     created: item.created || now,

@@ -676,7 +676,8 @@
       "top_rated_hint": "la top {{number}} secondo i voti della community",
       "view_grid": "griglia",
       "view_label": "visualizzazione",
-      "view_list": "elenco"
+      "view_list": "elenco",
+      "widgets_hint": "piccole Q-App per la Home: valutale, leggi cosa ne pensano gli altri e aggiungi quelle che ti piacciono"
     },
     "no_matches": "nessuna corrispondenza per «{{query}}»",
     "no_matches_hint": "prova con un altro nome oppure incolla un link qortal://.",
@@ -1167,7 +1168,8 @@
     "categories": "categorie",
     "community_apps": "app della community",
     "my_apps": "le mie app",
-    "official_apps": "app ufficiali"
+    "official_apps": "app ufficiali",
+    "widgets": "widget"
   },
   "tag_number": "tag {{number}}",
   "tags": "tag",
@@ -1280,6 +1282,15 @@
     "loading": "Caricamento",
     "loading_message": "Recupero degli ultimi dati pubblici dal nodo Qortal predefinito.",
     "retry": "Riprova"
+  },
+  "widgets": {
+    "add_to_home": "aggiungi alla Home",
+    "added_to_home": "{{title}} ora è nella Home.",
+    "on_home": "nella Home",
+    "qdn_resource": "risorsa QDN",
+    "remove_from_home": "rimuovi dalla Home",
+    "removed_from_home": "{{title}} non è più nella Home.",
+    "type": "widget"
   },
   "zip": "zip"
 }

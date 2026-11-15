@@ -676,7 +676,8 @@
       "top_rated_hint": "{{number}} parasta yhteisön arvioiden mukaan",
       "view_grid": "ruudukko",
       "view_label": "asettelu",
-      "view_list": "luettelo"
+      "view_list": "luettelo",
+      "widgets_hint": "pieniä Q-Appeja etusivulle: arvioi niitä, lue mitä muut sanovat ja lisää ne, joista pidät"
     },
     "no_matches": "mikään ei vastaa hakua ”{{query}}”",
     "no_matches_hint": "kokeile toista nimeä tai liitä qortal://-linkki.",
@@ -1167,7 +1168,8 @@
     "categories": "kategoriat",
     "community_apps": "yhteisösovellukset",
     "my_apps": "omat sovellukset",
-    "official_apps": "viralliset sovellukset"
+    "official_apps": "viralliset sovellukset",
+    "widgets": "widgetit"
   },
   "tag_number": "tunniste {{number}}",
   "tags": "tunnisteet",
@@ -1280,6 +1282,15 @@
     "loading": "Ladataan",
     "loading_message": "Haetaan uusimpia julkisia tietoja oletus-Qortal-solmusta.",
     "retry": "Yritä uudelleen"
+  },
+  "widgets": {
+    "add_to_home": "lisää etusivulle",
+    "added_to_home": "{{title}} on nyt etusivulla.",
+    "on_home": "etusivulla",
+    "qdn_resource": "QDN-resurssi",
+    "remove_from_home": "poista etusivulta",
+    "removed_from_home": "{{title}} ei ole enää etusivulla.",
+    "type": "widget"
   },
   "zip": "zip"
 }

@@ -9,6 +9,7 @@ import {
   publishReply,
   publishReview,
   reviewItemKey,
+  reviewKeyOf,
   ReviewRecord,
   ReviewResource,
   reviewSnippet,
@@ -505,5 +506,89 @@ describe('publishing', () => {
     await expect(publishReview(APP, 'Alice', 'x')).rejects.toThrow(
       'Insufficient balance'
     );
+  });
+});
+
+describe('a widget under its own identifier', () => {
+  const WIDGET = {
+    service: 'APP',
+    name: 'Q-Weather',
+    identifier: 'go-widget-now',
+  };
+  const WIDGET_KEY = appReviewKey('APP', 'Q-Weather', 'go-widget-now');
+  const APP_KEY = appReviewKey('APP', 'Q-Weather');
+
+  it('has its own reviews, not those of the app beside it', async () => {
+    expect(reviewKeyOf(WIDGET)).toBe(WIDGET_KEY);
+    expect(reviewKeyOf({ ...WIDGET, identifier: null })).toBe(APP_KEY);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { name: 'Alice', identifier: WIDGET_KEY, created: 5 },
+        { name: 'Bob', identifier: APP_KEY, created: 6 },
+      ],
+    } as Response);
+    const page = await searchAppReviews('http://node', WIDGET);
+    expect(page.items.map((item) => item.name)).toEqual(['Alice']);
+    const url = String(vi.mocked(fetch).mock.calls[0][0]);
+    expect(url).toContain(`identifier=${WIDGET_KEY}&`);
+  });
+
+  it('publishes reviews, replies and removals under its key, naming it', async () => {
+    const send = vi.fn().mockResolvedValue({ signature: 'sig' });
+    window.sendMessage = send;
+    await publishReview(WIDGET, 'Alice', 'Handy', { now: 50 });
+    await publishReply(
+      WIDGET,
+      'Q-Weather',
+      { name: 'Alice', identifier: WIDGET_KEY },
+      'Thanks'
+    );
+    await deleteReviewItem(WIDGET, 'Bob', {
+      identifier: replyIdentifier(WIDGET_KEY, 'abc'),
+      kind: 'reply',
+      created: 10,
+      parentName: 'Alice',
+    });
+    const [review, answer, removal] = send.mock.calls.map((call) => call[1]);
+    expect(review.identifier).toBe(WIDGET_KEY);
+    expect(JSON.parse(atob(review.data)).app).toEqual(WIDGET);
+    expect(answer.identifier.startsWith(replyPrefixOf(WIDGET_KEY))).toBe(true);
+    expect(JSON.parse(atob(removal.data)).parent).toEqual({
+      name: 'Alice',
+      identifier: WIDGET_KEY,
+    });
+  });
+
+  it("leaves the identifier out of an app's record", () => {
+    const record = parseReviewRecord(
+      serializeReviewRecord(
+        {
+          kind: 'review',
+          text: 'Hi',
+          parent: null,
+          created: 1,
+          edited: 0,
+          deleted: false,
+        },
+        { service: 'APP', name: 'Q-Weather', identifier: 'default' }
+      )
+    );
+    expect(record?.text).toBe('Hi');
+    expect(
+      JSON.parse(
+        serializeReviewRecord(
+          {
+            kind: 'review',
+            text: 'Hi',
+            parent: null,
+            created: 1,
+            edited: 0,
+            deleted: false,
+          },
+          APP
+        )
+      ).app
+    ).toEqual({ service: 'APP', name: 'Q-Blog' });
   });
 });

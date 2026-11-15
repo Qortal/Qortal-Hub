@@ -676,7 +676,8 @@
       "top_rated_hint": "社区评分前 {{number}} 名",
       "view_grid": "网格",
       "view_label": "布局",
-      "view_list": "列表"
+      "view_list": "列表",
+      "widgets_hint": "首页用的小型 Q-App：为它们评分，看看其他人怎么说，把喜欢的添加到首页"
     },
     "no_matches": "没有与“{{query}}”匹配的内容",
     "no_matches_hint": "请尝试其他名称，或粘贴 qortal:// 链接。",
@@ -1167,7 +1168,8 @@
     "categories": "分类",
     "community_apps": "社区应用",
     "my_apps": "我的应用",
-    "official_apps": "官方应用"
+    "official_apps": "官方应用",
+    "widgets": "小组件"
   },
   "tag_number": "标签{{number}}",
   "tags": "标签",
@@ -1280,6 +1282,15 @@
     "loading": "加载中",
     "loading_message": "正在从默认 Qortal 节点获取最新公开数据。",
     "retry": "重试"
+  },
+  "widgets": {
+    "add_to_home": "添加到首页",
+    "added_to_home": "{{title}} 已添加到首页。",
+    "on_home": "已在首页",
+    "qdn_resource": "QDN 资源",
+    "remove_from_home": "从首页移除",
+    "removed_from_home": "{{title}} 已从首页移除。",
+    "type": "小组件"
   },
   "zip": "拉链"
 }

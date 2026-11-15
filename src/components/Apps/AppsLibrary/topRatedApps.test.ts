@@ -5,11 +5,13 @@ import { createStore, Provider } from 'jotai';
 
 vi.mock('../../../App', () => ({ getBaseApiReact: () => 'http://node' }));
 
+import { userInfoAtom } from '../../../atoms/global';
 import {
   allRatingsLoadedAtom,
   getCacheKey,
   ratingsStoreAtom,
 } from '../../../hooks/useAppRatings';
+import { pendingVotesAtom } from '../AppPage/appPageStore';
 import {
   isRatedWell,
   TOP_RATED_LIMIT,
@@ -95,6 +97,29 @@ describe('topRatedApps', () => {
         () => rating(4, 4)
       ).map((item) => `${item.service} ${item.name}`)
     ).toEqual(['APP Chess', 'WEBSITE Chess']);
+  });
+
+  it('tells items apart, and ranks them, by the key it is given', () => {
+    // Widgets: one name, several identifiers, each with its own poll.
+    type Widget = { name: string; service: string; identifier: string };
+    const widget = (identifier: string): Widget => ({
+      ...app('Q-Weather'),
+      identifier,
+    });
+    const ratings = new Map([
+      ['now', rating(4.2, 6)],
+      ['bars', rating(4.9, 20)],
+      ['chart', rating(4.5, 12)],
+    ]);
+    const byIdentifier = (item: Widget) => item.identifier;
+    expect(
+      topRatedApps<Widget>(
+        [widget('now'), widget('bars'), widget('chart'), widget('now')],
+        (item) => ratings.get(item.identifier),
+        TOP_RATED_LIMIT,
+        byIdentifier
+      ).map((item) => item.identifier)
+    ).toEqual(['bars', 'chart', 'now']);
   });
 });
 
@@ -190,5 +215,32 @@ describe('useTopRatedApps', () => {
 
     act(() => store.set(allRatingsLoadedAtom, true));
     expect(names(result.current)).toEqual(['B', 'C', 'A']);
+  });
+
+  it("counts the account's own vote at once, and takes the fewest it is given", () => {
+    const store = createStore();
+    store.set(userInfoAtom, { address: 'QMe' });
+    store.set(ratingsStoreAtom, storeWith({ A: rating(4, 9) }));
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(Provider, { store }, children);
+    const { result } = renderHook(() => useTopRatedApps(list, undefined, 1), {
+      wrapper,
+    });
+    expect(names(result.current)).toEqual(['A']);
+
+    // D gets its first rating, a 5, from this account: before its block.
+    act(() =>
+      store.set(pendingVotesAtom, {
+        d: {
+          voter: 'QMe',
+          rating: 5,
+          createdPoll: true,
+          sentAt: 1,
+          name: 'D',
+          service: 'APP',
+        },
+      })
+    );
+    expect(names(result.current)).toEqual(['A', 'D']);
   });
 });

@@ -10,7 +10,11 @@ import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../../App';
 import { getFee } from '../../../background/background';
-import { appReviewKey, normalizeAppService } from './appPageIds';
+import {
+  appReviewKey,
+  normalizeAppIdentifier,
+  normalizeAppService,
+} from './appPageIds';
 import { appStoreKey, pendingReviewsAtom } from './appPageStore';
 import {
   buildReviewThreads,
@@ -68,15 +72,19 @@ const mergeResources = (...lists: ReviewResource[][]): ReviewResource[] => {
   return Array.from(byKey.values());
 };
 
-/** Reviews and replies of an app, with the user's own actions on them. */
+/**
+ * Reviews and replies of an app, with the user's own actions on them. A
+ * widget's are its own: give its identifier.
+ */
 export const useAppReviews = (
-  app: { service?: string; name?: string },
+  app: { service?: string; name?: string; identifier?: string | null },
   me: { name?: string }
 ) => {
   const service = normalizeAppService(app?.service);
   const name = app?.name || '';
+  const identifier = normalizeAppIdentifier(app?.identifier);
   const myName = me?.name || '';
-  const key = appStoreKey(service, name);
+  const key = appStoreKey(service, name, identifier);
   const { t } = useTranslation(['core']);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const [pendingByApp, setPendingByApp] = useAtom(pendingReviewsAtom);
@@ -135,7 +143,7 @@ export const useAppReviews = (
           .map((parent) =>
             searchAppReviews(
               getBaseApiReact(),
-              { service, name },
+              { service, name, identifier },
               { kind: 'review', name: parent, limit: 5, signal }
             ).then(
               (page) => page.items,
@@ -145,7 +153,7 @@ export const useAppReviews = (
       );
       return found.flat();
     },
-    [name, service]
+    [identifier, name, service]
   );
 
   useEffect(() => {
@@ -153,7 +161,7 @@ export const useAppReviews = (
     const controller = new AbortController();
     const { signal } = controller;
     const base = getBaseApiReact();
-    const ref = { service, name };
+    const ref = { service, name, identifier };
     const sameApp = rowsRef.current.key === key;
     const rows = sameApp ? rowsRef.current.rows : { review: 0, reply: 0 };
     if (!sameApp) {
@@ -214,13 +222,13 @@ export const useAppReviews = (
       }
     })();
     return () => controller.abort();
-  }, [findParents, key, myName, name, service, token]);
+  }, [findParents, identifier, key, myName, name, service, token]);
 
   const reload = useCallback(() => setToken((value) => value + 1), []);
 
   const loadMore = useCallback(async () => {
     const base = getBaseApiReact();
-    const ref = { service, name };
+    const ref = { service, name, identifier };
     const { rows } = rowsRef.current;
     const kinds = (['review', 'reply'] as ReviewKind[]).filter(
       (kind) => more[kind]
@@ -257,7 +265,7 @@ export const useAppReviews = (
     } catch {
       setMore({ review: false, reply: false });
     }
-  }, [findParents, key, more, name, service]);
+  }, [findParents, identifier, key, more, name, service]);
 
   // Load each record once per version; the search shows only a snippet.
   useEffect(() => {
@@ -456,13 +464,13 @@ export const useAppReviews = (
             : 'core:app_page.reviews.confirm_publish',
           { postProcess: 'capitalizeFirstChar' }
         ),
-        { name: myName, identifier: appReviewKey(service, name) },
+        { name: myName, identifier: appReviewKey(service, name, identifier) },
         () =>
-          publishReview({ service, name }, myName, text, {
+          publishReview({ service, name, identifier }, myName, text, {
             created: myReview?.created,
           })
       ),
-    [myName, myReview, name, run, service, t]
+    [identifier, myName, myReview, name, run, service, t]
   );
 
   const submitReply = useCallback(
@@ -474,13 +482,16 @@ export const useAppReviews = (
         null,
         () =>
           publishReply(
-            { service, name },
+            { service, name, identifier },
             myName,
-            { name: parentName, identifier: appReviewKey(service, name) },
+            {
+              name: parentName,
+              identifier: appReviewKey(service, name, identifier),
+            },
             text
           )
       ),
-    [myName, name, run, service, t]
+    [identifier, myName, name, run, service, t]
   );
 
   const removeItem = useCallback(
@@ -493,9 +504,9 @@ export const useAppReviews = (
           { postProcess: 'capitalizeFirstChar' }
         ),
         { name: item.name, identifier: item.identifier },
-        () => deleteReviewItem({ service, name }, myName, item)
+        () => deleteReviewItem({ service, name, identifier }, myName, item)
       ),
-    [myName, name, run, service, t]
+    [identifier, myName, name, run, service, t]
   );
 
   return {
