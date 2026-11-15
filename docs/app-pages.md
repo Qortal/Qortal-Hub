@@ -14,11 +14,12 @@ Code: `src/components/Apps/AppPage/`. Capture: `electron/src/qapp-screenshot.ts`
 
 `<SERVICE>` is `APP` or `WEBSITE`, upper case. `<name>` is the app's name.
 
-| What        | Service     | Name      | Identifier                    |
-| ----------- | ----------- | --------- | ----------------------------- |
-| Page text   | `JSON`      | the app's | `qhub_app_page_v1_<SERVICE>`  |
-| Screenshots | `IMAGE`     | the app's | `qhub_app_shots_v1_<SERVICE>` |
-| Icon        | `THUMBNAIL` | the app's | `qortal_avatar` (unchanged)   |
+| What        | Service     | Name      | Identifier                     |
+| ----------- | ----------- | --------- | ------------------------------ |
+| Page text   | `JSON`      | the app's | `qhub_app_page_v1_<SERVICE>`   |
+| Screenshots | `IMAGE`     | the app's | `qhub_app_shots_v1_<SERVICE>`  |
+| Hidden      | `JSON`      | the app's | `qhub_app_hidden_v1_<SERVICE>` |
+| Icon        | `THUMBNAIL` | the app's | `qortal_avatar` (unchanged)    |
 
 Check each identifier exactly. Pass `mode=ALL` to every search here: without
 it, Core keeps only the newest resource of each name and service, so any
@@ -71,6 +72,43 @@ whatever the original file carried besides the pixels. Read a picture with
 `/arbitrary/IMAGE/<name>/qhub_app_shots_v1_<SERVICE>?filepath=1.webp`.
 A list with no screenshots is a single file, which Core serves without
 `filepath`.
+
+### Hidden from the library
+
+A Q-App or website can't be deleted: every publish stays on Qortal's
+blockchain and QDN. Its publisher can hide it from Hub's library instead, with
+the button beside Edit page, which publishes one small record:
+
+```json
+{
+  "v": 1,
+  "app": { "service": "APP", "name": "Q-Blog" },
+  "hidden": true,
+  "replaced": false,
+  "updated": 1763150000000
+}
+```
+
+The record's QDN title is `hidden`, or `shown` once the publisher shows the
+app again. So the library reads every app's state from one search, without
+downloading the records:
+`/arbitrary/resources/search?service=JSON&identifier=qhub_app_hidden_v1_&prefix=true&mode=ALL&includemetadata=true`.
+Only the app's name can publish under it, so nobody else can hide an app.
+
+Hub leaves a hidden app out of the library, its search and the top bar's
+suggestions, except under the user's own names, so the publisher can still find
+theirs. Links, pins, bookmarks and open tabs still open it.
+
+Each person can still choose to see them: the eye button in the library's
+header leaves them out while it is on (the default) and lists them too once it
+is off. The choice is kept on the device (`launcher-hide-hidden-apps-v1` in
+`localStorage`).
+
+When hiding, the publisher can also replace the app with a small page saying
+its publisher removed it (`"replaced": true`). The page is one `index.html`
+with that line in every language Hub has, and it follows Hub's `?lang=` and
+`?theme=`. The page text and screenshots are then published empty too. Each of
+these is a publish of its own, with its own fee, and the record comes last.
 
 ## Links
 

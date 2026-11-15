@@ -99,6 +99,7 @@ import {
   getDialogSecondaryButtonSx,
 } from '../App/dialogSurface';
 import { pickNextTabFromMru, tabsLeftByCloseAll } from './tabSelection';
+import { useHiddenAppsLoader } from './AppPage/useHiddenApps';
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
@@ -211,6 +212,8 @@ export const AppsDesktop = ({
   const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
+  // Apps their publishers hid stay out of the library (appHidden.ts).
+  useHiddenAppsLoader(myAddress, myName);
   const [availableQapps, setAvailableQapps] = useAtom(availableQappsAtom);
   const availableQappsCountRef = useRef(0);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);

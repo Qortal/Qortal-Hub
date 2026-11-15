@@ -27,7 +27,9 @@ import {
 } from './AppPageEditorDialog';
 import { SectionCard, SectionTitle } from './AppPageParts';
 import { appIconUrl, shotImageUrl } from './appPageQdn';
-import { AppPageData, isVersionCurrent } from './appPageData';
+import { AppPageData, EMPTY_APP_PAGE, isVersionCurrent } from './appPageData';
+import { HideAppDialog } from './HideAppDialog';
+import { useShowInLibrary } from './useShowInLibrary';
 import type { ShotDraft } from './ScreenshotsEditor';
 import { normalizeAppService } from './appPageIds';
 import { useAppListing, useAppPageData, useOwnedNames } from './useAppPage';
@@ -120,6 +122,19 @@ export const AppPage = ({
     setSnack({ type, message });
     setSnackOpen(true);
   }, []);
+
+  // Hidden from the library (appHidden.ts): what the publisher just did shows
+  // until the node lists the new record.
+  const [hideOpen, setHideOpen] = useState(false);
+  const [savedHidden, setSavedHidden] = useState<{
+    hidden: boolean;
+    replaced: boolean;
+    at: number;
+  } | null>(null);
+  const hiddenState =
+    savedHidden && savedHidden.at > (pageData.hidden?.updated || 0) - 60_000
+      ? savedHidden
+      : pageData.hidden;
 
   // What the publisher just saved shows until the node has the new version.
   const savedPageNewer =
@@ -336,6 +351,43 @@ export const AppPage = ({
     }
   };
 
+  const { busy: hideBusy, showInLibrary } = useShowInLibrary({
+    app: ref,
+    title: listingApp?.metadata?.title || app?.name || '',
+    notify,
+    onShown: () => {
+      setSavedHidden({ hidden: false, replaced: false, at: Date.now() });
+      setTimeout(() => pageData.reload(), 90_000);
+    },
+  });
+
+  const onHidden = ({ replaced }: { replaced: boolean }) => {
+    const at = Date.now();
+    setHideOpen(false);
+    setSavedHidden({ hidden: true, replaced, at });
+    if (replaced) {
+      // The page text and screenshots were emptied with the app.
+      setSaved((previous) => ({
+        ...previous,
+        page: { ...EMPTY_APP_PAGE, updated: at },
+        pageAt: at,
+        shots: [],
+        shotsAt: at,
+      }));
+    }
+    notify(
+      'success',
+      t('core:app_page.hide.done_hidden', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+    // The node lists the new versions after the next block.
+    setTimeout(() => {
+      pageData.reload();
+      reloadListing();
+    }, 90_000);
+  };
+
   const openEditor = (tab: EditorTab) => setEditor({ open: true, tab });
   const title = listingApp?.metadata?.title || app?.name || '';
 
@@ -381,6 +433,8 @@ export const AppPage = ({
         isInstalled={isInstalled}
         isPinned={isPinned}
         editLoading={pageData.loading || pageData.shotsLoading}
+        hiddenState={hiddenState}
+        hideBusy={hideBusy}
         isPublisher={isPublisher}
         myName={myName}
         onCopied={() =>
@@ -392,7 +446,9 @@ export const AppPage = ({
           )
         }
         onEdit={() => openEditor('page')}
+        onHide={() => setHideOpen(true)}
         onOpen={() => executeEvent('addTab', { data: app })}
+        onShowAgain={() => void showInLibrary()}
         onTogglePin={togglePin}
         version={page?.version || ''}
         versionCurrent={versionCurrent}
@@ -435,6 +491,17 @@ export const AppPage = ({
           )}
         </Box>
       </Box>
+
+      {isPublisher && (
+        <HideAppDialog
+          app={listingApp}
+          hasPage={!!pageData.resources?.page || !!saved.page}
+          hasShots={!!pageData.resources?.shots || !!saved.shots}
+          onClose={() => setHideOpen(false)}
+          onHidden={onHidden}
+          open={hideOpen}
+        />
+      )}
 
       {isPublisher && (
         <AppPageEditorDialog

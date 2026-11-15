@@ -19,6 +19,7 @@ import {
   StatusFilter,
   type StatusFilterOption,
 } from '../Filters';
+import { HiddenAppsToggle } from '../AppsLibrary/HiddenAppsToggle';
 
 const LIBRARY_TABS: AppsLibraryTabValue[] = [
   'official',
@@ -144,6 +145,17 @@ export const LauncherLibrary = ({
           }}
         >
           <AppsTabs currentTab={currentTab} onTabChange={onTabChange} />
+          {/* Apps their publishers hid: left out or shown (appHidden.ts). */}
+          <Box
+            sx={{
+              position: 'absolute',
+              right: getQapps ? 48 : 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+            }}
+          >
+            <HiddenAppsToggle />
+          </Box>
           {getQapps ? (
             <Tooltip title={refreshLabel}>
               <IconButton

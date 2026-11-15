@@ -4,10 +4,12 @@ import { normalizeAppService } from './appPageIds';
 import {
   AppPageResources,
   fetchAppPage,
+  fetchHiddenState,
   fetchShotsManifest,
   findAppPageResources,
 } from './appPageQdn';
 import type { AppPageData, ShotsManifest } from './appPageData';
+import type { AppHiddenState } from './appHidden';
 
 const enc = encodeURIComponent;
 
@@ -71,6 +73,8 @@ interface PageState {
   page: AppPageData | null;
   shots: ShotsManifest | null;
   resources: AppPageResources | null;
+  /** Whether its publisher hid it from the library (appHidden.ts). */
+  hidden: AppHiddenState | null;
 }
 
 const pageCache = new Map<string, { at: number; state: PageState }>();
@@ -92,6 +96,7 @@ export const useAppPageData = (app: { service?: string; name?: string }) => {
       page: null,
       shots: null,
       resources: null,
+      hidden: null,
     }
   );
   const [token, setToken] = useState(0);
@@ -115,6 +120,7 @@ export const useAppPageData = (app: { service?: string; name?: string }) => {
       page: hit?.state.page ?? null,
       shots: hit?.state.shots ?? null,
       resources: hit?.state.resources ?? null,
+      hidden: hit?.state.hidden ?? null,
     };
     const update = (patch: Partial<PageState>) => {
       current = { ...current, ...patch };
@@ -126,6 +132,29 @@ export const useAppPageData = (app: { service?: string; name?: string }) => {
       try {
         const resources = await findAppPageResources(base, ref, signal);
         update({ resources, shotsLoading: !!resources.shots });
+        // The record says whether the app was replaced too; until it is read
+        // (or if it can't be), its QDN title says whether it is hidden.
+        if (resources.hidden) {
+          const listed = resources.hidden;
+          update({
+            hidden: {
+              hidden: listed.isHidden,
+              replaced: false,
+              updated: listed.updated,
+            },
+          });
+          void fetchHiddenState(base, ref, signal)
+            .then((hidden) => {
+              if (!hidden) return;
+              update({ hidden });
+              // Read after the rest: the page kept for reopening gets it too.
+              const kept = pageCache.get(key);
+              if (kept) pageCache.set(key, { at: kept.at, state: current });
+            })
+            .catch(() => undefined);
+        } else {
+          update({ hidden: null });
+        }
         const [page] = await Promise.all([
           resources.page
             ? fetchAppPage(base, ref, signal).catch(() => null)
