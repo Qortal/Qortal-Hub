@@ -40,6 +40,11 @@ export type SidePanelItem = SidePanelBuiltInItem | SidePanelQdnItem;
 export type SidePanelSettings = {
   /** At the left edge until the pointer comes, or always, beside the content. */
   show: 'hover' | 'always';
+  /**
+   * A bar of buttons down the left edge, or a half circle with the buttons
+   * round its rim, turned by scrolling over it.
+   */
+  layout: 'bar' | 'arc';
   /** How much of the panel's background shows: 0 (none) to 1 (all). */
   background: number;
   /** The buttons' size: 1 as designed, a bit smaller or bigger. */
@@ -102,6 +107,7 @@ export const SIDE_PANEL_ADDED_LIMIT = 12;
 
 export const SIDE_PANEL_DEFAULT: SidePanelSettings = {
   show: 'hover',
+  layout: 'bar',
   background: 1,
   buttonSize: 1,
   edgeHandle: true,
@@ -183,6 +189,7 @@ export const normalizeSidePanel = (value: unknown): SidePanelSettings => {
     handleBackground,
     handleHeight,
     items,
+    layout,
     show,
   } = value as Record<string, unknown>;
   const changed = Number(changedAt);
@@ -218,6 +225,7 @@ export const normalizeSidePanel = (value: unknown): SidePanelSettings => {
   });
   return {
     show: show === 'always' ? 'always' : 'hover',
+    layout: layout === 'arc' ? 'arc' : 'bar',
     background: clamp01(background, SIDE_PANEL_DEFAULT.background),
     buttonSize: toSidePanelStep(
       buttonSize,
@@ -247,6 +255,7 @@ export const isSidePanelItemShown = (item: SidePanelItem) =>
 
 export const sameSidePanel = (a: SidePanelSettings, b: SidePanelSettings) =>
   a.show === b.show &&
+  a.layout === b.layout &&
   a.background === b.background &&
   a.buttonSize === b.buttonSize &&
   a.edgeHandle === b.edgeHandle &&

@@ -73,6 +73,12 @@ describe('normalizeSidePanel', () => {
     });
   });
 
+  it('keeps a half circle, and a bar otherwise', () => {
+    expect(normalizeSidePanel({ layout: 'arc' }).layout).toBe('arc');
+    expect(normalizeSidePanel({ layout: 'round' }).layout).toBe('bar');
+    expect(normalizeSidePanel({}).layout).toBe('bar');
+  });
+
   it('keeps the background between none and full', () => {
     expect(normalizeSidePanel({ background: -1 }).background).toBe(0);
     expect(normalizeSidePanel({ background: 7 }).background).toBe(1);
