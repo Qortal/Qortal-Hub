@@ -25,6 +25,26 @@ type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 const cache = new Map<string, { at: number; widgets: HomeWidgetListing[] }>();
 
+/**
+ * Widgets published from this Hub that the node may not list yet: until an
+ * answer has them, the picker asks the node each time instead of using what
+ * it kept (for a while at most, in case the publish never makes it).
+ */
+const PUBLISHED_WAIT_MS = 15 * 60_000;
+const published = new Map<string, number>();
+
+const waitingFor = (now: number): string[] => {
+  for (const [key, at] of published) {
+    if (now - at > PUBLISHED_WAIT_MS) published.delete(key);
+  }
+  return [...published.keys()];
+};
+
+const listsAll = (widgets: HomeWidgetListing[], keys: string[]) => {
+  const listed = new Set(widgets.map(homeWidgetKey));
+  return keys.every((key) => listed.has(key));
+};
+
 export const widgetSearchUrls = (baseUrl: string) => {
   const common =
     'service=APP&mode=ALL&limit=0&includemetadata=true&excludeblocked=true';
@@ -81,8 +101,16 @@ export async function fetchHomeWidgets(
     now?: number;
   } = {}
 ): Promise<HomeWidgetListing[]> {
+  const waiting = waitingFor(now);
   const cached = cache.get(baseUrl);
-  if (!fresh && cached && now - cached.at < CACHE_MS) return cached.widgets;
+  if (
+    !fresh &&
+    cached &&
+    now - cached.at < CACHE_MS &&
+    listsAll(cached.widgets, waiting)
+  ) {
+    return cached.widgets;
+  }
 
   const urls = widgetSearchUrls(baseUrl);
   const [byIdentifier, byTag] = await Promise.allSettled([
@@ -96,6 +124,10 @@ export async function fetchHomeWidgets(
     byIdentifier.status === 'fulfilled' ? byIdentifier.value : [],
     byTag.status === 'fulfilled' ? byTag.value : []
   );
+  const listed = new Set(widgets.map(homeWidgetKey));
+  waiting.forEach((key) => {
+    if (listed.has(key)) published.delete(key);
+  });
   // Only a full answer with widgets in it is kept: a half one, or none yet
   // (a widget published a minute ago), is asked again next time.
   if (
@@ -108,4 +140,18 @@ export async function fetchHomeWidgets(
   return widgets;
 }
 
-export const clearHomeWidgetCacheForTests = () => cache.clear();
+/**
+ * A widget was just published from this Hub: the picker asks the node again
+ * each time until the node lists it.
+ */
+export const rememberPublishedWidget = (
+  widget: { name: string; identifier: string | null },
+  now = Date.now()
+) => {
+  published.set(homeWidgetKey(widget), now);
+};
+
+export const clearHomeWidgetCacheForTests = () => {
+  cache.clear();
+  published.clear();
+};

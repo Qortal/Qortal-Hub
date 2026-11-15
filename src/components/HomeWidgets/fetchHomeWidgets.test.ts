@@ -3,6 +3,7 @@ import {
   clearHomeWidgetCacheForTests,
   fetchHomeWidgets,
   mergeWidgetResults,
+  rememberPublishedWidget,
   widgetSearchUrls,
 } from './fetchHomeWidgets';
 
@@ -82,6 +83,48 @@ describe('fetchHomeWidgets', () => {
     expect(fetcher).toHaveBeenCalledTimes(4);
     await fetchHomeWidgets(BASE, { fetcher, now: 3000 + 11 * 60_000 });
     expect(fetcher).toHaveBeenCalledTimes(6);
+  });
+
+  it('asks again until the node lists a widget published from this Hub', async () => {
+    const fresh = {
+      name: 'Tester',
+      service: 'APP',
+      identifier: 'go-widget-clock',
+      metadata: { tags: ['go-widget'] },
+      updated: 50,
+    };
+    let listed = false;
+    const fetcher = vi.fn((url: string) =>
+      ok(
+        url.includes('identifier=go-widget')
+          ? [...byIdentifier, ...(listed ? [fresh] : [])]
+          : all
+      )
+    );
+    await fetchHomeWidgets(BASE, { fetcher, now: 1000 });
+    rememberPublishedWidget(
+      { name: 'Tester', identifier: 'go-widget-clock' },
+      1500
+    );
+    // Kept, but without the new widget: the node is asked again.
+    await fetchHomeWidgets(BASE, { fetcher, now: 2000 });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    listed = true;
+    const widgets = await fetchHomeWidgets(BASE, { fetcher, now: 3000 });
+    expect(widgets.map((w) => w.identifier)).toContain('go-widget-clock');
+    // Listed now: what was kept is used again.
+    await fetchHomeWidgets(BASE, { fetcher, now: 4000 });
+    expect(fetcher).toHaveBeenCalledTimes(6);
+  });
+
+  it('stops waiting for a published widget after a while', async () => {
+    const fetcher = vi.fn((url: string) =>
+      ok(url.includes('identifier=go-widget') ? byIdentifier : all)
+    );
+    rememberPublishedWidget({ name: 'Gone', identifier: 'go-widget-x' }, 0);
+    await fetchHomeWidgets(BASE, { fetcher, now: 16 * 60_000 });
+    await fetchHomeWidgets(BASE, { fetcher, now: 16 * 60_000 + 1000 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it('shows what one search found when the other fails, without keeping it', async () => {

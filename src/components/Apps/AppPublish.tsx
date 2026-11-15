@@ -8,6 +8,8 @@ import {
 } from 'react';
 import {
   Box,
+  Button,
+  InputAdornment,
   MenuItem,
   TextField,
   ToggleButton,
@@ -38,6 +40,7 @@ import {
   loadPublishPrefill,
 } from './appPublishPrefill';
 import {
+  DEFAULT_IDENTIFIER,
   PublishProfile,
   loadPublishProfile,
   prefillFromProfile,
@@ -62,10 +65,32 @@ import {
   PublishPreviewCard,
   PublishSummaryCard,
 } from './PublishFormParts';
+import {
+  NameWidget,
+  WIDGET_ID_PREFIX,
+  WIDGET_OWN_TAG_COUNT,
+  WIDGET_TITLE_SUGGESTED_MAX,
+  cleanWidgetSlug,
+  loadNameWidgets,
+  widgetIdentifier,
+  widgetPublishTags,
+  withoutWidgetTag,
+} from './WidgetPublish/widgetPublish';
+import { WidgetGuideTip } from './WidgetPublish/WidgetGuideTip';
+import { WidgetGuideDialog } from './WidgetPublish/WidgetGuideDialog';
+import { GuideText } from './WidgetPublish/WidgetGuideParts';
+import { rememberPublishedWidget } from '../HomeWidgets/fetchHomeWidgets';
+import { WIDGET_TAG } from '../HomeWidgets/homeWidgets';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
 const TAG_MAX_CHARS = 20;
+
+/** What the form publishes: a Q-App, a widget (a Q-App for Home) or a website. */
+type PublishKind = 'APP' | 'WIDGET' | 'WEBSITE';
+
+/** The prefill of a new widget: nothing is published yet to load. */
+const NEW_WIDGET = '\u0000new-widget';
 
 /**
  * Text state whose setter applies Core's metadata limit, so the form shows what
@@ -132,12 +157,51 @@ export const AppPublish = ({
   const [title, setTitle] = useLimitedText(limitQdnTitle);
   const [description, setDescription] = useLimitedText(limitQdnDescription);
   const [category, setCategory] = useState('');
-  const [appType, setAppType] = useState(initialAppType);
+  const [kind, setKind] = useState<PublishKind>(initialAppType);
+  const appType = kind === 'WEBSITE' ? 'WEBSITE' : 'APP';
+  const isWidget = kind === 'WIDGET';
+  // Opened as "Publish app" or "Publish website": that service only. A Q-App
+  // can still go out as a widget; Update is for the name's own app.
+  const lockedService = isAppTypeLocked ? initialAppType : null;
+  const canPickWidget = !isUpdate && lockedService !== 'WEBSITE';
+  // A widget: one the name has published ('' for a new one), and a new one's ID.
+  const [widgetChoice, setWidgetChoice] = useState('');
+  const [widgetSlug, setWidgetSlug] = useState('');
+  const [nameWidgets, setNameWidgets] = useState<NameWidget[]>([]);
+  const [guideTipOpen, setGuideTipOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  // The short guide opens by itself the first time Widget is picked.
+  const guideTipShownRef = useRef(false);
+  // A widget just published from here: the form already holds its details,
+  // which the node may not list yet.
+  const justPublishedRef = useRef('');
+  // The name the form's fields were last filled in for.
+  const filledForNameRef = useRef<string | null>(null);
+  const widgetId = widgetChoice || widgetIdentifier(widgetSlug);
+  // A typed ID that one of the name's widgets has already.
+  const widgetTakenBy = widgetChoice
+    ? undefined
+    : nameWidgets.find((widget) => widget.identifier === widgetId);
+  const chosenWidget = nameWidgets.find(
+    (widget) => widget.identifier === widgetChoice
+  );
+  const updatesWidget = !!widgetChoice || !!widgetTakenBy;
+  // Which resource the form is filled in from.
+  const prefillTarget = isWidget
+    ? widgetChoice || NEW_WIDGET
+    : DEFAULT_IDENTIFIER;
   const [source, setSource] = useState<PublishSource | null>(null);
   // This PC's saved profile for the chosen name and type.
   const [profile, setProfile] = useState<PublishProfile | null>(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
+  // Warnings in text, readable on both themes.
+  const warningTextSx = {
+    color:
+      theme.palette.mode === 'dark'
+        ? theme.palette.warning.light
+        : theme.palette.warning.dark,
+  };
   const { t, i18n } = useTranslation(['auth', 'core', 'group', 'question']);
   const [tag1, setTag1] = useLimitedText(limitQdnTag);
   const [tag2, setTag2] = useLimitedText(limitQdnTag);
@@ -197,29 +261,70 @@ export const AppPublish = ({
     });
   };
 
+  // Another app, website or widget: the files chosen for one are never
+  // published as another.
+  // Files chosen before a name was picked are kept: there was no target yet.
+  const targetKey = [name, appType, prefillTarget].join('\u0000');
+  const targetRef = useRef({ key: targetKey, name });
+  useEffect(() => {
+    const previous = targetRef.current;
+    if (previous.key === targetKey) return;
+    targetRef.current = { key: targetKey, name };
+    // Nor right after publishing a new widget: it is still the same files.
+    if (previous.name && !justPublishedRef.current) setSource(null);
+  }, [targetKey, name]);
+
   useEffect(() => {
     if (!name || !appType) return;
     const run = ++prefillRunRef.current;
     editedFieldsRef.current = new Set();
+    const nameChanged =
+      filledForNameRef.current !== null && filledForNameRef.current !== name;
+    filledForNameRef.current = name;
+    const identifier =
+      prefillTarget === DEFAULT_IDENTIFIER || prefillTarget === NEW_WIDGET
+        ? undefined
+        : prefillTarget;
+    if (identifier && identifier === justPublishedRef.current) {
+      // Just published from here: the form and its profile are up to date.
+      justPublishedRef.current = '';
+      setPrefillPending(false);
+      return;
+    }
+    setProfile(null);
+    if (prefillTarget === NEW_WIDGET) {
+      // Nothing published to load. A new widget starts from what the form
+      // has (its app's details), but never from another name's.
+      if (nameChanged) applyPrefill(EMPTY_PREFILL);
+      setPrefillPending(false);
+      return;
+    }
     const controller = new AbortController();
     setPrefillPending(true);
-    setProfile(null);
 
     Promise.all([
       loadPublishPrefill(getBaseApiReact(), appType, name, {
         signal: controller.signal,
+        identifier,
       }),
-      loadPublishProfile(publishProfileKey(myAddress, appType, name)),
+      loadPublishProfile(
+        publishProfileKey(myAddress, appType, name, identifier)
+      ),
     ])
       .then(([result, savedProfile]) => {
         if (run !== prefillRunRef.current) return;
         setProfile(savedProfile);
         // What this PC sent last time, when the network has nothing to give.
         const fromProfile = prefillFromProfile(savedProfile);
-        applyPrefill(
+        const prefill =
           result.kind === 'found'
             ? result.prefill
-            : (fromProfile ?? EMPTY_PREFILL)
+            : (fromProfile ?? EMPTY_PREFILL);
+        // A widget's own tag isn't one of the tags the form lets you edit.
+        applyPrefill(
+          identifier
+            ? { ...prefill, tags: withoutWidgetTag(prefill.tags) }
+            : prefill
         );
         if (result.kind === 'unavailable') {
           setInfoSnack({
@@ -242,7 +347,35 @@ export const AppPublish = ({
       });
 
     return () => controller.abort();
-  }, [name, appType, myAddress]);
+  }, [name, appType, myAddress, prefillTarget]);
+
+  // The widgets the name has published, to update one of them.
+  useEffect(() => {
+    setNameWidgets([]);
+    if (!isWidget || !name) return;
+    const controller = new AbortController();
+    loadNameWidgets(getBaseApiReact(), name, { signal: controller.signal })
+      .then(setNameWidgets)
+      .catch(() => {
+        // Aborted: another name, or not a widget any more.
+      });
+    return () => controller.abort();
+  }, [isWidget, name]);
+
+  // Another name has other widgets: the choice goes with the name.
+  const chooseName = (next: string) => {
+    setWidgetChoice('');
+    setName(next);
+  };
+
+  const chooseKind = (next: PublishKind | null) => {
+    if (!next) return;
+    setKind(next);
+    if (next === 'WIDGET' && !guideTipShownRef.current) {
+      guideTipShownRef.current = true;
+      setGuideTipOpen(true);
+    }
+  };
 
   const getNames = useCallback(async () => {
     if (!myAddress) return;
@@ -321,9 +454,11 @@ export const AppPublish = ({
         category,
         appType,
         file,
+        widgetId,
       };
       const requiredFields = [
         'name',
+        ...(isWidget ? ['widgetId'] : []),
         'title',
         'description',
         'category',
@@ -339,6 +474,7 @@ export const AppPublish = ({
         category: 'core:publish_form.check_category',
         appType: 'core:app_service_type',
         file: 'core:publish_form.check_files',
+        widgetId: 'core:publish_widget.check_id',
       };
       const missingFields: string[] = [];
       requiredFields.forEach((field) => {
@@ -356,19 +492,36 @@ export const AppPublish = ({
         });
         throw new Error(errorMsg);
       }
-      const extras = pageExtrasRef.current?.prepare() ?? null;
+      // A widget has no page in the library.
+      const extras = isWidget
+        ? null
+        : (pageExtrasRef.current?.prepare() ?? null);
       const extraParts = extrasPartCount(extras);
       const fee = await getFee('ARBITRARY');
+      const identifier = isWidget ? widgetId : undefined;
+      const publishedTags = isWidget
+        ? widgetPublishTags(tags.slice(0, WIDGET_OWN_TAG_COUNT))
+        : tags;
 
       await show({
-        message: extraParts
-          ? t('core:app_page.publish.confirm_with_page', {
-              count: extraParts,
-              postProcess: 'capitalizeFirstChar',
-            })
-          : t('core:message.question.publish_app', {
-              postProcess: 'capitalizeFirstChar',
-            }),
+        message: isWidget
+          ? t(
+              updatesWidget
+                ? 'core:publish_widget.confirm_update'
+                : 'core:publish_widget.confirm_new',
+              {
+                resource: `APP / ${name} / ${widgetId}`,
+                postProcess: 'capitalizeFirstChar',
+              }
+            )
+          : extraParts
+            ? t('core:app_page.publish.confirm_with_page', {
+                count: extraParts,
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:message.question.publish_app', {
+                postProcess: 'capitalizeFirstChar',
+              }),
         publishFee: extraParts
           ? `${(Number(fee.fee) * (1 + extraParts)).toFixed(2)} QORT`
           : fee.fee + ' QORT',
@@ -383,15 +536,16 @@ export const AppPublish = ({
           .sendMessage('publishOnQDN', {
             data: file,
             service: appType,
+            ...(identifier ? { identifier } : {}),
             title,
             name,
             description,
             category,
-            tag1,
-            tag2,
-            tag3,
-            tag4,
-            tag5,
+            tag1: publishedTags[0],
+            tag2: publishedTags[1],
+            tag3: publishedTags[2],
+            tag4: publishedTags[3],
+            tag5: publishedTags[4],
             uploadType: 'zip',
           })
           .then((response) => {
@@ -435,19 +589,24 @@ export const AppPublish = ({
             }
           : {
               type: 'success',
-              message: t('core:message.success.published', {
-                postProcess: 'capitalizeFirstChar',
-              }),
+              message: t(
+                isWidget
+                  ? 'core:publish_widget.published'
+                  : 'core:message.success.published',
+                { postProcess: 'capitalizeFirstChar' }
+              ),
             }
       );
       setOpenSnackGlobal(true);
+      // The widget picker asks the node again until it lists this widget.
+      if (isWidget) rememberPublishedWidget({ name, identifier: widgetId });
       const published: PublishProfile = {
         publishedAt: Date.now(),
         metadata: {
           title,
           description,
           category,
-          tags: [tag1, tag2, tag3, tag4, tag5].filter(Boolean),
+          tags: publishedTags.filter(Boolean),
         },
         ...(source.path
           ? {
@@ -462,9 +621,29 @@ export const AppPublish = ({
       };
       setProfile((current) => ({ ...current, ...published }));
       void savePublishProfile(
-        publishProfileKey(myAddress, appType, name),
+        publishProfileKey(myAddress, appType, name, identifier),
         published
       );
+      // A widget is added from Home, not opened as an app: the form stays,
+      // now on this widget, so publishing again updates it.
+      if (isWidget) {
+        const publishedWidget: NameWidget = {
+          identifier: widgetId,
+          title,
+          updated: Date.now(),
+          listed: true,
+        };
+        setNameWidgets((list) => [
+          publishedWidget,
+          ...list.filter((widget) => widget.identifier !== widgetId),
+        ]);
+        if (widgetChoice !== widgetId) {
+          justPublishedRef.current = widgetId;
+          setWidgetChoice(widgetId);
+          setWidgetSlug('');
+        }
+        return;
+      }
       const dataObj = {
         name: name,
         service: appType,
@@ -504,6 +683,15 @@ export const AppPublish = ({
       label: t('core:publish_form.check_name', capital),
       done: !!name,
     },
+    ...(isWidget
+      ? [
+          {
+            key: 'widget',
+            label: t('core:publish_widget.check_id', capital),
+            done: !!widgetId,
+          },
+        ]
+      : []),
     {
       key: 'files',
       label: t('core:publish_form.check_files', capital),
@@ -525,19 +713,21 @@ export const AppPublish = ({
       done: !!category,
     },
   ];
+  // A widget is the widget alone: no page in the library.
+  const pageSummary = isWidget ? null : extrasSummary;
   const parts = [
     {
       key: 'app',
-      label:
-        appType === 'WEBSITE'
+      label: isWidget
+        ? t('core:publish_widget.part_widget', capital)
+        : appType === 'WEBSITE'
           ? t('core:publish_form.part_website', capital)
           : t('core:publish_form.part_app', capital),
     },
-    ...(extrasSummary?.pageText
+    ...(pageSummary?.pageText
       ? [{ key: 'page', label: t('core:app_page.edit.part_page', capital) }]
       : []),
-    ...(extrasSummary &&
-    ['chosen', 'remove'].includes(extrasSummary.screenshots)
+    ...(pageSummary && ['chosen', 'remove'].includes(pageSummary.screenshots)
       ? [
           {
             key: 'shots',
@@ -549,21 +739,36 @@ export const AppPublish = ({
   const heading =
     isUpdate && name
       ? t('core:publish_update.title', { name, ...capital })
-      : appType === 'WEBSITE'
-        ? t('core:developer.publish_site', capital)
-        : t('core:developer.publish_app', capital);
+      : isWidget
+        ? t('core:publish_widget.heading', capital)
+        : appType === 'WEBSITE'
+          ? t('core:developer.publish_site', capital)
+          : t('core:developer.publish_app', capital);
+  // The tags the form lets you edit: a widget's first tag is go-widget.
+  const ownTagCount = isWidget ? WIDGET_OWN_TAG_COUNT : tags.length;
+  const shownTags = Array.from(
+    new Set(
+      (isWidget ? widgetPublishTags(tags.slice(0, WIDGET_OWN_TAG_COUNT)) : tags)
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    )
+  );
+  const widgetResource = `APP / ${name || '…'} / ${widgetId || `${WIDGET_ID_PREFIX}…`}`;
+  const slugTyped = widgetSlug.length > 0;
+  const slugInvalid = slugTyped && !widgetIdentifier(widgetSlug);
 
   const preview = (
     <PublishPreviewCard
       categoryName={categoryName}
       description={description}
       isWebsite={appType === 'WEBSITE'}
+      isWidget={isWidget}
       name={name}
-      shotUrls={extrasSummary?.shotUrls || []}
+      shotUrls={pageSummary?.shotUrls || []}
       // Each tag once, as the library shows them.
-      tags={Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)))}
+      tags={shownTags}
       title={title}
-      version={extrasSummary?.version || ''}
+      version={pageSummary?.version || ''}
     />
   );
   const summary = (
@@ -581,7 +786,11 @@ export const AppPublish = ({
   const sections = (
     <Box sx={{ minWidth: 0 }}>
       <FormSection
-        hint={t('core:message.generic.one_app_per_name', capital)}
+        hint={
+          isWidget
+            ? t('core:publish_widget.section_hint', capital)
+            : t('core:message.generic.one_app_per_name', capital)
+        }
         number={1}
         title={t('core:publish_form.section_name', capital)}
       >
@@ -596,7 +805,7 @@ export const AppPublish = ({
           <TextField
             disabled={isUpdate}
             label={t('core:name_app', capital)}
-            onChange={(event) => setName(event?.target.value)}
+            onChange={(event) => chooseName(event?.target.value)}
             select
             SelectProps={{ displayEmpty: true }}
             InputLabelProps={{ shrink: true }}
@@ -620,28 +829,177 @@ export const AppPublish = ({
               </MenuItem>
             ))}
           </TextField>
-          <ToggleButtonGroup
-            aria-label={t('core:app_service_type', capital)}
-            disabled={isAppTypeLocked}
-            exclusive
-            onChange={(_, value) => value && setAppType(value)}
-            sx={{
-              '& .MuiToggleButton-root': {
-                borderRadius: '12px',
-                px: 2.5,
-                textTransform: 'none',
-              },
-            }}
-            value={appType}
-          >
-            <ToggleButton value="APP">
-              {t('core:app_page.hero.type_app')}
-            </ToggleButton>
-            <ToggleButton value="WEBSITE">
-              {t('core:website', capital)}
-            </ToggleButton>
-          </ToggleButtonGroup>
+          <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.5 }}>
+            <ToggleButtonGroup
+              aria-label={t('core:app_service_type', capital)}
+              exclusive
+              onChange={(_, value) => chooseKind(value)}
+              sx={{
+                '& .MuiToggleButton-root': {
+                  borderRadius: '12px',
+                  px: 2.5,
+                  textTransform: 'none',
+                },
+              }}
+              value={kind}
+            >
+              <ToggleButton disabled={lockedService === 'WEBSITE'} value="APP">
+                {t('core:app_page.hero.type_app')}
+              </ToggleButton>
+              <ToggleButton disabled={!canPickWidget} value="WIDGET">
+                {t('core:publish_widget.type_widget', capital)}
+              </ToggleButton>
+              <ToggleButton disabled={lockedService === 'APP'} value="WEBSITE">
+                {t('core:website', capital)}
+              </ToggleButton>
+            </ToggleButtonGroup>
+            {isWidget ? (
+              <WidgetGuideTip
+                onLearnMore={() => setGuideOpen(true)}
+                onOpenChange={setGuideTipOpen}
+                open={guideTipOpen}
+              />
+            ) : null}
+          </Box>
         </Box>
+        {isWidget ? (
+          <Box
+            sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2.5 }}
+          >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 2,
+              }}
+            >
+              {nameWidgets.length > 0 || widgetChoice ? (
+                <TextField
+                  FormHelperTextProps={{ sx: warningTextSx }}
+                  helperText={
+                    chosenWidget && !chosenWidget.listed
+                      ? t('core:publish_widget.relist_note', capital)
+                      : undefined
+                  }
+                  label={t('core:publish_widget.choose_label', capital)}
+                  onChange={(event) => setWidgetChoice(event.target.value)}
+                  select
+                  SelectProps={{ displayEmpty: true }}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ flex: '1 1 260px' }}
+                  value={widgetChoice}
+                >
+                  <MenuItem value="">
+                    {t('core:publish_widget.new_widget', capital)}
+                  </MenuItem>
+                  {(chosenWidget || !widgetChoice
+                    ? nameWidgets
+                    : [
+                        // Chosen, and not in the node's answer (yet).
+                        {
+                          identifier: widgetChoice,
+                          title: widgetChoice,
+                          updated: 0,
+                          listed: true,
+                        },
+                        ...nameWidgets,
+                      ]
+                  ).map((widget) => (
+                    <MenuItem key={widget.identifier} value={widget.identifier}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Box
+                          component="span"
+                          sx={{ display: 'block', fontWeight: 600 }}
+                        >
+                          {widget.title}
+                        </Box>
+                        <Box
+                          component="span"
+                          sx={{
+                            color: 'text.secondary',
+                            display: 'block',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {widget.listed
+                            ? widget.identifier
+                            : `${widget.identifier} · ${t('core:publish_widget.not_listed', capital)}`}
+                        </Box>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </TextField>
+              ) : null}
+              {widgetChoice ? null : (
+                <TextField
+                  error={slugInvalid}
+                  FormHelperTextProps={
+                    widgetTakenBy ? { sx: warningTextSx } : undefined
+                  }
+                  helperText={
+                    slugInvalid ? (
+                      t('core:publish_widget.id_invalid', capital)
+                    ) : widgetTakenBy ? (
+                      <>
+                        {t('core:publish_widget.id_taken', {
+                          title: widgetTakenBy.title,
+                          ...capital,
+                        })}{' '}
+                        <Button
+                          onClick={() => {
+                            setWidgetChoice(widgetTakenBy.identifier);
+                            setWidgetSlug('');
+                          }}
+                          size="small"
+                          sx={{
+                            minWidth: 0,
+                            p: '0 4px',
+                            textTransform: 'none',
+                            verticalAlign: 'baseline',
+                          }}
+                        >
+                          {t('core:publish_widget.update_instead', capital)}
+                        </Button>
+                      </>
+                    ) : (
+                      t('core:publish_widget.id_hint', capital)
+                    )
+                  }
+                  // A pasted full identifier: its go-widget- is dropped after.
+                  inputProps={{ maxLength: 64 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        {WIDGET_ID_PREFIX}
+                      </InputAdornment>
+                    ),
+                  }}
+                  label={t('core:publish_widget.id_label', capital)}
+                  onChange={(event) =>
+                    setWidgetSlug(cleanWidgetSlug(event.target.value))
+                  }
+                  sx={{ flex: '1 1 260px' }}
+                  value={widgetSlug}
+                />
+              )}
+            </Box>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                fontSize: '13px',
+                lineHeight: 1.6,
+              }}
+            >
+              <GuideText
+                text={t('core:publish_widget.note', {
+                  resource: widgetResource,
+                  ...capital,
+                })}
+              />
+            </Typography>
+          </Box>
+        ) : null}
       </FormSection>
 
       <FormSection
@@ -663,7 +1021,11 @@ export const AppPublish = ({
       </FormSection>
 
       <FormSection
-        hint={t('core:publish_form.listing_hint', capital)}
+        hint={
+          isWidget
+            ? t('core:publish_widget.listing_hint', capital)
+            : t('core:publish_form.listing_hint', capital)
+        }
         number={3}
         title={t('core:publish_form.section_listing', capital)}
       >
@@ -671,7 +1033,14 @@ export const AppPublish = ({
           <TextField
             fullWidth
             FormHelperTextProps={{ sx: { textAlign: 'end' } }}
-            helperText={`${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`}
+            helperText={
+              isWidget && title.length > WIDGET_TITLE_SUGGESTED_MAX
+                ? `${t('core:publish_widget.title_long', {
+                    number: WIDGET_TITLE_SUGGESTED_MAX,
+                    ...capital,
+                  })} · ${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`
+                : `${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`
+            }
             inputProps={{ maxLength: TITLE_MAX_CHARS }}
             label={t('core:title', capital)}
             onBlur={() => setActiveField(null)}
@@ -737,7 +1106,7 @@ export const AppPublish = ({
               </Typography>
               <Typography sx={{ color: 'text.secondary', fontSize: '12px' }}>
                 {activeTagInfo
-                  ? `${tagLabel(activeTagInfo.number)}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`
+                  ? `${tagLabel(activeTagInfo.number + (isWidget ? 1 : 0))}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`
                   : t('core:publish_form.tags_hint', capital)}
               </Typography>
             </Box>
@@ -748,10 +1117,24 @@ export const AppPublish = ({
                 gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
               }}
             >
-              {tags.map((tag, index) => (
+              {isWidget ? (
+                // The tag that lists the widget: always there, first.
+                <TextField
+                  disabled
+                  inputProps={{
+                    'aria-label': t('core:publish_widget.tag_locked', {
+                      number: 1,
+                      ...capital,
+                    }),
+                  }}
+                  size="small"
+                  value={WIDGET_TAG}
+                />
+              ) : null}
+              {tags.slice(0, ownTagCount).map((tag, index) => (
                 <TextField
                   inputProps={{
-                    'aria-label': tagLabel(index + 1),
+                    'aria-label': tagLabel(index + (isWidget ? 2 : 1)),
                     maxLength: TAG_MAX_CHARS,
                   }}
                   key={index}
@@ -763,7 +1146,7 @@ export const AppPublish = ({
                     );
                   }}
                   onFocus={() => setActiveField(`tag${index + 1}`)}
-                  placeholder={tagLabel(index + 1)}
+                  placeholder={tagLabel(index + (isWidget ? 2 : 1))}
                   size="small"
                   value={tag}
                 />
@@ -773,20 +1156,24 @@ export const AppPublish = ({
         </Box>
       </FormSection>
 
-      <FormSection
-        hint={t('core:app_page.publish.hint', capital)}
-        number={4}
-        title={t('core:app_page.publish.title', capital)}
-      >
-        <PublishPageExtras
-          bare
-          file={source?.file ?? null}
-          name={name}
-          onSummaryChange={setExtrasSummary}
-          ref={pageExtrasRef}
-          service={appType}
-        />
-      </FormSection>
+      {/* A widget has no page in the library. Kept mounted, so what was
+          entered here is still there after switching back to Q-App. */}
+      <Box sx={isWidget ? { display: 'none' } : undefined}>
+        <FormSection
+          hint={t('core:app_page.publish.hint', capital)}
+          number={4}
+          title={t('core:app_page.publish.title', capital)}
+        >
+          <PublishPageExtras
+            bare
+            file={source?.file ?? null}
+            name={name}
+            onSummaryChange={setExtrasSummary}
+            ref={pageExtrasRef}
+            service={appType}
+          />
+        </FormSection>
+      </Box>
     </Box>
   );
 
@@ -831,7 +1218,9 @@ export const AppPublish = ({
             </Typography>
           ) : (
             <Typography sx={{ color: 'text.secondary', fontSize: '14px' }}>
-              {t('core:publish_form.intro', capital)}
+              {isWidget
+                ? t('core:publish_widget.intro', capital)
+                : t('core:publish_form.intro', capital)}
             </Typography>
           )}
         </Box>
@@ -867,6 +1256,7 @@ export const AppPublish = ({
             t('core:loading.generic', { postProcess: 'capitalizeFirstChar' }),
         }}
       />
+      <WidgetGuideDialog onClose={() => setGuideOpen(false)} open={guideOpen} />
       <CustomizedSnackbars
         duration={3500}
         open={openSnack}
