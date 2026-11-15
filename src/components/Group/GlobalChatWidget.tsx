@@ -47,7 +47,10 @@ import { MiniDirectThread } from '../Chat/MiniDirectThread';
 import { MiniGroupThread } from '../Chat/MiniGroupThread';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { validateAddress } from '../../utils/validateAddress';
-import { appChromeOffset, appChromeOffsetPx } from '../Desktop/CustomTitleBar';
+import {
+  appChromeOffsetNow,
+  appChromeOffsetPx,
+} from '../Desktop/CustomTitleBar';
 import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 
 export type ChatWidgetTab = 'messages' | 'groups';
@@ -116,7 +119,7 @@ export function GlobalChatWidget({
     if (typeof window === 'undefined')
       return { x: 0, width: 380, height: 560 };
     const w = window.innerWidth;
-    const h = window.innerHeight - appChromeOffset;
+    const h = window.innerHeight - appChromeOffsetNow();
     const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
     const maxH = Math.min(
       WIDGET_MAX_HEIGHT,
@@ -142,7 +145,7 @@ export function GlobalChatWidget({
 
   const [windowSize, setWindowSize] = useState(() =>
     typeof window !== 'undefined'
-      ? { w: window.innerWidth, h: window.innerHeight - appChromeOffset }
+      ? { w: window.innerWidth, h: window.innerHeight - appChromeOffsetNow() }
       : { w: 800, h: 600 }
   );
   const [bottomX, setBottomX] = useState(initialBounds.x);
@@ -223,7 +226,7 @@ export function GlobalChatWidget({
 
   useEffect(() => {
     const onResize = () =>
-      setWindowSize({ w: window.innerWidth, h: window.innerHeight - appChromeOffset });
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight - appChromeOffsetNow() });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -233,7 +236,7 @@ export function GlobalChatWidget({
     if (!storedBounds || hasAppliedStoredRef.current) return;
     hasAppliedStoredRef.current = true;
     const w = window.innerWidth;
-    const h = window.innerHeight - appChromeOffset;
+    const h = window.innerHeight - appChromeOffsetNow();
     const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
     const maxH = Math.min(
       WIDGET_MAX_HEIGHT,

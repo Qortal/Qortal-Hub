@@ -1,7 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/system';
 import { AuthenticatedContainerInnerRight } from '../../styles/App-styles';
-import { appChromeOffset } from '../Desktop/CustomTitleBar';
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 /**
  * Group layout styled components using MUI's styled API.
@@ -83,7 +83,7 @@ export const NotPartGroupDiv = styled('div')(({ theme }) => ({
   alignItems: 'center',
   display: 'flex',
   flexDirection: 'column',
-  height: `calc(100vh - ${70 + appChromeOffset}px)`,
+  height: `calc(100vh - 70px - ${appChromeOffsetPx})`,
   overflow: 'auto',
   padding: theme.spacing(3),
   width: '100%',

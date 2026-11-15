@@ -179,6 +179,18 @@
     "limit_reached": "välilehtien enimmäismäärä saavutettu. Sulje yksi avataksesi uuden.",
     "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi."
   },
+  "apps_bar": {
+    "empty": "Kiinnitä sovellus tai lisää kirjanmerkki, niin se näkyy tässä.",
+    "label": "Kiinnitetyt sovellukset ja kirjanmerkit",
+    "more": "Näytä loput",
+    "rename_hint": "Jätä tyhjäksi, jos haluat näyttää vain kuvan.",
+    "rename_tip": "Nimeä palkin kohde uudelleen napsauttamalla sitä hiiren oikealla painikkeella.",
+    "rename_title": "Nimeä uudelleen palkissa",
+    "reset_name": "Käytä omaa nimeä",
+    "show": "Näytä otsikkopalkissa",
+    "show_hint": "Kiinnittämäsi sovellukset ja kirjanmerkit ikkunan yläreunassa.",
+    "show_names": "Näytä nimet"
+  },
   "apps_dashboard": "sovellusten hallintapaneeli",
   "apps_official": "viralliset sovellukset",
   "aria": {
@@ -213,11 +225,14 @@
     "new_folder": "Uusi kansio",
     "no_bookmarks": "Ei vielä kirjanmerkkejä.",
     "no_bookmarks_folder": "Tässä kansiossa ei ole kirjanmerkkejä.",
+    "no_bookmarks_hint": "Avaa sivu ja tallenna se tänne painamalla ”Lisää sivu”.",
+    "open_folder": "Avaa kansio",
     "qortal_link": "Qortal-linkki",
     "qortal_link_placeholder": "qortal://APP/Nimi/polku",
     "remove": "Poista",
     "rename": "Nimeä uudelleen",
     "save_location_without_query": "Tallenna Q-App-sijainti ilman kyselyparametreja.",
+    "search": "Hae kirjanmerkeistä",
     "title": "Kirjanmerkit",
     "top_level": "Ylin taso"
   },
@@ -436,7 +451,7 @@
   "group_call_you": "Sinä",
   "group_list_call_active": "Äänipuhelu käynnissä",
   "group_list_call_youre_in": "Olet tässä puhelussa",
-  "home": "koti",
+  "home": "etusivu",
   "identifier": "tunniste",
   "image_embed": "kuvan upotus",
   "items_per_page": "Kohteita per sivu:",
@@ -454,7 +469,11 @@
     "pinned_empty": "mitään ei ole vielä kiinnitetty. Kiinnitä sovellus alla olevasta kirjastosta, niin se pysyy tässä.",
     "pinned_hint": "järjestä vetämällä · luo kansio pudottamalla sovellus toisen päälle · lisää toimintoja hiiren oikealla painikkeella",
     "results_apps": "sovellukset ja verkkosivustot",
-    "results_saved": "kiinnitetyt sovelluksesi ja kirjanmerkkisi"
+    "results_saved": "kiinnitetyt sovelluksesi ja kirjanmerkkisi",
+    "save_later": "ei nyt",
+    "save_retry": "yritä uudelleen",
+    "save_text": "kiinnitetyt sovelluksesi, kirjanmerkkisi ja kansiosi tässä järjestyksessä jokaisella laitteella, jolla kirjaudut sisään.",
+    "save_title": "tallennetaanko tämä asettelu QDN:ään?"
   },
   "level": "taso",
   "library": "kirjasto",
@@ -923,6 +942,7 @@
     "my_apps": "omat sovellukset",
     "official_apps": "viralliset sovellukset"
   },
+  "tag_number": "tunniste {{number}}",
   "tags": "tunnisteet",
   "theme": {
     "dark": "tumma",
