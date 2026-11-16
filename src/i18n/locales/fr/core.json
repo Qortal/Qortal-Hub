@@ -313,7 +313,8 @@
       "sort_newest": "plus récents",
       "title": "avis",
       "update": "mettre à jour l’avis",
-      "write": "écrire un avis"
+      "write": "écrire un avis",
+      "yours_failed": "impossible de vérifier votre avis précédent : l’écriture attend que ce soit possible."
     },
     "screenshots": {
       "add": "ajouter des captures d’écran",

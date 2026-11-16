@@ -33,7 +33,7 @@ import {
   StarRow,
 } from './AppPageParts';
 import { REVIEW_LIMITS, ReviewItem, ReviewThread } from './appReviews';
-import type { ReviewActionResult } from './useAppReviews';
+import type { MyReviewStatus, ReviewActionResult } from './useAppReviews';
 import { useLauncherTabDialog } from '../launcherTabs';
 
 type Sort = 'newest' | 'highest' | 'lowest';
@@ -191,6 +191,32 @@ const YourReviewLoading = () => {
       {t('core:app_page.reviews.loading_yours', {
         postProcess: 'capitalizeFirstChar',
       })}
+    </Box>
+  );
+};
+
+/** The user's own review couldn't be checked: writing waits for a Retry. */
+const YourReviewFailed = ({ onRetry }: { onRetry: () => void }) => {
+  const { t } = useTranslation(['core']);
+  return (
+    <Box
+      role="alert"
+      sx={{
+        alignItems: 'center',
+        color: 'text.secondary',
+        display: 'flex',
+        flexWrap: 'wrap',
+        fontSize: '13.5px',
+        gap: 1,
+        py: 1,
+      }}
+    >
+      {t('core:app_page.reviews.yours_failed', {
+        postProcess: 'capitalizeFirstChar',
+      })}
+      <Button onClick={onRetry} size="small" sx={{ textTransform: 'none' }}>
+        {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+      </Button>
     </Box>
   );
 };
@@ -512,14 +538,17 @@ export const AppReviewsSection = ({
   loading,
   failed,
   hasMore,
+  loadingMore,
   myName,
   myReview,
+  myReviewStatus,
   ratingByAddress,
   myRating,
   prompt,
   onDismissPrompt,
   onLoadMore,
   onRetry,
+  onRetryMyReview,
   submitReview,
   submitReply,
   removeItem,
@@ -531,14 +560,20 @@ export const AppReviewsSection = ({
   loading: boolean;
   failed: boolean;
   hasMore: boolean;
+  /** A page of reviews is loading: Load more waits for it. */
+  loadingMore: boolean;
   myName?: string;
   myReview: ReviewItem | null;
+  /** Writing waits until the user's own review is known. */
+  myReviewStatus: MyReviewStatus;
   ratingByAddress: Map<string, number>;
   myRating: number | null;
   prompt: number | null;
   onDismissPrompt: () => void;
   onLoadMore: () => void;
   onRetry: () => void;
+  /** Looks for the user's own review again after it couldn't be checked. */
+  onRetryMyReview: () => void;
   submitReview: (text: string) => Promise<ReviewActionResult>;
   submitReply: (parent: string, text: string) => Promise<ReviewActionResult>;
   removeItem: (item: ReviewItem) => Promise<ReviewActionResult>;
@@ -587,9 +622,11 @@ export const AppReviewsSection = ({
   const visibleCount = threads.filter(
     (thread) => !thread.review.deleted
   ).length;
-  // Until the whole text is loaded, the search's snippet is all there is:
-  // editing that would publish it cut short.
-  const myReviewLoading = !!myReview && !myReview.complete;
+  // Until the search for the user's own review has answered and its whole
+  // text is loaded, writing could replace a review they haven't seen, or
+  // publish the search's snippet cut short.
+  const myReviewLoading = myReviewStatus === 'loading';
+  const myReviewFailed = myReviewStatus === 'failed';
   // A composer starts again from the text once a newer version arrives.
   const composerKey = myReview
     ? `${myReview.updated}-${myReview.complete}`
@@ -603,7 +640,14 @@ export const AppReviewsSection = ({
       });
   const loadMoreButton = hasMore && (
     <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-      <Button onClick={onLoadMore} sx={{ textTransform: 'none' }}>
+      <Button
+        disabled={loadingMore}
+        onClick={onLoadMore}
+        startIcon={
+          loadingMore ? <CircularProgress color="inherit" size={14} /> : null
+        }
+        sx={{ textTransform: 'none' }}
+      >
         {t('core:app_page.reviews.load_more', {
           postProcess: 'capitalizeFirstChar',
         })}
@@ -668,7 +712,7 @@ export const AppReviewsSection = ({
             )}
             {canWrite && !composing && !prompt && (
               <Button
-                disabled={myReviewLoading}
+                disabled={myReviewLoading || myReviewFailed}
                 onClick={() => setComposing(true)}
                 size="small"
                 startIcon={
@@ -718,6 +762,10 @@ export const AppReviewsSection = ({
           </Typography>
         )}
       </SectionTitle>
+
+      {canWrite && myReviewFailed && !prompt && !composing && (
+        <YourReviewFailed onRetry={onRetryMyReview} />
+      )}
 
       <Collapse in={!!prompt} unmountOnExit>
         <Box
@@ -782,6 +830,8 @@ export const AppReviewsSection = ({
           </Typography>
           {myReviewLoading ? (
             <YourReviewLoading />
+          ) : myReviewFailed ? (
+            <YourReviewFailed onRetry={onRetryMyReview} />
           ) : (
             <Composer
               autoFocus
@@ -812,6 +862,8 @@ export const AppReviewsSection = ({
           )}
           {myReviewLoading ? (
             <YourReviewLoading />
+          ) : myReviewFailed ? (
+            <YourReviewFailed onRetry={onRetryMyReview} />
           ) : (
             <Composer
               autoFocus

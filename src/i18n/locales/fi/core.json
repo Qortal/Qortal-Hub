@@ -313,7 +313,8 @@
       "sort_newest": "uusimmat",
       "title": "arvostelut",
       "update": "päivitä arvostelu",
-      "write": "kirjoita arvostelu"
+      "write": "kirjoita arvostelu",
+      "yours_failed": "aiempaa arvosteluasi ei voitu tarkistaa, joten kirjoittaminen odottaa, kunnes se onnistuu."
     },
     "screenshots": {
       "add": "lisää kuvakaappauksia",
