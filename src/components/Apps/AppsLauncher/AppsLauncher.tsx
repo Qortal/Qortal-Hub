@@ -25,6 +25,12 @@ import {
 } from '../../../utils/pinnedAppsSettings';
 import { AppsLibraryContainer, AppsWidthLimiter } from '../Apps-styles';
 import type { AppsLibraryTabValue } from '../AppsLibrary';
+import { libraryMuted } from '../AppsLibrary/libraryStyles';
+import {
+  inLauncherTab,
+  type PublishEditTarget,
+  useLauncherTabId,
+} from '../launcherTabs';
 import {
   LauncherBookmarkTile,
   openLauncherBookmark,
@@ -69,9 +75,9 @@ type SavedResult = {
 
 const sectionTitleSx = {
   color: 'text.primary',
-  fontSize: '15px',
-  fontWeight: 600,
-  lineHeight: 1.3,
+  fontSize: '17px',
+  fontWeight: 650,
+  lineHeight: '28px',
   margin: 0,
 } as const;
 
@@ -94,7 +100,8 @@ interface AppsLauncherProps {
   myName: string;
   myWebsite?: PinnedApp | null;
   request?: AppsLauncherRequest;
-  setMode: (mode: string) => void;
+  /** Opens a page from the launcher (My apps' publish pages). */
+  setMode: (mode: string, publishEditTarget?: PublishEditTarget | null) => void;
 }
 
 /**
@@ -124,6 +131,8 @@ const AppsLauncherPage = ({
   setMode,
 }: AppsLauncherProps) => {
   const { t } = useTranslation(['core']);
+  // In a launcher tab, what opens from here opens in its place.
+  const launcherTabId = useLauncherTabId();
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const libraryStartRef = useRef<HTMLDivElement | null>(null);
@@ -234,14 +243,14 @@ const AppsLauncherPage = ({
             />
           ),
           open: () => {
-            openLauncherBookmark(bookmark);
+            openLauncherBookmark(bookmark, launcherTabId);
             clearQuery();
           },
         });
       }
       return results;
     },
-    [bookmarks, clearQuery, openPrivateApp, pinnedApps, t]
+    [bookmarks, clearQuery, launcherTabId, openPrivateApp, pinnedApps, t]
   );
   const savedResults = useMemo(
     () => (link || !deferredQuery ? [] : findSaved(deferredQuery, appResults)),
@@ -341,22 +350,28 @@ const AppsLauncherPage = ({
 
   // --- Opening things -------------------------------------------------------
 
-  const openLink = useCallback((target: LauncherLink) => {
-    if (target.kind === 'group') {
-      void openQortalUseGroupLink(target.link);
-    } else {
-      executeEvent('addTab', {
-        data: {
-          service: target.service,
-          name: target.name,
-          identifier: target.identifier,
-          path: target.path,
-        },
-      });
-      executeEvent('open-apps-mode', {});
-    }
-    setQuery('');
-  }, []);
+  const openLink = useCallback(
+    (target: LauncherLink) => {
+      if (target.kind === 'group') {
+        void openQortalUseGroupLink(target.link);
+      } else {
+        executeEvent('addTab', {
+          data: inLauncherTab(
+            {
+              service: target.service,
+              name: target.name,
+              identifier: target.identifier,
+              path: target.path,
+            },
+            launcherTabId
+          ),
+        });
+        executeEvent('open-apps-mode', {});
+      }
+      setQuery('');
+    },
+    [launcherTabId]
+  );
 
   // Enter opens the address that was typed, or the best match.
   const handleSubmit = useCallback(() => {
@@ -369,13 +384,20 @@ const AppsLauncherPage = ({
     }
     const [bestApp] = searchLauncherApps(availableQapps, text, searchOptions);
     if (bestApp) {
-      executeEvent('addTab', { data: bestApp });
+      executeEvent('addTab', { data: inLauncherTab(bestApp, launcherTabId) });
       executeEvent('open-apps-mode', {});
       setQuery('');
       return;
     }
     findSaved(text, [])[0]?.open();
-  }, [availableQapps, findSaved, openLink, query, searchOptions]);
+  }, [
+    availableQapps,
+    findSaved,
+    launcherTabId,
+    openLink,
+    query,
+    searchOptions,
+  ]);
 
   const enterOpens = useMemo(() => {
     if (link) return null;
@@ -500,8 +522,8 @@ const AppsLauncherPage = ({
                   </Typography>
                   <Typography
                     sx={(theme) => ({
-                      color: theme.palette.text.secondary,
-                      fontSize: '12.5px',
+                      color: libraryMuted(theme),
+                      fontSize: '13px',
                     })}
                   >
                     {t('core:launcher.pinned_hint', {

@@ -116,6 +116,7 @@ describe('readHomeLayout', () => {
     saveHomeLayout(ALICE, { hidden: ['qortino'], stack: ['feed', 'widgets'] });
 
     expect(readHomeLayout(ALICE)).toEqual({
+      changedAt: expect.any(Number),
       hidden: ['qortino'],
       stack: ['feed', 'widgets', 'groupActivity'],
     });
@@ -198,6 +199,7 @@ describe('useHomeLayout', () => {
     expect(
       JSON.parse(localStorage.getItem(homeLayoutStorageKey(ALICE)) ?? '{}')
     ).toEqual({
+      changedAt: expect.any(Number),
       hidden: ['featured'],
       stack: ['widgets', 'groupActivity', 'feed'],
     });
@@ -213,6 +215,54 @@ describe('useHomeLayout', () => {
     });
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
+  });
+});
+
+describe('when the layout changed', () => {
+  it('marks a change, and only a change, with its time', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    saveHomeLayout(ALICE, { hidden: ['qortino'], stack: [] });
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    now.mockReturnValue(2_000);
+    saveHomeLayout(ALICE, readHomeLayout(ALICE));
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    saveHomeLayout(ALICE, { hidden: [], stack: [] });
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    saveHomeLayout(ALICE, { hidden: ['feed'], stack: [] }, { changedAt: 500 });
+    expect(readHomeLayout(ALICE).changedAt).toBe(500);
+    now.mockRestore();
+  });
+
+  it('counts a widget window added or removed, and the height its widget asks for', () => {
+    const clock = { name: 'GO Clock', identifier: null };
+    const clockId = homeWidgetWindowId(clock);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    saveHomeLayout(ALICE, withHomeWidgetWindow(readHomeLayout(ALICE), clock));
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    now.mockReturnValue(2_000);
+    const askHeight = () =>
+      saveHomeLayout(
+        ALICE,
+        withHomeWidgetWindowHeight(readHomeLayout(ALICE), clockId, 140)
+      );
+    askHeight();
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    // The same height again changes nothing.
+    now.mockReturnValue(3_000);
+    askHeight();
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    saveHomeLayout(
+      ALICE,
+      withoutHomeWidgetWindow(readHomeLayout(ALICE), clockId)
+    );
+    expect(readHomeLayout(ALICE).changedAt).toBe(3_000);
+    now.mockRestore();
   });
 });
 

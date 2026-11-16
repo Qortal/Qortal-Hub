@@ -174,10 +174,17 @@
   "app_private": "プライベート",
   "app_service_type": "アプリサービスタイプ",
   "app_tab": {
+    "close": "タブを閉じる",
     "close_all": "すべてのタブを閉じる",
     "duplicate": "タブを複製",
     "limit_reached": "タブの最大数に達しました。別のタブを開くには、いずれかを閉じてください。",
-    "locked_kept_open": "ロックされたタブは開いたままです。確認するには、1つずつ閉じてください。"
+    "locked_kept_open": "ロックされたタブは開いたままです。確認するには、1つずつ閉じてください。",
+    "new_tab": "新しいタブ",
+    "pin": "タブをピン留め",
+    "pinned_and_locked_kept_open": "ピン留めしたタブとロックされたタブは開いたままです。ピン留めしたタブはピン留めを解除してから閉じ、ロックされたタブは確認のため1つずつ閉じてください。",
+    "pinned_kept_open": "ピン留めしたタブは開いたままです。閉じるには、先にピン留めを解除してください。",
+    "unpin": "タブのピン留めを解除",
+    "unsaved_publish": "公開フォームの内容はまだ公開されていません。タブを閉じると破棄されます。"
   },
   "apps_bar": {
     "empty": "アプリをピン留めするかブックマークを追加すると、ここに表示されます。",
@@ -466,6 +473,36 @@
     "folder_delete": "フォルダーを削除",
     "folder_move_to": "フォルダーに移動",
     "folder_remove_from": "フォルダーから出す",
+    "library": {
+      "all_categories": "すべてのカテゴリ",
+      "categories_hint": "Q-AppとWebサイトをトピック別に見る",
+      "clear_filters": "フィルターをクリア",
+      "community_hint": "Qortalコミュニティが公開したQ-AppとWebサイト",
+      "count_filtered": "{{shown}} / {{total}}",
+      "empty_text": "ノードからQ-AppやWebサイトがまだ届いていません。上の更新ボタンで再試行してください。",
+      "empty_title": "Q-AppやWebサイトはまだありません",
+      "featured_hint": "まずはこちらの公式Q-App",
+      "featured_next": "おすすめアプリをさらに表示",
+      "featured_previous": "前のおすすめアプリを表示",
+      "filter_categories": "カテゴリを絞り込む",
+      "my_apps_hint": "このアカウントの名前で公開されたもの",
+      "no_category_matches": "「{{query}}」に一致するカテゴリはありません",
+      "no_filter_matches": "これらのフィルターに一致するQ-AppやWebサイトはありません",
+      "no_name_text": "Q-AppやWebサイトを公開するには、Qortal名を登録してください。公開したものはここに表示されます。",
+      "official_hint": "Qortal Hubの公式リストにあるQ-App",
+      "private_actions_hint": "グループで共有されたプライベートアプリを開くか、自分のアプリを公開します",
+      "rating_none": "まだ評価はありません",
+      "rating_summary": "評価 {{rating}}（5点満点）、投票数: {{count}}",
+      "refreshed": "ライブラリを更新しました",
+      "refreshing": "ライブラリを更新しています",
+      "search_categories": "カテゴリを検索",
+      "search_in_category": "{{category}}内を検索",
+      "status_apps_shown": "表示中のQ-AppとWebサイト: {{shown}} / {{total}}",
+      "status_categories_shown": "表示中のカテゴリ: {{shown}} / {{total}}",
+      "view_grid": "グリッド",
+      "view_label": "表示形式",
+      "view_list": "リスト"
+    },
     "no_matches": "「{{query}}」に一致するものはありません",
     "no_matches_hint": "別の名前を試すか、qortal://リンクを貼り付けてください。",
     "pinned_and_bookmarks": "ピン留めしたアプリとブックマーク",
@@ -746,8 +783,21 @@
       "menu_aria": "セッションのオプション",
       "tooltip": "ロックまたはログアウト"
     },
+    "suggestion_action": {
+      "new_tab": "新しいタブ",
+      "open_link": "リンクを開く",
+      "switch_to_tab": "タブに切り替え"
+    },
+    "suggestion_group": {
+      "apps": "Q-AppsとWebサイト",
+      "names": "名前",
+      "saved": "ピン留めしたアプリとブックマーク",
+      "tabs": "開いているタブ"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "ブックマーク",
+      "name": "名前",
       "website": "Webサイト"
     },
     "suggestions": "候補"
@@ -806,6 +856,29 @@
     "selected_file": "選択したファイル: {{filename}}"
   },
   "publish": "公開",
+  "publish_source": {
+    "changed_files": "{{date}}以降に変更されたファイル: {{number}}",
+    "choose_another": "別のものを選択",
+    "choose_folder": "フォルダーを選択",
+    "read_error": "選択したフォルダーまたはファイルを読み込めませんでした",
+    "same_file": "前回と同じファイル",
+    "same_folder": "前回と同じフォルダー",
+    "selected_file": "選択したファイル: {{name}}",
+    "selected_folder": "選択したフォルダー: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "{{group}}の管理者であることを確認できませんでした。後でもう一度お試しください。",
+    "checking_admin": "{{group}}の管理者であることを確認しています…",
+    "current_unavailable": "現在のバージョンを読み込めなかったため、アプリ名とロゴを引き継げません。もう一度入力してください。",
+    "filled_from_profile": "このアプリの詳細をネットワークから読み込めなかったため、このPCからの前回の公開内容で入力しました。公開する前に確認してください。",
+    "identifier_locked": "更新では識別子を変更できません。別の識別子にすると新しいアプリとして公開されます。",
+    "is_admin": "あなたは{{group}}の管理者です",
+    "last_published": "このPCからの前回の公開: {{date}}",
+    "loading_current": "現在のバージョンを読み込んでいます…",
+    "logo_kept": "ロゴは現在のバージョンから引き継ぎます",
+    "not_admin": "あなたは{{group}}の管理者ではなくなったため、このアカウントからこのアプリを更新できません。",
+    "title": "{{name}}を更新"
+  },
   "q_apps": {
     "about": "このq-appについて",
     "q_mail": "Q-Mail",
@@ -950,6 +1023,28 @@
   "receiver": "受信機",
   "remaining_to_level": "レベル{{level}}まで残り",
   "retry": "再試行",
+  "saved_layouts": {
+    "confirm_home": "QDN に保存したホームのレイアウトを使いますか？このデバイスのレイアウトは置き換えられます。",
+    "confirm_home_when": "{{when}} に QDN に保存したホームのレイアウトを使いますか？このデバイスのレイアウトは置き換えられます。",
+    "confirm_side_panel": "QDN に保存したサイドパネルを使いますか？このデバイスのサイドパネルは置き換えられます。",
+    "confirm_side_panel_when": "{{when}} に QDN に保存したサイドパネルを使いますか？このデバイスのサイドパネルは置き換えられます。",
+    "keep": "このデバイスのものを残す",
+    "not_now": "今はしない",
+    "offer_both": "ホームのレイアウトとサイドパネルが別のデバイスで変更され、保存されました。",
+    "offer_home": "ホームのレイアウトが別のデバイスで変更され、保存されました。",
+    "offer_side_panel": "サイドパネルが別のデバイスで変更され、保存されました。",
+    "restore": "復元",
+    "restore_from_qdn": "QDN から復元",
+    "restore_title": "QDN から復元しますか？",
+    "restored": "QDN から復元しました。",
+    "save_text_both": "ホームのレイアウトとサイドパネルが、この設定のまま、サインインするすべての端末に表示されます。",
+    "save_text_home": "ホームのレイアウトが、この並びのまま、サインインするすべての端末に表示されます。",
+    "save_text_side_panel": "サイドパネルが、この設定のまま、サインインするすべての端末に表示されます。",
+    "save_title": "このレイアウトをQDNに保存しますか？",
+    "try_again": "再試行",
+    "unreadable_text": "保存済みの設定をこのノードからダウンロードできなかったため、ここで保存すると上書きしてしまう可能性があります。ローカルノードに切り替えるか、保存ボタンで上書きしてください。",
+    "unreadable_title": "このノードではQDNに保存できません"
+  },
   "sender": "送信者",
   "server": "サーバ",
   "service_type": "サービスタイプ",

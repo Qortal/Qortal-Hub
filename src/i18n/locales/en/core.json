@@ -174,10 +174,17 @@
   "app_private": "private",
   "app_service_type": "app service type",
   "app_tab": {
+    "close": "close tab",
     "close_all": "close all tabs",
     "duplicate": "duplicate tab",
     "limit_reached": "maximum number of tabs reached. Close one to open another.",
-    "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm."
+    "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm.",
+    "new_tab": "new tab",
+    "pin": "pin tab",
+    "pinned_and_locked_kept_open": "pinned and locked tabs stay open. Unpin a pinned tab before closing it, and close each locked tab on its own to confirm.",
+    "pinned_kept_open": "pinned tabs stay open. Unpin a tab to close it.",
+    "unpin": "unpin tab",
+    "unsaved_publish": "the details in its publish form are not published yet, and closing the tab discards them."
   },
   "apps_bar": {
     "empty": "Pin an app or add a bookmark, and it shows here.",
@@ -466,6 +473,36 @@
     "folder_delete": "delete folder",
     "folder_move_to": "move to folder",
     "folder_remove_from": "remove from folder",
+    "library": {
+      "all_categories": "all categories",
+      "categories_hint": "browse Q-Apps and websites by topic",
+      "clear_filters": "clear filters",
+      "community_hint": "Q-Apps and websites published by the Qortal community",
+      "count_filtered": "{{shown}} of {{total}}",
+      "empty_text": "your node has not sent any Q-Apps or websites yet. Use the refresh button above to try again.",
+      "empty_title": "no Q-Apps or websites yet",
+      "featured_hint": "a few official Q-Apps to start with",
+      "featured_next": "show more featured apps",
+      "featured_previous": "show the previous featured apps",
+      "filter_categories": "filter categories",
+      "my_apps_hint": "published under the names on this account",
+      "no_category_matches": "no category matches “{{query}}”",
+      "no_filter_matches": "no Q-Apps or websites match these filters",
+      "no_name_text": "register a Qortal name to publish Q-Apps and websites. They will show up here.",
+      "official_hint": "the Q-Apps on Qortal Hub's official list",
+      "private_actions_hint": "open a private app shared with one of your groups, or publish your own",
+      "rating_none": "no ratings yet",
+      "rating_summary": "rating {{rating}} out of 5, number of votes: {{count}}",
+      "refreshed": "library refreshed",
+      "refreshing": "refreshing the library",
+      "search_categories": "search categories",
+      "search_in_category": "search in {{category}}",
+      "status_apps_shown": "Q-Apps and websites shown: {{shown}} of {{total}}",
+      "status_categories_shown": "categories shown: {{shown}} of {{total}}",
+      "view_grid": "grid",
+      "view_label": "layout",
+      "view_list": "list"
+    },
     "no_matches": "nothing matches “{{query}}”",
     "no_matches_hint": "try another name, or paste a qortal:// link.",
     "pinned_and_bookmarks": "pinned apps and bookmarks",
@@ -746,8 +783,21 @@
       "menu_aria": "Session options",
       "tooltip": "Lock or log out"
     },
+    "suggestion_action": {
+      "new_tab": "New tab",
+      "open_link": "Open link",
+      "switch_to_tab": "Switch to tab"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps and websites",
+      "names": "Names",
+      "saved": "Pinned apps and bookmarks",
+      "tabs": "Open tabs"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Bookmark",
+      "name": "Name",
       "website": "Website"
     },
     "suggestions": "Suggestions"
@@ -806,6 +856,29 @@
     "selected_file": "selected file: {{filename}}"
   },
   "publish": "publish",
+  "publish_source": {
+    "changed_files": "files changed since {{date}}: {{number}}",
+    "choose_another": "choose another",
+    "choose_folder": "choose folder",
+    "read_error": "the selected folder or file couldn't be read",
+    "same_file": "same file as last time",
+    "same_folder": "same folder as last time",
+    "selected_file": "selected file: {{name}}",
+    "selected_folder": "selected folder: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "couldn't check that you're still an admin of {{group}}. Try again later.",
+    "checking_admin": "checking that you're still an admin of {{group}}…",
+    "current_unavailable": "the current version couldn't be loaded, so its app name and logo can't be kept. Enter them again.",
+    "filled_from_profile": "this app's details couldn't be loaded from the network, so they were filled in from this PC's last publish. Check them before publishing.",
+    "identifier_locked": "the identifier can't be changed in an update: a different identifier would publish a new app.",
+    "is_admin": "you're an admin of {{group}}",
+    "last_published": "last published from this PC: {{date}}",
+    "loading_current": "loading the current version…",
+    "logo_kept": "logo kept from the current version",
+    "not_admin": "you're no longer an admin of {{group}}, so this app can't be updated from this account.",
+    "title": "update {{name}}"
+  },
   "q_apps": {
     "about": "about this Q-App",
     "q_mail": "Q-Mail",
@@ -950,6 +1023,28 @@
   "receiver": "receiver",
   "remaining_to_level": "Remaining to level {{level}}",
   "retry": "retry",
+  "saved_layouts": {
+    "confirm_home": "Use the Home layout saved to QDN? It replaces this device's layout.",
+    "confirm_home_when": "Use the Home layout saved to QDN on {{when}}? It replaces this device's layout.",
+    "confirm_side_panel": "Use the side panel saved to QDN? It replaces this device's side panel.",
+    "confirm_side_panel_when": "Use the side panel saved to QDN on {{when}}? It replaces this device's side panel.",
+    "keep": "keep this device's",
+    "not_now": "not now",
+    "offer_both": "Your Home layout and side panel were changed and saved on another device.",
+    "offer_home": "Your Home layout was changed and saved on another device.",
+    "offer_side_panel": "Your side panel was changed and saved on another device.",
+    "restore": "restore",
+    "restore_from_qdn": "restore from QDN",
+    "restore_title": "restore from QDN?",
+    "restored": "Restored from QDN.",
+    "save_text_both": "your Home layout and side panel, set up like this, on every device you sign in on.",
+    "save_text_home": "your Home layout, arranged like this, on every device you sign in on.",
+    "save_text_side_panel": "your side panel, set up like this, on every device you sign in on.",
+    "save_title": "save this layout to QDN?",
+    "try_again": "try again",
+    "unreadable_text": "your saved settings couldn't be downloaded from this node, so saving here could write over them. Switch to your local node, or overwrite them with the Save button.",
+    "unreadable_title": "can't save to QDN on this node"
+  },
   "sender": "sender",
   "server": "server",
   "service_type": "service type",
