@@ -22,6 +22,7 @@ import {
   usePrefersReducedMotion,
 } from '../AppsLibrary/libraryStyles';
 import type { CategoryCounts } from './categoryCounts';
+import { useLauncherTabDialog } from '../launcherTabs';
 import { FilterPill } from './FilterPill';
 import { filterFieldSx } from './LibraryFilterField';
 
@@ -119,6 +120,8 @@ export const CategoryFilter = ({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
+  // In a hidden launcher tab the list steps aside, and comes back with it.
+  const popoverShown = useLauncherTabDialog(!!anchor);
   const label = t('core:filter.category', cap);
   const allLabel = t('core:launcher.library.all_categories', cap);
   const searchLabel = t('core:launcher.library.search_categories', cap);
@@ -190,7 +193,7 @@ export const CategoryFilter = ({
         anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
         id={popupId}
         onClose={close}
-        open={!!anchor}
+        {...popoverShown}
         slotProps={{
           paper: {
             'aria-label': label,

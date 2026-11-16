@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -14,6 +15,7 @@ import { appSortAtom, filterAndSortApps } from '../../atoms/appsAtoms';
 import { executeEvent } from '../../utils/events';
 import { AppsLibraryContainer } from './Apps-styles';
 import { AppCollection } from './AppsLibrary/AppCollection';
+import { LauncherTabShownContext } from './launcherTabs';
 import {
   CountBadge,
   LibraryEmptyState,
@@ -65,6 +67,9 @@ export const AppsCategoryDesktop = ({
   const headerRef = useRef<HTMLDivElement | null>(null);
   const [headerHeight, setHeaderHeight] = useState(0);
   const ratingsMap = useRatingsForSort(sortOption);
+  // In a hidden launcher tab the page stays as it was (its search too), but
+  // its grid stops measuring until the tab shows again.
+  const isTabShown = useContext(LauncherTabShownContext);
 
   useEffect(() => {
     if (!isShow) setSearchValue('');
@@ -318,7 +323,7 @@ export const AppsCategoryDesktop = ({
           <LibraryPanel sx={{ mb: 4, width: '90%' }}>
             {shown.length > 0 ? (
               <AppCollection
-                active={isShow}
+                active={isShow && isTabShown}
                 apps={shown}
                 isFromCategory
                 label={title}
