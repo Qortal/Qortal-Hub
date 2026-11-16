@@ -9,6 +9,7 @@ import {
 } from '../../../atoms/global';
 import { executeEvent } from '../../../utils/events';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
+import { inLauncherTab, useLauncherTabId } from '../launcherTabs';
 import type { LibraryView } from '../AppsLibrary/libraryView';
 import { LibraryAppRow, LibraryAppTile } from './LibraryAppItem';
 
@@ -38,6 +39,7 @@ const AppCardEnhancedInner = ({
 }: AppCardEnhancedProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const launcherTabId = useLauncherTabId();
   const isInstalled = app?.status?.status === 'READY';
 
   const pinnedKey = useMemo(
@@ -90,9 +92,9 @@ const AppCardEnhancedInner = ({
   const handleOpenClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      executeEvent('addTab', { data: app });
+      executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) });
     },
-    [app]
+    [app, launcherTabId]
   );
 
   const truncatedDescription = useMemo(() => {

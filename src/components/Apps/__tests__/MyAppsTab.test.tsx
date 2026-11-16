@@ -25,7 +25,6 @@ vi.mock('../AppCard', () => ({
 }));
 
 import { MyAppsTab } from '../AppsLibrary/MyAppsTab';
-import { publishEditTargetAtom } from '../../../atoms/appsAtoms';
 import { userInfoAtom } from '../../../atoms/global';
 
 const availableQapps = [
@@ -57,32 +56,31 @@ describe('MyAppsTab', () => {
         </ThemeProvider>
       </Provider>
     );
-    return { setMode, store };
+    return { setMode };
   };
 
   it("offers Update only on the account's own apps and websites", async () => {
     const user = userEvent.setup();
-    const { setMode, store } = renderTab();
+    const { setMode } = renderTab();
 
     expect(await screen.findByText('update APP alice')).toBeInTheDocument();
     expect(screen.getByText('update WEBSITE alice')).toBeInTheDocument();
     expect(screen.queryByText('update APP bob')).not.toBeInTheDocument();
 
+    // What to update goes with the page, to the launcher tab it opens in.
     await user.click(screen.getByText('update WEBSITE alice'));
-    expect(store.get(publishEditTargetAtom)).toEqual({
+    expect(setMode).toHaveBeenCalledWith('publish', {
       name: 'alice',
       service: 'WEBSITE',
     });
-    expect(setMode).toHaveBeenCalledWith('publish');
   });
 
   it('opens "publish new" with nothing locked', async () => {
     const user = userEvent.setup();
-    const { setMode, store } = renderTab();
+    const { setMode } = renderTab();
     await user.click(await screen.findByText('update APP alice'));
 
     await user.click(screen.getByText('core:developer.publish_app'));
-    expect(store.get(publishEditTargetAtom)).toBeNull();
     expect(setMode).toHaveBeenLastCalledWith('publish-app');
   });
 });

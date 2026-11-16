@@ -179,10 +179,12 @@
     "duplicate": "monista välilehti",
     "limit_reached": "välilehtien enimmäismäärä saavutettu. Sulje yksi avataksesi uuden.",
     "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi.",
+    "new_tab": "uusi välilehti",
     "pin": "kiinnitä välilehti",
     "pinned_and_locked_kept_open": "kiinnitetyt ja lukitut välilehdet jäävät auki. Irrota kiinnitetty välilehti ennen sen sulkemista ja sulje lukitut yksitellen vahvistaaksesi.",
     "pinned_kept_open": "kiinnitetyt välilehdet jäävät auki. Irrota välilehti sulkeaksesi sen.",
-    "unpin": "irrota välilehti"
+    "unpin": "irrota välilehti",
+    "unsaved_publish": "julkaisulomakkeen tietoja ei ole vielä julkaistu, ja välilehden sulkeminen hylkää ne."
   },
   "apps_bar": {
     "empty": "Kiinnitä sovellus tai lisää kirjanmerkki, niin se näkyy tässä.",

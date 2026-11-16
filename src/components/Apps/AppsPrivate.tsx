@@ -74,6 +74,7 @@ export const AppsPrivate = ({
   updateTarget = null,
   onClose,
   onPublished,
+  isShown = true,
 }: {
   myName: string;
   myAddress: string;
@@ -82,6 +83,11 @@ export const AppsPrivate = ({
   updateTarget?: PrivateAppTarget | null;
   onClose: () => void;
   onPublished?: () => void;
+  /**
+   * False while the launcher tab it is in is hidden: the dialog is put away,
+   * and comes back as it was when the tab shows again.
+   */
+  isShown?: boolean;
 }) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState<string | number>(0);
@@ -530,7 +536,7 @@ export const AppsPrivate = ({
     <>
       {isOpen && (
         <Dialog
-          open={isOpen}
+          open={isOpen && isShown}
           onClose={closeDialog}
           aria-labelledby="private-app-dialog-title"
           onKeyDown={(e) => {
