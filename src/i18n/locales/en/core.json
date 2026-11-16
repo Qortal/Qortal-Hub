@@ -824,6 +824,29 @@
     "selected_file": "selected file: {{filename}}"
   },
   "publish": "publish",
+  "publish_source": {
+    "changed_files": "files changed since {{date}}: {{number}}",
+    "choose_another": "choose another",
+    "choose_folder": "choose folder",
+    "read_error": "the selected folder or file couldn't be read",
+    "same_file": "same file as last time",
+    "same_folder": "same folder as last time",
+    "selected_file": "selected file: {{name}}",
+    "selected_folder": "selected folder: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "couldn't check that you're still an admin of {{group}}. Try again later.",
+    "checking_admin": "checking that you're still an admin of {{group}}…",
+    "current_unavailable": "the current version couldn't be loaded, so its app name and logo can't be kept. Enter them again.",
+    "filled_from_profile": "this app's details couldn't be loaded from the network, so they were filled in from this PC's last publish. Check them before publishing.",
+    "identifier_locked": "the identifier can't be changed in an update: a different identifier would publish a new app.",
+    "is_admin": "you're an admin of {{group}}",
+    "last_published": "last published from this PC: {{date}}",
+    "loading_current": "loading the current version…",
+    "logo_kept": "logo kept from the current version",
+    "not_admin": "you're no longer an admin of {{group}}, so this app can't be updated from this account.",
+    "title": "update {{name}}"
+  },
   "q_apps": {
     "about": "about this Q-App",
     "q_mail": "Q-Mail",

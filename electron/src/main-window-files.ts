@@ -15,6 +15,66 @@ type Grants = {
   writes: Map<string, string>;
 };
 
+type PickerOptions = {
+  /** Where the picker opens, e.g. the folder used last time. */
+  defaultPath?: unknown;
+  /** Count the zipped files modified after this time (ms). */
+  changedSince?: unknown;
+};
+
+const pickerOptions = (value: unknown): PickerOptions =>
+  value && typeof value === 'object' ? (value as PickerOptions) : {};
+
+/**
+ * Where to open the picker. Only a hint for the dialog: it grants nothing,
+ * and a path that no longer exists opens the usual picker instead.
+ */
+async function pickerDefaultPath(options: unknown): Promise<string | null> {
+  const { defaultPath } = pickerOptions(options);
+  if (
+    typeof defaultPath !== 'string' ||
+    !isAbsolute(defaultPath) ||
+    defaultPath.includes('\0')
+  ) {
+    return null;
+  }
+  try {
+    await fs.stat(defaultPath);
+    return resolve(defaultPath);
+  } catch {
+    return null;
+  }
+}
+
+function changedSince(options: unknown): number | null {
+  const { changedSince: since } = pickerOptions(options);
+  return typeof since === 'number' && Number.isFinite(since) && since > 0
+    ? since
+    : null;
+}
+
+/**
+ * How many of the zip's files were modified after `since`. It counts the
+ * zip's own entries, so it skips exactly what the zip skips.
+ */
+async function countFilesChangedSince(
+  root: string,
+  zip: Pick<AdmZip, 'getEntries'>,
+  since: number
+): Promise<number> {
+  let changed = 0;
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) continue;
+    try {
+      const stats = await fs.stat(join(root, ...entry.entryName.split('/')));
+      if (stats.isFile() && stats.mtimeMs > since) changed += 1;
+    } catch {
+      // Gone since it was zipped.
+    }
+  }
+  return changed;
+}
+
 export function installMainWindowFileCleanup(
   contents: Pick<WebContents, 'id' | 'on'>,
   cleanup: (contentsId: number) => void
@@ -88,11 +148,14 @@ export function registerMainWindowFileIpc({
     return current;
   };
 
-  ipcMain.handle('dialog:openFile', async (event) => {
+  ipcMain.handle('dialog:openFile', async (event, options) => {
     const { grants, checkLive } = capture(event);
+    const defaultPath = await pickerDefaultPath(options);
+    checkLive();
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [{ name: 'ZIP Files', extensions: ['zip'] }],
+      ...(defaultPath ? { defaultPath } : {}),
     });
     checkLive();
     if (result.canceled || !result.filePaths[0]) return undefined;
@@ -108,12 +171,15 @@ export function registerMainWindowFileIpc({
     checkLive();
     return fs.readFile(target);
   });
-  ipcMain.handle('fs:selectAndZip', async (event, existingPath) => {
+  ipcMain.handle('fs:selectAndZip', async (event, existingPath, options) => {
     const { grants, checkLive } = capture(event);
     let directoryPath = existingPath;
     if (!directoryPath) {
+      const defaultPath = await pickerDefaultPath(options);
+      checkLive();
       const result = await dialog.showOpenDialog({
         properties: ['openDirectory'],
+        ...(defaultPath ? { defaultPath } : {}),
       });
       checkLive();
       if (result.canceled || !result.filePaths[0]) return null;
@@ -126,7 +192,12 @@ export function registerMainWindowFileIpc({
     checkLive();
     const zip = new AdmZip();
     zip.addLocalFolder(target);
-    return { buffer: zip.toBuffer(), directoryPath };
+    const buffer = zip.toBuffer();
+    const since = changedSince(options);
+    if (since === null) return { buffer, directoryPath };
+    const changedFiles = await countFilesChangedSince(target, zip, since);
+    checkLive();
+    return { buffer, directoryPath, changedFiles };
   });
   ipcMain.handle('file:startStreamSave', async (event, options) => {
     const { grants, checkLive } = capture(event);
