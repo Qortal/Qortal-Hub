@@ -6,6 +6,7 @@ import {
 import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
 import type { AppBookmark } from '../Apps/AppBookmarks/bookmarkTypes';
 import { isAppStartBookmark } from '../Apps/AppsLauncher/launcherItems';
+import { isLauncherTab } from '../Apps/launcherTabs';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
 import { extractComponents } from '../Chat/MessageDisplay';
 import { appOpenCountKey, type AppOpenCounts } from './appOpenCounts';
@@ -254,7 +255,9 @@ export const buildOmniboxOptions = (
   const shown = new Set<string>();
   const options: OmniboxOption[] = [];
 
+  // A launcher tab is a page on the way to an app: nothing to switch to.
   const tabRows = (tabs ?? [])
+    .filter((tab) => !isLauncherTab(tab))
     .map((tab, order) => ({
       order,
       score:

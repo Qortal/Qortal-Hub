@@ -307,10 +307,12 @@
     "duplicate": "duplica scheda",
     "limit_reached": "numero massimo di schede raggiunto. Chiudine una per aprirne un'altra.",
     "locked_kept_open": "le schede bloccate restano aperte. Chiudile una alla volta per confermare.",
+    "new_tab": "nuova scheda",
     "pin": "fissa scheda",
     "pinned_and_locked_kept_open": "le schede fissate e bloccate restano aperte. Rilascia una scheda fissata prima di chiuderla e chiudi le schede bloccate una alla volta per confermare.",
     "pinned_kept_open": "le schede fissate restano aperte. Rilascia una scheda per chiuderla.",
-    "unpin": "rilascia scheda"
+    "unpin": "rilascia scheda",
+    "unsaved_publish": "i dati del suo modulo di pubblicazione non sono ancora pubblicati e chiudere la scheda li elimina."
   },
   "apps_bar": {
     "empty": "Fissa un’app o aggiungi un segnalibro e comparirà qui.",

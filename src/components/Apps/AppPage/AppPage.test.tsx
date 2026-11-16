@@ -46,7 +46,9 @@ vi.mock('../../Snackbar/Snackbar', () => ({
 }));
 
 import { AppInfo } from '../AppInfo';
+import { LauncherTabContext } from '../launcherTabs';
 import { userInfoAtom } from '../../../atoms/global';
+import { shownAppPageAtom } from '../../../atoms/appsAtoms';
 import { executeEvent } from '../../../utils/events';
 import { clearAppPageCache } from './useAppPage';
 
@@ -145,14 +147,22 @@ const publishedJson = () =>
     .filter((call) => call[0] === 'publishOnQDN' && call[1].service === 'JSON')
     .map((call) => JSON.parse(atob(call[1].data)));
 
-const renderPage = (me = { name: 'Me', address: 'QMe' }) => {
+const renderPage = (
+  me = { name: 'Me', address: 'QMe' },
+  launcherTabId: string | null = null
+) => {
   const store = createStore();
   store.set(userInfoAtom, me);
   return render(
     <Provider store={store}>
       <ThemeProvider theme={createTheme()}>
         <I18nextProvider i18n={i18n}>
-          <AppInfo app={{ name: 'Q-Blog', service: 'APP' }} myName={me.name} />
+          <LauncherTabContext.Provider value={launcherTabId}>
+            <AppInfo
+              app={{ name: 'Q-Blog', service: 'APP' }}
+              myName={me.name}
+            />
+          </LauncherTabContext.Provider>
         </I18nextProvider>
       </ThemeProvider>
     </Provider>
@@ -174,6 +184,26 @@ afterEach(() => {
 });
 
 describe('the app page', () => {
+  it('tells the top bar its link while it is on screen', () => {
+    const store = createStore();
+    store.set(userInfoAtom, { name: 'Me', address: 'QMe' });
+    const view = render(
+      <Provider store={store}>
+        <ThemeProvider theme={createTheme()}>
+          <I18nextProvider i18n={i18n}>
+            <AppInfo app={{ name: 'Q-Blog', service: 'APP' }} myName="Me" />
+          </I18nextProvider>
+        </ThemeProvider>
+      </Provider>
+    );
+    expect(store.get(shownAppPageAtom)).toEqual({
+      service: 'APP',
+      name: 'Q-Blog',
+    });
+    view.unmount();
+    expect(store.get(shownAppPageAtom)).toBeNull();
+  });
+
   it('shows the listing, the page and screenshots', async () => {
     routes();
     renderPage();
@@ -214,6 +244,21 @@ describe('the app page', () => {
     expect(
       screen.queryByRole('heading', { name: 'app_page.screenshots.title' })
     ).toBeNull();
+  });
+
+  it('opens the app in the place of the launcher tab it shows in', async () => {
+    routes();
+    renderPage(undefined, 'launcher-tab-2');
+    const open = await screen.findByRole('button', { name: 'action.open' });
+    fireEvent.click(open);
+    const [, payload] = vi
+      .mocked(executeEvent)
+      .mock.calls.find(([name]) => name === 'addTab') as any;
+    expect(payload.data).toMatchObject({
+      name: 'Q-Blog',
+      service: 'APP',
+      fromLauncherTabId: 'launcher-tab-2',
+    });
   });
 });
 

@@ -62,6 +62,7 @@ import {
   PublishPreviewCard,
   PublishSummaryCard,
 } from './PublishFormParts';
+import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
@@ -116,6 +117,11 @@ interface AppPublishProps {
   isAppTypeLocked?: boolean;
   /** Opened from Update on a published app: the name can't be changed. */
   isUpdate?: boolean;
+  /**
+   * Told whether the form holds input that is not published yet, and false
+   * when it closes: a launcher tab asks before it closes with some.
+   */
+  onUnsavedChange?: (hasUnsavedInput: boolean) => void;
 }
 
 export const AppPublish = ({
@@ -126,6 +132,7 @@ export const AppPublish = ({
   initialAppType = 'APP',
   isAppTypeLocked = false,
   isUpdate = false,
+  onUnsavedChange,
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(initialName);
@@ -137,6 +144,8 @@ export const AppPublish = ({
   // This PC's saved profile for the chosen name and type.
   const [profile, setProfile] = useState<PublishProfile | null>(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
+  // In a launcher tab, the published app opens in its place.
+  const launcherTabId = useLauncherTabId();
   const theme = useTheme();
   const { t, i18n } = useTranslation(['auth', 'core', 'group', 'question']);
   const [tag1, setTag1] = useLimitedText(limitQdnTag);
@@ -157,7 +166,20 @@ export const AppPublish = ({
   const prefillRunRef = useRef(0);
   // Fields the user changed since that prefill started: it never overwrites them.
   const editedFieldsRef = useRef(new Set<string>());
-  const markEdited = (field: string) => editedFieldsRef.current.add(field);
+  // Anything the user chose or typed since the form opened or last published.
+  // What a prefill fills in is not counted.
+  const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
+  const noteInput = () => setHasUnsavedInput(true);
+  const markEdited = (field: string) => {
+    editedFieldsRef.current.add(field);
+    noteInput();
+  };
+  const onUnsavedChangeRef = useRef(onUnsavedChange);
+  onUnsavedChangeRef.current = onUnsavedChange;
+  useEffect(() => {
+    onUnsavedChangeRef.current?.(hasUnsavedInput);
+  }, [hasUnsavedInput]);
+  useEffect(() => () => onUnsavedChangeRef.current?.(false), []);
   // Screenshots, version and What's new, published right after the app.
   const pageExtrasRef = useRef<PublishExtrasHandle>(null);
   const [extrasSummary, setExtrasSummary] = useState<ExtrasSummary | null>(
@@ -410,6 +432,9 @@ export const AppPublish = ({
             );
           });
       });
+      // What was typed is published now, before the app opens in the tab.
+      setHasUnsavedInput(false);
+      onUnsavedChangeRef.current?.(false);
       const signature = publishSignature(response);
       let extrasFailed = '';
       if (extraParts) {
@@ -476,7 +501,7 @@ export const AppPublish = ({
         created: Date.now(),
       };
       executeEvent('addTab', {
-        data: dataObj,
+        data: inLauncherTab(dataObj, launcherTabId),
       });
     } catch (error) {
       setInfoSnack({
@@ -596,7 +621,10 @@ export const AppPublish = ({
           <TextField
             disabled={isUpdate}
             label={t('core:name_app', capital)}
-            onChange={(event) => setName(event?.target.value)}
+            onChange={(event) => {
+              noteInput();
+              setName(event?.target.value);
+            }}
             select
             SelectProps={{ displayEmpty: true }}
             InputLabelProps={{ shrink: true }}
@@ -624,7 +652,11 @@ export const AppPublish = ({
             aria-label={t('core:app_service_type', capital)}
             disabled={isAppTypeLocked}
             exclusive
-            onChange={(_, value) => value && setAppType(value)}
+            onChange={(_, value) => {
+              if (!value) return;
+              noteInput();
+              setAppType(value);
+            }}
             sx={{
               '& .MuiToggleButton-root': {
                 borderRadius: '12px',
@@ -655,7 +687,10 @@ export const AppPublish = ({
         <PublishSourcePicker
           changedSince={profileChangedSince(profile)}
           maxSize={maxFileSize}
-          onChange={setSource}
+          onChange={(next) => {
+            noteInput();
+            setSource(next);
+          }}
           onError={showError}
           savedSource={profile?.source}
           source={source}
@@ -782,6 +817,7 @@ export const AppPublish = ({
           bare
           file={source?.file ?? null}
           name={name}
+          onInput={noteInput}
           onSummaryChange={setExtrasSummary}
           ref={pageExtrasRef}
           service={appType}

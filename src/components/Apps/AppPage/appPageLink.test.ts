@@ -107,6 +107,36 @@ describe('links in page text', () => {
     expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
   });
 
+  it("from a page's text in a launcher tab, name that tab", async () => {
+    vi.useFakeTimers();
+    await openPageTextLink(
+      'qortal://use-app-page/WEBSITE/Q-Blog',
+      'launcher-tab-1'
+    );
+    vi.runAllTimers();
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', {
+      data: {
+        name: 'Q-Blog',
+        service: 'WEBSITE',
+        fromLauncherTabId: 'launcher-tab-1',
+      },
+    });
+
+    await openPageTextLink(
+      'qortal://APP/Q-Tube/channel/1?identifier=abc&x=1',
+      'launcher-tab-1'
+    );
+    expect(executeEvent).toHaveBeenCalledWith('addTab', {
+      data: {
+        service: 'APP',
+        name: 'Q-Tube',
+        identifier: 'abc',
+        path: 'channel/1?x=1',
+        fromLauncherTabId: 'launcher-tab-1',
+      },
+    });
+  });
+
   it('read plain resource links only', () => {
     expect(parseQortalResourceLink('qortal://use-group/x')).toBeNull();
     expect(parseQortalResourceLink('qortal://APP')).toBeNull();

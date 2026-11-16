@@ -123,9 +123,11 @@ export const PublishPageExtras = forwardRef<
     file: Blob | null;
     /** Inside a form section that shows the title itself. */
     bare?: boolean;
+    /** Told when the user changes something here (not when it loads). */
+    onInput?: () => void;
     onSummaryChange?: (summary: ExtrasSummary) => void;
   }
->(({ service, name, file, bare = false, onSummaryChange }, ref) => {
+>(({ service, name, file, bare = false, onInput, onSummaryChange }, ref) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const [existingPage, setExistingPage] = useState<AppPageData | null>(null);
@@ -300,6 +302,15 @@ export const PublishPageExtras = forwardRef<
   ]);
   const summaryRef = useRef(onSummaryChange);
   summaryRef.current = onSummaryChange;
+  // What the user changes, as against what was read from the node.
+  const changeShots = (next: ShotDraft[]) => {
+    onInput?.();
+    setShots(next);
+  };
+  const changeVersion = (next: string) => {
+    onInput?.();
+    setVersion(next);
+  };
   useEffect(() => {
     summaryRef.current?.(summary);
   }, [summary]);
@@ -401,7 +412,10 @@ export const PublishPageExtras = forwardRef<
       {!isKnown(shotsLoad) && shotsLoad !== 'idle' ? null : hasExisting ? (
         <RadioGroup
           aria-labelledby={shotsTitleId}
-          onChange={(event) => setMode(event.target.value as ShotsMode)}
+          onChange={(event) => {
+            onInput?.();
+            setMode(event.target.value as ShotsMode);
+          }}
           value={mode}
         >
           {options.map((option) => (
@@ -474,7 +488,7 @@ export const PublishPageExtras = forwardRef<
                       postProcess: 'capitalizeFirstChar',
                     })
               }
-              onChange={setShots}
+              onChange={changeShots}
               onError={setError}
               shots={shots}
             />
@@ -505,7 +519,7 @@ export const PublishPageExtras = forwardRef<
           label={t('core:app_page.details.version', {
             postProcess: 'capitalizeFirstChar',
           })}
-          onChange={(event) => setVersion(event.target.value)}
+          onChange={(event) => changeVersion(event.target.value)}
           placeholder={suggestion || '1.0.0'}
           size="small"
           sx={{ width: 220 }}
@@ -513,7 +527,7 @@ export const PublishPageExtras = forwardRef<
         />
         {pageReady && suggestion && !version && (
           <Button
-            onClick={() => setVersion(suggestion)}
+            onClick={() => changeVersion(suggestion)}
             size="small"
             sx={{ alignSelf: 'flex-start', mt: 0.5, textTransform: 'none' }}
           >
@@ -537,9 +551,10 @@ export const PublishPageExtras = forwardRef<
         })}
         minRows={2}
         multiline
-        onChange={(event) =>
-          setWhatsNew(event.target.value.slice(0, APP_PAGE_LIMITS.whatsNew))
-        }
+        onChange={(event) => {
+          onInput?.();
+          setWhatsNew(event.target.value.slice(0, APP_PAGE_LIMITS.whatsNew));
+        }}
         placeholder={t('core:app_page.publish.whats_new_placeholder', {
           postProcess: 'capitalizeFirstChar',
         })}

@@ -40,14 +40,16 @@ vi.mock('../AppsPrivate', () => ({
     updateTarget,
     onClose,
     onPublished,
+    isShown,
   }: {
     action: string | null;
     updateTarget: { identifier: string } | null;
     onClose: () => void;
     onPublished: () => void;
+    isShown: boolean;
   }) =>
     action ? (
-      <div data-testid="private-dialog">
+      <div data-shown={String(isShown)} data-testid="private-dialog">
         {action}
         {updateTarget ? `:${updateTarget.identifier}` : ''}
         <button onClick={onClose}>close-dialog</button>
@@ -58,12 +60,15 @@ vi.mock('../AppsPrivate', () => ({
 
 import { PrivateTab } from '../AppsLibrary/PrivateTab';
 
-const renderTab = () =>
-  render(
+const renderTab = (isActive?: boolean) => {
+  const ui = (active?: boolean) => (
     <ThemeProvider theme={createTheme()}>
-      <PrivateTab myName="alice" myAddress="Qaddress" />
+      <PrivateTab isActive={active} myName="alice" myAddress="Qaddress" />
     </ThemeProvider>
   );
+  const view = render(ui(isActive));
+  return { rerenderActive: (active: boolean) => view.rerender(ui(active)) };
+};
 
 describe('PrivateTab', () => {
   it('shows the published list with both actions and no dialog', () => {
@@ -114,5 +119,32 @@ describe('PrivateTab', () => {
     await user.click(screen.getByText('published'));
 
     expect(screen.getByTestId('published-list')).toHaveTextContent('refresh-1');
+  });
+
+  it('puts its dialog away while out of sight, and brings it back as it was', async () => {
+    const user = userEvent.setup();
+    const { rerenderActive } = renderTab();
+
+    await user.click(screen.getByText('update-q-notes'));
+    expect(screen.getByTestId('private-dialog')).toHaveAttribute(
+      'data-shown',
+      'true'
+    );
+
+    // Its launcher tab is hidden behind another tab.
+    rerenderActive(false);
+    expect(screen.getByTestId('private-dialog')).toHaveAttribute(
+      'data-shown',
+      'false'
+    );
+
+    rerenderActive(true);
+    expect(screen.getByTestId('private-dialog')).toHaveAttribute(
+      'data-shown',
+      'true'
+    );
+    expect(screen.getByTestId('private-dialog')).toHaveTextContent(
+      'update:q-notes'
+    );
   });
 });

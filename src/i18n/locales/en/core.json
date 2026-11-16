@@ -307,10 +307,12 @@
     "duplicate": "duplicate tab",
     "limit_reached": "maximum number of tabs reached. Close one to open another.",
     "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm.",
+    "new_tab": "new tab",
     "pin": "pin tab",
     "pinned_and_locked_kept_open": "pinned and locked tabs stay open. Unpin a pinned tab before closing it, and close each locked tab on its own to confirm.",
     "pinned_kept_open": "pinned tabs stay open. Unpin a tab to close it.",
-    "unpin": "unpin tab"
+    "unpin": "unpin tab",
+    "unsaved_publish": "the details in its publish form are not published yet, and closing the tab discards them."
   },
   "apps_bar": {
     "empty": "Pin an app or add a bookmark, and it shows here.",
