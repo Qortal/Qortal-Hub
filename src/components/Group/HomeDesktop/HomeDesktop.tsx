@@ -93,6 +93,8 @@ import {
   type HomeGridWindow,
   type HomeGridWindowAction,
 } from './HomeGrid';
+import { RestoreLayoutButton } from '../../Save/RestoreLayoutButton';
+import { LAYOUT_EDIT_DONE_EVENT } from '../../Save/LayoutSavePrompt';
 import {
   homeWalletRailRect,
   useHomeWindowTitles,
@@ -183,6 +185,7 @@ export const HomeDesktop = ({
   const titles = useHomeWindowTitles();
   const homeActive = desktopViewMode === 'home';
   const [isEditingHome, setIsEditingHome] = useState(false);
+  const wasEditingHomeRef = useRef(false);
   const [isWidgetPickerOpen, setIsWidgetPickerOpen] = useState(false);
   const [widgetReloadKeys, setWidgetReloadKeys] = useState<
     Record<string, number>
@@ -562,6 +565,7 @@ export const HomeDesktop = ({
                     }
                   : undefined
               }
+              editActions={<RestoreLayoutButton part="homeLayout" />}
               grid={grid}
               headerEnd={
                 <Box sx={headerLabelSx}>
@@ -584,7 +588,14 @@ export const HomeDesktop = ({
                   )
                 )
               }
-              onEditingChange={setIsEditingHome}
+              onEditingChange={(editing) => {
+                setIsEditingHome(editing);
+                // Done editing: the layout may be worth saving to QDN.
+                if (wasEditingHomeRef.current && !editing) {
+                  executeEvent(LAYOUT_EDIT_DONE_EVENT, {});
+                }
+                wasEditingHomeRef.current = editing;
+              }}
               onHideWindow={(id) => {
                 if (id === 'account') return;
                 if (isHomeWidgetWindowId(id)) {

@@ -107,6 +107,16 @@ export type HomeLayout = {
   workspaces?: string[];
   /** HOME_LAYOUT_VERSION: every layout read has it. */
   version?: number;
+  /**
+   * When it last changed on this device (ms), what the copy in the QDN
+   * settings is weighed against. Missing: never changed here.
+   */
+  changedAt?: number;
+};
+
+const changedAtOf = (value: unknown): number | undefined => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 };
 
 /**
@@ -234,16 +244,20 @@ export const normalizeHomeLayout = (
         ? { workspaces: [...fallback.workspaces] }
         : {}),
       version: HOME_LAYOUT_VERSION,
+      ...(fallback.changedAt ? { changedAt: fallback.changedAt } : {}),
     };
   }
-  const { grid, hidden, stack, version, widgetWindows, workspaces } = value as {
-    grid?: unknown;
-    hidden?: unknown;
-    stack?: unknown;
-    version?: unknown;
-    widgetWindows?: unknown;
-    workspaces?: unknown;
-  };
+  const { changedAt, grid, hidden, stack, version, widgetWindows, workspaces } =
+    value as {
+      changedAt?: unknown;
+      grid?: unknown;
+      hidden?: unknown;
+      stack?: unknown;
+      version?: unknown;
+      widgetWindows?: unknown;
+      workspaces?: unknown;
+    };
+  const normalChangedAt = changedAtOf(changedAt);
   // Stored before the Workspace was a window of its own, when Qortino's
   // switch hid it too.
   const older = !(Number(version) >= HOME_LAYOUT_VERSION);
@@ -281,6 +295,7 @@ export const normalizeHomeLayout = (
     ...(normalWidgets.length ? { widgetWindows: [...normalWidgets] } : {}),
     ...(normalWorkspaces.length ? { workspaces: normalWorkspaces } : {}),
     version: HOME_LAYOUT_VERSION,
+    ...(normalChangedAt ? { changedAt: normalChangedAt } : {}),
   };
 };
 
@@ -532,13 +547,29 @@ export const readHomeLayout = (address?: string | null): HomeLayout => {
   }
 };
 
-export const saveHomeLayout = (address: string, layout: HomeLayout) => {
+/**
+ * Saves the account's layout. A layout that changed is marked as changed
+ * now, unless `changedAt` says when (one taken in from QDN keeps its time).
+ * "Now" is always later than the time it had: one taken in from a device
+ * whose clock is ahead must not make a change made here look older.
+ */
+export const saveHomeLayout = (
+  address: string,
+  layout: HomeLayout,
+  options: { changedAt?: number } = {}
+) => {
+  const before = readHomeLayout(address);
+  const next = normalizeHomeLayout({ ...layout, version: HOME_LAYOUT_VERSION });
+  const changedAt =
+    options.changedAt ??
+    (sameHomeLayout(before, next)
+      ? before.changedAt
+      : Math.max(Date.now(), (before.changedAt ?? 0) + 1));
+  const { changedAt: _ignored, ...content } = next;
   try {
     window.localStorage.setItem(
       homeLayoutStorageKey(address),
-      JSON.stringify(
-        normalizeHomeLayout({ ...layout, version: HOME_LAYOUT_VERSION })
-      )
+      JSON.stringify(changedAt ? { ...content, changedAt } : content)
     );
   } catch (error) {
     console.warn('Unable to save the Home layout.', error);
