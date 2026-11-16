@@ -179,10 +179,12 @@
     "duplicate": "Tab duplizieren",
     "limit_reached": "maximale Anzahl an Tabs erreicht. Schließe einen, um einen weiteren zu öffnen.",
     "locked_kept_open": "gesperrte Tabs bleiben offen. Schließe jeden einzeln, um es zu bestätigen.",
+    "new_tab": "neuer Tab",
     "pin": "Tab anheften",
     "pinned_and_locked_kept_open": "angeheftete und gesperrte Tabs bleiben offen. Lösen Sie einen angehefteten Tab vor dem Schließen ab, und schließen Sie gesperrte Tabs einzeln, um es zu bestätigen.",
     "pinned_kept_open": "angeheftete Tabs bleiben offen. Lösen Sie einen Tab ab, um ihn zu schließen.",
-    "unpin": "Tab ablösen"
+    "unpin": "Tab ablösen",
+    "unsaved_publish": "die Angaben im Veröffentlichungsformular sind noch nicht veröffentlicht. Wenn Sie den Tab schließen, gehen sie verloren."
   },
   "apps_bar": {
     "empty": "Heften Sie eine App an oder fügen Sie ein Lesezeichen hinzu, dann erscheint es hier.",
@@ -824,6 +826,29 @@
     "selected_file": "Ausgewählte Datei: {{filename}}"
   },
   "publish": "veröffentlichen",
+  "publish_source": {
+    "changed_files": "Seit {{date}} geänderte Dateien: {{number}}",
+    "choose_another": "etwas anderes wählen",
+    "choose_folder": "Ordner wählen",
+    "read_error": "Der ausgewählte Ordner oder die ausgewählte Datei konnte nicht gelesen werden",
+    "same_file": "Gleiche Datei wie beim letzten Mal",
+    "same_folder": "Gleicher Ordner wie beim letzten Mal",
+    "selected_file": "Ausgewählte Datei: {{name}}",
+    "selected_folder": "Ausgewählter Ordner: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "Es konnte nicht geprüft werden, ob Sie noch Admin von {{group}} sind. Versuchen Sie es später erneut.",
+    "checking_admin": "Es wird geprüft, ob Sie noch Admin von {{group}} sind…",
+    "current_unavailable": "Die aktuelle Version konnte nicht geladen werden, daher können App-Name und Logo nicht übernommen werden. Geben Sie sie erneut ein.",
+    "filled_from_profile": "Die Details dieser App konnten nicht aus dem Netzwerk geladen werden, daher wurden sie aus der letzten Veröffentlichung von diesem PC übernommen. Prüfen Sie sie vor dem Veröffentlichen.",
+    "identifier_locked": "Die Kennung kann bei einem Update nicht geändert werden: Eine andere Kennung würde eine neue App veröffentlichen.",
+    "is_admin": "Sie sind Admin von {{group}}",
+    "last_published": "Zuletzt von diesem PC veröffentlicht: {{date}}",
+    "loading_current": "Die aktuelle Version wird geladen…",
+    "logo_kept": "Logo aus der aktuellen Version übernommen",
+    "not_admin": "Sie sind nicht mehr Admin von {{group}}, daher kann diese App von diesem Konto aus nicht aktualisiert werden.",
+    "title": "{{name}} aktualisieren"
+  },
   "q_apps": {
     "about": "über diese Q-App",
     "q_mail": "Q-Mail",

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
-import { useAtomValue } from 'jotai';
+import { atom, useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
   isUsingImportExportSettingsAtom,
@@ -35,6 +35,15 @@ interface LauncherSaveWindowProps {
 type Phase = 'idle' | 'saving' | 'saved' | 'failed';
 
 /**
+ * The changes counted when the window was put off, and the account: one
+ * answer for the window of every launcher tab.
+ */
+const putOffAtom = atom<{ address: string | null; count: number }>({
+  address: null,
+  count: 0,
+});
+
+/**
  * Offers to save the launcher to QDN once it was rearranged: the pinned apps,
  * the bookmarks and folders, and their order, so every device the account
  * signs in on shows the same. It stays until it is saved or put off; the next
@@ -55,10 +64,10 @@ export const LauncherSaveWindow = ({
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState('');
-  /** The changes counted when the window was put off. */
-  const [putOffAt, setPutOffAt] = useState(0);
+  const [putOffState, setPutOffState] = useAtom(putOffAtom);
 
   const account = myAddress || null;
+  const putOffAt = putOffState.address === account ? putOffState.count : 0;
   const editCount = edits.address === account ? edits.count : 0;
   // What is on QDN is known, and this account can publish there.
   const canSave =
@@ -94,7 +103,7 @@ export const LauncherSaveWindow = ({
   };
 
   const putOff = () => {
-    setPutOffAt(editCount);
+    setPutOffState({ address: account, count: editCount });
     setPhase('idle');
     setError('');
   };

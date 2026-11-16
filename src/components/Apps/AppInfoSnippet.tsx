@@ -21,6 +21,7 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
+import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
@@ -35,6 +36,7 @@ export const AppInfoSnippet = ({
     sortablePinnedAppsAtom
   );
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  const launcherTabId = useLauncherTabId();
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
@@ -183,7 +185,7 @@ export const AppInfoSnippet = ({
         <AppButton
           onClick={() => {
             executeEvent('addTab', {
-              data: app,
+              data: inLauncherTab(app, launcherTabId),
             });
           }}
           sx={{
