@@ -280,3 +280,84 @@ describe('RatingsCacheInitializer — IndexedDB cache hit', () => {
     });
   });
 });
+
+describe('refreshRatings — cards already on screen', () => {
+  it('gives a visible card without a poll its empty rating again', async () => {
+    vi.doMock('../../App', () => ({ getBaseApiReact: () => BASE_URL }));
+    vi.doMock('../../utils/ratingsIndexedDB', () => ({
+      loadRatingsCacheFromDB: vi.fn().mockResolvedValue(new Map()),
+      saveRatingsCacheToDB: vi.fn(),
+    }));
+    vi.doMock('../../constants/constants', () => ({
+      RATING_CACHE_TTL: 30 * 60 * 1000,
+    }));
+
+    // Like a real observer: one report when an element starts being watched,
+    // and none while it stays in view.
+    const originalObserver = globalThis.IntersectionObserver;
+    class FakeIntersectionObserver {
+      constructor(
+        private readonly callback: (
+          entries: unknown[],
+          observer: unknown
+        ) => void
+      ) {}
+      observe(target: Element) {
+        setTimeout(
+          () => this.callback([{ target, isIntersecting: true }], this),
+          0
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    globalThis.IntersectionObserver =
+      FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+
+    // Only Q-Tube has a poll.
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(fakeResponse(200, makeBulkResponse()));
+
+    try {
+      const mod = await freshImport();
+      const { render, screen, act } = await import('@testing-library/react');
+      const refresh: { current: (() => Promise<void>) | null } = {
+        current: null,
+      };
+      const Card = () => {
+        const { refreshRatings } = mod.useAppRatings();
+        refresh.current = refreshRatings;
+        const { rating, containerRef } = mod.useAppRating('Q-Chess', 'APP');
+        return React.createElement(
+          'div',
+          { ref: containerRef },
+          rating ? `votes ${rating.totalVotes}` : 'waiting'
+        );
+      };
+      render(
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(mod.RatingsCacheInitializer),
+          React.createElement(Card)
+        )
+      );
+
+      expect(await screen.findByText('votes 0')).toBeInTheDocument();
+
+      await act(async () => {
+        await refresh.current?.();
+      });
+      expect(screen.getByText('waiting')).toBeInTheDocument();
+
+      // Without a fresh report the card would wait until it scrolled away.
+      expect(await screen.findByText('votes 0')).toBeInTheDocument();
+    } finally {
+      globalThis.IntersectionObserver = originalObserver;
+    }
+  });
+});

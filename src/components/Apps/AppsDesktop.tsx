@@ -95,6 +95,7 @@ import {
   tabsLeftByCloseAll,
 } from './tabSelection';
 import { useHiddenAppsLoader } from './AppPage/useHiddenApps';
+import { namesOwnResources } from './libraryResources';
 import {
   isPinnedTab,
   moveTabWithinGroup,
@@ -783,7 +784,7 @@ export const AppsDesktop = ({
       apps = responseData;
       websites = responseDataWebsites;
       const combine = [...apps, ...websites];
-      const nextAvailableQapps = combine?.filter((res) => !res?.identifier);
+      const nextAvailableQapps = namesOwnResources(combine);
       availableQappsCountRef.current = nextAvailableQapps.length;
       setAvailableQapps(nextAvailableQapps);
     } catch (error) {

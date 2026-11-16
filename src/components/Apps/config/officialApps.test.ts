@@ -9,6 +9,12 @@ import {
 } from './officialApps';
 
 describe('officialApps', () => {
+  it('lists Q-Drive', () => {
+    expect(isOfficialApp('Q-Drive')).toBe(true);
+    expect(isFeaturedApp('Q-Drive')).toBe(false);
+    expect(defaultPinnedApps.map((app) => app.name)).toContain('Q-Drive');
+  });
+
   it('lists Torq instead of Quitter, and SubWire and Subscreen', () => {
     expect(isOfficialApp('Torq')).toBe(true);
     expect(isOfficialApp('Quitter')).toBe(false);
@@ -30,7 +36,7 @@ describe('officialApps', () => {
     expect(isFeaturedApp('Q-Blog')).toBe(false);
   });
 
-  it('leads the Featured carousel with Torq, Q-Tube, SubWire, Q-Share and Q-Assets, then the rest by rating', () => {
+  it('leads the Featured carousel with Torq, Q-Tube, SubWire, Q-Share, Q-Assets and Q-Shop, then the rest by rating, and Q-Search last', () => {
     const apps = officialAppsConfig.featured.map((name) => ({ name }));
     // The rest's ratings; Q-Trade and Q-Wallets tie, so votes decide.
     const ratings: Record<
@@ -52,18 +58,27 @@ describe('officialApps', () => {
       'SubWire',
       'Q-Share',
       'Q-Assets',
-      'Q-Search',
+      'Q-Shop',
       'Q-Wallets',
       'Q-Trade',
       'Q-Mail',
-      'Q-Shop',
+      'Q-Search',
     ]);
   });
 
-  it('leads only with featured apps, and compares names without case', () => {
-    officialAppsConfig.featuredLead.forEach((name) =>
-      expect(isFeaturedApp(name)).toBe(true)
-    );
+  it('leads and ends only with featured apps, and compares names without case', () => {
+    [
+      ...officialAppsConfig.featuredLead,
+      ...officialAppsConfig.featuredLast,
+    ].forEach((name) => expect(isFeaturedApp(name)).toBe(true));
+    // Q-Search stays last, whatever its rating.
+    expect(
+      sortFeaturedApps([{ name: 'q-search' }, { name: 'Q-Mail' }], (app) =>
+        app.name === 'q-search'
+          ? { averageRating: 5, totalVotes: 99 }
+          : undefined
+      ).map((app) => app.name)
+    ).toEqual(['Q-Mail', 'q-search']);
     expect(
       sortFeaturedApps([{ name: 'q-tube' }, { name: 'TORQ' }], () => undefined)
     ).toEqual([{ name: 'TORQ' }, { name: 'q-tube' }]);

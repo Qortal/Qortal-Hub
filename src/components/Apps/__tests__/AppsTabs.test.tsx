@@ -137,4 +137,47 @@ describe('AppsTabs', () => {
       unmount();
     });
   });
+
+  it('links each tab to its panel when given an id prefix', () => {
+    render(
+      <TestWrapper>
+        <AppsTabs currentTab="official" idPrefix="lib" onTabChange={vi.fn()} />
+      </TestWrapper>
+    );
+
+    const community = screen.getAllByRole('tab')[1];
+    expect(community).toHaveAttribute('id', 'lib-tab-community');
+    expect(community).toHaveAttribute('aria-controls', 'lib-panel-community');
+  });
+
+  it('still works when the system asks for less motion', async () => {
+    const user = userEvent.setup();
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const onTabChange = vi.fn();
+    try {
+      render(
+        <TestWrapper>
+          <AppsTabs currentTab="categories" onTabChange={onTabChange} />
+        </TestWrapper>
+      );
+      expect(screen.getAllByRole('tab')[2]).toHaveAttribute(
+        'aria-selected',
+        'true'
+      );
+      await user.click(screen.getByRole('tab', { name: /my apps/i }));
+      expect(onTabChange).toHaveBeenCalledWith('my-apps');
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
 });
