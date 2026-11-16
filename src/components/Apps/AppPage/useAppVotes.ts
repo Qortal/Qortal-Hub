@@ -34,6 +34,7 @@ import {
   summarizeVoteCounts,
   summaryFromVoters,
   Voter,
+  voterOf,
   votersFromPoll,
 } from './appVotes';
 
@@ -47,6 +48,12 @@ const sendBackground = (action: string, payload: Record<string, unknown>) =>
       })
       .catch(reject);
   });
+
+/**
+ * What the node said about the app's rating poll. Only "missing" lets a vote
+ * create the poll; while it's loading, or after an error, voting waits.
+ */
+export type PollStatus = 'loading' | 'found' | 'missing' | 'error';
 
 export type VoteResult =
   | { ok: true }
@@ -80,22 +87,41 @@ export const useAppVotes = (
 
   const [poll, setPoll] = useState<PollInfo | null>(null);
   const [votes, setVotes] = useState<PollVotes | null>(null);
-  const [loading, setLoading] = useState(!!name);
+  const [pollStatus, setPollStatus] = useState<PollStatus>(
+    name ? 'loading' : 'missing'
+  );
   const [token, setToken] = useState(0);
 
   useEffect(() => {
     if (!name) return;
     const controller = new AbortController();
     const base = getBaseApiReact();
-    setLoading(true);
-    Promise.all([
-      fetchPollInfo(base, service, name, controller.signal).catch(() => null),
-      fetchPollVotes(base, service, name, controller.signal).catch(() => null),
+    // A reload keeps what was shown; only the first load starts from nothing.
+    setPollStatus((status) => (status === 'found' ? status : 'loading'));
+    Promise.allSettled([
+      fetchPollInfo(base, service, name, controller.signal),
+      fetchPollVotes(base, service, name, controller.signal),
     ]).then(([info, list]) => {
       if (controller.signal.aborted) return;
-      setPoll(info);
-      setVotes(info ? list : null);
-      setLoading(false);
+      if (info.status === 'rejected') {
+        // Not read is not missing: keep what was shown, and don't vote.
+        setPollStatus('error');
+        return;
+      }
+      if (!info.value) {
+        setPoll(null);
+        setVotes(null);
+        setPollStatus('missing');
+        return;
+      }
+      setPoll(info.value);
+      if (list.status === 'fulfilled' && list.value) {
+        setVotes(list.value);
+        setPollStatus('found');
+      } else {
+        // Without the votes, the user's own vote is unknown.
+        setPollStatus('error');
+      }
     });
     return () => controller.abort();
   }, [name, service, token]);
@@ -107,12 +133,10 @@ export const useAppVotes = (
     [poll, votes]
   );
   const mine = useMemo(
-    () =>
-      (me?.address && voters.find((voter) => voter.address === me.address)) ||
-      null,
+    () => voterOf(voters, me?.address),
     [voters, me?.address]
   );
-  // Who voted is known here, so each person counts once.
+  // Counted as the library's cards count, so both show the same rating.
   const confirmedSummary: RatingSummary = useMemo(
     () => (voters.length ? summaryFromVoters(voters) : summarizeVoteCounts([])),
     [voters]
@@ -184,6 +208,17 @@ export const useAppVotes = (
           };
         }
         if (!name || !(rating >= 1 && rating <= 5)) return { ok: false };
+        // Until the node has said whether the poll exists, a vote could
+        // create it a second time instead of voting in it.
+        if (pollStatus === 'loading') return { ok: false };
+        if (pollStatus === 'error') {
+          return {
+            ok: false,
+            message: t('core:app_page.rating.load_failed', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+          };
+        }
         if (pending?.createdPoll && !poll) {
           // A second CREATE_POLL would only fail, after its fee was asked.
           return {
@@ -202,7 +237,7 @@ export const useAppVotes = (
             }),
           };
         }
-        const createsPoll = !poll;
+        const createsPoll = pollStatus === 'missing';
         const fee = await getFee(createsPoll ? 'CREATE_POLL' : 'VOTE_ON_POLL');
         try {
           await show({
@@ -279,6 +314,7 @@ export const useAppVotes = (
       name,
       pending,
       poll,
+      pollStatus,
       service,
       setPendingVotes,
       show,
@@ -287,8 +323,9 @@ export const useAppVotes = (
   );
 
   return {
-    loading,
-    pollExists: !!poll,
+    loading: pollStatus === 'loading',
+    pollExists: pollStatus === 'found',
+    pollStatus,
     summary,
     voters,
     mine,

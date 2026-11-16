@@ -253,6 +253,7 @@
       "average_label": "note moyenne de {{average}} sur 5",
       "count_one": "{{count}} évaluation",
       "count_other": "{{count}} évaluations",
+      "load_failed": "impossible de charger les notes ; la notation attend qu'elles soient chargées.",
       "pending": "votre vote est en route. Tout le monde le verra d’ici une minute environ.",
       "pending_first": "votre première note est en route. Vous pourrez la modifier dès qu’elle sera dans un bloc, d’ici une minute environ.",
       "pick": "votre évaluation",

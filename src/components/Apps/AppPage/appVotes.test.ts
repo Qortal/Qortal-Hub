@@ -1,13 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyPendingVote,
+  fetchPollInfo,
   initialRating,
   isPendingVoteConfirmed,
   ratingName,
   ratingPollName,
+  ratingsByAddress,
   ratingWithPendingVote,
   summarizeVoteCounts,
   summaryFromVoters,
+  voterOf,
   votersFromPoll,
 } from './appVotes';
 
@@ -67,15 +70,42 @@ describe('rating polls', () => {
     expect(summarizeVoteCounts([]).average).toBe(0);
   });
 
-  it('counts each person once, by their latest vote', () => {
+  it("counts each voter's latest vote and the creator's first rating", () => {
     const summary = summaryFromVoters([
-      { address: 'QOwner', rating: 5, isInitial: false },
+      { address: 'QOwner', rating: 5, isInitial: true },
+      { address: 'QOwner', rating: 1, isInitial: false },
       { address: 'QB', rating: 4, isInitial: false },
       { address: 'QA', rating: 2, isInitial: false },
     ]);
-    expect(summary.total).toBe(3);
-    expect(summary.average).toBeCloseTo(11 / 3);
+    expect(summary.total).toBe(4);
+    expect(summary.average).toBeCloseTo(12 / 4);
     expect(summaryFromVoters([]).total).toBe(0);
+  });
+
+  it('counts as the library does when the creator rates again', () => {
+    // The poll was created with 5 stars, its creator then voted 1, and
+    // someone else voted 3: the library's card says 3.0 from 3 ratings.
+    const page = summaryFromVoters(
+      votersFromPoll(
+        poll,
+        [
+          { optionIndex: 0, voterPublicKey: 'Owner' },
+          { optionIndex: 2, voterPublicKey: 'A' },
+        ],
+        addressOf
+      )
+    );
+    const library = summarizeVoteCounts([
+      { optionName: '1', voteCount: 1 },
+      { optionName: '2', voteCount: 0 },
+      { optionName: '3', voteCount: 1 },
+      { optionName: '4', voteCount: 0 },
+      { optionName: '5', voteCount: 0 },
+      { optionName: 'initialValue-5', voteCount: 0 },
+    ]);
+    expect(page).toEqual(library);
+    expect(page.total).toBe(3);
+    expect(page.average).toBeCloseTo(3);
   });
 
   it('lists who voted what, one row each, highest first', () => {
@@ -97,15 +127,61 @@ describe('rating polls', () => {
     ]);
   });
 
-  it("shows the creator's later vote instead of their initial rating", () => {
+  it("keeps the creator's first rating beside their later vote", () => {
     const voters = votersFromPoll(
       poll,
       [{ optionIndex: 2, voterPublicKey: 'Owner' }],
       addressOf
     );
     expect(voters).toEqual([
+      { address: 'QOwner', rating: 5, isInitial: true },
       { address: 'QOwner', rating: 3, isInitial: false },
     ]);
+  });
+
+  it("finds someone's rating: their latest vote, or else their first", () => {
+    const voted = votersFromPoll(
+      poll,
+      [{ optionIndex: 2, voterPublicKey: 'Owner' }],
+      addressOf
+    );
+    expect(voterOf(voted, 'QOwner')).toEqual({
+      address: 'QOwner',
+      rating: 3,
+      isInitial: false,
+    });
+    expect(voterOf(votersFromPoll(poll, [], addressOf), 'QOwner')).toEqual({
+      address: 'QOwner',
+      rating: 5,
+      isInitial: true,
+    });
+    expect(voterOf(voted, 'QNobody')).toBeNull();
+    expect(voterOf(voted, undefined)).toBeNull();
+  });
+
+  it("gives each person's stars: their vote, or else their first rating", () => {
+    // Created with 1 star, then voted 5; the rows come highest first.
+    const voters = votersFromPoll(
+      {
+        creatorPublicKey: 'Owner',
+        pollOptions: [...options.slice(0, 5), { optionName: 'initialValue-1' }],
+      },
+      [
+        { optionIndex: 4, voterPublicKey: 'Owner' },
+        { optionIndex: 2, voterPublicKey: 'A' },
+      ],
+      addressOf
+    );
+    expect(ratingsByAddress(voters)).toEqual(
+      new Map([
+        ['QOwner', 5],
+        ['QA', 3],
+      ])
+    );
+    expect(ratingsByAddress([...voters].reverse()).get('QOwner')).toBe(5);
+    expect(
+      ratingsByAddress(votersFromPoll(poll, [], addressOf)).get('QOwner')
+    ).toBe(5);
   });
 
   it('skips votes whose voter cannot be read', () => {
@@ -170,7 +246,7 @@ describe('a vote waiting for its block', () => {
     expect(next.total).toBe(3);
   });
 
-  it("replaces the creator's first rating with their vote", () => {
+  it("keeps the creator's first rating when they vote again", () => {
     const next = applyPendingVote(
       summary,
       { ...sent, rating: 3 },
@@ -180,7 +256,8 @@ describe('a vote waiting for its block', () => {
         isInitial: true,
       }
     );
-    expect(next.counts).toMatchObject({ 3: 3, 5: 0 });
+    expect(next.counts).toMatchObject({ 3: 3, 5: 1 });
+    expect(next.total).toBe(4);
   });
 
   it('changes nothing once the node shows the vote', () => {
@@ -272,5 +349,45 @@ describe('ratingWithPendingVote (the library, before the block)', () => {
     expect(ratingWithPendingVote(unknown, sent(5))).toBe(unknown);
     expect(ratingWithPendingVote(null, sent(5))).toBeNull();
     expect(ratingWithPendingVote(unknown, sent(9))).toBe(unknown);
+  });
+});
+
+describe('reading the rating poll', () => {
+  const answer = (status: number, body: unknown) =>
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+        status,
+      })
+    );
+  const read = () => fetchPollInfo('http://node', 'APP', 'Q-Blog');
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('gives the poll the node has', async () => {
+    answer(200, { pollName: 'app-library-APP-rating-Q-Blog' });
+    await expect(read()).resolves.toMatchObject({
+      pollName: 'app-library-APP-rating-Q-Blog',
+    });
+  });
+
+  it('says there is none only when the node says so', async () => {
+    // Core's answer for a poll it doesn't have.
+    answer(404, { error: 501, message: '!!en:ApiError.POLL_NO_EXISTS!!' });
+    await expect(read()).resolves.toBeNull();
+  });
+
+  it("throws when the poll couldn't be read, so no vote creates it", async () => {
+    answer(500, { error: 1, message: 'unknown error' });
+    await expect(read()).rejects.toThrow();
+    answer(404, '<html>Not found</html>');
+    await expect(read()).rejects.toThrow();
+    answer(200, { message: 'not a poll' });
+    await expect(read()).rejects.toThrow();
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new TypeError('Failed to fetch')
+    );
+    await expect(read()).rejects.toThrow('Failed to fetch');
   });
 });

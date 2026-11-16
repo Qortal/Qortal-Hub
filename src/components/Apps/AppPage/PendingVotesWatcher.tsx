@@ -10,6 +10,7 @@ import {
   PENDING_VOTE_CHECK_MS,
   PENDING_VOTE_TTL,
   type PendingVote,
+  voterOf,
   votersFromPoll,
 } from './appVotes';
 
@@ -24,10 +25,7 @@ export const isPendingVoteOnNode = async (
     fetchPollVotes(base, pending.service, pending.name, signal),
   ]);
   if (!poll) return false;
-  const mine =
-    votersFromPoll(poll, list?.votes || []).find(
-      (voter) => voter.address === pending.voter
-    ) || null;
+  const mine = voterOf(votersFromPoll(poll, list?.votes || []), pending.voter);
   return isPendingVoteConfirmed(pending, mine);
 };
 

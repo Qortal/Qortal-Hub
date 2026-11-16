@@ -14,6 +14,7 @@ import { AppRatingsPanel } from '../AppPage/AppRatingsPanel';
 import { AppReviewsSection } from '../AppPage/AppReviewsSection';
 import { appIconUrl } from '../AppPage/appPageQdn';
 import { useAppReviews, ReviewActionResult } from '../AppPage/useAppReviews';
+import { ratingsByAddress } from '../AppPage/appVotes';
 import { useAppVotes } from '../AppPage/useAppVotes';
 import { useIconAccent } from '../AppPage/useIconAccent';
 import type { LibraryWidget } from '../AppsLibrary/widgetLibrary';
@@ -84,7 +85,7 @@ export const WidgetPage = ({
   }, []);
 
   const ratingByAddress = useMemo(
-    () => new Map(votes.voters.map((voter) => [voter.address, voter.rating])),
+    () => ratingsByAddress(votes.voters),
     [votes.voters]
   );
   const myRating = votes.pending?.rating ?? votes.mine?.rating ?? null;
@@ -144,8 +145,10 @@ export const WidgetPage = ({
       mine={votes.mine}
       myAddress={myAddress}
       onRate={rate}
+      onRetry={votes.reload}
       pending={votes.pending}
       pollExists={votes.pollExists}
+      pollStatus={votes.pollStatus}
       summary={votes.summary}
       voters={votes.voters}
     />

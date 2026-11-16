@@ -58,6 +58,29 @@ const node = () =>
     return new Response('', { status: 404 });
   });
 
+/** Core's answer for a poll it doesn't have. */
+const noPoll = () =>
+  new Response(
+    JSON.stringify({ error: 501, message: '!!en:ApiError.POLL_NO_EXISTS!!' }),
+    { status: 404 }
+  );
+
+/** A node that answers the poll with `info`, and the votes with `votes`. */
+const nodeWith = (
+  info: () => Response | Promise<Response>,
+  votes: () => Response | Promise<Response> = () =>
+    new Response(JSON.stringify({ votes: [], voteCounts: [] }))
+) =>
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes('/polls/votes/')) return votes();
+    if (url.includes('/polls/')) return info();
+    return new Response('', { status: 404 });
+  });
+
+const sentActions = () =>
+  vi.mocked(window.sendMessage).mock.calls.map(([action]) => action);
+
 const votesFetches = () =>
   vi
     .mocked(fetch)
@@ -292,5 +315,87 @@ describe('the library while a vote waits, and after', () => {
     });
     expect(store.get(pendingVotesAtom)[key]).toBeUndefined();
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("voting waits until the node says whether there's a poll", () => {
+  it("doesn't vote while the poll is loading", async () => {
+    nodeWith(() => new Promise<Response>(() => {}));
+    const { result } = renderVotes();
+    await flush();
+    expect(result.current.pollStatus).toBe('loading');
+    let outcome: Awaited<ReturnType<typeof result.current.vote>>;
+    await act(async () => {
+      outcome = await result.current.vote(4);
+    });
+    expect(outcome!).toEqual({ ok: false });
+    expect(sentActions()).toEqual([]);
+  });
+
+  it("doesn't create the poll when it couldn't be read", async () => {
+    nodeWith(() => new Response('', { status: 500 }));
+    const { result } = renderVotes();
+    await flush();
+    expect(result.current.pollStatus).toBe('error');
+    expect(result.current.loading).toBe(false);
+    let outcome: Awaited<ReturnType<typeof result.current.vote>>;
+    await act(async () => {
+      outcome = await result.current.vote(4);
+    });
+    expect(outcome!).toMatchObject({ ok: false, message: expect.any(String) });
+    expect(sentActions()).toEqual([]);
+  });
+
+  it("doesn't create the poll when the node can't be reached", async () => {
+    nodeWith(() => Promise.reject(new TypeError('Failed to fetch')));
+    const { result } = renderVotes();
+    await flush();
+    expect(result.current.pollStatus).toBe('error');
+    await act(async () => {
+      await result.current.vote(4);
+    });
+    expect(sentActions()).toEqual([]);
+  });
+
+  it("doesn't vote when the poll is in but its votes couldn't be read", async () => {
+    nodeWith(
+      () => new Response(JSON.stringify(POLL)),
+      () => new Response('', { status: 500 })
+    );
+    const { result } = renderVotes();
+    await flush();
+    expect(result.current.pollStatus).toBe('error');
+    await act(async () => {
+      await result.current.vote(4);
+    });
+    expect(sentActions()).toEqual([]);
+  });
+
+  it('votes in the poll once a retry reads it', async () => {
+    let info = () => new Response('', { status: 502 });
+    nodeWith(() => info());
+    const { result } = renderVotes();
+    await flush();
+    expect(result.current.pollStatus).toBe('error');
+
+    info = () => new Response(JSON.stringify(POLL));
+    act(() => result.current.reload());
+    await flush();
+    expect(result.current.pollStatus).toBe('found');
+    await act(async () => {
+      await result.current.vote(4);
+    });
+    expect(sentActions()).toEqual(['voteOnPoll']);
+  });
+
+  it('creates the poll only when the node says there is none', async () => {
+    nodeWith(noPoll, noPoll);
+    const { result } = renderVotes();
+    await flush();
+    expect(result.current.pollStatus).toBe('missing');
+    await act(async () => {
+      await result.current.vote(4);
+    });
+    expect(sentActions()).toEqual(['createPoll']);
   });
 });
