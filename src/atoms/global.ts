@@ -37,6 +37,9 @@ export const blobControllerAtom = atomWithReset({});
 export const canSaveSettingToQdnAtom = atomWithReset(false);
 export const enabledDevModeAtom = atomWithReset(false);
 export const fullScreenAtom = atomWithReset(false);
+// True while the apps view shows a library page (library, category, app info, publish),
+// so the top bar's back button can step back through them.
+export const appsLibraryPageActiveAtom = atomWithReset(false);
 export const p2pHealthAtom = atom<P2pHealthLevel | 'unknown'>('unknown');
 export const groupAnnouncementsAtom = atomWithReset({});
 export const groupChatTimestampsAtom = atomWithReset({});

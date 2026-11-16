@@ -75,6 +75,7 @@ import {
   navigationControllerAtom,
   isNewTabWindowAtom,
   userInfoAtom,
+  appsLibraryPageActiveAtom,
 } from '../../atoms/global';
 import {
   availableQappsAtom,
@@ -228,6 +229,17 @@ type AppsDesktopProps = {
   renderInternalTab?: (args: RenderInternalTabArgs) => ReactNode;
   show: boolean;
 };
+
+// Pages inside the apps view that step back through navigateBack rather than tab history
+const LIBRARY_PAGE_MODES = [
+  'category',
+  'appInfo-from-category',
+  'appInfo',
+  'library',
+  'publish',
+  'publish-app',
+  'publish-website',
+];
 
 export const AppsDesktop = ({
   mode,
@@ -969,17 +981,7 @@ export const AppsDesktop = ({
       return;
     }
 
-    if (
-      [
-        'category',
-        'appInfo-from-category',
-        'appInfo',
-        'library',
-        'publish',
-        'publish-app',
-        'publish-website',
-      ].includes(mode)
-    ) {
+    if (LIBRARY_PAGE_MODES.includes(mode)) {
       if (mode === 'category') {
         setMode('library');
         setSelectedCategory(null);
@@ -1022,6 +1024,18 @@ export const AppsDesktop = ({
       unsubscribeFromEvent('navigateBack', navigateBackFunc);
     };
   }, [navigateBackFunc]);
+
+  // Let the top bar's back button step back through library pages
+  const setAppsLibraryPageActive = useSetAtom(appsLibraryPageActiveAtom);
+  useEffect(() => {
+    setAppsLibraryPageActive(
+      desktopViewMode === 'apps' && LIBRARY_PAGE_MODES.includes(mode)
+    );
+  }, [desktopViewMode, mode, setAppsLibraryPageActive]);
+  useEffect(
+    () => () => setAppsLibraryPageActive(false),
+    [setAppsLibraryPageActive]
+  );
 
   useEffect(() => {
     subscribeToEvent('devModeNavigateBack', navigateBackFunc);
