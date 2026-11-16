@@ -75,6 +75,18 @@ describe('parseLauncherLink', () => {
     });
   });
 
+  it("recognises an app's page link, in any case", () => {
+    expect(parseLauncherLink('qortal://use-app-page/APP/Q-Shop')).toEqual({
+      kind: 'page',
+      link: 'qortal://use-app-page/APP/Q-Shop',
+      service: 'APP',
+      name: 'Q-Shop',
+    });
+    expect(
+      parseLauncherLink('QORTAL://use-app-page/website/My%20Site')
+    ).toMatchObject({ kind: 'page', service: 'WEBSITE', name: 'My Site' });
+  });
+
   it('rejects other qortal://use- links', () => {
     expect(parseLauncherLink('qortal://use-embed/POLL?name=x')).toBeNull();
   });

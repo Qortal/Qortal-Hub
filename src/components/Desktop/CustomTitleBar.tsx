@@ -1,5 +1,14 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
@@ -11,7 +20,26 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import FilterNoneIcon from '@mui/icons-material/FilterNone';
 import QortalLogo from '../../assets/svgs/Logo1Dark.svg';
+import qortalLogoTitleMinting from '../../assets/sidebar/qortal-logo-title-minting.webp';
 import { WalletIcon } from '../../assets/Icons/WalletIcon';
+import { coreInfoSurfaceSx } from './coreInfoSurface';
+import { NodeStateLogo } from './NodeStateLogo';
+import { useNodeState } from './nodeState';
+
+// Loaded when first opened: the title bar stays light.
+const CoreSyncStatus = lazy(() =>
+  import('../CoreSyncStatus').then((module) => ({
+    default: module.CoreSyncStatus,
+  }))
+);
+
+/** Calls `onMount` once it shows: after what loads with it, in Suspense. */
+const WhenShown = ({ onMount }: { onMount: () => void }) => {
+  useEffect(() => {
+    onMount();
+  }, [onMount]);
+  return null;
+};
 
 const TITLE_BAR_HEIGHT = 32;
 export const APP_NAV_BAR_HEIGHT = 48;
@@ -119,6 +147,15 @@ export function CustomTitleBar(props?: {
   const isElectron = useIsElectron();
   const platform = usePlatform();
   const [isMaximized, setIsMaximized] = useState(false);
+  const nodeState = useNodeState();
+  // Signed in, in the main window: the title shows the node's information.
+  const canShowNodeInfo = !!rightNav;
+  const [isNodeInfoOpen, setIsNodeInfoOpen] = useState(false);
+  // The information loads the first time it opens: it's placed again then.
+  const nodeInfoPopper = useRef<{ update: () => unknown } | null>(null);
+  const placeNodeInfo = useCallback(() => {
+    void nodeInfoPopper.current?.update();
+  }, []);
 
   const isMac = platform === 'darwin';
 
@@ -355,19 +392,17 @@ export function CustomTitleBar(props?: {
     </IconButton>
   );
 
-  const titleBadge = (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.75,
-      }}
-    >
-      <Box
-        component="img"
-        src={QortalLogo}
+  // The logo and name are grey on the public node and blue on the user's
+  // own, with the logo's small cube in gold while it mints.
+  const titleInner = (
+    <>
+      <NodeStateLogo
         alt=""
-        sx={{ height: 20, width: 'auto', display: 'block' }}
+        highlighted={isNodeInfoOpen}
+        mintingSrc={qortalLogoTitleMinting}
+        size={20}
+        src={QortalLogo}
+        state={nodeState}
       />
       <Typography
         variant="body2"
@@ -376,11 +411,79 @@ export function CustomTitleBar(props?: {
           fontWeight: 600,
           letterSpacing: '0.02em',
           lineHeight: 1,
-          color: theme.palette.text.primary,
+          color:
+            nodeState === 'public'
+              ? theme.palette.text.secondary
+              : theme.palette.primary.main,
+          transition: 'color 0.2s ease',
         }}
       >
         Qortal Hub
       </Typography>
+    </>
+  );
+
+  // The title, clickable for the node's information once signed in. It
+  // sits in the middle, or on the left when the apps bar takes the middle.
+  const titleBadge = canShowNodeInfo ? (
+    <Tooltip
+      // On hover, at once; a click or the keyboard opens it too.
+      enterDelay={0}
+      enterNextDelay={0}
+      leaveDelay={120}
+      onClose={() => setIsNodeInfoOpen(false)}
+      onOpen={() => setIsNodeInfoOpen(true)}
+      open={isNodeInfoOpen}
+      placement="bottom"
+      slotProps={{
+        popper: { popperRef: nodeInfoPopper as never },
+        tooltip: { sx: coreInfoSurfaceSx(theme) },
+      }}
+      title={
+        // The same information as the side panel's logo on hover.
+        <Suspense fallback={null}>
+          <CoreSyncStatus panelOnly />
+          <WhenShown onMount={placeNodeInfo} />
+        </Suspense>
+      }
+    >
+      <ButtonBase
+        aria-expanded={isNodeInfoOpen}
+        aria-label={t('core:core.information', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+        onClick={() => setIsNodeInfoOpen(true)}
+        // A double click here isn't the title bar's maximize.
+        onDoubleClick={(event) => event.stopPropagation()}
+        sx={{
+          alignItems: 'center',
+          borderRadius: 999,
+          display: 'flex',
+          gap: 0.5,
+          pl: 0.5,
+          pr: 1,
+          pointerEvents: 'auto',
+          py: 0.25,
+          transition: 'background-color 140ms ease',
+          WebkitAppRegion: 'no-drag',
+          '&:hover': { backgroundColor: controlHover },
+          '&.Mui-focusVisible': {
+            outline: `1px solid ${theme.palette.primary.main}`,
+          },
+        }}
+      >
+        {titleInner}
+      </ButtonBase>
+    </Tooltip>
+  ) : (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+      }}
+    >
+      {titleInner}
     </Box>
   );
 

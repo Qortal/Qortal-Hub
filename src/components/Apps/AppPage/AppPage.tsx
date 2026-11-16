@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import {
   sortablePinnedAppsAtom,
   userInfoAtom,
 } from '../../../atoms/global';
+import { shownAppPageAtom } from '../../../atoms/appsAtoms';
 import { executeEvent } from '../../../utils/events';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
@@ -22,6 +23,11 @@ import {
   EditorSaved,
   EditorTab,
 } from './AppPageEditorDialog';
+import {
+  inLauncherTab,
+  LauncherTabShownContext,
+  useLauncherTabId,
+} from '../launcherTabs';
 import { appIconUrl, shotImageUrl } from './appPageQdn';
 import { AppPageData, isVersionCurrent } from './appPageData';
 import type { ShotDraft } from './ScreenshotsEditor';
@@ -89,6 +95,18 @@ export const AppPage = ({
     [service, app?.name]
   );
   const base = getBaseApiReact();
+  const launcherTabId = useLauncherTabId();
+
+  // On screen: the top bar shows this page's link. A page in a launcher tab
+  // that is hidden behind another tab is not.
+  const isTabShown = useContext(LauncherTabShownContext);
+  const setShownAppPage = useSetAtom(shownAppPageAtom);
+  useEffect(() => {
+    if (!ref.name || !isTabShown) return;
+    setShownAppPage(ref);
+    return () =>
+      setShownAppPage((current) => (current === ref ? null : current));
+  }, [isTabShown, ref, setShownAppPage]);
 
   const pageData = useAppPageData(ref);
   const votes = useAppVotes(ref, { address: myAddress, name: myName });
@@ -296,7 +314,9 @@ export const AppPage = ({
           )
         }
         onEdit={() => openEditor('page')}
-        onOpen={() => executeEvent('addTab', { data: app })}
+        onOpen={() =>
+          executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) })
+        }
         onRatingsClick={() =>
           document
             .getElementById('app-page-ratings-card')

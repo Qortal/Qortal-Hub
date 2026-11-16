@@ -21,6 +21,16 @@ export const appSearchQueryAtom = atomWithReset<string>('');
  */
 export const availableQappsAtom = atom<any[]>([]);
 
+type ShownAppPage = { service: string; name: string } | null;
+
+/**
+ * The Q-App or website whose page is on screen, if any. While it shows, the
+ * top bar shows the page's own link (qortal://use-app-page/…). The `null as`
+ * keeps it writable for TypeScript: without strictNullChecks, a plain null
+ * would match atom's read-only overload.
+ */
+export const shownAppPageAtom = atom<ShownAppPage>(null as ShownAppPage);
+
 
 // Current tab atom
 export type AppsLibraryTab =
@@ -29,14 +39,6 @@ export type AppsLibraryTab =
   | 'my-apps'
   | 'official';
 export const currentAppsTabAtom = atomWithReset<AppsLibraryTab>('official');
-
-// When opening AppPublish from "Update" on a published app card, pass name + service
-export type PublishEditTarget = {
-  name: string;
-  service: 'APP' | 'WEBSITE';
-};
-export const publishEditTargetAtom =
-  atomWithReset<PublishEditTarget | null>(null);
 
 // Helper function to filter and sort apps
 export const filterAndSortApps = (
