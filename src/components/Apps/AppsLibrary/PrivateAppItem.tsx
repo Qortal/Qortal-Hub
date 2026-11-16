@@ -29,8 +29,12 @@ interface PrivateAppItemProps {
   groupName: string;
   view: LibraryView;
   onOpen: () => void;
-  /** More buttons, before Open (Update, for the account's own apps). */
-  actions?: ReactNode;
+  /**
+   * More buttons, before Open (Update, for the account's own apps). As a
+   * function it gets the id of the app's title, for the buttons'
+   * aria-describedby.
+   */
+  actions?: ReactNode | ((titleId: string) => ReactNode);
 }
 
 const lineSx = (theme: any) => ({
@@ -90,7 +94,7 @@ export const PrivateAppItem = ({
         justifyContent: 'flex-end',
       }}
     >
-      {actions}
+      {typeof actions === 'function' ? actions(titleId) : actions}
       <LibraryActionButton
         describedBy={titleId}
         kind="primary"

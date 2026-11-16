@@ -9,6 +9,7 @@ import { AppsPrivate, PrivateAppAction } from '../AppsPrivate';
 import { PublishedPrivateApps } from '../PublishedPrivateApps';
 import { LibrarySection } from './LibrarySection';
 import { cap } from './libraryStyles';
+import type { PublishedPrivateApp } from '../privateAppMetadata';
 import {
   PublishButton,
   PublishNewContainer,
@@ -31,12 +32,21 @@ export const PrivateTab = ({
   const { t } = useTranslation(['core']);
   const [refreshKey, setRefreshKey] = useState(0);
   const [action, setAction] = useState<PrivateAppAction | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<PublishedPrivateApp | null>(
+    null
+  );
+
+  const open = (next: PrivateAppAction, target?: PublishedPrivateApp) => {
+    setUpdateTarget(target ?? null);
+    setAction(next);
+  };
 
   return (
     <AppsWidthLimiter sx={{ alignItems: 'stretch' }}>
       <SectionContainer>
         <PublishedPrivateApps
           myAddress={myAddress}
+          onUpdate={(app) => open('update', app)}
           refreshKey={refreshKey + libraryRefreshKey}
         />
 
@@ -46,7 +56,7 @@ export const PrivateTab = ({
           title={t('core:private_apps.actions_title', cap)}
         >
           <PublishNewContainer>
-            <PublishButton onClick={() => setAction('access')}>
+            <PublishButton onClick={() => open('access')}>
               <LockOpenIcon
                 sx={{ fontSize: '32px', color: theme.palette.primary.main }}
               />
@@ -62,7 +72,7 @@ export const PrivateTab = ({
                 })}
               </Typography>
             </PublishButton>
-            <PublishButton onClick={() => setAction('publish')}>
+            <PublishButton onClick={() => open('publish')}>
               <PublishIcon
                 sx={{ fontSize: '32px', color: theme.palette.secondary.main }}
               />
@@ -86,7 +96,11 @@ export const PrivateTab = ({
         myName={myName}
         myAddress={myAddress}
         action={action}
-        onClose={() => setAction(null)}
+        updateTarget={updateTarget}
+        onClose={() => {
+          setAction(null);
+          setUpdateTarget(null);
+        }}
         onPublished={() => setRefreshKey((key) => key + 1)}
       />
     </AppsWidthLimiter>

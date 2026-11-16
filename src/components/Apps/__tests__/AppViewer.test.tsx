@@ -124,3 +124,73 @@ describe('AppViewer guest recovery', () => {
     expect(prepare).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("AppViewer keeps a page's own query and fragment", () => {
+  const stubGuest = () => {
+    const prepare = vi.fn().mockResolvedValue({
+      partition: 'test-blog',
+      preload: 'file:///test/qapp-guest-preload.js',
+    });
+    vi.stubGlobal('electronAPI', {
+      qappGuestPrepare: prepare,
+      qappGuestRelease: vi.fn().mockResolvedValue(true),
+    });
+    return prepare;
+  };
+  const owner = { name: 'Q-Blog', service: 'APP' };
+
+  it("adds Hub's parameters after them when navigation falls back to loading the page", async () => {
+    const prepare = stubGuest();
+    const { container } = render(
+      <AppViewer
+        app={{ ...owner, identifier: 'beta', tabId: 'blog' }}
+        isDevMode={false}
+      />
+    );
+    const source = () =>
+      container.querySelector('webview')?.getAttribute('src') ?? '';
+    await waitFor(() => expect(source()).toContain('/render/APP/Q-Blog?'));
+
+    // The guest never said hello, so in-page navigation fails at once.
+    await act(async () => {
+      executeEvent('navigateToPath-blog', { path: 'search?q=hello#top' });
+    });
+    await waitFor(() => expect(source()).toContain('/search?'));
+
+    const url = new URL(source());
+    expect(url.pathname).toBe('/render/APP/Q-Blog/search');
+    expect(url.searchParams.get('q')).toBe('hello');
+    expect(url.searchParams.get('theme')).toBe('dark');
+    expect(url.searchParams.get('lang')).toBe('en');
+    expect(url.searchParams.get('identifier')).toBe('beta');
+    expect(url.searchParams.get('isManualNavigation')).toBe('false');
+    expect(url.hash).toBe('#top');
+    expect(
+      qappGuestUrlAllowed(
+        prepare.mock.calls[0][1],
+        source(),
+        { ...owner, tabId: 'blog' },
+        false
+      )
+    ).toBe(true);
+  });
+
+  it("puts Hub's parameters before a page's fragment when it first loads", async () => {
+    stubGuest();
+    const { container } = render(
+      <AppViewer
+        app={{ ...owner, path: 'page#top', tabId: 'blog' }}
+        isDevMode={false}
+      />
+    );
+    const source = () =>
+      container.querySelector('webview')?.getAttribute('src') ?? '';
+    await waitFor(() => expect(source()).toContain('/render/APP/Q-Blog/page'));
+
+    const url = new URL(source());
+    expect(url.pathname).toBe('/render/APP/Q-Blog/page');
+    expect(url.searchParams.get('theme')).toBe('dark');
+    expect(url.searchParams.get('lang')).toBe('en');
+    expect(url.hash).toBe('#top');
+  });
+});

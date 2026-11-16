@@ -252,7 +252,13 @@ export const MyAppsTab = ({
           title={t('core:developer.publish_new', cap)}
         >
           <PublishNewContainer>
-            <PublishButton onClick={() => setMode('publish-app')}>
+            <PublishButton
+              onClick={() => {
+                // A new app or website: nothing is locked.
+                setPublishEditTarget(null);
+                setMode('publish-app');
+              }}
+            >
               <AppsIcon
                 sx={{ fontSize: '32px', color: theme.palette.primary.main }}
               />
@@ -268,7 +274,13 @@ export const MyAppsTab = ({
                 })}
               </Typography>
             </PublishButton>
-            <PublishButton onClick={() => setMode('publish-website')}>
+            <PublishButton
+              onClick={() => {
+                // A new app or website: nothing is locked.
+                setPublishEditTarget(null);
+                setMode('publish-website');
+              }}
+            >
               <LanguageIcon
                 sx={{ fontSize: '32px', color: theme.palette.secondary.main }}
               />
