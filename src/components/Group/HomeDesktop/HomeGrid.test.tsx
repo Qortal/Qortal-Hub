@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../../i18n/i18n';
@@ -104,6 +104,27 @@ describe('HomeGrid', () => {
     expect(screen.queryAllByRole('group')).toHaveLength(0);
   });
 
+  it('tells when editing starts and stops, with its extra buttons meanwhile', () => {
+    const onEditingChange = vi.fn();
+    renderGrid({
+      editActions: <button type="button">Restore from QDN</button>,
+      onEditingChange,
+    });
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+    expect(
+      screen.queryByRole('button', { name: 'Restore from QDN' })
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+    expect(onEditingChange).toHaveBeenLastCalledWith(true);
+    expect(
+      screen.getByRole('button', { name: 'Restore from QDN' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('starts editing when the Modules settings ask', () => {
     renderGrid();
     act(() => executeEvent(HOME_EDIT_LAYOUT_EVENT, {}));
@@ -201,5 +222,77 @@ describe('HomeGrid', () => {
     fireEvent.pointerDown(wallet, { button: 0, clientX: 50, clientY: 400 });
     fireEvent.pointerUp(wallet, { clientX: 51, clientY: 401 });
     expect(onChangeGrid).not.toHaveBeenCalled();
+  });
+  it('offers to add a widget under the windows while editing', () => {
+    const onAdd = vi.fn();
+    renderGrid({
+      addWidget: { description: 'In a window of its own.', onAdd },
+    });
+    expect(screen.queryByRole('button', { name: /Add widget/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+    fireEvent.click(screen.getByRole('button', { name: /Add widget/ }));
+
+    expect(onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the widget tile closed when Home is full', () => {
+    const onAdd = vi.fn();
+    renderGrid({
+      addWidget: {
+        description: 'You can have up to 8 widgets on Home.',
+        disabled: true,
+        onAdd,
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+
+    const tile = screen.getByRole('button', { name: /Add widget/ });
+    expect(tile).toBeDisabled();
+    expect(
+      screen.getByText('You can have up to 8 widgets on Home.')
+    ).toBeInTheDocument();
+  });
+
+  it("gives a widget's window its own buttons, and Delete removes it", () => {
+    const clock = 'widget:GO%20Clock:' as HomeWindowId;
+    const onReload = vi.fn();
+    const windows: HomeGridWindow[] = [
+      ...GRID.map((item) => ({
+        id: item.key,
+        node: <div>{`${TITLES[item.key]} content`}</div>,
+        title: TITLES[item.key] ?? item.key,
+      })),
+      {
+        actions: [
+          { icon: <span />, label: 'Reload widget', onClick: onReload },
+        ],
+        id: clock,
+        node: <div>Clock content</div>,
+        title: 'Clock',
+      },
+    ];
+    const { onHideWindow } = renderGrid({
+      grid: [...GRID, { key: clock, x: 0, y: 60, w: 6, h: 20 }],
+      windows,
+    });
+    expect(
+      document.querySelector('[data-home-window="widget:GO%20Clock:"]')
+    ).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+    const controls = screen.getByRole('group', {
+      name: /^Clock: arrow keys move it/,
+    });
+    expect(
+      within(controls).queryByRole('button', { name: 'Hide Clock' })
+    ).toBeNull();
+    fireEvent.click(
+      within(controls).getByRole('button', { name: 'Reload widget' })
+    );
+    expect(onReload).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(controls, { key: 'Delete' });
+    expect(onHideWindow).toHaveBeenCalledWith(clock);
   });
 });

@@ -22,17 +22,18 @@ import {
   quitterDashboardFeedCacheAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { executeEvent } from '../../utils/events';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
 import {
   QAppWidgetContainer,
   QAppWidgetStatePanel,
 } from './QAppWidgetContainer';
 import { QuitterFeedCard } from './quitter/QuitterFeedCard';
+import { TorqComposer } from './quitter/TorqComposer';
 import {
   TORQ_APP_NAME,
   fetchTorqHiddenUsers,
   hiddenUserKey,
+  openTorqPost,
   torqFeedItems,
 } from './quitter/torqFeed';
 import {
@@ -210,6 +211,9 @@ export const QuitterFeedWidget = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
+  // The composer is open for this name only: another account starts closed.
+  const [composerOpenFor, setComposerOpenFor] = useState<string | null>(null);
+  const [publishedPostToken, setPublishedPostToken] = useState(0);
   const itemsRef = useRef<QuitterFeedItem[]>([]);
   const pendingItemsRef = useRef<QuitterFeedItem[]>([]);
   const feedKeyRef = useRef('');
@@ -221,6 +225,8 @@ export const QuitterFeedWidget = ({
   const activeUpdateRequestIdRef = useRef(0);
   const isUpdateCheckInFlightRef = useRef(false);
   const feedKey = `${feedMode}:${currentUserName ?? ''}`;
+  const isComposing =
+    currentUserName != null && composerOpenFor === currentUserName;
 
   const cacheMatches = feedCache?.feedKey === feedKey;
   const feedItems = cacheMatches ? feedCache.items : NO_FEED_ITEMS;
@@ -580,6 +586,8 @@ export const QuitterFeedWidget = ({
       options: {
         feedMode?: QuitterFeedMode;
         showRefreshIndicator?: boolean;
+        /** Show new posts at the top right away, not behind "N new posts". */
+        showNow?: boolean;
       } = {}
     ) => {
       if (isInitialLoading || itemsRef.current.length === 0) {
@@ -638,6 +646,25 @@ export const QuitterFeedWidget = ({
         const nextPendingItems = nextPage.items
           .slice(0, cutoffIndex)
           .filter((item) => !knownIds.has(item.id));
+
+        if (options.showNow) {
+          const freshItems = prependUniqueFeedItems(
+            nextPendingItems,
+            pendingItemsRef.current
+          );
+          if (freshItems.length === 0) {
+            return;
+          }
+          commitPendingItems([]);
+          commitVisibleItems(
+            prependUniqueFeedItems(freshItems, itemsRef.current)
+          );
+          setRevealedItemIds(freshItems.map((item) => item.id));
+          if (scrollerRef.current) {
+            scrollerRef.current.scrollTop = 0;
+          }
+          return;
+        }
 
         if (nextPendingItems.length === 0) {
           return;
@@ -789,15 +816,7 @@ export const QuitterFeedWidget = ({
   }, [feedMode, feedKey, initialFeedState, feedItems.length]);
 
   const handleOpenPost = useCallback((item: QuitterFeedItem) => {
-    executeEvent('addTab', {
-      data: {
-        identifier: '',
-        name: TORQ_APP_NAME,
-        path: `post/${encodeURIComponent(item.author)}/${encodeURIComponent(item.identifier)}`,
-        service: 'APP',
-      },
-    });
-    executeEvent('open-apps-mode', {});
+    openTorqPost(item.author, item.identifier);
   }, []);
 
   const handleApplyPendingPosts = useCallback(() => {
@@ -855,6 +874,48 @@ export const QuitterFeedWidget = ({
     setIsInitialLoading(true);
     setReloadToken((value) => value + 1);
   }, [setFeedCache]);
+
+  const handleComposerOpenChange = useCallback(
+    (open: boolean) => {
+      setComposerOpenFor(open ? currentUserName : null);
+    },
+    [currentUserName]
+  );
+
+  const handlePostPublished = useCallback(() => {
+    setPublishedPostToken((value) => value + 1);
+  }, []);
+
+  // After a post from the composer, load what is new and show it at the top.
+  const reloadAfterPublish = useEffectEvent((signal: AbortSignal) => {
+    if (isInitialLoading || initialFeedState === 'loading') {
+      return;
+    }
+
+    if (itemsRef.current.length === 0) {
+      handleRetryInitialFeed();
+      return;
+    }
+
+    void checkForNewPosts(signal, {
+      feedMode,
+      showNow: true,
+      showRefreshIndicator: true,
+    });
+  });
+
+  useEffect(() => {
+    if (publishedPostToken === 0) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    reloadAfterPublish(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [publishedPostToken]);
 
   const handleSelectFollowingFeed = useCallback(() => {
     if (feedMode === 'following') {
@@ -968,8 +1029,26 @@ export const QuitterFeedWidget = ({
         >
           <Box
             sx={{
-              alignItems: 'center',
               display: 'flex',
+              // Open, the composer comes first and scrolls when space is short.
+              flex: isComposing ? '0 1 auto' : '0 0 auto',
+              flexDirection: 'column',
+              mb: '11px',
+              minHeight: 0,
+            }}
+          >
+            <TorqComposer
+              key={currentUserName ?? ''}
+              open={isComposing}
+              onOpenChange={handleComposerOpenChange}
+              onPublished={handlePostPublished}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: isComposing ? 'none' : 'flex',
               flexShrink: 0,
               gap: '8px',
               justifyContent: 'space-between',
@@ -1010,7 +1089,7 @@ export const QuitterFeedWidget = ({
             </Typography>
           </Box>
 
-          {!showStatePanel && items.length > 0 ? (
+          {!isComposing && !showStatePanel && items.length > 0 ? (
             <Collapse in={pendingItems.length > 0} mountOnEnter unmountOnExit>
               <Box
                 sx={{
@@ -1113,47 +1192,60 @@ export const QuitterFeedWidget = ({
           ) : null}
 
           {showStatePanel ? (
-            <QAppWidgetStatePanel
-              description={
-                showInitialErrorState
-                  ? error
-                  : showEmptyState
-                    ? emptyMessage
-                    : null
-              }
-              loadingLabel={showInitialLoadingState ? loadingLabel : undefined}
-              onRetry={
-                showInitialErrorState ? handleRetryInitialFeed : undefined
-              }
-              onSecondaryAction={
-                (showInitialErrorState || showEmptyState) && isFollowingFeed
-                  ? handleSelectGeneralFeed
-                  : undefined
-              }
-              retryLabel={
-                isFollowingFeed
-                  ? t('quitter_feed.retry_following')
-                  : t('quitter_feed.retry_general')
-              }
-              secondaryActionLabel={
-                (showInitialErrorState || showEmptyState) && isFollowingFeed
-                  ? t('quitter_feed.return_to_general')
-                  : undefined
-              }
-              title={
-                showInitialLoadingState
-                  ? loadingLabel
-                  : showInitialErrorState
-                    ? errorTitle
-                    : emptyTitle
-              }
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                flex: '1 1 0',
+                flexDirection: 'column',
+                minHeight: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <QAppWidgetStatePanel
+                description={
+                  showInitialErrorState
+                    ? error
+                    : showEmptyState
+                      ? emptyMessage
+                      : null
+                }
+                loadingLabel={
+                  showInitialLoadingState ? loadingLabel : undefined
+                }
+                onRetry={
+                  showInitialErrorState ? handleRetryInitialFeed : undefined
+                }
+                onSecondaryAction={
+                  (showInitialErrorState || showEmptyState) && isFollowingFeed
+                    ? handleSelectGeneralFeed
+                    : undefined
+                }
+                retryLabel={
+                  isFollowingFeed
+                    ? t('quitter_feed.retry_following')
+                    : t('quitter_feed.retry_general')
+                }
+                secondaryActionLabel={
+                  (showInitialErrorState || showEmptyState) && isFollowingFeed
+                    ? t('quitter_feed.return_to_general')
+                    : undefined
+                }
+                title={
+                  showInitialLoadingState
+                    ? loadingLabel
+                    : showInitialErrorState
+                      ? errorTitle
+                      : emptyTitle
+                }
+              />
+            </Box>
           ) : (
             <>
               <Box
                 ref={scrollerRef}
                 sx={{
-                  flex: '1 1 auto',
+                  // Takes the room left: an open composer comes first.
+                  flex: '1 1 0',
                   minHeight: 0,
                   // Avoid browser scroll anchoring fighting virtual row layout / height totals.
                   overflowAnchor: 'none',
@@ -1243,7 +1335,7 @@ export const QuitterFeedWidget = ({
                   </Box>
                 </Box>
               </Box>
-              {items.length > 0 && (
+              {items.length > 0 && !isComposing && (
                 <Box
                   data-quitters-footer="true"
                   sx={{
