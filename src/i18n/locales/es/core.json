@@ -751,8 +751,21 @@
       "menu_aria": "Opciones de sesión",
       "tooltip": "Bloquear o cerrar sesión"
     },
+    "suggestion_action": {
+      "new_tab": "Nueva pestaña",
+      "open_link": "Abrir enlace",
+      "switch_to_tab": "Ir a la pestaña"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps y sitios web",
+      "names": "Nombres",
+      "saved": "Aplicaciones fijadas y marcadores",
+      "tabs": "Pestañas abiertas"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Marcador",
+      "name": "Nombre",
       "website": "Sitio web"
     },
     "suggestions": "Sugerencias"

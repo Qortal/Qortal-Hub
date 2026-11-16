@@ -753,8 +753,21 @@
       "menu_aria": "Параметры сеанса",
       "tooltip": "Заблокировать или выйти"
     },
+    "suggestion_action": {
+      "new_tab": "Новая вкладка",
+      "open_link": "Открыть ссылку",
+      "switch_to_tab": "Перейти на вкладку"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps и сайты",
+      "names": "Имена",
+      "saved": "Закреплённые приложения и закладки",
+      "tabs": "Открытые вкладки"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Закладка",
+      "name": "Имя",
       "website": "Веб-сайт"
     },
     "suggestions": "Подсказки"

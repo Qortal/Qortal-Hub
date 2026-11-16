@@ -132,6 +132,7 @@ import {
 } from './tabSession';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
 import { isSamePrivateApp } from '../../hooks/privatePinnedApps';
+import { isSameResourceIdentifier } from './resourceIdentifier';
 
 import { useTabShortcuts } from './useTabShortcuts';
 
@@ -1097,25 +1098,15 @@ export const AppsDesktop = ({
         return;
       }
     }
-    if (tabs.length >= MAX_OPEN_APP_TABS) {
-      setInfoSnack({
-        message: t('core:app_tab.limit_reached', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        type: 'warning',
-      });
-      setOpenSnack(true);
-      return;
-    }
-
     if (data?.navigateIfAlreadyOpen) {
       const { navigateIfAlreadyOpen, path, ...tabIdentity } = data;
+      // The same resource only: without an identifier, the name's default
+      // resource, not a tab of another resource of it.
       const existingTab = tabs.find(
         (tab) =>
           tab.service === tabIdentity.service &&
           tab.name?.toLowerCase() === tabIdentity.name?.toLowerCase() &&
-          (tabIdentity.identifier == null ||
-            tab.identifier === tabIdentity.identifier)
+          isSameResourceIdentifier(tab.identifier, tabIdentity.identifier)
       );
 
       if (existingTab) {
@@ -1135,6 +1126,18 @@ export const AppsDesktop = ({
         return;
       }
     }
+    // Only a new tab needs a free slot: an open one is reused above.
+    if (tabs.length >= MAX_OPEN_APP_TABS) {
+      setInfoSnack({
+        message: t('core:app_tab.limit_reached', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        type: 'warning',
+      });
+      setOpenSnack(true);
+      return;
+    }
+
     // Only the tab menu pins a tab: a tab opened any other way starts
     // unpinned, a duplicate of a pinned tab too.
     const { pinned: _pinned, ...tabData } = data ?? {};
