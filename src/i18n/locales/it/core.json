@@ -171,6 +171,114 @@
   },
   "app_name": "nome app",
   "app_other": "app",
+  "app_page": {
+    "about": {
+      "read_less": "mostra meno",
+      "read_more": "leggi tutto"
+    },
+    "capture": {
+      "capture_failed": "non è stato possibile catturare lo screenshot. Riprova tra un momento.",
+      "capture_this": "cattura questa schermata",
+      "count": "{{done}} di {{slots}} screenshot",
+      "full": "non c’è spazio per altri: rimuovi uno screenshot per catturarne un altro.",
+      "instructions": "L’app funziona qui come in una scheda. Vai a una schermata che vuoi mostrare e catturala; fai lo stesso per ogni screenshot. Non viene pubblicato nulla finché non pubblichi tu.",
+      "loading": "apertura dell’app…",
+      "needs_desktop": "per catturare screenshot serve l’app desktop di Qortal Hub. Puoi comunque scegliere delle immagini.",
+      "not_ready": "l’app non si è aperta. Chiudi questa finestra e riprova.",
+      "preview_failed": "il tuo nodo non è riuscito a creare un’anteprima di questo file zip.",
+      "title": "cattura screenshot",
+      "use_one": "usa {{count}} screenshot",
+      "use_other": "usa {{count}} screenshot"
+    },
+    "details": {
+      "type": "tipo",
+      "version": "versione"
+    },
+    "edit": {
+      "about": "informazioni (descrizione dettagliata)",
+      "choose_icon": "scegli un’immagine",
+      "confirm": "pubblicare queste modifiche su QDN: {{parts}}? Ognuna è una pubblicazione a sé.",
+      "error_app_not_ready": "il tuo nodo non ha ancora i file di quest’app. Apri l’app una volta, poi riprova.",
+      "error_app_too_large": "l’app è troppo grande per ripubblicarla da qui. Pubblicala dalla sua cartella nel modulo di pubblicazione.",
+      "error_file_missing": "non è stato possibile leggere uno dei file dell’app dal tuo nodo. Riprova più tardi.",
+      "error_files_unknown": "il tuo nodo non elenca i file di quest’app, quindi non può essere ripubblicata da qui. Pubblicala dalla sua cartella nel modulo di pubblicazione.",
+      "error_page_too_large": "il testo della pagina è troppo lungo per QDN. Accorcia «Informazioni» o «Novità».",
+      "error_shot_unavailable": "non è stato possibile rileggere uno screenshot da QDN. Riprova tra un momento.",
+      "files_progress": "lettura dei file dell’app dal tuo nodo: {{done}} di {{total}}",
+      "hint": "Ogni parte che modifichi viene pubblicata a sé. L’app stessa viene caricata di nuovo solo quando modifichi i dettagli della sua scheda.",
+      "icon_hint": "L’icona è l’immagine del nome {{name}}, quindi cambia ovunque venga mostrata l’immagine di quel nome.",
+      "link_invalid": "usa un link https:// o qortal://",
+      "links": "link",
+      "listing_description": "breve descrizione",
+      "listing_hint": "Titolo, breve descrizione, categoria e tag fanno parte della voce QDN dell’app stessa. Salvandoli, l’app viene ripubblicata: Hub legge i suoi file ({{size}}) dal tuo nodo e li invia con i nuovi dettagli. L’app in sé non cambia.",
+      "listing_title": "titolo",
+      "next_version": "usa {{version}}",
+      "no_changes": "ancora nessuna modifica",
+      "open": "modifica pagina",
+      "page_cleared": "il testo della pagina verrà pubblicato vuoto",
+      "page_unreadable": "il tuo nodo elenca il testo di questa pagina ma non è riuscito a leggerlo, quindi ora non si può modificare da qui: pubblicare lo sostituirebbe con campi vuoti. Riprova tra un po’.",
+      "part_icon": "icona",
+      "part_listing": "dettagli della scheda",
+      "part_page": "testo della pagina",
+      "part_screenshots": "screenshot",
+      "publish_one": "pubblica {{count}} modifica",
+      "publish_other": "pubblica {{count}} modifiche",
+      "saved": "pubblicato. Gli altri vedranno le modifiche entro un paio di minuti.",
+      "screenshots_hint": "Fino a 5 immagini. Catturale dall’app o scegli le tue; ognuna viene ricodificata, quindi si conserva solo l’immagine.",
+      "screenshots_removed": "se pubblichi ora, tutti gli screenshot verranno rimossi dalla pagina.",
+      "shots_unreadable": "il tuo nodo elenca gli screenshot di questa pagina ma non è riuscito a leggerli, quindi ora non si possono modificare da qui: pubblicare li sostituirebbe. Riprova tra un po’.",
+      "tab_icon": "icona",
+      "tab_listing": "scheda",
+      "tab_page": "pagina",
+      "tab_screenshots": "screenshot",
+      "title": "modifica la pagina di {{name}}",
+      "version_hint": "facoltativo, ad esempio 1.4.2"
+    },
+    "hero": {
+      "icon_alt": "icona di {{name}}",
+      "type_app": "Q-App",
+      "type_website": "sito web",
+      "updated_time": "aggiornato {{time}}",
+      "version": "versione {{version}}"
+    },
+    "links": {
+      "source": "codice sorgente",
+      "support": "supporto",
+      "website": "sito web"
+    },
+    "reviews": {
+      "characters": "{{length}} / {{limit}}"
+    },
+    "screenshots": {
+      "add": "aggiungi screenshot",
+      "alt": "screenshot {{index}} di {{name}}",
+      "alt_editor": "screenshot {{index}}",
+      "caption": "didascalia",
+      "caption_placeholder": "didascalia (facoltativa)",
+      "choose": "scegli immagini",
+      "counter": "{{current}} / {{total}}",
+      "limit_hint": "{{done}} di {{limit}}",
+      "move_earlier": "sposta prima",
+      "move_later": "sposta dopo",
+      "next": "screenshot successivo",
+      "not_an_image": "{{name}} non è un’immagine PNG, JPEG o WebP.",
+      "previous": "screenshot precedente",
+      "scroll_back": "scorri indietro",
+      "scroll_more": "vedi altri screenshot",
+      "take": "cattura screenshot",
+      "title": "screenshot",
+      "too_big": "{{name}} supera i 15 MB."
+    },
+    "share": {
+      "copy_app_link": "copia il link dell’app",
+      "copy_page_link": "copia il link di questa pagina",
+      "title": "condividi"
+    },
+    "version_older": "questo numero di versione è stato impostato prima dell’ultimo aggiornamento dell’app.",
+    "whats_new": {
+      "title": "novità"
+    }
+  },
   "app_private": "privata",
   "app_service_type": "tipo di servizio app",
   "app_tab": {

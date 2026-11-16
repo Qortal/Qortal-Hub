@@ -1,3 +1,5 @@
+import { createElement, Fragment, type ReactNode } from 'react';
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   canGoBackInLauncher,
@@ -12,6 +14,8 @@ import {
   showAppInfo,
   showCategory,
   showPublishPage,
+  LauncherTabShownContext,
+  useLauncherTabDialog,
 } from './launcherTabs';
 
 const tube = { tabId: 'tube', service: 'APP', name: 'Q-Tube' };
@@ -186,5 +190,31 @@ describe('inLauncherTab', () => {
   it('leaves it as it is anywhere else', () => {
     expect(inLauncherTab(app, null)).toBe(app);
     expect(inLauncherTab(app, undefined)).toBe(app);
+  });
+});
+
+describe('useLauncherTabDialog', () => {
+  /** A dialog's props, in a launcher tab shown or hidden, or in none (null). */
+  const dialogIn = (isTabShown: boolean | null, open: boolean) =>
+    renderHook(() => useLauncherTabDialog(open), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        isTabShown === null
+          ? createElement(Fragment, null, children)
+          : createElement(
+              LauncherTabShownContext.Provider,
+              { value: isTabShown },
+              children
+            ),
+    }).result.current;
+
+  it('is just open outside a launcher tab, and in one on screen', () => {
+    expect(dialogIn(null, true)).toEqual({ open: true, keepMounted: false });
+    expect(dialogIn(true, true)).toEqual({ open: true, keepMounted: false });
+    expect(dialogIn(true, false)).toEqual({ open: false, keepMounted: false });
+  });
+
+  it('puts an open dialog away, kept mounted, while its tab is hidden', () => {
+    expect(dialogIn(false, true)).toEqual({ open: false, keepMounted: true });
+    expect(dialogIn(false, false)).toEqual({ open: false, keepMounted: false });
   });
 });

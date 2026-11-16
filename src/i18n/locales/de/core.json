@@ -171,6 +171,114 @@
   },
   "app_name": "App -Name",
   "app_other": "Apps",
+  "app_page": {
+    "about": {
+      "read_less": "weniger anzeigen",
+      "read_more": "weiterlesen"
+    },
+    "capture": {
+      "capture_failed": "der Screenshot konnte nicht aufgenommen werden. Versuchen Sie es gleich noch einmal.",
+      "capture_this": "diese Ansicht aufnehmen",
+      "count": "{{done}} von {{slots}} Screenshots",
+      "full": "kein Platz für weitere: Entfernen Sie einen Screenshot, um einen neuen aufzunehmen.",
+      "instructions": "Die App läuft hier wie in einem Tab. Gehen Sie zu einer Ansicht, die Sie zeigen möchten, und nehmen Sie sie auf; für jeden weiteren Screenshot genauso. Veröffentlicht wird erst, wenn Sie veröffentlichen.",
+      "loading": "App wird geöffnet…",
+      "needs_desktop": "zum Aufnehmen von Screenshots ist die Desktop-App von Qortal Hub erforderlich. Bilder auswählen können Sie trotzdem.",
+      "not_ready": "die App ließ sich nicht öffnen. Schließen Sie dieses Fenster und versuchen Sie es erneut.",
+      "preview_failed": "Ihr Knoten konnte keine Vorschau dieser ZIP-Datei erstellen.",
+      "title": "Screenshots aufnehmen",
+      "use_one": "{{count}} Screenshot verwenden",
+      "use_other": "{{count}} Screenshots verwenden"
+    },
+    "details": {
+      "type": "Typ",
+      "version": "Version"
+    },
+    "edit": {
+      "about": "über (ausführliche Beschreibung)",
+      "choose_icon": "Bild auswählen",
+      "confirm": "diese Änderungen auf QDN veröffentlichen: {{parts}}? Jede davon ist eine eigene Veröffentlichung.",
+      "error_app_not_ready": "Ihr Knoten hat die Dateien dieser App noch nicht. Öffnen Sie die App einmal und versuchen Sie es dann erneut.",
+      "error_app_too_large": "die App ist zu groß, um sie von hier aus erneut zu veröffentlichen. Veröffentlichen Sie sie aus ihrem Ordner im Veröffentlichungsformular.",
+      "error_file_missing": "eine der Dateien der App konnte nicht von Ihrem Knoten gelesen werden. Versuchen Sie es später erneut.",
+      "error_files_unknown": "Ihr Knoten führt die Dateien dieser App nicht auf, daher kann sie von hier aus nicht erneut veröffentlicht werden. Veröffentlichen Sie sie aus ihrem Ordner im Veröffentlichungsformular.",
+      "error_page_too_large": "der Seitentext ist zu lang für QDN. Kürzen Sie „Über“ oder „Neuerungen“.",
+      "error_shot_unavailable": "ein Screenshot konnte nicht von QDN zurückgelesen werden. Versuchen Sie es gleich noch einmal.",
+      "files_progress": "Dateien der App werden von Ihrem Knoten gelesen: {{done}} von {{total}}",
+      "hint": "Jeder Teil, den Sie ändern, wird einzeln veröffentlicht. Die App selbst wird nur dann erneut hochgeladen, wenn Sie ihre Eintragsdetails ändern.",
+      "icon_hint": "Das Symbol ist das Bild des Namens {{name}}, daher ändert es sich überall, wo das Bild dieses Namens angezeigt wird.",
+      "link_invalid": "verwenden Sie einen https://- oder qortal://-Link",
+      "links": "Links",
+      "listing_description": "Kurzbeschreibung",
+      "listing_hint": "Titel, Kurzbeschreibung, Kategorie und Tags gehören zum eigenen QDN-Eintrag der App. Beim Speichern wird die App erneut veröffentlicht: Hub liest ihre Dateien ({{size}}) von Ihrem Knoten und sendet sie mit den neuen Angaben. Die App selbst bleibt unverändert.",
+      "listing_title": "Titel",
+      "next_version": "{{version}} verwenden",
+      "no_changes": "noch keine Änderungen",
+      "open": "Seite bearbeiten",
+      "page_cleared": "der Seitentext wird leer veröffentlicht",
+      "page_unreadable": "Ihr Knoten führt den Text dieser Seite, konnte ihn aber nicht lesen. Er lässt sich daher hier gerade nicht ändern: Eine Veröffentlichung würde ihn durch leere Felder ersetzen. Versuchen Sie es später noch einmal.",
+      "part_icon": "Symbol",
+      "part_listing": "Eintragsdetails",
+      "part_page": "Seitentext",
+      "part_screenshots": "Screenshots",
+      "publish_one": "{{count}} Änderung veröffentlichen",
+      "publish_other": "{{count}} Änderungen veröffentlichen",
+      "saved": "veröffentlicht. Andere sehen die Änderungen in ein bis zwei Minuten.",
+      "screenshots_hint": "Bis zu 5 Bilder. Nehmen Sie sie in der App auf oder wählen Sie eigene; jedes wird neu kodiert, sodass nur das Bild selbst erhalten bleibt.",
+      "screenshots_removed": "wenn Sie jetzt veröffentlichen, werden alle Screenshots von der Seite entfernt.",
+      "shots_unreadable": "Ihr Knoten führt die Screenshots dieser Seite, konnte sie aber nicht lesen. Sie lassen sich daher hier gerade nicht ändern: Eine Veröffentlichung würde sie ersetzen. Versuchen Sie es später noch einmal.",
+      "tab_icon": "Symbol",
+      "tab_listing": "Eintrag",
+      "tab_page": "Seite",
+      "tab_screenshots": "Screenshots",
+      "title": "Seite von {{name}} bearbeiten",
+      "version_hint": "optional, zum Beispiel 1.4.2"
+    },
+    "hero": {
+      "icon_alt": "Symbol von {{name}}",
+      "type_app": "Q-App",
+      "type_website": "Website",
+      "updated_time": "aktualisiert {{time}}",
+      "version": "Version {{version}}"
+    },
+    "links": {
+      "source": "Quellcode",
+      "support": "Support",
+      "website": "Website"
+    },
+    "reviews": {
+      "characters": "{{length}} / {{limit}}"
+    },
+    "screenshots": {
+      "add": "Screenshots hinzufügen",
+      "alt": "Screenshot {{index}} von {{name}}",
+      "alt_editor": "Screenshot {{index}}",
+      "caption": "Bildunterschrift",
+      "caption_placeholder": "Bildunterschrift (optional)",
+      "choose": "Bilder auswählen",
+      "counter": "{{current}} / {{total}}",
+      "limit_hint": "{{done}} von {{limit}}",
+      "move_earlier": "nach vorne verschieben",
+      "move_later": "nach hinten verschieben",
+      "next": "nächster Screenshot",
+      "not_an_image": "{{name}} ist kein PNG-, JPEG- oder WebP-Bild.",
+      "previous": "vorheriger Screenshot",
+      "scroll_back": "zurückscrollen",
+      "scroll_more": "weitere Screenshots ansehen",
+      "take": "Screenshots aufnehmen",
+      "title": "Screenshots",
+      "too_big": "{{name}} ist größer als 15 MB."
+    },
+    "share": {
+      "copy_app_link": "Link zur App kopieren",
+      "copy_page_link": "Link zu dieser Seite kopieren",
+      "title": "teilen"
+    },
+    "version_older": "diese Versionsnummer wurde vor der letzten Aktualisierung der App festgelegt.",
+    "whats_new": {
+      "title": "Neuerungen"
+    }
+  },
   "app_private": "Privat",
   "app_service_type": "App -Service -Typ",
   "app_tab": {

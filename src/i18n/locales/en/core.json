@@ -171,6 +171,114 @@
   },
   "app_name": "app name",
   "app_other": "apps",
+  "app_page": {
+    "about": {
+      "read_less": "show less",
+      "read_more": "read more"
+    },
+    "capture": {
+      "capture_failed": "the screenshot could not be taken. Try again in a moment.",
+      "capture_this": "capture this screen",
+      "count": "{{done}} of {{slots}} screenshots",
+      "full": "no room for more: remove one to capture another.",
+      "instructions": "The app runs here as it does in a tab. Go to a screen you want to show, then capture it; do the same for each screenshot. Nothing is published until you publish.",
+      "loading": "opening the app…",
+      "needs_desktop": "taking screenshots needs the Qortal Hub desktop app. You can still choose pictures.",
+      "not_ready": "the app did not open. Close this window and try again.",
+      "preview_failed": "your node could not build a preview of this zip file.",
+      "title": "take screenshots",
+      "use_one": "use {{count}} screenshot",
+      "use_other": "use {{count}} screenshots"
+    },
+    "details": {
+      "type": "type",
+      "version": "version"
+    },
+    "edit": {
+      "about": "about (a longer description)",
+      "choose_icon": "choose a picture",
+      "confirm": "publish these changes to QDN: {{parts}}? Each one is a publish of its own.",
+      "error_app_not_ready": "your node doesn't have this app's files yet. Open the app once, then try again.",
+      "error_app_too_large": "the app is too big to publish again from here. Publish it from its folder in the publish form.",
+      "error_file_missing": "one of the app's files could not be read from your node. Try again later.",
+      "error_files_unknown": "your node doesn't list this app's files, so it can't be published again from here. Publish it from its folder in the publish form.",
+      "error_page_too_large": "the page text is too long for QDN. Shorten About or What's new.",
+      "error_shot_unavailable": "a screenshot could not be read back from QDN. Try again in a moment.",
+      "files_progress": "reading the app's files from your node: {{done}} of {{total}}",
+      "hint": "Each part you change is published on its own. The app itself is only uploaded again when you change its listing details.",
+      "icon_hint": "The icon is the picture of the name {{name}}, so it changes everywhere that name's picture shows.",
+      "link_invalid": "use an https:// or qortal:// link",
+      "links": "links",
+      "listing_description": "short description",
+      "listing_hint": "The title, short description, category and tags belong to the app's own QDN entry. Saving them publishes the app again: Hub reads its files ({{size}}) from your node and sends them with the new details. The app itself stays the same.",
+      "listing_title": "title",
+      "next_version": "use {{version}}",
+      "no_changes": "no changes yet",
+      "open": "edit page",
+      "page_cleared": "the page text will be published empty",
+      "page_unreadable": "your node lists this page's text but couldn't read it, so it can't be changed from here now: publishing would replace it with empty fields. Try again in a while.",
+      "part_icon": "icon",
+      "part_listing": "listing details",
+      "part_page": "page text",
+      "part_screenshots": "screenshots",
+      "publish_one": "publish {{count}} change",
+      "publish_other": "publish {{count}} changes",
+      "saved": "published. Others see the changes in a minute or two.",
+      "screenshots_hint": "Up to 5 pictures. Take them from the app or choose your own; each one is re-encoded, so nothing but the picture is kept.",
+      "screenshots_removed": "publishing now takes all screenshots off the page.",
+      "shots_unreadable": "your node lists this page's screenshots but couldn't read them, so they can't be changed from here now: publishing would replace them. Try again in a while.",
+      "tab_icon": "icon",
+      "tab_listing": "listing",
+      "tab_page": "page",
+      "tab_screenshots": "screenshots",
+      "title": "edit the page of {{name}}",
+      "version_hint": "optional, for example 1.4.2"
+    },
+    "hero": {
+      "icon_alt": "icon of {{name}}",
+      "type_app": "Q-App",
+      "type_website": "website",
+      "updated_time": "updated {{time}}",
+      "version": "version {{version}}"
+    },
+    "links": {
+      "source": "source code",
+      "support": "support",
+      "website": "website"
+    },
+    "reviews": {
+      "characters": "{{length}} / {{limit}}"
+    },
+    "screenshots": {
+      "add": "add screenshots",
+      "alt": "screenshot {{index}} of {{name}}",
+      "alt_editor": "screenshot {{index}}",
+      "caption": "caption",
+      "caption_placeholder": "caption (optional)",
+      "choose": "choose pictures",
+      "counter": "{{current}} / {{total}}",
+      "limit_hint": "{{done}} of {{limit}}",
+      "move_earlier": "move earlier",
+      "move_later": "move later",
+      "next": "next screenshot",
+      "not_an_image": "{{name}} is not a PNG, JPEG or WebP picture.",
+      "previous": "previous screenshot",
+      "scroll_back": "scroll back",
+      "scroll_more": "see more screenshots",
+      "take": "take screenshots",
+      "title": "screenshots",
+      "too_big": "{{name}} is larger than 15 MB."
+    },
+    "share": {
+      "copy_app_link": "copy link to the app",
+      "copy_page_link": "copy link to this page",
+      "title": "share"
+    },
+    "version_older": "this version number was set before the app's latest update.",
+    "whats_new": {
+      "title": "what's new"
+    }
+  },
   "app_private": "private",
   "app_service_type": "app service type",
   "app_tab": {

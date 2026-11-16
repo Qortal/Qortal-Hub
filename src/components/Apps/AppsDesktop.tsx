@@ -842,9 +842,9 @@ export const AppsDesktop = ({
     setLauncherTabStates((prev) => keepOpenLauncherStates(prev, tabs));
   }, [tabs]);
 
-  // An app's details and a category open in the launcher tab on screen: only
-  // that one can be clicked. (What opens in a tab says where it came from:
-  // addTabFunc.)
+  // A category, and an app's details opened from one, open in the launcher
+  // tab on screen: only that one can be clicked. (What opens in a tab says
+  // where it came from: addTabFunc. An app's page itself: showAppPage.)
   useEffect(() => {
     const showInLauncherTab = (
       change: (state: LauncherTabState) => LauncherTabState
@@ -852,19 +852,15 @@ export const AppsDesktop = ({
       const tab = selectedTabRef.current;
       if (isLauncherTab(tab)) updateLauncherTab(tab.tabId, change);
     };
-    const onAppInfo = (e) =>
-      showInLauncherTab((state) => showAppInfo(state, e.detail?.data));
     const onAppInfoFromCategory = (e) =>
       showInLauncherTab((state) => showAppInfo(state, e.detail?.data, true));
     const onCategory = (e) =>
       showInLauncherTab((state) => showCategory(state, e.detail?.data));
 
-    subscribeToEvent('selectedAppInfo', onAppInfo);
     subscribeToEvent('selectedAppInfoCategory', onAppInfoFromCategory);
     subscribeToEvent('selectedCategory', onCategory);
 
     return () => {
-      unsubscribeFromEvent('selectedAppInfo', onAppInfo);
       unsubscribeFromEvent('selectedAppInfoCategory', onAppInfoFromCategory);
       unsubscribeFromEvent('selectedCategory', onCategory);
     };
@@ -1019,7 +1015,13 @@ export const AppsDesktop = ({
   const openNewLauncherTab = ({
     afterTabId,
     query = '',
-  }: { afterTabId?: string; query?: string } = {}): boolean => {
+    state,
+  }: {
+    afterTabId?: string;
+    query?: string;
+    /** Its first page, when it is not the launcher with `query`. */
+    state?: LauncherTabState;
+  } = {}): boolean => {
     if (tabs.length >= MAX_OPEN_APP_TABS) {
       noteTabLimit();
       return false;
@@ -1028,7 +1030,7 @@ export const AppsDesktop = ({
     setTabs((prev) => withTabAfter(prev, newTab, afterTabId));
     setLauncherTabStates((prev) => ({
       ...prev,
-      [newTab.tabId]: newLauncherTabState(query),
+      [newTab.tabId]: state ?? newLauncherTabState(query),
     }));
     setSelectedTab(newTab);
     setMode('viewer');
@@ -1060,6 +1062,43 @@ export const AppsDesktop = ({
     if (isSearch) {
       updateLauncherTab(target.tabId, (state) => restartLauncher(state, query));
     }
+    showTabInPlace(target);
+  };
+
+  /**
+   * An app's or website's page. A link in a page's text names the launcher
+   * tab it is in (`fromLauncherTabId`), and the new page takes that page's
+   * place. Anything else takes a launcher tab only from its launcher page:
+   * the library's cards, from the launcher tab on screen, and a page link
+   * from elsewhere (as from chat), which goes to the launcher tab viewed
+   * last. An app's page, a category or a publish form another launcher tab
+   * holds is left as it is, and the page gets a new launcher tab instead.
+   */
+  const showAppPage = (data) => {
+    if (!data) return;
+    const { fromLauncherTabId, ...app } = data;
+    const launcherTabs = tabs.filter(isLauncherTab);
+    const fromTab = fromLauncherTabId
+      ? launcherTabs.find((tab) => tab.tabId === fromLauncherTabId)
+      : null;
+    const target =
+      fromTab ??
+      launcherTabToShow(
+        launcherTabs.filter(
+          (tab) =>
+            (launcherTabStates[tab.tabId] ?? INITIAL_LAUNCHER_TAB_STATE)
+              .page === 'launcher'
+        ),
+        selectedTab?.tabId,
+        recentTabIdsRef.current
+      );
+    if (!target || target.lock) {
+      const state = showAppInfo(newLauncherTabState(), app);
+      // At the tab limit the tab viewed last shows, under the note.
+      if (!openNewLauncherTab({ state })) setMode('viewer');
+      return;
+    }
+    updateLauncherTab(target.tabId, (state) => showAppInfo(state, app));
     showTabInPlace(target);
   };
 
@@ -1456,24 +1495,37 @@ export const AppsDesktop = ({
 
   // The launcher's events go by this render's tabs and selection, as closing
   // does: `newTabWindow` (the + and Ctrl+T) opens a new launcher tab, the Apps
-  // buttons' `showLauncherTab` and a library search go to the one there is.
-  const launcherEventsRef = useRef({ openNewLauncherTab, showLauncherTab });
-  launcherEventsRef.current = { openNewLauncherTab, showLauncherTab };
+  // buttons' `showLauncherTab` and a library search go to the one there is,
+  // and an app's page (`selectedAppInfo`) shows in one.
+  const launcherEventsRef = useRef({
+    openNewLauncherTab,
+    showAppPage,
+    showLauncherTab,
+  });
+  launcherEventsRef.current = {
+    openNewLauncherTab,
+    showAppPage,
+    showLauncherTab,
+  };
 
   useEffect(() => {
     const onNewTab = () => launcherEventsRef.current.openNewLauncherTab();
     const onShowLauncher = () => launcherEventsRef.current.showLauncherTab();
     const onLibrarySearch = (e) =>
       launcherEventsRef.current.showLauncherTab(e.detail?.data?.query || '');
+    const onAppInfo = (e) =>
+      launcherEventsRef.current.showAppPage(e.detail?.data);
 
     subscribeToEvent('newTabWindow', onNewTab);
     subscribeToEvent('showLauncherTab', onShowLauncher);
     subscribeToEvent('openAppsLibrarySearch', onLibrarySearch);
+    subscribeToEvent('selectedAppInfo', onAppInfo);
 
     return () => {
       unsubscribeFromEvent('newTabWindow', onNewTab);
       unsubscribeFromEvent('showLauncherTab', onShowLauncher);
       unsubscribeFromEvent('openAppsLibrarySearch', onLibrarySearch);
+      unsubscribeFromEvent('selectedAppInfo', onAppInfo);
     };
   }, []);
 
