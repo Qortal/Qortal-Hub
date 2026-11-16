@@ -17,6 +17,10 @@ import {
 } from '../encryption/encryption';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTakeInSavedLauncher } from '../components/Apps/AppsLauncher/launcherQdnSync';
+import {
+  savedLayoutsAtom,
+  takeInSavedLayouts,
+} from '../components/Save/savedLayouts';
 
 function fetchFromLocalStorage(key) {
   try {
@@ -86,8 +90,12 @@ export const useQortalGetSaveSettings = (
   const currentNameRef = useRef(myName);
   currentNameRef.current = myName;
   const takeInSavedLauncher = useTakeInSavedLauncher();
+  const setSavedLayouts = useSetAtom(savedLayoutsAtom);
 
-  /** The bookmarks and the launcher's order, from the same settings. */
+  /**
+   * The bookmarks and the launcher's order, Home's layout and the side
+   * panel, from the same settings.
+   */
   const takeInLauncher = useCallback(
     async (
       myAddress: string | null | undefined,
@@ -99,8 +107,13 @@ export const useQortalGetSaveSettings = (
       } catch (error) {
         console.error(error);
       }
+      try {
+        setSavedLayouts(takeInSavedLayouts(myAddress, found?.settings ?? null));
+      } catch (error) {
+        console.error(error);
+      }
     },
-    [takeInSavedLauncher]
+    [setSavedLayouts, takeInSavedLauncher]
   );
 
   const getSavedSettings = useCallback(

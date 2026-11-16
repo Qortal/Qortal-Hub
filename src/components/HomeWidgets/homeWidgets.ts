@@ -78,7 +78,8 @@ export interface SavedHomeWidget extends GridRect {
  */
 export const HOME_WIDGET_LIMIT = 8;
 
-const normalizeIdentifier = (identifier: unknown): string | null =>
+/** A stored identifier: null for the name's default APP resource. */
+export const normalizeIdentifier = (identifier: unknown): string | null =>
   typeof identifier === 'string' &&
   identifier.trim() !== '' &&
   identifier !== 'default'

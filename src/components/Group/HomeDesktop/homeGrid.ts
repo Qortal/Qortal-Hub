@@ -14,12 +14,21 @@ import type { HomePanelId, HomeStackPanelId } from './homeLayout';
  *   keeps its top left corner and pushes what it reaches further down.
  * - The account card and Widgets only take a width: their height follows
  *   their content (HOME_AUTO_HEIGHT_WINDOWS).
+ * - Besides Home's own windows there are the widgets the account put in
+ *   windows of their own (`widget:…` keys, homeWidgetWindowId), listed with
+ *   the layout.
  * - When Home is narrower than HOME_GRID_MIN_WIDTH_PX, the windows flow in
  *   the same order into two columns, or one on a narrow window, instead.
  *
  * Everything here is pure.
  */
-export type HomeWindowId = 'account' | HomePanelId;
+/** Home's own windows. */
+export type HomeFixedWindowId = 'account' | HomePanelId;
+
+/** A Q-App widget in a window of its own: `widget:<name>:<identifier>`. */
+export type HomeWidgetWindowId = `widget:${string}`;
+
+export type HomeWindowId = HomeFixedWindowId | HomeWidgetWindowId;
 
 export type HomeGridItem = GridRect & { key: HomeWindowId };
 
@@ -37,8 +46,8 @@ const HOME_GRID_MAX_H = 240;
 const HOME_GRID_MAX_MEASURED_H = 10_000;
 const HOME_GRID_MAX_Y = 100_000;
 
-/** Every window, in the order the settings and the menus list them. */
-export const HOME_WINDOW_IDS: readonly HomeWindowId[] = [
+/** Home's own windows, in the order the settings and the menus list them. */
+export const HOME_WINDOW_IDS: readonly HomeFixedWindowId[] = [
   'account',
   'qortino',
   'tools',
@@ -69,7 +78,7 @@ const maxHeightOf = (key: HomeWindowId) =>
  * a floor until it has been measured.
  */
 export const HOME_WINDOW_MIN_SIZE: Record<
-  HomeWindowId,
+  HomeFixedWindowId,
   { w: number; h: number }
 > = {
   account: { w: 8, h: 3 },
@@ -83,9 +92,33 @@ export const HOME_WINDOW_MIN_SIZE: Record<
   feed: { w: 7, h: 34 },
 };
 
+/** A widget's window: a clock's size at the least. */
+export const HOME_WIDGET_WINDOW_MIN_SIZE = { w: 3, h: 10 };
+/** A new widget's window: about a phone's width, as in the Widgets window. */
+export const HOME_WIDGET_WINDOW_DEFAULT_SIZE = { w: 6, h: 27 };
+
+/** The key of a widget's own window. */
+export const homeWidgetWindowId = (widget: {
+  name: string;
+  identifier: string | null;
+}): HomeWidgetWindowId =>
+  `widget:${encodeURIComponent(widget.name)}:${encodeURIComponent(
+    widget.identifier ?? ''
+  )}`;
+
+export const isHomeWidgetWindowId = (
+  value: unknown
+): value is HomeWidgetWindowId =>
+  typeof value === 'string' && value.startsWith('widget:');
+
+export const homeWindowMinSize = (key: HomeWindowId) =>
+  isHomeWidgetWindowId(key)
+    ? HOME_WIDGET_WINDOW_MIN_SIZE
+    : HOME_WINDOW_MIN_SIZE[key];
+
 /** The top of the default layout: today's three columns. */
 const HOME_GRID_TOP: Record<
-  Exclude<HomeWindowId, HomeStackPanelId>,
+  Exclude<HomeFixedWindowId, HomeStackPanelId>,
   GridRect
 > = {
   qortino: { x: 0, y: 0, w: 6, h: 46 },
@@ -109,7 +142,7 @@ const int = (value: unknown, fallback: number): number => {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-const isHomeWindowId = (value: unknown): value is HomeWindowId =>
+const isHomeFixedWindowId = (value: unknown): value is HomeFixedWindowId =>
   typeof value === 'string' &&
   (HOME_WINDOW_IDS as readonly string[]).includes(value);
 
@@ -123,7 +156,7 @@ const collides = (a: GridRect, b: GridRect) =>
 export const clampHomeWindow = (
   item: Partial<GridRect> & { key: HomeWindowId }
 ): HomeGridItem => {
-  const min = HOME_WINDOW_MIN_SIZE[item.key];
+  const min = homeWindowMinSize(item.key);
   const w = clamp(int(item.w, min.w), min.w, HOME_GRID_COLUMNS);
   const h = clamp(int(item.h, min.h), min.h, maxHeightOf(item.key));
   return {
@@ -216,10 +249,12 @@ export const homeDefaultGrid = (
 };
 
 /**
- * A stored layout made whole: unknown and repeated windows dropped, every
- * window inside the grid and within its sizes, no overlaps, nothing left
- * floating. A window it lacks (one added later) goes under everything, at
- * its default size. Anything that isn't a list gives undefined.
+ * A stored layout made whole: unknown and repeated windows dropped (a
+ * widget's window too, unless `widgetWindows` lists it), every window inside
+ * the grid and within its sizes, no overlaps, nothing left floating. A
+ * window it lacks (one added later) goes under everything, at its default
+ * size, Home's own windows first. Anything that isn't a list gives
+ * undefined.
  *
  * The `hidden` windows keep their places, which the shown ones may have
  * taken: only the shown ones settle, so saving never changes what shows.
@@ -227,14 +262,18 @@ export const homeDefaultGrid = (
 export const normalizeHomeGrid = (
   value: unknown,
   stack?: readonly HomeStackPanelId[],
+  widgetWindows: readonly HomeWidgetWindowId[] = [],
   hidden: readonly HomeWindowId[] = []
 ): HomeGridItem[] | undefined => {
   if (!Array.isArray(value)) return undefined;
+  const known = (key: unknown): key is HomeWindowId =>
+    isHomeFixedWindowId(key) ||
+    (isHomeWidgetWindowId(key) && widgetWindows.includes(key));
   const items: HomeGridItem[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue;
     const { key } = entry as { key?: unknown };
-    if (!isHomeWindowId(key) || items.some((item) => item.key === key)) {
+    if (!known(key) || items.some((item) => item.key === key)) {
       continue;
     }
     items.push(clampHomeWindow({ ...(entry as GridRect), key }));
@@ -249,9 +288,15 @@ export const normalizeHomeGrid = (
     items.push({ ...start, y: bottom });
     bottom += start.h;
   }
-  const ordered = HOME_WINDOW_IDS.map((key) =>
-    items.find((item) => item.key === key)
-  ).filter(Boolean);
+  for (const key of widgetWindows) {
+    if (items.some((item) => item.key === key)) continue;
+    items.push({ key, x: 0, y: bottom, ...HOME_WIDGET_WINDOW_DEFAULT_SIZE });
+    bottom += HOME_WIDGET_WINDOW_DEFAULT_SIZE.h;
+  }
+  const order: readonly HomeWindowId[] = [...HOME_WINDOW_IDS, ...widgetWindows];
+  const ordered = order
+    .map((key) => items.find((item) => item.key === key))
+    .filter(Boolean);
   const settled = settleHomeGrid(
     ordered.filter((item) => !hidden.includes(item.key))
   );
@@ -321,7 +366,7 @@ export const resizeHomeWindow = (
 ): HomeGridItem[] => {
   const item = items.find((entry) => entry.key === key);
   if (!item) return [...items];
-  const min = HOME_WINDOW_MIN_SIZE[key];
+  const min = homeWindowMinSize(key);
   const width = clamp(int(w, item.w), min.w, HOME_GRID_COLUMNS);
   const resized = {
     ...item,
@@ -363,12 +408,12 @@ export const homeGridShown = (
 export const mergeHomeGrid = (
   stored: readonly HomeGridItem[],
   shown: readonly HomeGridItem[]
-): HomeGridItem[] =>
-  HOME_WINDOW_IDS.map(
-    (key) =>
-      shown.find((item) => item.key === key) ??
-      stored.find((item) => item.key === key)
-  ).filter(Boolean);
+): HomeGridItem[] => [
+  ...stored.map(
+    (item) => shown.find((entry) => entry.key === item.key) ?? item
+  ),
+  ...shown.filter((item) => !stored.some((entry) => entry.key === item.key)),
+];
 
 /**
  * Home's flowing layout, narrower than HOME_GRID_MIN_WIDTH_PX: the shown

@@ -39,10 +39,12 @@ const clock = {
   updated: 2,
 };
 
-const renderPanel = () =>
+const renderPanel = (
+  elsewhere?: readonly { name: string; identifier: string | null }[]
+) =>
   render(
     <Provider store={createStore()}>
-      <HomeWidgetsPanel active />
+      <HomeWidgetsPanel active elsewhere={elsewhere} />
     </Provider>
   );
 
@@ -111,6 +113,20 @@ describe('HomeWidgetsPanel', () => {
         '/render/APP/Clock?'
       )
     );
+  });
+
+  it('counts the widgets in windows of their own as added', async () => {
+    renderPanel([{ name: 'Clock', identifier: 'go-widget-clock' }]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'group:home_widgets.add_widget' })
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('GO Clock')).toBeInTheDocument();
+
+    expect(
+      within(dialog).getByRole('button', { name: 'group:home_widgets.added' })
+    ).toBeDisabled();
+    expect(saved()).toEqual([]);
   });
 
   it('arranges: keyboard moves and resizes, Delete and the button remove', async () => {
