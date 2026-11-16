@@ -5,7 +5,7 @@ import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { alpha } from '@mui/material/styles';
 import { useAtomValue } from 'jotai';
-import { Activity, useCallback, useMemo, useState } from 'react';
+import { Activity, useCallback, useMemo, useRef, useState } from 'react';
 import ErrorBoundary from '../../../common/ErrorBoundary';
 import { Spacer } from '../../../common/Spacer';
 import { HomeProfileCard } from '../HomeProfileCard';
@@ -70,6 +70,8 @@ import {
   isHomeWidgetWindowId,
 } from './homeGrid';
 import { HomeGrid, type HomeGridWindow } from './HomeGrid';
+import { RestoreLayoutButton } from '../../Save/RestoreLayoutButton';
+import { LAYOUT_EDIT_DONE_EVENT } from '../../Save/LayoutSavePrompt';
 import { homeWalletRailRect, useHomeWindowTitles } from './homeWindows';
 
 export const HomeDesktop = ({
@@ -102,6 +104,7 @@ export const HomeDesktop = ({
   const titles = useHomeWindowTitles();
   const homeActive = desktopViewMode === 'home';
   const [isEditingHome, setIsEditingHome] = useState(false);
+  const wasEditingHomeRef = useRef(false);
   const [isWidgetPickerOpen, setIsWidgetPickerOpen] = useState(false);
   const [widgetReloadKeys, setWidgetReloadKeys] = useState<
     Record<string, number>
@@ -139,8 +142,9 @@ export const HomeDesktop = ({
     setQuitterWidgetRefreshToken((value) => value + 1);
   }, []);
 
+  // The launcher tab there is, or a new one (AppsDesktop).
   const handleOpenAppsPanel = useCallback(() => {
-    executeEvent('newTabWindow', {});
+    executeEvent('showLauncherTab', {});
     setDesktopViewMode('apps');
   }, [setDesktopViewMode]);
   const handleOpenFeedApp = useCallback(() => {
@@ -203,7 +207,7 @@ export const HomeDesktop = ({
     qortino: () =>
       homeActive ? (
         <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
-          <HomeQortinoWorkspaceCard onOpenAppsPanel={handleOpenAppsPanel} />
+          <HomeQortinoWorkspaceCard />
         </ErrorBoundary>
       ) : null,
     tools: () => (
@@ -394,6 +398,7 @@ export const HomeDesktop = ({
                     }
                   : undefined
               }
+              editActions={<RestoreLayoutButton part="homeLayout" />}
               grid={grid}
               headerEnd={
                 <Box sx={headerLabelSx}>
@@ -409,7 +414,14 @@ export const HomeDesktop = ({
               onChangeGrid={(next) =>
                 updateHomeLayout((current) => withHomeGrid(current, next))
               }
-              onEditingChange={setIsEditingHome}
+              onEditingChange={(editing) => {
+                setIsEditingHome(editing);
+                // Done editing: the layout may be worth saving to QDN.
+                if (wasEditingHomeRef.current && !editing) {
+                  executeEvent(LAYOUT_EDIT_DONE_EVENT, {});
+                }
+                wasEditingHomeRef.current = editing;
+              }}
               onHideWindow={(id) => {
                 if (id === 'account') return;
                 if (isHomeWidgetWindowId(id)) {

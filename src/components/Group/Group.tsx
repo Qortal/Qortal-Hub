@@ -80,6 +80,9 @@ import { HomeDesktop } from './HomeDesktop';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
 import { AppsDesktop } from '../Apps/AppsDesktop';
 import { DesktopSideBar } from '../Desktop/DesktopLeftSideBar';
+import { LayoutRestoreOffer } from '../Save/LayoutRestoreOffer';
+import { LayoutSavePrompt } from '../Save/LayoutSavePrompt';
+import { QdnCardDock } from '../Save/QdnSettingsCard';
 import { AdminSpace } from '../Chat/AdminSpace';
 import {
   addressInfoControllerAtom,
@@ -5223,6 +5226,10 @@ export const Group = ({
           groupsPropertiesRef={groupsPropertiesRef}
           hasInitializedWebsocketRef={hasInitializedWebsocket}
         />
+        <QdnCardDock page>
+          <LayoutRestoreOffer />
+          <LayoutSavePrompt />
+        </QdnCardDock>
         <DesktopSideBar
           desktopViewMode={desktopViewMode}
           toggleSideViewGroups={toggleSideViewGroups}

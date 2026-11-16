@@ -174,10 +174,17 @@
   "app_private": "privaatne",
   "app_service_type": "rakenduse teenuse tüüp",
   "app_tab": {
+    "close": "sulge vaheleht",
     "close_all": "sulge kõik vahelehed",
     "duplicate": "dubleeri vaheleht",
     "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
-    "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada."
+    "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada.",
+    "new_tab": "uus vaheleht",
+    "pin": "kinnita vaheleht",
+    "pinned_and_locked_kept_open": "kinnitatud ja lukustatud vahelehed jäävad avatuks. Eemalda kinnitatud vahelehe kinnitus enne selle sulgemist ja sulge lukustatud vahelehed ükshaaval, et kinnitada.",
+    "pinned_kept_open": "kinnitatud vahelehed jäävad avatuks. Eemalda vahelehe kinnitus, et see sulgeda.",
+    "unpin": "eemalda vahelehe kinnitus",
+    "unsaved_publish": "avaldamisvormi andmed pole veel avaldatud ja vahelehe sulgemine kustutab need."
   },
   "apps_bar": {
     "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",
@@ -466,6 +473,36 @@
     "folder_delete": "kustuta kaust",
     "folder_move_to": "teisalda kausta",
     "folder_remove_from": "eemalda kaustast",
+    "library": {
+      "all_categories": "kõik kategooriad",
+      "categories_hint": "sirvi Q-Appe ja veebilehti teemade kaupa",
+      "clear_filters": "tühjenda filtrid",
+      "community_hint": "Qortali kogukonna avaldatud Q-Appid ja veebilehed",
+      "count_filtered": "{{shown}} / {{total}}",
+      "empty_text": "sinu sõlm pole veel ühtegi Q-Appi ega veebilehte saatnud. Proovi uuesti ülal oleva värskendusnupuga.",
+      "empty_title": "Q-Appe ega veebilehti veel pole",
+      "featured_hint": "mõned ametlikud Q-Appid alustamiseks",
+      "featured_next": "näita rohkem esiletõstetud rakendusi",
+      "featured_previous": "näita eelmisi esiletõstetud rakendusi",
+      "filter_categories": "filtreeri kategooriaid",
+      "my_apps_hint": "avaldatud selle konto nimede all",
+      "no_category_matches": "ükski kategooria ei vasta otsingule „{{query}}“",
+      "no_filter_matches": "ükski Q-App ega veebileht ei vasta nendele filtritele",
+      "no_name_text": "registreeri Qortali nimi, et Q-Appe ja veebilehti avaldada. Need ilmuvad siia.",
+      "official_hint": "Qortal Hubi ametlikus nimekirjas olevad Q-Appid",
+      "private_actions_hint": "ava mõne sinu grupiga jagatud privaatrakendus või avalda enda oma",
+      "rating_none": "hinnanguid veel pole",
+      "rating_summary": "hinnang {{rating}} / 5, hääli: {{count}}",
+      "refreshed": "teek värskendatud",
+      "refreshing": "teegi värskendamine",
+      "search_categories": "otsi kategooriaid",
+      "search_in_category": "otsi kategooriast {{category}}",
+      "status_apps_shown": "näidatud Q-Appe ja veebilehti: {{shown}} / {{total}}",
+      "status_categories_shown": "näidatud kategooriaid: {{shown}} / {{total}}",
+      "view_grid": "ruudustik",
+      "view_label": "paigutus",
+      "view_list": "loend"
+    },
     "no_matches": "miski ei vasta otsingule „{{query}}“",
     "no_matches_hint": "proovi teist nime või kleebi qortal:// link.",
     "pinned_and_bookmarks": "kinnitatud rakendused ja järjehoidjad",
@@ -746,8 +783,21 @@
       "menu_aria": "Sessiooni valikud",
       "tooltip": "Lukusta või logi välja"
     },
+    "suggestion_action": {
+      "new_tab": "Uus vaheleht",
+      "open_link": "Ava link",
+      "switch_to_tab": "Mine vahelehele"
+    },
+    "suggestion_group": {
+      "apps": "Q-Appid ja veebilehed",
+      "names": "Nimed",
+      "saved": "Kinnitatud rakendused ja järjehoidjad",
+      "tabs": "Avatud vahelehed"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Järjehoidja",
+      "name": "Nimi",
       "website": "Veebileht"
     },
     "suggestions": "Soovitused"
@@ -806,6 +856,29 @@
     "selected_file": "valitud fail: {{filename}}"
   },
   "publish": "avalda",
+  "publish_source": {
+    "changed_files": "alates {{date}} muudetud faile: {{number}}",
+    "choose_another": "vali muu",
+    "choose_folder": "vali kaust",
+    "read_error": "valitud kausta või faili ei õnnestunud lugeda",
+    "same_file": "sama fail mis eelmisel korral",
+    "same_folder": "sama kaust mis eelmisel korral",
+    "selected_file": "valitud fail: {{name}}",
+    "selected_folder": "valitud kaust: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "ei õnnestunud kontrollida, kas oled endiselt rühma {{group}} administraator. Proovi hiljem uuesti.",
+    "checking_admin": "kontrollitakse, kas oled endiselt rühma {{group}} administraator…",
+    "current_unavailable": "praegust versiooni ei õnnestunud laadida, seega ei saa rakenduse nime ja logo säilitada. Sisesta need uuesti.",
+    "filled_from_profile": "selle rakenduse andmeid ei õnnestunud võrgust laadida, seega täideti need selle arvuti viimase avaldamise põhjal. Kontrolli neid enne avaldamist.",
+    "identifier_locked": "uuendamisel ei saa identifikaatorit muuta: teine identifikaator avaldaks uue rakenduse.",
+    "is_admin": "oled rühma {{group}} administraator",
+    "last_published": "viimati sellest arvutist avaldatud: {{date}}",
+    "loading_current": "praeguse versiooni laadimine…",
+    "logo_kept": "logo säilitatakse praegusest versioonist",
+    "not_admin": "sa ei ole enam rühma {{group}} administraator, seega ei saa seda rakendust sellelt kontolt uuendada.",
+    "title": "uuenda: {{name}}"
+  },
   "q_apps": {
     "about": "rakenduse kohta",
     "q_mail": "Q-Mail",
@@ -941,6 +1014,28 @@
   "receiver": "saaja",
   "remaining_to_level": "Jäänud tasemeni {{level}}",
   "retry": "proovi uuesti",
+  "saved_layouts": {
+    "confirm_home": "Kas kasutada QDN-i salvestatud avalehe paigutust? See asendab selle seadme paigutuse.",
+    "confirm_home_when": "Kas kasutada {{when}} QDN-i salvestatud avalehe paigutust? See asendab selle seadme paigutuse.",
+    "confirm_side_panel": "Kas kasutada QDN-i salvestatud külgpaneeli? See asendab selle seadme külgpaneeli.",
+    "confirm_side_panel_when": "Kas kasutada {{when}} QDN-i salvestatud külgpaneeli? See asendab selle seadme külgpaneeli.",
+    "keep": "jäta selle seadme oma",
+    "not_now": "mitte praegu",
+    "offer_both": "Sinu avalehe paigutust ja külgpaneeli muudeti ja need salvestati teises seadmes.",
+    "offer_home": "Sinu avalehe paigutust muudeti ja see salvestati teises seadmes.",
+    "offer_side_panel": "Sinu külgpaneeli muudeti ja see salvestati teises seadmes.",
+    "restore": "taasta",
+    "restore_from_qdn": "taasta QDN-ist",
+    "restore_title": "kas taastada QDN-ist?",
+    "restored": "Taastatud QDN-ist.",
+    "save_text_both": "sinu avalehe paigutus ja külgpaneel sellisena igas seadmes, kuhu sisse logid.",
+    "save_text_home": "sinu avalehe paigutus sellisena igas seadmes, kuhu sisse logid.",
+    "save_text_side_panel": "sinu külgpaneel sellisena igas seadmes, kuhu sisse logid.",
+    "save_title": "kas salvestada see paigutus QDN-i?",
+    "try_again": "proovi uuesti",
+    "unreadable_text": "sinu salvestatud seadeid ei õnnestunud sellelt sõlmelt alla laadida, seega võib siin salvestamine need üle kirjutada. Lülitu oma kohalikule sõlmele või kirjuta need nupuga Salvesta üle.",
+    "unreadable_title": "selle sõlme kaudu ei saa QDN-i salvestada"
+  },
   "sender": "saatja",
   "server": "server",
   "service_type": "teenuse tüüp",

@@ -313,6 +313,7 @@ export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
       : `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.35)}`,
 }));
 
+/** The strip itself doesn't scroll: only its unpinned tabs do. */
 export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
   alignSelf: 'center',
   alignItems: 'center',
@@ -325,13 +326,47 @@ export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-start',
   minHeight: 0,
   minWidth: 0,
-  overflowX: 'auto',
-  overflowY: 'hidden',
+  overflow: 'hidden',
   padding: '0 10px 0 6px',
   position: 'relative',
   width: '100%',
-  '::-webkit-scrollbar': {
-    display: 'none',
+}));
+
+export const APPS_HORIZONTAL_TAB_BUTTON_HEIGHT_PX = 36;
+export const APPS_HORIZONTAL_TAB_SCROLLBAR_PX = 4;
+
+/**
+ * The tabs that aren't pinned, which scroll sideways once they are at their
+ * narrowest. A thin scrollbar runs under them, with the same room above them,
+ * so they line up with the pinned tabs and the + button whether it shows or
+ * not.
+ */
+export const AppsHorizontalTabScrollArea = styled(Box)(({ theme }) => ({
+  alignSelf: 'center',
+  boxSizing: 'border-box',
+  flex: '0 1 auto',
+  height: `${
+    APPS_HORIZONTAL_TAB_BUTTON_HEIGHT_PX + 2 * APPS_HORIZONTAL_TAB_SCROLLBAR_PX
+  }px`,
+  minWidth: 0,
+  overflowX: 'auto',
+  overflowY: 'hidden',
+  paddingTop: `${APPS_HORIZONTAL_TAB_SCROLLBAR_PX}px`,
+  position: 'relative',
+  '&::-webkit-scrollbar': {
+    height: `${APPS_HORIZONTAL_TAB_SCROLLBAR_PX}px`,
+  },
+  '&::-webkit-scrollbar-track': {
+    backgroundColor: 'transparent',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundClip: 'padding-box',
+    backgroundColor: alpha(theme.palette.text.primary, 0.14),
+    border: 0,
+    borderRadius: '999px',
+  },
+  '&:hover::-webkit-scrollbar-thumb': {
+    backgroundColor: alpha(theme.palette.text.primary, 0.28),
   },
 }));
 
@@ -348,7 +383,7 @@ export const AppsHorizontalTabButton = styled(ButtonBase)(({ theme }) => ({
   display: 'flex',
   flex: '0 1 180px',
   gap: '8px',
-  height: '36px',
+  height: `${APPS_HORIZONTAL_TAB_BUTTON_HEIGHT_PX}px`,
   justifyContent: 'flex-start',
   minWidth: 0,
   padding: '0 10px',

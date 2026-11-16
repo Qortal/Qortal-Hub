@@ -122,6 +122,8 @@ type HomeGridProps = {
   hiddenWindows: readonly { id: HomeWindowId; title: string }[];
   onChangeGrid: (grid: HomeGridItem[]) => void;
   onHideWindow: (id: HomeWindowId) => void;
+  /** More buttons in the edit toolbar (restoring the layout saved on QDN). */
+  editActions?: ReactNode;
   /** Edit Home started or stopped. */
   onEditingChange?: (editing: boolean) => void;
   onResetGrid: () => void;
@@ -160,6 +162,7 @@ const scrollParentOf = (node: HTMLElement | null): HTMLElement | null => {
 export const HomeGrid = ({
   active,
   addWidget,
+  editActions,
   grid,
   headerEnd,
   headerStart,
@@ -670,6 +673,7 @@ export const HomeGrid = ({
       <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
         {editing ? (
           <>
+            {editActions}
             <Button
               aria-haspopup="menu"
               disabled={hiddenWindows.length === 0}

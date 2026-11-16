@@ -174,10 +174,17 @@
   "app_private": "privado",
   "app_service_type": "aplicativo tipo serviço",
   "app_tab": {
+    "close": "fechar aba",
     "close_all": "fechar todas as abas",
     "duplicate": "duplicar aba",
     "limit_reached": "número máximo de abas atingido. Feche uma para abrir outra.",
-    "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar."
+    "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar.",
+    "new_tab": "nova aba",
+    "pin": "fixar aba",
+    "pinned_and_locked_kept_open": "as abas fixadas e bloqueadas continuam abertas. Desafixe uma aba fixada antes de a fechar e feche as bloqueadas uma a uma para confirmar.",
+    "pinned_kept_open": "as abas fixadas continuam abertas. Desafixe uma aba para a fechar.",
+    "unpin": "desafixar aba",
+    "unsaved_publish": "os dados do formulário de publicação ainda não foram publicados, e fechar a aba os descarta."
   },
   "apps_bar": {
     "empty": "Fixe uma aplicação ou adicione um marcador e aparecerá aqui.",
@@ -466,6 +473,36 @@
     "folder_delete": "eliminar pasta",
     "folder_move_to": "mover para pasta",
     "folder_remove_from": "remover da pasta",
+    "library": {
+      "all_categories": "todas as categorias",
+      "categories_hint": "explore Q-Apps e sites por tema",
+      "clear_filters": "limpar filtros",
+      "community_hint": "Q-Apps e sites publicados pela comunidade Qortal",
+      "count_filtered": "{{shown}} de {{total}}",
+      "empty_text": "seu nó ainda não enviou nenhum Q-App ou site. Use o botão de atualizar acima para tentar novamente.",
+      "empty_title": "ainda não há Q-Apps nem sites",
+      "featured_hint": "alguns Q-Apps oficiais para começar",
+      "featured_next": "mostrar mais apps em destaque",
+      "featured_previous": "mostrar os apps em destaque anteriores",
+      "filter_categories": "filtrar categorias",
+      "my_apps_hint": "publicados com os nomes desta conta",
+      "no_category_matches": "nenhuma categoria corresponde a “{{query}}”",
+      "no_filter_matches": "nenhum Q-App ou site corresponde a esses filtros",
+      "no_name_text": "registre um nome Qortal para publicar Q-Apps e sites. Eles aparecerão aqui.",
+      "official_hint": "os Q-Apps da lista oficial do Qortal Hub",
+      "private_actions_hint": "abra um aplicativo privado compartilhado com um dos seus grupos ou publique o seu",
+      "rating_none": "ainda sem avaliações",
+      "rating_summary": "avaliação {{rating}} de 5, número de votos: {{count}}",
+      "refreshed": "biblioteca atualizada",
+      "refreshing": "atualizando a biblioteca",
+      "search_categories": "pesquisar categorias",
+      "search_in_category": "pesquisar em {{category}}",
+      "status_apps_shown": "Q-Apps e sites mostrados: {{shown}} de {{total}}",
+      "status_categories_shown": "categorias mostradas: {{shown}} de {{total}}",
+      "view_grid": "grade",
+      "view_label": "exibição",
+      "view_list": "lista"
+    },
     "no_matches": "nada corresponde a “{{query}}”",
     "no_matches_hint": "tente outro nome ou cole um link qortal://.",
     "pinned_and_bookmarks": "aplicações fixadas e marcadores",
@@ -746,8 +783,21 @@
       "menu_aria": "Opções da sessão",
       "tooltip": "Bloquear ou terminar sessão"
     },
+    "suggestion_action": {
+      "new_tab": "Nova aba",
+      "open_link": "Abrir ligação",
+      "switch_to_tab": "Mudar para a aba"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps e sites",
+      "names": "Nomes",
+      "saved": "Aplicações fixadas e marcadores",
+      "tabs": "Abas abertas"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Marcador",
+      "name": "Nome",
       "website": "Site"
     },
     "suggestions": "Sugestões"
@@ -806,6 +856,29 @@
     "selected_file": "arquivo selecionado: {{filename}}"
   },
   "publish": "publicar",
+  "publish_source": {
+    "changed_files": "arquivos alterados desde {{date}}: {{number}}",
+    "choose_another": "escolher outro",
+    "choose_folder": "escolher pasta",
+    "read_error": "não foi possível ler a pasta ou o arquivo selecionado",
+    "same_file": "mesmo arquivo da última vez",
+    "same_folder": "mesma pasta da última vez",
+    "selected_file": "arquivo selecionado: {{name}}",
+    "selected_folder": "pasta selecionada: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "não foi possível verificar se você ainda é administrador de {{group}}. Tente novamente mais tarde.",
+    "checking_admin": "verificando se você ainda é administrador de {{group}}…",
+    "current_unavailable": "não foi possível carregar a versão atual, então o nome do app e a logo não podem ser mantidos. Preencha-os novamente.",
+    "filled_from_profile": "não foi possível carregar da rede os detalhes deste aplicativo, então eles foram preenchidos com a última publicação deste PC. Confira-os antes de publicar.",
+    "identifier_locked": "o identificador não pode ser alterado em uma atualização: um identificador diferente publicaria um novo aplicativo.",
+    "is_admin": "você é administrador de {{group}}",
+    "last_published": "última publicação deste PC: {{date}}",
+    "loading_current": "carregando a versão atual…",
+    "logo_kept": "logo mantida da versão atual",
+    "not_admin": "você não é mais administrador de {{group}}, então este aplicativo não pode ser atualizado a partir desta conta.",
+    "title": "atualizar {{name}}"
+  },
   "q_apps": {
     "about": "sobre este Q-App",
     "q_mail": "Q-Mail",
@@ -941,6 +1014,28 @@
   "receiver": "destinatário",
   "remaining_to_level": "Restante para nível {{level}}",
   "retry": "tentar novamente",
+  "saved_layouts": {
+    "confirm_home": "Usar a disposição do Início guardada no QDN? Substitui a deste dispositivo.",
+    "confirm_home_when": "Usar a disposição do Início guardada no QDN em {{when}}? Substitui a deste dispositivo.",
+    "confirm_side_panel": "Usar o painel lateral guardado no QDN? Substitui o deste dispositivo.",
+    "confirm_side_panel_when": "Usar o painel lateral guardado no QDN em {{when}}? Substitui o deste dispositivo.",
+    "keep": "manter a deste dispositivo",
+    "not_now": "agora não",
+    "offer_both": "A sua disposição do Início e o seu painel lateral foram alterados e guardados noutro dispositivo.",
+    "offer_home": "A sua disposição do Início foi alterada e guardada noutro dispositivo.",
+    "offer_side_panel": "O seu painel lateral foi alterado e guardado noutro dispositivo.",
+    "restore": "restaurar",
+    "restore_from_qdn": "restaurar do QDN",
+    "restore_title": "restaurar do QDN?",
+    "restored": "Restaurado do QDN.",
+    "save_text_both": "a sua disposição do Início e o seu painel lateral, configurados assim, em todos os dispositivos em que iniciar sessão.",
+    "save_text_home": "a sua disposição do Início, organizada assim, em todos os dispositivos em que iniciar sessão.",
+    "save_text_side_panel": "o seu painel lateral, configurado assim, em todos os dispositivos em que iniciar sessão.",
+    "save_title": "salvar esta disposição na QDN?",
+    "try_again": "tentar novamente",
+    "unreadable_text": "não foi possível baixar suas configurações salvas deste nó, então salvar aqui poderia sobrescrevê-las. Mude para o seu nó local ou sobrescreva-as com o botão Salvar.",
+    "unreadable_title": "não é possível salvar na QDN com este nó"
+  },
   "sender": "remetente",
   "server": "servidor",
   "service_type": "tipo de serviço",
