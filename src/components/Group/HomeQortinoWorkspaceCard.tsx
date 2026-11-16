@@ -130,6 +130,7 @@ import { hasRequiredQortinoOnboardingBalance } from './qortinoOnboarding';
 import { HOME_WORKSPACE_COPY_LIMIT } from './HomeDesktop/homeLayout';
 import { HotkeyAppAvatar, QortinoWorkspaceApps } from './QortinoWorkspaceApps';
 import { QortinoFitBox } from './QortinoFitBox';
+import { namesOwnResources } from '../Apps/libraryResources';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
@@ -2659,8 +2660,7 @@ export const HomeQortinoWorkspaceCard = ({
       ).flat() as QAppResourceRecord[];
       const nextCatalog = Array.from(
         new Map(
-          (Array.isArray(responseData) ? responseData : [])
-            ?.filter((res) => !res?.identifier)
+          namesOwnResources(responseData)
             .map((resource) => {
               const appName =
                 typeof resource?.name === 'string' ? resource.name.trim() : '';
