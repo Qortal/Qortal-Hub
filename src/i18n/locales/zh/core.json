@@ -174,10 +174,15 @@
   "app_private": "私人的",
   "app_service_type": "应用服务类型",
   "app_tab": {
+    "close": "关闭标签页",
     "close_all": "关闭所有标签页",
     "duplicate": "复制标签页",
     "limit_reached": "已达到标签页数量上限。请关闭一个标签页后再打开新的。",
-    "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。"
+    "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。",
+    "pin": "固定标签页",
+    "pinned_and_locked_kept_open": "已固定和已锁定的标签页保持打开。请先取消固定再关闭已固定的标签页，并逐个关闭已锁定的标签页以确认。",
+    "pinned_kept_open": "已固定的标签页保持打开。请先取消固定，再关闭标签页。",
+    "unpin": "取消固定标签页"
   },
   "apps_bar": {
     "empty": "固定一个应用或添加书签，它就会显示在这里。",
@@ -746,8 +751,21 @@
       "menu_aria": "会话选项",
       "tooltip": "锁定或退出登录"
     },
+    "suggestion_action": {
+      "new_tab": "新标签页",
+      "open_link": "打开链接",
+      "switch_to_tab": "切换到标签页"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps 和网站",
+      "names": "名称",
+      "saved": "已固定的应用和书签",
+      "tabs": "已打开的标签页"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "书签",
+      "name": "名称",
       "website": "网站"
     },
     "suggestions": "建议"
@@ -806,6 +824,29 @@
     "selected_file": "已选文件：{{filename}}"
   },
   "publish": "发布",
+  "publish_source": {
+    "changed_files": "自{{date}}以来更改的文件：{{number}}",
+    "choose_another": "选择其他",
+    "choose_folder": "选择文件夹",
+    "read_error": "无法读取所选的文件夹或文件",
+    "same_file": "与上次相同的文件",
+    "same_folder": "与上次相同的文件夹",
+    "selected_file": "已选文件：{{name}}",
+    "selected_folder": "已选文件夹：{{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "无法确认您是否仍是{{group}}的管理员。请稍后再试。",
+    "checking_admin": "正在确认您是否仍是{{group}}的管理员…",
+    "current_unavailable": "无法加载当前版本，因此无法保留其应用名称和徽标。请重新输入。",
+    "filled_from_profile": "无法从网络加载此应用的详细信息，因此已使用此电脑上次发布的内容填写。发布前请检查。",
+    "identifier_locked": "更新时不能更改标识符：使用不同的标识符会发布一个新应用。",
+    "is_admin": "您是{{group}}的管理员",
+    "last_published": "此电脑上次发布：{{date}}",
+    "loading_current": "正在加载当前版本…",
+    "logo_kept": "徽标沿用当前版本",
+    "not_admin": "您已不再是{{group}}的管理员，因此无法从此帐户更新此应用。",
+    "title": "更新{{name}}"
+  },
   "q_apps": {
     "about": "关于这个Q-App",
     "q_mail": "Q-Mail",
@@ -941,6 +982,28 @@
   "receiver": "接收者",
   "remaining_to_level": "距等级 {{level}} 剩余",
   "retry": "重试",
+  "saved_layouts": {
+    "confirm_home": "使用保存在 QDN 上的首页布局吗？它将替换此设备的布局。",
+    "confirm_home_when": "使用 {{when}} 保存在 QDN 上的首页布局吗？它将替换此设备的布局。",
+    "confirm_side_panel": "使用保存在 QDN 上的侧边栏吗？它将替换此设备的侧边栏。",
+    "confirm_side_panel_when": "使用 {{when}} 保存在 QDN 上的侧边栏吗？它将替换此设备的侧边栏。",
+    "keep": "保留此设备的",
+    "not_now": "以后再说",
+    "offer_both": "您的首页布局和侧边栏已在另一台设备上更改并保存。",
+    "offer_home": "您的首页布局已在另一台设备上更改并保存。",
+    "offer_side_panel": "您的侧边栏已在另一台设备上更改并保存。",
+    "restore": "恢复",
+    "restore_from_qdn": "从 QDN 恢复",
+    "restore_title": "从 QDN 恢复？",
+    "restored": "已从 QDN 恢复。",
+    "save_text_both": "您的首页布局和侧边栏将按此设置，出现在您登录的每台设备上。",
+    "save_text_home": "您的首页布局将按此排列，出现在您登录的每台设备上。",
+    "save_text_side_panel": "您的侧边栏将按此设置，出现在您登录的每台设备上。",
+    "save_title": "将此布局保存到QDN？",
+    "try_again": "重试",
+    "unreadable_text": "无法从此节点下载您已保存的设置，因此在这里保存可能会覆盖它们。请切换到您的本地节点，或使用“保存”按钮覆盖它们。",
+    "unreadable_title": "无法通过此节点保存到QDN"
+  },
   "sender": "发件人",
   "server": "服务器",
   "service_type": "服务类型",

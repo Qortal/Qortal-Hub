@@ -13,6 +13,7 @@ import { flushSync } from 'react-dom';
 import type { ReactNode } from 'react';
 import {
   closestCenter,
+  type CollisionDetection,
   DndContext,
   DragEndEvent,
   PointerSensor,
@@ -20,7 +21,6 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   horizontalListSortingStrategy,
   SortableContext,
 } from '@dnd-kit/sortable';
@@ -44,6 +44,7 @@ import {
   APPS_HORIZONTAL_TAB_HEIGHT_PX,
   AppsHorizontalTabAddButton,
   AppsHorizontalTabBar,
+  AppsHorizontalTabScrollArea,
   AppsHorizontalTabScroller,
   AppsParent,
 } from './Apps-styles';
@@ -98,13 +99,52 @@ import {
   getDialogPaperSx,
   getDialogSecondaryButtonSx,
 } from '../App/dialogSurface';
-import { pickNextTabFromMru, tabsLeftByCloseAll } from './tabSelection';
+
+import {
+  closeAllKeptNoteKey,
+  pickNextTabFromMru,
+  tabsLeftByCloseAll,
+} from './tabSelection';
+import {
+  isPinnedTab,
+  moveTabWithinGroup,
+  pinnedFirst,
+  setTabPinned,
+} from './tabPinning';
+import {
+  layoutTabStrip,
+  PINNED_TAB_WIDTH_PX,
+  scrollLeftToShow,
+  TAB_IDEAL_WIDTH_PX,
+  TAB_STRIP_GAP_PX,
+  wheelScrollPx,
+} from './tabStripLayout';
+import {
+  createTabSessionWriter,
+  isPrivateTabToReopen,
+  loadTabSession,
+  reportedAppPath,
+  restoredTab,
+  serializeTabSession,
+  tabFlags,
+  type TabSession,
+  type TabSessionWriter,
+} from './tabSession';
+import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
+import { isSamePrivateApp } from '../../hooks/privatePinnedApps';
+import { isSameResourceIdentifier } from './resourceIdentifier';
+
+import { useTabShortcuts } from './useTabShortcuts';
+
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
 const MIN_LIBRARY_APPS_BEFORE_SLOW_POLL = 10;
 /** Bounded MRU stack (tab ids only) for "last visited" after closing the active tab */
 const MAX_TAB_MRU_DEPTH = 64;
+
+/** A restored private app being downloaded and decrypted again. */
+type PrivateReopenRequest = { tabId: string; address: string };
 
 /** Prefer the tab that was to the right of the closed tab; if closed tab was last, use the new last tab */
 function positionalTabAfterClose(
@@ -125,9 +165,6 @@ function positionalTabAfterClose(
   return remainingTabs[removedIndex - 1] ?? null;
 }
 const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
-/** Match `AppsHorizontalTabButton` ideal width for strip width math */
-const TAB_STRIP_IDEAL_TAB_PX = 180;
-const TAB_STRIP_INNER_GAP_PX = 2;
 
 const restrictTabsToHorizontalAxis = ({ transform }) => ({
   ...transform,
@@ -244,8 +281,9 @@ export const AppsDesktop = ({
     string | null
   >(null);
   const [enteringTabIds, setEnteringTabIds] = useState<string[]>([]);
-  const [tabStripCompresses, setTabStripCompresses] = useState(false);
+  const [tabWidthPx, setTabWidthPx] = useState(TAB_IDEAL_WIDTH_PX);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
+  const tabScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const tabAddButtonRef = useRef<HTMLButtonElement | null>(null);
   const [launcherRequest, setLauncherRequest] = useState<AppsLauncherRequest>({
     nonce: 0,
@@ -259,6 +297,29 @@ export const AppsDesktop = ({
     null
   );
   const tabInteractionLockedRef = useRef(false);
+  // The account whose open tabs are kept (tabSession.ts), once they are read.
+  const [sessionAddress, setSessionAddress] = useState<string | null>(null);
+  const storedSessionRef = useRef<TabSession | null>(null);
+  const sessionWriterRef = useRef<TabSessionWriter | null>(null);
+  // Tabs whose app has been shown. A restored tab loads the first time it is
+  // selected, then stays loaded like the others.
+  const [shownTabIds, setShownTabIds] = useState<Set<string>>(() => new Set());
+  const { openApp: openPrivateApp } = useHandlePrivateApps();
+  // The hook hands out a new `openApp` on every render: keep the latest.
+  const openPrivateAppRef = useRef(openPrivateApp);
+  openPrivateAppRef.current = openPrivateApp;
+  // Restored private apps being downloaded and decrypted again, by tab.
+  const reopenRequestsRef = useRef<Map<string, PrivateReopenRequest>>(
+    new Map()
+  );
+  // What a request is checked against when it ends: the tabs and the account
+  // as last drawn, and whether this view is still there (signing out removes
+  // it, and the next account gets a new one).
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const myAddressRef = useRef(myAddress);
+  myAddressRef.current = myAddress;
+  const isMountedRef = useRef(true);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -267,6 +328,155 @@ export const AppsDesktop = ({
     })
   );
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
+
+  // The open tabs come back after a restart: once, when the account is first
+  // known, and never over tabs already opened in this run.
+  useEffect(() => {
+    if (!myAddress || sessionAddress) return;
+    const saved = loadTabSession(myAddress, MAX_OPEN_APP_TABS);
+    storedSessionRef.current = saved;
+    if (tabs.length === 0 && saved.tabs.length > 0) {
+      setTabs(pinnedFirst(saved.tabs.map(restoredTab)));
+      // Hub starts on Home and its Apps button opens the launcher, so no
+      // restored tab is selected, and none loads, until one is chosen. The
+      // one that was selected is the first Hub falls back to.
+      recentTabIdsRef.current = saved.selectedTabId
+        ? [saved.selectedTabId]
+        : [];
+    }
+    setSessionAddress(myAddress);
+  }, [myAddress, sessionAddress, tabs.length]);
+
+  useEffect(() => {
+    if (!sessionAddress) return;
+    const writer = createTabSessionWriter(sessionAddress, {
+      saved: storedSessionRef.current ?? undefined,
+    });
+    sessionWriterRef.current = writer;
+    const flush = () => writer.flush();
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      writer.flush();
+      sessionWriterRef.current = null;
+    };
+  }, [sessionAddress]);
+
+  // Saves the tabs, their order, the selected one (or, while none is, the
+  // last one selected) and where each app is.
+  useEffect(() => {
+    if (!sessionAddress || myAddress !== sessionAddress) return;
+    const selectedTabId =
+      selectedTab?.tabId ??
+      pickNextTabFromMru(tabs, recentTabIdsRef.current)?.tabId;
+    sessionWriterRef.current?.update(
+      serializeTabSession(tabs, selectedTabId, MAX_OPEN_APP_TABS, (tab) =>
+        reportedAppPath(tab, navigationController?.[tab.tabId]?.currentLink)
+      )
+    );
+  }, [
+    myAddress,
+    navigationController,
+    selectedTab?.tabId,
+    sessionAddress,
+    tabs,
+  ]);
+
+  useEffect(() => {
+    const tabId = selectedTab?.tabId;
+    if (!tabId) return;
+    setShownTabIds((prev) =>
+      prev.has(tabId) ? prev : new Set(prev).add(tabId)
+    );
+  }, [selectedTab?.tabId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    const requests = reopenRequestsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      requests.clear();
+    };
+  }, []);
+
+  // A request still counts while this view shows the account that made it
+  // and its tab is still in the strip, waiting for its app.
+  const isReopenWanted = useCallback(
+    (request: PrivateReopenRequest) =>
+      isMountedRef.current &&
+      myAddressRef.current === request.address &&
+      reopenRequestsRef.current.get(request.tabId) === request &&
+      tabsRef.current.some(
+        (tab) => tab?.tabId === request.tabId && isPrivateTabToReopen(tab)
+      ),
+    []
+  );
+
+  // The reopened app takes its tab's place and keeps the tab's marks. The
+  // selection stays as it is: the app shows only if its tab is selected.
+  const finishReopen = useCallback(
+    (request: PrivateReopenRequest, appTab) => {
+      if (!isReopenWanted(request)) return;
+      const waiting = tabsRef.current.find(
+        (tab) => tab?.tabId === request.tabId
+      );
+      const reopened = {
+        ...tabFlags(waiting),
+        ...appTab,
+        tabId: request.tabId,
+      };
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab?.tabId === request.tabId && isPrivateTabToReopen(tab)
+            ? reopened
+            : tab
+        )
+      );
+      setSelectedTab((selected) =>
+        selected?.tabId === request.tabId ? reopened : selected
+      );
+    },
+    [isReopenWanted]
+  );
+
+  // A restored private app is downloaded and decrypted again when its tab is
+  // selected. The request belongs to that tab and to the account that made
+  // it: closing the tab, or signing out, drops it.
+  const reopenPrivateTab = useCallback(
+    (tab) => {
+      if (!isPrivateTabToReopen(tab)) return;
+      const address = myAddressRef.current;
+      const requests = reopenRequestsRef.current;
+      if (!address || requests.has(tab.tabId)) return;
+      const request: PrivateReopenRequest = { tabId: tab.tabId, address };
+      requests.set(tab.tabId, request);
+      Promise.resolve()
+        .then(() =>
+          openPrivateAppRef.current(
+            tab.privateAppProperties,
+            false,
+            undefined,
+            {
+              isWanted: () => isReopenWanted(request),
+              openTab: (appTab) => finishReopen(request, appTab),
+            }
+          )
+        )
+        .catch((error) => console.error(error))
+        .finally(() => {
+          if (requests.get(tab.tabId) === request) {
+            requests.delete(tab.tabId);
+          }
+        });
+    },
+    [finishReopen, isReopenWanted]
+  );
+
+  useEffect(() => {
+    if (isPrivateTabToReopen(selectedTab)) reopenPrivateTab(selectedTab);
+  }, [reopenPrivateTab, selectedTab]);
 
   const myApp = useMemo(() => {
     return availableQapps.find(
@@ -325,6 +535,18 @@ export const AppsDesktop = ({
   const viewerTabs = useMemo(() => {
     return viewerTabOrder.map((tabId) => tabsById.get(tabId)).filter(Boolean);
   }, [tabsById, viewerTabOrder]);
+
+  // `tabs` keeps the pinned tabs first; they sit apart from the others,
+  // which scroll once they are at their narrowest.
+  const pinnedTabs = useMemo(() => tabs.filter(isPinnedTab), [tabs]);
+  const unpinnedTabs = useMemo(
+    () => tabs.filter((tab) => !isPinnedTab(tab)),
+    [tabs]
+  );
+  const pinnedTabIds = useMemo(
+    () => new Set(pinnedTabs.map((tab) => tab.tabId)),
+    [pinnedTabs]
+  );
 
   useEffect(() => {
     if (tabsToNavTimeoutRef.current !== null) {
@@ -411,47 +633,99 @@ export const AppsDesktop = ({
     });
   }, [isNewTabWindow, onInternalTabVisibilityChange, selectedTab, show]);
 
-  const updateTabStripCompression = useCallback(() => {
+  // Tabs stay at their ideal width while they fit, then shrink evenly down to
+  // a minimum, after which they scroll (tabStripLayout.ts).
+  const updateTabStripLayout = useCallback(() => {
     const scroller = tabScrollerRef.current;
-    if (!show || !scroller || tabs.length === 0) {
-      setTabStripCompresses(false);
+    if (!scroller || unpinnedTabs.length === 0) {
+      setTabWidthPx(TAB_IDEAL_WIDTH_PX);
       return;
     }
-    if (scroller.clientWidth < 32) {
+    if (!show || scroller.clientWidth < 32) {
       return;
     }
-    const addEl = tabAddButtonRef.current;
-    const addW = addEl?.offsetWidth ?? 36;
     const cs = getComputedStyle(scroller);
     const padL = parseFloat(cs.paddingLeft) || 0;
     const padR = parseFloat(cs.paddingRight) || 0;
-    const rowGap = parseFloat(cs.gap) || TAB_STRIP_INNER_GAP_PX;
-    const available = scroller.clientWidth - padL - padR - addW - rowGap;
-
-    const tabsNeed =
-      tabs.length * TAB_STRIP_IDEAL_TAB_PX +
-      Math.max(0, tabs.length - 1) * TAB_STRIP_INNER_GAP_PX;
-
-    setTabStripCompresses(tabsNeed > available + 0.5);
-  }, [show, tabs.length]);
+    const { tabWidthPx: nextTabWidthPx } = layoutTabStrip({
+      addButtonPx: tabAddButtonRef.current?.offsetWidth ?? 36,
+      availablePx: Math.floor(scroller.clientWidth - padL - padR),
+      gapPx: parseFloat(cs.columnGap) || TAB_STRIP_GAP_PX,
+      pinnedCount: pinnedTabs.length,
+      unpinnedCount: unpinnedTabs.length,
+    });
+    setTabWidthPx(nextTabWidthPx);
+  }, [show, pinnedTabs.length, unpinnedTabs.length]);
 
   useLayoutEffect(() => {
-    updateTabStripCompression();
-    const id = window.requestAnimationFrame(() => updateTabStripCompression());
+    updateTabStripLayout();
+    const id = window.requestAnimationFrame(() => updateTabStripLayout());
     return () => window.cancelAnimationFrame(id);
-  }, [updateTabStripCompression, sidebarOffsetPx]);
+  }, [updateTabStripLayout, sidebarOffsetPx]);
 
   useLayoutEffect(() => {
     const scroller = tabScrollerRef.current;
     const addBtn = tabAddButtonRef.current;
     if (!scroller) return;
-    const ro = new ResizeObserver(() => updateTabStripCompression());
+    const ro = new ResizeObserver(() => updateTabStripLayout());
     ro.observe(scroller);
     if (addBtn) {
       ro.observe(addBtn);
     }
     return () => ro.disconnect();
-  }, [updateTabStripCompression]);
+  }, [updateTabStripLayout]);
+
+  // Keeps the selected tab in view when the tabs scroll, a new one included.
+  useLayoutEffect(() => {
+    const area = tabScrollAreaRef.current;
+    const selectedTabId = selectedTab?.tabId;
+    if (!area || !selectedTabId) return;
+    const tabElement = Array.from(
+      area.querySelectorAll<HTMLElement>('[data-tab-id]')
+    ).find((element) => element.dataset.tabId === selectedTabId);
+    if (!tabElement) return;
+    const nextScrollLeft = scrollLeftToShow({
+      endPx: tabElement.offsetLeft + tabElement.offsetWidth,
+      scrollLeft: area.scrollLeft,
+      startPx: tabElement.offsetLeft,
+      viewPx: area.clientWidth,
+    });
+    if (nextScrollLeft !== area.scrollLeft) {
+      area.scrollLeft = nextScrollLeft;
+    }
+  }, [
+    pinnedTabs.length,
+    selectedTab?.tabId,
+    show,
+    tabWidthPx,
+    unpinnedTabs.length,
+  ]);
+
+  // A mouse wheel over the strip moves the scrolling tabs sideways. The
+  // listener is not passive, so the page underneath doesn't scroll too.
+  useEffect(() => {
+    const scroller = tabScrollerRef.current;
+    if (!scroller) return;
+    const handleWheel = (event: WheelEvent) => {
+      const area = tabScrollAreaRef.current;
+      if (!area || event.ctrlKey) return;
+      const maxScrollLeft = area.scrollWidth - area.clientWidth;
+      if (maxScrollLeft <= 0) return;
+      // A sideways swipe over the tabs already scrolls them.
+      const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (sideways && area.contains(event.target as Node)) return;
+      event.preventDefault();
+      const nextScrollLeft = Math.min(
+        maxScrollLeft,
+        Math.max(0, area.scrollLeft + wheelScrollPx(event, area.clientWidth))
+      );
+      if (nextScrollLeft !== area.scrollLeft) {
+        area.scrollLeft = nextScrollLeft;
+      }
+    };
+    scroller.addEventListener('wheel', handleWheel, { passive: false });
+    return () => scroller.removeEventListener('wheel', handleWheel);
+  }, []);
 
   useEffect(() => {
     const trackPointer = (event: PointerEvent) => {
@@ -775,6 +1049,20 @@ export const AppsDesktop = ({
     return () => setAppsSubPageCanGoBack(false);
   }, [setAppsSubPageCanGoBack]);
 
+  /** Shows a tab that is already in the strip, where it is. */
+  const showTabInPlace = (tab) => {
+    setPendingVisualTabActivationId(null);
+    setDelayedVisualActiveTabId(null);
+    setEnteringTabIds((prev) => prev.filter((id) => id !== tab.tabId));
+    setIsAddTabFocused(false);
+    setIsAddTabWaitingForPointerMove(false);
+    addTabPointerOriginRef.current = null;
+    setSelectedTab(tab);
+    setMode('viewer');
+    setDesktopViewMode('apps');
+    setIsNewTabWindow(false);
+  };
+
   const addTabFunc = (e) => {
     const data = e.detail?.data;
     if (data?.internal) {
@@ -782,40 +1070,43 @@ export const AppsDesktop = ({
         (tab) => tab?.internal === data.internal
       );
       if (existingInternalTab) {
-        setPendingVisualTabActivationId(null);
-        setDelayedVisualActiveTabId(null);
-        setEnteringTabIds((prev) =>
-          prev.filter((id) => id !== existingInternalTab.tabId)
-        );
-        setIsAddTabFocused(false);
-        setIsAddTabWaitingForPointerMove(false);
-        addTabPointerOriginRef.current = null;
-        setSelectedTab(existingInternalTab);
-        setMode('viewer');
-        setDesktopViewMode('apps');
-        setIsNewTabWindow(false);
+        showTabInPlace(existingInternalTab);
         return;
       }
     }
-    if (tabs.length >= MAX_OPEN_APP_TABS) {
-      setInfoSnack({
-        message: t('core:app_tab.limit_reached', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        type: 'warning',
-      });
-      setOpenSnack(true);
-      return;
+    // A private app opened from elsewhere (its list, a pinned app) takes the
+    // place of its restored tab, and keeps that tab's marks.
+    if (data?.isPrivate && !isPrivateTabToReopen(data)) {
+      const waiting = tabs.filter(
+        (tab) =>
+          isPrivateTabToReopen(tab) &&
+          isSamePrivateApp(tab.privateAppProperties, data.privateAppProperties)
+      );
+      const restored =
+        waiting.find((tab) => reopenRequestsRef.current.has(tab.tabId)) ??
+        waiting[0];
+      if (restored) {
+        const reopened = {
+          ...tabFlags(restored),
+          ...data,
+          tabId: restored.tabId,
+        };
+        setTabs((prev) =>
+          prev.map((tab) => (tab?.tabId === restored.tabId ? reopened : tab))
+        );
+        showTabInPlace(reopened);
+        return;
+      }
     }
-
     if (data?.navigateIfAlreadyOpen) {
       const { navigateIfAlreadyOpen, path, ...tabIdentity } = data;
+      // The same resource only: without an identifier, the name's default
+      // resource, not a tab of another resource of it.
       const existingTab = tabs.find(
         (tab) =>
           tab.service === tabIdentity.service &&
           tab.name?.toLowerCase() === tabIdentity.name?.toLowerCase() &&
-          (tabIdentity.identifier == null ||
-            tab.identifier === tabIdentity.identifier)
+          isSameResourceIdentifier(tab.identifier, tabIdentity.identifier)
       );
 
       if (existingTab) {
@@ -835,8 +1126,23 @@ export const AppsDesktop = ({
         return;
       }
     }
+    // Only a new tab needs a free slot: an open one is reused above.
+    if (tabs.length >= MAX_OPEN_APP_TABS) {
+      setInfoSnack({
+        message: t('core:app_tab.limit_reached', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        type: 'warning',
+      });
+      setOpenSnack(true);
+      return;
+    }
+
+    // Only the tab menu pins a tab: a tab opened any other way starts
+    // unpinned, a duplicate of a pinned tab too.
+    const { pinned: _pinned, ...tabData } = data ?? {};
     const newTab = {
-      ...data,
+      ...tabData,
       tabId: uid.rnd(),
     };
     const shouldUseSmoothHandoff = isAddTabFocused;
@@ -858,7 +1164,7 @@ export const AppsDesktop = ({
 
       const nextTabs = [...prev];
       nextTabs.splice(sourceIndex + 1, 0, newTab);
-      return nextTabs;
+      return pinnedFirst(nextTabs);
     });
     setSelectedTab(newTab);
     setMode('viewer');
@@ -971,6 +1277,8 @@ export const AppsDesktop = ({
     setIsAddTabWaitingForPointerMove(false);
     addTabPointerOriginRef.current = null;
     setSelectedTab(data);
+    // Choosing it again retries a private app that could not be reopened.
+    reopenPrivateTab(data);
     if (isDev) {
       setDesktopViewMode('dev');
       setDevMode('viewer');
@@ -1279,6 +1587,15 @@ export const AppsDesktop = ({
     setIsNewTabWindow(false);
   }, [setIsNewTabWindow, setMode]);
 
+  useTabShortcuts({
+    isNewTabWindow,
+    maxTabs: MAX_OPEN_APP_TABS,
+    openNewTab: openDashboardFromTabs,
+    selectedTab,
+    show,
+    tabs,
+  });
+
   const returnFromAppsMode = useCallback(() => {
     executeEvent('return-from-apps-mode', {});
   }, []);
@@ -1311,21 +1628,29 @@ export const AppsDesktop = ({
     [navigationController]
   );
 
+  const toggleTabPinned = useCallback((tabId: string) => {
+    setTabs((prev) => {
+      const tab = prev.find((item) => item?.tabId === tabId);
+      return tab ? setTabPinned(prev, tabId, !isPinnedTab(tab)) : prev;
+    });
+  }, []);
+
   const closeAllTabs = useCallback(() => {
-    // A locked tab asks before it closes (removeTabFunc), so Close All keeps
-    // it open rather than closing it without asking.
-    const { kept: lockedTabs, nextTab } = tabsLeftByCloseAll(
+    // A locked tab asks before it closes (removeTabFunc), and a pinned tab
+    // closes only once it is unpinned, so Close All keeps both open rather
+    // than closing them without asking.
+    const { kept: keptTabs, nextTab } = tabsLeftByCloseAll(
       tabs,
       selectedTab?.tabId,
       recentTabIdsRef.current
     );
+    const keptIds = new Set(keptTabs.map((tab) => tab.tabId));
     tabs.forEach((tab) => {
-      if (tab?.tabId && !tab.lock) {
+      if (tab?.tabId && !keptIds.has(tab.tabId)) {
         clearSessionPermissionsByTabId(tab.tabId);
       }
     });
-    if (lockedTabs.length > 0) {
-      const keptIds = new Set(lockedTabs.map((tab) => tab.tabId));
+    if (keptTabs.length > 0) {
       recentTabIdsRef.current = recentTabIdsRef.current.filter((id) =>
         keptIds.has(id)
       );
@@ -1338,7 +1663,7 @@ export const AppsDesktop = ({
       setIsAddTabWaitingForPointerMove(false);
       addTabPointerOriginRef.current = null;
       setIsNewTabWindow(false);
-      setTabs(lockedTabs);
+      setTabs(keptTabs);
       setSelectedTab(nextTab);
       if (isLocalDevTab(nextTab)) {
         setDesktopViewMode('dev');
@@ -1350,7 +1675,7 @@ export const AppsDesktop = ({
       tabsTokenRef.current += 1;
       executeEvent('setTabsToNav', {
         data: {
-          tabs: lockedTabs,
+          tabs: keptTabs,
           selectedTab: nextTab,
           isNewTabWindow: false,
           tabsToken: tabsTokenRef.current,
@@ -1358,7 +1683,7 @@ export const AppsDesktop = ({
       });
       setInfoSnack({
         type: 'info',
-        message: t('core:app_tab.locked_kept_open', {
+        message: t(closeAllKeptNoteKey(keptTabs), {
           postProcess: 'capitalizeFirstChar',
         }),
       });
@@ -1516,13 +1841,9 @@ export const AppsDesktop = ({
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (over && active.id !== over.id) {
-        setTabs((prev) => {
-          const oldIndex = prev.findIndex((tab) => tab?.tabId === active.id);
-          const newIndex = prev.findIndex((tab) => tab?.tabId === over.id);
-
-          if (oldIndex === -1 || newIndex === -1) return prev;
-          return arrayMove(prev, oldIndex, newIndex);
-        });
+        setTabs((prev) =>
+          moveTabWithinGroup(prev, String(active.id), String(over.id))
+        );
       }
       scheduleTabPointerUnlock();
     },
@@ -1532,6 +1853,62 @@ export const AppsDesktop = ({
   const handleTabDragCancel = useCallback(() => {
     scheduleTabPointerUnlock();
   }, [scheduleTabPointerUnlock]);
+
+  // A dragged tab only trades places with tabs of its own group, pinned or
+  // not.
+  const tabCollisionDetection = useCallback<CollisionDetection>(
+    (args) => {
+      const draggingPinned = pinnedTabIds.has(String(args.active.id));
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (container) =>
+            pinnedTabIds.has(String(container.id)) === draggingPinned
+        ),
+      });
+    },
+    [pinnedTabIds]
+  );
+
+  const renderTab = (tab) => (
+    <TabComponent
+      key={tab?.tabId}
+      app={tab}
+      isDevApp={isLocalDevTab(tab)}
+      isPinned={isPinnedTab(tab)}
+      isSelected={tab?.tabId === selectedTab?.tabId}
+      tabInteractionLockedRef={tabInteractionLockedRef}
+      widthPx={isPinnedTab(tab) ? PINNED_TAB_WIDTH_PX : tabWidthPx}
+      isEntering={enteringTabIds.includes(tab?.tabId)}
+      isVisuallySelected={
+        delayedVisualActiveTabId === tab?.tabId ||
+        (tab?.tabId === selectedTab?.tabId &&
+          pendingVisualTabActivationId !== tab?.tabId)
+      }
+      onCloseAll={closeAllTabs}
+      onDuplicate={() => duplicateTab(tab)}
+      onTogglePin={() => toggleTabPinned(tab?.tabId)}
+      onClose={() => {
+        executeEvent('removeTab', {
+          data: tab,
+        });
+      }}
+      onSelect={() => {
+        if (isLocalDevTab(tab)) {
+          executeEvent('open-dev-mode', {});
+          executeEvent('setSelectedTab', {
+            data: tab,
+            isDevMode: true,
+          });
+        } else {
+          executeEvent('open-apps-mode', {});
+          executeEvent('setSelectedTab', {
+            data: tab,
+          });
+        }
+      }}
+    />
+  );
 
   const hasOpenTabs = tabs.length > 0;
   const hideAppsShellOffScreen = !show && hasOpenTabs;
@@ -1579,81 +1956,57 @@ export const AppsDesktop = ({
           <AppsHorizontalTabScroller
             ref={tabScrollerRef}
             sx={{
-              alignItems: 'stretch',
-              gap: '2px',
+              gap: `${TAB_STRIP_GAP_PX}px`,
               paddingLeft: `calc(6px + ${sidebarOffsetPx}px)`,
               transition: `padding-left ${SIDEBAR_CHROME_TRANSITION}`,
             }}
           >
             <DndContext
-              collisionDetection={closestCenter}
+              collisionDetection={tabCollisionDetection}
               modifiers={[restrictTabsToHorizontalAxis, restrictTabsToStrip]}
               onDragCancel={handleTabDragCancel}
               onDragEnd={handleTabDragEnd}
               onDragStart={handleTabDragStart}
               sensors={sensors}
             >
-              <SortableContext
-                items={tabs.map((tab) => tab?.tabId)}
-                strategy={horizontalListSortingStrategy}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: '2px',
-                    ...(tabStripCompresses
-                      ? {
-                          flex: '1 1 auto',
-                          maxWidth: '100%',
-                          minWidth: 0,
-                          overflow: 'hidden',
-                        }
-                      : {
-                          flex: '0 0 auto',
-                          overflow: 'visible',
-                          width: 'max-content',
-                        }),
-                  }}
+              {pinnedTabs.length > 0 && (
+                <SortableContext
+                  items={pinnedTabs.map((tab) => tab.tabId)}
+                  strategy={horizontalListSortingStrategy}
                 >
-                  {tabs.map((tab) => (
-                    <TabComponent
-                      key={tab?.tabId}
-                      app={tab}
-                      isDevApp={isLocalDevTab(tab)}
-                      isSelected={tab?.tabId === selectedTab?.tabId}
-                      tabInteractionLockedRef={tabInteractionLockedRef}
-                      tabStripCompresses={tabStripCompresses}
-                      isEntering={enteringTabIds.includes(tab?.tabId)}
-                      isVisuallySelected={
-                        delayedVisualActiveTabId === tab?.tabId ||
-                        (tab?.tabId === selectedTab?.tabId &&
-                          pendingVisualTabActivationId !== tab?.tabId)
-                      }
-                      onCloseAll={closeAllTabs}
-                      onDuplicate={() => duplicateTab(tab)}
-                      onClose={() => {
-                        executeEvent('removeTab', {
-                          data: tab,
-                        });
+                  <Box
+                    data-tab-group="pinned"
+                    sx={{
+                      display: 'flex',
+                      flex: '0 0 auto',
+                      gap: `${TAB_STRIP_GAP_PX}px`,
+                    }}
+                  >
+                    {pinnedTabs.map(renderTab)}
+                  </Box>
+                </SortableContext>
+              )}
+              {unpinnedTabs.length > 0 && (
+                <AppsHorizontalTabScrollArea
+                  data-tab-group="unpinned"
+                  ref={tabScrollAreaRef}
+                >
+                  <SortableContext
+                    items={unpinnedTabs.map((tab) => tab.tabId)}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: `${TAB_STRIP_GAP_PX}px`,
+                        width: 'max-content',
                       }}
-                      onSelect={() => {
-                        if (isLocalDevTab(tab)) {
-                          executeEvent('open-dev-mode', {});
-                          executeEvent('setSelectedTab', {
-                            data: tab,
-                            isDevMode: true,
-                          });
-                        } else {
-                          executeEvent('open-apps-mode', {});
-                          executeEvent('setSelectedTab', {
-                            data: tab,
-                          });
-                        }
-                      }}
-                    />
-                  ))}
-                </Box>
-              </SortableContext>
+                    >
+                      {unpinnedTabs.map(renderTab)}
+                    </Box>
+                  </SortableContext>
+                </AppsHorizontalTabScrollArea>
+              )}
             </DndContext>
 
             <AppsHorizontalTabAddButton
@@ -1794,6 +2147,11 @@ export const AppsDesktop = ({
                 }}
               >
                 <AppPublish
+                  key={
+                    publishEditTarget
+                      ? `update-${publishEditTarget.service}-${publishEditTarget.name}`
+                      : mode
+                  }
                   categories={categories}
                   myAddress={myAddress}
                   myName={myName}
@@ -1807,11 +2165,19 @@ export const AppsDesktop = ({
                     mode === 'publish-website' ||
                     !!publishEditTarget
                   }
+                  isUpdate={!!publishEditTarget}
                 />
               </Box>
             )}
 
           {viewerTabs.map((tab) => {
+            // A restored tab loads the first time it is selected; a private
+            // app's waits until it is reopened.
+            const isLoaded =
+              !isPrivateTabToReopen(tab) &&
+              (shownTabIds.has(tab?.tabId) ||
+                tab?.tabId === selectedTab?.tabId);
+            if (!isLoaded) return null;
             const hideContentForDevHome =
               desktopViewMode === 'dev' &&
               devMode === 'home' &&
