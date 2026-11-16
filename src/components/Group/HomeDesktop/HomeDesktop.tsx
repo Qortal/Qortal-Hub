@@ -223,8 +223,9 @@ export const HomeDesktop = ({
     setQuitterWidgetRefreshToken((value) => value + 1);
   }, []);
 
+  // The launcher tab there is, or a new one (AppsDesktop).
   const handleOpenAppsPanel = useCallback(() => {
-    executeEvent('newTabWindow', {});
+    executeEvent('showLauncherTab', {});
     setDesktopViewMode('apps');
   }, [setDesktopViewMode]);
   const handleOpenFeedApp = useCallback(() => {
@@ -513,7 +514,6 @@ export const HomeDesktop = ({
         >
           <HomeQortinoWorkspaceCard
             onGettingStartedShownChange={setGettingStartedShown}
-            onOpenAppsPanel={handleOpenAppsPanel}
             qortinoNode={slots.qortino ?? null}
             workspaces={workspacePlaces}
           />
