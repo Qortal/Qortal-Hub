@@ -751,8 +751,21 @@
       "menu_aria": "Options de session",
       "tooltip": "Verrouiller ou se déconnecter"
     },
+    "suggestion_action": {
+      "new_tab": "Nouvel onglet",
+      "open_link": "Ouvrir le lien",
+      "switch_to_tab": "Aller à l'onglet"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps et sites web",
+      "names": "Noms",
+      "saved": "Applications épinglées et favoris",
+      "tabs": "Onglets ouverts"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Favori",
+      "name": "Nom",
       "website": "Site web"
     },
     "suggestions": "Suggestions"

@@ -751,8 +751,21 @@
       "menu_aria": "Istunnon asetukset",
       "tooltip": "Lukitse tai kirjaudu ulos"
     },
+    "suggestion_action": {
+      "new_tab": "Uusi välilehti",
+      "open_link": "Avaa linkki",
+      "switch_to_tab": "Siirry välilehdelle"
+    },
+    "suggestion_group": {
+      "apps": "Q-Appit ja verkkosivustot",
+      "names": "Nimet",
+      "saved": "Kiinnitetyt sovellukset ja kirjanmerkit",
+      "tabs": "Avoimet välilehdet"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Kirjanmerkki",
+      "name": "Nimi",
       "website": "Verkkosivusto"
     },
     "suggestions": "Ehdotukset"
