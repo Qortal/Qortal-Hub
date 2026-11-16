@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "{{name}} – ikoon",
+      "no_ratings": "hinnanguid veel pole",
+      "rating_summary_one": "{{average}} · {{count}} hinnang",
+      "rating_summary_other": "{{average}} · {{count}} hinnangut",
       "type_app": "Q-App",
       "type_website": "veebileht",
       "updated_time": "uuendatud {{time}}",
@@ -245,6 +248,28 @@
       "source": "lähtekood",
       "support": "tugi",
       "website": "veebileht"
+    },
+    "rating": {
+      "average_label": "keskmine hinnang {{average}} viiest",
+      "count_one": "{{count}} hinnang",
+      "count_other": "{{count}} hinnangut",
+      "load_failed": "hinnanguid ei õnnestunud laadida, seega saab hinnata alles siis, kui need on laaditud.",
+      "pending": "sinu hääl on teel. Kõik näevad seda umbes minuti pärast.",
+      "pending_first": "sinu esimene hinnang on teel. Saad seda muuta, kui see on plokis, umbes minuti pärast.",
+      "pick": "sinu hinnang",
+      "pick_star_one": "hinda {{count}} tärniga",
+      "pick_star_other": "hinda {{count}} tärniga",
+      "rate_prompt": "anna oma hinnang",
+      "sent": "aitäh hinnangu eest!",
+      "stars_label_one": "{{count}} tärn",
+      "stars_label_other": "{{count}} tärni",
+      "title": "hinnangud",
+      "word_1": "pole minu jaoks",
+      "word_2": "vajab veel tööd",
+      "word_3": "täitsa okei",
+      "word_4": "väga hea",
+      "word_5": "imeline!",
+      "yours": "sinu hinnang"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +300,17 @@
       "title": "jaga"
     },
     "version_older": "see versiooninumber määrati enne rakenduse viimast uuendust.",
+    "voters": {
+      "all": "kõik · {{total}}",
+      "first_rating": "esimene hindaja",
+      "none": "keegi pole veel nii mitut tärni andnud.",
+      "open": "hääletajad · {{total}}",
+      "public_note": "hääled on Qortali plokiahelas avalikud: igaüks näeb, kes ja kuidas hääletas.",
+      "show_star": "hääli ({{stars}} ★): {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "hääletajad",
+      "you": "sina"
+    },
     "whats_new": {
       "title": "mis on uut"
     }

@@ -72,6 +72,22 @@ whatever the original file carried besides the pixels. Read a picture with
 A list with no screenshots is a single file, which Core serves without
 `filepath`.
 
+## Ratings
+
+Ratings stay the polls Hub already uses: `app-library-<SERVICE>-rating-<name>`
+with options `1`..`5` and `initialValue-N`, the rating of whoever created the
+poll. The page now also reads `/polls/votes/<poll>`, which lists every vote's
+public key and option, to show who voted how. Votes are public on the chain
+anyway; the page says so.
+
+The initial rating belongs to the address of the poll's `creatorPublicKey`.
+The poll's `owner` is any address its creator chose, so it can't tell who
+gave that rating.
+
+A vote is shown at once while its transaction waits for a block, and the page
+looks again until the node has it. Once the page is closed, Hub keeps looking,
+so the library's cards show the vote too.
+
 ## Links
 
 `qortal://use-app-page/<SERVICE>/<name>` opens an app's page instead of the

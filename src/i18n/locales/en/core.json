@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "icon of {{name}}",
+      "no_ratings": "no ratings yet",
+      "rating_summary_one": "{{average}} · {{count}} rating",
+      "rating_summary_other": "{{average}} · {{count}} ratings",
       "type_app": "Q-App",
       "type_website": "website",
       "updated_time": "updated {{time}}",
@@ -245,6 +248,28 @@
       "source": "source code",
       "support": "support",
       "website": "website"
+    },
+    "rating": {
+      "average_label": "average rating {{average}} out of 5",
+      "count_one": "{{count}} rating",
+      "count_other": "{{count}} ratings",
+      "load_failed": "couldn't load the ratings, so rating waits until they load.",
+      "pending": "your vote is on its way. Everyone sees it in about a minute.",
+      "pending_first": "your first rating is on its way. You can change it once it's in a block, in about a minute.",
+      "pick": "your rating",
+      "pick_star_one": "rate {{count}} star",
+      "pick_star_other": "rate {{count}} stars",
+      "rate_prompt": "rate it",
+      "sent": "thanks for rating!",
+      "stars_label_one": "{{count}} star",
+      "stars_label_other": "{{count}} stars",
+      "title": "ratings",
+      "word_1": "not for me",
+      "word_2": "needs work",
+      "word_3": "okay",
+      "word_4": "really good",
+      "word_5": "love it!",
+      "yours": "your rating"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +300,17 @@
       "title": "share"
     },
     "version_older": "this version number was set before the app's latest update.",
+    "voters": {
+      "all": "all · {{total}}",
+      "first_rating": "first to rate it",
+      "none": "nobody gave this many stars yet.",
+      "open": "who voted · {{total}}",
+      "public_note": "votes are public on the Qortal blockchain: anyone can see who voted and how.",
+      "show_star": "{{stars}} ★ votes: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "who voted",
+      "you": "you"
+    },
     "whats_new": {
       "title": "what's new"
     }

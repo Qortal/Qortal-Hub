@@ -1,1 +1,0 @@
-export { AppRatingBreakdown } from './AppRatingBreakdown';

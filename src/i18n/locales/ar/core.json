@@ -244,6 +244,13 @@
     },
     "hero": {
       "icon_alt": "أيقونة {{name}}",
+      "no_ratings": "لا توجد تقييمات بعد",
+      "rating_summary_few": "{{average}} · {{count}} تقييمات",
+      "rating_summary_many": "{{average}} · {{count}} تقييمًا",
+      "rating_summary_one": "{{average}} · {{count}} تقييم",
+      "rating_summary_other": "{{average}} · {{count}} تقييم",
+      "rating_summary_two": "{{average}} · {{count}} تقييمان",
+      "rating_summary_zero": "{{average}} · {{count}} تقييم",
       "type_app": "Q-App",
       "type_website": "موقع ويب",
       "updated_time": "حُدِّث {{time}}",
@@ -253,6 +260,40 @@
       "source": "الشيفرة المصدرية",
       "support": "الدعم",
       "website": "الموقع الإلكتروني"
+    },
+    "rating": {
+      "average_label": "متوسط التقييم {{average}} من 5",
+      "count_few": "{{count}} تقييمات",
+      "count_many": "{{count}} تقييمًا",
+      "count_one": "{{count}} تقييم",
+      "count_other": "{{count}} تقييم",
+      "count_two": "{{count}} تقييمان",
+      "count_zero": "{{count}} تقييم",
+      "load_failed": "تعذّر تحميل التقييمات، لذا ينتظر التقييم حتى يتم تحميلها.",
+      "pending": "صوتك في الطريق. سيراه الجميع خلال دقيقة تقريبًا.",
+      "pending_first": "تقييمك الأول في الطريق. يمكنك تغييره بعد إدراجه في كتلة، أي خلال دقيقة تقريبًا.",
+      "pick": "تقييمك",
+      "pick_star_few": "تقييم بـ{{count}} نجوم",
+      "pick_star_many": "تقييم بـ{{count}} نجمة",
+      "pick_star_one": "تقييم بـ{{count}} نجمة",
+      "pick_star_other": "تقييم بـ{{count}} نجمة",
+      "pick_star_two": "تقييم بـ{{count}} نجمتين",
+      "pick_star_zero": "تقييم بـ{{count}} نجمة",
+      "rate_prompt": "قيّمه",
+      "sent": "شكرًا على تقييمك!",
+      "stars_label_few": "{{count}} نجوم",
+      "stars_label_many": "{{count}} نجمة",
+      "stars_label_one": "{{count}} نجمة",
+      "stars_label_other": "{{count}} نجمة",
+      "stars_label_two": "{{count}} نجمتان",
+      "stars_label_zero": "{{count}} نجمة",
+      "title": "التقييمات",
+      "word_1": "لا يناسبني",
+      "word_2": "يحتاج إلى تحسين",
+      "word_3": "لا بأس به",
+      "word_4": "جيد جدًا",
+      "word_5": "أحببته!",
+      "yours": "تقييمك"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -283,6 +324,17 @@
       "title": "مشاركة"
     },
     "version_older": "تم تعيين رقم الإصدار هذا قبل آخر تحديث للتطبيق.",
+    "voters": {
+      "all": "الكل · {{total}}",
+      "first_rating": "أول من قيّمه",
+      "none": "لم يمنح أحد هذا العدد من النجوم بعد.",
+      "open": "من صوّت · {{total}}",
+      "public_note": "الأصوات علنية على بلوكشين Qortal: يمكن لأي شخص أن يرى من صوّت وكيف صوّت.",
+      "show_star": "أصوات {{stars}} ★: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "من صوّت",
+      "you": "أنت"
+    },
     "whats_new": {
       "title": "ما الجديد"
     }

@@ -1,13 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   alpha,
   Avatar,
   Box,
+  ButtonBase,
+  keyframes,
   Link,
   Paper,
   Typography,
   useTheme,
 } from '@mui/material';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
+import StarHalfRoundedIcon from '@mui/icons-material/StarHalfRounded';
+import StarOutlineRoundedIcon from '@mui/icons-material/StarOutlineRounded';
+import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
 import { appIconUrl } from './appPageQdn';
 import { openPageTextLink, splitTextLinks } from './appPageLink';
@@ -69,6 +75,157 @@ export const SectionTitle = ({
     {action}
   </Box>
 );
+
+/** Read-only stars, halves included. */
+export const StarRow = ({
+  value,
+  size = 18,
+  label,
+}: {
+  value: number;
+  size?: number;
+  label?: string;
+}) => {
+  const theme = useTheme();
+  const stars = [1, 2, 3, 4, 5].map((star) => {
+    const fill = value - star + 1;
+    const Icon =
+      fill >= 0.75
+        ? StarRoundedIcon
+        : fill >= 0.25
+          ? StarHalfRoundedIcon
+          : StarOutlineRoundedIcon;
+    return (
+      <Icon
+        key={star}
+        sx={{
+          color:
+            fill >= 0.25
+              ? theme.palette.warning.main
+              : alpha(theme.palette.text.secondary, 0.55),
+          fontSize: size,
+        }}
+      />
+    );
+  });
+  return (
+    <Box
+      aria-label={label}
+      role={label ? 'img' : undefined}
+      sx={{ alignItems: 'center', display: 'inline-flex', lineHeight: 0 }}
+    >
+      {stars}
+    </Box>
+  );
+};
+
+const pop = keyframes`
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+`;
+
+/** Five stars to pick from, with a word for each while hovering. */
+export const StarPicker = ({
+  value,
+  onPick,
+  disabled,
+  size = 34,
+}: {
+  value: number | null;
+  onPick: (rating: number) => void;
+  disabled?: boolean;
+  size?: number;
+}) => {
+  const theme = useTheme();
+  const { t } = useTranslation(['core']);
+  const [hover, setHover] = useState<number | null>(null);
+  const [popped, setPopped] = useState<number | null>(null);
+  const shown = hover ?? value ?? 0;
+  const words = [
+    t('core:app_page.rating.word_1', { postProcess: 'capitalizeFirstChar' }),
+    t('core:app_page.rating.word_2', { postProcess: 'capitalizeFirstChar' }),
+    t('core:app_page.rating.word_3', { postProcess: 'capitalizeFirstChar' }),
+    t('core:app_page.rating.word_4', { postProcess: 'capitalizeFirstChar' }),
+    t('core:app_page.rating.word_5', { postProcess: 'capitalizeFirstChar' }),
+  ];
+
+  return (
+    <Box
+      sx={{ alignItems: 'center', display: 'flex', flexDirection: 'column' }}
+    >
+      <Box
+        aria-label={t('core:app_page.rating.pick', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+        onMouseLeave={() => setHover(null)}
+        role="radiogroup"
+        sx={{ display: 'flex', gap: '2px' }}
+      >
+        {[1, 2, 3, 4, 5].map((star) => {
+          const active = star <= shown;
+          return (
+            <ButtonBase
+              aria-checked={value === star}
+              aria-label={t('core:app_page.rating.pick_star', {
+                count: star,
+                postProcess: 'capitalizeFirstChar',
+              })}
+              disabled={disabled}
+              key={star}
+              onBlur={() => setHover(null)}
+              onClick={() => {
+                setPopped(star);
+                onPick(star);
+              }}
+              onFocus={() => setHover(star)}
+              onMouseEnter={() => setHover(star)}
+              role="radio"
+              sx={{
+                borderRadius: '50%',
+                p: '3px',
+                transition: 'transform 120ms ease',
+                '&:hover': { transform: 'scale(1.12)' },
+                '&.Mui-focusVisible': {
+                  outline: `2px solid ${theme.palette.primary.main}`,
+                },
+              }}
+            >
+              <StarRoundedIcon
+                onAnimationEnd={() => setPopped(null)}
+                sx={{
+                  animation:
+                    popped !== null && star <= popped
+                      ? `${pop} 360ms ease ${(star - 1) * 40}ms`
+                      : 'none',
+                  color: active
+                    ? theme.palette.warning.main
+                    : alpha(theme.palette.text.secondary, 0.4),
+                  filter: active
+                    ? `drop-shadow(0 0 6px ${alpha(theme.palette.warning.main, 0.45)})`
+                    : 'none',
+                  fontSize: size,
+                  transition: 'color 120ms ease, filter 120ms ease',
+                }}
+              />
+            </ButtonBase>
+          );
+        })}
+      </Box>
+      <Typography
+        aria-live="polite"
+        sx={{
+          color: 'text.secondary',
+          fontSize: '13px',
+          minHeight: '20px',
+          mt: 0.5,
+        }}
+      >
+        {shown ? words[shown - 1] : ' '}
+      </Typography>
+    </Box>
+  );
+};
 
 /** A name's picture, or its first letter. */
 export const NameAvatar = ({

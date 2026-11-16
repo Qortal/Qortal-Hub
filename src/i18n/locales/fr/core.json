@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "icône de {{name}}",
+      "no_ratings": "aucune évaluation pour l’instant",
+      "rating_summary_one": "{{average}} · {{count}} évaluation",
+      "rating_summary_other": "{{average}} · {{count}} évaluations",
       "type_app": "Q-App",
       "type_website": "site web",
       "updated_time": "mis à jour {{time}}",
@@ -245,6 +248,28 @@
       "source": "code source",
       "support": "assistance",
       "website": "site web"
+    },
+    "rating": {
+      "average_label": "note moyenne de {{average}} sur 5",
+      "count_one": "{{count}} évaluation",
+      "count_other": "{{count}} évaluations",
+      "load_failed": "impossible de charger les notes ; la notation attend qu'elles soient chargées.",
+      "pending": "votre vote est en route. Tout le monde le verra d’ici une minute environ.",
+      "pending_first": "votre première note est en route. Vous pourrez la modifier dès qu’elle sera dans un bloc, d’ici une minute environ.",
+      "pick": "votre évaluation",
+      "pick_star_one": "donner {{count}} étoile",
+      "pick_star_other": "donner {{count}} étoiles",
+      "rate_prompt": "donnez une note",
+      "sent": "merci pour votre évaluation !",
+      "stars_label_one": "{{count}} étoile",
+      "stars_label_other": "{{count}} étoiles",
+      "title": "évaluations",
+      "word_1": "pas pour moi",
+      "word_2": "à améliorer",
+      "word_3": "correct",
+      "word_4": "vraiment bien",
+      "word_5": "j’adore !",
+      "yours": "votre évaluation"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +300,17 @@
       "title": "partager"
     },
     "version_older": "ce numéro de version a été défini avant la dernière mise à jour de l’app.",
+    "voters": {
+      "all": "tous · {{total}}",
+      "first_rating": "première évaluation",
+      "none": "personne n’a encore donné autant d’étoiles.",
+      "open": "qui a voté · {{total}}",
+      "public_note": "les votes sont publics sur la blockchain Qortal : tout le monde peut voir qui a voté et comment.",
+      "show_star": "votes à {{stars}} ★ : {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "qui a voté",
+      "you": "vous"
+    },
     "whats_new": {
       "title": "nouveautés"
     }

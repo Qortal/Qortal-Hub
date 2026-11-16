@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "icono de {{name}}",
+      "no_ratings": "aún no hay valoraciones",
+      "rating_summary_one": "{{average}} · {{count}} valoración",
+      "rating_summary_other": "{{average}} · {{count}} valoraciones",
       "type_app": "Q-App",
       "type_website": "sitio web",
       "updated_time": "actualizado {{time}}",
@@ -245,6 +248,28 @@
       "source": "código fuente",
       "support": "soporte",
       "website": "sitio web"
+    },
+    "rating": {
+      "average_label": "valoración media de {{average}} sobre 5",
+      "count_one": "{{count}} valoración",
+      "count_other": "{{count}} valoraciones",
+      "load_failed": "no se pudieron cargar las valoraciones; se podrá valorar cuando se carguen.",
+      "pending": "tu voto está en camino. Todos lo verán en más o menos un minuto.",
+      "pending_first": "tu primera valoración está en camino. Podrás cambiarla cuando esté en un bloque, en más o menos un minuto.",
+      "pick": "tu valoración",
+      "pick_star_one": "valorar con {{count}} estrella",
+      "pick_star_other": "valorar con {{count}} estrellas",
+      "rate_prompt": "deja tu valoración",
+      "sent": "¡Gracias por tu valoración!",
+      "stars_label_one": "{{count}} estrella",
+      "stars_label_other": "{{count}} estrellas",
+      "title": "valoraciones",
+      "word_1": "no es para mí",
+      "word_2": "puede mejorar",
+      "word_3": "está bien",
+      "word_4": "me gusta mucho",
+      "word_5": "¡Me encanta!",
+      "yours": "tu valoración"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +300,17 @@
       "title": "compartir"
     },
     "version_older": "este número de versión se fijó antes de la última actualización de la app.",
+    "voters": {
+      "all": "todos · {{total}}",
+      "first_rating": "primera valoración",
+      "none": "nadie ha dado todavía tantas estrellas.",
+      "open": "quién ha votado · {{total}}",
+      "public_note": "los votos son públicos en la blockchain de Qortal: cualquiera puede ver quién ha votado y cómo.",
+      "show_star": "votos de {{stars}} ★: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "quién ha votado",
+      "you": "tú"
+    },
     "whats_new": {
       "title": "novedades"
     }

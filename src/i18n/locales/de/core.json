@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "Symbol von {{name}}",
+      "no_ratings": "noch keine Bewertungen",
+      "rating_summary_one": "{{average}} · {{count}} Bewertung",
+      "rating_summary_other": "{{average}} · {{count}} Bewertungen",
       "type_app": "Q-App",
       "type_website": "Website",
       "updated_time": "aktualisiert {{time}}",
@@ -245,6 +248,28 @@
       "source": "Quellcode",
       "support": "Support",
       "website": "Website"
+    },
+    "rating": {
+      "average_label": "durchschnittliche Bewertung {{average}} von 5",
+      "count_one": "{{count}} Bewertung",
+      "count_other": "{{count}} Bewertungen",
+      "load_failed": "die Bewertungen konnten nicht geladen werden. Bewerten ist erst möglich, wenn sie geladen sind.",
+      "pending": "Ihre Stimme ist unterwegs. In etwa einer Minute ist sie für alle sichtbar.",
+      "pending_first": "Ihre erste Bewertung ist unterwegs. Sobald sie in einem Block ist, in etwa einer Minute, können Sie sie ändern.",
+      "pick": "Ihre Bewertung",
+      "pick_star_one": "mit {{count}} Stern bewerten",
+      "pick_star_other": "mit {{count}} Sternen bewerten",
+      "rate_prompt": "jetzt bewerten",
+      "sent": "danke für Ihre Bewertung!",
+      "stars_label_one": "{{count}} Stern",
+      "stars_label_other": "{{count}} Sterne",
+      "title": "Bewertungen",
+      "word_1": "nicht mein Fall",
+      "word_2": "ausbaufähig",
+      "word_3": "ganz okay",
+      "word_4": "richtig gut",
+      "word_5": "ich liebe es!",
+      "yours": "Ihre Bewertung"
     },
     "reviews": {
       "characters": "{{length}} / {{limit}}"
@@ -275,6 +300,17 @@
       "title": "teilen"
     },
     "version_older": "diese Versionsnummer wurde vor der letzten Aktualisierung der App festgelegt.",
+    "voters": {
+      "all": "alle · {{total}}",
+      "first_rating": "erste Bewertung",
+      "none": "noch niemand hat so viele Sterne vergeben.",
+      "open": "wer abgestimmt hat · {{total}}",
+      "public_note": "Stimmen sind auf der Qortal-Blockchain öffentlich: Alle können sehen, wer wie abgestimmt hat.",
+      "show_star": "Stimmen mit {{stars}} ★: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "wer abgestimmt hat",
+      "you": "Sie"
+    },
     "whats_new": {
       "title": "Neuerungen"
     }
