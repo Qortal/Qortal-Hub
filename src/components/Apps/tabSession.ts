@@ -4,7 +4,9 @@
  *
  * A tab is kept with what reopens it: service, name, identifier, the address
  * inside the app (a path relative to the app) and its title. Dev Mode tabs
- * are not kept: what they show is not on QDN. A private app keeps what Hub
+ * are not kept: what they show is not on QDN. Launcher tabs are not kept
+ * either: what they held (a page, a search, a publish form being filled in)
+ * belongs to the run, and Hub starts on Home. A private app keeps what Hub
  * needs to download and decrypt it again, as its pinned apps do; the address
  * of the copy the node built for this run is not kept.
  */
@@ -28,7 +30,8 @@ const MAX_FLAGS = 16;
 // Enough for a tab icon; a bigger logo comes back when the app is reopened.
 const MAX_LOGO_LENGTH = 64_000;
 
-// Internal tabs Hub draws itself, which need nothing stored to reopen.
+// Internal tabs Hub draws itself, which need nothing stored to reopen. A
+// launcher tab (launcherTabs.ts) is not one of them.
 const RESTORABLE_INTERNAL_TABS = new Set([QCHAT_INTERNAL_TAB_ID]);
 
 // True/false fields that are not carried as they are: the ones kept in their

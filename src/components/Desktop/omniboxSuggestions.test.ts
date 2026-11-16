@@ -199,6 +199,17 @@ describe('buildOmniboxOptions', () => {
         })
       ).toEqual(['tabs:t1', 'library:chat']);
     });
+
+    it('skip launcher tabs, whatever they are called', () => {
+      expect(
+        build('new', {
+          tabs: [
+            tab('t1', 'New tab', { internal: 'launcher', service: 'INTERNAL' }),
+            tab('t2', 'Newsroom'),
+          ],
+        })
+      ).toEqual(['tabs:t2', 'library:new']);
+    });
   });
 
   describe('pinned apps and bookmarks', () => {

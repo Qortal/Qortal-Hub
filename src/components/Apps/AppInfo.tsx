@@ -31,6 +31,7 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
+import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AppRatingBreakdown } from './AppInfo/AppRatingBreakdown';
@@ -63,6 +64,7 @@ export const AppInfo = ({ app, myName }) => {
     sortablePinnedAppsAtom
   );
   const { show } = useContext(QORTAL_APP_CONTEXT);
+  const launcherTabId = useLauncherTabId();
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState<{
     type: string;
@@ -370,7 +372,7 @@ export const AppInfo = ({ app, myName }) => {
             <AppButton
               onClick={() => {
                 executeEvent('addTab', {
-                  data: app,
+                  data: inLauncherTab(app, launcherTabId),
                 });
               }}
               sx={{
