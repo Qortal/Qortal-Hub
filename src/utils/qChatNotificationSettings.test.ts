@@ -834,6 +834,51 @@ describe('getGroupUnreadCountConsideringMute', () => {
     const summary = { unreadCount: 7, mentionCount: 3 };
     expect(getGroupUnreadCountConsideringMute(settings, summary)).toBe(7);
   });
+
+  // A `mutedUntil` key outlives the mute it recorded: it becomes an expired
+  // timestamp once the mute lapses, or 0 on an explicit unmute. Treating any
+  // key as "muted" made the group report zero unread with no channel breakdown
+  // available, so its red dot vanished while messages were unread.
+  it('does not treat an expired mute as muting the group', () => {
+    const settings: GroupNotificationStore = {
+      channels: { general: { mutedUntil: Date.now() - 60_000 } },
+    };
+    const summary = { unreadCount: 4, mentionCount: 0 };
+    expect(getGroupUnreadCountConsideringMute(settings, summary)).toBe(4);
+    expect(groupHasUnreadConsideringMute(settings, summary)).toBe(true);
+  });
+
+  it('does not treat an explicit unmute (0) as muting the group', () => {
+    const settings: GroupNotificationStore = {
+      channels: { general: { mutedUntil: 0 } },
+    };
+    const summary = { unreadCount: 4, mentionCount: 0 };
+    expect(getGroupUnreadCountConsideringMute(settings, summary)).toBe(4);
+    expect(groupHasUnreadConsideringMute(settings, summary)).toBe(true);
+  });
+
+  it('does not treat a non-mute channel override as muting the group', () => {
+    const settings: GroupNotificationStore = {
+      channels: { general: { pushLevel: 'all' as const } },
+    };
+    const summary = { unreadCount: 4, mentionCount: 0 };
+    expect(getGroupUnreadCountConsideringMute(settings, summary)).toBe(4);
+  });
+
+  it('still reports zero for a group-wide mute with no channel breakdown', () => {
+    // A group-wide mute is stored as the same active mute written to every
+    // known channel, so every entry being actively muted is the shape that
+    // legitimately means "this group is muted".
+    const settings: GroupNotificationStore = {
+      channels: {
+        general: { mutedUntil: null },
+        random: { mutedUntil: null },
+      },
+    };
+    const summary = { unreadCount: 4, mentionCount: 0 };
+    expect(getGroupUnreadCountConsideringMute(settings, summary)).toBe(0);
+    expect(groupHasUnreadConsideringMute(settings, summary)).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1057,13 +1102,16 @@ describe('welcome subtraction is bounded by real unread', () => {
     ).toBe(3);
   });
 
-  it('still subtracts a welcome count equal to the unread total', () => {
+  it('does not subtract a welcome count equal to the unread total', () => {
+    // Equal counts are ambiguous: the set cannot be told apart from one that
+    // has absorbed already-read welcome posts, which would cancel a real
+    // message. Erring toward showing the dot, so the group still reports unread.
     expect(
       groupHasUnreadConsideringMute(groupStore, summary, 3, fallback)
-    ).toBe(false);
+    ).toBe(true);
     expect(
       getGroupUnreadCountConsideringMute(groupStore, summary, 3, fallback)
-    ).toBe(0);
+    ).toBe(3);
   });
 
   it('still subtracts a welcome count below the unread total', () => {

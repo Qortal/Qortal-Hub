@@ -1709,9 +1709,12 @@ export const Group = ({
               settings?.notifyOnWelcomePosts ??
               globalNotifFormRef.current.notifyOnWelcomePosts ??
               true;
-            // Equal counts are consistent; a larger set is stale and must not
-            // be subtracted at all.
-            if (!notifyOnWelcomePosts && rawWelcome <= groupUnread) {
+            // A set at or above the unread total is ambiguous or stale — it
+            // cannot be told apart from a set that has absorbed already-read
+            // welcome posts — so it is not subtracted, matching
+            // `resolveEffectiveWelcomeUnread`. Erring here shows a badge rather
+            // than hiding one.
+            if (!notifyOnWelcomePosts && rawWelcome < groupUnread) {
               totalWelcomeUnreads += rawWelcome;
             }
           }

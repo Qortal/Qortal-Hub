@@ -235,10 +235,16 @@ export default {
       }
     );
 
-    // The welcome suppression must still work when every unread post *is* a
-    // welcome post — otherwise the original welcome-notification bug returns.
+    // A welcome set EQUAL to the unread total is ambiguous: it cannot be told
+    // apart from a set that has absorbed already-read welcome posts, which is
+    // the shape that was cancelling real unread messages and hiding the dot.
+    //
+    // This pins the deliberate consequence of resolving that ambiguity toward
+    // showing the badge: a group whose only unread posts are welcome posts now
+    // DOES show a dot when notifyOnWelcomePosts is off. That is the accepted
+    // cost — a visible, self-correcting dot beats a hidden real message.
     await ctx.check(
-      'a group whose only unread is welcome posts still reports no unread',
+      'an ambiguous welcome set no longer suppresses the dot',
       () => {
         const welcomeOnly = {
           unreadCount: 2,
@@ -261,13 +267,35 @@ export default {
           2,
           fallback
         );
-        if (hasUnread !== false) {
+        if (hasUnread !== true) {
           throw new Error(
-            'welcome-only unread should be suppressed when ' +
-              'notifyOnWelcomePosts is false'
+            'an ambiguous (equal-count) welcome set must not be subtracted; ' +
+              'subtracting it can cancel a real message'
           );
         }
-        return 'false';
+        return 'true';
+      }
+    );
+
+    // The setting must still do something, which is the part that matters:
+    // when the set is unambiguously smaller than the unread total, at least one
+    // real message remains and the subtraction still applies to the count.
+    await ctx.check(
+      'an unambiguous welcome set is still subtracted from the count',
+      () => {
+        const count = settings.getGroupUnreadCountConsideringMute(
+          groupStore,
+          {
+            unreadCount: 3,
+            replyCount: 0,
+            mentionCount: 0,
+            channels: [{ channelId: CHANNEL, unreadCount: 3, mentionCount: 0 }],
+          },
+          1,
+          fallback
+        );
+        if (count !== 2) throw new Error(`count=${count}, expected 2`);
+        return 'count=2';
       }
     );
 
@@ -283,6 +311,66 @@ export default {
         return `skew=${skew}ms`;
       }
     );
+
+    // A `mutedUntil` key outlives the mute it recorded: it becomes an expired
+    // timestamp when the mute lapses, or 0 on an explicit unmute. Treating any
+    // key as "the group is muted" zeroed the group whenever its summary carried
+    // no channel breakdown, hiding the dot while messages were unread.
+    await ctx.check('an expired mute does not hide the group dot', () => {
+      const repo = {
+        channels: { [CHANNEL]: { mutedUntil: Date.now() - 60_000 } },
+      };
+      const summary = { unreadCount: 4, mentionCount: 0 };
+      if (
+        settings.groupHasUnreadConsideringMute(repo, summary, 0, fallback) !==
+        true
+      ) {
+        throw new Error('an expired mute must not count as muted');
+      }
+      if (
+        settings.getGroupUnreadCountConsideringMute(
+          repo,
+          summary,
+          0,
+          fallback
+        ) !== 4
+      ) {
+        throw new Error('expired mute changed the count');
+      }
+      return 'unreadCount=4';
+    });
+
+    await ctx.check(
+      'an explicit unmute (0) does not hide the group dot',
+      () => {
+        const repo = { channels: { [CHANNEL]: { mutedUntil: 0 } } };
+        const summary = { unreadCount: 4, mentionCount: 0 };
+        if (
+          settings.groupHasUnreadConsideringMute(repo, summary, 0, fallback) !==
+          true
+        ) {
+          throw new Error('mutedUntil: 0 means unmuted, not muted');
+        }
+        return 'true';
+      }
+    );
+
+    await ctx.check('a group-wide active mute still hides the dot', () => {
+      const repo = {
+        channels: {
+          [CHANNEL]: { mutedUntil: null },
+          other: { mutedUntil: null },
+        },
+      };
+      const summary = { unreadCount: 4, mentionCount: 0 };
+      if (
+        settings.groupHasUnreadConsideringMute(repo, summary, 0, fallback) !==
+        false
+      ) {
+        throw new Error('every entry actively muted means the group is muted');
+      }
+      return 'false';
+    });
 
     await runClockSkewCase(ctx, settings);
   },

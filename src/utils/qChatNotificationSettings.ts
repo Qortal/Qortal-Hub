@@ -655,19 +655,36 @@ function computeFilteredChannelCounts(
   const channels = Array.isArray(summary?.channels) ? summary.channels : [];
 
   if (channels.length === 0) {
-    const hasChannelMutes = groupStore?.channels
-      ? Object.values(groupStore.channels).some(
-          (ch) => ch?.mutedUntil !== undefined
-        )
-      : false;
-    if (!hasChannelMutes) {
-      return {
-        totalUnread: Number(summary?.unreadCount ?? 0),
-        totalMention: Number(summary?.mentionCount ?? 0),
-        anyUnreadMention: summary?.hasUnreadMention === true,
-      };
+    // No per-channel breakdown, so nothing can be filtered channel by channel.
+    //
+    // Previously any `mutedUntil` key at all was read as "this group is muted"
+    // and the whole group was reported as zero. But a key survives as an
+    // expired mute (a mute the user let lapse) or an explicit `mutedUntil: 0`
+    // (unmuted), and neither mutes anything. Such a group then silently lost
+    // its red dot while messages were genuinely unread — the intermittent
+    // "group badge sometimes missing" report.
+    //
+    // A group-wide mute is stored as a bulk write of the same active mute to
+    // every known channel, so "every known entry is actively muted" is the
+    // shape that legitimately means muted. Anything else falls back to the
+    // aggregate and shows the dot.
+    const muteEntries = groupStore?.channels
+      ? Object.values(groupStore.channels)
+      : [];
+    const hasActiveMute = muteEntries.some((ch) =>
+      isMutedUntilActive(ch?.mutedUntil)
+    );
+    const hasNonActiveEntry = muteEntries.some(
+      (ch) => !isMutedUntilActive(ch?.mutedUntil)
+    );
+    if (hasActiveMute && !hasNonActiveEntry) {
+      return { totalUnread: 0, totalMention: 0, anyUnreadMention: false };
     }
-    return { totalUnread: 0, totalMention: 0, anyUnreadMention: false };
+    return {
+      totalUnread: Number(summary?.unreadCount ?? 0),
+      totalMention: Number(summary?.mentionCount ?? 0),
+      anyUnreadMention: summary?.hasUnreadMention === true,
+    };
   }
 
   let totalUnread = 0;
@@ -700,12 +717,18 @@ function computeFilteredChannelCounts(
  *
  * A set claiming more unread welcome posts than there are unread messages is
  * provably inconsistent with the summary, so it is disregarded rather than
- * trusted. Trusting it would hide real unread, which is the failure being fixed;
- * disregarding it can at worst show a badge for welcome posts the user muted,
- * which self-corrects on the next reconciliation.
+ * trusted.
  *
- * Equal counts are consistent — a group whose every unread message is a welcome
- * post — and are still subtracted.
+ * A set *equal* to the unread total is ambiguous and is also disregarded. The
+ * set carries no timestamps, so "3 unread, all welcome posts" and "3 unread,
+ * one stale welcome id plus 2 real messages" are the same input. Subtracting in
+ * full resolves the ambiguity in the direction that hides a real message, which
+ * is the reported bug; disregarding it can only show a dot for a muted welcome
+ * post, which is visible and self-corrects. When the two readings cannot be
+ * told apart, this deliberately errs toward showing the badge.
+ *
+ * A set below the total is subtracted: at least one real unread message remains
+ * however the ambiguity resolves, so the dot still shows either way.
  */
 function resolveEffectiveWelcomeUnread(
   welcomeUnreadCount: number | undefined,
@@ -713,7 +736,7 @@ function resolveEffectiveWelcomeUnread(
 ): number {
   const welcomeCount = Math.max(0, Number(welcomeUnreadCount) || 0);
   if (welcomeCount === 0) return 0;
-  if (welcomeCount > Math.max(0, totalUnread)) return 0;
+  if (welcomeCount >= Math.max(0, totalUnread)) return 0;
   return welcomeCount;
 }
 

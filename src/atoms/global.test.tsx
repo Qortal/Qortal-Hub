@@ -19,6 +19,7 @@ import {
 import {
   type GroupNotificationStore,
   groupHasUnreadConsideringMute,
+  getGroupUnreadCountConsideringMute,
 } from '../utils/qChatNotificationSettings';
 
 function setupStore(overrides: {
@@ -309,7 +310,15 @@ describe('groupChatHasUnreadAtom', () => {
 });
 
 describe('groupHasUnreadConsideringMute with globalNotificationFormAtom fallback', () => {
-  it('uncustomized group unread dot reflects global notifyOnWelcomePosts=false', () => {
+  /**
+   * A welcome set equal to the unread total is ambiguous — it cannot be told
+   * apart from a set that has absorbed already-read welcome posts — so it is no
+   * longer subtracted. The boolean therefore no longer hides a group whose only
+   * unread posts are welcome posts; it errs toward showing the dot. The count
+   * helper still reflects the setting, which is what the companion test below
+   * pins.
+   */
+  it('uncustomized group unread dot stays visible when the welcome set is ambiguous', () => {
     const store = createStore();
     store.set(memberGroupsAtom, []);
     store.set(reticulumChatSummariesAtom, null as any);
@@ -328,9 +337,21 @@ describe('groupHasUnreadConsideringMute with globalNotificationFormAtom fallback
     const groupSettings: GroupNotificationStore = { channels: {} };
     const summary = { unreadCount: 1, mentionCount: 0 };
 
+    // Welcome set equals the unread total -> ambiguous -> not subtracted.
     expect(
       groupHasUnreadConsideringMute(groupSettings, summary, 1, globalForm)
-    ).toBe(false);
+    ).toBe(true);
+
+    // But the global setting still applies when the set is unambiguously
+    // smaller than the unread total: 3 unread, 1 welcome post -> 2 remain.
+    expect(
+      getGroupUnreadCountConsideringMute(
+        groupSettings,
+        { unreadCount: 3, mentionCount: 0 },
+        1,
+        globalForm
+      )
+    ).toBe(2);
   });
 
   it('uncustomized group unread dot reflects global notifyOnWelcomePosts=true', () => {

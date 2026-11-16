@@ -688,19 +688,48 @@ Two rules make that accounting safe. Both were added after a bug where the
 group badge and channel count disappeared while messages were genuinely unread:
 
 1. **The subtraction is bounded.** A welcome set can only account for as many
-   unread messages as the group actually has. A set claiming _more_ than the
-   unread total is provably stale and is disregarded entirely, not clamped — a
-   clamp would subtract every real unread message and re-hide the badge.
+   unread messages as the group actually has. A set that is _equal to or larger
+   than_ the unread total is disregarded entirely, not clamped — a clamp would
+   subtract every real unread message and re-hide the badge. Equality counts as
+   ambiguous rather than as a welcome-only group: the set stores event ids and
+   no timestamps, so "3 unread, all welcome posts" and "3 unread: one leftover
+   welcome id plus two real messages" are indistinguishable, and subtracting
+   resolves that in the direction that hides a real message.
 2. **The set is reconciled.** `reconcileWelcomeUnreadForGroup` trims each
    group's set to its unread total on every summaries refresh, dropping the
    oldest entries. Entries are otherwise only cleared when a group reaches zero
    unread or a message is deleted, so a welcome post read on another device
    would leave a permanent entry and the set would grow without bound.
 
+Note the trade-off in rule 1: a group whose only unread posts are welcome posts
+will show a dot even with **Notify on welcome posts** off. That is deliberate —
+a visible, self-correcting dot is better than silently hiding a real message.
+The setting still affects the numeric count whenever the set is unambiguously
+smaller than the unread total. Removing this trade-off would mean giving the set
+event timestamps, so an entry could be compared against the channel read
+watermark instead of inferred from a size comparison.
+
 Verified headlessly by the `unread-badge-visibility` scenario
 (`node electron/scenarios/runner.mjs unread-badge-visibility`), which asserts
-both the bounded subtraction and that the membership join baseline never clears
-a message newer than the member's `joinedAt`.
+the bounded subtraction, the mute classification, and that the membership join
+baseline never clears a message newer than the member's `joinedAt`.
+
+### Group dot and mute entries
+
+A `mutedUntil` key outlives the mute it recorded: it becomes an expired
+timestamp once the mute lapses, and `0` on an explicit unmute. Neither mutes
+anything.
+
+`computeFilteredChannelCounts` used to treat _any_ such key as "this group is
+muted" and report zero unread whenever the summary had no per-channel
+breakdown — so a group the user had once muted, and since let lapse, silently
+lost its dot while messages were unread.
+
+When there is no channel breakdown the group is now treated as muted only when
+**every** known channel entry is actively muted, which is the shape a
+group-wide mute writes. An expired mute, an explicit unmute, a non-mute
+override (such as a push level), or a mix all fall back to the aggregate and
+show the dot.
 
 ### Clock skew between senders
 
