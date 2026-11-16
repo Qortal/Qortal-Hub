@@ -143,11 +143,12 @@ const QORTINO_MASCOT_STAGE_PADDING_X = 26;
 const QORTINO_MASCOT_STAGE_PADDING_Y = 28;
 const QORTINO_MASCOT_VERTICAL_LIFT_PX = 12;
 const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 251;
+const QORTINO_COMPANION_MIN_HEIGHT_PX = 130;
 const HOTKEY_SLOT_COUNT = 6;
 const HOTKEY_PICKER_SEARCH_DEBOUNCE_MS = 320;
 const CURATED_HOTKEY_APP_NAMES = [
   'Q-Tube',
-  'Quitter',
+  'Torq',
   'Q-Mail',
   'Q-Blog',
   'Q-Trade',
@@ -2488,14 +2489,14 @@ export const HomeQortinoWorkspaceCard = ({
         label: 'Q-Tube',
         run: () => openApp('Q-Tube'),
       },
-      quitter: {
+      torq: {
         description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
-          appName: 'Quitter',
+          appName: 'Torq',
         }),
         icon: ForumRoundedIcon,
-        id: 'quitter',
-        label: 'Quitter',
-        run: () => openApp('Quitter'),
+        id: 'torq',
+        label: 'Torq',
+        run: () => openApp('Torq'),
       },
     }),
     [openApp, qw]
@@ -5778,7 +5779,9 @@ export const HomeQortinoWorkspaceCard = ({
           containerName: 'qortino-card',
           containerType: 'inline-size',
           display: 'grid',
-          gridTemplateRows: `${workspaceBayHeightPx}px minmax(0, 1fr)`,
+          // In a short Home window the workspace bay gives up room first,
+          // so QORTINO below always shows.
+          gridTemplateRows: `minmax(0, ${workspaceBayHeightPx}px) minmax(${QORTINO_COMPANION_MIN_HEIGHT_PX}px, 1fr)`,
           height: '100%',
           overflow: 'hidden',
           position: 'relative',

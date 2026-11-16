@@ -23,6 +23,7 @@ import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { openQChatTab } from '../../utils/openQChatTab';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qTradeLogo from '../../assets/Icons/q-trade-logo.webp';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import BorderGlow from '../common/BorderGlow';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 import {
@@ -35,6 +36,16 @@ import {
   handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
+import {
+  countGridTracks,
+  featuredMoreApps,
+  featuredMoreAppsFit,
+  largestPx,
+} from './featuredMoreApps';
+import {
+  homeWindowNarrowerThan,
+  homeWindowShorterThan,
+} from './HomeDesktop/homeWindows';
 import {
   GROUP_ACTIVITY_BLUE,
   getBlueAmbientLineBackground,
@@ -83,17 +94,32 @@ const FEATURED_PREVIEW_CONFIG = {
 type PreviewAppName = keyof typeof FEATURED_PREVIEW_CONFIG;
 const FEATURED_APP_GRID = [
   Q_TUBE_APP_NAME,
-  'Quitter',
+  'Torq',
   'Q-Mail',
   SUBWIRE_APP_NAME,
   'Q-Trade',
   Q_CHAT_APP_NAME,
 ] as const;
+/** The cells those apps take: Q-Tube and Q-Chat are two cells wide. */
+const FEATURED_APP_GRID_CELLS = FEATURED_APP_GRID.reduce<number>(
+  (cells, appName) =>
+    cells +
+    (appName === Q_TUBE_APP_NAME || appName === Q_CHAT_APP_NAME ? 2 : 1),
+  0
+);
+/** More official apps, for a window with room for whole rows of them. */
+const FEATURED_MORE_APPS = featuredMoreApps(FEATURED_APP_GRID);
 const FEATURED_GRID_GAP_PX = 12;
 const FEATURED_GRID_COL_MAX_PX = 124;
 /** Cap width when space allows; below this the grid scales down proportionally (avoids 3-col + span-2 orphan gaps). */
 const FEATURED_GRID_MAX_WIDTH_PX =
   4 * FEATURED_GRID_COL_MAX_PX + 3 * FEATURED_GRID_GAP_PX;
+/** Home window sizes where the apps change their arrangement. */
+const FEATURED_SNUG_PX = 430;
+const FEATURED_SHORT_PX = 400;
+const FEATURED_TWO_COLUMNS_BELOW_PX = 440;
+const FEATURED_ONE_ROW =
+  '@container home-window (min-width: 900px) and (height < 400px)';
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -161,6 +187,9 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
       return false;
     }
   });
+  const tilesAreaRef = useRef<HTMLDivElement | null>(null);
+  const tilesGridRef = useRef<HTMLDivElement | null>(null);
+  const [moreAppsShown, setMoreAppsShown] = useState(0);
   const featuredFooterStripBackground =
     theme.palette.mode === 'dark'
       ? `radial-gradient(140% 252% at 50% 54%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.225)} 0%, ${alpha(
@@ -366,6 +395,39 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
     }
   }, [isCalmMode]);
 
+  // A taller window shows more official apps after these, in whole rows
+  // that fit without scrolling. The tiles area takes the room the window
+  // leaves it, whatever its tiles, so the apps added can't change what is
+  // measured here.
+  useEffect(() => {
+    const area = tilesAreaRef.current;
+    const grid = tilesGridRef.current;
+    if (!area || !grid || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      const gridStyle = window.getComputedStyle(grid);
+      // The grid's height is its content's, so its rows are as tall as
+      // grid-auto-rows lets them be. A tile is the fallback.
+      const tile = grid.querySelector<HTMLElement>(':scope > button');
+      setMoreAppsShown(
+        featuredMoreAppsFit({
+          availableHeight: entry.contentRect.height,
+          baseCells: FEATURED_APP_GRID_CELLS,
+          columns: countGridTracks(gridStyle.gridTemplateColumns),
+          gap: FEATURED_GRID_GAP_PX,
+          moreApps: FEATURED_MORE_APPS.length,
+          rowHeight:
+            largestPx(gridStyle.gridAutoRows) || (tile?.offsetHeight ?? 0),
+        })
+      );
+    });
+    observer.observe(area);
+
+    return () => observer.disconnect();
+  }, []);
+
   const schedulePreviewExpand = (appName: PreviewAppName) => {
     if (onboardingCardLocked) return;
     if (isCalmMode) return;
@@ -509,6 +571,8 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
               letterSpacing: '0.012em',
               lineHeight: 1.45,
               maxWidth: '420px',
+              // A short Home window keeps its room for the apps.
+              [homeWindowShorterThan(FEATURED_SHORT_PX)]: { display: 'none' },
             }}
           >
             {t('group:dashboard.featured_q_apps_subtitle')}
@@ -526,34 +590,85 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
         }}
       >
         <Box
+          ref={tilesAreaRef}
           sx={{
             alignItems: 'center',
             display: 'flex',
             flex: 1,
             justifyContent: 'center',
             minHeight: 0,
+            overflow: 'hidden',
             padding: '18px 0',
             position: 'relative',
             width: '100%',
+            [homeWindowShorterThan(FEATURED_SNUG_PX)]: { padding: '14px 0' },
+            [homeWindowShorterThan(FEATURED_SHORT_PX)]: { padding: '8px 0' },
           }}
         >
+          {/* When a small Home window can't fit the apps, they scroll. More
+              apps only show when everything fits, so while they do, nothing
+              scrolls: not even for the frame before a window that just got
+              smaller drops some of them. */}
           <Box
             sx={{
-              alignItems: 'stretch',
-              display: 'grid',
-              gap: `${FEATURED_GRID_GAP_PX}px`,
-              gridAutoRows: 'minmax(108px, 124px)',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-              justifyContent: 'stretch',
-              marginInline: 'auto',
-              maxWidth: `${FEATURED_GRID_MAX_WIDTH_PX}px`,
-              position: 'relative',
+              maxHeight: '100%',
+              overflowY: moreAppsShown > 0 ? 'hidden' : 'auto',
               width: '100%',
-              zIndex: 1,
             }}
           >
-            {FEATURED_APP_GRID.map((appName, index) =>
-              appName ? (
+            <Box
+              ref={tilesGridRef}
+              sx={{
+                alignItems: 'stretch',
+                display: 'grid',
+                gap: `${FEATURED_GRID_GAP_PX}px`,
+                gridAutoRows: 'minmax(108px, 124px)',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                justifyContent: 'stretch',
+                marginInline: 'auto',
+                maxWidth: `${FEATURED_GRID_MAX_WIDTH_PX}px`,
+                position: 'relative',
+                width: '100%',
+                zIndex: 1,
+                // Home's window decides the columns: two in a narrow one, all
+                // eight cells in one row in a wide, short one.
+                [homeWindowShorterThan(FEATURED_SHORT_PX)]: {
+                  gridAutoRows: 'minmax(84px, 108px)',
+                },
+                [homeWindowNarrowerThan(FEATURED_TWO_COLUMNS_BELOW_PX)]: {
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  maxWidth: `${2 * FEATURED_GRID_COL_MAX_PX + FEATURED_GRID_GAP_PX}px`,
+                },
+                [FEATURED_ONE_ROW]: {
+                  gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
+                  maxWidth: `${8 * FEATURED_GRID_COL_MAX_PX + 7 * FEATURED_GRID_GAP_PX}px`,
+                },
+              }}
+            >
+              {FEATURED_APP_GRID.map((appName, index) =>
+                appName ? (
+                  <AppTile
+                    key={appName}
+                    appName={appName}
+                    calmMode={isCalmMode}
+                    theme={theme}
+                    expandedPreviewApp={expandedPreviewApp}
+                    onPreviewExpandStart={schedulePreviewExpand}
+                    onPreviewExpandEnd={schedulePreviewCollapse}
+                  />
+                ) : (
+                  <Box
+                    key={`featured-empty-slot-${index}`}
+                    aria-hidden="true"
+                    sx={{
+                      height: '100%',
+                      visibility: 'hidden',
+                      width: '100%',
+                    }}
+                  />
+                )
+              )}
+              {FEATURED_MORE_APPS.slice(0, moreAppsShown).map((appName) => (
                 <AppTile
                   key={appName}
                   appName={appName}
@@ -563,18 +678,8 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
                   onPreviewExpandStart={schedulePreviewExpand}
                   onPreviewExpandEnd={schedulePreviewCollapse}
                 />
-              ) : (
-                <Box
-                  key={`featured-empty-slot-${index}`}
-                  aria-hidden="true"
-                  sx={{
-                    height: '100%',
-                    visibility: 'hidden',
-                    width: '100%',
-                  }}
-                />
-              )
-            )}
+              ))}
+            </Box>
           </Box>
           {!isCalmMode ? (
             <FeaturedExpandedPreview
@@ -1036,7 +1141,14 @@ const AppTile = ({
           {isQChat ? (
             <MessagingIconFilled height={31} width={31} color="currentColor" />
           ) : (
-            appName.charAt(0)
+            // Without a picture, the Qortal logo, as the launcher shows it.
+            <Box
+              alt=""
+              component="img"
+              draggable={false}
+              src={LogoSelected}
+              sx={{ height: 'auto', width: '58%' }}
+            />
           )}
         </Avatar>
 
@@ -1111,7 +1223,7 @@ const AppTile = ({
                 {t('group:dashboard.featured_q_tube_keyword_decentralized')}
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
-                {t('group:dashboard.featured_q_tube_keyword_cat_videos')}
+                {t('group:dashboard.featured_q_tube_keyword_video_sharing')}
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
                 {t('group:dashboard.featured_q_tube_keyword_platform')}

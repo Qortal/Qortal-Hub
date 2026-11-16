@@ -25,6 +25,8 @@ export type WalletActivityEntry = {
   counterpartyAddress: string;
   counterpartyLabel: string;
   direction: WalletActivityDirection;
+  /** The payment's signature, when known (keys the history list). */
+  signature?: string;
   timestamp: number;
 };
 export type DashboardNodeOption = {
@@ -38,17 +40,3 @@ export type HomeCustomizableCardsLayout = {
   heights: Partial<Record<HomeCustomizableCardId, number>>;
   order: HomeCustomizableCardId[];
 };
-export type HomeLayoutDebugMetric = {
-  bottom: number;
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-};
-export type HomeLayoutDebugKey =
-  | 'accountOverview'
-  | 'featuredApps'
-  | 'info'
-  | 'profileCard'
-  | 'tools'
-  | 'walletActivity';

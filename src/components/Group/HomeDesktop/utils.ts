@@ -11,7 +11,6 @@ import {
 import type {
   HomeCustomizableCardId,
   HomeCustomizableCardsLayout,
-  HomeLayoutDebugMetric,
   MinterInfoView,
   WalletActivityDirection,
   WalletActivityTransaction,
@@ -166,21 +165,6 @@ export function parseHomeCustomizableCardsLayout(
       order: HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
     };
   }
-}
-
-export function measureHomeLayoutDebugMetric(
-  node: HTMLElement,
-  rootRect: DOMRect
-): HomeLayoutDebugMetric {
-  const rect = node.getBoundingClientRect();
-
-  return {
-    bottom: rect.bottom - rootRect.top,
-    height: rect.height,
-    left: rect.left - rootRect.left,
-    top: rect.top - rootRect.top,
-    width: rect.width,
-  };
 }
 
 export function nodeMenuItemSx(theme: Theme, selected: boolean) {

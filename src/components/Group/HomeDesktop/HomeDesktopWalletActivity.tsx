@@ -3,7 +3,7 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import { alpha } from '@mui/material/styles';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { balanceAtom, userInfoAtom } from '../../../atoms/global';
 import { getBaseApiReact } from '../../../App';
@@ -12,9 +12,14 @@ import { useTranslation } from 'react-i18next';
 import { DashboardUtilityPanel } from './DashboardUtilityPanel';
 import { WalletActionButton } from './WalletActionButton';
 import {
-  HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
+  WalletActivityHistory,
+  WalletActivityHistoryToggle,
+} from './WalletActivityHistory';
+import {
+  WALLET_ACTIVITY_HISTORY_OPEN_MIN_HEIGHT_PX,
   WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
 } from './homeDesktopConstants';
+import { homeWalletRailRect } from './homeWindows';
 import type { WalletActivityEntry, WalletActivityTransaction } from './types';
 import {
   formatWalletActivityAmount,
@@ -24,21 +29,24 @@ import {
   isWalletActivityTimestampRecent,
 } from './utils';
 
-const HOME_RIGHT_RAIL_DATA_ATTR = '[data-home-right-rail]';
+/** Whether the element is at least `minHeight` px tall, as it is resized. */
+const useIsAtLeastTall = (node: HTMLElement | null, minHeight: number) => {
+  const [isTall, setIsTall] = useState(false);
 
-function getRightRailRectFromElement(element: HTMLElement | null) {
-  if (!element) return null;
-  if (
-    typeof window !== 'undefined' &&
-    !window.matchMedia(`(min-width: ${HOME_WIDE_DASHBOARD_MIN_WIDTH_PX}px)`)
-      .matches
-  ) {
-    return null;
-  }
-  const rail = element.closest(HOME_RIGHT_RAIL_DATA_ATTR);
-  if (!rail) return null;
-  return rail.getBoundingClientRect();
-}
+  useEffect(() => {
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const height =
+        entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
+      setIsTall(height >= minHeight);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [minHeight, node]);
+
+  return isTall;
+};
 
 export const HomeDesktopWalletActivity = () => {
   const theme = useTheme();
@@ -65,6 +73,20 @@ export const HomeDesktopWalletActivity = () => {
   const [isWalletActivityLoading, setIsWalletActivityLoading] = useState(false);
   const [walletActivityRelativeTimeNow, setWalletActivityRelativeTimeNow] =
     useState(() => Date.now());
+  // A tall card shows the history by itself; once the user opens or closes
+  // it, their choice stands.
+  const [cardNode, setCardNode] = useState<HTMLDivElement | null>(null);
+  const isCardTall = useIsAtLeastTall(
+    cardNode,
+    WALLET_ACTIVITY_HISTORY_OPEN_MIN_HEIGHT_PX
+  );
+  const [historyChoice, setHistoryChoice] = useState<boolean | null>(null);
+  const isHistoryOpen = historyChoice ?? isCardTall;
+  const toggleHistory = useCallback(
+    () => setHistoryChoice(!isHistoryOpen),
+    [isHistoryOpen]
+  );
+  const historyListId = useId();
 
   const walletActivitySecondaryTextColor = alpha(
     theme.palette.text.primary,
@@ -75,7 +97,7 @@ export const HomeDesktopWalletActivity = () => {
     (target: HTMLElement | null) => {
       if (!target) return;
       const rect = target.getBoundingClientRect();
-      const rightRailRect = getRightRailRectFromElement(target);
+      const rightRailRect = homeWalletRailRect();
       executeEvent('openReceiveQortInternal', {
         address: userAddress ?? '',
         anchorRect: {
@@ -307,6 +329,7 @@ export const HomeDesktopWalletActivity = () => {
 
   useEffect(() => {
     setRecentWalletActivity(null);
+    setHistoryChoice(null);
     lastWalletActivityBalanceRef.current = null;
   }, [userAddress]);
 
@@ -341,6 +364,7 @@ export const HomeDesktopWalletActivity = () => {
 
   return (
     <DashboardUtilityPanel
+      panelBoxRef={setCardNode}
       title={td('wallet_activity', 'Wallet Activity')}
       theme={theme}
       sx={{
@@ -370,7 +394,7 @@ export const HomeDesktopWalletActivity = () => {
           onClick={(event) => {
             const el = event.currentTarget as HTMLElement;
             const rect = el.getBoundingClientRect();
-            const rightRailRect = getRightRailRectFromElement(el);
+            const rightRailRect = homeWalletRailRect();
             executeEvent('openPaymentInternal', {
               anchorRect: {
                 height: rect.height,
@@ -422,19 +446,44 @@ export const HomeDesktopWalletActivity = () => {
           pt: 2.2,
         }}
       >
-        <Typography
+        <Box
           sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.64rem',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textAlign: 'left',
-            textTransform: 'uppercase',
+            alignItems: 'center',
+            display: 'flex',
+            gap: 1,
+            justifyContent: 'space-between',
+            minWidth: 0,
           }}
         >
-          {td('recent_transaction', 'Recent Transaction')}
-        </Typography>
-        {isWalletActivityLoading ? (
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '0.64rem',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              minWidth: 0,
+              overflow: 'hidden',
+              textAlign: 'left',
+              textOverflow: 'ellipsis',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isHistoryOpen
+              ? tDashboard('wallet_history')
+              : td('recent_transaction', 'Recent Transaction')}
+          </Typography>
+          <WalletActivityHistoryToggle
+            controls={historyListId}
+            onToggle={toggleHistory}
+            open={isHistoryOpen}
+          />
+        </Box>
+        {/* The open history takes the latest payment's place. A refresh
+            keeps the last entry on screen: swapping it for the loading
+            line changed the card's height under the reader. */}
+        {isHistoryOpen ? null : isWalletActivityLoading &&
+          !recentWalletActivity ? (
           <Typography
             sx={{
               color: theme.palette.text.secondary,
@@ -566,26 +615,36 @@ export const HomeDesktopWalletActivity = () => {
             {td('no_wallet_activity', 'No new wallet activity.')}
           </Typography>
         )}
-        <Box
-          sx={{
-            mt: 'auto',
-            pt: 1.05,
-          }}
-        >
-          <Typography
+        {isHistoryOpen ? null : (
+          <Box
             sx={{
-              color: walletActivitySecondaryTextColor,
-              fontSize: '0.68rem',
-              lineHeight: 1.45,
-              textAlign: 'left',
+              mt: 'auto',
+              pt: 1.05,
             }}
           >
-            {td(
-              'wallet_activity_window',
-              'Latest transaction within the past 7 days'
-            )}
-          </Typography>
-        </Box>
+            <Typography
+              sx={{
+                color: walletActivitySecondaryTextColor,
+                fontSize: '0.68rem',
+                lineHeight: 1.45,
+                textAlign: 'left',
+              }}
+            >
+              {td(
+                'wallet_activity_window',
+                'Latest transaction within the past 7 days'
+              )}
+            </Typography>
+          </Box>
+        )}
+        <WalletActivityHistory
+          id={historyListId}
+          onOpenCounterparty={handleOpenWalletActivityCounterparty}
+          open={isHistoryOpen}
+          refreshKey={balance == null ? null : String(balance)}
+          resolveLabel={resolveWalletActivityAddressLabel}
+          userAddress={userAddress}
+        />
       </Box>
     </DashboardUtilityPanel>
   );

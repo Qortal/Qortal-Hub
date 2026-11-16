@@ -16,6 +16,11 @@ import {
   uint8ArrayToObject,
 } from '../encryption/encryption';
 import { useAtom, useSetAtom } from 'jotai';
+import { useTakeInSavedLauncher } from '../components/Apps/AppsLauncher/launcherQdnSync';
+import {
+  savedLayoutsAtom,
+  takeInSavedLayouts,
+} from '../components/Save/savedLayouts';
 
 function fetchFromLocalStorage(key) {
   try {
@@ -31,7 +36,7 @@ function fetchFromLocalStorage(key) {
   }
 }
 
-const getPublishRecord = async (myName) => {
+export const getPublishRecord = async (myName) => {
   const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=ext_saved_settings&exactmatchnames=true&limit=1&prefix=true&name=${myName}`;
   const response = await fetch(url);
   if (!response.ok) {
@@ -48,7 +53,7 @@ const getPublishRecord = async (myName) => {
   return { hasPublishRecord: false };
 };
 
-const getPublish = async (myName) => {
+export const getPublish = async (myName) => {
   try {
     const res = await fetch(
       `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${myName}/ext_saved_settings?encoding=base64`
@@ -66,7 +71,11 @@ const getPublish = async (myName) => {
   }
 };
 
-export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
+export const useQortalGetSaveSettings = (
+  myName,
+  isAuthenticated,
+  myAddress?: string | null
+) => {
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setCanSave = useSetAtom(canSaveSettingToQdnAtom);
   const setSettingsQDNLastUpdated = useSetAtom(settingsQDNLastUpdatedAtom);
@@ -80,9 +89,35 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
   // account switched meanwhile) is dropped.
   const currentNameRef = useRef(myName);
   currentNameRef.current = myName;
+  const takeInSavedLauncher = useTakeInSavedLauncher();
+  const setSavedLayouts = useSetAtom(savedLayoutsAtom);
+
+  /**
+   * The bookmarks and the launcher's order, Home's layout and the side
+   * panel, from the same settings.
+   */
+  const takeInLauncher = useCallback(
+    async (
+      myAddress: string | null | undefined,
+      found: { settings: unknown; savedAt: number } | null
+    ) => {
+      if (!myAddress) return;
+      try {
+        await takeInSavedLauncher(myAddress, found);
+      } catch (error) {
+        console.error(error);
+      }
+      try {
+        setSavedLayouts(takeInSavedLayouts(myAddress, found?.settings ?? null));
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [setSavedLayouts, takeInSavedLauncher]
+  );
 
   const getSavedSettings = useCallback(
-    async (myName, settingsLocalLastUpdated) => {
+    async (myName, settingsLocalLastUpdated, myAddress) => {
       try {
         const { hasPublishRecord, timestamp } = await getPublishRecord(myName);
         if (hasPublishRecord) {
@@ -107,16 +142,22 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
           if (!settings) {
             // set -100 to indicate that it couldn't fetch the publish
             setSettingsQDNLastUpdated(-100);
+          } else {
+            await takeInLauncher(myAddress, {
+              settings,
+              savedAt: timestamp || 0,
+            });
           }
         } else {
           setSettingsQDNLastUpdated(0);
+          await takeInLauncher(myAddress, null);
         }
         setCanSave(true);
       } catch (error) {
         console.log(error);
       }
     },
-    []
+    [takeInLauncher]
   );
 
   useEffect(() => {
@@ -128,9 +169,10 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
     )
       return;
     if (isUsingImportExportSettings) return;
-    getSavedSettings(myName, settingsLocalLastUpdated);
+    getSavedSettings(myName, settingsLocalLastUpdated, myAddress);
   }, [
     getSavedSettings,
+    myAddress,
     myName,
     settingsLocalLastUpdated,
     isAuthenticated,

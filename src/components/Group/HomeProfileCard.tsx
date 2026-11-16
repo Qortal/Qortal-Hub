@@ -95,13 +95,9 @@ import TiltedCard from '../common/TiltedCard';
 import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
 import { Save } from '../Save/Save';
 import { useBlockedAddresses } from '../../hooks/useBlockUsers';
-import {
-  HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT,
-  HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY,
-  HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
-  HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
-  HOME_WIDGETS_VISIBLE_STORAGE_KEY,
-} from './HomeDesktop/homeDesktopConstants';
+import { HOME_WIDE_DASHBOARD_MIN_WIDTH_PX } from './HomeDesktop/homeDesktopConstants';
+import { HomeLayoutSettings } from './HomeDesktop/HomeLayoutSettings';
+import { homeWindowWiderThan } from './HomeDesktop/homeWindows';
 import {
   AUTO_LOCK_TIMEOUT_OPTIONS,
   DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES,
@@ -209,6 +205,9 @@ const formatReticulumConnectedDuration = (
   return `${seconds}s`;
 };
 
+/** From this window width on, the avatar sits beside the account details. */
+const PROFILE_CARD_SIDE_BY_SIDE_PX = 480;
+
 export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
   const { t } = useTranslation(['core', 'group']);
   const theme = useTheme();
@@ -283,16 +282,6 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
     useState<AutoLockTimeoutMinutes>(DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES);
   const [areUiAnimationsEnabled, setAreUiAnimationsEnabled] = useState(() =>
     readStoredBoolean(ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY, true)
-  );
-  const [isGroupActivityModuleVisible, setIsGroupActivityModuleVisible] =
-    useState(() =>
-      readStoredBoolean(HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY, true)
-    );
-  const [isQuitterFeedModuleVisible, setIsQuitterFeedModuleVisible] = useState(
-    () => readStoredBoolean(HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY, true)
-  );
-  const [isWidgetsModuleVisible, setIsWidgetsModuleVisible] = useState(() =>
-    readStoredBoolean(HOME_WIDGETS_VISIBLE_STORAGE_KEY, true)
   );
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
   const [reticulumManagedConfigEnabled, setReticulumManagedConfigEnabled] =
@@ -685,54 +674,6 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
         }
       `;
   }, [areUiAnimationsEnabled]);
-
-  const persistDashboardModuleVisibility = useCallback(
-    (storageKey: string, visible: boolean) => {
-      if (typeof window === 'undefined') return;
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(visible));
-        window.dispatchEvent(
-          new CustomEvent(HOME_DASHBOARD_MODULE_VISIBILITY_CHANGE_EVENT)
-        );
-      } catch (error) {
-        console.warn('Unable to persist dashboard module preference.', error);
-      }
-    },
-    []
-  );
-
-  const handleToggleGroupActivityModule = useCallback(
-    (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
-      setIsGroupActivityModuleVisible(checked);
-      persistDashboardModuleVisibility(
-        HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY,
-        checked
-      );
-    },
-    [persistDashboardModuleVisibility]
-  );
-
-  const handleToggleQuitterFeedModule = useCallback(
-    (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
-      setIsQuitterFeedModuleVisible(checked);
-      persistDashboardModuleVisibility(
-        HOME_QUITTER_FEED_VISIBLE_STORAGE_KEY,
-        checked
-      );
-    },
-    [persistDashboardModuleVisibility]
-  );
-
-  const handleToggleWidgetsModule = useCallback(
-    (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
-      setIsWidgetsModuleVisible(checked);
-      persistDashboardModuleVisibility(
-        HOME_WIDGETS_VISIBLE_STORAGE_KEY,
-        checked
-      );
-    },
-    [persistDashboardModuleVisibility]
-  );
 
   const loadAppNotificationsPreference = useCallback(async () => {
     try {
@@ -2195,17 +2136,17 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
         alignItems: 'center',
         borderRadius: '14px',
         display: 'grid',
-        gap: {
-          xs: '18px',
-          lg: '16px',
-        },
-        gridTemplateColumns: {
-          xs: '1fr',
-          lg: '104px minmax(0, 1fr)',
-        },
+        // Home's window decides: the avatar beside the details when it's
+        // wide enough, above them when it isn't.
+        gap: '18px',
+        gridTemplateColumns: '1fr',
         minHeight: '164px',
         padding: '22px 24px',
         width: '100%',
+        [homeWindowWiderThan(PROFILE_CARD_SIDE_BY_SIDE_PX)]: {
+          gap: '16px',
+          gridTemplateColumns: '104px minmax(0, 1fr)',
+        },
       }}
       onMouseMove={handleDashboardPanelPointerMove}
       onMouseLeave={handleDashboardPanelPointerLeave}
@@ -2227,11 +2168,11 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
           flexDirection: 'column',
           gap: '4px',
           justifyContent: 'center',
-          justifySelf: {
-            xs: 'center',
-            lg: 'stretch',
-          },
+          justifySelf: 'center',
           width: '104px',
+          [homeWindowWiderThan(PROFILE_CARD_SIDE_BY_SIDE_PX)]: {
+            justifySelf: 'stretch',
+          },
         }}
       >
         <TiltedCard scaleOnHover={1.1} rotateAmplitude={18}>
@@ -2409,11 +2350,10 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
           justifyContent: 'center',
           gap: '8px',
           minWidth: 0,
-          pl: {
-            xs: 0,
-            lg: '12px',
-          },
           width: '100%',
+          [homeWindowWiderThan(PROFILE_CARD_SIDE_BY_SIDE_PX)]: {
+            pl: '12px',
+          },
         }}
       >
         <Box
@@ -4411,156 +4351,13 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
               ) : null}
 
               {activeSettingsTab === 'modules' ? (
-                <Box sx={{ display: 'grid', gap: 1.4 }}>
-                  <Box
-                    sx={{
-                      background: avatarModalSurfaceSoft,
-                      border: `1px solid ${avatarFieldBorder}`,
-                      borderRadius: '12px',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        gap: 1.2,
-                        justifyContent: 'space-between',
-                        px: 1.35,
-                        py: 1.2,
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.primary,
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.01em',
-                          }}
-                        >
-                          {td('group_activity_module', 'Group Activity')}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.secondary,
-                            fontSize: '0.75rem',
-                            lineHeight: 1.45,
-                            mt: 0.4,
-                          }}
-                        >
-                          {td(
-                            'group_activity_module_desc',
-                            'Show the Group Activity module on Home. Turn off to stop rendering it.'
-                          )}
-                        </Typography>
-                      </Box>
-                      <Switch
-                        checked={isGroupActivityModuleVisible}
-                        onChange={handleToggleGroupActivityModule}
-                        sx={settingsSwitchSx}
-                      />
-                    </Box>
-
-                    <Box
-                      sx={{
-                        borderTop: `1px solid ${avatarSectionDivider}`,
-                        mx: 1.35,
-                      }}
-                    />
-
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        gap: 1.2,
-                        justifyContent: 'space-between',
-                        px: 1.35,
-                        py: 1.2,
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.primary,
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.01em',
-                          }}
-                        >
-                          {td('quitter_feed_module', 'Quitter Feed')}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.secondary,
-                            fontSize: '0.75rem',
-                            lineHeight: 1.45,
-                            mt: 0.4,
-                          }}
-                        >
-                          {td(
-                            'quitter_feed_module_desc',
-                            'Show the Quitter Feed module on Home. Turn off to stop rendering it.'
-                          )}
-                        </Typography>
-                      </Box>
-                      <Switch
-                        checked={isQuitterFeedModuleVisible}
-                        onChange={handleToggleQuitterFeedModule}
-                        sx={settingsSwitchSx}
-                      />
-                    </Box>
-
-                    <Box
-                      sx={{
-                        borderTop: `1px solid ${avatarSectionDivider}`,
-                        mx: 1.35,
-                      }}
-                    />
-
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        gap: 1.2,
-                        justifyContent: 'space-between',
-                        px: 1.35,
-                        py: 1.2,
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.primary,
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.01em',
-                          }}
-                        >
-                          {td('widgets_module', 'Widgets')}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.secondary,
-                            fontSize: '0.75rem',
-                            lineHeight: 1.45,
-                            mt: 0.4,
-                          }}
-                        >
-                          {td(
-                            'widgets_module_desc',
-                            'Show your widgets on Home: small Q-Apps such as a clock or the weather. Turn off to stop running them.'
-                          )}
-                        </Typography>
-                      </Box>
-                      <Switch
-                        checked={isWidgetsModuleVisible}
-                        onChange={handleToggleWidgetsModule}
-                        sx={settingsSwitchSx}
-                      />
-                    </Box>
-                  </Box>
-                </Box>
+                <HomeLayoutSettings
+                  border={avatarFieldBorder}
+                  divider={avatarSectionDivider}
+                  onCloseSettings={closeAccountSettingsModal}
+                  surface={avatarModalSurfaceSoft}
+                  switchSx={settingsSwitchSx}
+                />
               ) : null}
 
               {activeSettingsTab === 'help' ? (

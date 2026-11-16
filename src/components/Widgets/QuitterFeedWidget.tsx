@@ -18,14 +18,24 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { quitterDashboardFeedCacheAtom, userInfoAtom } from '../../atoms/global';
-import { executeEvent } from '../../utils/events';
+import {
+  quitterDashboardFeedCacheAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
 import {
   QAppWidgetContainer,
   QAppWidgetStatePanel,
 } from './QAppWidgetContainer';
 import { QuitterFeedCard } from './quitter/QuitterFeedCard';
+import { TorqComposer } from './quitter/TorqComposer';
+import {
+  TORQ_APP_NAME,
+  fetchTorqHiddenUsers,
+  hiddenUserKey,
+  openTorqPost,
+  torqFeedItems,
+} from './quitter/torqFeed';
 import {
   fetchQuitterFeedPage,
   fetchQuitterFollowedNames,
@@ -87,6 +97,8 @@ const writeQuitterFeedMode = (storageKey: string, mode: QuitterFeedMode) => {
     // ignore quota / private mode
   }
 };
+
+const NO_FEED_ITEMS: QuitterFeedItem[] = [];
 
 const FOLLOWING_LOAD_TIMEOUT_MS = 40_000;
 const FEED_POLL_INTERVAL_MS = 90_000;
@@ -191,25 +203,74 @@ export const QuitterFeedWidget = ({
     return `${QUITTER_FEED_MODE_STORAGE_PREFIX}${addr}`;
   }, [userInfo?.address]);
   const [feedMode, setFeedMode] = useState<QuitterFeedMode>('following');
+  // Torq's feed leaves out the users this account hides in Torq.
+  const [torqHiddenKeys, setTorqHiddenKeys] = useState<Set<string>>(
+    () => new Set()
+  );
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
+  // The composer is open for this name only: another account starts closed.
+  const [composerOpenFor, setComposerOpenFor] = useState<string | null>(null);
+  const [publishedPostToken, setPublishedPostToken] = useState(0);
   const itemsRef = useRef<QuitterFeedItem[]>([]);
   const pendingItemsRef = useRef<QuitterFeedItem[]>([]);
   const feedKeyRef = useRef('');
   const feedCacheRef = useRef<QuitterDashboardFeedCache | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const previousRefreshTokenRef = useRef(refreshToken);
+  const hiddenUsersRefreshTokenRef = useRef(refreshToken);
   const activeFeedRequestIdRef = useRef(0);
   const activeUpdateRequestIdRef = useRef(0);
   const isUpdateCheckInFlightRef = useRef(false);
   const feedKey = `${feedMode}:${currentUserName ?? ''}`;
+  const isComposing =
+    currentUserName != null && composerOpenFor === currentUserName;
 
   const cacheMatches = feedCache?.feedKey === feedKey;
-  const items = cacheMatches ? feedCache.items : [];
-  const pendingItems = cacheMatches ? feedCache.pendingItems : [];
-  const followingEmptyReason = cacheMatches ? feedCache.followingEmptyReason : null;
+  const feedItems = cacheMatches ? feedCache.items : NO_FEED_ITEMS;
+  const feedPendingItems = cacheMatches
+    ? feedCache.pendingItems
+    : NO_FEED_ITEMS;
+  // Torq publishes posts as Quitter does, so the feed loads them the same
+  // way, then shows them as Torq does (torqFeed.ts).
+  const items = useMemo(
+    () => torqFeedItems(feedItems, torqHiddenKeys),
+    [feedItems, torqHiddenKeys]
+  );
+  const pendingItems = useMemo(
+    () => torqFeedItems(feedPendingItems, torqHiddenKeys),
+    [feedPendingItems, torqHiddenKeys]
+  );
+
+  // Torq's hidden users for this account. A manual refresh also picks up the
+  // users hidden in Torq since.
+  useEffect(() => {
+    if (!currentUserName) {
+      setTorqHiddenKeys((prev) => (prev.size === 0 ? prev : new Set()));
+      return undefined;
+    }
+    const force = hiddenUsersRefreshTokenRef.current !== refreshToken;
+    hiddenUsersRefreshTokenRef.current = refreshToken;
+    const controller = new AbortController();
+    void fetchTorqHiddenUsers(currentUserName, {
+      force,
+      signal: controller.signal,
+    }).then((names) => {
+      if (controller.signal.aborted) return;
+      const keys = new Set(names.map(hiddenUserKey));
+      setTorqHiddenKeys((prev) =>
+        prev.size === keys.size && [...keys].every((key) => prev.has(key))
+          ? prev
+          : keys
+      );
+    });
+    return () => controller.abort();
+  }, [currentUserName, refreshToken]);
+  const followingEmptyReason = cacheMatches
+    ? feedCache.followingEmptyReason
+    : null;
   const initialFeedState: QuitterDashboardInitialFeedState = cacheMatches
     ? feedCache.initialFeedState
     : 'loading';
@@ -262,31 +323,37 @@ export const QuitterFeedWidget = ({
     setFeedMode(readQuitterFeedMode(feedModeStorageKey));
   }, [feedModeStorageKey]);
 
-  const commitVisibleItems = useCallback((nextItems: QuitterFeedItem[]) => {
-    itemsRef.current = nextItems;
-    setFeedCache((prev) => {
-      const key = feedKeyRef.current;
-      const next: QuitterDashboardFeedCache =
-        prev?.feedKey === key
-          ? { ...prev, items: nextItems }
-          : { ...emptyCacheForKey(key), items: nextItems };
-      feedCacheRef.current = next;
-      return next;
-    });
-  }, [setFeedCache]);
+  const commitVisibleItems = useCallback(
+    (nextItems: QuitterFeedItem[]) => {
+      itemsRef.current = nextItems;
+      setFeedCache((prev) => {
+        const key = feedKeyRef.current;
+        const next: QuitterDashboardFeedCache =
+          prev?.feedKey === key
+            ? { ...prev, items: nextItems }
+            : { ...emptyCacheForKey(key), items: nextItems };
+        feedCacheRef.current = next;
+        return next;
+      });
+    },
+    [setFeedCache]
+  );
 
-  const commitPendingItems = useCallback((nextItems: QuitterFeedItem[]) => {
-    pendingItemsRef.current = nextItems;
-    setFeedCache((prev) => {
-      const key = feedKeyRef.current;
-      const next: QuitterDashboardFeedCache =
-        prev?.feedKey === key
-          ? { ...prev, pendingItems: nextItems }
-          : { ...emptyCacheForKey(key), pendingItems: nextItems };
-      feedCacheRef.current = next;
-      return next;
-    });
-  }, [setFeedCache]);
+  const commitPendingItems = useCallback(
+    (nextItems: QuitterFeedItem[]) => {
+      pendingItemsRef.current = nextItems;
+      setFeedCache((prev) => {
+        const key = feedKeyRef.current;
+        const next: QuitterDashboardFeedCache =
+          prev?.feedKey === key
+            ? { ...prev, pendingItems: nextItems }
+            : { ...emptyCacheForKey(key), pendingItems: nextItems };
+        feedCacheRef.current = next;
+        return next;
+      });
+    },
+    [setFeedCache]
+  );
 
   useEffect(() => {
     onRefreshStateChange?.(isRefreshing);
@@ -494,8 +561,8 @@ export const QuitterFeedWidget = ({
           error instanceof FeedLoadTimeoutError
             ? error.message
             : resolvedFeedMode === 'following'
-              ? t('quitter_feed.error_following')
-              : t('quitter_feed.error_generic');
+              ? t('quitter_feed.error_following', { app: TORQ_APP_NAME })
+              : t('quitter_feed.error_generic', { app: TORQ_APP_NAME });
         const nextCache: QuitterDashboardFeedCache = {
           ...emptyCacheForKey(requestFeedKey),
           error: message,
@@ -519,6 +586,8 @@ export const QuitterFeedWidget = ({
       options: {
         feedMode?: QuitterFeedMode;
         showRefreshIndicator?: boolean;
+        /** Show new posts at the top right away, not behind "N new posts". */
+        showNow?: boolean;
       } = {}
     ) => {
       if (isInitialLoading || itemsRef.current.length === 0) {
@@ -577,6 +646,25 @@ export const QuitterFeedWidget = ({
         const nextPendingItems = nextPage.items
           .slice(0, cutoffIndex)
           .filter((item) => !knownIds.has(item.id));
+
+        if (options.showNow) {
+          const freshItems = prependUniqueFeedItems(
+            nextPendingItems,
+            pendingItemsRef.current
+          );
+          if (freshItems.length === 0) {
+            return;
+          }
+          commitPendingItems([]);
+          commitVisibleItems(
+            prependUniqueFeedItems(freshItems, itemsRef.current)
+          );
+          setRevealedItemIds(freshItems.map((item) => item.id));
+          if (scrollerRef.current) {
+            scrollerRef.current.scrollTop = 0;
+          }
+          return;
+        }
 
         if (nextPendingItems.length === 0) {
           return;
@@ -674,7 +762,7 @@ export const QuitterFeedWidget = ({
   }, [feedMode, initialFeedState, isInitialLoading, refreshToken]);
 
   useEffect(() => {
-    if (initialFeedState !== 'success' || items.length === 0) {
+    if (initialFeedState !== 'success' || feedItems.length === 0) {
       return undefined;
     }
 
@@ -725,18 +813,10 @@ export const QuitterFeedWidget = ({
 
       activeController?.abort();
     };
-  }, [feedMode, feedKey, initialFeedState, items.length]);
+  }, [feedMode, feedKey, initialFeedState, feedItems.length]);
 
   const handleOpenPost = useCallback((item: QuitterFeedItem) => {
-    executeEvent('addTab', {
-      data: {
-        identifier: '',
-        name: 'Quitter',
-        path: `post/${encodeURIComponent(item.author)}/${encodeURIComponent(item.identifier)}`,
-        service: 'APP',
-      },
-    });
-    executeEvent('open-apps-mode', {});
+    openTorqPost(item.author, item.identifier);
   }, []);
 
   const handleApplyPendingPosts = useCallback(() => {
@@ -795,6 +875,48 @@ export const QuitterFeedWidget = ({
     setReloadToken((value) => value + 1);
   }, [setFeedCache]);
 
+  const handleComposerOpenChange = useCallback(
+    (open: boolean) => {
+      setComposerOpenFor(open ? currentUserName : null);
+    },
+    [currentUserName]
+  );
+
+  const handlePostPublished = useCallback(() => {
+    setPublishedPostToken((value) => value + 1);
+  }, []);
+
+  // After a post from the composer, load what is new and show it at the top.
+  const reloadAfterPublish = useEffectEvent((signal: AbortSignal) => {
+    if (isInitialLoading || initialFeedState === 'loading') {
+      return;
+    }
+
+    if (itemsRef.current.length === 0) {
+      handleRetryInitialFeed();
+      return;
+    }
+
+    void checkForNewPosts(signal, {
+      feedMode,
+      showNow: true,
+      showRefreshIndicator: true,
+    });
+  });
+
+  useEffect(() => {
+    if (publishedPostToken === 0) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    reloadAfterPublish(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [publishedPostToken]);
+
   const handleSelectFollowingFeed = useCallback(() => {
     if (feedMode === 'following') {
       return;
@@ -846,9 +968,11 @@ export const QuitterFeedWidget = ({
       return t('quitter_feed.empty_message_no_name');
     }
     if (followingEmptyReason === 'no-following') {
-      return t('quitter_feed.empty_message_no_following');
+      return t('quitter_feed.empty_message_no_following', {
+        app: TORQ_APP_NAME,
+      });
     }
-    return t('quitter_feed.empty_message_no_posts');
+    return t('quitter_feed.empty_message_no_posts', { app: TORQ_APP_NAME });
   }, [followingEmptyReason, isFollowingFeed, t]);
   const showStatePanel =
     showInitialLoadingState || showInitialErrorState || showEmptyState;
@@ -864,6 +988,32 @@ export const QuitterFeedWidget = ({
       'background-color 140ms ease, border-color 140ms ease, color 140ms ease',
     whiteSpace: 'nowrap',
   } as const;
+  const segmentedGroupSx = {
+    alignItems: 'center',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? alpha(theme.palette.common.white, 0.04)
+        : alpha(theme.palette.text.primary, 0.04),
+    border: `1px solid ${alpha(
+      theme.palette.border.main,
+      theme.palette.mode === 'dark' ? 0.16 : 0.1
+    )}`,
+    borderRadius: '999px',
+    display: 'inline-flex',
+    gap: '4px',
+    p: '2px',
+  } as const;
+  const segmentSx = (active: boolean) => ({
+    ...segmentedToggleSx,
+    backgroundColor: active
+      ? alpha(theme.palette.primary.main, 0.18)
+      : 'transparent',
+    border: `1px solid ${alpha(
+      theme.palette.border.main,
+      active ? (theme.palette.mode === 'dark' ? 0.28 : 0.18) : 0
+    )}`,
+    color: active ? theme.palette.text.primary : theme.palette.text.secondary,
+  });
 
   return (
     <>
@@ -879,8 +1029,26 @@ export const QuitterFeedWidget = ({
         >
           <Box
             sx={{
-              alignItems: 'center',
               display: 'flex',
+              // Open, the composer comes first and scrolls when space is short.
+              flex: isComposing ? '0 1 auto' : '0 0 auto',
+              flexDirection: 'column',
+              mb: '11px',
+              minHeight: 0,
+            }}
+          >
+            <TorqComposer
+              key={currentUserName ?? ''}
+              open={isComposing}
+              onOpenChange={handleComposerOpenChange}
+              onPublished={handlePostPublished}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: isComposing ? 'none' : 'flex',
               flexShrink: 0,
               gap: '8px',
               justifyContent: 'space-between',
@@ -888,70 +1056,20 @@ export const QuitterFeedWidget = ({
               pb: '8px',
             }}
           >
-            <Box
-              sx={{
-                alignItems: 'center',
-                backgroundColor:
-                  theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.04)
-                    : alpha(theme.palette.text.primary, 0.04),
-                border: `1px solid ${alpha(
-                  theme.palette.border.main,
-                  theme.palette.mode === 'dark' ? 0.16 : 0.1
-                )}`,
-                borderRadius: '999px',
-                display: 'inline-flex',
-                gap: '4px',
-                p: '2px',
-              }}
-            >
+            <Box sx={segmentedGroupSx}>
               <ButtonBase
+                aria-pressed={feedMode === 'general'}
                 disableRipple
                 onClick={handleSelectGeneralFeed}
-                sx={{
-                  ...segmentedToggleSx,
-                  backgroundColor:
-                    feedMode === 'general'
-                      ? alpha(theme.palette.primary.main, 0.18)
-                      : 'transparent',
-                  border: `1px solid ${alpha(
-                    theme.palette.border.main,
-                    feedMode === 'general'
-                      ? theme.palette.mode === 'dark'
-                        ? 0.28
-                        : 0.18
-                      : 0
-                  )}`,
-                  color:
-                    feedMode === 'general'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary,
-                }}
+                sx={segmentSx(feedMode === 'general')}
               >
                 {t('quitter_feed.tab_general')}
               </ButtonBase>
               <ButtonBase
+                aria-pressed={feedMode === 'following'}
                 disableRipple
                 onClick={handleSelectFollowingFeed}
-                sx={{
-                  ...segmentedToggleSx,
-                  backgroundColor:
-                    feedMode === 'following'
-                      ? alpha(theme.palette.primary.main, 0.18)
-                      : 'transparent',
-                  border: `1px solid ${alpha(
-                    theme.palette.border.main,
-                    feedMode === 'following'
-                      ? theme.palette.mode === 'dark'
-                        ? 0.28
-                        : 0.18
-                      : 0
-                  )}`,
-                  color:
-                    feedMode === 'following'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary,
-                }}
+                sx={segmentSx(feedMode === 'following')}
               >
                 {t('quitter_feed.tab_following')}
               </ButtonBase>
@@ -971,7 +1089,7 @@ export const QuitterFeedWidget = ({
             </Typography>
           </Box>
 
-          {!showStatePanel && items.length > 0 ? (
+          {!isComposing && !showStatePanel && items.length > 0 ? (
             <Collapse in={pendingItems.length > 0} mountOnEnter unmountOnExit>
               <Box
                 sx={{
@@ -1074,47 +1192,60 @@ export const QuitterFeedWidget = ({
           ) : null}
 
           {showStatePanel ? (
-            <QAppWidgetStatePanel
-              description={
-                showInitialErrorState
-                  ? error
-                  : showEmptyState
-                    ? emptyMessage
-                    : null
-              }
-              loadingLabel={showInitialLoadingState ? loadingLabel : undefined}
-              onRetry={
-                showInitialErrorState ? handleRetryInitialFeed : undefined
-              }
-              onSecondaryAction={
-                (showInitialErrorState || showEmptyState) && isFollowingFeed
-                  ? handleSelectGeneralFeed
-                  : undefined
-              }
-              retryLabel={
-                isFollowingFeed
-                  ? t('quitter_feed.retry_following')
-                  : t('quitter_feed.retry_general')
-              }
-              secondaryActionLabel={
-                (showInitialErrorState || showEmptyState) && isFollowingFeed
-                  ? t('quitter_feed.return_to_general')
-                  : undefined
-              }
-              title={
-                showInitialLoadingState
-                  ? loadingLabel
-                  : showInitialErrorState
-                    ? errorTitle
-                    : emptyTitle
-              }
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                flex: '1 1 0',
+                flexDirection: 'column',
+                minHeight: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <QAppWidgetStatePanel
+                description={
+                  showInitialErrorState
+                    ? error
+                    : showEmptyState
+                      ? emptyMessage
+                      : null
+                }
+                loadingLabel={
+                  showInitialLoadingState ? loadingLabel : undefined
+                }
+                onRetry={
+                  showInitialErrorState ? handleRetryInitialFeed : undefined
+                }
+                onSecondaryAction={
+                  (showInitialErrorState || showEmptyState) && isFollowingFeed
+                    ? handleSelectGeneralFeed
+                    : undefined
+                }
+                retryLabel={
+                  isFollowingFeed
+                    ? t('quitter_feed.retry_following')
+                    : t('quitter_feed.retry_general')
+                }
+                secondaryActionLabel={
+                  (showInitialErrorState || showEmptyState) && isFollowingFeed
+                    ? t('quitter_feed.return_to_general')
+                    : undefined
+                }
+                title={
+                  showInitialLoadingState
+                    ? loadingLabel
+                    : showInitialErrorState
+                      ? errorTitle
+                      : emptyTitle
+                }
+              />
+            </Box>
           ) : (
             <>
               <Box
                 ref={scrollerRef}
                 sx={{
-                  flex: '1 1 auto',
+                  // Takes the room left: an open composer comes first.
+                  flex: '1 1 0',
                   minHeight: 0,
                   // Avoid browser scroll anchoring fighting virtual row layout / height totals.
                   overflowAnchor: 'none',
@@ -1204,7 +1335,7 @@ export const QuitterFeedWidget = ({
                   </Box>
                 </Box>
               </Box>
-              {items.length > 0 && (
+              {items.length > 0 && !isComposing && (
                 <Box
                   data-quitters-footer="true"
                   sx={{
