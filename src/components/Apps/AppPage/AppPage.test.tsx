@@ -448,6 +448,53 @@ describe('editing the page', () => {
     expect(edit).toBeDisabled();
   });
 
+  it('keeps Add screenshots off too until the page text has loaded, then publishes the page whole', async () => {
+    // The page text answers late; the screenshots load at once.
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    routes({
+      '/names/address/': [{ name: 'Other' }, { name: 'q-blog' }],
+      '/arbitrary/resource/status/JSON/': async () => {
+        await gate;
+        return { status: 'READY' };
+      },
+    });
+    renderPage({ name: 'Other', address: 'QPub' });
+    const add = await screen.findByRole('button', {
+      name: 'app_page.screenshots.add',
+    });
+    expect(add).toBeDisabled();
+    fireEvent.click(add);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(add).toBeEnabled());
+    fireEvent.click(add);
+    fireEvent.click(
+      await screen.findByRole('tab', { name: 'app_page.edit.tab_page' })
+    );
+    const about = await screen.findByLabelText('app_page.edit.about');
+    expect(about).toHaveValue('A longer story about Q-Blog.');
+    fireEvent.change(about, { target: { value: 'A new story' } });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'app_page.edit.publish' })
+      );
+    });
+    await waitFor(() => expect(publishedJson()).toHaveLength(1));
+    // Only About changed: the version, What's new and links stay as they were.
+    expect(publishedJson()[0]).toMatchObject({
+      about: 'A new story',
+      version: '2.1.0',
+      whatsNew: 'Comments are faster.',
+      links: { website: 'https://blog.example/' },
+    });
+  });
+
   it("won't edit a page text the node lists but can't read", async () => {
     routes({
       '/names/address/': [{ name: 'Other' }, { name: 'q-blog' }],

@@ -118,6 +118,8 @@ export const AppPageEditorDialog = ({
   savedShots = null,
   pageUnreadable = false,
   shotsUnreadable = false,
+  pageLoading = false,
+  shotsLoading = false,
   onClose,
   onSaved,
 }: {
@@ -133,6 +135,13 @@ export const AppPageEditorDialog = ({
   pageUnreadable?: boolean;
   /** The same for the screenshots. */
   shotsUnreadable?: boolean;
+  /**
+   * The page text is still loading: it can't be edited or published yet,
+   * or what the empty fields hold would replace it.
+   */
+  pageLoading?: boolean;
+  /** The same for the screenshots. */
+  shotsLoading?: boolean;
   onClose: () => void;
   onSaved: (saved: EditorSaved) => void;
 }) => {
@@ -228,11 +237,12 @@ export const AppPageEditorDialog = ({
     (kind) =>
       pageDraft.links[kind]?.trim() && !normalizeAppLink(pageDraft.links[kind])
   );
-  // A part the node couldn't read is never published: it would replace the
-  // real one with what the empty editor holds.
-  const pageChanged = !pageUnreadable && !sameAppPage(pageDraft, page);
+  // A part the node couldn't read, or hasn't sent yet, is never published:
+  // it would replace the real one with what the empty editor holds.
+  const pageChanged =
+    !pageUnreadable && !pageLoading && !sameAppPage(pageDraft, page);
   const shotsChanged =
-    !shotsUnreadable && !sameShotDrafts(shotDrafts, baseShots);
+    !shotsUnreadable && !shotsLoading && !sameShotDrafts(shotDrafts, baseShots);
   const listingChanged = !sameListing(listing, listingOf(app));
   const versionPartChanged =
     pageDraft.version.trim() !== (page?.version || '').trim() ||
@@ -240,6 +250,7 @@ export const AppPageEditorDialog = ({
   // A new upload of the app makes the page's version refer to it again.
   const pageNeedsResign =
     !pageUnreadable &&
+    !pageLoading &&
     listingChanged &&
     !!(page?.version || page?.whatsNew) &&
     !pageChanged;
@@ -410,6 +421,21 @@ export const AppPageEditorDialog = ({
   // Put away, the drafts kept, while its launcher tab is hidden.
   const dialogShown = useLauncherTabDialog(open);
 
+  // In place of a part's fields while the node's copy of it is on its way.
+  const loadingNote = (
+    <Box
+      role="status"
+      sx={{ alignItems: 'center', display: 'flex', gap: 1.5, pt: 2 }}
+    >
+      <CircularProgress size={18} />
+      <Typography sx={{ color: 'text.secondary', fontSize: '13.5px' }}>
+        {t('core:message.generic.loading', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </Typography>
+    </Box>
+  );
+
   return (
     <Dialog
       PaperProps={{ sx: { borderRadius: '18px' } }}
@@ -469,7 +495,8 @@ export const AppPageEditorDialog = ({
             })}
           </Alert>
         )}
-        {tab === 'page' && !pageUnreadable && (
+        {tab === 'page' && pageLoading && loadingNote}
+        {tab === 'page' && !pageUnreadable && !pageLoading && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             {field(
               'about',
@@ -565,7 +592,8 @@ export const AppPageEditorDialog = ({
             })}
           </Alert>
         )}
-        {tab === 'screenshots' && !shotsUnreadable && (
+        {tab === 'screenshots' && shotsLoading && loadingNote}
+        {tab === 'screenshots' && !shotsUnreadable && !shotsLoading && (
           <Box sx={{ pt: 1 }}>
             <Typography
               sx={{ color: 'text.secondary', fontSize: '13.5px', mb: 2 }}
