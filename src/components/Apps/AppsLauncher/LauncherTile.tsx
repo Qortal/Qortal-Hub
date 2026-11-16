@@ -28,6 +28,8 @@ interface LauncherAppIconProps {
   children?: ReactNode;
   /** A small mark in the corner of the icon. */
   badge?: ReactNode;
+  /** How big the icon is; the launcher's tile size by default. */
+  size?: number;
 }
 
 /** A picture as it is being asked for: what it is of, where from, how far. */
@@ -79,6 +81,7 @@ export const LauncherAppIcon = ({
   appName,
   children,
   badge,
+  size = LAUNCHER_ICON_SIZE_PX,
 }: LauncherAppIconProps) => {
   const nodeUrl = useAtomValue(selectedNodeInfoAtom)?.url;
   const [request, setRequest] = useState(() =>
@@ -143,6 +146,7 @@ export const LauncherAppIcon = ({
           }
         : current
     );
+  const badgeSize = Math.max(12, Math.round(size * 0.36));
   const showPicture = !!address && status !== 'failed' && !children;
   const showLogo =
     !children && status !== 'loaded' && (!address || request.hasFailed);
@@ -151,9 +155,9 @@ export const LauncherAppIcon = ({
     <Box
       sx={{
         flexShrink: 0,
-        height: LAUNCHER_ICON_SIZE_PX,
+        height: size,
         position: 'relative',
-        width: LAUNCHER_ICON_SIZE_PX,
+        width: size,
       }}
     >
       <Box
@@ -161,7 +165,8 @@ export const LauncherAppIcon = ({
           alignItems: 'center',
           backgroundColor: theme.palette.background.paper,
           border: `1px solid ${theme.palette.divider}`,
-          borderRadius: '16px',
+          // Rounded in step with the icon, so a small one is not a circle.
+          borderRadius: `${Math.max(6, Math.round(size * 0.29))}px`,
           color: theme.palette.text.secondary,
           display: 'flex',
           height: '100%',
@@ -211,11 +216,11 @@ export const LauncherAppIcon = ({
             bottom: -4,
             color: theme.palette.text.secondary,
             display: 'flex',
-            height: 20,
+            height: badgeSize,
             justifyContent: 'center',
             position: 'absolute',
             right: -4,
-            width: 20,
+            width: badgeSize,
           })}
         >
           {badge}
@@ -242,30 +247,36 @@ const FOLDER_PICTURES_MAX = 9;
  */
 export const LauncherFolderIcon = ({
   pictures,
+  size: iconSize = LAUNCHER_ICON_SIZE_PX,
 }: {
   pictures: FolderPicture[];
+  /** How big the icon is; the launcher's tile size by default. */
+  size?: number;
 }) => {
   const perRow = pictures.length > 4 ? 3 : 2;
-  const size = perRow === 3 ? 13 : 20;
+  const gap = Math.max(2, Math.round(iconSize * (perRow === 3 ? 0.054 : 0.07)));
+  const size = Math.floor((iconSize * 0.79 - gap * (perRow - 1)) / perRow);
   return (
     <Box
       sx={(theme) => ({
         alignContent: 'center',
         backgroundColor: theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
-        borderRadius: '16px',
+        borderRadius: `${Math.max(6, Math.round(iconSize * 0.29))}px`,
         color: theme.palette.text.secondary,
         display: 'grid',
         flexShrink: 0,
-        gap: perRow === 3 ? '3px' : '4px',
+        gap: `${gap}px`,
         gridTemplateColumns: `repeat(${perRow}, ${size}px)`,
-        height: LAUNCHER_ICON_SIZE_PX,
+        height: iconSize,
         justifyContent: 'center',
-        width: LAUNCHER_ICON_SIZE_PX,
+        width: iconSize,
       })}
     >
       {pictures.length === 0 ? (
-        <FolderOutlinedIcon sx={{ fontSize: 26, gridColumn: '1 / -1' }} />
+        <FolderOutlinedIcon
+          sx={{ fontSize: iconSize * 0.46, gridColumn: '1 / -1' }}
+        />
       ) : (
         pictures.slice(0, FOLDER_PICTURES_MAX).map((picture) => {
           const src =
@@ -284,7 +295,7 @@ export const LauncherFolderIcon = ({
               }}
               src={src}
               sx={{
-                borderRadius: perRow === 3 ? '4px' : '6px',
+                borderRadius: `${Math.max(2, Math.round(size * 0.3))}px`,
                 height: size,
                 objectFit: 'cover',
                 width: size,

@@ -847,6 +847,20 @@ export function GlobalQortalNavBar({
     };
   }, []);
 
+  // Ctrl+L (useTabShortcuts): select the field's text so typing replaces it.
+  useEffect(() => {
+    const handleFocusNavInput = () => {
+      inputElementRef.current?.focus();
+      inputElementRef.current?.select();
+    };
+
+    subscribeToEvent('focusNavInput', handleFocusNavInput);
+
+    return () => {
+      unsubscribeFromEvent('focusNavInput', handleFocusNavInput);
+    };
+  }, []);
+
   useEffect(() => {
     const handleForceNavClear = (e: CustomEvent) => {
       const nextToken = Number(e.detail?.data?.tabsToken || 0);
