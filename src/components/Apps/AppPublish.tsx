@@ -81,6 +81,10 @@ import { WidgetGuideDialog } from './WidgetPublish/WidgetGuideDialog';
 import { GuideText } from './WidgetPublish/WidgetGuideParts';
 import { rememberPublishedWidget } from '../HomeWidgets/fetchHomeWidgets';
 import { WIDGET_TAG } from '../HomeWidgets/homeWidgets';
+import {
+  publishedOwnWidgetsAtom,
+  withPublishedOwnWidget,
+} from './AppsLibrary/ownWidgets';
 import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 
 const TITLE_MAX_CHARS = 80;
@@ -142,6 +146,13 @@ interface AppPublishProps {
   isAppTypeLocked?: boolean;
   /** Opened from Update on a published app: the name can't be changed. */
   isUpdate?: boolean;
+  /** Opened from Publish widget in My apps: on Widget, for a new one. */
+  startAsWidget?: boolean;
+  /**
+   * Opened from Update on one of the name's widgets (My apps): its identifier.
+   * The form stays on that widget, as Update keeps the name.
+   */
+  widgetToUpdate?: string;
   /**
    * Told whether the form holds input that is not published yet, and false
    * when it closes: a launcher tab asks before it closes with some.
@@ -157,6 +168,8 @@ export const AppPublish = ({
   initialAppType = 'APP',
   isAppTypeLocked = false,
   isUpdate = false,
+  startAsWidget = false,
+  widgetToUpdate,
   onUnsavedChange,
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
@@ -164,21 +177,30 @@ export const AppPublish = ({
   const [title, setTitle] = useLimitedText(limitQdnTitle);
   const [description, setDescription] = useLimitedText(limitQdnDescription);
   const [category, setCategory] = useState('');
-  const [kind, setKind] = useState<PublishKind>(initialAppType);
+  const [kind, setKind] = useState<PublishKind>(
+    widgetToUpdate || startAsWidget ? 'WIDGET' : initialAppType
+  );
   const appType = kind === 'WEBSITE' ? 'WEBSITE' : 'APP';
   const isWidget = kind === 'WIDGET';
   // Opened as "Publish app" or "Publish website": that service only. A Q-App
-  // can still go out as a widget; Update is for the name's own app.
+  // can still go out as a widget; Update is for the name's own app, or for
+  // the one widget it was opened on.
   const lockedService = isAppTypeLocked ? initialAppType : null;
-  const canPickWidget = !isUpdate && lockedService !== 'WEBSITE';
+  const updatesOneWidget = !!widgetToUpdate;
+  const canPickWidget =
+    updatesOneWidget || (!isUpdate && lockedService !== 'WEBSITE');
   // A widget: one the name has published ('' for a new one), and a new one's ID.
-  const [widgetChoice, setWidgetChoice] = useState('');
+  const [widgetChoice, setWidgetChoice] = useState(widgetToUpdate ?? '');
   const [widgetSlug, setWidgetSlug] = useState('');
   const [nameWidgets, setNameWidgets] = useState<NameWidget[]>([]);
-  const [guideTipOpen, setGuideTipOpen] = useState(false);
+  // A new widget from Publish widget: its short guide shows at once.
+  const [guideTipOpen, setGuideTipOpen] = useState(startAsWidget);
   const [guideOpen, setGuideOpen] = useState(false);
   // The short guide opens by itself the first time Widget is picked.
-  const guideTipShownRef = useRef(false);
+  const guideTipShownRef = useRef(startAsWidget || updatesOneWidget);
+  // What the widgets published from here show in My apps until the node
+  // lists them.
+  const setPublishedOwnWidgets = useSetAtom(publishedOwnWidgetsAtom);
   // A widget just published from here: the form already holds its details,
   // which the node may not list yet.
   const justPublishedRef = useRef('');
@@ -624,8 +646,34 @@ export const AppPublish = ({
             }
       );
       setOpenSnackGlobal(true);
-      // The widget picker asks the node again until it lists this widget.
-      if (isWidget) rememberPublishedWidget({ name, identifier: widgetId });
+      if (isWidget) {
+        // The widget picker asks the node again until it lists this widget.
+        rememberPublishedWidget({ name, identifier: widgetId });
+        // My apps shows it at once, as published, until the node lists it.
+        const replaced = chosenWidget ?? widgetTakenBy;
+        setPublishedOwnWidgets((list) =>
+          withPublishedOwnWidget(
+            list,
+            {
+              name,
+              identifier: widgetId,
+              title: title.trim() || name,
+              description: description.trim(),
+              updated: 0,
+              ...(category
+                ? {
+                    category,
+                    categoryName:
+                      categories?.find((item) => item?.id === category)?.name ||
+                      '',
+                  }
+                : {}),
+              tags: withoutWidgetTag(publishedTags.filter(Boolean)),
+            },
+            { replaces: replaced?.updated ?? 0 }
+          )
+        );
+      }
       const published: PublishProfile = {
         publishedAt: Date.now(),
         metadata: {
@@ -762,8 +810,13 @@ export const AppPublish = ({
         ]
       : []),
   ];
-  const heading =
-    isUpdate && name
+  // Update on a widget names the widget, the way Update names the app.
+  const heading = updatesOneWidget
+    ? t('core:publish_update.title', {
+        name: chosenWidget?.title || widgetToUpdate,
+        ...capital,
+      })
+    : isUpdate && name
       ? t('core:publish_update.title', { name, ...capital })
       : isWidget
         ? t('core:publish_widget.heading', capital)
@@ -872,7 +925,10 @@ export const AppPublish = ({
               }}
               value={kind}
             >
-              <ToggleButton disabled={lockedService === 'WEBSITE'} value="APP">
+              <ToggleButton
+                disabled={lockedService === 'WEBSITE' || updatesOneWidget}
+                value="APP"
+              >
                 {t('core:app_page.hero.type_app')}
               </ToggleButton>
               <ToggleButton disabled={!canPickWidget} value="WIDGET">
@@ -905,6 +961,7 @@ export const AppPublish = ({
             >
               {nameWidgets.length > 0 || widgetChoice ? (
                 <TextField
+                  disabled={updatesOneWidget}
                   FormHelperTextProps={{ sx: warningTextSx }}
                   helperText={
                     chosenWidget && !chosenWidget.listed

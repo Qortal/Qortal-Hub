@@ -46,6 +46,17 @@ It lists the name's widgets to update one, and its (i) has the short version
 of the rules below, with **Learn more** for a full page that can be copied as
 Markdown (`src/components/Apps/WidgetPublish/`).
 
+The library's **My apps** lists the widgets of the account's names under
+**Your published widgets**, beside their apps and websites
+(`src/components/Apps/AppsLibrary/ownWidgets.ts`). It asks the node for every
+APP of each name: a tagged one is a widget, and one under a `go-widget`
+identifier without the tag is shown to its publisher as **not listed** (see
+Retiring below). **Update** opens the publish form on that widget, with the
+name and the widget fixed; for a name's own app tagged as a widget it opens
+the app's form. **Publish widget** opens the form on Widget for a new one. A
+widget published from the Hub shows there at once, as published, until the
+node lists that version (at most 15 minutes).
+
 **Retiring a widget:** republish it under the same name and identifier
 without the `go-widget` tag, for example as a "moved" notice. It leaves the
 list, but everyone who already added it keeps loading it, since saved widgets
