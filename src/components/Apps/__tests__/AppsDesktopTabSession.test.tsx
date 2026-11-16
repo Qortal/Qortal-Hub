@@ -342,6 +342,24 @@ describe('AppsDesktop open tabs after a restart', () => {
     expect(viewers().map((viewer) => viewer.tabId)).toEqual(['t1']);
   });
 
+  it('brings pinned tabs back first, as the strip keeps them', () => {
+    save('QAlice', {
+      tabs: [
+        { tabId: 't1', service: 'APP', name: 'Q-Mail' },
+        {
+          tabId: 't2',
+          service: 'APP',
+          name: 'Q-Tube',
+          flags: { pinned: true },
+        },
+      ],
+    });
+    renderApps('QAlice');
+    click('open Q-Mail');
+    // The list Hub keeps, and saves, is in the strip's order.
+    expect(saved('QAlice').tabs.map((tab) => tab.tabId)).toEqual(['t2', 't1']);
+  });
+
   it('keeps the address a restored tab was opened at until its app reports one', () => {
     save('QAlice', {
       tabs: [

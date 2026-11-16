@@ -310,7 +310,7 @@ export function toSavedTab(tab: unknown, path?: string): SavedTab | null {
 }
 
 /** The tab object AppsDesktop opens for a saved tab. */
-export function restoredTab(saved: SavedTab): TabLike {
+export function restoredTab(saved: SavedTab): TabLike & { tabId: string } {
   return {
     ...tabFlags(saved.flags),
     tabId: saved.tabId,

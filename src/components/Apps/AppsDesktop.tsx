@@ -321,7 +321,7 @@ export const AppsDesktop = ({
     const saved = loadTabSession(myAddress, MAX_OPEN_APP_TABS);
     storedSessionRef.current = saved;
     if (tabs.length === 0 && saved.tabs.length > 0) {
-      setTabs(saved.tabs.map(restoredTab));
+      setTabs(pinnedFirst(saved.tabs.map(restoredTab)));
       // Hub starts on Home and its Apps button opens the launcher, so no
       // restored tab is selected, and none loads, until one is chosen. The
       // one that was selected is the first Hub falls back to.
