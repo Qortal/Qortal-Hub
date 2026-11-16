@@ -142,6 +142,9 @@ const MIN_LIBRARY_APPS_BEFORE_SLOW_POLL = 10;
 /** Bounded MRU stack (tab ids only) for "last visited" after closing the active tab */
 const MAX_TAB_MRU_DEPTH = 64;
 
+/** A restored private app being downloaded and decrypted again. */
+type PrivateReopenRequest = { tabId: string; address: string };
+
 /** Prefer the tab that was to the right of the closed tab; if closed tab was last, use the new last tab */
 function positionalTabAfterClose(
   remainingTabs: { tabId: string }[],
@@ -304,7 +307,18 @@ export const AppsDesktop = ({
   // The hook hands out a new `openApp` on every render: keep the latest.
   const openPrivateAppRef = useRef(openPrivateApp);
   openPrivateAppRef.current = openPrivateApp;
-  const reopeningPrivateTabIdsRef = useRef<Set<string>>(new Set());
+  // Restored private apps being downloaded and decrypted again, by tab.
+  const reopenRequestsRef = useRef<Map<string, PrivateReopenRequest>>(
+    new Map()
+  );
+  // What a request is checked against when it ends: the tabs and the account
+  // as last drawn, and whether this view is still there (signing out removes
+  // it, and the next account gets a new one).
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const myAddressRef = useRef(myAddress);
+  myAddressRef.current = myAddress;
+  const isMountedRef = useRef(true);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -377,20 +391,87 @@ export const AppsDesktop = ({
     );
   }, [selectedTab?.tabId]);
 
-  // A restored private app is downloaded and decrypted again when its tab is
-  // selected; the opened app then takes the tab's place (addTabFunc).
-  const reopenPrivateTab = useCallback((tab) => {
-    if (!isPrivateTabToReopen(tab)) return;
-    const reopening = reopeningPrivateTabIdsRef.current;
-    if (reopening.has(tab.tabId)) return;
-    reopening.add(tab.tabId);
-    Promise.resolve()
-      .then(() =>
-        openPrivateAppRef.current(tab.privateAppProperties, false, undefined)
-      )
-      .catch((error) => console.error(error))
-      .finally(() => reopening.delete(tab.tabId));
+  useEffect(() => {
+    isMountedRef.current = true;
+    const requests = reopenRequestsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      requests.clear();
+    };
   }, []);
+
+  // A request still counts while this view shows the account that made it
+  // and its tab is still in the strip, waiting for its app.
+  const isReopenWanted = useCallback(
+    (request: PrivateReopenRequest) =>
+      isMountedRef.current &&
+      myAddressRef.current === request.address &&
+      reopenRequestsRef.current.get(request.tabId) === request &&
+      tabsRef.current.some(
+        (tab) => tab?.tabId === request.tabId && isPrivateTabToReopen(tab)
+      ),
+    []
+  );
+
+  // The reopened app takes its tab's place and keeps the tab's marks. The
+  // selection stays as it is: the app shows only if its tab is selected.
+  const finishReopen = useCallback(
+    (request: PrivateReopenRequest, appTab) => {
+      if (!isReopenWanted(request)) return;
+      const waiting = tabsRef.current.find(
+        (tab) => tab?.tabId === request.tabId
+      );
+      const reopened = {
+        ...tabFlags(waiting),
+        ...appTab,
+        tabId: request.tabId,
+      };
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab?.tabId === request.tabId && isPrivateTabToReopen(tab)
+            ? reopened
+            : tab
+        )
+      );
+      setSelectedTab((selected) =>
+        selected?.tabId === request.tabId ? reopened : selected
+      );
+    },
+    [isReopenWanted]
+  );
+
+  // A restored private app is downloaded and decrypted again when its tab is
+  // selected. The request belongs to that tab and to the account that made
+  // it: closing the tab, or signing out, drops it.
+  const reopenPrivateTab = useCallback(
+    (tab) => {
+      if (!isPrivateTabToReopen(tab)) return;
+      const address = myAddressRef.current;
+      const requests = reopenRequestsRef.current;
+      if (!address || requests.has(tab.tabId)) return;
+      const request: PrivateReopenRequest = { tabId: tab.tabId, address };
+      requests.set(tab.tabId, request);
+      Promise.resolve()
+        .then(() =>
+          openPrivateAppRef.current(
+            tab.privateAppProperties,
+            false,
+            undefined,
+            {
+              isWanted: () => isReopenWanted(request),
+              openTab: (appTab) => finishReopen(request, appTab),
+            }
+          )
+        )
+        .catch((error) => console.error(error))
+        .finally(() => {
+          if (requests.get(tab.tabId) === request) {
+            requests.delete(tab.tabId);
+          }
+        });
+    },
+    [finishReopen, isReopenWanted]
+  );
 
   useEffect(() => {
     if (isPrivateTabToReopen(selectedTab)) reopenPrivateTab(selectedTab);
@@ -992,8 +1073,8 @@ export const AppsDesktop = ({
         return;
       }
     }
-    // A private app opened again takes the place of its restored tab, and
-    // keeps that tab's marks.
+    // A private app opened from elsewhere (its list, a pinned app) takes the
+    // place of its restored tab, and keeps that tab's marks.
     if (data?.isPrivate && !isPrivateTabToReopen(data)) {
       const waiting = tabs.filter(
         (tab) =>
@@ -1001,9 +1082,8 @@ export const AppsDesktop = ({
           isSamePrivateApp(tab.privateAppProperties, data.privateAppProperties)
       );
       const restored =
-        waiting.find((tab) =>
-          reopeningPrivateTabIdsRef.current.has(tab.tabId)
-        ) ?? waiting[0];
+        waiting.find((tab) => reopenRequestsRef.current.has(tab.tabId)) ??
+        waiting[0];
       if (restored) {
         const reopened = {
           ...tabFlags(restored),

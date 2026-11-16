@@ -155,6 +155,16 @@ const minter = {
   groupId: 42,
 };
 
+/** The tab useHandlePrivateApps opens once Minter is decrypted again. */
+const reopenedMinter = () => ({
+  ...minter,
+  url: `${NODE}/render/hash/abc?secret=xyz`,
+  isPreview: true,
+  isPrivate: true,
+  privateAppProperties: { ...minter, appName: 'Minter Helper' },
+  refreshFunc: () => undefined,
+});
+
 describe('AppsDesktop open tabs after a restart', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -413,24 +423,32 @@ describe('AppsDesktop open tabs after a restart', () => {
         { tabId: 't2', service: 'APP', name: 'Q-Mail' },
       ],
     });
+    // Like the real one, openApp settles after it has opened the app.
+    let settle: (opened: boolean) => void = () => {};
+    openPrivateApp.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        })
+    );
     renderApps('QAlice');
 
     click('open Minter');
     await act(async () => {});
     expect(openPrivateApp).toHaveBeenCalledTimes(1);
-    expect(openPrivateApp).toHaveBeenCalledWith(minter, false, undefined);
+    expect(openPrivateApp).toHaveBeenCalledWith(minter, false, undefined, {
+      isWanted: expect.any(Function),
+      openTab: expect.any(Function),
+    });
     // Nothing is shown for it until it has been decrypted again.
     expect(viewers()).toEqual([]);
 
-    const previewUrl = `${NODE}/render/hash/abc?secret=xyz`;
-    addTab({
-      ...minter,
-      url: previewUrl,
-      isPreview: true,
-      isPrivate: true,
-      privateAppProperties: { ...minter, appName: 'Minter Helper' },
-      refreshFunc: () => undefined,
+    const [, , , request] = openPrivateApp.mock.calls[0];
+    expect(request.isWanted()).toBe(true);
+    act(() => {
+      request.openTab(reopenedMinter());
     });
+    await act(async () => settle(true));
 
     expect(strip()).toEqual([
       { tabId: 'p1', selected: true },
@@ -444,6 +462,32 @@ describe('AppsDesktop open tabs after a restart', () => {
       flags: { pinned: true },
     });
     expect(JSON.stringify(kept)).not.toContain('secret');
+  });
+
+  it('lets a private app opened from its list take its restored tab', () => {
+    save('QAlice', {
+      tabs: [
+        { tabId: 't2', service: 'APP', name: 'Q-Mail' },
+        {
+          tabId: 'p1',
+          service: 'DOCUMENT',
+          name: 'Minter',
+          identifier: 'app-id',
+          isPrivate: true,
+          privateAppProperties: minter,
+        },
+      ],
+    });
+    renderApps('QAlice');
+    click('open Q-Mail');
+
+    // Opened on purpose, from its list or a pinned app: it is shown.
+    addTab(reopenedMinter());
+    expect(strip()).toEqual([
+      { tabId: 't2', selected: false },
+      { tabId: 'p1', selected: true },
+    ]);
+    expect(openPrivateApp).not.toHaveBeenCalled();
   });
 
   it('keeps the tab strip working when the tabs cannot be saved', () => {
