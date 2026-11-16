@@ -238,8 +238,10 @@ export const AppPage = ({
       mine={votes.mine}
       myAddress={myAddress}
       onRate={rate}
+      onRetry={votes.reload}
       pending={votes.pending}
       pollExists={votes.pollExists}
+      pollStatus={votes.pollStatus}
       summary={votes.summary}
       voters={votes.voters}
     />

@@ -253,6 +253,7 @@
       "average_label": "keskmine hinnang {{average}} viiest",
       "count_one": "{{count}} hinnang",
       "count_other": "{{count}} hinnangut",
+      "load_failed": "hinnanguid ei õnnestunud laadida, seega saab hinnata alles siis, kui need on laaditud.",
       "pending": "sinu hääl on teel. Kõik näevad seda umbes minuti pärast.",
       "pending_first": "sinu esimene hinnang on teel. Saad seda muuta, kui see on plokis, umbes minuti pärast.",
       "pick": "sinu hinnang",

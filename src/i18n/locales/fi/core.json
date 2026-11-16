@@ -253,6 +253,7 @@
       "average_label": "keskimääräinen arvio {{average}} viidestä",
       "count_one": "{{count}} arvio",
       "count_other": "{{count}} arviota",
+      "load_failed": "arvioita ei voitu ladata, joten arvioida voi vasta, kun ne on ladattu.",
       "pending": "äänesi on matkalla. Kaikki näkevät sen noin minuutin kuluttua.",
       "pending_first": "ensimmäinen arviosi on matkalla. Voit muuttaa sitä, kun se on lohkossa, noin minuutin kuluttua.",
       "pick": "arviosi",

@@ -74,6 +74,22 @@ const never: Handler = (_url, init) =>
     )
   );
 
+/** Core's answer for a poll it doesn't have. */
+const noPoll: Handler = () =>
+  new Response(
+    JSON.stringify({ error: 501, message: '!!en:ApiError.POLL_NO_EXISTS!!' }),
+    { status: 404 }
+  );
+
+const RATING_POLL = {
+  pollName: 'app-library-APP-rating-Q-Blog',
+  owner: 'QOwner',
+  creatorPublicKey: CREATOR_KEY,
+  pollOptions: ['1', '2', '3', '4', '5', 'initialValue-5'].map(
+    (optionName) => ({ optionName })
+  ),
+};
+
 const routes = (overrides: Record<string, unknown> = {}) => {
   const table: Record<string, unknown> = {
     'service=APP&name=Q-Blog': [
@@ -139,14 +155,7 @@ const routes = (overrides: Record<string, unknown> = {}) => {
         { optionName: 'initialValue-5', voteCount: 0 },
       ],
     },
-    '/polls/app-library-APP-rating-Q-Blog': {
-      pollName: 'app-library-APP-rating-Q-Blog',
-      owner: 'QOwner',
-      creatorPublicKey: CREATOR_KEY,
-      pollOptions: ['1', '2', '3', '4', '5', 'initialValue-5'].map(
-        (optionName) => ({ optionName })
-      ),
-    },
+    '/polls/app-library-APP-rating-Q-Blog': RATING_POLL,
     '/names/address/': [{ name: 'Me' }],
     ...overrides,
   };
@@ -328,8 +337,8 @@ describe('the app page', () => {
   it('works without a page, screenshots or poll yet', async () => {
     routes({
       'identifier=qhub_app_': [],
-      '/polls/app-library-APP-rating-Q-Blog': { message: 'POLL_NO_EXISTS' },
-      '/polls/votes/app-library-APP-rating-Q-Blog': {},
+      '/polls/app-library-APP-rating-Q-Blog': noPoll,
+      '/polls/votes/app-library-APP-rating-Q-Blog': noPoll,
     });
     renderPage();
     expect(await screen.findByText('Your blog on Qortal')).toBeInTheDocument();
@@ -480,8 +489,8 @@ describe('ratings on the page', () => {
 
   it("doesn't create the poll twice while the first rating is on its way", async () => {
     routes({
-      '/polls/app-library-APP-rating-Q-Blog': { message: 'POLL_NO_EXISTS' },
-      '/polls/votes/app-library-APP-rating-Q-Blog': {},
+      '/polls/app-library-APP-rating-Q-Blog': noPoll,
+      '/polls/votes/app-library-APP-rating-Q-Blog': noPoll,
     });
     renderPage();
     const stars = await screen.findAllByRole('radio');
@@ -509,6 +518,90 @@ describe('ratings on the page', () => {
       .mocked(window.sendMessage)
       .mock.calls.filter(([action]) => action === 'createPoll');
     expect(createPolls).toHaveLength(1);
+  });
+
+  it("keeps the stars off until it knows whether there's a poll", async () => {
+    routes({ '/polls/app-library-APP-rating-Q-Blog': never });
+    renderPage();
+    const stars = await screen.findAllByRole('radio');
+    stars.forEach((star) => expect(star).toBeDisabled());
+    await act(async () => {
+      fireEvent.click(stars[3]);
+    });
+    expect(window.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("says when the poll couldn't be read, and votes in it after Retry", async () => {
+    let poll: Handler = () => new Response('', { status: 500 });
+    routes({
+      '/polls/app-library-APP-rating-Q-Blog': (
+        url: string,
+        init?: RequestInit
+      ) => poll(url, init),
+    });
+    renderPage();
+    const alert = await screen.findByText('app_page.rating.load_failed');
+    expect(alert).toHaveAttribute('role', 'alert');
+    screen.getAllByRole('radio').forEach((star) => expect(star).toBeDisabled());
+    // Not read isn't missing: nothing offers to create the poll.
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[3]);
+    });
+    expect(window.sendMessage).not.toHaveBeenCalled();
+
+    poll = () => RATING_POLL;
+    fireEvent.click(within(alert).getByRole('button', { name: 'retry' }));
+    await screen.findByText('4.3');
+    await waitFor(() => expect(screen.getAllByRole('radio')[0]).toBeEnabled());
+    expect(screen.queryByText('app_page.rating.load_failed')).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[0]);
+    });
+    await waitFor(() =>
+      expect(window.sendMessage).toHaveBeenCalledWith(
+        'voteOnPoll',
+        { pollName: 'app-library-APP-rating-Q-Blog', optionIndex: 0 },
+        expect.any(Number)
+      )
+    );
+    expect(
+      vi
+        .mocked(window.sendMessage)
+        .mock.calls.filter(([action]) => action === 'createPoll')
+    ).toHaveLength(0);
+  });
+
+  it('counts a creator who rated again as the library does', async () => {
+    routes({
+      '/polls/votes/app-library-APP-rating-Q-Blog': {
+        votes: [
+          { optionIndex: 0, voterPublicKey: CREATOR_KEY },
+          { optionIndex: 2, voterPublicKey: 'BB' },
+        ],
+        voteCounts: [
+          { optionName: '1', voteCount: 1 },
+          { optionName: '2', voteCount: 0 },
+          { optionName: '3', voteCount: 1 },
+          { optionName: '4', voteCount: 0 },
+          { optionName: '5', voteCount: 0 },
+          { optionName: 'initialValue-5', voteCount: 0 },
+        ],
+      },
+    });
+    renderPage();
+    // The creator's first 5, their later 1, and a 3: 3.0 from 3, as the
+    // library's card counts the same poll.
+    expect(await screen.findByText('3.0')).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'app_page.voters.open' })
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      await within(dialog).findAllByText(`name-of-${addressOf(CREATOR_KEY)}`)
+    ).toHaveLength(2);
+    expect(
+      within(dialog).getByText('app_page.voters.first_rating')
+    ).toBeInTheDocument();
   });
 
   it("says so when a vote's fee cannot be looked up", async () => {
