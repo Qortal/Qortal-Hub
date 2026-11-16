@@ -174,10 +174,15 @@
   "app_private": "privaatne",
   "app_service_type": "rakenduse teenuse tüüp",
   "app_tab": {
+    "close": "sulge vaheleht",
     "close_all": "sulge kõik vahelehed",
     "duplicate": "dubleeri vaheleht",
     "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
-    "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada."
+    "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada.",
+    "pin": "kinnita vaheleht",
+    "pinned_and_locked_kept_open": "kinnitatud ja lukustatud vahelehed jäävad avatuks. Eemalda kinnitatud vahelehe kinnitus enne selle sulgemist ja sulge lukustatud vahelehed ükshaaval, et kinnitada.",
+    "pinned_kept_open": "kinnitatud vahelehed jäävad avatuks. Eemalda vahelehe kinnitus, et see sulgeda.",
+    "unpin": "eemalda vahelehe kinnitus"
   },
   "apps_bar": {
     "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",

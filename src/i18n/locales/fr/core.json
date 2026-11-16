@@ -174,10 +174,15 @@
   "app_private": "privé",
   "app_service_type": "type de service d'application",
   "app_tab": {
+    "close": "fermer l'onglet",
     "close_all": "fermer tous les onglets",
     "duplicate": "dupliquer l'onglet",
     "limit_reached": "nombre maximal d'onglets atteint. Fermez-en un pour en ouvrir un autre.",
-    "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer."
+    "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer.",
+    "pin": "épingler l'onglet",
+    "pinned_and_locked_kept_open": "les onglets épinglés et verrouillés restent ouverts. Désépinglez un onglet épinglé avant de le fermer, et fermez les onglets verrouillés un par un pour confirmer.",
+    "pinned_kept_open": "les onglets épinglés restent ouverts. Désépinglez un onglet pour le fermer.",
+    "unpin": "désépingler l'onglet"
   },
   "apps_bar": {
     "empty": "Épinglez une application ou ajoutez un favori, et il apparaîtra ici.",

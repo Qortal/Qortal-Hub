@@ -174,10 +174,15 @@
   "app_private": "私人的",
   "app_service_type": "应用服务类型",
   "app_tab": {
+    "close": "关闭标签页",
     "close_all": "关闭所有标签页",
     "duplicate": "复制标签页",
     "limit_reached": "已达到标签页数量上限。请关闭一个标签页后再打开新的。",
-    "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。"
+    "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。",
+    "pin": "固定标签页",
+    "pinned_and_locked_kept_open": "已固定和已锁定的标签页保持打开。请先取消固定再关闭已固定的标签页，并逐个关闭已锁定的标签页以确认。",
+    "pinned_kept_open": "已固定的标签页保持打开。请先取消固定，再关闭标签页。",
+    "unpin": "取消固定标签页"
   },
   "apps_bar": {
     "empty": "固定一个应用或添加书签，它就会显示在这里。",

@@ -174,10 +174,15 @@
   "app_private": "yksityinen",
   "app_service_type": "sovelluksen palvelutyyppi",
   "app_tab": {
+    "close": "sulje välilehti",
     "close_all": "sulje kaikki välilehdet",
     "duplicate": "monista välilehti",
     "limit_reached": "välilehtien enimmäismäärä saavutettu. Sulje yksi avataksesi uuden.",
-    "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi."
+    "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi.",
+    "pin": "kiinnitä välilehti",
+    "pinned_and_locked_kept_open": "kiinnitetyt ja lukitut välilehdet jäävät auki. Irrota kiinnitetty välilehti ennen sen sulkemista ja sulje lukitut yksitellen vahvistaaksesi.",
+    "pinned_kept_open": "kiinnitetyt välilehdet jäävät auki. Irrota välilehti sulkeaksesi sen.",
+    "unpin": "irrota välilehti"
   },
   "apps_bar": {
     "empty": "Kiinnitä sovellus tai lisää kirjanmerkki, niin se näkyy tässä.",

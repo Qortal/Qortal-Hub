@@ -174,10 +174,15 @@
   "app_private": "privado",
   "app_service_type": "aplicativo tipo serviço",
   "app_tab": {
+    "close": "fechar aba",
     "close_all": "fechar todas as abas",
     "duplicate": "duplicar aba",
     "limit_reached": "número máximo de abas atingido. Feche uma para abrir outra.",
-    "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar."
+    "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar.",
+    "pin": "fixar aba",
+    "pinned_and_locked_kept_open": "as abas fixadas e bloqueadas continuam abertas. Desafixe uma aba fixada antes de a fechar e feche as bloqueadas uma a uma para confirmar.",
+    "pinned_kept_open": "as abas fixadas continuam abertas. Desafixe uma aba para a fechar.",
+    "unpin": "desafixar aba"
   },
   "apps_bar": {
     "empty": "Fixe uma aplicação ou adicione um marcador e aparecerá aqui.",
