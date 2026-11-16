@@ -185,6 +185,70 @@ describe('loading the whole text', () => {
   });
 });
 
+describe('reviews of a widget', () => {
+  it('lists and publishes them under the widget, apart from its app', async () => {
+    const widgetKey = appReviewKey('APP', 'Q-Weather', 'go-widget-now');
+    const searched: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/resources/search')) {
+        const identifier = url.searchParams.get('identifier') || '';
+        searched.push(identifier);
+        return new Response(
+          JSON.stringify(
+            identifier === widgetKey
+              ? [
+                  {
+                    name: 'Alice',
+                    identifier: widgetKey,
+                    created: 5,
+                    metadata: { description: 'Handy' },
+                  },
+                ]
+              : []
+          )
+        );
+      }
+      return new Response('', { status: 404 });
+    });
+    window.sendMessage = vi.fn().mockResolvedValue({ signature: 'TX' });
+    const store = createStore();
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Provider store={store}>
+        <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
+      </Provider>
+    );
+    const { result } = renderHook(
+      () =>
+        useAppReviews(
+          { service: 'APP', name: 'Q-Weather', identifier: 'go-widget-now' },
+          { name: 'Me' }
+        ),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.threads.map((thread) => thread.review.name)).toEqual([
+      'Alice',
+    ]);
+    expect(searched).toContain(widgetKey);
+    expect(searched).toContain(replyPrefixOf(widgetKey));
+    expect(searched).not.toContain(appReviewKey('APP', 'Q-Weather'));
+
+    await act(async () => {
+      expect(await result.current.submitReview('Nice clock')).toEqual({
+        ok: true,
+      });
+    });
+    const payload = vi.mocked(window.sendMessage).mock.calls[0][1] as any;
+    expect(payload.identifier).toBe(widgetKey);
+    // Sent and shown on the widget's page only.
+    expect(result.current.threads[0].review).toMatchObject({
+      name: 'Me',
+      pending: true,
+    });
+  });
+});
+
 describe("the user's own review, before writing", () => {
   const mine = {
     ...reviewRow(7),

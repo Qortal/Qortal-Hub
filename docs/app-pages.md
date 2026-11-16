@@ -130,9 +130,44 @@ The poll's `owner` is any address its creator chose, so it can't tell who
 gave that rating.
 
 A vote is shown at once while its transaction waits for a block, and the page
-looks again until the node has it. Once the page is closed, Hub keeps looking,
-so the library's cards show the vote too. After voting, the page asks for a
-review.
+looks again until the node has it. Once the page is closed, Hub keeps looking.
+The library counts the vote at once too, for the account that sent it: on the
+cards, in the Featured rows and in the "Highest rated" sort. It goes from the
+pending vote to the node's once the node has it and the app's rating has been
+fetched again. After voting, the page asks for a review.
+
+## Widgets
+
+The library's Widgets tab lists Home widgets (APPs tagged `go-widget`, see
+`docs/home-widgets.md`). Each has a page with the same ratings and reviews,
+kept apart from its app's, since a name can publish its app and several
+widgets:
+
+| What        | Name                                                      |
+| ----------- | --------------------------------------------------------- |
+| Rating poll | `app-library-APP-rating-<name>-id-<identifier>`           |
+| Reviews     | `qhub_review_v1_APP_<key>`, replies as above              |
+| `<key>`     | SHA-256 of `APP:<name in lower case>` + `\n` + identifier |
+
+- The poll follows what Q-Git and other clients already use for a resource
+  with an identifier (`app-library-GIT_REPOSITORY-rating-<name>-id-<repo>`),
+  with the name and identifier as published. Its options and its
+  `initialValue-N` are an app poll's; its description names it as
+  `<name>/<identifier>`.
+- Core's `/polls/apps/ratings` returns every `app-library-` poll and takes
+  everything after `-rating-` as the app's name, so the library keeps a
+  widget's rating under `<name>-id-<identifier>`, with no change to Core.
+- A name can't hold a line break (Core folds any whitespace into one space),
+  so no app's review key is ever a widget's. A widget's review records carry
+  `"app": { "service": "APP", "name": "…", "identifier": "…" }`.
+- A widget published as its name's default APP (no identifier) is that app:
+  it has the app's poll and reviews.
+- The Widgets tab's Featured row shows from the first widget rated above three
+  stars (Community's needs three): there are few widgets.
+- An app whose name ends in `-id-<something>` would share its poll with the
+  widget `<something>` of the shorter name, if both existed. Names are
+  unique, and a widget's identifier usually starts with `go-widget`, so this
+  is left as it is, as it is for the other clients using the pattern.
 
 ## Links
 

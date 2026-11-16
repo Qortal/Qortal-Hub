@@ -688,7 +688,8 @@
       "top_rated_hint": "die Top {{number}} nach Bewertungen der Community",
       "view_grid": "Raster",
       "view_label": "Ansicht",
-      "view_list": "Liste"
+      "view_list": "Liste",
+      "widgets_hint": "kleine Q-Apps für die Startseite: bewerten Sie sie, lesen Sie, was andere sagen, und fügen Sie die hinzu, die Ihnen gefallen"
     },
     "no_matches": "nichts passt zu „{{query}}“",
     "no_matches_hint": "versuche einen anderen Namen oder füge einen qortal://-Link ein.",
@@ -1290,7 +1291,8 @@
     "categories": "Kategorien",
     "community_apps": "Community-Apps",
     "my_apps": "meine Apps",
-    "official_apps": "offizielle Apps"
+    "official_apps": "offizielle Apps",
+    "widgets": "Widgets"
   },
   "tag_number": "Tag {{number}}",
   "tags": "Tags",
@@ -1403,6 +1405,15 @@
     "loading": "Wird geladen",
     "loading_message": "Die neuesten öffentlichen Daten werden vom Standard-Qortal-Knoten geladen.",
     "retry": "Erneut versuchen"
+  },
+  "widgets": {
+    "add_to_home": "zur Startseite hinzufügen",
+    "added_to_home": "{{title}} ist jetzt auf der Startseite.",
+    "on_home": "auf der Startseite",
+    "qdn_resource": "QDN-Ressource",
+    "remove_from_home": "von der Startseite entfernen",
+    "removed_from_home": "{{title}} ist nicht mehr auf der Startseite.",
+    "type": "Widget"
   },
   "zip": "Reißverschluss"
 }

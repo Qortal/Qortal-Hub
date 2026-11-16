@@ -1,7 +1,11 @@
 import Base58 from '../../../encryption/Base58';
 import publicKeyToAddress from '../../../utils/generateWallet/publicKeyToAddress';
-import type { PollInfo, VoteCount } from '../../../types/ratings';
-import { normalizeAppService } from './appPageIds';
+import type {
+  AppRatingData,
+  PollInfo,
+  VoteCount,
+} from '../../../types/ratings';
+import { normalizeAppIdentifier, normalizeAppService } from './appPageIds';
 
 /**
  * Ratings are the existing Qortal polls `app-library-<SERVICE>-rating-<name>`:
@@ -10,8 +14,25 @@ import { normalizeAppService } from './appPageIds';
  * show a vote at once while its transaction waits for a block.
  */
 
-export const ratingPollName = (service: string, name: string) =>
-  `app-library-${normalizeAppService(service)}-rating-${name}`;
+/**
+ * What a rating poll is named after: the app's name, or for a widget (an APP
+ * under an identifier of its own) `<name>-id-<identifier>`, the way Q-Git and
+ * other clients already name the polls of a resource with an identifier.
+ * Core's /polls/apps/ratings takes everything after `-rating-` as the app's
+ * name, so the library's ratings keep a widget under this name too, and so do
+ * the pending votes.
+ */
+export const ratingName = (name: string, identifier?: string | null) => {
+  const own = normalizeAppIdentifier(identifier);
+  return own ? `${name}-id-${own}` : name;
+};
+
+export const ratingPollName = (
+  service: string,
+  name: string,
+  identifier?: string | null
+) =>
+  `app-library-${normalizeAppService(service)}-rating-${ratingName(name, identifier)}`;
 
 export interface PollVote {
   optionIndex: number;
@@ -248,6 +269,12 @@ export interface PendingVote {
    */
   name?: string;
   service?: string;
+  /**
+   * The voter's earlier vote, which this one moves to another star. Not the
+   * poll creator's first rating: that one stays counted, as the library's
+   * cards count it.
+   */
+  replaces?: number | null;
 }
 
 /** Whether the node now shows the pending vote. */
@@ -276,6 +303,56 @@ export const applyPendingVote = (
   if (before && counts[before] > 0) counts[before] -= 1;
   counts[star] += 1;
   return summaryFromCounts(counts);
+};
+
+/**
+ * The library's rating of the app (the ratings store's, counted as the cards
+ * count it: every vote, plus the creator's first rating) as it will be once
+ * the pending vote is in a block, so the cards and the Featured rows show it
+ * at once. Null when there is nothing to show.
+ */
+export const ratingWithPendingVote = (
+  data: AppRatingData | null | undefined,
+  pending: PendingVote
+): AppRatingData | null => {
+  const star = starOf(pending?.rating);
+  if (!star) return data ?? null;
+  if (pending.createdPoll) {
+    // Once the store has the poll, its first rating is already counted.
+    if (data?.hasPublishedRating) return data;
+    return {
+      averageRating: star,
+      totalVotes: 1,
+      voteCounts: [{ optionName: `${INITIAL_PREFIX}${star}`, voteCount: 0 }],
+      hasPublishedRating: true,
+      pollInfo: data?.pollInfo ?? null,
+      lastFetched: data?.lastFetched ?? 0,
+    };
+  }
+  // A vote on a poll the store doesn't know yet can't be counted with the
+  // others: the store fetches the poll first.
+  if (!data?.hasPublishedRating) return data ?? null;
+  const before = starOf(pending.replaces);
+  let added = false;
+  const voteCounts = (data.voteCounts || []).map((vote) => {
+    let count = Math.max(0, Number(vote?.voteCount) || 0);
+    if (before && vote.optionName === String(before)) {
+      count = Math.max(0, count - 1);
+    }
+    if (vote.optionName === String(star)) {
+      count += 1;
+      added = true;
+    }
+    return { ...vote, voteCount: count };
+  });
+  if (!added) voteCounts.push({ optionName: String(star), voteCount: 1 });
+  const summary = summarizeVoteCounts(voteCounts);
+  return {
+    ...data,
+    averageRating: summary.average,
+    totalVotes: summary.total,
+    voteCounts,
+  };
 };
 
 /** How long a sent vote is shown before it's dropped as lost. */

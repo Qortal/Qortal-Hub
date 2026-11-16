@@ -15,6 +15,7 @@ i18n.init({
         'tabs.official_apps': 'official apps',
         'tabs.community_apps': 'community apps',
         'tabs.categories': 'categories',
+        'tabs.widgets': 'widgets',
         'tabs.my_apps': 'my apps',
         'tabs.add_private': 'Private apps',
       },
@@ -38,7 +39,7 @@ const TestWrapper = ({ children }: { children: React.ReactNode }) => (
 import { AppsTabs, AppsLibraryTabValue } from '../AppsLibrary';
 
 describe('AppsTabs', () => {
-  it('renders all five tabs', () => {
+  it('renders all six tabs', () => {
     const mockOnTabChange = vi.fn();
     render(
       <TestWrapper>
@@ -49,8 +50,18 @@ describe('AppsTabs', () => {
     expect(screen.getByText(/official apps/i)).toBeInTheDocument();
     expect(screen.getByText(/community apps/i)).toBeInTheDocument();
     expect(screen.getByText(/categories/i)).toBeInTheDocument();
+    expect(screen.getByText(/widgets/i)).toBeInTheDocument();
     expect(screen.getByText(/my apps/i)).toBeInTheDocument();
     expect(screen.getByText(/private apps/i)).toBeInTheDocument();
+    // Widgets sits with the tabs to browse, before the account's own.
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Official apps',
+      'Community apps',
+      'Categories',
+      'Widgets',
+      'My apps',
+      'Private apps',
+    ]);
   });
 
   it('highlights the current tab', () => {
@@ -104,6 +115,10 @@ describe('AppsTabs', () => {
     await user.click(screen.getByText(/categories/i));
     expect(mockOnTabChange).toHaveBeenLastCalledWith('categories');
 
+    // Click widgets tab
+    await user.click(screen.getByText(/widgets/i));
+    expect(mockOnTabChange).toHaveBeenLastCalledWith('widgets');
+
     // Click my apps tab
     await user.click(screen.getByText(/my apps/i));
     expect(mockOnTabChange).toHaveBeenLastCalledWith('my-apps');
@@ -113,7 +128,7 @@ describe('AppsTabs', () => {
     expect(mockOnTabChange).toHaveBeenLastCalledWith('community');
 
     // Verify total call count
-    expect(mockOnTabChange).toHaveBeenCalledTimes(3);
+    expect(mockOnTabChange).toHaveBeenCalledTimes(4);
   });
 
   it('supports all valid tab values', () => {
@@ -122,6 +137,7 @@ describe('AppsTabs', () => {
       'official',
       'community',
       'categories',
+      'widgets',
       'my-apps',
       'private',
     ];
@@ -132,8 +148,8 @@ describe('AppsTabs', () => {
           <AppsTabs currentTab={tabValue} onTabChange={mockOnTabChange} />
         </TestWrapper>
       );
-      // Should render without errors (5 tabs: official, community, categories, my-apps, private)
-      expect(screen.getAllByRole('tab').length).toBe(5);
+      // Should render without errors (6 tabs: official, community, categories, widgets, my-apps, private)
+      expect(screen.getAllByRole('tab').length).toBe(6);
       unmount();
     });
   });

@@ -21,6 +21,11 @@ import { blobBytes, bytesToBase64 } from './blobBytes';
 export interface AppRef {
   service: string;
   name: string;
+  /**
+   * A widget's own identifier (an APP under `go-widget-…`): its reviews and
+   * rating are its own. Absent for an app, the name's default resource.
+   */
+  identifier?: string | null;
 }
 
 export interface PageResource {

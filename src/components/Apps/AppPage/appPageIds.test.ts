@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import { sha256 } from '@noble/hashes/sha256';
 import {
   appPageIdentifier,
   appReviewKey,
   appShotsIdentifier,
+  normalizeAppIdentifier,
   replyIdentifier,
   replyPrefixOf,
   reviewIdentifierKind,
 } from './appPageIds';
+
+const hex16 = (text: string) =>
+  Array.from(sha256(new TextEncoder().encode(text)), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  )
+    .join('')
+    .slice(0, 16);
 
 describe('app page identifiers', () => {
   it('names the page and screenshot resources per service', () => {
@@ -46,6 +55,36 @@ describe('app page identifiers', () => {
     expect(reviewIdentifierKind(`${key}_r_abc123`, key)).toBeNull();
     expect(reviewIdentifierKind(appReviewKey('APP', 'Other'), key)).toBeNull();
     expect(reviewIdentifierKind(`${key}x`, key)).toBeNull();
+  });
+
+  it("gives a widget under its own identifier a key of its own, never an app's", () => {
+    const app = appReviewKey('APP', 'Q-Weather');
+    const widget = appReviewKey('APP', 'Q-Weather', 'go-widget-now');
+    // As docs/app-pages.md says: the name in lower case, a line break, the
+    // identifier as published.
+    expect(app).toBe(`qhub_review_v1_APP_${hex16('APP:q-weather')}`);
+    expect(widget).toBe(
+      `qhub_review_v1_APP_${hex16('APP:q-weather\ngo-widget-now')}`
+    );
+    expect(widget).not.toBe(app);
+    expect(appReviewKey('app', ' q-weather ', 'go-widget-now')).toBe(widget);
+    expect(appReviewKey('APP', 'Q-Weather', 'go-widget-weather')).not.toBe(
+      widget
+    );
+    // An app named like the widget's poll still has a key of its own.
+    expect(appReviewKey('APP', 'Q-Weather-id-go-widget-now')).not.toBe(widget);
+    expect(replyIdentifier(widget).length).toBeLessThanOrEqual(64);
+  });
+
+  it("keeps the app's key for a widget that is its name's default APP", () => {
+    const app = appReviewKey('APP', 'GO Clock');
+    expect(appReviewKey('APP', 'GO Clock', null)).toBe(app);
+    expect(appReviewKey('APP', 'GO Clock', '')).toBe(app);
+    expect(appReviewKey('APP', 'GO Clock', 'default')).toBe(app);
+    expect(normalizeAppIdentifier('default')).toBeNull();
+    expect(normalizeAppIdentifier('  ')).toBeNull();
+    expect(normalizeAppIdentifier(7)).toBeNull();
+    expect(normalizeAppIdentifier('go-widget-now')).toBe('go-widget-now');
   });
 
   it('makes a different reply identifier each time', () => {

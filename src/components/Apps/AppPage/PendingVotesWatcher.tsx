@@ -69,6 +69,17 @@ export const PendingVotesWatcher = () => {
           })
         );
         if (controller.signal.aborted || !settled.length) return;
+        // The app's rating first (a vote dropped as too old may still have
+        // come in): the library counts a pending vote until then
+        // (optimisticRatings), so the cards don't lose it in between.
+        await Promise.all(
+          settled.map(([, pending]) =>
+            Promise.resolve(
+              fetchRating(pending.name, pending.service, true)
+            ).catch(() => null)
+          )
+        );
+        if (controller.signal.aborted) return;
         setPendingVotes((previous) => {
           const next = { ...previous };
           // A newer vote sent meanwhile stays.
@@ -77,10 +88,6 @@ export const PendingVotesWatcher = () => {
           });
           return next;
         });
-        // A vote dropped as too old may still have come in.
-        settled.forEach(([, pending]) =>
-          fetchRating(pending.name, pending.service, true)
-        );
       } finally {
         isChecking = false;
       }

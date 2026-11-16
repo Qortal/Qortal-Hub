@@ -52,14 +52,14 @@ interface SavedParts {
 }
 
 /** Two columns from this page width on. */
-const WIDE_PAGE = 920;
+export const WIDE_PAGE = 920;
 
 /**
  * The page's width. A hidden or collapsed container (display: none) measures
  * 0: the page keeps the width it last had, so it is laid out as it was when it
  * shows again.
  */
-const useWidth = () => {
+export const useWidth = () => {
   const [width, setWidth] = useState(0);
   const [element, setElement] = useState<HTMLElement | null>(null);
   useEffect(() => {

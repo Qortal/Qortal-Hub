@@ -18,6 +18,12 @@ import { sha256 } from '@noble/hashes/sha256';
  * QDN's 64 characters. Reviews and replies have prefixes of their own, so a
  * prefix search for the reviews finds only reviews, and many replies can't
  * push them off a page.
+ *
+ * A widget is an APP under an identifier of its own (`go-widget-now`): its
+ * key hashes `<SERVICE>:<lowercase name>` + a line break + the identifier as
+ * published. A name can't hold a line break (Core turns any whitespace into
+ * one space), so no app's key is ever a widget's. A widget published as the
+ * name's default APP is that app, and shares its reviews.
  */
 
 export const APP_PAGE_IDENTIFIER_PREFIX = 'qhub_app_';
@@ -29,6 +35,17 @@ export type AppServiceName = 'APP' | 'WEBSITE';
 export const normalizeAppService = (service: string | undefined): string =>
   String(service || 'APP').toUpperCase();
 
+/**
+ * A resource's identifier, or null for the name's default one (no
+ * identifier, '' or 'default'): an app is its name's default resource.
+ */
+export const normalizeAppIdentifier = (identifier: unknown): string | null =>
+  typeof identifier === 'string' &&
+  identifier.trim() !== '' &&
+  identifier !== 'default'
+    ? identifier
+    : null;
+
 export const appPageIdentifier = (service: string): string =>
   `${APP_PAGE_IDENTIFIER_PREFIX}page_v1_${normalizeAppService(service)}`;
 
@@ -38,13 +55,18 @@ export const appShotsIdentifier = (service: string): string =>
 const toHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
-/** The app's part of every review identifier. */
-export const appReviewKey = (service: string, name: string): string => {
+/** The app's (or widget's) part of every review identifier. */
+export const appReviewKey = (
+  service: string,
+  name: string,
+  identifier?: string | null
+): string => {
   const normalizedService = normalizeAppService(service);
+  const ownIdentifier = normalizeAppIdentifier(identifier);
   const source = new TextEncoder().encode(
     `${normalizedService}:${String(name || '')
       .trim()
-      .toLowerCase()}`
+      .toLowerCase()}${ownIdentifier ? `\n${ownIdentifier}` : ''}`
   );
   const digest = sha256(source);
   return `${REVIEW_IDENTIFIER_PREFIX}${normalizedService}_${toHex(digest).slice(0, 16)}`;

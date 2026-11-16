@@ -4,8 +4,10 @@ import {
   fetchPollInfo,
   initialRating,
   isPendingVoteConfirmed,
+  ratingName,
   ratingPollName,
   ratingsByAddress,
+  ratingWithPendingVote,
   summarizeVoteCounts,
   summaryFromVoters,
   voterOf,
@@ -29,6 +31,23 @@ describe('rating polls', () => {
     expect(ratingPollName('app', 'Q-Blog')).toBe(
       'app-library-APP-rating-Q-Blog'
     );
+  });
+
+  it("names a widget's poll after its identifier, as Q-Git names a repository's", () => {
+    expect(ratingName('Q-Weather', 'go-widget-now')).toBe(
+      'Q-Weather-id-go-widget-now'
+    );
+    expect(ratingPollName('APP', 'Q-Weather', 'go-widget-now')).toBe(
+      'app-library-APP-rating-Q-Weather-id-go-widget-now'
+    );
+    // A widget that is its name's default APP is the app: one poll.
+    expect(ratingPollName('APP', 'GO Clock', null)).toBe(
+      'app-library-APP-rating-GO Clock'
+    );
+    expect(ratingPollName('APP', 'GO Clock', 'default')).toBe(
+      'app-library-APP-rating-GO Clock'
+    );
+    expect(ratingName('GO Clock', '')).toBe('GO Clock');
   });
 
   it("reads the creator's rating from the poll's options", () => {
@@ -263,6 +282,73 @@ describe('a vote waiting for its block', () => {
         isInitial: true,
       })
     ).toBe(false);
+  });
+});
+
+describe('ratingWithPendingVote (the library, before the block)', () => {
+  const stored = (voteCounts: Array<[string, number]>) => ({
+    averageRating: 0,
+    totalVotes: 0,
+    voteCounts: voteCounts.map(([optionName, voteCount]) => ({
+      optionName,
+      voteCount,
+    })),
+    hasPublishedRating: true,
+    pollInfo: null,
+    lastFetched: 7,
+  });
+  const sent = (rating: number, extra = {}) => ({
+    voter: 'QMe',
+    rating,
+    createdPoll: false,
+    sentAt: 1,
+    name: 'Q-Weather-id-go-widget-now',
+    service: 'APP',
+    ...extra,
+  });
+
+  it('shows a first rating at once, until the store has the poll', () => {
+    expect(
+      ratingWithPendingVote(null, sent(5, { createdPoll: true }))
+    ).toMatchObject({
+      averageRating: 5,
+      totalVotes: 1,
+      hasPublishedRating: true,
+    });
+    // The poll is in: its first rating is counted already.
+    const inStore = stored([['initialValue-5', 0]]);
+    expect(ratingWithPendingVote(inStore, sent(5, { createdPoll: true }))).toBe(
+      inStore
+    );
+  });
+
+  it('adds a vote, or moves the voter’s earlier one, as the cards count', () => {
+    // The creator's 5, and a 3: 4.0 from 2.
+    const data = stored([
+      ['initialValue-5', 0],
+      ['3', 1],
+      ['5', 0],
+    ]);
+    expect(ratingWithPendingVote(data, sent(5))).toMatchObject({
+      averageRating: 13 / 3,
+      totalVotes: 3,
+    });
+    // The one who gave 3 now gives 5.
+    expect(ratingWithPendingVote(data, sent(5, { replaces: 3 }))).toMatchObject(
+      { averageRating: 5, totalVotes: 2 }
+    );
+    // An option the node didn't list yet.
+    expect(
+      ratingWithPendingVote(stored([['initialValue-4', 0]]), sent(2))
+    ).toMatchObject({ averageRating: 3, totalVotes: 2 });
+  });
+
+  it("leaves what it can't count as it is", () => {
+    const unknown = { ...stored([]), hasPublishedRating: false };
+    // A vote on a poll the store hasn't fetched yet.
+    expect(ratingWithPendingVote(unknown, sent(5))).toBe(unknown);
+    expect(ratingWithPendingVote(null, sent(5))).toBeNull();
+    expect(ratingWithPendingVote(unknown, sent(9))).toBe(unknown);
   });
 });
 

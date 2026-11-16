@@ -688,7 +688,8 @@
       "top_rated_hint": "el top {{number}} según las valoraciones de la comunidad",
       "view_grid": "cuadrícula",
       "view_label": "vista",
-      "view_list": "lista"
+      "view_list": "lista",
+      "widgets_hint": "pequeñas Q-Apps para Inicio: valóralas, lee lo que opinan los demás y agrega las que te gusten"
     },
     "no_matches": "nada coincide con «{{query}}»",
     "no_matches_hint": "prueba con otro nombre o pega un enlace qortal://.",
@@ -1290,7 +1291,8 @@
     "categories": "categorías",
     "community_apps": "apps de la comunidad",
     "my_apps": "mis apps",
-    "official_apps": "apps oficiales"
+    "official_apps": "apps oficiales",
+    "widgets": "widgets"
   },
   "tag_number": "etiqueta {{number}}",
   "tags": "etiquetas",
@@ -1403,6 +1405,15 @@
     "loading": "Cargando",
     "loading_message": "Obteniendo los últimos datos públicos del nodo Qortal predeterminado.",
     "retry": "Reintentar"
+  },
+  "widgets": {
+    "add_to_home": "agregar a Inicio",
+    "added_to_home": "{{title}} ya está en Inicio.",
+    "on_home": "en Inicio",
+    "qdn_resource": "recurso de QDN",
+    "remove_from_home": "quitar de Inicio",
+    "removed_from_home": "{{title}} ya no está en Inicio.",
+    "type": "widget"
   },
   "zip": "cremallera"
 }
