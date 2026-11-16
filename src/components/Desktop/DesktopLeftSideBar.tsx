@@ -637,7 +637,8 @@ export const DesktopSideBar = ({
             })}
             onClick={() =>
               runSidebarAction(() => {
-                executeEvent('newTabWindow', {});
+                // The launcher tab there is, or a new one (AppsDesktop).
+                executeEvent('showLauncherTab', {});
                 setDesktopViewMode('apps');
               })
             }

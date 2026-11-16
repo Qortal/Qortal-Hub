@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import { executeEvent } from '../../../utils/events';
 import type { PinnedApp } from '../../../utils/pinnedAppsSettings';
+import { inLauncherTab, useLauncherTabId } from '../launcherTabs';
 import { launcherPinLabel } from './launcherPins';
 import {
   LAUNCHER_ICON_SIZE_PX,
@@ -12,31 +13,36 @@ import {
 } from './LauncherTile';
 
 /**
- * Opens a pinned app in a tab. A private app is downloaded and decrypted
- * first; the promise tells whether it opened.
+ * Opens a pinned app in a tab, or in the launcher tab it was chosen in. A
+ * private app is downloaded and decrypted first; the promise tells whether it
+ * opened.
  */
 export const useOpenLauncherPin = () => {
   const { openApp } = useHandlePrivateApps();
+  const launcherTabId = useLauncherTabId();
   // The hook hands out a new `openApp` on every render: keep the latest.
   const openAppRef = useRef(openApp);
   openAppRef.current = openApp;
 
-  return useCallback(async (app: PinnedApp): Promise<boolean> => {
-    if (!app.isPrivate) {
-      executeEvent('addTab', { data: app });
-      return true;
-    }
-    try {
-      return !!(await openAppRef.current(
-        app.privateAppProperties,
-        false,
-        undefined
-      ));
-    } catch (error) {
-      console.error(error);
-      return false;
-    }
-  }, []);
+  return useCallback(
+    async (app: PinnedApp): Promise<boolean> => {
+      if (!app.isPrivate) {
+        executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) });
+        return true;
+      }
+      try {
+        return !!(await openAppRef.current(
+          app.privateAppProperties,
+          false,
+          undefined
+        ));
+      } catch (error) {
+        console.error(error);
+        return false;
+      }
+    },
+    [launcherTabId]
+  );
 };
 
 /** The picture of a pinned app: its thumbnail, a private app's logo or a lock. */

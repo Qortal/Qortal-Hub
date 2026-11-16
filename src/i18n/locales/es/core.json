@@ -179,10 +179,12 @@
     "duplicate": "duplicar pestaña",
     "limit_reached": "se alcanzó el número máximo de pestañas. Cierra una para abrir otra.",
     "locked_kept_open": "las pestañas bloqueadas siguen abiertas. Ciérralas una por una para confirmar.",
+    "new_tab": "nueva pestaña",
     "pin": "fijar pestaña",
     "pinned_and_locked_kept_open": "las pestañas fijadas y bloqueadas siguen abiertas. Desfija una pestaña fijada antes de cerrarla, y cierra las bloqueadas una por una para confirmar.",
     "pinned_kept_open": "las pestañas fijadas siguen abiertas. Desfija una pestaña para cerrarla.",
-    "unpin": "desfijar pestaña"
+    "unpin": "desfijar pestaña",
+    "unsaved_publish": "los datos de su formulario de publicación aún no se han publicado, y al cerrar la pestaña se descartan."
   },
   "apps_bar": {
     "empty": "Fija una aplicación o añade un marcador y aparecerá aquí.",
@@ -751,8 +753,21 @@
       "menu_aria": "Opciones de sesión",
       "tooltip": "Bloquear o cerrar sesión"
     },
+    "suggestion_action": {
+      "new_tab": "Nueva pestaña",
+      "open_link": "Abrir enlace",
+      "switch_to_tab": "Ir a la pestaña"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps y sitios web",
+      "names": "Nombres",
+      "saved": "Aplicaciones fijadas y marcadores",
+      "tabs": "Pestañas abiertas"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Marcador",
+      "name": "Nombre",
       "website": "Sitio web"
     },
     "suggestions": "Sugerencias"
@@ -811,6 +826,29 @@
     "selected_file": "archivo seleccionado: {{filename}}"
   },
   "publish": "publicar",
+  "publish_source": {
+    "changed_files": "archivos modificados desde el {{date}}: {{number}}",
+    "choose_another": "elegir otro",
+    "choose_folder": "elegir carpeta",
+    "read_error": "no se pudo leer la carpeta o el archivo seleccionado",
+    "same_file": "el mismo archivo que la última vez",
+    "same_folder": "la misma carpeta que la última vez",
+    "selected_file": "archivo seleccionado: {{name}}",
+    "selected_folder": "carpeta seleccionada: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "no se pudo comprobar si sigues siendo administrador de {{group}}. Inténtalo de nuevo más tarde.",
+    "checking_admin": "comprobando que sigues siendo administrador de {{group}}…",
+    "current_unavailable": "no se pudo cargar la versión actual, así que no se pueden conservar el nombre de la aplicación ni el logotipo. Vuelve a introducirlos.",
+    "filled_from_profile": "no se pudieron cargar desde la red los detalles de esta aplicación, así que se rellenaron con la última publicación desde este PC. Revísalos antes de publicar.",
+    "identifier_locked": "el identificador no se puede cambiar en una actualización: otro identificador publicaría una aplicación nueva.",
+    "is_admin": "eres administrador de {{group}}",
+    "last_published": "última publicación desde este PC: {{date}}",
+    "loading_current": "cargando la versión actual…",
+    "logo_kept": "logotipo conservado de la versión actual",
+    "not_admin": "ya no eres administrador de {{group}}, así que esta aplicación no se puede actualizar desde esta cuenta.",
+    "title": "actualizar {{name}}"
+  },
   "q_apps": {
     "about": "Sobre este Q-App",
     "q_mail": "Q-Mail",

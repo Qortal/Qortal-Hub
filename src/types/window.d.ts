@@ -114,6 +114,20 @@ declare global {
       set: (key: string, value: unknown) => Promise<void>;
       delete: (key: string) => Promise<void>;
     };
+    /** Saved publish profiles, on this PC only (see publish-profiles.ts). */
+    publishProfiles?: {
+      get: (
+        key: import('../components/Apps/publishProfiles').PublishProfileKey
+      ) => Promise<
+        import('../components/Apps/publishProfiles').PublishProfile | null
+      >;
+      merge: (
+        key: import('../components/Apps/publishProfiles').PublishProfileKey,
+        patch: import('../components/Apps/publishProfiles').PublishProfile
+      ) => Promise<
+        import('../components/Apps/publishProfiles').PublishProfile | null
+      >;
+    };
     coreSetup?: {
       isCoreRunning?: () => Promise<boolean>;
       isCoreRunningOnSystem?: () => Promise<boolean>;
