@@ -30,6 +30,7 @@ import {
 } from './AppPageParts';
 import { usePrimaryNames } from './useAppPage';
 import type { PendingVote, RatingSummary, Voter } from './appVotes';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 const shortAddress = (address: string) =>
   address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
@@ -57,9 +58,11 @@ export const AppVotersDialog = ({
   const shown = star ? voters.filter((voter) => voter.rating === star) : voters;
   const countFor = (value: number) =>
     voters.filter((voter) => voter.rating === value).length;
+  // Put away while its launcher tab is hidden, and back with it.
+  const dialogShown = useLauncherTabDialog(open);
 
   return (
-    <Dialog fullWidth maxWidth="xs" onClose={onClose} open={open}>
+    <Dialog fullWidth maxWidth="xs" onClose={onClose} {...dialogShown}>
       <DialogTitle sx={{ alignItems: 'center', display: 'flex', pr: 6 }}>
         {t('core:app_page.voters.title', {
           postProcess: 'capitalizeFirstChar',

@@ -29,28 +29,38 @@ vi.mock('./screenshotImage', () => ({
 }));
 
 import { ScreenshotCaptureDialog } from './ScreenshotCaptureDialog';
+import { LauncherTabShownContext } from '../launcherTabs';
 
 const CAPTURED = { png: new Uint8Array([1]), width: 1600, height: 1000 };
 
 let qappGuestShot: ReturnType<typeof vi.fn>;
 
+// As its callers keep it: the same object across renders.
+const SOURCE = { kind: 'published', service: 'APP', name: 'MyApp' } as const;
+
 const renderDialog = (slots = 5) => {
   const onClose = vi.fn();
   const onDone = vi.fn();
-  render(
+  const dialogIn = (isTabShown: boolean) => (
     <ThemeProvider theme={createTheme()}>
       <I18nextProvider i18n={i18n}>
-        <ScreenshotCaptureDialog
-          onClose={onClose}
-          onDone={onDone}
-          open
-          slots={slots}
-          source={{ kind: 'published', service: 'APP', name: 'MyApp' }}
-        />
+        <LauncherTabShownContext.Provider value={isTabShown}>
+          <ScreenshotCaptureDialog
+            onClose={onClose}
+            onDone={onDone}
+            open
+            slots={slots}
+            source={SOURCE}
+          />
+        </LauncherTabShownContext.Provider>
       </I18nextProvider>
     </ThemeProvider>
   );
-  return { onClose, onDone };
+  const view = render(dialogIn(true));
+  // Its launcher tab hidden behind another tab, or shown again.
+  const setTabShown = (isTabShown: boolean) =>
+    view.rerender(dialogIn(isTabShown));
+  return { onClose, onDone, setTabShown };
 };
 
 const captureButton = () =>
@@ -187,6 +197,31 @@ describe('taking screenshots by hand', () => {
     });
     expect(shotUrls()).toEqual(['blob:1']);
     expect(screen.queryByText('app_page.capture.capture_failed')).toBeNull();
+  });
+
+  it('steps aside while its launcher tab is hidden, keeping the app and the captures', async () => {
+    const { onClose, setTabShown } = renderDialog();
+    await whenReady();
+    await act(async () => {
+      fireEvent.click(captureButton());
+    });
+    const view = screen.getByTestId('app-view');
+
+    setTabShown(false);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Kept as it was, out of sight.
+    expect(screen.getByTestId('app-view')).toBe(view);
+
+    setTabShown(true);
+
+    expect(
+      await screen.findByRole('dialog', { name: 'app_page.capture.title' })
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('app-view')).toBe(view);
+    expect(shotUrls()).toEqual(['blob:1']);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('cancels without handing anything over', async () => {
