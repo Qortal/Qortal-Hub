@@ -885,8 +885,21 @@
       "menu_aria": "Sessiooni valikud",
       "tooltip": "Lukusta või logi välja"
     },
+    "suggestion_action": {
+      "new_tab": "Uus vaheleht",
+      "open_link": "Ava link",
+      "switch_to_tab": "Mine vahelehele"
+    },
+    "suggestion_group": {
+      "apps": "Q-Appid ja veebilehed",
+      "names": "Nimed",
+      "saved": "Kinnitatud rakendused ja järjehoidjad",
+      "tabs": "Avatud vahelehed"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Järjehoidja",
+      "name": "Nimi",
       "website": "Veebileht"
     },
     "suggestions": "Soovitused"

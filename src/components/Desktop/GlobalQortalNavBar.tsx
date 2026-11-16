@@ -46,9 +46,14 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
-import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
+import { useNameSearch } from '../../hooks/useNameSearch';
 import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
-import { buildAppPageLink, openAppPageLink } from '../Apps/AppPage/appPageLink';
+import {
+  buildAppPageLink,
+  openAppPageLink,
+  parseAppPageLink,
+} from '../Apps/AppPage/appPageLink';
+import type { PinnedApp } from '../../utils/pinnedAppsSettings';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
 import {
@@ -65,20 +70,38 @@ import { TaskManager } from '../TaskManager/TaskManager';
 import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { SubscriptionsStatus } from './SubscriptionsStatus';
 import { AppBookmarksButton } from '../Apps/AppBookmarks';
+import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
+import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
+import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
 import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
-import { AppSearchSuggestions } from './AppSearchSuggestions';
+import {
+  AppSearchSuggestions,
+  type SuggestionGroup,
+} from './AppSearchSuggestions';
 import {
   type AppOpenCounts,
   readAppOpenCounts,
   recordAppOpen,
 } from './appOpenCounts';
+import { exactAppNameMatch, type SearchableApp } from './appSearchSuggestions';
 import {
-  type AppSearchOption,
-  buildAppSearchOptions,
-  exactAppNameMatch,
-  type SearchableApp,
-} from './appSearchSuggestions';
+  buildOmniboxOptions,
+  findPrivateAppTab,
+  isInternalTab,
+  isPrivateAppTab,
+  NAME_SEARCH_DELAY_MS,
+  NAME_SEARCH_LIMIT,
+  NAME_SEARCH_MIN_LENGTH,
+  type OmniboxLink,
+  type OmniboxOption,
+  type OmniboxTab,
+  omniboxGroupOf,
+  omniboxOptionKey,
+  omniboxOptionOpenTab,
+  omniboxTabPage,
+  parseOmniboxLink,
+} from './omniboxSuggestions';
 
 export const QORTAL_GROUP_CALL_NAV_SLOT_ID = 'qortal-group-call-nav-slot';
 export const DIRECT_VOICE_CALL_NAV_SLOT_ID = 'direct-voice-call-nav-slot';
@@ -90,6 +113,14 @@ type GlobalQortalNavBarProps = {
 
 /** Hub-owned surfaces in the app tab strip (e.g. Q-Chat), not arbitrary Q-Apps */
 const INTERNAL_TAB_SERVICE = 'INTERNAL';
+
+/** How a suggestion opens: Alt+Enter asks for a new tab. */
+type OpenChoice = { newTab?: boolean };
+
+const NAME_SEARCH_OPTIONS = {
+  delayMs: NAME_SEARCH_DELAY_MS,
+  minLength: NAME_SEARCH_MIN_LENGTH,
+};
 
 type SelectedTab = {
   tabId: string;
@@ -393,14 +424,14 @@ function AuthenticatedUserMenu({
   return (
     <>
       {primaryName ? (
-      <Tooltip
+        <Tooltip
           title={tooltipTitle(primaryName)}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps}
-      >
-        {accountButton}
-      </Tooltip>
+          placement="bottom"
+          arrow
+          slotProps={tooltipSlotProps}
+        >
+          {accountButton}
+        </Tooltip>
       ) : (
         accountButton
       )}
@@ -803,6 +834,9 @@ export function GlobalQortalNavBar({
   // Suggestions are for what the user types, not for the current link.
   const [isEditingInput, setIsEditingInput] = useState(false);
   const [appOpenCounts, setAppOpenCounts] = useState<AppOpenCounts>({});
+  // The tabs of the strip, which the suggestions can switch to.
+  const [openTabs, setOpenTabs] = useState<OmniboxTab[]>([]);
+  const openPrivatePin = useOpenLauncherPin();
 
   const setTabsToNav = useCallback((e: CustomEvent) => {
     const nextToken = Number(e.detail?.data?.tabsToken || 0);
@@ -820,6 +854,8 @@ export function GlobalQortalNavBar({
     }
     const nextSelectedTab = e.detail?.data?.selectedTab;
     setSelectedTab(nextSelectedTab ? { ...nextSelectedTab } : null);
+    const nextTabs = e.detail?.data?.tabs;
+    setOpenTabs(Array.isArray(nextTabs) ? nextTabs.filter(Boolean) : []);
   }, []);
 
   useEffect(() => {
@@ -991,67 +1027,291 @@ export function GlobalQortalNavBar({
     setInputValue('');
   }, [shownLink, desktopViewMode]);
 
-  const handleOpenInput = useCallback((value: string) => {
-    const trimmed = value.trim();
-    if (!trimmed) return;
+  // What the bar shows while nobody types in it: the page on screen.
+  const restingInputValue =
+    (desktopViewMode === 'apps' || desktopViewMode === 'dev') && shownLink
+      ? shownLink
+      : '';
 
-    // qortal://use-app-page/<SERVICE>/<name>: the app's page, not the app.
-    if (openAppPageLink(trimmed)) return;
+  // After a choice the bar stops suggesting and shows the address of what
+  // opens, until the tab's own link arrives.
+  const finishChoice = useCallback(
+    (value?: string | null) => {
+      setIsEditingInput(false);
+      setInputValue(value || restingInputValue);
+      inputElementRef.current?.blur();
+    },
+    [restingInputValue]
+  );
 
-    if (parseQortalUseGroupLink(trimmed)) {
-      void openQortalUseGroupLink(trimmed);
-      return;
-    }
-
-    const isExplicitQortalLink = /^qortal:\/\//i.test(trimmed);
-    const parsedLink = isExplicitQortalLink
-      ? extractComponents(normalizeQortalInput(trimmed))
-      : null;
-
-    if (parsedLink) {
-      const { service, name, identifier, path } = parsedLink;
-      executeEvent('addTab', { data: { service, name, identifier, path } });
-      executeEvent('open-apps-mode', {});
-      return;
-    }
-
-    executeEvent('openAppsLibrarySearch', {
-      data: {
-        query: trimmed,
+  /**
+   * Opens a Q-App, website or page in a tab. If that resource is open
+   * already, its tab is switched to and shows this page, or the start page
+   * without one (`navigateIfAlreadyOpen`); without an identifier, that is the
+   * name's default resource. With `newTab` (Alt+Enter) it gets a new tab.
+   */
+  const openResource = useCallback(
+    (
+      target: {
+        identifier?: string;
+        name: string;
+        path?: string;
+        service: string;
       },
-    });
+      { newTab = false }: OpenChoice = {}
+    ) => {
+      const data: Record<string, unknown> = {
+        name: target.name,
+        service: target.service.toUpperCase(),
+      };
+      // 'null' or 'default' is the default resource: no identifier.
+      const identifier = resourceIdentifierKey(target.identifier);
+      if (identifier) data.identifier = identifier;
+      if (target.path) data.path = target.path;
+      if (!newTab) data.navigateIfAlreadyOpen = true;
+      executeEvent('addTab', { data });
+      executeEvent('open-apps-mode', {});
+    },
+    []
+  );
+
+  /** Switches to an open tab, the way clicking it in the strip does. */
+  const switchToTab = useCallback((tab: OmniboxTab) => {
+    if (!tab.service) {
+      executeEvent('open-dev-mode', {});
+      executeEvent('setSelectedTab', { data: tab, isDevMode: true });
+      return;
+    }
     executeEvent('open-apps-mode', {});
+    executeEvent('setSelectedTab', { data: tab });
   }, []);
 
-  const openSearchApp = useCallback((app: SearchableApp) => {
-    const service = app.service.toUpperCase();
-    setIsEditingInput(false);
-    setInputValue(`${QORTAL_PROTOCOL}${service}/${app.name}`);
-    inputElementRef.current?.blur();
-    executeEvent('addTab', { data: { name: app.name, service } });
-    executeEvent('open-apps-mode', {});
-  }, []);
+  const openLink = useCallback(
+    (link: OmniboxLink, choice?: OpenChoice) => {
+      if (link.kind === 'group') {
+        finishChoice();
+        void openQortalUseGroupLink(link.link);
+        return;
+      }
+      finishChoice(link.link);
+      openResource(link, choice);
+    },
+    [finishChoice, openResource]
+  );
+
+  // Text that is no exact name: a link opens, other text searches the library.
+  const handleOpenInput = useCallback(
+    (value: string, choice?: OpenChoice) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+
+      // qortal://use-app-page/<SERVICE>/<name>: the app's page, not the app.
+      if (parseAppPageLink(trimmed)) {
+        finishChoice(trimmed);
+        openAppPageLink(trimmed);
+        return;
+      }
+
+      const link = parseOmniboxLink(trimmed);
+      if (link) {
+        openLink(link, choice);
+        return;
+      }
+
+      executeEvent('openAppsLibrarySearch', {
+        data: {
+          query: trimmed,
+        },
+      });
+      executeEvent('open-apps-mode', {});
+    },
+    [finishChoice, openLink]
+  );
+
+  const openSearchApp = useCallback(
+    (app: SearchableApp, choice?: OpenChoice) => {
+      const service = app.service.toUpperCase();
+      finishChoice(`${QORTAL_PROTOCOL}${service}/${app.name}`);
+      openResource({ name: app.name, service }, choice);
+    },
+    [finishChoice, openResource]
+  );
 
   // Enter or the open button: a Q-App or website typed by its exact name opens
   // it. Anything else works as before: links open, text searches the library.
   const submitSearchInput = useCallback(
-    (value: string) => {
+    (value: string, choice?: OpenChoice) => {
       const exactApp = exactAppNameMatch(value, availableQapps, appOpenCounts);
       if (exactApp) {
-        openSearchApp(exactApp);
+        openSearchApp(exactApp, choice);
         return;
       }
-      handleOpenInput(value);
+      handleOpenInput(value, choice);
     },
     [appOpenCounts, availableQapps, handleOpenInput, openSearchApp]
   );
 
-  const appSearchOptions = useMemo(
+  const openTabSuggestion = useCallback(
+    (tab: OmniboxTab, choice: OpenChoice) => {
+      // Alt+Enter: the same Q-App or website in a new tab, at its start page.
+      // Q-Chat and private apps have the one tab only.
+      if (
+        choice.newTab &&
+        tab.service &&
+        tab.name &&
+        !isInternalTab(tab) &&
+        !isPrivateAppTab(tab)
+      ) {
+        const service = tab.service.toUpperCase();
+        finishChoice(`${QORTAL_PROTOCOL}${service}/${tab.name}`);
+        openResource(
+          { identifier: tab.identifier, name: tab.name, service },
+          choice
+        );
+        return;
+      }
+      finishChoice(navigationController?.[tab.tabId]?.currentLink);
+      switchToTab(tab);
+    },
+    [finishChoice, navigationController, openResource, switchToTab]
+  );
+
+  const openPinnedApp = useCallback(
+    (app: PinnedApp, choice: OpenChoice) => {
+      if (!app.isPrivate) {
+        const service = String(app.service).toUpperCase();
+        finishChoice(`${QORTAL_PROTOCOL}${service}/${app.name}`);
+        openResource({ name: String(app.name), service }, choice);
+        return;
+      }
+      finishChoice();
+      // A private app opens from its own copy: a tab showing it is switched
+      // to, else it is downloaded and decrypted again.
+      const openTab = choice.newTab ? null : findPrivateAppTab(openTabs, app);
+      if (openTab) {
+        switchToTab(openTab);
+        return;
+      }
+      void openPrivatePin(app);
+    },
+    [finishChoice, openPrivatePin, openResource, openTabs, switchToTab]
+  );
+
+  const chooseSuggestion = useCallback(
+    (option: OmniboxOption, choice: OpenChoice) => {
+      switch (option.kind) {
+        case 'app':
+          openSearchApp(option.app, choice);
+          return;
+        case 'bookmark': {
+          const { bookmark } = option;
+          finishChoice(bookmark.link);
+          openResource(
+            {
+              identifier: bookmark.identifier,
+              name: bookmark.appName,
+              path: bookmark.path,
+              service: bookmark.service,
+            },
+            choice
+          );
+          return;
+        }
+        case 'link':
+          openLink(option.link, choice);
+          return;
+        case 'name':
+          // The name's Q-App or website, else its owner's profile.
+          if (option.app) {
+            openSearchApp(option.app, choice);
+            return;
+          }
+          finishChoice();
+          executeEvent('openUserLookupDrawer', { addressOrName: option.name });
+          return;
+        case 'pinned':
+          openPinnedApp(option.app, choice);
+          return;
+        case 'tab':
+          openTabSuggestion(option.tab, choice);
+          return;
+        default:
+          handleOpenInput(option.query);
+      }
+    },
+    [
+      finishChoice,
+      handleOpenInput,
+      openLink,
+      openPinnedApp,
+      openResource,
+      openSearchApp,
+      openTabSuggestion,
+    ]
+  );
+
+  // For the buttons on a row whose app is open: its tab, or a new one.
+  const openSuggestionFromButton = useCallback(
+    (option: OmniboxOption, newTab: boolean) =>
+      chooseSuggestion(option, { newTab }),
+    [chooseSuggestion]
+  );
+  const openTabOfSuggestion = useCallback(
+    (option: OmniboxOption) => omniboxOptionOpenTab(option, openTabs),
+    [openTabs]
+  );
+  const tabPageOfSuggestion = useCallback(
+    (tab: OmniboxTab) =>
+      omniboxTabPage(tab, navigationController?.[tab.tabId]?.currentLink),
+    [navigationController]
+  );
+
+  // Names are looked up once typing stops; links are not names.
+  const typedText = inputValue.trim();
+  const { results: nameResults } = useNameSearch(
+    isEditingInput && !/^qortal:\/\//i.test(typedText) ? typedText : '',
+    NAME_SEARCH_LIMIT,
+    NAME_SEARCH_OPTIONS
+  );
+  const foundNames = useMemo(
+    () => (nameResults ?? []).map((item) => item?.name).filter(Boolean),
+    [nameResults]
+  );
+  // Read again whenever the field gets focus, so new bookmarks show.
+  const { data: bookmarkStore } = useLauncherBookmarks(
+    userInfo?.address,
+    isInputFocused
+  );
+  // The tab on screen is not offered: there is nothing to switch to.
+  const onScreenTabId =
+    desktopViewMode === 'apps' || desktopViewMode === 'dev'
+      ? (selectedTab?.tabId ?? null)
+      : null;
+
+  const searchOptions = useMemo(
     () =>
       isEditingInput
-        ? buildAppSearchOptions(inputValue, availableQapps, appOpenCounts)
+        ? buildOmniboxOptions(inputValue, {
+            apps: availableQapps,
+            bookmarks: bookmarkStore?.bookmarks,
+            names: foundNames,
+            onScreenTabId,
+            openCounts: appOpenCounts,
+            pinnedApps: sortablePinnedApps,
+            tabs: openTabs,
+          })
         : [],
-    [appOpenCounts, availableQapps, inputValue, isEditingInput]
+    [
+      appOpenCounts,
+      availableQapps,
+      bookmarkStore,
+      foundNames,
+      inputValue,
+      isEditingInput,
+      onScreenTabId,
+      openTabs,
+      sortablePinnedApps,
+    ]
   );
 
   const {
@@ -1059,32 +1319,29 @@ export function GlobalQortalNavBar({
     getListboxProps: getSuggestionListProps,
     getOptionProps: getSuggestionProps,
     getRootProps: getSearchRootProps,
-    groupedOptions: suggestionOptions,
+    groupedOptions: suggestionGroups,
     popupOpen: isSuggestionListOpen,
-  } = useAutocomplete<AppSearchOption, false, false, true>({
+  } = useAutocomplete<OmniboxOption, false, false, true>({
     filterOptions: (options) => options,
     freeSolo: true,
     getOptionKey: (option) =>
-      typeof option === 'string'
-        ? option
-        : option.kind === 'app'
-          ? `${option.app.service}:${option.app.name}`
-          : 'library',
+      typeof option === 'string' ? option : omniboxOptionKey(option),
+    // One label per row, so the highlighted row stays highlighted when rows
+    // are added (names come later).
     getOptionLabel: (option) =>
-      typeof option === 'string'
-        ? option
-        : option.kind === 'app'
-          ? option.app.name
-          : option.query,
+      typeof option === 'string' ? option : omniboxOptionKey(option),
+    groupBy: omniboxGroupOf,
     inputValue,
-    onChange: (_event, option) => {
+    onChange: (event, option) => {
       if (!option) return;
+      // Alt+Enter, or Alt and a click: a new tab, even for an open app.
+      const choice = {
+        newTab: !!(event as { altKey?: boolean } | null)?.altKey,
+      };
       if (typeof option === 'string') {
-        submitSearchInput(option);
-      } else if (option.kind === 'app') {
-        openSearchApp(option.app);
+        submitSearchInput(option, choice);
       } else {
-        handleOpenInput(option.query);
+        chooseSuggestion(option, choice);
       }
     },
     onInputChange: (_event, value, reason) => {
@@ -1092,7 +1349,7 @@ export function GlobalQortalNavBar({
       setInputValue(value);
       setIsEditingInput(true);
     },
-    options: appSearchOptions,
+    options: searchOptions,
     value: null,
   });
 
@@ -1889,7 +2146,9 @@ export function GlobalQortalNavBar({
 
               <ButtonBase
                 disableRipple
-                onClick={() => submitSearchInput(inputValue)}
+                onClick={(event) =>
+                  submitSearchInput(inputValue, { newTab: event.altKey })
+                }
                 sx={{
                   alignItems: 'center',
                   borderRadius: '8px',
@@ -1932,9 +2191,12 @@ export function GlobalQortalNavBar({
             anchorEl={searchBoxRef.current}
             getListboxProps={getSuggestionListProps}
             getOptionProps={getSuggestionProps}
+            groups={suggestionGroups as SuggestionGroup[]}
+            onOpenOption={openSuggestionFromButton}
             open={isInputFocused && isSuggestionListOpen}
-            options={suggestionOptions as AppSearchOption[]}
+            openTabOf={openTabOfSuggestion}
             query={inputValue}
+            tabPageOf={tabPageOfSuggestion}
           />
           <Box
             id={QORTAL_GROUP_CALL_NAV_SLOT_ID}

@@ -885,8 +885,21 @@
       "menu_aria": "セッションのオプション",
       "tooltip": "ロックまたはログアウト"
     },
+    "suggestion_action": {
+      "new_tab": "新しいタブ",
+      "open_link": "リンクを開く",
+      "switch_to_tab": "タブに切り替え"
+    },
+    "suggestion_group": {
+      "apps": "Q-AppsとWebサイト",
+      "names": "名前",
+      "saved": "ピン留めしたアプリとブックマーク",
+      "tabs": "開いているタブ"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "ブックマーク",
+      "name": "名前",
       "website": "Webサイト"
     },
     "suggestions": "候補"

@@ -885,8 +885,21 @@
       "menu_aria": "Session options",
       "tooltip": "Lock or log out"
     },
+    "suggestion_action": {
+      "new_tab": "New tab",
+      "open_link": "Open link",
+      "switch_to_tab": "Switch to tab"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps and websites",
+      "names": "Names",
+      "saved": "Pinned apps and bookmarks",
+      "tabs": "Open tabs"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "Bookmark",
+      "name": "Name",
       "website": "Website"
     },
     "suggestions": "Suggestions"

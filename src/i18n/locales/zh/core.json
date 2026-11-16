@@ -885,8 +885,21 @@
       "menu_aria": "会话选项",
       "tooltip": "锁定或退出登录"
     },
+    "suggestion_action": {
+      "new_tab": "新标签页",
+      "open_link": "打开链接",
+      "switch_to_tab": "切换到标签页"
+    },
+    "suggestion_group": {
+      "apps": "Q-Apps 和网站",
+      "names": "名称",
+      "saved": "已固定的应用和书签",
+      "tabs": "已打开的标签页"
+    },
     "suggestion_type": {
       "app": "Q-App",
+      "bookmark": "书签",
+      "name": "名称",
       "website": "网站"
     },
     "suggestions": "建议"
