@@ -146,7 +146,11 @@ describe('MyAppsTab in the library', () => {
     await user.click(
       within(apps).getByRole('button', { name: 'core:developer.update' })
     );
-    expect(setMode).toHaveBeenCalledWith('publish');
+    // The form opens locked to the app it updates.
+    expect(setMode).toHaveBeenCalledWith('publish', {
+      name: 'alice',
+      service: 'APP',
+    });
     expect(executeEvent).not.toHaveBeenCalled();
   });
 
