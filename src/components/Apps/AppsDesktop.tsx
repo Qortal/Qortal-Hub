@@ -13,6 +13,7 @@ import { flushSync } from 'react-dom';
 import type { ReactNode } from 'react';
 import {
   closestCenter,
+  type CollisionDetection,
   DndContext,
   DragEndEvent,
   PointerSensor,
@@ -20,7 +21,6 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   horizontalListSortingStrategy,
   SortableContext,
 } from '@dnd-kit/sortable';
@@ -44,6 +44,7 @@ import {
   APPS_HORIZONTAL_TAB_HEIGHT_PX,
   AppsHorizontalTabAddButton,
   AppsHorizontalTabBar,
+  AppsHorizontalTabScrollArea,
   AppsHorizontalTabScroller,
   AppsParent,
 } from './Apps-styles';
@@ -98,7 +99,29 @@ import {
   getDialogPaperSx,
   getDialogSecondaryButtonSx,
 } from '../App/dialogSurface';
-import { pickNextTabFromMru, tabsLeftByCloseAll } from './tabSelection';
+
+import {
+  closeAllKeptNoteKey,
+  pickNextTabFromMru,
+  tabsLeftByCloseAll,
+} from './tabSelection';
+import {
+  isPinnedTab,
+  moveTabWithinGroup,
+  pinnedFirst,
+  setTabPinned,
+} from './tabPinning';
+import {
+  layoutTabStrip,
+  PINNED_TAB_WIDTH_PX,
+  scrollLeftToShow,
+  TAB_IDEAL_WIDTH_PX,
+  TAB_STRIP_GAP_PX,
+  wheelScrollPx,
+} from './tabStripLayout';
+
+import { useTabShortcuts } from './useTabShortcuts';
+
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
@@ -125,9 +148,6 @@ function positionalTabAfterClose(
   return remainingTabs[removedIndex - 1] ?? null;
 }
 const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
-/** Match `AppsHorizontalTabButton` ideal width for strip width math */
-const TAB_STRIP_IDEAL_TAB_PX = 180;
-const TAB_STRIP_INNER_GAP_PX = 2;
 
 const restrictTabsToHorizontalAxis = ({ transform }) => ({
   ...transform,
@@ -244,8 +264,9 @@ export const AppsDesktop = ({
     string | null
   >(null);
   const [enteringTabIds, setEnteringTabIds] = useState<string[]>([]);
-  const [tabStripCompresses, setTabStripCompresses] = useState(false);
+  const [tabWidthPx, setTabWidthPx] = useState(TAB_IDEAL_WIDTH_PX);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
+  const tabScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const tabAddButtonRef = useRef<HTMLButtonElement | null>(null);
   const [launcherRequest, setLauncherRequest] = useState<AppsLauncherRequest>({
     nonce: 0,
@@ -325,6 +346,18 @@ export const AppsDesktop = ({
   const viewerTabs = useMemo(() => {
     return viewerTabOrder.map((tabId) => tabsById.get(tabId)).filter(Boolean);
   }, [tabsById, viewerTabOrder]);
+
+  // `tabs` keeps the pinned tabs first; they sit apart from the others,
+  // which scroll once they are at their narrowest.
+  const pinnedTabs = useMemo(() => tabs.filter(isPinnedTab), [tabs]);
+  const unpinnedTabs = useMemo(
+    () => tabs.filter((tab) => !isPinnedTab(tab)),
+    [tabs]
+  );
+  const pinnedTabIds = useMemo(
+    () => new Set(pinnedTabs.map((tab) => tab.tabId)),
+    [pinnedTabs]
+  );
 
   useEffect(() => {
     if (tabsToNavTimeoutRef.current !== null) {
@@ -411,47 +444,99 @@ export const AppsDesktop = ({
     });
   }, [isNewTabWindow, onInternalTabVisibilityChange, selectedTab, show]);
 
-  const updateTabStripCompression = useCallback(() => {
+  // Tabs stay at their ideal width while they fit, then shrink evenly down to
+  // a minimum, after which they scroll (tabStripLayout.ts).
+  const updateTabStripLayout = useCallback(() => {
     const scroller = tabScrollerRef.current;
-    if (!show || !scroller || tabs.length === 0) {
-      setTabStripCompresses(false);
+    if (!scroller || unpinnedTabs.length === 0) {
+      setTabWidthPx(TAB_IDEAL_WIDTH_PX);
       return;
     }
-    if (scroller.clientWidth < 32) {
+    if (!show || scroller.clientWidth < 32) {
       return;
     }
-    const addEl = tabAddButtonRef.current;
-    const addW = addEl?.offsetWidth ?? 36;
     const cs = getComputedStyle(scroller);
     const padL = parseFloat(cs.paddingLeft) || 0;
     const padR = parseFloat(cs.paddingRight) || 0;
-    const rowGap = parseFloat(cs.gap) || TAB_STRIP_INNER_GAP_PX;
-    const available = scroller.clientWidth - padL - padR - addW - rowGap;
-
-    const tabsNeed =
-      tabs.length * TAB_STRIP_IDEAL_TAB_PX +
-      Math.max(0, tabs.length - 1) * TAB_STRIP_INNER_GAP_PX;
-
-    setTabStripCompresses(tabsNeed > available + 0.5);
-  }, [show, tabs.length]);
+    const { tabWidthPx: nextTabWidthPx } = layoutTabStrip({
+      addButtonPx: tabAddButtonRef.current?.offsetWidth ?? 36,
+      availablePx: Math.floor(scroller.clientWidth - padL - padR),
+      gapPx: parseFloat(cs.columnGap) || TAB_STRIP_GAP_PX,
+      pinnedCount: pinnedTabs.length,
+      unpinnedCount: unpinnedTabs.length,
+    });
+    setTabWidthPx(nextTabWidthPx);
+  }, [show, pinnedTabs.length, unpinnedTabs.length]);
 
   useLayoutEffect(() => {
-    updateTabStripCompression();
-    const id = window.requestAnimationFrame(() => updateTabStripCompression());
+    updateTabStripLayout();
+    const id = window.requestAnimationFrame(() => updateTabStripLayout());
     return () => window.cancelAnimationFrame(id);
-  }, [updateTabStripCompression, sidebarOffsetPx]);
+  }, [updateTabStripLayout, sidebarOffsetPx]);
 
   useLayoutEffect(() => {
     const scroller = tabScrollerRef.current;
     const addBtn = tabAddButtonRef.current;
     if (!scroller) return;
-    const ro = new ResizeObserver(() => updateTabStripCompression());
+    const ro = new ResizeObserver(() => updateTabStripLayout());
     ro.observe(scroller);
     if (addBtn) {
       ro.observe(addBtn);
     }
     return () => ro.disconnect();
-  }, [updateTabStripCompression]);
+  }, [updateTabStripLayout]);
+
+  // Keeps the selected tab in view when the tabs scroll, a new one included.
+  useLayoutEffect(() => {
+    const area = tabScrollAreaRef.current;
+    const selectedTabId = selectedTab?.tabId;
+    if (!area || !selectedTabId) return;
+    const tabElement = Array.from(
+      area.querySelectorAll<HTMLElement>('[data-tab-id]')
+    ).find((element) => element.dataset.tabId === selectedTabId);
+    if (!tabElement) return;
+    const nextScrollLeft = scrollLeftToShow({
+      endPx: tabElement.offsetLeft + tabElement.offsetWidth,
+      scrollLeft: area.scrollLeft,
+      startPx: tabElement.offsetLeft,
+      viewPx: area.clientWidth,
+    });
+    if (nextScrollLeft !== area.scrollLeft) {
+      area.scrollLeft = nextScrollLeft;
+    }
+  }, [
+    pinnedTabs.length,
+    selectedTab?.tabId,
+    show,
+    tabWidthPx,
+    unpinnedTabs.length,
+  ]);
+
+  // A mouse wheel over the strip moves the scrolling tabs sideways. The
+  // listener is not passive, so the page underneath doesn't scroll too.
+  useEffect(() => {
+    const scroller = tabScrollerRef.current;
+    if (!scroller) return;
+    const handleWheel = (event: WheelEvent) => {
+      const area = tabScrollAreaRef.current;
+      if (!area || event.ctrlKey) return;
+      const maxScrollLeft = area.scrollWidth - area.clientWidth;
+      if (maxScrollLeft <= 0) return;
+      // A sideways swipe over the tabs already scrolls them.
+      const sideways = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (sideways && area.contains(event.target as Node)) return;
+      event.preventDefault();
+      const nextScrollLeft = Math.min(
+        maxScrollLeft,
+        Math.max(0, area.scrollLeft + wheelScrollPx(event, area.clientWidth))
+      );
+      if (nextScrollLeft !== area.scrollLeft) {
+        area.scrollLeft = nextScrollLeft;
+      }
+    };
+    scroller.addEventListener('wheel', handleWheel, { passive: false });
+    return () => scroller.removeEventListener('wheel', handleWheel);
+  }, []);
 
   useEffect(() => {
     const trackPointer = (event: PointerEvent) => {
@@ -836,8 +921,11 @@ export const AppsDesktop = ({
       return;
     }
 
+    // Only the tab menu pins a tab: a tab opened any other way starts
+    // unpinned, a duplicate of a pinned tab too.
+    const { pinned: _pinned, ...tabData } = data ?? {};
     const newTab = {
-      ...data,
+      ...tabData,
       tabId: uid.rnd(),
     };
     const shouldUseSmoothHandoff = isAddTabFocused;
@@ -859,7 +947,7 @@ export const AppsDesktop = ({
 
       const nextTabs = [...prev];
       nextTabs.splice(sourceIndex + 1, 0, newTab);
-      return nextTabs;
+      return pinnedFirst(nextTabs);
     });
     setSelectedTab(newTab);
     setMode('viewer');
@@ -1280,6 +1368,15 @@ export const AppsDesktop = ({
     setIsNewTabWindow(false);
   }, [setIsNewTabWindow, setMode]);
 
+  useTabShortcuts({
+    isNewTabWindow,
+    maxTabs: MAX_OPEN_APP_TABS,
+    openNewTab: openDashboardFromTabs,
+    selectedTab,
+    show,
+    tabs,
+  });
+
   const returnFromAppsMode = useCallback(() => {
     executeEvent('return-from-apps-mode', {});
   }, []);
@@ -1312,21 +1409,29 @@ export const AppsDesktop = ({
     [navigationController]
   );
 
+  const toggleTabPinned = useCallback((tabId: string) => {
+    setTabs((prev) => {
+      const tab = prev.find((item) => item?.tabId === tabId);
+      return tab ? setTabPinned(prev, tabId, !isPinnedTab(tab)) : prev;
+    });
+  }, []);
+
   const closeAllTabs = useCallback(() => {
-    // A locked tab asks before it closes (removeTabFunc), so Close All keeps
-    // it open rather than closing it without asking.
-    const { kept: lockedTabs, nextTab } = tabsLeftByCloseAll(
+    // A locked tab asks before it closes (removeTabFunc), and a pinned tab
+    // closes only once it is unpinned, so Close All keeps both open rather
+    // than closing them without asking.
+    const { kept: keptTabs, nextTab } = tabsLeftByCloseAll(
       tabs,
       selectedTab?.tabId,
       recentTabIdsRef.current
     );
+    const keptIds = new Set(keptTabs.map((tab) => tab.tabId));
     tabs.forEach((tab) => {
-      if (tab?.tabId && !tab.lock) {
+      if (tab?.tabId && !keptIds.has(tab.tabId)) {
         clearSessionPermissionsByTabId(tab.tabId);
       }
     });
-    if (lockedTabs.length > 0) {
-      const keptIds = new Set(lockedTabs.map((tab) => tab.tabId));
+    if (keptTabs.length > 0) {
       recentTabIdsRef.current = recentTabIdsRef.current.filter((id) =>
         keptIds.has(id)
       );
@@ -1339,7 +1444,7 @@ export const AppsDesktop = ({
       setIsAddTabWaitingForPointerMove(false);
       addTabPointerOriginRef.current = null;
       setIsNewTabWindow(false);
-      setTabs(lockedTabs);
+      setTabs(keptTabs);
       setSelectedTab(nextTab);
       if (isLocalDevTab(nextTab)) {
         setDesktopViewMode('dev');
@@ -1351,7 +1456,7 @@ export const AppsDesktop = ({
       tabsTokenRef.current += 1;
       executeEvent('setTabsToNav', {
         data: {
-          tabs: lockedTabs,
+          tabs: keptTabs,
           selectedTab: nextTab,
           isNewTabWindow: false,
           tabsToken: tabsTokenRef.current,
@@ -1359,7 +1464,7 @@ export const AppsDesktop = ({
       });
       setInfoSnack({
         type: 'info',
-        message: t('core:app_tab.locked_kept_open', {
+        message: t(closeAllKeptNoteKey(keptTabs), {
           postProcess: 'capitalizeFirstChar',
         }),
       });
@@ -1517,13 +1622,9 @@ export const AppsDesktop = ({
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (over && active.id !== over.id) {
-        setTabs((prev) => {
-          const oldIndex = prev.findIndex((tab) => tab?.tabId === active.id);
-          const newIndex = prev.findIndex((tab) => tab?.tabId === over.id);
-
-          if (oldIndex === -1 || newIndex === -1) return prev;
-          return arrayMove(prev, oldIndex, newIndex);
-        });
+        setTabs((prev) =>
+          moveTabWithinGroup(prev, String(active.id), String(over.id))
+        );
       }
       scheduleTabPointerUnlock();
     },
@@ -1533,6 +1634,62 @@ export const AppsDesktop = ({
   const handleTabDragCancel = useCallback(() => {
     scheduleTabPointerUnlock();
   }, [scheduleTabPointerUnlock]);
+
+  // A dragged tab only trades places with tabs of its own group, pinned or
+  // not.
+  const tabCollisionDetection = useCallback<CollisionDetection>(
+    (args) => {
+      const draggingPinned = pinnedTabIds.has(String(args.active.id));
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (container) =>
+            pinnedTabIds.has(String(container.id)) === draggingPinned
+        ),
+      });
+    },
+    [pinnedTabIds]
+  );
+
+  const renderTab = (tab) => (
+    <TabComponent
+      key={tab?.tabId}
+      app={tab}
+      isDevApp={isLocalDevTab(tab)}
+      isPinned={isPinnedTab(tab)}
+      isSelected={tab?.tabId === selectedTab?.tabId}
+      tabInteractionLockedRef={tabInteractionLockedRef}
+      widthPx={isPinnedTab(tab) ? PINNED_TAB_WIDTH_PX : tabWidthPx}
+      isEntering={enteringTabIds.includes(tab?.tabId)}
+      isVisuallySelected={
+        delayedVisualActiveTabId === tab?.tabId ||
+        (tab?.tabId === selectedTab?.tabId &&
+          pendingVisualTabActivationId !== tab?.tabId)
+      }
+      onCloseAll={closeAllTabs}
+      onDuplicate={() => duplicateTab(tab)}
+      onTogglePin={() => toggleTabPinned(tab?.tabId)}
+      onClose={() => {
+        executeEvent('removeTab', {
+          data: tab,
+        });
+      }}
+      onSelect={() => {
+        if (isLocalDevTab(tab)) {
+          executeEvent('open-dev-mode', {});
+          executeEvent('setSelectedTab', {
+            data: tab,
+            isDevMode: true,
+          });
+        } else {
+          executeEvent('open-apps-mode', {});
+          executeEvent('setSelectedTab', {
+            data: tab,
+          });
+        }
+      }}
+    />
+  );
 
   const hasOpenTabs = tabs.length > 0;
   const hideAppsShellOffScreen = !show && hasOpenTabs;
@@ -1580,81 +1737,57 @@ export const AppsDesktop = ({
           <AppsHorizontalTabScroller
             ref={tabScrollerRef}
             sx={{
-              alignItems: 'stretch',
-              gap: '2px',
+              gap: `${TAB_STRIP_GAP_PX}px`,
               paddingLeft: `calc(6px + ${sidebarOffsetPx}px)`,
               transition: `padding-left ${SIDEBAR_CHROME_TRANSITION}`,
             }}
           >
             <DndContext
-              collisionDetection={closestCenter}
+              collisionDetection={tabCollisionDetection}
               modifiers={[restrictTabsToHorizontalAxis, restrictTabsToStrip]}
               onDragCancel={handleTabDragCancel}
               onDragEnd={handleTabDragEnd}
               onDragStart={handleTabDragStart}
               sensors={sensors}
             >
-              <SortableContext
-                items={tabs.map((tab) => tab?.tabId)}
-                strategy={horizontalListSortingStrategy}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: '2px',
-                    ...(tabStripCompresses
-                      ? {
-                          flex: '1 1 auto',
-                          maxWidth: '100%',
-                          minWidth: 0,
-                          overflow: 'hidden',
-                        }
-                      : {
-                          flex: '0 0 auto',
-                          overflow: 'visible',
-                          width: 'max-content',
-                        }),
-                  }}
+              {pinnedTabs.length > 0 && (
+                <SortableContext
+                  items={pinnedTabs.map((tab) => tab.tabId)}
+                  strategy={horizontalListSortingStrategy}
                 >
-                  {tabs.map((tab) => (
-                    <TabComponent
-                      key={tab?.tabId}
-                      app={tab}
-                      isDevApp={isLocalDevTab(tab)}
-                      isSelected={tab?.tabId === selectedTab?.tabId}
-                      tabInteractionLockedRef={tabInteractionLockedRef}
-                      tabStripCompresses={tabStripCompresses}
-                      isEntering={enteringTabIds.includes(tab?.tabId)}
-                      isVisuallySelected={
-                        delayedVisualActiveTabId === tab?.tabId ||
-                        (tab?.tabId === selectedTab?.tabId &&
-                          pendingVisualTabActivationId !== tab?.tabId)
-                      }
-                      onCloseAll={closeAllTabs}
-                      onDuplicate={() => duplicateTab(tab)}
-                      onClose={() => {
-                        executeEvent('removeTab', {
-                          data: tab,
-                        });
+                  <Box
+                    data-tab-group="pinned"
+                    sx={{
+                      display: 'flex',
+                      flex: '0 0 auto',
+                      gap: `${TAB_STRIP_GAP_PX}px`,
+                    }}
+                  >
+                    {pinnedTabs.map(renderTab)}
+                  </Box>
+                </SortableContext>
+              )}
+              {unpinnedTabs.length > 0 && (
+                <AppsHorizontalTabScrollArea
+                  data-tab-group="unpinned"
+                  ref={tabScrollAreaRef}
+                >
+                  <SortableContext
+                    items={unpinnedTabs.map((tab) => tab.tabId)}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: `${TAB_STRIP_GAP_PX}px`,
+                        width: 'max-content',
                       }}
-                      onSelect={() => {
-                        if (isLocalDevTab(tab)) {
-                          executeEvent('open-dev-mode', {});
-                          executeEvent('setSelectedTab', {
-                            data: tab,
-                            isDevMode: true,
-                          });
-                        } else {
-                          executeEvent('open-apps-mode', {});
-                          executeEvent('setSelectedTab', {
-                            data: tab,
-                          });
-                        }
-                      }}
-                    />
-                  ))}
-                </Box>
-              </SortableContext>
+                    >
+                      {unpinnedTabs.map(renderTab)}
+                    </Box>
+                  </SortableContext>
+                </AppsHorizontalTabScrollArea>
+              )}
             </DndContext>
 
             <AppsHorizontalTabAddButton

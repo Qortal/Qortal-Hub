@@ -63,6 +63,11 @@ export type SidePanelSettings = {
   /** How much of the edge handle's fill shows: 0 (its outline only) to 1. */
   handleBackground: number;
   items: SidePanelItem[];
+  /**
+   * When it last changed on this device (ms), what the copy in the QDN
+   * settings is weighed against. Missing: never changed here.
+   */
+  changedAt?: number;
 };
 
 /** A setting's range, in the steps its slider takes. */
@@ -185,6 +190,7 @@ export const normalizeSidePanel = (value: unknown): SidePanelSettings => {
   const {
     background,
     buttonSize,
+    changedAt,
     edgeHandle,
     handleBackground,
     handleHeight,
@@ -192,6 +198,7 @@ export const normalizeSidePanel = (value: unknown): SidePanelSettings => {
     layout,
     show,
   } = value as Record<string, unknown>;
+  const changed = Number(changedAt);
   const result: SidePanelItem[] = [];
   const seen = new Set<string>();
   let added = 0;
@@ -242,6 +249,9 @@ export const normalizeSidePanel = (value: unknown): SidePanelSettings => {
       SIDE_PANEL_DEFAULT.handleBackground
     ),
     items: result,
+    ...(Number.isFinite(changed) && changed > 0
+      ? { changedAt: Math.round(changed) }
+      : {}),
   };
 };
 
@@ -350,11 +360,29 @@ export const readSidePanel = (
   }
 };
 
-export const saveSidePanel = (address: string, settings: SidePanelSettings) => {
+/**
+ * Saves the account's side panel. Settings that changed are marked as
+ * changed now, unless `changedAt` says when (QDN's copy keeps its time).
+ * "Now" is always later than the time they had: one taken in from a device
+ * whose clock is ahead must not make a change made here look older.
+ */
+export const saveSidePanel = (
+  address: string,
+  settings: SidePanelSettings,
+  options: { changedAt?: number } = {}
+) => {
+  const before = readSidePanel(address);
+  const next = normalizeSidePanel(settings);
+  const changedAt =
+    options.changedAt ??
+    (sameSidePanel(before, next)
+      ? before.changedAt
+      : Math.max(Date.now(), (before.changedAt ?? 0) + 1));
+  const { changedAt: _ignored, ...content } = next;
   try {
     window.localStorage.setItem(
       sidePanelStorageKey(address),
-      JSON.stringify(normalizeSidePanel(settings))
+      JSON.stringify(changedAt ? { ...content, changedAt } : content)
     );
   } catch (error) {
     console.warn('Unable to save the side panel settings.', error);
