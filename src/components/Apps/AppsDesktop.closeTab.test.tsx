@@ -78,6 +78,13 @@ const tab = (name: string) => nav.tabs.find((item) => item.name === name);
 /** Room for a busy test machine: the top bar hears of tabs after 100 ms. */
 const SLOW = { timeout: 3000 };
 
+/**
+ * Closing a tab tells the top bar once more, 400 ms later. A test can end
+ * before that: the update must fire then, not during the next test, where it
+ * would read as that test's selection.
+ */
+const LATE_TOP_BAR_UPDATE_MS = 400;
+
 const openTabs = async (...names: string[]) => {
   for (const name of names) {
     act(() => {
@@ -127,8 +134,12 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
+afterEach(async () => {
   unsubscribeFromEvent('setTabsToNav', recordNav);
+  // Timers fire in order, so this one comes after any late update.
+  await new Promise((resolve) =>
+    setTimeout(resolve, LATE_TOP_BAR_UPDATE_MS + 100)
+  );
   vi.unstubAllGlobals();
 });
 

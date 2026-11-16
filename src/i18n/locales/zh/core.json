@@ -287,10 +287,12 @@
     "duplicate": "复制标签页",
     "limit_reached": "已达到标签页数量上限。请关闭一个标签页后再打开新的。",
     "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。",
+    "new_tab": "新标签页",
     "pin": "固定标签页",
     "pinned_and_locked_kept_open": "已固定和已锁定的标签页保持打开。请先取消固定再关闭已固定的标签页，并逐个关闭已锁定的标签页以确认。",
     "pinned_kept_open": "已固定的标签页保持打开。请先取消固定，再关闭标签页。",
-    "unpin": "取消固定标签页"
+    "unpin": "取消固定标签页",
+    "unsaved_publish": "此标签页的发布表单中的内容尚未发布，关闭标签页将丢弃这些内容。"
   },
   "apps_bar": {
     "empty": "固定一个应用或添加书签，它就会显示在这里。",
@@ -932,6 +934,29 @@
     "selected_file": "已选文件：{{filename}}"
   },
   "publish": "发布",
+  "publish_source": {
+    "changed_files": "自{{date}}以来更改的文件：{{number}}",
+    "choose_another": "选择其他",
+    "choose_folder": "选择文件夹",
+    "read_error": "无法读取所选的文件夹或文件",
+    "same_file": "与上次相同的文件",
+    "same_folder": "与上次相同的文件夹",
+    "selected_file": "已选文件：{{name}}",
+    "selected_folder": "已选文件夹：{{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "无法确认您是否仍是{{group}}的管理员。请稍后再试。",
+    "checking_admin": "正在确认您是否仍是{{group}}的管理员…",
+    "current_unavailable": "无法加载当前版本，因此无法保留其应用名称和徽标。请重新输入。",
+    "filled_from_profile": "无法从网络加载此应用的详细信息，因此已使用此电脑上次发布的内容填写。发布前请检查。",
+    "identifier_locked": "更新时不能更改标识符：使用不同的标识符会发布一个新应用。",
+    "is_admin": "您是{{group}}的管理员",
+    "last_published": "此电脑上次发布：{{date}}",
+    "loading_current": "正在加载当前版本…",
+    "logo_kept": "徽标沿用当前版本",
+    "not_admin": "您已不再是{{group}}的管理员，因此无法从此帐户更新此应用。",
+    "title": "更新{{name}}"
+  },
   "q_apps": {
     "about": "关于这个Q-App",
     "q_mail": "Q-Mail",

@@ -54,7 +54,6 @@ import {
   appSortAtom,
   appStatusFilterAtom,
   currentAppsTabAtom,
-  publishEditTargetAtom,
 } from '../atoms/appsAtoms';
 
 /**
@@ -151,7 +150,6 @@ export function useAppReset() {
   const resetAppStatusFilterAtom = useResetAtom(appStatusFilterAtom);
   const resetAppSearchQueryAtom = useResetAtom(appSearchQueryAtom);
   const resetCurrentAppsTabAtom = useResetAtom(currentAppsTabAtom);
-  const resetPublishEditTargetAtom = useResetAtom(publishEditTargetAtom);
 
   const resetAllRecoil = useCallback(() => {
     if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
@@ -211,7 +209,6 @@ export function useAppReset() {
     resetAppStatusFilterAtom();
     resetAppSearchQueryAtom();
     resetCurrentAppsTabAtom();
-    resetPublishEditTargetAtom();
   }, [
     globalDownloadsValue,
     setGroupInvitesCache,
@@ -262,7 +259,6 @@ export function useAppReset() {
     resetAppStatusFilterAtom,
     resetAppSearchQueryAtom,
     resetCurrentAppsTabAtom,
-    resetPublishEditTargetAtom,
   ]);
 
   return { resetAllRecoil };

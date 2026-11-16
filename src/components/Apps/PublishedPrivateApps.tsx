@@ -26,17 +26,22 @@ import { EmptyStateBox, SectionTitle } from './AppsLibrary/LibraryTab-styles';
 interface PublishedPrivateAppsProps {
   myAddress: string;
   refreshKey?: number;
+  /** Opens the publish form to update one of the account's own apps. */
+  onUpdate?: (app: PublishedPrivateApp) => void;
 }
 
 export const PublishedPrivateApps = ({
   myAddress,
   refreshKey = 0,
+  onUpdate,
 }: PublishedPrivateAppsProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core', 'group']);
   const { openApp } = useHandlePrivateApps();
   const memberGroups = useAtomValue(memberGroupsAtom);
   const [apps, setApps] = useState<PublishedPrivateApp[]>([]);
+  // The account's names, lower case: only their apps can be updated.
+  const [ownNames, setOwnNames] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -65,6 +70,7 @@ export const PublishedPrivateApps = ({
       const names: string[] = Array.isArray(namesData)
         ? namesData.map((item) => item?.name).filter(Boolean)
         : [];
+      setOwnNames(new Set(names.map((name) => name.toLowerCase())));
       if (!names.length) {
         setApps([]);
         return;
@@ -195,6 +201,18 @@ export const PublishedPrivateApps = ({
                 {app.timestamp ? ` · ${formatTimestamp(app.timestamp)}` : ''}
               </Typography>
             </Box>
+
+            {onUpdate && ownNames.has(app.name.toLowerCase()) && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => onUpdate(app)}
+              >
+                {t('core:developer.update', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            )}
 
             <Button
               variant="contained"
