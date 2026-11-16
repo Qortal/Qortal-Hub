@@ -15,6 +15,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import AddPhotoAlternateRoundedIcon from '@mui/icons-material/AddPhotoAlternateRounded';
 import { useTranslation } from 'react-i18next';
 import { SectionTitle } from './AppPageParts';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 export interface GalleryShot {
   url: string;
@@ -42,6 +43,9 @@ const ShotLightbox = ({
   const { t } = useTranslation(['core']);
   const open = index !== null && !!shots[index];
   const shot = open ? shots[index] : null;
+  // Put away while its launcher tab is hidden; the arrows wait for it too.
+  const dialogShown = useLauncherTabDialog(open);
+  const isShown = dialogShown.open;
   const go = useCallback(
     (delta: number) => {
       if (index === null || shots.length === 0) return;
@@ -51,14 +55,14 @@ const ShotLightbox = ({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!isShown) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft') go(theme.direction === 'rtl' ? 1 : -1);
       if (event.key === 'ArrowRight') go(theme.direction === 'rtl' ? -1 : 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, open, theme.direction]);
+  }, [go, isShown, theme.direction]);
 
   return (
     <Dialog
@@ -74,7 +78,7 @@ const ShotLightbox = ({
       }}
       maxWidth={false}
       onClose={onClose}
-      open={open}
+      {...dialogShown}
     >
       {shot && (
         <Box sx={{ position: 'relative' }}>

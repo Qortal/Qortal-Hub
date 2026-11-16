@@ -21,6 +21,7 @@ import {
   WIDGET_GUIDE_TITLE_KEY,
   widgetGuideMarkdown,
 } from './widgetGuide';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 /**
  * The whole widget guide on a page of its own, over the publish form. It can
@@ -51,12 +52,15 @@ export const WidgetGuideDialog = ({
         ? t('core:widget_guide.copy_failed', capital)
         : t('core:widget_guide.copy_markdown', capital);
 
+  // In a launcher tab that is hidden, the page waits for it to show.
+  const shown = useLauncherTabDialog(open);
+
   return (
     <Dialog
       aria-labelledby={titleId}
       fullScreen
       onClose={onClose}
-      open={open}
+      {...shown}
       PaperProps={{ sx: { backgroundColor: theme.palette.background.default } }}
     >
       <Box

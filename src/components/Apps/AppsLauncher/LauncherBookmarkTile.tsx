@@ -2,17 +2,27 @@ import type { ComponentProps } from 'react';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import { executeEvent } from '../../../utils/events';
 import type { AppBookmark } from '../AppBookmarks/bookmarkTypes';
+import { inLauncherTab, useLauncherTabId } from '../launcherTabs';
 import { LauncherAppIcon, LauncherTile } from './LauncherTile';
 
-/** Opens a bookmarked page in a tab. */
-export const openLauncherBookmark = (bookmark: AppBookmark) => {
+/**
+ * Opens a bookmarked page in a tab: in the launcher tab it was chosen in, if
+ * it was.
+ */
+export const openLauncherBookmark = (
+  bookmark: AppBookmark,
+  launcherTabId?: string | null
+) => {
   executeEvent('addTab', {
-    data: {
-      service: bookmark.service,
-      name: bookmark.appName,
-      identifier: bookmark.identifier,
-      path: bookmark.path,
-    },
+    data: inLauncherTab(
+      {
+        service: bookmark.service,
+        name: bookmark.appName,
+        identifier: bookmark.identifier,
+        path: bookmark.path,
+      },
+      launcherTabId
+    ),
   });
   executeEvent('open-apps-mode', {});
 };
@@ -40,14 +50,17 @@ export const LauncherBookmarkTile = ({
   bookmark,
   onOpened,
   ...tileProps
-}: LauncherBookmarkTileProps) => (
-  <LauncherTile
-    {...tileProps}
-    icon={<LauncherBookmarkIcon bookmark={bookmark} />}
-    label={bookmark.name || bookmark.appName}
-    onClick={() => {
-      openLauncherBookmark(bookmark);
-      onOpened?.();
-    }}
-  />
-);
+}: LauncherBookmarkTileProps) => {
+  const launcherTabId = useLauncherTabId();
+  return (
+    <LauncherTile
+      {...tileProps}
+      icon={<LauncherBookmarkIcon bookmark={bookmark} />}
+      label={bookmark.name || bookmark.appName}
+      onClick={() => {
+        openLauncherBookmark(bookmark, launcherTabId);
+        onOpened?.();
+      }}
+    />
+  );
+};

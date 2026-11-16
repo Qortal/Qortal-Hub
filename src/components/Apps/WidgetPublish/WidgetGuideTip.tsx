@@ -17,6 +17,7 @@ import {
   WIDGET_GUIDE_TIP_KEYS,
   WIDGET_GUIDE_TIP_TITLE_KEY,
 } from './widgetGuide';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 /**
  * The (i) beside the Widget option: the short guide in a popover, with Learn
@@ -36,6 +37,8 @@ export const WidgetGuideTip = ({
   const { t } = useTranslation(['core']);
   // The popover waits for its anchor: on the first render the (i) isn't there yet.
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  // In a launcher tab that is hidden, the popover waits for it to show.
+  const popoverShown = useLauncherTabDialog(open && !!anchor);
   const capital = { postProcess: 'capitalizeFirstChar' };
   const label = t('core:widget_guide.tip.about', capital);
   const titleId = useId();
@@ -63,7 +66,7 @@ export const WidgetGuideTip = ({
         anchorEl={anchor}
         anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
         onClose={() => onOpenChange(false)}
-        open={open && !!anchor}
+        {...popoverShown}
         slotProps={{
           paper: {
             'aria-labelledby': titleId,

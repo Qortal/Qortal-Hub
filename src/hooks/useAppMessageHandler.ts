@@ -2,6 +2,7 @@ import { useEffect, MutableRefObject } from 'react';
 import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
 import { extractComponents } from '../components/Chat/MessageDisplay';
+import { openAppPageLink } from '../components/Apps/AppPage/appPageLink';
 import { openQWalletsTab } from '../utils/openQWalletsTab';
 
 type PermissionHandler = (
@@ -71,10 +72,13 @@ export function useAppMessageHandler(
         } else if (payload?.openWallets) {
           openQWalletsTab();
         } else if (payload?.link) {
-          const data = extractComponents(payload.link);
-          if (data) {
-            executeEvent('addTab', { data });
-            executeEvent('open-apps-mode', {});
+          // An app's or website's page opens as a page, not as the app.
+          if (!openAppPageLink(payload.link)) {
+            const data = extractComponents(payload.link);
+            if (data) {
+              executeEvent('addTab', { data });
+              executeEvent('open-apps-mode', {});
+            }
           }
         }
       } else if (message.action === 'NOTIFICATION_PERMISSION_REQUEST') {

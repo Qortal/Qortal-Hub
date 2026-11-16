@@ -61,6 +61,7 @@ import type { CaptureSource } from './ScreenshotCaptureDialog';
 import { ScreenshotsEditor, ShotDraft } from './ScreenshotsEditor';
 import { encodeSquareIcon, MAX_IMAGE_FILE_BYTES } from './screenshotImage';
 import { appTags } from './AppDetailsCard';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 export type EditorTab = 'page' | 'screenshots' | 'icon' | 'listing';
 type Part = 'listing' | 'page' | 'screenshots' | 'icon';
@@ -406,6 +407,9 @@ export const AppPageEditorDialog = ({
     />
   );
 
+  // Put away, the drafts kept, while its launcher tab is hidden.
+  const dialogShown = useLauncherTabDialog(open);
+
   return (
     <Dialog
       PaperProps={{ sx: { borderRadius: '18px' } }}
@@ -413,7 +417,7 @@ export const AppPageEditorDialog = ({
       fullWidth
       maxWidth="md"
       onClose={saving ? undefined : onClose}
-      open={open}
+      {...dialogShown}
     >
       {/* The title names the dialog: the hint and Close stay out of it. */}
       <DialogTitle sx={{ pb: 0.5, pr: 6 }}>

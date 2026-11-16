@@ -25,6 +25,7 @@ import { SHOT_LIMITS } from './appPageData';
 import { encodeScreenshot } from './screenshotImage';
 import { blobBytes, bytesToBase64 } from './blobBytes';
 import type { ShotDraft } from './ScreenshotsEditor';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 export type CaptureSource =
   | { kind: 'published'; service: string; name: string }
@@ -231,6 +232,9 @@ export const ScreenshotCaptureDialog = ({
     '&:hover': { backgroundColor: theme.palette.background.default },
   };
 
+  // Put away, the app kept running in it, while its launcher tab is hidden.
+  const dialogShown = useLauncherTabDialog(open);
+
   return (
     <Dialog
       PaperProps={{ sx: { borderRadius: '18px' } }}
@@ -238,7 +242,7 @@ export const ScreenshotCaptureDialog = ({
       fullWidth
       maxWidth="lg"
       onClose={close}
-      open={open}
+      {...dialogShown}
     >
       {/* The title names the dialog: the instructions and Close stay out. */}
       <DialogTitle sx={{ pb: 0.5, pr: 6 }}>

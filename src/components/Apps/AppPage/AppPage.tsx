@@ -8,6 +8,7 @@ import {
   sortablePinnedAppsAtom,
   userInfoAtom,
 } from '../../../atoms/global';
+import { shownAppPageAtom } from '../../../atoms/appsAtoms';
 import { getFee } from '../../../background/background';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../../constants/constants';
 import { useAppRating } from '../../../hooks/useAppRatings';
@@ -25,6 +26,11 @@ import {
   EditorTab,
 } from './AppPageEditorDialog';
 import { SectionCard, SectionTitle } from './AppPageParts';
+import {
+  inLauncherTab,
+  LauncherTabShownContext,
+  useLauncherTabId,
+} from '../launcherTabs';
 import { appIconUrl, shotImageUrl } from './appPageQdn';
 import { AppPageData, isVersionCurrent } from './appPageData';
 import type { ShotDraft } from './ScreenshotsEditor';
@@ -91,6 +97,18 @@ export const AppPage = ({
     [service, app?.name]
   );
   const base = getBaseApiReact();
+  const launcherTabId = useLauncherTabId();
+
+  // On screen: the top bar shows this page's link. A page in a launcher tab
+  // that is hidden behind another tab is not.
+  const isTabShown = useContext(LauncherTabShownContext);
+  const setShownAppPage = useSetAtom(shownAppPageAtom);
+  useEffect(() => {
+    if (!ref.name || !isTabShown) return;
+    setShownAppPage(ref);
+    return () =>
+      setShownAppPage((current) => (current === ref ? null : current));
+  }, [isTabShown, ref, setShownAppPage]);
 
   const pageData = useAppPageData(ref);
   const ownedNames = useOwnedNames(myAddress);
@@ -382,7 +400,9 @@ export const AppPage = ({
           )
         }
         onEdit={() => openEditor('page')}
-        onOpen={() => executeEvent('addTab', { data: app })}
+        onOpen={() =>
+          executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) })
+        }
         onTogglePin={togglePin}
         version={page?.version || ''}
         versionCurrent={versionCurrent}
