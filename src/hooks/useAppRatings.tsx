@@ -12,6 +12,17 @@ import {
 // Jotai atom for centralized ratings store (export for consumers that need full store, e.g. OfficialAppsTab)
 export const ratingsStoreAtom = atom<Map<string, AppRatingData>>(new Map());
 
+/**
+ * Whether the store has every app's rating: true once the node's bulk list
+ * of ratings has been read, false when that failed (an older node, or the
+ * request did not get through), so only the apps seen so far are known. Null
+ * until the first try ends. (The cast keeps it writable: without strict null
+ * checks, a bare null would pick jotai's read-only overload.)
+ */
+export const allRatingsLoadedAtom = atom<boolean | null>(
+  null as boolean | null
+);
+
 /** Derived atom family: each card subscribes only to its own rating. Key: getCacheKey(name, service). */
 export const ratingForAppAtomFamily = atomFamily((key: string) =>
   atom((get) => get(ratingsStoreAtom).get(key) || null)
@@ -311,6 +322,7 @@ const recheckObservedElements = () => {
  */
 function RatingsCacheInitializerInner() {
   const setRatingsStore = useSetAtom(ratingsStoreAtom);
+  const setAllRatingsLoaded = useSetAtom(allRatingsLoadedAtom);
   useEffect(() => {
     if (ratingsCacheHydrated) return;
     ratingsCacheHydrated = true;
@@ -326,6 +338,7 @@ function RatingsCacheInitializerInner() {
       // Step 2: old node — intersection observer handles per-app lazy loads
       if (bulkEndpointAvailable === false) {
         bulkFetchComplete = true;
+        setAllRatingsLoaded(false);
         recheckObservedElements();
         return;
       }
@@ -335,6 +348,7 @@ function RatingsCacheInitializerInner() {
       bulkFetchComplete = true; // mark complete regardless of success/failure
 
       if (bulkData === null) {
+        setAllRatingsLoaded(false);
         // Cards seen while the bulk fetch ran fetch one by one now.
         recheckObservedElements();
         return;
@@ -350,12 +364,13 @@ function RatingsCacheInitializerInner() {
         ratingsStoreRef.current = next;
         return next;
       });
+      setAllRatingsLoaded(true);
       // Cards on screen without a poll get their empty rating now.
       recheckObservedElements();
     };
 
     initialize();
-  }, [setRatingsStore]);
+  }, [setAllRatingsLoaded, setRatingsStore]);
   return null;
 }
 
@@ -363,6 +378,7 @@ export const RatingsCacheInitializer = RatingsCacheInitializerInner;
 
 export const useAppRatings = () => {
   const setRatingsStore = useSetAtom(ratingsStoreAtom);
+  const setAllRatingsLoaded = useSetAtom(allRatingsLoadedAtom);
 
   // Fetch a single rating - stable callback that doesn't change on store updates
   const fetchRating = useCallback(
@@ -562,10 +578,11 @@ export const useAppRatings = () => {
         return next;
       });
     }
+    setAllRatingsLoaded(bulkData !== null);
     // The cards already on screen ask again: apps without a poll get their
     // empty rating, and an old node fetches them one by one.
     recheckObservedElements();
-  }, [setRatingsStore]);
+  }, [setAllRatingsLoaded, setRatingsStore]);
 
   return {
     getRating,

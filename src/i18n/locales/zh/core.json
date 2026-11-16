@@ -499,6 +499,7 @@
       "search_in_category": "在“{{category}}”中搜索",
       "status_apps_shown": "显示的 Q-App 和网站：{{shown}} / {{total}}",
       "status_categories_shown": "显示的分类：{{shown}} / {{total}}",
+      "top_rated_hint": "社区评分前 {{number}} 名",
       "view_grid": "网格",
       "view_label": "布局",
       "view_list": "列表"

@@ -23,6 +23,7 @@ import {
   libraryFocusRing,
 } from './libraryStyles';
 import { libraryViewAtom } from './libraryView';
+import { TopRatedAppsBanner } from './TopRatedAppsBanner';
 import type { LibraryStatus } from './useLibraryStatus';
 import { useRatingsForSort } from './useRatingsForSort';
 
@@ -81,6 +82,21 @@ export const CommunityAppsTab = ({
     ratingsStore,
   ]);
 
+  // The Featured row picks from what the list shows, its category and status
+  // (A to Z, so apps rated alike keep that order). A search hides it.
+  const appsForFeatured = useMemo(
+    () =>
+      searchValue?.trim()
+        ? []
+        : filterAndSortApps(communityApps, {
+            sort: 'alphabetical',
+            category: categoryValue,
+            status: statusValue,
+            search: '',
+          }),
+    [categoryValue, communityApps, searchValue, statusValue]
+  );
+
   const title = t('core:tabs.community_apps', cap);
   const total = communityApps.length;
   const shown = filteredAndSortedApps.length;
@@ -102,6 +118,13 @@ export const CommunityAppsTab = ({
 
   return (
     <AppsWidthLimiter sx={{ alignItems: 'stretch', flex: 1, gap: '16px' }}>
+      {isWaiting ? null : (
+        // Another filter starts the row from its first card.
+        <TopRatedAppsBanner
+          apps={appsForFeatured}
+          key={`${categoryValue}|${statusValue}`}
+        />
+      )}
       <LibrarySection
         count={
           total === 0

@@ -499,6 +499,7 @@
       "search_in_category": "hae kategoriasta {{category}}",
       "status_apps_shown": "näytettyjä Q-Appeja ja verkkosivustoja: {{shown}} / {{total}}",
       "status_categories_shown": "näytettyjä kategorioita: {{shown}} / {{total}}",
+      "top_rated_hint": "{{number}} parasta yhteisön arvioiden mukaan",
       "view_grid": "ruudukko",
       "view_label": "asettelu",
       "view_list": "luettelo"
