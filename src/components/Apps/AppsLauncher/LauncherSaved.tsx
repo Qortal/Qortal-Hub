@@ -31,6 +31,7 @@ import type {
   AppBookmarksForAddress,
 } from '../AppBookmarks/bookmarkTypes';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
+import { useLauncherTabId } from '../launcherTabs';
 import {
   LauncherBookmarkIcon,
   LauncherBookmarkTile,
@@ -144,6 +145,7 @@ export const LauncherSaved = ({
   const [view, setView] = useLauncherView(myAddress);
   const countEdit = useCountLauncherEdit(myAddress);
   const openPin = useOpenLauncherPin();
+  const launcherTabId = useLauncherTabId();
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [drop, setDrop] = useState<LauncherDrop | null>(null);
@@ -293,9 +295,11 @@ export const LauncherSaved = ({
   const openItem = useCallback(
     (item: LauncherLeafItem) => {
       if (item.pin) void openPin(item.pin.app);
-      else if (item.type === 'bookmark') openLauncherBookmark(item.bookmark);
+      else if (item.type === 'bookmark') {
+        openLauncherBookmark(item.bookmark, launcherTabId);
+      }
     },
-    [openPin]
+    [launcherTabId, openPin]
   );
 
   const startRenaming = useCallback(

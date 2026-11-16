@@ -8,6 +8,7 @@ import { AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { AppsPrivate, PrivateAppAction } from '../AppsPrivate';
 import { PublishedPrivateApps } from '../PublishedPrivateApps';
+import type { PublishedPrivateApp } from '../privateAppMetadata';
 import {
   PublishButton,
   PublishNewContainer,
@@ -19,18 +20,39 @@ import {
 interface PrivateTabProps {
   myName: string;
   myAddress: string;
+  /**
+   * False while the tab is out of sight, as when its launcher tab is hidden:
+   * a dialog it opened steps aside, keeping what was entered.
+   */
+  isActive?: boolean;
 }
 
-export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
+export const PrivateTab = ({
+  myName,
+  myAddress,
+  isActive = true,
+}: PrivateTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const [refreshKey, setRefreshKey] = useState(0);
   const [action, setAction] = useState<PrivateAppAction | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<PublishedPrivateApp | null>(
+    null
+  );
+
+  const open = (next: PrivateAppAction, target?: PublishedPrivateApp) => {
+    setUpdateTarget(target ?? null);
+    setAction(next);
+  };
 
   return (
     <AppsWidthLimiter>
       <SectionContainer>
-        <PublishedPrivateApps myAddress={myAddress} refreshKey={refreshKey} />
+        <PublishedPrivateApps
+          myAddress={myAddress}
+          onUpdate={(app) => open('update', app)}
+          refreshKey={refreshKey}
+        />
 
         <StyledDivider />
 
@@ -43,7 +65,7 @@ export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
           </SectionTitle>
           <Spacer height="16px" />
           <PublishNewContainer>
-            <PublishButton onClick={() => setAction('access')}>
+            <PublishButton onClick={() => open('access')}>
               <LockOpenIcon
                 sx={{ fontSize: '32px', color: theme.palette.primary.main }}
               />
@@ -59,7 +81,7 @@ export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
                 })}
               </Typography>
             </PublishButton>
-            <PublishButton onClick={() => setAction('publish')}>
+            <PublishButton onClick={() => open('publish')}>
               <PublishIcon
                 sx={{ fontSize: '32px', color: theme.palette.secondary.main }}
               />
@@ -80,10 +102,15 @@ export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
       </SectionContainer>
 
       <AppsPrivate
+        isShown={isActive}
         myName={myName}
         myAddress={myAddress}
         action={action}
-        onClose={() => setAction(null)}
+        updateTarget={updateTarget}
+        onClose={() => {
+          setAction(null);
+          setUpdateTarget(null);
+        }}
         onPublished={() => setRefreshKey((key) => key + 1)}
       />
     </AppsWidthLimiter>

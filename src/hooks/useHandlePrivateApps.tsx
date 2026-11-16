@@ -9,6 +9,10 @@ import {
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
+import {
+  inLauncherTab,
+  useLauncherTabId,
+} from '../components/Apps/launcherTabs';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useAtom, useSetAtom } from 'jotai';
@@ -16,19 +20,43 @@ import { useTranslation } from 'react-i18next';
 import { upsertPrivatePinnedApp } from './privatePinnedApps';
 import { privateAppPreviewUrl } from './privateAppPreview';
 
+export type OpenPrivateAppOptions = {
+  /**
+   * Asked between the steps. Once it gives false (the tab the app was for
+   * was closed, or another account signed in), openApp stops: the app does
+   * not open, and its message closes instead of turning into another.
+   */
+  isWanted?: () => boolean;
+  /** Takes the opened app's tab, instead of the addTab event. */
+  openTab?: (tab: Record<string, any>) => void;
+};
+
+let lastOpenId = 0;
+
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
   const [openSnackGlobal, setOpenSnackGlobal] = useAtom(openSnackGlobalAtom);
   const [infoSnackCustom, setInfoSnackCustom] = useAtom(infoSnackGlobalAtom);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  // Inside a launcher tab the app opens in its place, once it is decrypted.
+  const launcherTabId = useLauncherTabId();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
 
   const openApp = async (
     privateAppProperties,
     addToPinnedApps,
-    setLoadingStatePrivateApp
+    setLoadingStatePrivateApp,
+    { isWanted, openTab }: OpenPrivateAppOptions = {}
   ) => {
+    // Marks this call's messages, so stopping closes its own and no other.
+    lastOpenId += 1;
+    const sourceId = `private-app-${lastOpenId}`;
+    const stillWanted = () => !isWanted || isWanted();
+    const stop = () => {
+      executeEvent('closeGlobalSnackBar', { sourceId });
+      return false;
+    };
     try {
       if (setLoadingStatePrivateApp) {
         setLoadingStatePrivateApp(
@@ -45,6 +73,7 @@ export const useHandlePrivateApps = () => {
           postProcess: 'capitalizeFirstChar',
         }),
         duration: null,
+        sourceId,
       });
       const urlData = `${getBaseApiReact()}/arbitrary/${
         privateAppProperties?.service
@@ -101,6 +130,7 @@ export const useHandlePrivateApps = () => {
         }
         throw error;
       }
+      if (!stillWanted()) return stop();
 
       let decryptedData;
       try {
@@ -128,6 +158,7 @@ export const useHandlePrivateApps = () => {
         }
         throw error;
       }
+      if (!stillWanted()) return stop();
 
       try {
         const convertToUint = base64ToUint8Array(decryptedData);
@@ -139,6 +170,7 @@ export const useHandlePrivateApps = () => {
             message: t('core:message.generic.building_app', {
               postProcess: 'capitalizeFirstChar',
             }),
+            sourceId,
           });
 
           const buildPrivatePreview = async () => {
@@ -174,6 +206,7 @@ export const useHandlePrivateApps = () => {
           };
 
           const previewUrl = await buildPrivatePreview();
+          if (!stillWanted()) return stop();
 
           const refreshFunc = async (tabId) => {
             try {
@@ -219,14 +252,19 @@ export const useHandlePrivateApps = () => {
               void refreshFunc(tabId);
             },
           };
-          executeEvent('addTab', {
-            data: dataBody,
-          });
+          if (openTab) {
+            openTab(dataBody);
+          } else {
+            executeEvent('addTab', {
+              data: inLauncherTab(dataBody, launcherTabId),
+            });
+          }
           setInfoSnackCustom({
             type: 'success',
             message: t('core:message.generic.opened', {
               postProcess: 'capitalizeFirstChar',
             }),
+            sourceId,
           });
           if (setLoadingStatePrivateApp) {
             setLoadingStatePrivateApp(``);
@@ -268,6 +306,8 @@ export const useHandlePrivateApps = () => {
         throw error;
       }
     } catch (error) {
+      // Nothing to report about an app no longer wanted.
+      if (!stillWanted()) return stop();
       setInfoSnackCustom({
         type: 'error',
         message:
@@ -275,6 +315,7 @@ export const useHandlePrivateApps = () => {
           t('core:message.error.fetch_app', {
             postProcess: 'capitalizeFirstChar',
           }),
+        sourceId,
       });
     }
     return false;

@@ -24,16 +24,10 @@ import {
   horizontalListSortingStrategy,
   SortableContext,
 } from '@dnd-kit/sortable';
-import {
-  AppsLauncher,
-  type AppsLauncherRequest,
-  isLauncherShown,
-  isLauncherSubPage,
-} from './AppsLauncher';
+import { isLauncherSubPage } from './AppsLauncher';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
 import { getBaseApiReact } from '../../App';
-import { AppInfo } from './AppInfo';
 import {
   executeEvent,
   subscribeToEvent,
@@ -51,12 +45,10 @@ import {
 import AppViewerContainer from './AppViewerContainer';
 import TabComponent from './TabComponent';
 import ShortUniqueId from 'short-unique-id';
-import { AppPublish } from './AppPublish';
 import {
   RatingsCacheInitializer,
   useAppRatings,
 } from '../../hooks/useAppRatings';
-import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
@@ -76,10 +68,7 @@ import {
   isNewTabWindowAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import {
-  availableQappsAtom,
-  publishEditTargetAtom,
-} from '../../atoms/appsAtoms';
+import { availableQappsAtom } from '../../atoms/appsAtoms';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
@@ -119,15 +108,48 @@ import {
   TAB_STRIP_GAP_PX,
   wheelScrollPx,
 } from './tabStripLayout';
+import {
+  createTabSessionWriter,
+  isPrivateTabToReopen,
+  loadTabSession,
+  reportedAppPath,
+  restoredTab,
+  serializeTabSession,
+  tabFlags,
+  type TabSession,
+  type TabSessionWriter,
+} from './tabSession';
+import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
+import { isSamePrivateApp } from '../../hooks/privatePinnedApps';
+import { isSameResourceIdentifier } from './resourceIdentifier';
+import {
+  canGoBackInLauncher,
+  isLauncherTab,
+  keepOpenLauncherStates,
+  launcherPageBack,
+  launcherTabToShow,
+  type LauncherTabState,
+  newLauncherTab,
+  newLauncherTabState,
+  restartLauncher,
+  showAppInfo,
+  showCategory,
+} from './launcherTabs';
+import { LauncherTabView } from './LauncherTabView';
 
 import { useTabShortcuts } from './useTabShortcuts';
 
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
+/** A launcher tab's page until it has one of its own. */
+const INITIAL_LAUNCHER_TAB_STATE = newLauncherTabState();
 const MIN_LIBRARY_APPS_BEFORE_SLOW_POLL = 10;
 /** Bounded MRU stack (tab ids only) for "last visited" after closing the active tab */
 const MAX_TAB_MRU_DEPTH = 64;
+
+/** A restored private app being downloaded and decrypted again. */
+type PrivateReopenRequest = { tabId: string; address: string };
 
 /** Prefer the tab that was to the right of the closed tab; if closed tab was last, use the new last tab */
 function positionalTabAfterClose(
@@ -227,17 +249,20 @@ export const AppsDesktop = ({
   const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
   const userInfo = useAtomValue(userInfoAtom);
-  const publishEditTarget = useAtomValue(publishEditTargetAtom);
-  const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
   const [availableQapps, setAvailableQapps] = useAtom(availableQappsAtom);
   const availableQappsCountRef = useRef(0);
-  const [selectedAppInfo, setSelectedAppInfo] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null);
   const [tabs, setTabs] = useState([]);
   const [viewerTabOrder, setViewerTabOrder] = useState<string[]>([]);
   const [selectedTab, setSelectedTab] = useState(null);
+  const selectedTabRef = useRef(selectedTab);
+  selectedTabRef.current = selectedTab;
+  // Each launcher tab's page (launcherTabs.ts), by tab id.
+  const [launcherTabStates, setLauncherTabStates] = useState<
+    Record<string, LauncherTabState>
+  >({});
+  // Only Dev Mode's own new tab page sets it now: the launcher is a tab.
   const [isNewTabWindow, setIsNewTabWindow] = useAtom(isNewTabWindowAtom);
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
@@ -251,35 +276,41 @@ export const AppsDesktop = ({
     type: 'warning' | 'error' | 'success' | 'info';
   } | null>(null);
   const [sidebarOffsetPx, setSidebarOffsetPx] = useState(0);
-  const [isAddTabFocused, setIsAddTabFocused] = useState(false);
-  const [isAddTabWaitingForPointerMove, setIsAddTabWaitingForPointerMove] =
-    useState(false);
-  const addTabPointerOriginRef = useRef<{ x: number; y: number } | null>(null);
-  const latestPointerPositionRef = useRef<{ x: number; y: number } | null>(
-    null
-  );
-  const [pendingVisualTabActivationId, setPendingVisualTabActivationId] =
-    useState<string | null>(null);
-  const [delayedVisualActiveTabId, setDelayedVisualActiveTabId] = useState<
-    string | null
-  >(null);
   const [enteringTabIds, setEnteringTabIds] = useState<string[]>([]);
   const [tabWidthPx, setTabWidthPx] = useState(TAB_IDEAL_WIDTH_PX);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
   const tabScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const tabAddButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [launcherRequest, setLauncherRequest] = useState<AppsLauncherRequest>({
-    nonce: 0,
-    query: '',
-  });
   const tabsToNavTimeoutRef = useRef<number | null>(null);
-  const tabActivationTimeoutRef = useRef<number | null>(null);
   const tabEntryCleanupTimeoutRef = useRef<number | null>(null);
   const recentTabIdsRef = useRef<string[]>([]);
   const tabPointerUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
   const tabInteractionLockedRef = useRef(false);
+  // The account whose open tabs are kept (tabSession.ts), once they are read.
+  const [sessionAddress, setSessionAddress] = useState<string | null>(null);
+  const storedSessionRef = useRef<TabSession | null>(null);
+  const sessionWriterRef = useRef<TabSessionWriter | null>(null);
+  // Tabs whose app has been shown. A restored tab loads the first time it is
+  // selected, then stays loaded like the others.
+  const [shownTabIds, setShownTabIds] = useState<Set<string>>(() => new Set());
+  const { openApp: openPrivateApp } = useHandlePrivateApps();
+  // The hook hands out a new `openApp` on every render: keep the latest.
+  const openPrivateAppRef = useRef(openPrivateApp);
+  openPrivateAppRef.current = openPrivateApp;
+  // Restored private apps being downloaded and decrypted again, by tab.
+  const reopenRequestsRef = useRef<Map<string, PrivateReopenRequest>>(
+    new Map()
+  );
+  // What a request is checked against when it ends: the tabs and the account
+  // as last drawn, and whether this view is still there (signing out removes
+  // it, and the next account gets a new one).
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const myAddressRef = useRef(myAddress);
+  myAddressRef.current = myAddress;
+  const isMountedRef = useRef(true);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -288,6 +319,159 @@ export const AppsDesktop = ({
     })
   );
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
+
+  // The open tabs come back after a restart: once, when the account is first
+  // known, and never over tabs already opened in this run.
+  useEffect(() => {
+    if (!myAddress || sessionAddress) return;
+    const saved = loadTabSession(myAddress, MAX_OPEN_APP_TABS);
+    storedSessionRef.current = saved;
+    if (tabs.length === 0 && saved.tabs.length > 0) {
+      setTabs(pinnedFirst(saved.tabs.map(restoredTab)));
+      // Hub starts on Home and its Apps button opens the launcher, so no
+      // restored tab is selected, and none loads, until one is chosen. The
+      // one that was selected is the first Hub falls back to.
+      recentTabIdsRef.current = saved.selectedTabId
+        ? [saved.selectedTabId]
+        : [];
+    }
+    setSessionAddress(myAddress);
+  }, [myAddress, sessionAddress, tabs.length]);
+
+  useEffect(() => {
+    if (!sessionAddress) return;
+    const writer = createTabSessionWriter(sessionAddress, {
+      saved: storedSessionRef.current ?? undefined,
+    });
+    sessionWriterRef.current = writer;
+    const flush = () => writer.flush();
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      writer.flush();
+      sessionWriterRef.current = null;
+    };
+  }, [sessionAddress]);
+
+  // Saves the tabs, their order, the selected one (or, while none is, the
+  // last one selected) and where each app is. Launcher tabs are not kept, so
+  // while one shows, the tab kept as selected is the last other one viewed.
+  useEffect(() => {
+    if (!sessionAddress || myAddress !== sessionAddress) return;
+    const selectedTabId =
+      (isLauncherTab(selectedTab) ? null : selectedTab?.tabId) ??
+      pickNextTabFromMru(
+        tabs.filter((tab) => !isLauncherTab(tab)),
+        recentTabIdsRef.current
+      )?.tabId;
+    sessionWriterRef.current?.update(
+      serializeTabSession(tabs, selectedTabId, MAX_OPEN_APP_TABS, (tab) =>
+        reportedAppPath(tab, navigationController?.[tab.tabId]?.currentLink)
+      )
+    );
+  }, [
+    myAddress,
+    navigationController,
+    selectedTab?.tabId,
+    sessionAddress,
+    tabs,
+  ]);
+
+  useEffect(() => {
+    const tabId = selectedTab?.tabId;
+    if (!tabId) return;
+    setShownTabIds((prev) =>
+      prev.has(tabId) ? prev : new Set(prev).add(tabId)
+    );
+  }, [selectedTab?.tabId]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    const requests = reopenRequestsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      requests.clear();
+    };
+  }, []);
+
+  // A request still counts while this view shows the account that made it
+  // and its tab is still in the strip, waiting for its app.
+  const isReopenWanted = useCallback(
+    (request: PrivateReopenRequest) =>
+      isMountedRef.current &&
+      myAddressRef.current === request.address &&
+      reopenRequestsRef.current.get(request.tabId) === request &&
+      tabsRef.current.some(
+        (tab) => tab?.tabId === request.tabId && isPrivateTabToReopen(tab)
+      ),
+    []
+  );
+
+  // The reopened app takes its tab's place and keeps the tab's marks. The
+  // selection stays as it is: the app shows only if its tab is selected.
+  const finishReopen = useCallback(
+    (request: PrivateReopenRequest, appTab) => {
+      if (!isReopenWanted(request)) return;
+      const waiting = tabsRef.current.find(
+        (tab) => tab?.tabId === request.tabId
+      );
+      const reopened = {
+        ...tabFlags(waiting),
+        ...appTab,
+        tabId: request.tabId,
+      };
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab?.tabId === request.tabId && isPrivateTabToReopen(tab)
+            ? reopened
+            : tab
+        )
+      );
+      setSelectedTab((selected) =>
+        selected?.tabId === request.tabId ? reopened : selected
+      );
+    },
+    [isReopenWanted]
+  );
+
+  // A restored private app is downloaded and decrypted again when its tab is
+  // selected. The request belongs to that tab and to the account that made
+  // it: closing the tab, or signing out, drops it.
+  const reopenPrivateTab = useCallback(
+    (tab) => {
+      if (!isPrivateTabToReopen(tab)) return;
+      const address = myAddressRef.current;
+      const requests = reopenRequestsRef.current;
+      if (!address || requests.has(tab.tabId)) return;
+      const request: PrivateReopenRequest = { tabId: tab.tabId, address };
+      requests.set(tab.tabId, request);
+      Promise.resolve()
+        .then(() =>
+          openPrivateAppRef.current(
+            tab.privateAppProperties,
+            false,
+            undefined,
+            {
+              isWanted: () => isReopenWanted(request),
+              openTab: (appTab) => finishReopen(request, appTab),
+            }
+          )
+        )
+        .catch((error) => console.error(error))
+        .finally(() => {
+          if (requests.get(tab.tabId) === request) {
+            requests.delete(tab.tabId);
+          }
+        });
+    },
+    [finishReopen, isReopenWanted]
+  );
+
+  useEffect(() => {
+    if (isPrivateTabToReopen(selectedTab)) reopenPrivateTab(selectedTab);
+  }, [reopenPrivateTab, selectedTab]);
 
   const myApp = useMemo(() => {
     return availableQapps.find(
@@ -420,9 +604,6 @@ export const AppsDesktop = ({
 
   useEffect(() => {
     return () => {
-      if (tabActivationTimeoutRef.current !== null) {
-        window.clearTimeout(tabActivationTimeoutRef.current);
-      }
       if (tabEntryCleanupTimeoutRef.current !== null) {
         window.clearTimeout(tabEntryCleanupTimeoutRef.current);
       }
@@ -538,76 +719,17 @@ export const AppsDesktop = ({
     return () => scroller.removeEventListener('wheel', handleWheel);
   }, []);
 
-  useEffect(() => {
-    const trackPointer = (event: PointerEvent) => {
-      latestPointerPositionRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-      };
-    };
-
-    window.addEventListener('pointermove', trackPointer, { passive: true });
-
-    return () => {
-      window.removeEventListener('pointermove', trackPointer);
-    };
+  // A new launcher tab fades in where the + is.
+  const animateTabEntry = useCallback((tabId: string) => {
+    if (tabEntryCleanupTimeoutRef.current !== null) {
+      window.clearTimeout(tabEntryCleanupTimeoutRef.current);
+    }
+    setEnteringTabIds([tabId]);
+    tabEntryCleanupTimeoutRef.current = window.setTimeout(() => {
+      tabEntryCleanupTimeoutRef.current = null;
+      setEnteringTabIds([]);
+    }, 220);
   }, []);
-
-  useEffect(() => {
-    if (!isAddTabWaitingForPointerMove) return;
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const origin = addTabPointerOriginRef.current;
-      if (origin) {
-        const dx = Math.abs(event.clientX - origin.x);
-        const dy = Math.abs(event.clientY - origin.y);
-        if (dx < 6 && dy < 6) {
-          return;
-        }
-      }
-      setIsAddTabFocused(false);
-      setIsAddTabWaitingForPointerMove(false);
-      addTabPointerOriginRef.current = null;
-    };
-
-    window.addEventListener('pointermove', handlePointerMove, {
-      passive: true,
-    });
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-    };
-  }, [isAddTabWaitingForPointerMove]);
-
-  const scheduleVisualTabActivation = useCallback(
-    (tabId: string) => {
-      if (tabActivationTimeoutRef.current !== null) {
-        window.clearTimeout(tabActivationTimeoutRef.current);
-      }
-      if (tabEntryCleanupTimeoutRef.current !== null) {
-        window.clearTimeout(tabEntryCleanupTimeoutRef.current);
-      }
-
-      setPendingVisualTabActivationId(tabId);
-      setDelayedVisualActiveTabId(null);
-      setEnteringTabIds((prev) =>
-        prev.includes(tabId) ? prev : [...prev, tabId]
-      );
-      addTabPointerOriginRef.current = latestPointerPositionRef.current;
-      setIsAddTabWaitingForPointerMove(true);
-
-      tabActivationTimeoutRef.current = window.setTimeout(() => {
-        setDelayedVisualActiveTabId(tabId);
-        setPendingVisualTabActivationId(null);
-      }, 85);
-
-      tabEntryCleanupTimeoutRef.current = window.setTimeout(() => {
-        setEnteringTabIds((prev) => prev.filter((id) => id !== tabId));
-        setDelayedVisualActiveTabId((prev) => (prev === tabId ? null : prev));
-      }, 220);
-    },
-    [setIsAddTabFocused]
-  );
 
   const getCategories = useCallback(async () => {
     try {
@@ -703,50 +825,74 @@ export const AppsDesktop = ({
     };
   }, [getQapps]);
 
-  const selectedAppInfoFunc = (e) => {
-    const data = e.detail?.data;
-    setSelectedAppInfo(data);
-    setMode('appInfo');
-  };
+  const updateLauncherTab = useCallback(
+    (tabId: string, change: (state: LauncherTabState) => LauncherTabState) => {
+      setLauncherTabStates((prev) => {
+        const current = prev[tabId] ?? newLauncherTabState();
+        const next = change(current);
+        return next === prev[tabId] ? prev : { ...prev, [tabId]: next };
+      });
+    },
+    []
+  );
 
+  // A closed launcher tab, or one an app took the place of, leaves its page.
   useEffect(() => {
-    subscribeToEvent('selectedAppInfo', selectedAppInfoFunc);
+    setLauncherTabStates((prev) => keepOpenLauncherStates(prev, tabs));
+  }, [tabs]);
+
+  // An app's details and a category open in the launcher tab on screen: only
+  // that one can be clicked. (What opens in a tab says where it came from:
+  // addTabFunc.)
+  useEffect(() => {
+    const showInLauncherTab = (
+      change: (state: LauncherTabState) => LauncherTabState
+    ) => {
+      const tab = selectedTabRef.current;
+      if (isLauncherTab(tab)) updateLauncherTab(tab.tabId, change);
+    };
+    const onAppInfo = (e) =>
+      showInLauncherTab((state) => showAppInfo(state, e.detail?.data));
+    const onAppInfoFromCategory = (e) =>
+      showInLauncherTab((state) => showAppInfo(state, e.detail?.data, true));
+    const onCategory = (e) =>
+      showInLauncherTab((state) => showCategory(state, e.detail?.data));
+
+    subscribeToEvent('selectedAppInfo', onAppInfo);
+    subscribeToEvent('selectedAppInfoCategory', onAppInfoFromCategory);
+    subscribeToEvent('selectedCategory', onCategory);
 
     return () => {
-      unsubscribeFromEvent('selectedAppInfo', selectedAppInfoFunc);
+      unsubscribeFromEvent('selectedAppInfo', onAppInfo);
+      unsubscribeFromEvent('selectedAppInfoCategory', onAppInfoFromCategory);
+      unsubscribeFromEvent('selectedCategory', onCategory);
     };
-  }, []);
+  }, [updateLauncherTab]);
 
-  const selectedAppInfoCategoryFunc = (e) => {
-    const data = e.detail?.data;
-    setSelectedAppInfo(data);
-    setMode('appInfo-from-category');
-  };
-
-  useEffect(() => {
-    subscribeToEvent('selectedAppInfoCategory', selectedAppInfoCategoryFunc);
-
-    return () => {
-      unsubscribeFromEvent(
-        'selectedAppInfoCategory',
-        selectedAppInfoCategoryFunc
-      );
-    };
-  }, []);
-
-  const selectedCategoryFunc = (e) => {
-    const data = e.detail?.data;
-    setSelectedCategory(data);
-    setMode('category');
-  };
-
-  useEffect(() => {
-    subscribeToEvent('selectedCategory', selectedCategoryFunc);
-
-    return () => {
-      unsubscribeFromEvent('selectedCategory', selectedCategoryFunc);
-    };
-  }, []);
+  // A launcher tab whose publish form holds input that is not published yet
+  // is locked: it asks before it closes, as a Q-App's locked tab does. The
+  // ids are also kept here as they are told, for an app that arrives after
+  // the click that opened it (a private app is decrypted first): it does not
+  // take the place of such a tab.
+  const unsavedLauncherTabIdsRef = useRef(new Set<string>());
+  const setLauncherTabUnsaved = useCallback(
+    (tabId: string, hasUnsavedInput: boolean) => {
+      if (hasUnsavedInput) unsavedLauncherTabIdsRef.current.add(tabId);
+      else unsavedLauncherTabIdsRef.current.delete(tabId);
+      setTabs((prev) => {
+        const index = prev.findIndex((tab) => tab?.tabId === tabId);
+        const tab = prev[index];
+        if (!isLauncherTab(tab) || !!tab.lock === hasUnsavedInput) {
+          return prev;
+        }
+        const { lock: _lock, ...unlocked } = tab;
+        const next = [...prev];
+        next[index] = hasUnsavedInput ? { ...unlocked, lock: true } : unlocked;
+        return next;
+      });
+    },
+    []
+  );
 
   const navigateBackFunc = useCallback(() => {
     if (desktopViewMode === 'dev') {
@@ -761,7 +907,6 @@ export const AppsDesktop = ({
       ) {
         if (devMode === 'category') {
           setDevMode('library');
-          setSelectedCategory(null);
         } else if (devMode === 'appInfo-from-category') {
           setDevMode('category');
         } else if (devMode === 'appInfo') {
@@ -781,38 +926,9 @@ export const AppsDesktop = ({
       return;
     }
 
-    if (
-      [
-        'category',
-        'appInfo-from-category',
-        'appInfo',
-        'library',
-        'publish',
-        'publish-app',
-        'publish-website',
-      ].includes(mode)
-    ) {
-      if (mode === 'category') {
-        setMode('library');
-        setSelectedCategory(null);
-      } else if (mode === 'appInfo-from-category') {
-        setMode('category');
-      } else if (mode === 'appInfo') {
-        setMode('library');
-      } else if (mode === 'library') {
-        if (isNewTabWindow) {
-          setMode('viewer');
-        } else {
-          setMode('home');
-        }
-      } else if (
-        mode === 'publish' ||
-        mode === 'publish-app' ||
-        mode === 'publish-website'
-      ) {
-        setPublishEditTarget(null);
-        setMode('library');
-      }
+    // A launcher tab goes back among its own pages.
+    if (isLauncherTab(selectedTab)) {
+      updateLauncherTab(selectedTab.tabId, launcherPageBack);
     } else if (selectedTab?.tabId) {
       executeEvent(`navigateBackApp-${selectedTab.tabId}`, {});
     }
@@ -820,11 +936,9 @@ export const AppsDesktop = ({
     desktopViewMode,
     devMode,
     isNewTabWindow,
-    mode,
-    selectedTab?.tabId,
+    selectedTab,
     setDevMode,
-    setMode,
-    setPublishEditTarget,
+    updateLauncherTab,
   ]);
 
   useEffect(() => {
@@ -846,61 +960,158 @@ export const AppsDesktop = ({
   const setAppsSubPageCanGoBack = useSetAtom(appsSubPageCanGoBackAtom);
 
   useEffect(() => {
-    const currentMode = desktopViewMode === 'dev' ? devMode : mode;
-    // 'library' is the launcher itself in Apps mode: nothing to go back to.
+    // In Apps mode the launcher's pages are in launcher tabs.
     const isSubPage =
-      (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
-      !selectedTab &&
-      (isLauncherSubPage(currentMode) ||
-        (desktopViewMode === 'dev' && currentMode === 'library'));
+      desktopViewMode === 'apps'
+        ? isLauncherTab(selectedTab) &&
+          canGoBackInLauncher(launcherTabStates[selectedTab.tabId])
+        : desktopViewMode === 'dev' &&
+          !selectedTab &&
+          (isLauncherSubPage(devMode) || devMode === 'library');
     setAppsSubPageCanGoBack(isSubPage);
-  }, [desktopViewMode, devMode, mode, selectedTab, setAppsSubPageCanGoBack]);
+  }, [
+    desktopViewMode,
+    devMode,
+    launcherTabStates,
+    selectedTab,
+    setAppsSubPageCanGoBack,
+  ]);
 
   useEffect(() => {
     return () => setAppsSubPageCanGoBack(false);
   }, [setAppsSubPageCanGoBack]);
 
+  /** Shows a tab that is already in the strip, where it is. */
+  const showTabInPlace = (tab) => {
+    setEnteringTabIds((prev) => prev.filter((id) => id !== tab.tabId));
+    setSelectedTab(tab);
+    setMode('viewer');
+    setDesktopViewMode('apps');
+    setIsNewTabWindow(false);
+  };
+
+  const noteTabLimit = () => {
+    setInfoSnack({
+      message: t('core:app_tab.limit_reached', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      type: 'warning',
+    });
+    setOpenSnack(true);
+  };
+
+  /** `tabs` with `newTab` after the tab `afterTabId`, or at the end. */
+  const withTabAfter = (prev, newTab, afterTabId?: string) => {
+    const sourceIndex = afterTabId
+      ? prev.findIndex((tab) => tab?.tabId === afterTabId)
+      : -1;
+    if (sourceIndex === -1) return [...prev, newTab];
+    const nextTabs = [...prev];
+    nextTabs.splice(sourceIndex + 1, 0, newTab);
+    return pinnedFirst(nextTabs);
+  };
+
+  /**
+   * What the strip's + does: a new launcher tab, with `query` searched. False
+   * at the tab limit, where only the note shows.
+   */
+  const openNewLauncherTab = ({
+    afterTabId,
+    query = '',
+  }: { afterTabId?: string; query?: string } = {}): boolean => {
+    if (tabs.length >= MAX_OPEN_APP_TABS) {
+      noteTabLimit();
+      return false;
+    }
+    const newTab = newLauncherTab(uid.rnd());
+    setTabs((prev) => withTabAfter(prev, newTab, afterTabId));
+    setLauncherTabStates((prev) => ({
+      ...prev,
+      [newTab.tabId]: newLauncherTabState(query),
+    }));
+    setSelectedTab(newTab);
+    setMode('viewer');
+    setDesktopViewMode('apps');
+    setIsNewTabWindow(false);
+    animateTabEntry(newTab.tabId);
+    return true;
+  };
+
+  /**
+   * The launcher, from an Apps button or a library search: the launcher tab
+   * on screen, else the one viewed last, else a new one. A search (`query`,
+   * '' included) starts it over with the search, but never over a publish
+   * form holding unsaved input: the search gets a new launcher tab instead.
+   */
+  const showLauncherTab = (query?: string) => {
+    const target = launcherTabToShow(
+      tabs,
+      selectedTab?.tabId,
+      recentTabIdsRef.current
+    );
+    const isSearch = typeof query === 'string';
+    if (!target || (isSearch && target.lock)) {
+      // At the tab limit the tab viewed last shows, under the note, rather
+      // than an empty page.
+      if (!openNewLauncherTab({ query })) setMode('viewer');
+      return;
+    }
+    if (isSearch) {
+      updateLauncherTab(target.tabId, (state) => restartLauncher(state, query));
+    }
+    showTabInPlace(target);
+  };
+
   const addTabFunc = (e) => {
-    const data = e.detail?.data;
+    const { fromLauncherTabId, ...data } = e.detail?.data ?? {};
+    // A launcher tab reopened (Ctrl+Shift+T) is a new one: nothing it held
+    // was kept.
+    if (isLauncherTab(data)) {
+      openNewLauncherTab({ afterTabId: data.afterTabId });
+      return;
+    }
     if (data?.internal) {
       const existingInternalTab = tabs.find(
         (tab) => tab?.internal === data.internal
       );
       if (existingInternalTab) {
-        setPendingVisualTabActivationId(null);
-        setDelayedVisualActiveTabId(null);
-        setEnteringTabIds((prev) =>
-          prev.filter((id) => id !== existingInternalTab.tabId)
-        );
-        setIsAddTabFocused(false);
-        setIsAddTabWaitingForPointerMove(false);
-        addTabPointerOriginRef.current = null;
-        setSelectedTab(existingInternalTab);
-        setMode('viewer');
-        setDesktopViewMode('apps');
-        setIsNewTabWindow(false);
+        showTabInPlace(existingInternalTab);
         return;
       }
     }
-    if (tabs.length >= MAX_OPEN_APP_TABS) {
-      setInfoSnack({
-        message: t('core:app_tab.limit_reached', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        type: 'warning',
-      });
-      setOpenSnack(true);
-      return;
+    // A private app opened from elsewhere (its list, a pinned app) takes the
+    // place of its restored tab, and keeps that tab's marks.
+    if (data?.isPrivate && !isPrivateTabToReopen(data)) {
+      const waiting = tabs.filter(
+        (tab) =>
+          isPrivateTabToReopen(tab) &&
+          isSamePrivateApp(tab.privateAppProperties, data.privateAppProperties)
+      );
+      const restored =
+        waiting.find((tab) => reopenRequestsRef.current.has(tab.tabId)) ??
+        waiting[0];
+      if (restored) {
+        const reopened = {
+          ...tabFlags(restored),
+          ...data,
+          tabId: restored.tabId,
+        };
+        setTabs((prev) =>
+          prev.map((tab) => (tab?.tabId === restored.tabId ? reopened : tab))
+        );
+        showTabInPlace(reopened);
+        return;
+      }
     }
-
     if (data?.navigateIfAlreadyOpen) {
       const { navigateIfAlreadyOpen, path, ...tabIdentity } = data;
+      // The same resource only: without an identifier, the name's default
+      // resource, not a tab of another resource of it.
       const existingTab = tabs.find(
         (tab) =>
           tab.service === tabIdentity.service &&
           tab.name?.toLowerCase() === tabIdentity.name?.toLowerCase() &&
-          (tabIdentity.identifier == null ||
-            tab.identifier === tabIdentity.identifier)
+          isSameResourceIdentifier(tab.identifier, tabIdentity.identifier)
       );
 
       if (existingTab) {
@@ -920,46 +1131,46 @@ export const AppsDesktop = ({
         return;
       }
     }
+
     // Only the tab menu pins a tab: a tab opened any other way starts
     // unpinned, a duplicate of a pinned tab too.
-    const { pinned: _pinned, ...tabData } = data ?? {};
+    const { pinned: _pinned, ...tabData } = data;
+
+    // Opened from inside a launcher tab: the app takes that tab's place, as
+    // a page opened from a browser's new tab does, unless the tab's publish
+    // form holds unsaved input by now. Opened any other way, it gets a tab
+    // of its own.
+    const launcherTab =
+      fromLauncherTabId &&
+      !unsavedLauncherTabIdsRef.current.has(fromLauncherTabId)
+        ? tabs.find(
+            (tab) => tab?.tabId === fromLauncherTabId && isLauncherTab(tab)
+          )
+        : null;
+    if (launcherTab) {
+      const appTab = { ...tabData, tabId: launcherTab.tabId };
+      setTabs((prev) =>
+        prev.map((tab) => (tab?.tabId === appTab.tabId ? appTab : tab))
+      );
+      showTabInPlace(appTab);
+      return;
+    }
+
+    // Only a new tab needs a free slot: an open one is reused above.
+    if (tabs.length >= MAX_OPEN_APP_TABS) {
+      noteTabLimit();
+      return;
+    }
+
     const newTab = {
       ...tabData,
       tabId: uid.rnd(),
     };
-    const shouldUseSmoothHandoff = isAddTabFocused;
-    if (!shouldUseSmoothHandoff) {
-      setIsAddTabFocused(false);
-      setIsAddTabWaitingForPointerMove(false);
-      addTabPointerOriginRef.current = null;
-    }
-    setTabs((prev) => {
-      const afterTabId = data?.afterTabId;
-      if (!afterTabId) {
-        return [...prev, newTab];
-      }
-
-      const sourceIndex = prev.findIndex((tab) => tab?.tabId === afterTabId);
-      if (sourceIndex === -1) {
-        return [...prev, newTab];
-      }
-
-      const nextTabs = [...prev];
-      nextTabs.splice(sourceIndex + 1, 0, newTab);
-      return pinnedFirst(nextTabs);
-    });
+    setTabs((prev) => withTabAfter(prev, newTab, data.afterTabId));
     setSelectedTab(newTab);
     setMode('viewer');
     setDesktopViewMode('apps');
     setIsNewTabWindow(false);
-    if (shouldUseSmoothHandoff) {
-      scheduleVisualTabActivation(newTab.tabId);
-    } else {
-      setPendingVisualTabActivationId(null);
-      setDelayedVisualActiveTabId(null);
-      setEnteringTabIds((prev) => prev.filter((id) => id !== newTab.tabId));
-      setIsAddTabFocused(false);
-    }
   };
 
   useEffect(() => {
@@ -973,13 +1184,7 @@ export const AppsDesktop = ({
   const addDevTabFunc = (e) => {
     const data = e.detail?.data;
     if (tabs.length >= MAX_OPEN_APP_TABS) {
-      setInfoSnack({
-        message: t('core:app_tab.limit_reached', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        type: 'warning',
-      });
-      setOpenSnack(true);
+      noteTabLimit();
       return;
     }
     const newTab = {
@@ -1052,13 +1257,10 @@ export const AppsDesktop = ({
     const data = e.detail?.data;
     const isDev = e.detail?.isDevMode;
 
-    setPendingVisualTabActivationId(null);
-    setDelayedVisualActiveTabId(null);
     setEnteringTabIds((prev) => prev.filter((id) => id !== data?.tabId));
-    setIsAddTabFocused(false);
-    setIsAddTabWaitingForPointerMove(false);
-    addTabPointerOriginRef.current = null;
     setSelectedTab(data);
+    // Choosing it again retries a private app that could not be reopened.
+    reopenPrivateTab(data);
     if (isDev) {
       setDesktopViewMode('dev');
       setDevMode('viewer');
@@ -1144,10 +1346,6 @@ export const AppsDesktop = ({
     const remainingIds = new Set(copyTabs.map((t) => t.tabId));
 
     setEnteringTabIds((prev) => prev.filter((id) => id !== tabId));
-    setPendingVisualTabActivationId((prev) => (prev === tabId ? null : prev));
-    setDelayedVisualActiveTabId((prev) => (prev === tabId ? null : prev));
-    setIsAddTabWaitingForPointerMove(false);
-    addTabPointerOriginRef.current = null;
     if (copyTabs?.length === 0) {
       recentTabIdsRef.current = [];
       setTabs(copyTabs);
@@ -1255,26 +1453,42 @@ export const AppsDesktop = ({
     };
   }, []);
 
-  const setNewTabWindowFunc = (e) => {
-    setIsNewTabWindow(true);
-    setIsAddTabFocused(true);
-    setSelectedTab(null);
-    setDesktopViewMode('apps');
-    // Always the launcher, not the app or category page that was open last.
-    if (isLauncherSubPage(mode)) {
-      setPublishEditTarget(null);
-      setMode('home');
-    }
-    setLauncherRequest({ nonce: Date.now(), query: '' });
-  };
+  // The launcher's events go by this render's tabs and selection, as closing
+  // does: `newTabWindow` (the + and Ctrl+T) opens a new launcher tab, the Apps
+  // buttons' `showLauncherTab` and a library search go to the one there is.
+  const launcherEventsRef = useRef({ openNewLauncherTab, showLauncherTab });
+  launcherEventsRef.current = { openNewLauncherTab, showLauncherTab };
 
   useEffect(() => {
-    subscribeToEvent('newTabWindow', setNewTabWindowFunc);
+    const onNewTab = () => launcherEventsRef.current.openNewLauncherTab();
+    const onShowLauncher = () => launcherEventsRef.current.showLauncherTab();
+    const onLibrarySearch = (e) =>
+      launcherEventsRef.current.showLauncherTab(e.detail?.data?.query || '');
+
+    subscribeToEvent('newTabWindow', onNewTab);
+    subscribeToEvent('showLauncherTab', onShowLauncher);
+    subscribeToEvent('openAppsLibrarySearch', onLibrarySearch);
 
     return () => {
-      unsubscribeFromEvent('newTabWindow', setNewTabWindowFunc);
+      unsubscribeFromEvent('newTabWindow', onNewTab);
+      unsubscribeFromEvent('showLauncherTab', onShowLauncher);
+      unsubscribeFromEvent('openAppsLibrarySearch', onLibrarySearch);
     };
-  }, [tabs, mode]);
+  }, []);
+
+  // Apps mode never opens on an empty page. Entered with no tab on screen
+  // (the top bar's Apps button on Home, say, with no tab open or only the
+  // restored ones), it shows the launcher, as the Apps buttons do: the
+  // launcher tab there is, or a new one. Closing the last tab goes Home.
+  const wasInAppsModeRef = useRef(desktopViewMode === 'apps');
+  useLayoutEffect(() => {
+    const inAppsMode = desktopViewMode === 'apps';
+    const entered = inAppsMode && !wasInAppsModeRef.current;
+    wasInAppsModeRef.current = inAppsMode;
+    if (entered && !selectedTabRef.current && !isNewTabWindow) {
+      launcherEventsRef.current.showLauncherTab();
+    }
+  }, [desktopViewMode, isNewTabWindow]);
 
   const devModeNewTabWindowFunc = () => {
     setIsNewTabWindow(true);
@@ -1290,30 +1504,6 @@ export const AppsDesktop = ({
       unsubscribeFromEvent('devModeNewTabWindow', devModeNewTabWindowFunc);
     };
   }, []);
-
-  const openAppsLibrarySearchFunc = useCallback(
-    (e) => {
-      const query = e.detail?.data?.query || '';
-      setDesktopViewMode('apps');
-      setIsAddTabFocused(true);
-      setSelectedTab(null);
-      setIsNewTabWindow(false);
-      setLauncherRequest({
-        nonce: Date.now(),
-        query,
-      });
-      setMode('library');
-    },
-    [setDesktopViewMode, setMode]
-  );
-
-  useEffect(() => {
-    subscribeToEvent('openAppsLibrarySearch', openAppsLibrarySearchFunc);
-
-    return () => {
-      unsubscribeFromEvent('openAppsLibrarySearch', openAppsLibrarySearchFunc);
-    };
-  }, [openAppsLibrarySearchFunc]);
 
   useEffect(() => {
     const handleSidebarOverlayVisibility = (e: CustomEvent) => {
@@ -1337,40 +1527,21 @@ export const AppsDesktop = ({
 
   const appsContentHeight = `calc(100vh - ${appChromeOffsetPx} - ${APPS_HORIZONTAL_TAB_HEIGHT_PX}px)`;
 
-  // One launcher stands where the dashboard and the library used to be: for a
-  // new tab, for the Apps button, and as the page the library pages return to.
-  const showLauncher = isLauncherShown({
-    desktopViewMode,
-    mode,
-    hasSelectedTab: !!selectedTab,
-    isNewTabWindow,
-  });
-
   const refreshLibrary = useCallback(async () => {
     await getQapps();
     refreshRatings();
   }, [getQapps, refreshRatings]);
 
-  const openDashboardFromTabs = useCallback(() => {
-    setIsAddTabFocused(true);
-    setIsAddTabWaitingForPointerMove(false);
-    addTabPointerOriginRef.current = null;
-    setPendingVisualTabActivationId(null);
-    setDelayedVisualActiveTabId(null);
-    setSelectedTab(null);
-    setLauncherRequest({
-      nonce: Date.now(),
-      query: '',
-    });
-    executeEvent('open-apps-mode', {});
-    setMode('home');
-    setIsNewTabWindow(false);
-  }, [setIsNewTabWindow, setMode]);
+  // The strip's + and Ctrl+T.
+  const openNewTab = useCallback(
+    () => launcherEventsRef.current.openNewLauncherTab(),
+    []
+  );
 
   useTabShortcuts({
     isNewTabWindow,
     maxTabs: MAX_OPEN_APP_TABS,
-    openNewTab: openDashboardFromTabs,
+    openNewTab,
     selectedTab,
     show,
     tabs,
@@ -1408,10 +1579,13 @@ export const AppsDesktop = ({
     [navigationController]
   );
 
+  // A launcher tab has no Pin: it is a page on the way to an app.
   const toggleTabPinned = useCallback((tabId: string) => {
     setTabs((prev) => {
       const tab = prev.find((item) => item?.tabId === tabId);
-      return tab ? setTabPinned(prev, tabId, !isPinnedTab(tab)) : prev;
+      return tab && !isLauncherTab(tab)
+        ? setTabPinned(prev, tabId, !isPinnedTab(tab))
+        : prev;
     });
   }, []);
 
@@ -1435,13 +1609,6 @@ export const AppsDesktop = ({
         keptIds.has(id)
       );
       setEnteringTabIds((prev) => prev.filter((id) => keptIds.has(id)));
-      setPendingVisualTabActivationId((prev) =>
-        keptIds.has(prev) ? prev : null
-      );
-      setDelayedVisualActiveTabId((prev) => (keptIds.has(prev) ? prev : null));
-      setIsAddTabFocused(false);
-      setIsAddTabWaitingForPointerMove(false);
-      addTabPointerOriginRef.current = null;
       setIsNewTabWindow(false);
       setTabs(keptTabs);
       setSelectedTab(nextTab);
@@ -1473,9 +1640,6 @@ export const AppsDesktop = ({
     recentTabIdsRef.current = [];
     setTabs([]);
     setSelectedTab(null);
-    setIsAddTabFocused(false);
-    setIsAddTabWaitingForPointerMove(false);
-    addTabPointerOriginRef.current = null;
     setIsNewTabWindow(false);
     executeEvent('clearNavInput', {});
     tabsTokenRef.current += 1;
@@ -1506,16 +1670,6 @@ export const AppsDesktop = ({
     setMode,
     setDevMode,
   ]);
-
-  useEffect(() => {
-    if (!show) {
-      setIsAddTabFocused(false);
-      setIsAddTabWaitingForPointerMove(false);
-      addTabPointerOriginRef.current = null;
-      setPendingVisualTabActivationId(null);
-      setDelayedVisualActiveTabId(null);
-    }
-  }, [show]);
 
   useEffect(() => {
     if (tabs.length === 0 && selectedTab) {
@@ -1660,14 +1814,11 @@ export const AppsDesktop = ({
       tabInteractionLockedRef={tabInteractionLockedRef}
       widthPx={isPinnedTab(tab) ? PINNED_TAB_WIDTH_PX : tabWidthPx}
       isEntering={enteringTabIds.includes(tab?.tabId)}
-      isVisuallySelected={
-        delayedVisualActiveTabId === tab?.tabId ||
-        (tab?.tabId === selectedTab?.tabId &&
-          pendingVisualTabActivationId !== tab?.tabId)
-      }
       onCloseAll={closeAllTabs}
       onDuplicate={() => duplicateTab(tab)}
-      onTogglePin={() => toggleTabPinned(tab?.tabId)}
+      onTogglePin={
+        isLauncherTab(tab) ? undefined : () => toggleTabPinned(tab?.tabId)
+      }
       onClose={() => {
         executeEvent('removeTab', {
           data: tab,
@@ -1689,6 +1840,11 @@ export const AppsDesktop = ({
       }}
     />
   );
+
+  // A launcher tab is locked only while its publish form holds unsaved input.
+  const closeTabNote = isLauncherTab(pendingTabToRemove)
+    ? t('core:app_tab.unsaved_publish', { postProcess: 'capitalizeFirstChar' })
+    : pendingTabToRemove?.lockMessage;
 
   const hasOpenTabs = tabs.length > 0;
   const hideAppsShellOffScreen = !show && hasOpenTabs;
@@ -1791,35 +1947,18 @@ export const AppsDesktop = ({
 
             <AppsHorizontalTabAddButton
               ref={tabAddButtonRef}
+              aria-label={t('core:app_tab.new_tab', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               disableRipple
-              onClick={openDashboardFromTabs}
+              onClick={openNewTab}
               sx={(theme) => ({
-                backgroundColor: isAddTabFocused
-                  ? alpha(
-                      theme.palette.primary.main,
-                      theme.palette.mode === 'dark' ? 0.78 : 0.88
-                    )
-                  : undefined,
-                borderColor: isAddTabFocused ? 'transparent' : undefined,
-                color: isAddTabFocused
-                  ? theme.palette.mode === 'dark'
-                    ? theme.palette.common.white
-                    : theme.palette.primary.contrastText
-                  : undefined,
                 '&:hover': {
-                  backgroundColor: isAddTabFocused
-                    ? alpha(
-                        theme.palette.primary.main,
-                        theme.palette.mode === 'dark' ? 0.86 : 0.94
-                      )
-                    : theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : 'rgba(0, 0, 0, 0.06)',
-                  color: isAddTabFocused
-                    ? theme.palette.mode === 'dark'
-                      ? theme.palette.common.white
-                      : theme.palette.primary.contrastText
-                    : theme.palette.text.primary,
+                  backgroundColor:
+                    theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.common.white, 0.08)
+                      : alpha(theme.palette.common.black, 0.06),
+                  color: theme.palette.text.primary,
                 },
               })}
             >
@@ -1864,87 +2003,40 @@ export const AppsDesktop = ({
               </Box>
             )}
 
-          <AppsLauncher
-            availableQapps={availableQapps}
-            categories={categories}
-            contentHeight={appsContentHeight}
-            getQapps={refreshLibrary}
-            isShow={showLauncher}
-            myAddress={myAddress}
-            myApp={myApp}
-            myName={myName}
-            myWebsite={myWebsite}
-            request={launcherRequest}
-            setMode={setMode}
-          />
-
-          {desktopViewMode === 'apps' && mode === 'appInfo' && !selectedTab && (
-            <Box
-              sx={{
-                height: appsContentHeight,
-                overflow: 'auto',
-                width: '100%',
-              }}
-            >
-              <AppInfo app={selectedAppInfo} myName={myName} />
-            </Box>
-          )}
-
-          {desktopViewMode === 'apps' &&
-            mode === 'appInfo-from-category' &&
-            !selectedTab && (
-              <Box
-                sx={{
-                  height: appsContentHeight,
-                  overflow: 'auto',
-                  width: '100%',
-                }}
-              >
-                <AppInfo app={selectedAppInfo} myName={myName} />
-              </Box>
-            )}
-
-          <AppsCategoryDesktop
-            availableQapps={availableQapps}
-            contentHeight={appsContentHeight}
-            isShow={
-              desktopViewMode === 'apps' && mode === 'category' && !selectedTab
-            }
-            category={selectedCategory}
-            myName={myName}
-          />
-
-          {desktopViewMode === 'apps' &&
-            (mode === 'publish' ||
-              mode === 'publish-app' ||
-              mode === 'publish-website') &&
-            !selectedTab && (
-              <Box
-                sx={{
-                  height: appsContentHeight,
-                  overflow: 'auto',
-                  width: '100%',
-                }}
-              >
-                <AppPublish
-                  categories={categories}
-                  myAddress={myAddress}
-                  myName={myName}
-                  initialName={publishEditTarget?.name}
-                  initialAppType={
-                    publishEditTarget?.service ??
-                    (mode === 'publish-website' ? 'WEBSITE' : 'APP')
-                  }
-                  isAppTypeLocked={
-                    mode === 'publish-app' ||
-                    mode === 'publish-website' ||
-                    !!publishEditTarget
-                  }
-                />
-              </Box>
-            )}
-
           {viewerTabs.map((tab) => {
+            // A restored tab loads the first time it is selected; a private
+            // app's waits until it is reopened.
+            const isLoaded =
+              !isPrivateTabToReopen(tab) &&
+              (shownTabIds.has(tab?.tabId) ||
+                tab?.tabId === selectedTab?.tabId);
+            if (!isLoaded) return null;
+            if (isLauncherTab(tab)) {
+              return (
+                <LauncherTabView
+                  availableQapps={availableQapps}
+                  categories={categories}
+                  contentHeight={appsContentHeight}
+                  getQapps={refreshLibrary}
+                  isShown={
+                    show &&
+                    desktopViewMode === 'apps' &&
+                    tab.tabId === selectedTab?.tabId
+                  }
+                  key={tab.tabId}
+                  myAddress={myAddress}
+                  myApp={myApp}
+                  myName={myName}
+                  myWebsite={myWebsite}
+                  onChange={updateLauncherTab}
+                  onUnsavedPublishChange={setLauncherTabUnsaved}
+                  state={
+                    launcherTabStates[tab.tabId] ?? INITIAL_LAUNCHER_TAB_STATE
+                  }
+                  tabId={tab.tabId}
+                />
+              );
+            }
             const hideContentForDevHome =
               desktopViewMode === 'dev' &&
               devMode === 'home' &&
@@ -2047,7 +2139,7 @@ export const AppsDesktop = ({
               postProcess: 'capitalizeFirstChar',
             })}
           </DialogContentText>
-          {pendingTabToRemove?.lockMessage && (
+          {closeTabNote && (
             <DialogContentText
               sx={{
                 ...dialogContentTextSx,
@@ -2056,7 +2148,7 @@ export const AppsDesktop = ({
                 marginTop: 1.4,
               }}
             >
-              {pendingTabToRemove.lockMessage}
+              {closeTabNote}
             </DialogContentText>
           )}
         </DialogContent>

@@ -241,6 +241,34 @@ describe('LauncherSaveWindow', () => {
     expect(screen.getByText(TITLE)).toBeVisible();
   });
 
+  it('is put off for every launcher tab at once', async () => {
+    const user = userEvent.setup();
+    const { store } = setUp();
+    // Another launcher tab's window, on the same account.
+    render(
+      <Provider store={store}>
+        <ThemeProvider theme={createTheme()}>
+          <LauncherSaveWindow
+            bookmarks={bookmarks(['Q-Tube', 'Q-Mail'])}
+            myAddress={ADDRESS}
+            myName={NAME}
+          />
+        </ThemeProvider>
+      </Provider>
+    );
+    expect(screen.getAllByText(TITLE)).toHaveLength(2);
+
+    await user.click(screen.getAllByRole('button', { name: LATER })[0]);
+
+    await waitFor(() => expect(screen.queryAllByText(TITLE)).toHaveLength(0));
+
+    act(() => {
+      store.set(launcherEditsAtom, { address: ADDRESS, count: 2 });
+    });
+
+    expect(screen.getAllByText(TITLE)).toHaveLength(2);
+  });
+
   it('counts the order of the tiles as something to save', () => {
     localStorage.setItem(
       launcherViewStorageKey(ADDRESS),
