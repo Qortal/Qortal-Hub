@@ -454,6 +454,65 @@ describe('the open tab of a row', () => {
   });
 });
 
+describe('the open tab of a row, for one resource of an app', () => {
+  const beta = tab('b', 'Torq', { identifier: 'beta' });
+  // Some tabs keep the default resource's identifier as 'null'.
+  const start = tab('s', 'Torq', { identifier: 'null' });
+  const appRow: OmniboxOption = { app: app('Torq'), kind: 'app' };
+  const linkRow = (identifier?: string): OmniboxOption => ({
+    kind: 'link',
+    link: {
+      identifier,
+      kind: 'resource',
+      link: `qortal://APP/Torq${identifier ? `?identifier=${identifier}` : ''}`,
+      name: 'Torq',
+      path: '',
+      service: 'APP',
+    },
+  });
+  const bookmarkRow = (identifier?: string): OmniboxOption => ({
+    bookmark: bookmark('b1', 'A post', 'Torq', 'post/x', { identifier }),
+    kind: 'bookmark',
+  });
+
+  it('finds no tab when only another resource of the app is open', () => {
+    expect(omniboxOptionOpenTab(appRow, [beta])).toBeNull();
+    expect(omniboxOptionOpenTab(linkRow(), [beta])).toBeNull();
+    expect(omniboxOptionOpenTab(bookmarkRow(), [beta])).toBeNull();
+    expect(
+      omniboxOptionOpenTab(
+        {
+          app: { name: 'Torq', service: 'APP' },
+          kind: 'pinned',
+          title: 'Torq',
+        },
+        [beta]
+      )
+    ).toBeNull();
+    expect(omniboxOptionOpenTab(linkRow('beta'), [start])).toBeNull();
+  });
+
+  it('finds the tab of the same resource', () => {
+    expect(omniboxOptionOpenTab(appRow, [beta, start])).toBe(start);
+    expect(omniboxOptionOpenTab(linkRow(), [beta, start])).toBe(start);
+    expect(omniboxOptionOpenTab(linkRow('default'), [beta, start])).toBe(start);
+    expect(omniboxOptionOpenTab(linkRow('beta'), [start, beta])).toBe(beta);
+    expect(omniboxOptionOpenTab(bookmarkRow('beta'), [start, beta])).toBe(beta);
+  });
+
+  it("lists the app's own row beside a tab of another of its resources", () => {
+    expect(build('torq', { apps: [app('Torq')], tabs: [beta] })).toEqual([
+      'tabs:b',
+      'apps:APP:Torq',
+      'library:torq',
+    ]);
+    expect(build('torq', { apps: [app('Torq')], tabs: [start] })).toEqual([
+      'tabs:s',
+      'library:torq',
+    ]);
+  });
+});
+
 describe('omniboxTabPage', () => {
   const tab = { name: 'Q Blog', service: 'APP', tabId: 't' };
 

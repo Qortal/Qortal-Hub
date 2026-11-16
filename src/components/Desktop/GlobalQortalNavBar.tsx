@@ -68,6 +68,7 @@ import { AppBookmarksButton } from '../Apps/AppBookmarks';
 import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
+import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
 import { availableQappsAtom } from '../../atoms/appsAtoms';
 import {
   AppSearchSuggestions,
@@ -1031,9 +1032,10 @@ export function GlobalQortalNavBar({
   );
 
   /**
-   * Opens a Q-App, website or page in a tab. If it is open already, its tab
-   * is switched to and shows this page, or the start page without one
-   * (`navigateIfAlreadyOpen`). With `newTab` (Alt+Enter) it gets a new tab.
+   * Opens a Q-App, website or page in a tab. If that resource is open
+   * already, its tab is switched to and shows this page, or the start page
+   * without one (`navigateIfAlreadyOpen`); without an identifier, that is the
+   * name's default resource. With `newTab` (Alt+Enter) it gets a new tab.
    */
   const openResource = useCallback(
     (
@@ -1049,7 +1051,9 @@ export function GlobalQortalNavBar({
         name: target.name,
         service: target.service.toUpperCase(),
       };
-      if (target.identifier) data.identifier = target.identifier;
+      // 'null' or 'default' is the default resource: no identifier.
+      const identifier = resourceIdentifierKey(target.identifier);
+      if (identifier) data.identifier = identifier;
       if (target.path) data.path = target.path;
       if (!newTab) data.navigateIfAlreadyOpen = true;
       executeEvent('addTab', { data });
