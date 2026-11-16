@@ -7,14 +7,14 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
 import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../../../atoms/global';
-import { publishEditTargetAtom } from '../../../atoms/appsAtoms';
 import { getBaseApiReact } from '../../../App';
 import { executeEvent } from '../../../utils/events';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { PublishedAppCard } from '../AppCard';
 import { LibraryActionButton } from '../AppCard/libraryCardParts';
+import type { PublishEditTarget } from '../launcherTabs';
 import { AppCollection } from './AppCollection';
 import { APP_SKELETON } from './libraryLayout';
 import {
@@ -33,7 +33,8 @@ import {
 interface MyAppsTabProps {
   myName: string;
   availableQapps: any[];
-  setMode: (mode: string) => void;
+  /** Opens a publish page: Update passes the app or website it updates. */
+  setMode: (mode: string, publishEditTarget?: PublishEditTarget | null) => void;
   searchValue?: string;
   /** Changes when the library's refresh button is pressed. */
   libraryRefreshKey?: number;
@@ -55,7 +56,6 @@ export const MyAppsTab = ({
   const { t } = useTranslation(['core']);
   const view = useAtomValue(libraryViewAtom);
   const userInfo = useAtomValue(userInfoAtom);
-  const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
   const myAddress = userInfo?.address ?? null;
   const [myNames, setMyNames] = useState<string[]>([]);
   const [namesLoaded, setNamesLoaded] = useState(false);
@@ -184,11 +184,7 @@ export const MyAppsTab = ({
       app={app}
       myName={myName}
       onUpdate={() => {
-        setPublishEditTarget({
-          name: app.name,
-          service: serviceOf(app),
-        });
-        setMode('publish');
+        setMode('publish', { name: app.name, service: serviceOf(app) });
       }}
       view={itemView}
     />
@@ -255,7 +251,6 @@ export const MyAppsTab = ({
             <PublishButton
               onClick={() => {
                 // A new app or website: nothing is locked.
-                setPublishEditTarget(null);
                 setMode('publish-app');
               }}
             >
@@ -277,7 +272,6 @@ export const MyAppsTab = ({
             <PublishButton
               onClick={() => {
                 // A new app or website: nothing is locked.
-                setPublishEditTarget(null);
                 setMode('publish-website');
               }}
             >

@@ -42,6 +42,7 @@ import {
   StatusFilter,
   type StatusFilterOption,
 } from '../Filters';
+import type { PublishEditTarget } from '../launcherTabs';
 
 const LIBRARY_TABS: AppsLibraryTabValue[] = [
   'official',
@@ -60,7 +61,7 @@ interface LauncherLibraryProps {
   getQapps?: () => void | Promise<void>;
   myName: string;
   myAddress: string;
-  setMode: (mode: string) => void;
+  setMode: (mode: string, publishEditTarget?: PublishEditTarget | null) => void;
   scrollElement: HTMLElement | null;
   /** How far from the top of the scroller the tab bar stays in view. */
   stickyTop: number;
@@ -204,6 +205,7 @@ export const LauncherLibrary = ({
       case 'private':
         return (
           <PrivateTab
+            isActive={isActive && currentTab === 'private'}
             libraryRefreshKey={libraryRefreshKey}
             myAddress={myAddress}
             myName={myName}
