@@ -160,3 +160,87 @@ describe('opening an app that is open already', () => {
     expect(selectedName()).toBe('App 9');
   });
 });
+
+describe('opening a resource of an app', () => {
+  const selectedTab = () => nav.selectedTab ?? null;
+  const tabOf = (identifier?: string) =>
+    nav.tabs.find(
+      (tab) => tab.name === 'Example' && tab.identifier === identifier
+    );
+
+  /** Example's beta resource in a tab, then Q-Mail on screen. */
+  const openBetaThenMail = async () => {
+    act(() => {
+      executeEvent('addTab', {
+        data: { identifier: 'beta', name: 'Example', service: 'APP' },
+      });
+    });
+    await waitFor(() => expect(tabOf('beta')).toBeTruthy(), SLOW);
+    await openTabs('Q-Mail');
+    return tabOf('beta');
+  };
+
+  it('opens the default resource in a new tab, not in the tab of another', async () => {
+    const beta = await openBetaThenMail();
+
+    act(() => {
+      executeEvent('addTab', {
+        data: { name: 'Example', navigateIfAlreadyOpen: true, service: 'APP' },
+      });
+    });
+
+    await waitFor(() => expect(nav.tabs).toHaveLength(3), SLOW);
+    expect(selectedTab()?.name).toBe('Example');
+    expect(selectedTab()?.identifier).toBeUndefined();
+    expect(selectedTab()?.tabId).not.toBe(beta.tabId);
+    expect(tabOf('beta')?.tabId).toBe(beta.tabId);
+  });
+
+  it('switches to the tab that shows the same resource', async () => {
+    const beta = await openBetaThenMail();
+
+    act(() => {
+      executeEvent('addTab', {
+        data: {
+          identifier: 'beta',
+          name: 'example',
+          navigateIfAlreadyOpen: true,
+          service: 'APP',
+        },
+      });
+    });
+
+    await waitFor(() => expect(selectedTab()?.tabId).toBe(beta.tabId), SLOW);
+    expect(nav.tabs).toHaveLength(2);
+  });
+
+  it.each([undefined, '', 'null', 'default'])(
+    'counts a tab with identifier %j as the default resource',
+    async (identifier) => {
+      act(() => {
+        executeEvent('addTab', {
+          data: { identifier, name: 'Example', service: 'APP' },
+        });
+      });
+      await waitFor(() => expect(selectedName()).toBe('Example'), SLOW);
+      const example = selectedTab();
+      await openTabs('Q-Mail');
+
+      act(() => {
+        executeEvent('addTab', {
+          data: {
+            name: 'Example',
+            navigateIfAlreadyOpen: true,
+            service: 'APP',
+          },
+        });
+      });
+
+      await waitFor(
+        () => expect(selectedTab()?.tabId).toBe(example.tabId),
+        SLOW
+      );
+      expect(nav.tabs).toHaveLength(2);
+    }
+  );
+});

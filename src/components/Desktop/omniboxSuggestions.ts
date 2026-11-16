@@ -9,6 +9,7 @@ import {
 } from '../../utils/qortalLink/parseQortalLink';
 import type { AppBookmark } from '../Apps/AppBookmarks/bookmarkTypes';
 import { isAppStartBookmark } from '../Apps/AppsLauncher/launcherItems';
+import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
 import { appOpenCountKey, type AppOpenCounts } from './appOpenCounts';
 import {
   type AppSearchOption,
@@ -136,13 +137,28 @@ const privateAppKey = (
     : null;
 };
 
-/** What a tab shows: the same key for the same app, whatever its page. */
+/**
+ * Which resource of a Q-App or website something opens: the app's own key for
+ * its default resource, with the identifier for any other. As when opening,
+ * a missing identifier is the default resource, not any resource.
+ */
+const resourceTargetKey = (
+  service: unknown,
+  name: unknown,
+  identifier?: unknown
+): string | null => {
+  const key = appOpenCountKey(service, name);
+  const id = resourceIdentifierKey(identifier);
+  return key && id ? `${key}\n${id}` : key;
+};
+
+/** What a tab shows: the same key for the same resource, whatever its page. */
 const tabTargetKey = (tab: OmniboxTab): string | null => {
   if (isInternalTab(tab)) return `INTERNAL:${asText(tab.internal)}`;
   if (isPrivateAppTab(tab)) {
     return privateAppKey(tab.privateAppProperties ?? tab);
   }
-  return appOpenCountKey(tab.service, tab.name);
+  return resourceTargetKey(tab.service, tab.name, tab.identifier);
 };
 
 const pinTargetKey = (app: PinnedApp): string | null =>
@@ -374,16 +390,27 @@ export const omniboxOptionKey = (option: OmniboxOption): string => {
   }
 };
 
-/** The app a row opens, with the key its tab would have. */
+/**
+ * The app a row opens, with the key its tab would have. Apps, names and pins
+ * open the default resource; bookmarks and links the one they name.
+ */
 const optionTargetKey = (option: OmniboxOption): string | null => {
   switch (option.kind) {
     case 'app':
       return appOpenCountKey(option.app.service, option.app.name);
     case 'bookmark':
-      return appOpenCountKey(option.bookmark.service, option.bookmark.appName);
+      return resourceTargetKey(
+        option.bookmark.service,
+        option.bookmark.appName,
+        option.bookmark.identifier
+      );
     case 'link':
       return option.link.kind === 'resource'
-        ? appOpenCountKey(option.link.service, option.link.name)
+        ? resourceTargetKey(
+            option.link.service,
+            option.link.name,
+            option.link.identifier
+          )
         : null;
     case 'name':
       return option.app

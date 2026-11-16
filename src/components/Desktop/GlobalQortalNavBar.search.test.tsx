@@ -441,6 +441,53 @@ describe('GlobalQortalNavBar search suggestions', () => {
     ]);
   });
 
+  it("keeps a tab of another resource off the app's own row", () => {
+    const input = renderBar();
+    // Q-Tube's beta resource is open; the Q-App itself is not.
+    showTabs([
+      { identifier: 'beta', name: 'Q-Tube', service: 'APP', tabId: 't1' },
+    ]);
+
+    type(input, 'tube');
+    expect(rowsOf('Open tabs')).toEqual(['Q-TubeQ-AppSwitch to tabNew tab']);
+    expect(rowsOf('Q-Apps and websites')).toEqual(['Q-TubeQ-App']);
+
+    // The app's row opens the Q-App, which reuses only a tab that shows it.
+    fireEvent.click(
+      within(
+        screen.getByRole('group', { name: 'Q-Apps and websites' })
+      ).getByRole('option')
+    );
+    expect(heardOf('setSelectedTab')).toEqual([]);
+    expect(opened()).toEqual([
+      { name: 'Q-Tube', navigateIfAlreadyOpen: true, service: 'APP' },
+    ]);
+  });
+
+  it('opens a link to the default resource without an identifier', () => {
+    const input = renderBar();
+
+    type(input, 'qortal://APP/Q-Tube/search?q=cats&identifier=default');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    type(input, 'qortal://APP/Q-Tube?identifier=beta');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(opened()).toEqual([
+      {
+        name: 'Q-Tube',
+        navigateIfAlreadyOpen: true,
+        path: 'search?q=cats',
+        service: 'APP',
+      },
+      {
+        identifier: 'beta',
+        name: 'Q-Tube',
+        navigateIfAlreadyOpen: true,
+        service: 'APP',
+      },
+    ]);
+  });
+
   it('fits the list to its rows, no wider than the field', () => {
     const fieldWidth = vi
       .spyOn(HTMLElement.prototype, 'offsetWidth', 'get')
