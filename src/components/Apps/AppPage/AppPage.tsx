@@ -33,6 +33,7 @@ import { AppPageData, isVersionCurrent } from './appPageData';
 import type { ShotDraft } from './ScreenshotsEditor';
 import { normalizeAppService } from './appPageIds';
 import { useAppListing, useAppPageData, useOwnedNames } from './useAppPage';
+import { ratingsByAddress } from './appVotes';
 import { useAppVotes } from './useAppVotes';
 import { useAppReviews, ReviewActionResult } from './useAppReviews';
 import { useIconAccent } from './useIconAccent';
@@ -213,7 +214,7 @@ export const AppPage = ({
   };
 
   const ratingByAddress = useMemo(
-    () => new Map(votes.voters.map((voter) => [voter.address, voter.rating])),
+    () => ratingsByAddress(votes.voters),
     [votes.voters]
   );
   const myRating = votes.pending?.rating ?? votes.mine?.rating ?? null;
@@ -262,8 +263,10 @@ export const AppPage = ({
       mine={votes.mine}
       myAddress={myAddress}
       onRate={rate}
+      onRetry={votes.reload}
       pending={votes.pending}
       pollExists={votes.pollExists}
+      pollStatus={votes.pollStatus}
       summary={votes.summary}
       voters={votes.voters}
     />

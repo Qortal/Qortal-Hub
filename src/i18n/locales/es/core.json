@@ -253,6 +253,7 @@
       "average_label": "valoración media de {{average}} sobre 5",
       "count_one": "{{count}} valoración",
       "count_other": "{{count}} valoraciones",
+      "load_failed": "no se pudieron cargar las valoraciones; se podrá valorar cuando se carguen.",
       "pending": "tu voto está en camino. Todos lo verán en más o menos un minuto.",
       "pending_first": "tu primera valoración está en camino. Podrás cambiarla cuando esté en un bloque, en más o menos un minuto.",
       "pick": "tu valoración",

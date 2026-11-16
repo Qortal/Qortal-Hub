@@ -30,6 +30,7 @@ import {
 } from './AppPageParts';
 import { usePrimaryNames } from './useAppPage';
 import type { PendingVote, RatingSummary, Voter } from './appVotes';
+import type { PollStatus } from './useAppVotes';
 import { useLauncherTabDialog } from '../launcherTabs';
 
 const shortAddress = (address: string) =>
@@ -116,7 +117,7 @@ export const AppVotersDialog = ({
               const name = names[voter.address];
               return (
                 <ListItemButton
-                  key={voter.address}
+                  key={`${voter.address}:${voter.isInitial ? 'first' : 'vote'}`}
                   onClick={() => {
                     executeEvent('openUserLookupDrawer', {
                       addressOrName: name || voter.address,
@@ -198,10 +199,12 @@ export const AppRatingsPanel = ({
   mine,
   pending,
   pollExists,
+  pollStatus,
   loading,
   canRate,
   myAddress,
   onRate,
+  onRetry,
 }: {
   summary: RatingSummary;
   voters: Voter[];
@@ -209,10 +212,14 @@ export const AppRatingsPanel = ({
   pending: PendingVote | null;
   /** Whether the node has the app's rating poll yet. */
   pollExists: boolean;
+  /** Voting waits until the node has said whether the poll exists. */
+  pollStatus: PollStatus;
   loading: boolean;
   canRate: boolean;
   myAddress?: string;
   onRate: (rating: number) => void;
+  /** Read the poll again after it couldn't be read. */
+  onRetry: () => void;
 }) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -223,7 +230,19 @@ export const AppRatingsPanel = ({
   // The first rating creates the poll: another one before it's in a block
   // would ask to create it again, and pay for that.
   const waitingForPoll = !!pending?.createdPoll && !pollExists;
-  const preview = useMemo(() => voters.slice(0, 6), [voters]);
+  // Each person once, though a creator who voted again has two ratings.
+  const preview = useMemo(
+    () =>
+      voters
+        .filter(
+          (voter, index) =>
+            voters.findIndex((other) => other.address === voter.address) ===
+            index
+        )
+        .slice(0, 6),
+    [voters]
+  );
+  const pollKnown = pollStatus === 'found' || pollStatus === 'missing';
   const previewNames = usePrimaryNames(preview.map((voter) => voter.address));
   const myRating = pending?.rating ?? mine?.rating ?? null;
   const max = Math.max(
@@ -373,7 +392,7 @@ export const AppRatingsPanel = ({
               })}
         </Typography>
         <StarPicker
-          disabled={!canRate || waitingForPoll}
+          disabled={!canRate || waitingForPoll || !pollKnown}
           onPick={onRate}
           value={myRating}
         />
@@ -397,6 +416,30 @@ export const AppRatingsPanel = ({
               : t('core:app_page.rating.pending', {
                   postProcess: 'capitalizeFirstChar',
                 })}
+          </Box>
+        ) : pollStatus === 'error' ? (
+          <Box
+            role="alert"
+            sx={{
+              alignItems: 'center',
+              color: 'text.secondary',
+              display: 'flex',
+              flexWrap: 'wrap',
+              fontSize: '12.5px',
+              gap: 1,
+              justifyContent: 'center',
+            }}
+          >
+            {t('core:app_page.rating.load_failed', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            <Button
+              onClick={onRetry}
+              size="small"
+              sx={{ minWidth: 0, textTransform: 'none' }}
+            >
+              {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+            </Button>
           </Box>
         ) : (
           !canRate && (

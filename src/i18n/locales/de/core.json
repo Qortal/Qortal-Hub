@@ -253,6 +253,7 @@
       "average_label": "durchschnittliche Bewertung {{average}} von 5",
       "count_one": "{{count}} Bewertung",
       "count_other": "{{count}} Bewertungen",
+      "load_failed": "die Bewertungen konnten nicht geladen werden. Bewerten ist erst möglich, wenn sie geladen sind.",
       "pending": "Ihre Stimme ist unterwegs. In etwa einer Minute ist sie für alle sichtbar.",
       "pending_first": "Ihre erste Bewertung ist unterwegs. Sobald sie in einem Block ist, in etwa einer Minute, können Sie sie ändern.",
       "pick": "Ihre Bewertung",

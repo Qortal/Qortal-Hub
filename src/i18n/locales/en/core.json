@@ -253,6 +253,7 @@
       "average_label": "average rating {{average}} out of 5",
       "count_one": "{{count}} rating",
       "count_other": "{{count}} ratings",
+      "load_failed": "couldn't load the ratings, so rating waits until they load.",
       "pending": "your vote is on its way. Everyone sees it in about a minute.",
       "pending_first": "your first rating is on its way. You can change it once it's in a block, in about a minute.",
       "pick": "your rating",

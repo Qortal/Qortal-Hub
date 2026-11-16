@@ -88,9 +88,9 @@ export const summarizeVoteCounts = (
 };
 
 /**
- * One rating per person, their latest. The poll's own counts (and the
- * library's cards) count a creator who voted again twice: once for creating
- * the poll and once for the vote.
+ * Counts per star from the rows of votersFromPoll: each voter's latest vote,
+ * plus the creator's first rating. That is how the library's cards count
+ * (summarizeVoteCounts), so the page and the library show the same rating.
  */
 export const summaryFromVoters = (voters: Voter[]): RatingSummary => {
   const counts = EMPTY_COUNTS();
@@ -148,18 +148,45 @@ export const votersFromPoll = (
     if (!address) return;
     byAddress.set(address, { address, rating: star, isInitial: false });
   });
+  const rows = Array.from(byAddress.values());
+  // The creator's first rating counts as well, also once they have voted
+  // again: the library's cards count it from the poll's totals, which can't
+  // say who voted. So it keeps a row of its own.
   const initial = initialRating(options);
   const creator = poll?.creatorPublicKey
     ? toAddress(poll.creatorPublicKey)
     : null;
-  if (creator && initial && !byAddress.has(creator)) {
-    byAddress.set(creator, {
-      address: creator,
-      rating: initial,
-      isInitial: true,
-    });
+  if (creator && initial) {
+    rows.push({ address: creator, rating: initial, isInitial: true });
   }
-  return Array.from(byAddress.values()).sort((a, b) => b.rating - a.rating);
+  return rows.sort((a, b) => b.rating - a.rating);
+};
+
+/**
+ * Someone's rating as it stands: their latest vote, or else the first rating
+ * they gave by creating the poll.
+ */
+export const voterOf = (
+  voters: Voter[],
+  address: string | null | undefined
+): Voter | null =>
+  (address &&
+    (voters.find((voter) => voter.address === address && !voter.isInitial) ||
+      voters.find((voter) => voter.address === address))) ||
+  null;
+
+/**
+ * Each person's stars, as their review shows them: their latest vote, or else
+ * the first rating they gave by creating the poll.
+ */
+export const ratingsByAddress = (voters: Voter[]): Map<string, number> => {
+  const ratings = new Map<string, number>();
+  voters.forEach((voter) => {
+    if (!voter.isInitial || !ratings.has(voter.address)) {
+      ratings.set(voter.address, voter.rating);
+    }
+  });
+  return ratings;
 };
 
 export const fetchPollVotes = async (
@@ -181,6 +208,16 @@ export const fetchPollVotes = async (
   };
 };
 
+/** Core's answer for a poll it doesn't have: 404, error 501 (POLL_NO_EXISTS). */
+const isNoSuchPoll = (data: any): boolean =>
+  data?.error === 501 || String(data?.message || '').includes('POLL_NO_EXISTS');
+
+/**
+ * The app's rating poll, or null when the node says there is none. Anything
+ * else throws (an error page, a timeout, an answer that isn't a poll): a poll
+ * the node couldn't send is not a missing one, and voting must not create it
+ * again.
+ */
 export const fetchPollInfo = async (
   base: string,
   service: string,
@@ -191,9 +228,10 @@ export const fetchPollInfo = async (
     `${base}/polls/${encodeURIComponent(ratingPollName(service, name))}`,
     { signal }
   );
-  if (!response.ok) return null;
-  const data = await response.json();
-  return data?.pollName ? data : null;
+  const data = await response.json().catch(() => null);
+  if (response.ok && data?.pollName) return data;
+  if (response.status === 404 && isNoSuchPoll(data)) return null;
+  throw new Error(`Rating poll not read (${response.status})`);
 };
 
 /** A vote the user sent that the node doesn't show yet. */
@@ -232,8 +270,9 @@ export const applyPendingVote = (
   const star = starOf(pending.rating);
   if (!star) return summary;
   const counts = { ...summary.counts };
-  // A vote replaces the voter's earlier rating, the creator's first one too.
-  const before = mine ? starOf(mine.rating) : null;
+  // A vote replaces the voter's earlier vote. The creator's first rating
+  // stays: it counts as well, as the library counts it.
+  const before = mine && !mine.isInitial ? starOf(mine.rating) : null;
   if (before && counts[before] > 0) counts[before] -= 1;
   counts[star] += 1;
   return summaryFromCounts(counts);

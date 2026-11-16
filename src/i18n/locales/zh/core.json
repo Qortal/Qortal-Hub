@@ -253,6 +253,7 @@
       "average_label": "平均评分 {{average}} 分（满分 5 分）",
       "count_one": "{{count}} 个评分",
       "count_other": "{{count}} 个评分",
+      "load_failed": "无法加载评分，加载完成后才能评分。",
       "pending": "你的投票正在提交。大约一分钟后所有人都能看到。",
       "pending_first": "你的第一次评分正在提交。打包进区块后（大约一分钟）即可更改。",
       "pick": "你的评分",
