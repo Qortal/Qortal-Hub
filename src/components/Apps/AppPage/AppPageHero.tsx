@@ -22,23 +22,23 @@ import ShareRoundedIcon from '@mui/icons-material/ShareRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import { useTranslation } from 'react-i18next';
 import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../../utils/events';
-import { AppRating } from '../AppRating';
 import { formatLongDate, formatRelative } from './AppPageParts';
 import { buildAppOpenLink, buildAppPageLink } from './appPageLink';
+import type { RatingSummary } from './appVotes';
 import { useLauncherTabDialog } from '../launcherTabs';
 
 interface AppPageHeroProps {
   app: any;
   iconUrl: string;
   accent: string | null;
-  /** The user's name, for rating from the header's stars. */
-  myName?: string;
+  summary: RatingSummary;
   version: string;
   versionCurrent: boolean;
   isInstalled: boolean;
@@ -57,13 +57,14 @@ interface AppPageHeroProps {
   /** The publisher's hide button, and show button once it is hidden. */
   onHide?: () => void;
   onShowAgain?: () => void;
+  onRatingsClick: () => void;
 }
 
 export const AppPageHero = ({
   app,
   iconUrl,
   accent,
-  myName,
+  summary,
   version,
   versionCurrent,
   isInstalled,
@@ -78,6 +79,7 @@ export const AppPageHero = ({
   onCopied,
   onHide,
   onShowAgain,
+  onRatingsClick,
 }: AppPageHeroProps) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation(['core']);
@@ -262,7 +264,29 @@ export const AppPageHero = ({
               rowGap: 0.5,
             }}
           >
-            <AppRating app={app} myName={myName} />
+            <Button
+              onClick={onRatingsClick}
+              size="small"
+              startIcon={
+                <StarRoundedIcon sx={{ color: theme.palette.warning.main }} />
+              }
+              sx={{
+                color: 'text.primary',
+                fontWeight: 650,
+                minWidth: 0,
+                px: 0.75,
+                textTransform: 'none',
+              }}
+            >
+              {summary.total > 0
+                ? t('core:app_page.hero.rating_summary', {
+                    average: summary.average.toFixed(1),
+                    count: summary.total,
+                  })
+                : t('core:app_page.hero.no_ratings', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+            </Button>
             {updated > 0 && (
               <Tooltip title={formatLongDate(updated, i18n.language)}>
                 <Typography

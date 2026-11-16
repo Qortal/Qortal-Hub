@@ -101,6 +101,32 @@ describe('FeaturedAppBanner', () => {
     vi.useRealTimers();
   });
 
+  it('draws other items with their own card, told apart by their key', () => {
+    const widgets = ['now', 'bars'].map((identifier) => ({
+      name: 'Q-Weather',
+      service: 'APP',
+      identifier,
+    }));
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <FeaturedAppBanner
+          featuredApps={widgets}
+          getKey={(item) => `${item.name}/${item.identifier}`}
+          renderItem={(item) => <p>{`widget ${item.identifier}`}</p>}
+          variant="top-rated"
+        />
+      </ThemeProvider>
+    );
+    const list = screen.getByRole('list');
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent)
+    ).toEqual(['widget now', 'widget bars']);
+    // No app card, so no Open.
+    expect(screen.queryByText('core:action.open')).toBeNull();
+  });
+
   it('shows each featured app once, in its order', () => {
     renderBanner();
     const list = screen.getByRole('list');

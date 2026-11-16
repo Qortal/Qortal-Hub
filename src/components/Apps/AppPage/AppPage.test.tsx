@@ -30,15 +30,24 @@ vi.mock('../../../background/background', () => ({
 }));
 vi.mock('../AppsNavBarDesktop', () => ({ saveToLocalStorage: vi.fn() }));
 vi.mock('../AppViewerContainer', () => ({ default: () => null }));
-// The ratings store the library's cards fill: the app's poll, as cached.
-let appRating: any = null;
-const refreshRating = vi.fn();
 vi.mock('../../../hooks/useAppRatings', () => ({
-  useAppRating: () => ({
-    rating: appRating,
-    refresh: refreshRating,
-    isLoading: false,
-  }),
+  useAppRating: () => ({ refresh: vi.fn() }),
+}));
+vi.mock('../../Group/groupApi', () => ({
+  getPrimaryNamesForAddresses: vi.fn(async (addresses: string[]) =>
+    Object.fromEntries(
+      addresses.map((address) => [address, `name-of-${address}`])
+    )
+  ),
+}));
+// Addresses from public keys: the key itself, so the test can tell them apart.
+vi.mock('../../../utils/generateWallet/publicKeyToAddress', () => ({
+  default: (bytes: Uint8Array) => `Q${Array.from(bytes).join('.')}`,
+}));
+vi.mock('../../../encryption/Base58', () => ({
+  default: {
+    decode: (key: string) => new Uint8Array([key.length, key.charCodeAt(0)]),
+  },
 }));
 vi.mock('../../Snackbar/Snackbar', () => ({
   CustomizedSnackbars: ({ open, info }: any) =>
@@ -50,7 +59,16 @@ import { LauncherTabContext } from '../launcherTabs';
 import { userInfoAtom } from '../../../atoms/global';
 import { shownAppPageAtom } from '../../../atoms/appsAtoms';
 import { executeEvent } from '../../../utils/events';
+import { appReviewKey, replyIdentifier, replyPrefixOf } from './appPageIds';
 import { clearAppPageCache } from './useAppPage';
+import { clearReviewRecordCache } from './useAppReviews';
+
+const KEY = appReviewKey('APP', 'Q-Blog');
+/** The search for the signed-in user's own review. */
+const OWN_SEARCH = `identifier=${KEY}&prefix=true&includemetadata=true&name=Me&`;
+const REPLY = replyIdentifier(KEY, 'abcdef');
+const addressOf = (key: string) => `Q${key.length}.${key.charCodeAt(0)}`;
+const CREATOR_KEY = 'CREATORKEY';
 
 type Handler = (url: string, init?: RequestInit) => unknown;
 
@@ -61,6 +79,22 @@ const never: Handler = (_url, init) =>
       reject(new DOMException('Aborted', 'AbortError'))
     )
   );
+
+/** Core's answer for a poll it doesn't have. */
+const noPoll: Handler = () =>
+  new Response(
+    JSON.stringify({ error: 501, message: '!!en:ApiError.POLL_NO_EXISTS!!' }),
+    { status: 404 }
+  );
+
+const RATING_POLL = {
+  pollName: 'app-library-APP-rating-Q-Blog',
+  owner: 'QOwner',
+  creatorPublicKey: CREATOR_KEY,
+  pollOptions: ['1', '2', '3', '4', '5', 'initialValue-5'].map(
+    (optionName) => ({ optionName })
+  ),
+};
 
 const routes = (overrides: Record<string, unknown> = {}) => {
   const table: Record<string, unknown> = {
@@ -113,7 +147,53 @@ const routes = (overrides: Record<string, unknown> = {}) => {
       ],
       updated: 5,
     },
+    '/polls/votes/app-library-APP-rating-Q-Blog': {
+      votes: [
+        { optionIndex: 4, voterPublicKey: 'AAAA' },
+        { optionIndex: 2, voterPublicKey: 'BB' },
+      ],
+      voteCounts: [
+        { optionName: '1', voteCount: 0 },
+        { optionName: '2', voteCount: 0 },
+        { optionName: '3', voteCount: 1 },
+        { optionName: '4', voteCount: 0 },
+        { optionName: '5', voteCount: 1 },
+        { optionName: 'initialValue-5', voteCount: 0 },
+      ],
+    },
+    '/polls/app-library-APP-rating-Q-Blog': RATING_POLL,
+    [`identifier=${KEY}&`]: [
+      {
+        name: 'Alice',
+        identifier: KEY,
+        created: 1_700_000_100_000,
+        metadata: { description: 'Great for writing' },
+      },
+    ],
+    [`identifier=${replyPrefixOf(KEY)}&`]: [
+      {
+        name: 'Q-Blog',
+        identifier: REPLY,
+        created: 1_700_000_200_000,
+        metadata: { title: 'Alice', description: 'Thank you!' },
+      },
+    ],
+    [`/arbitrary/COMMENT/Alice/${KEY}`]: {
+      v: 1,
+      kind: 'review',
+      text: 'Great for writing, and fast.',
+      created: 1,
+    },
+    [`/arbitrary/COMMENT/Q-Blog/${REPLY}`]: {
+      v: 1,
+      kind: 'reply',
+      text: 'Thank you!',
+      parent: { name: 'Alice', identifier: KEY },
+      created: 2,
+    },
     '/names/address/': [{ name: 'Me' }],
+    '/names/Alice': { name: 'Alice', owner: addressOf('AAAA') },
+    '/names/Q-Blog': { name: 'Q-Blog', owner: 'QOwner' },
     ...overrides,
   };
   return vi
@@ -171,8 +251,7 @@ const renderPage = (
 
 beforeEach(() => {
   clearAppPageCache();
-  appRating = null;
-  refreshRating.mockReset();
+  clearReviewRecordCache();
   vi.mocked(executeEvent).mockClear();
   getFee.mockReset().mockResolvedValue({ fee: '0.01' });
   show.mockReset().mockResolvedValue(undefined);
@@ -204,7 +283,7 @@ describe('the app page', () => {
     expect(store.get(shownAppPageAtom)).toBeNull();
   });
 
-  it('shows the listing, the page and screenshots', async () => {
+  it('shows the listing, the page, screenshots, ratings and reviews', async () => {
     routes();
     renderPage();
     expect(
@@ -219,10 +298,270 @@ describe('the app page', () => {
       await screen.findByRole('button', { name: 'Home' })
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Editor' })).toBeInTheDocument();
+    // 3 + 5 + the creator's initial 5: 13 / 3.
+    expect(await screen.findByText('4.3')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Great for writing, and fast.')
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Thank you!')).toBeInTheDocument();
+    // Alice's stars are her vote in the poll (5).
+    const review = screen
+      .getByText('Great for writing, and fast.')
+      .closest('article')!;
+    expect(
+      await within(review).findByRole('img', {
+        name: 'app_page.rating.stars_label',
+      })
+    ).toBeInTheDocument();
     // Only the publisher gets the edit button.
     expect(
       screen.queryByRole('button', { name: 'app_page.edit.open' })
     ).toBeNull();
+  });
+
+  it("keeps Write a review off until it knows whether you've written one", async () => {
+    routes({ [OWN_SEARCH]: never });
+    renderPage();
+    expect(
+      await screen.findByRole('button', { name: 'app_page.reviews.write' })
+    ).toBeDisabled();
+  });
+
+  it("offers Retry, not an empty review, when your own couldn't be checked", async () => {
+    let own: Handler = () => new Response('', { status: 500 });
+    routes({
+      [OWN_SEARCH]: (url: string, init?: RequestInit) => own(url, init),
+      [`/arbitrary/COMMENT/Me/${KEY}`]: {
+        v: 1,
+        kind: 'review',
+        text: 'My review, in full.',
+        created: 3,
+      },
+    });
+    renderPage();
+    expect(
+      await screen.findByText('app_page.reviews.yours_failed')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'app_page.reviews.write' })
+    ).toBeDisabled();
+
+    // After a vote, the review box doesn't start empty over the unknown one.
+    await screen.findByText('4.3');
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[4]);
+    });
+    expect(
+      await screen.findByText('app_page.reviews.prompt_title')
+    ).toBeInTheDocument();
+    const alert = screen.getByText('app_page.reviews.yours_failed');
+    expect(alert).toHaveAttribute('role', 'alert');
+    expect(
+      screen.queryByPlaceholderText('app_page.reviews.placeholder')
+    ).toBeNull();
+
+    own = () => [
+      {
+        name: 'Me',
+        identifier: KEY,
+        created: 1_700_000_300_000,
+        metadata: { description: 'My review' },
+      },
+    ];
+    fireEvent.click(within(alert).getByRole('button', { name: 'retry' }));
+    expect(
+      await screen.findByDisplayValue('My review, in full.')
+    ).toBeInTheDocument();
+  });
+
+  it('tries your review again when the page is opened again, after giving up', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let served = false;
+      routes({
+        [OWN_SEARCH]: [
+          {
+            name: 'Me',
+            identifier: KEY,
+            created: 1_700_000_400_000,
+            metadata: { description: 'My review' },
+          },
+        ],
+        [`/arbitrary/COMMENT/Me/${KEY}`]: () =>
+          served
+            ? { v: 1, kind: 'review', text: 'My review, in full.', created: 4 }
+            : new Response('Data unavailable. Please try again later.', {
+                status: 404,
+              }),
+      });
+      const recordFetches = () =>
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(([url]) =>
+            String(url).includes(`/arbitrary/COMMENT/Me/${KEY}`)
+          ).length;
+      const first = renderPage();
+      // Three tries, 20 s apart, then Retry.
+      await waitFor(() => expect(recordFetches()).toBe(1));
+      for (const tries of [2, 3]) {
+        await act(async () => vi.advanceTimersByTimeAsync(21_000));
+        await waitFor(() => expect(recordFetches()).toBe(tries));
+      }
+      expect(
+        await screen.findByText('app_page.reviews.yours_failed')
+      ).toBeInTheDocument();
+
+      // Closed, the node recovers, and the page is opened again.
+      first.unmount();
+      served = true;
+      renderPage();
+      const edit = await screen.findByRole('button', {
+        name: 'app_page.reviews.edit_yours',
+      });
+      await waitFor(() => expect(edit).toBeEnabled());
+      expect(screen.queryByText('app_page.reviews.yours_failed')).toBeNull();
+      expect(recordFetches()).toBe(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps Load more off while its page loads', async () => {
+    const page = Array.from({ length: 50 }, (_, index) => ({
+      name: `Fan ${index}`,
+      identifier: KEY,
+      created: 1_700_000_000_000 - index,
+      metadata: { description: `Review ${index}` },
+    }));
+    routes({
+      [`identifier=${KEY}&`]: (url: string, init?: RequestInit) =>
+        url.includes('offset=50') ? never(url, init) : page,
+    });
+    renderPage();
+    const more = await screen.findByRole('button', {
+      name: 'app_page.reviews.load_more',
+    });
+    fireEvent.click(more);
+    await waitFor(() => expect(more).toBeDisabled());
+    fireEvent.click(more);
+    const secondPage = vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url]) =>
+          String(url).includes(`identifier=${KEY}&`) &&
+          String(url).includes('offset=50')
+      );
+    expect(secondPage).toHaveLength(1);
+  });
+
+  it("gives a review its writer's vote, also when they created the poll", async () => {
+    // Alice created the poll with 1 star, then voted 5.
+    routes({
+      '/polls/app-library-APP-rating-Q-Blog': {
+        ...RATING_POLL,
+        creatorPublicKey: 'AAAA',
+        pollOptions: ['1', '2', '3', '4', '5', 'initialValue-1'].map(
+          (optionName) => ({ optionName })
+        ),
+      },
+    });
+    renderPage();
+    const review = (
+      await screen.findByText('Great for writing, and fast.')
+    ).closest('article')!;
+    const stars = await within(review).findByRole('img', {
+      name: 'app_page.rating.stars_label',
+    });
+    await waitFor(() =>
+      expect(
+        stars.querySelectorAll('[data-testid="StarRoundedIcon"]')
+      ).toHaveLength(5)
+    );
+  });
+
+  it('lists who voted, with their names and stars', async () => {
+    routes();
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'app_page.voters.open' })
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      await within(dialog).findByText(`name-of-${addressOf('AAAA')}`)
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(`name-of-${addressOf('BB')}`)
+    ).toBeInTheDocument();
+    // The first rating is the creator's, read from the creator's key.
+    expect(
+      within(dialog).getByText(`name-of-${addressOf(CREATOR_KEY)}`)
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText('name-of-QOwner')).toBeNull();
+    expect(
+      within(dialog).getByText('app_page.voters.first_rating')
+    ).toBeInTheDocument();
+  });
+
+  it('counts a vote at once and asks for a review', async () => {
+    routes();
+    renderPage();
+    await screen.findByText('4.3');
+    const stars = screen.getAllByRole('radio');
+    await act(async () => {
+      fireEvent.click(stars[0]);
+    });
+    await waitFor(() =>
+      expect(window.sendMessage).toHaveBeenCalledWith(
+        'voteOnPoll',
+        { pollName: 'app-library-APP-rating-Q-Blog', optionIndex: 0 },
+        expect.any(Number)
+      )
+    );
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({ publishFee: '0.01 QORT' })
+    );
+    // (13 + 1) / 4, before the node has the vote.
+    expect(await screen.findByText('3.5')).toBeInTheDocument();
+    expect(screen.getByText('app_page.rating.pending')).toBeInTheDocument();
+    expect(
+      await screen.findByText('app_page.reviews.prompt_title')
+    ).toBeInTheDocument();
+
+    const box = screen.getAllByPlaceholderText(
+      'app_page.reviews.placeholder'
+    )[0];
+    fireEvent.change(box, { target: { value: 'Clean and quick' } });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'app_page.reviews.post' })
+      );
+    });
+    await waitFor(() =>
+      expect(window.sendMessage).toHaveBeenCalledWith(
+        'publishOnQDN',
+        expect.objectContaining({
+          service: 'COMMENT',
+          identifier: KEY,
+          name: 'Me',
+        })
+      )
+    );
+    expect(await screen.findByText('Clean and quick')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('app_page.reviews.pending').length
+    ).toBeGreaterThan(0);
+  });
+
+  it("doesn't vote when the fee is declined", async () => {
+    routes();
+    show.mockRejectedValue({ isCanceled: true });
+    renderPage();
+    await screen.findByText('4.3');
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[0]);
+    });
+    expect(window.sendMessage).not.toHaveBeenCalled();
+    expect(screen.queryByText('app_page.reviews.prompt_title')).toBeNull();
   });
 
   it('lets the publisher edit the page', async () => {
@@ -233,14 +572,19 @@ describe('the app page', () => {
     ).toBeInTheDocument();
   });
 
-  it('works without a page or screenshots yet', async () => {
-    routes({ 'identifier=qhub_app_': [] });
+  it('works without a page, screenshots or poll yet', async () => {
+    routes({
+      'identifier=qhub_app_': [],
+      '/polls/app-library-APP-rating-Q-Blog': noPoll,
+      '/polls/votes/app-library-APP-rating-Q-Blog': noPoll,
+      [`identifier=${KEY}&`]: [],
+      [`identifier=${replyPrefixOf(KEY)}&`]: [],
+    });
     renderPage();
     expect(await screen.findByText('Your blog on Qortal')).toBeInTheDocument();
-    // Loaded: the About's placeholder lines are gone.
-    await waitFor(() =>
-      expect(document.querySelector('.MuiSkeleton-root')).toBeNull()
-    );
+    expect(
+      await screen.findByText('app_page.reviews.empty_invite')
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: 'app_page.screenshots.title' })
     ).toBeNull();
@@ -400,96 +744,261 @@ describe('editing the page', () => {
   });
 });
 
-describe('rating from the page', () => {
-  const POLL_INFO = {
-    pollName: 'app-library-APP-rating-Q-Blog',
-    pollOptions: ['1', '2', '3', '4', '5', 'initialValue-5'].map(
-      (optionName) => ({ optionName })
-    ),
-  };
-  const ratingsCard = () =>
-    within(document.getElementById('app-page-ratings-card')!);
-
-  it("votes on the app's poll from the ratings card", async () => {
-    appRating = {
-      averageRating: 4,
-      hasPublishedRating: true,
-      pollInfo: POLL_INFO,
-      totalVotes: 2,
-      voteCounts: [
-        { optionName: '3', voteCount: 1 },
-        { optionName: 'initialValue-5', voteCount: 0 },
-      ],
-    };
+describe('ratings on the page', () => {
+  it('opens the voters list at the star clicked, every time', async () => {
     routes();
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
-    // 3 + the creator's initial 5.
-    expect(ratingsCard().getByText('4.0')).toBeInTheDocument();
-    await act(async () => {
-      fireEvent.click(ratingsCard().getByRole('radio', { name: '4 Stars' }));
-    });
-    await waitFor(() =>
-      expect(window.sendMessage).toHaveBeenCalledWith(
-        'voteOnPoll',
-        { pollName: 'app-library-APP-rating-Q-Blog', optionIndex: 3 },
-        expect.any(Number)
-      )
+    await screen.findByText('4.3');
+    const fiveStars = () =>
+      screen.getAllByRole('button', { name: 'app_page.voters.show_star' })[0];
+    await waitFor(() => expect(fiveStars()).toBeEnabled());
+    fireEvent.click(fiveStars());
+    let dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText(`name-of-${addressOf('AAAA')}`);
+    expect(within(dialog).queryByText(`name-of-${addressOf('BB')}`)).toBeNull();
+
+    fireEvent.click(within(dialog).getByText('app_page.voters.all'));
+    expect(
+      within(dialog).getByText(`name-of-${addressOf('BB')}`)
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'action.close' })
     );
-    expect(show).toHaveBeenCalledWith(
-      expect.objectContaining({ publishFee: '0.01 QORT' })
-    );
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'message.success.rated_app'
-    );
-    expect(refreshRating).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    fireEvent.click(fiveStars());
+    dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText(`name-of-${addressOf('AAAA')}`);
+    expect(within(dialog).queryByText(`name-of-${addressOf('BB')}`)).toBeNull();
   });
 
-  it('creates the poll with the first rating', async () => {
-    appRating = {
-      averageRating: 0,
-      hasPublishedRating: false,
-      pollInfo: null,
-      totalVotes: 0,
-      voteCounts: [],
-    };
-    routes();
+  it("doesn't create the poll twice while the first rating is on its way", async () => {
+    routes({
+      '/polls/app-library-APP-rating-Q-Blog': noPoll,
+      '/polls/votes/app-library-APP-rating-Q-Blog': noPoll,
+    });
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
+    const stars = await screen.findAllByRole('radio');
+    await waitFor(() => expect(stars[3]).toBeEnabled());
     await act(async () => {
-      fireEvent.click(ratingsCard().getByRole('radio', { name: '4 Stars' }));
+      fireEvent.click(stars[3]);
     });
     await waitFor(() =>
       expect(window.sendMessage).toHaveBeenCalledWith(
         'createPoll',
         expect.objectContaining({
-          pollName: 'app-library-APP-rating-Q-Blog',
           pollOptions: ['1, 2, 3, 4, 5, initialValue-4'],
-          pollOwnerAddress: 'Me',
         }),
         expect.any(Number)
       )
     );
+    expect(
+      await screen.findByText('app_page.rating.pending_first')
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('radio')[4]).toBeDisabled();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[4]);
+    });
+    const createPolls = vi
+      .mocked(window.sendMessage)
+      .mock.calls.filter(([action]) => action === 'createPoll');
+    expect(createPolls).toHaveLength(1);
   });
 
-  it("doesn't vote when the fee is declined", async () => {
-    appRating = {
-      averageRating: 4,
-      hasPublishedRating: true,
-      pollInfo: POLL_INFO,
-      totalVotes: 1,
-      voteCounts: [{ optionName: 'initialValue-4', voteCount: 0 }],
-    };
-    show.mockRejectedValue({ isCanceled: true });
+  it("keeps the stars off until it knows whether there's a poll", async () => {
+    routes({ '/polls/app-library-APP-rating-Q-Blog': never });
+    renderPage();
+    const stars = await screen.findAllByRole('radio');
+    stars.forEach((star) => expect(star).toBeDisabled());
+    await act(async () => {
+      fireEvent.click(stars[3]);
+    });
+    expect(window.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("says when the poll couldn't be read, and votes in it after Retry", async () => {
+    let poll: Handler = () => new Response('', { status: 500 });
+    routes({
+      '/polls/app-library-APP-rating-Q-Blog': (
+        url: string,
+        init?: RequestInit
+      ) => poll(url, init),
+    });
+    renderPage();
+    const alert = await screen.findByText('app_page.rating.load_failed');
+    expect(alert).toHaveAttribute('role', 'alert');
+    screen.getAllByRole('radio').forEach((star) => expect(star).toBeDisabled());
+    // Not read isn't missing: nothing offers to create the poll.
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[3]);
+    });
+    expect(window.sendMessage).not.toHaveBeenCalled();
+
+    poll = () => RATING_POLL;
+    fireEvent.click(within(alert).getByRole('button', { name: 'retry' }));
+    await screen.findByText('4.3');
+    await waitFor(() => expect(screen.getAllByRole('radio')[0]).toBeEnabled());
+    expect(screen.queryByText('app_page.rating.load_failed')).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[0]);
+    });
+    await waitFor(() =>
+      expect(window.sendMessage).toHaveBeenCalledWith(
+        'voteOnPoll',
+        { pollName: 'app-library-APP-rating-Q-Blog', optionIndex: 0 },
+        expect.any(Number)
+      )
+    );
+    expect(
+      vi
+        .mocked(window.sendMessage)
+        .mock.calls.filter(([action]) => action === 'createPoll')
+    ).toHaveLength(0);
+  });
+
+  it('counts a creator who rated again as the library does', async () => {
+    routes({
+      '/polls/votes/app-library-APP-rating-Q-Blog': {
+        votes: [
+          { optionIndex: 0, voterPublicKey: CREATOR_KEY },
+          { optionIndex: 2, voterPublicKey: 'BB' },
+        ],
+        voteCounts: [
+          { optionName: '1', voteCount: 1 },
+          { optionName: '2', voteCount: 0 },
+          { optionName: '3', voteCount: 1 },
+          { optionName: '4', voteCount: 0 },
+          { optionName: '5', voteCount: 0 },
+          { optionName: 'initialValue-5', voteCount: 0 },
+        ],
+      },
+    });
+    renderPage();
+    // The creator's first 5, their later 1, and a 3: 3.0 from 3, as the
+    // library's card counts the same poll.
+    expect(await screen.findByText('3.0')).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'app_page.voters.open' })
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      await within(dialog).findAllByText(`name-of-${addressOf(CREATOR_KEY)}`)
+    ).toHaveLength(2);
+    expect(
+      within(dialog).getByText('app_page.voters.first_rating')
+    ).toBeInTheDocument();
+  });
+
+  it("says so when a vote's fee cannot be looked up", async () => {
     routes();
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
+    await screen.findByText('4.3');
+    getFee.mockRejectedValue(new Error('Node unreachable'));
     await act(async () => {
-      fireEvent.click(ratingsCard().getByRole('radio', { name: '2 Stars' }));
+      fireEvent.click(screen.getAllByRole('radio')[0]);
     });
-    await waitFor(() => expect(show).toHaveBeenCalled());
-    expect(window.sendMessage).not.toHaveBeenCalled();
-    expect(refreshRating).not.toHaveBeenCalled();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Node unreachable'
+    );
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it('says so when the fee cannot be looked up, instead of doing nothing', async () => {
+    routes();
+    renderPage();
+    await screen.findByText('Great for writing, and fast.');
+    getFee.mockRejectedValue(new Error('Node unreachable'));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'app_page.reviews.reply' })[0]
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText('app_page.reviews.reply_placeholder'),
+      { target: { value: 'Agreed' } }
+    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'app_page.reviews.post_reply' })
+      );
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Node unreachable'
+    );
+    expect(show).not.toHaveBeenCalled();
+  });
+});
+
+describe('your own review', () => {
+  const withMine = (record: unknown) =>
+    routes({
+      [`identifier=${KEY}&`]: (url: string) =>
+        url.includes('name=Me&')
+          ? [
+              {
+                name: 'Me',
+                identifier: KEY,
+                created: 1_700_000_050_000,
+                metadata: { description: 'My first take' },
+              },
+            ]
+          : [
+              {
+                name: 'Alice',
+                identifier: KEY,
+                created: 1_700_000_100_000,
+                metadata: { description: 'Great for writing' },
+              },
+            ],
+      [`/arbitrary/COMMENT/Me/${KEY}`]: record,
+    });
+
+  it('is found even when it is not on the first page', async () => {
+    withMine({ v: 1, kind: 'review', text: 'My first take, in full.' });
+    renderPage();
+    expect(
+      await screen.findByText('My first take, in full.')
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'app_page.reviews.edit_yours' })
+    ).toBeEnabled();
+    // Two reviews: the sort menu shows, named for screen readers.
+    expect(
+      screen.getByRole('combobox', { name: 'app_page.reviews.sort' })
+    ).toBeInTheDocument();
+  });
+
+  it("can't be edited from the cut-short snippet while it loads", async () => {
+    withMine(new Response('Data unavailable', { status: 404 }));
+    renderPage();
+    expect(await screen.findByText('My first take')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'app_page.reviews.edit_yours' })
+    ).toBeDisabled();
+    const card = screen.getByText('My first take').closest('article')!;
+    expect(
+      within(card).getByRole('button', { name: 'action.edit' })
+    ).toBeDisabled();
+  });
+
+  it('is offered for an update after a vote, labelled as one', async () => {
+    withMine({ v: 1, kind: 'review', text: 'My first take, in full.' });
+    renderPage();
+    await screen.findByText('My first take, in full.');
+    await screen.findByText('4.3');
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[1]);
+    });
+    expect(
+      await screen.findByText('app_page.reviews.prompt_update')
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByPlaceholderText('app_page.reviews.placeholder')[0]
+    ).toHaveValue('My first take, in full.');
+    expect(
+      screen.getByRole('button', { name: 'app_page.reviews.update' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'app_page.reviews.post' })
+    ).toBeNull();
   });
 });
 
@@ -523,39 +1032,51 @@ describe('across page widths', () => {
       width = next;
       observers.forEach((callback) => callback());
     });
-  const aboutCard = () =>
-    document.querySelector('[aria-labelledby="app-page-about"]')!;
-  /** Two columns put the ratings in a column of their own, beside the about. */
-  const ratingsBesideAbout = () =>
-    document.getElementById('app-page-ratings-card')!.parentElement !==
-    aboutCard().parentElement;
+  /** Two columns put the ratings beside the reviews, after them in the page. */
+  const ratingsAfterReviews = () => {
+    const ratings = document.getElementById('app-page-ratings-card')!;
+    const reviews = document.querySelector(
+      '[aria-labelledby="app-page-reviews"]'
+    )!;
+    return !!(
+      reviews.compareDocumentPosition(ratings) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  };
 
-  it('keeps the about card as it was when the page gets narrower or wider', async () => {
+  it('keeps a review being written when the page gets narrower or wider', async () => {
     routes();
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
-    const about = aboutCard();
-    expect(ratingsBesideAbout()).toBe(true);
+    await screen.findByText('Great for writing, and fast.');
+    const write = await screen.findByRole('button', {
+      name: 'app_page.reviews.write',
+    });
+    await waitFor(() => expect(write).toBeEnabled());
+    fireEvent.click(write);
+    const box = (await screen.findAllByRole('textbox')).find(
+      (element) => element.tagName === 'TEXTAREA'
+    )!;
+    fireEvent.change(box, { target: { value: 'My half-written review' } });
 
     // One column, then two again.
     resize(800);
-    expect(ratingsBesideAbout()).toBe(false);
-    expect(aboutCard()).toBe(about);
+    expect(ratingsAfterReviews()).toBe(false);
+    expect(screen.getByDisplayValue('My half-written review')).toBe(box);
     resize(1200);
-    expect(ratingsBesideAbout()).toBe(true);
-    expect(aboutCard()).toBe(about);
+    expect(ratingsAfterReviews()).toBe(true);
+    expect(screen.getByDisplayValue('My half-written review')).toBe(box);
   });
 
   it('keeps its layout while it measures 0 wide (hidden or collapsed)', async () => {
     routes();
     renderPage();
-    await screen.findByText('A longer story about Q-Blog.');
-    expect(ratingsBesideAbout()).toBe(true);
+    await screen.findByText('Great for writing, and fast.');
+    expect(ratingsAfterReviews()).toBe(true);
 
     resize(0);
-    expect(ratingsBesideAbout()).toBe(true);
+    expect(ratingsAfterReviews()).toBe(true);
     resize(1200);
-    expect(ratingsBesideAbout()).toBe(true);
+    expect(ratingsAfterReviews()).toBe(true);
   });
 });
 

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBaseApiReact } from '../../../App';
+import { getPrimaryNamesForAddresses } from '../../Group/groupApi';
 import { normalizeAppService } from './appPageIds';
 import {
   AppPageResources,
@@ -183,6 +184,68 @@ export const useAppPageData = (app: { service?: string; name?: string }) => {
   }, [key]);
 
   return { ...state, reload };
+};
+
+const namesCache = new Map<string, string>();
+const namesInFlight = new Map<string, Promise<void>>();
+
+const loadNames = async (addresses: string[]) => {
+  const missing = addresses.filter(
+    (address) => !namesCache.has(address) && !namesInFlight.has(address)
+  );
+  for (let i = 0; i < missing.length; i += 50) {
+    const batch = missing.slice(i, i + 50);
+    const promise = getPrimaryNamesForAddresses(batch)
+      .then((names) => {
+        batch.forEach((address) =>
+          namesCache.set(address, names[address] || '')
+        );
+      })
+      .catch(() => {
+        batch.forEach((address) => namesCache.set(address, ''));
+      })
+      .finally(() => batch.forEach((address) => namesInFlight.delete(address)));
+    batch.forEach((address) => namesInFlight.set(address, promise));
+  }
+  await Promise.all(
+    addresses
+      .map((address) => namesInFlight.get(address))
+      .filter(Boolean) as Promise<void>[]
+  );
+};
+
+/** Primary names of addresses ('' for none), filled in as they arrive. */
+export const usePrimaryNames = (addresses: string[]) => {
+  const joined = useMemo(
+    () =>
+      Array.from(new Set(addresses.filter(Boolean)))
+        .sort()
+        .join(','),
+    [addresses]
+  );
+  const [names, setNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const list = joined ? joined.split(',') : [];
+    if (list.length === 0) return;
+    let alive = true;
+    const fromCache = () => {
+      const next: Record<string, string> = {};
+      list.forEach((address) => {
+        if (namesCache.has(address)) next[address] = namesCache.get(address)!;
+      });
+      return next;
+    };
+    setNames(fromCache());
+    loadNames(list).then(() => {
+      if (alive) setNames(fromCache());
+    });
+    return () => {
+      alive = false;
+    };
+  }, [joined]);
+
+  return names;
 };
 
 const ownedNamesCache = new Map<string, string[]>();

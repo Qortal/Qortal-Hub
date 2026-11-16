@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "icône de {{name}}",
+      "no_ratings": "aucune évaluation pour l’instant",
+      "rating_summary_one": "{{average}} · {{count}} évaluation",
+      "rating_summary_other": "{{average}} · {{count}} évaluations",
       "type_app": "Q-App",
       "type_website": "site web",
       "updated_time": "mis à jour {{time}}",
@@ -272,8 +275,72 @@
       "support": "assistance",
       "website": "site web"
     },
+    "rating": {
+      "average_label": "note moyenne de {{average}} sur 5",
+      "count_one": "{{count}} évaluation",
+      "count_other": "{{count}} évaluations",
+      "load_failed": "impossible de charger les notes ; la notation attend qu'elles soient chargées.",
+      "pending": "votre vote est en route. Tout le monde le verra d’ici une minute environ.",
+      "pending_first": "votre première note est en route. Vous pourrez la modifier dès qu’elle sera dans un bloc, d’ici une minute environ.",
+      "pick": "votre évaluation",
+      "pick_star_one": "donner {{count}} étoile",
+      "pick_star_other": "donner {{count}} étoiles",
+      "rate_prompt": "donnez une note",
+      "sent": "merci pour votre évaluation !",
+      "stars_label_one": "{{count}} étoile",
+      "stars_label_other": "{{count}} étoiles",
+      "title": "évaluations",
+      "word_1": "pas pour moi",
+      "word_2": "à améliorer",
+      "word_3": "correct",
+      "word_4": "vraiment bien",
+      "word_5": "j’adore !",
+      "yours": "votre évaluation"
+    },
     "reviews": {
-      "characters": "{{length}} / {{limit}}"
+      "characters": "{{length}} / {{limit}}",
+      "confirm_delete_reply": "retirer votre réponse ? QDN conserve chaque version, une réponse vide est donc publiée à sa place.",
+      "confirm_delete_review": "retirer votre avis ? QDN conserve chaque version, un avis vide est donc publié à sa place.",
+      "confirm_publish": "publier votre avis ? Tout le monde pourra le lire, avec votre nom.",
+      "confirm_reply": "publier votre réponse ? Tout le monde pourra la lire, avec votre nom.",
+      "confirm_update": "publier la nouvelle version de votre avis ?",
+      "developer": "développeur",
+      "edit_yours": "modifier votre avis",
+      "edited": "(modifié)",
+      "empty": "aucun avis pour l’instant.",
+      "empty_invite": "aucun avis pour l’instant. Déjà essayé ? Donnez le premier avis.",
+      "hide_replies": "masquer les réponses",
+      "load_failed": "les avis n’ont pas pu être chargés.",
+      "load_more": "afficher plus d’avis",
+      "loading_yours": "chargement de votre avis…",
+      "name_needed": "vous avez besoin d’un nom enregistré pour écrire des avis.",
+      "not_now": "pas maintenant",
+      "pending": "envoi en cours",
+      "pending_hint": "Publié depuis ce Hub. Les autres le verront dès qu’il sera dans un bloc, d’ici une minute environ.",
+      "placeholder": "qu’est-ce qui vous plaît ? Qu’est-ce qui pourrait être mieux ?",
+      "post": "publier l’avis",
+      "post_reply": "répondre",
+      "prompt_text": "merci ! Quelques mots aident les autres à se décider et le développeur à l’améliorer.",
+      "prompt_title": "vous avez évalué {{name}}",
+      "prompt_update": "merci ! Voulez-vous aussi mettre à jour votre avis ?",
+      "public_note": "les avis sont publics et signés de votre nom.",
+      "rate_too": "donnez aussi une note, pour que vos étoiles s’affichent avec votre avis.",
+      "removed": "cet avis a été retiré.",
+      "removed_sent": "retiré. Les autres le verront d’ici une minute environ.",
+      "reply": "répondre",
+      "reply_placeholder": "répondre à {{name}}…",
+      "reply_sent": "réponse envoyée",
+      "sent": "avis envoyé. Les autres le verront d’ici une minute environ.",
+      "show_replies_one": "afficher {{count}} réponse",
+      "show_replies_other": "afficher {{count}} réponses",
+      "sort": "trier les avis",
+      "sort_highest": "mieux notés",
+      "sort_lowest": "moins bien notés",
+      "sort_newest": "plus récents",
+      "title": "avis",
+      "update": "mettre à jour l’avis",
+      "write": "écrire un avis",
+      "yours_failed": "impossible de vérifier votre avis précédent : l’écriture attend que ce soit possible."
     },
     "screenshots": {
       "add": "ajouter des captures d’écran",
@@ -301,6 +368,17 @@
       "title": "partager"
     },
     "version_older": "ce numéro de version a été défini avant la dernière mise à jour de l’app.",
+    "voters": {
+      "all": "tous · {{total}}",
+      "first_rating": "première évaluation",
+      "none": "personne n’a encore donné autant d’étoiles.",
+      "open": "qui a voté · {{total}}",
+      "public_note": "les votes sont publics sur la blockchain Qortal : tout le monde peut voir qui a voté et comment.",
+      "show_star": "votes à {{stars}} ★ : {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "qui a voté",
+      "you": "vous"
+    },
     "whats_new": {
       "title": "nouveautés"
     }
@@ -636,7 +714,8 @@
       "top_rated_hint": "le top {{number}} selon les notes de la communauté",
       "view_grid": "grille",
       "view_label": "affichage",
-      "view_list": "liste"
+      "view_list": "liste",
+      "widgets_hint": "de petites Q-Apps pour l’accueil : notez-les, lisez ce qu’en pensent les autres et ajoutez celles qui vous plaisent"
     },
     "no_matches": "rien ne correspond à « {{query}} »",
     "no_matches_hint": "essayez un autre nom ou collez un lien qortal://.",
@@ -1238,7 +1317,8 @@
     "categories": "catégories",
     "community_apps": "apps communautaires",
     "my_apps": "mes apps",
-    "official_apps": "apps officielles"
+    "official_apps": "apps officielles",
+    "widgets": "widgets"
   },
   "tag_number": "balise {{number}}",
   "tags": "balises",
@@ -1351,6 +1431,15 @@
     "loading": "Chargement",
     "loading_message": "Récupération des dernières données publiques depuis le nœud Qortal par défaut.",
     "retry": "Réessayer"
+  },
+  "widgets": {
+    "add_to_home": "ajouter à l’accueil",
+    "added_to_home": "{{title}} est maintenant sur l’accueil.",
+    "on_home": "sur l’accueil",
+    "qdn_resource": "ressource QDN",
+    "remove_from_home": "retirer de l’accueil",
+    "removed_from_home": "{{title}} n’est plus sur l’accueil.",
+    "type": "widget"
   },
   "zip": "fermeture éclair"
 }

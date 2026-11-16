@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "{{name}}のアイコン",
+      "no_ratings": "まだ評価はありません",
+      "rating_summary_one": "{{average}}・{{count}}件の評価",
+      "rating_summary_other": "{{average}}・{{count}}件の評価",
       "type_app": "Q-App",
       "type_website": "Webサイト",
       "updated_time": "{{time}}に更新",
@@ -272,8 +275,72 @@
       "support": "サポート",
       "website": "Webサイト"
     },
+    "rating": {
+      "average_label": "平均評価：5点中{{average}}点",
+      "count_one": "{{count}}件の評価",
+      "count_other": "{{count}}件の評価",
+      "load_failed": "評価を読み込めませんでした。読み込まれるまで評価はできません。",
+      "pending": "投票を送信中です。1分ほどですべての人に表示されます。",
+      "pending_first": "最初の評価を送信中です。ブロックに取り込まれたら（1分ほど）変更できます。",
+      "pick": "あなたの評価",
+      "pick_star_one": "星{{count}}つで評価",
+      "pick_star_other": "星{{count}}つで評価",
+      "rate_prompt": "評価する",
+      "sent": "評価ありがとうございます！",
+      "stars_label_one": "星{{count}}つ",
+      "stars_label_other": "星{{count}}つ",
+      "title": "評価",
+      "word_1": "自分には合わない",
+      "word_2": "改善の余地あり",
+      "word_3": "まあまあ",
+      "word_4": "とても良い",
+      "word_5": "大好き！",
+      "yours": "あなたの評価"
+    },
     "reviews": {
-      "characters": "{{length}} / {{limit}}"
+      "characters": "{{length}} / {{limit}}",
+      "confirm_delete_reply": "返信を削除しますか？QDNはすべてのバージョンを保存するため、代わりに空の返信が公開されます。",
+      "confirm_delete_review": "レビューを削除しますか？QDNはすべてのバージョンを保存するため、代わりに空のレビューが公開されます。",
+      "confirm_publish": "レビューを公開しますか？あなたの名前とともに、誰でも読めるようになります。",
+      "confirm_reply": "返信を公開しますか？あなたの名前とともに、誰でも読めるようになります。",
+      "confirm_update": "レビューの新しいバージョンを公開しますか？",
+      "developer": "開発者",
+      "edit_yours": "レビューを編集",
+      "edited": "（編集済み）",
+      "empty": "まだレビューはありません。",
+      "empty_invite": "まだレビューはありません。使ってみましたか？最初の感想を書いてみませんか。",
+      "hide_replies": "返信を非表示",
+      "load_failed": "レビューを読み込めませんでした。",
+      "load_more": "さらにレビューを表示",
+      "loading_yours": "あなたのレビューを読み込んでいます…",
+      "name_needed": "レビューを書くには登録済みの名前が必要です。",
+      "not_now": "今はしない",
+      "pending": "送信中",
+      "pending_hint": "このHubから公開しました。ブロックに取り込まれると（1分ほど）、他の人にも表示されます。",
+      "placeholder": "気に入った点は？改善してほしい点は？",
+      "post": "レビューを投稿",
+      "post_reply": "返信",
+      "prompt_text": "ありがとうございます！ひとこと書いてもらえると、他の人が選ぶときの参考になり、開発者の改善にも役立ちます。",
+      "prompt_title": "{{name}}を評価しました",
+      "prompt_update": "ありがとうございます！レビューも更新しますか？",
+      "public_note": "レビューは公開され、あなたの名前で署名されます。",
+      "rate_too": "評価もつけると、レビューと一緒に星が表示されます。",
+      "removed": "このレビューは削除されました。",
+      "removed_sent": "削除しました。1分ほどで他の人にも反映されます。",
+      "reply": "返信",
+      "reply_placeholder": "{{name}}に返信…",
+      "reply_sent": "返信を送信しました",
+      "sent": "レビューを送信しました。1分ほどで他の人にも表示されます。",
+      "show_replies_one": "{{count}}件の返信を表示",
+      "show_replies_other": "{{count}}件の返信を表示",
+      "sort": "レビューの並べ替え",
+      "sort_highest": "評価が高い順",
+      "sort_lowest": "評価が低い順",
+      "sort_newest": "新着順",
+      "title": "レビュー",
+      "update": "レビューを更新",
+      "write": "レビューを書く",
+      "yours_failed": "以前のレビューを確認できませんでした。確認できるまで書き込みはお待ちください。"
     },
     "screenshots": {
       "add": "スクリーンショットを追加",
@@ -301,6 +368,17 @@
       "title": "共有"
     },
     "version_older": "このバージョン番号は、アプリの最新の更新より前に設定されたものです。",
+    "voters": {
+      "all": "すべて・{{total}}",
+      "first_rating": "最初に評価した人",
+      "none": "まだこの星の数をつけた人はいません。",
+      "open": "投票した人・{{total}}",
+      "public_note": "投票はQortalブロックチェーン上で公開されています。誰がどのように投票したかは誰でも確認できます。",
+      "show_star": "{{stars}}★の投票：{{total}}件",
+      "stars_filter": "{{stars}}★・{{total}}",
+      "title": "投票した人",
+      "you": "あなた"
+    },
     "whats_new": {
       "title": "新機能"
     }
@@ -636,7 +714,8 @@
       "top_rated_hint": "コミュニティの評価トップ{{number}}",
       "view_grid": "グリッド",
       "view_label": "表示形式",
-      "view_list": "リスト"
+      "view_list": "リスト",
+      "widgets_hint": "ホーム用の小さなQ-App。評価したり、ほかの人の感想を読んだりして、気に入ったものを追加できます"
     },
     "no_matches": "「{{query}}」に一致するものはありません",
     "no_matches_hint": "別の名前を試すか、qortal://リンクを貼り付けてください。",
@@ -1238,7 +1317,8 @@
     "categories": "カテゴリ",
     "community_apps": "コミュニティアプリ",
     "my_apps": "マイアプリ",
-    "official_apps": "公式アプリ"
+    "official_apps": "公式アプリ",
+    "widgets": "ウィジェット"
   },
   "tag_number": "タグ{{number}}",
   "tags": "タグ",
@@ -1351,6 +1431,15 @@
     "loading": "読み込み中",
     "loading_message": "既定の Qortal ノードから最新の公開データを取得しています。",
     "retry": "再試行"
+  },
+  "widgets": {
+    "add_to_home": "ホームに追加",
+    "added_to_home": "{{title}} をホームに追加しました。",
+    "on_home": "ホームに追加済み",
+    "qdn_resource": "QDNリソース",
+    "remove_from_home": "ホームから削除",
+    "removed_from_home": "{{title}} をホームから削除しました。",
+    "type": "ウィジェット"
   },
   "zip": "ジップ"
 }

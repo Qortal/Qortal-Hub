@@ -236,6 +236,9 @@
     },
     "hero": {
       "icon_alt": "icono de {{name}}",
+      "no_ratings": "aún no hay valoraciones",
+      "rating_summary_one": "{{average}} · {{count}} valoración",
+      "rating_summary_other": "{{average}} · {{count}} valoraciones",
       "type_app": "Q-App",
       "type_website": "sitio web",
       "updated_time": "actualizado {{time}}",
@@ -272,8 +275,72 @@
       "support": "soporte",
       "website": "sitio web"
     },
+    "rating": {
+      "average_label": "valoración media de {{average}} sobre 5",
+      "count_one": "{{count}} valoración",
+      "count_other": "{{count}} valoraciones",
+      "load_failed": "no se pudieron cargar las valoraciones; se podrá valorar cuando se carguen.",
+      "pending": "tu voto está en camino. Todos lo verán en más o menos un minuto.",
+      "pending_first": "tu primera valoración está en camino. Podrás cambiarla cuando esté en un bloque, en más o menos un minuto.",
+      "pick": "tu valoración",
+      "pick_star_one": "valorar con {{count}} estrella",
+      "pick_star_other": "valorar con {{count}} estrellas",
+      "rate_prompt": "deja tu valoración",
+      "sent": "¡Gracias por tu valoración!",
+      "stars_label_one": "{{count}} estrella",
+      "stars_label_other": "{{count}} estrellas",
+      "title": "valoraciones",
+      "word_1": "no es para mí",
+      "word_2": "puede mejorar",
+      "word_3": "está bien",
+      "word_4": "me gusta mucho",
+      "word_5": "¡Me encanta!",
+      "yours": "tu valoración"
+    },
     "reviews": {
-      "characters": "{{length}} / {{limit}}"
+      "characters": "{{length}} / {{limit}}",
+      "confirm_delete_reply": "¿Quitar tu respuesta? QDN conserva todas las versiones, así que en su lugar se publica una respuesta vacía.",
+      "confirm_delete_review": "¿Quitar tu reseña? QDN conserva todas las versiones, así que en su lugar se publica una reseña vacía.",
+      "confirm_publish": "¿Publicar tu reseña? Todo el mundo podrá leerla, junto con tu nombre.",
+      "confirm_reply": "¿Publicar tu respuesta? Todo el mundo podrá leerla, junto con tu nombre.",
+      "confirm_update": "¿Publicar la nueva versión de tu reseña?",
+      "developer": "desarrollador",
+      "edit_yours": "editar tu reseña",
+      "edited": "(editada)",
+      "empty": "aún no hay reseñas.",
+      "empty_invite": "aún no hay reseñas. ¿Ya lo has probado? Sé la primera persona en opinar.",
+      "hide_replies": "ocultar respuestas",
+      "load_failed": "no se pudieron cargar las reseñas.",
+      "load_more": "mostrar más reseñas",
+      "loading_yours": "cargando tu reseña…",
+      "name_needed": "necesitas un nombre registrado para escribir reseñas.",
+      "not_now": "ahora no",
+      "pending": "enviando",
+      "pending_hint": "Publicado desde este Hub. Los demás lo verán cuando esté en un bloque, en más o menos un minuto.",
+      "placeholder": "¿Qué te gusta? ¿Qué podría mejorar?",
+      "post": "publicar reseña",
+      "post_reply": "responder",
+      "prompt_text": "¡Gracias! Unas pocas palabras ayudan a otros a decidirse y al desarrollador a seguir mejorando.",
+      "prompt_title": "has valorado {{name}}",
+      "prompt_update": "¡Gracias! ¿Quieres actualizar también tu reseña?",
+      "public_note": "las reseñas son públicas y van firmadas con tu nombre.",
+      "rate_too": "deja también tu valoración para que tus estrellas aparezcan con tu reseña.",
+      "removed": "esta reseña se eliminó.",
+      "removed_sent": "eliminada. Los demás lo verán en más o menos un minuto.",
+      "reply": "responder",
+      "reply_placeholder": "responder a {{name}}…",
+      "reply_sent": "respuesta enviada",
+      "sent": "reseña enviada. Los demás la verán en más o menos un minuto.",
+      "show_replies_one": "mostrar {{count}} respuesta",
+      "show_replies_other": "mostrar {{count}} respuestas",
+      "sort": "ordenar reseñas",
+      "sort_highest": "mejor valoradas",
+      "sort_lowest": "peor valoradas",
+      "sort_newest": "más recientes",
+      "title": "reseñas",
+      "update": "actualizar reseña",
+      "write": "escribir una reseña",
+      "yours_failed": "no se pudo comprobar tu reseña anterior; podrás escribir cuando se pueda."
     },
     "screenshots": {
       "add": "añadir capturas",
@@ -301,6 +368,17 @@
       "title": "compartir"
     },
     "version_older": "este número de versión se fijó antes de la última actualización de la app.",
+    "voters": {
+      "all": "todos · {{total}}",
+      "first_rating": "primera valoración",
+      "none": "nadie ha dado todavía tantas estrellas.",
+      "open": "quién ha votado · {{total}}",
+      "public_note": "los votos son públicos en la blockchain de Qortal: cualquiera puede ver quién ha votado y cómo.",
+      "show_star": "votos de {{stars}} ★: {{total}}",
+      "stars_filter": "{{stars}} ★ · {{total}}",
+      "title": "quién ha votado",
+      "you": "tú"
+    },
     "whats_new": {
       "title": "novedades"
     }
@@ -636,7 +714,8 @@
       "top_rated_hint": "el top {{number}} según las valoraciones de la comunidad",
       "view_grid": "cuadrícula",
       "view_label": "vista",
-      "view_list": "lista"
+      "view_list": "lista",
+      "widgets_hint": "pequeñas Q-Apps para Inicio: valóralas, lee lo que opinan los demás y agrega las que te gusten"
     },
     "no_matches": "nada coincide con «{{query}}»",
     "no_matches_hint": "prueba con otro nombre o pega un enlace qortal://.",
@@ -1238,7 +1317,8 @@
     "categories": "categorías",
     "community_apps": "apps de la comunidad",
     "my_apps": "mis apps",
-    "official_apps": "apps oficiales"
+    "official_apps": "apps oficiales",
+    "widgets": "widgets"
   },
   "tag_number": "etiqueta {{number}}",
   "tags": "etiquetas",
@@ -1351,6 +1431,15 @@
     "loading": "Cargando",
     "loading_message": "Obteniendo los últimos datos públicos del nodo Qortal predeterminado.",
     "retry": "Reintentar"
+  },
+  "widgets": {
+    "add_to_home": "agregar a Inicio",
+    "added_to_home": "{{title}} ya está en Inicio.",
+    "on_home": "en Inicio",
+    "qdn_resource": "recurso de QDN",
+    "remove_from_home": "quitar de Inicio",
+    "removed_from_home": "{{title}} ya no está en Inicio.",
+    "type": "widget"
   },
   "zip": "cremallera"
 }
