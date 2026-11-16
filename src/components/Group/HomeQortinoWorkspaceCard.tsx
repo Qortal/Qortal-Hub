@@ -187,7 +187,6 @@ type WorkspaceState = {
 
 type HomeQortinoWorkspaceCardProps = {
   onGettingStartedComplete?: () => void;
-  onOpenAppsPanel?: () => void;
 };
 
 type QortinoSectionRuntimeFallbackProps = {
@@ -1794,7 +1793,6 @@ const HotkeyPickerVirtualScroll = memo(function HotkeyPickerVirtualScroll({
 
 export const HomeQortinoWorkspaceCard = ({
   onGettingStartedComplete,
-  onOpenAppsPanel,
 }: HomeQortinoWorkspaceCardProps) => {
   const { t } = useTranslation(['group', 'core']);
   const qw = useCallback(
@@ -1820,21 +1818,12 @@ export const HomeQortinoWorkspaceCard = ({
   const txList = useAtomValue(txListAtom);
   const userAddress = userInfo?.address;
   const name = userInfo?.name;
-  const openApp = useCallback(
-    (appName: string, path = '') => {
-      if (onOpenAppsPanel) {
-        onOpenAppsPanel();
-      } else {
-        executeEvent('newTabWindow', {});
-        executeEvent('open-apps-mode', {});
-      }
-
-      window.setTimeout(() => {
-        dispatchAppTab(appName, path);
-      }, 90);
-    },
-    [onOpenAppsPanel]
-  );
+  // The app gets a tab of its own: a launcher tab opened on the way would be
+  // left behind it.
+  const openApp = useCallback((appName: string, path = '') => {
+    dispatchAppTab(appName, path);
+    executeEvent('open-apps-mode', {});
+  }, []);
 
   const workspaceModules = useMemo<WorkspaceModuleDefinition[]>(
     () => [

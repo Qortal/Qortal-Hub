@@ -4,7 +4,7 @@ import { createStore, Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
-import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
 import {
   sortablePinnedAppsAtom,
   userInfoAtom,
@@ -56,6 +56,7 @@ const EVENTS = [
   'openAppsLibrarySearch',
   'openUserLookupDrawer',
   'setSelectedTab',
+  'selectedAppInfo',
 ];
 let heard: Heard[] = [];
 const listeners = EVENTS.map((event) => {
@@ -88,9 +89,12 @@ const renderBar = ({
   mode = 'home',
   navigation = {},
   pins = [],
+  page = null,
 }: {
   apps?: unknown[];
   mode?: string;
+  /** The Q-App's or website's page on screen. */
+  page?: { service: string; name: string } | null;
   /** Each tab's address bar link, by tab id. */
   navigation?: Record<string, { currentLink?: string }>;
   pins?: unknown[];
@@ -98,6 +102,7 @@ const renderBar = ({
   const store = createStore();
   store.set(userInfoAtom, { address: 'QViewer', name: 'Viewer' });
   store.set(navigationControllerAtom, navigation as never);
+  store.set(shownAppPageAtom, page);
   store.set(availableQappsAtom, apps as never);
   store.set(sortablePinnedAppsAtom, pins as never);
   render(
@@ -152,6 +157,11 @@ const heardOf = (event: string) =>
   heard.filter((item) => item.event === event).map(({ data }) => data);
 
 const opened = () => heardOf('addTab') as Record<string, unknown>[];
+
+const pagesShown = () =>
+  heard
+    .filter(({ event }) => event === 'selectedAppInfo')
+    .map(({ data }) => data);
 
 const librarySearches = () =>
   heardOf('openAppsLibrarySearch').map((data) => data.query);
@@ -264,6 +274,28 @@ describe('GlobalQortalNavBar search suggestions', () => {
     expect(opened()).toEqual([
       expect.objectContaining({ name: 'Q-Tube', service: 'APP' }),
     ]);
+  });
+
+  it("opens an app's page from its link, without searching the library", async () => {
+    const input = renderBar();
+    type(input, 'qortal://use-app-page/APP/Q-Shop');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    // The page is asked for once the apps view shows (a 0 ms timer).
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(pagesShown()).toEqual([{ name: 'Q-Shop', service: 'APP' }]);
+    expect(librarySearches()).toEqual([]);
+    expect(opened()).toEqual([]);
+  });
+
+  it("shows the link of an app's page that is on screen", () => {
+    const input = renderBar({
+      mode: 'apps',
+      page: { service: 'APP', name: 'Q-Shop' },
+    });
+    expect(input).toHaveValue('qortal://use-app-page/APP/Q-Shop');
   });
 
   it('ranks the apps this account opens most first', () => {

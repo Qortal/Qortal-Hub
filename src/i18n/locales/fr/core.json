@@ -363,10 +363,12 @@
     "duplicate": "dupliquer l'onglet",
     "limit_reached": "nombre maximal d'onglets atteint. Fermez-en un pour en ouvrir un autre.",
     "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer.",
+    "new_tab": "nouvel onglet",
     "pin": "épingler l'onglet",
     "pinned_and_locked_kept_open": "les onglets épinglés et verrouillés restent ouverts. Désépinglez un onglet épinglé avant de le fermer, et fermez les onglets verrouillés un par un pour confirmer.",
     "pinned_kept_open": "les onglets épinglés restent ouverts. Désépinglez un onglet pour le fermer.",
-    "unpin": "désépingler l'onglet"
+    "unpin": "désépingler l'onglet",
+    "unsaved_publish": "les informations de son formulaire de publication ne sont pas encore publiées, et fermer l'onglet les efface."
   },
   "apps_bar": {
     "empty": "Épinglez une application ou ajoutez un favori, et il apparaîtra ici.",

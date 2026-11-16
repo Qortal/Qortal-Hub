@@ -34,6 +34,7 @@ import {
 } from './AppPageParts';
 import { REVIEW_LIMITS, ReviewItem, ReviewThread } from './appReviews';
 import type { ReviewActionResult } from './useAppReviews';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 type Sort = 'newest' | 'highest' | 'lowest';
 
@@ -546,6 +547,9 @@ export const AppReviewsSection = ({
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const [sort, setSort] = useState<Sort>('newest');
+  const [sortOpen, setSortOpen] = useState(false);
+  // In a hidden launcher tab the sort menu steps aside, and comes back with it.
+  const sortMenuShown = useLauncherTabDialog(sortOpen);
   const [composing, setComposing] = useState(false);
   const promptRef = useRef<HTMLDivElement>(null);
   const canWrite = !!myName;
@@ -636,7 +640,11 @@ export const AppReviewsSection = ({
                     postProcess: 'capitalizeFirstChar',
                   }),
                 }}
+                MenuProps={{ keepMounted: sortMenuShown.keepMounted }}
                 onChange={(event) => setSort(event.target.value as Sort)}
+                onClose={() => setSortOpen(false)}
+                onOpen={() => setSortOpen(true)}
+                open={sortMenuShown.open}
                 size="small"
                 sx={{ borderRadius: '10px', fontSize: '13px' }}
                 value={sort}

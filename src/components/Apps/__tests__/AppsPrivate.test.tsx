@@ -121,11 +121,12 @@ describe('AppsPrivate – Update', () => {
     const store = createStore();
     store.set(myGroupsWhereIAmAdminAtom, adminGroups);
     store.set(memberGroupsAtom, [{ groupId: 42, groupName: 'Builders' }]);
-    return render(
+    const ui = (isShown: boolean) => (
       <Provider store={store}>
         <ThemeProvider theme={createTheme()}>
           <AppsPrivate
             action="update"
+            isShown={isShown}
             myAddress={MY_ADDRESS}
             myName="alice"
             onClose={onClose}
@@ -135,6 +136,11 @@ describe('AppsPrivate – Update', () => {
         </ThemeProvider>
       </Provider>
     );
+    const view = render(ui(true));
+    return {
+      ...view,
+      setShown: (isShown: boolean) => view.rerender(ui(isShown)),
+    };
   };
 
   const field = (name: string) => screen.getByRole('textbox', { name });
@@ -309,5 +315,20 @@ describe('AppsPrivate – Update', () => {
       },
       true
     );
+  });
+
+  it('steps aside while its launcher tab is hidden, keeping what was entered', async () => {
+    const user = userEvent.setup();
+    const { setShown } = renderDialog();
+    await waitFor(() => expect(field('core:app_name')).toHaveValue('Q-Notes'));
+    await user.type(field('core:app_name'), ' 2');
+
+    setShown(false);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    setShown(true);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(field('core:app_name')).toHaveValue('Q-Notes 2');
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

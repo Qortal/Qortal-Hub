@@ -21,12 +21,18 @@ interface PrivateTabProps {
   myAddress: string;
   /** Changes when the library's refresh button is pressed. */
   libraryRefreshKey?: number;
+  /**
+   * False while the tab is out of sight, as when its launcher tab is hidden:
+   * a dialog it opened steps aside, keeping what was entered.
+   */
+  isActive?: boolean;
 }
 
 export const PrivateTab = ({
   myName,
   myAddress,
   libraryRefreshKey = 0,
+  isActive = true,
 }: PrivateTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -93,6 +99,7 @@ export const PrivateTab = ({
       </SectionContainer>
 
       <AppsPrivate
+        isShown={isActive}
         myName={myName}
         myAddress={myAddress}
         action={action}

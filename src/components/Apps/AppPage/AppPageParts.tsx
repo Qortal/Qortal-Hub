@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
 import { appIconUrl } from './appPageQdn';
 import { openPageTextLink, splitTextLinks } from './appPageLink';
+import { useLauncherTabId } from '../launcherTabs';
 
 export const SectionCard = ({
   children,
@@ -338,6 +339,7 @@ export const LinkifiedText = ({
   sx?: object;
 }) => {
   const parts = useMemo(() => splitTextLinks(text || ''), [text]);
+  const launcherTabId = useLauncherTabId();
   return (
     <Typography
       component="div"
@@ -354,7 +356,7 @@ export const LinkifiedText = ({
           <Link
             component="button"
             key={index}
-            onClick={() => void openPageTextLink(part.value)}
+            onClick={() => void openPageTextLink(part.value, launcherTabId)}
             sx={{
               font: 'inherit',
               textAlign: 'left',

@@ -55,6 +55,7 @@ import {
 } from './publishProfiles';
 import { PublishSource } from './publishSource';
 import { PublishSourcePicker, formatPublishDate } from './PublishSourcePicker';
+import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
@@ -120,6 +121,11 @@ interface AppPublishProps {
   isAppTypeLocked?: boolean;
   /** Opened from Update on a published app: the name can't be changed. */
   isUpdate?: boolean;
+  /**
+   * Told whether the form holds input that is not published yet, and false
+   * when it closes: a launcher tab asks before it closes with some.
+   */
+  onUnsavedChange?: (hasUnsavedInput: boolean) => void;
 }
 
 export const AppPublish = ({
@@ -130,6 +136,7 @@ export const AppPublish = ({
   initialAppType = 'APP',
   isAppTypeLocked = false,
   isUpdate = false,
+  onUnsavedChange,
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(initialName);
@@ -141,6 +148,8 @@ export const AppPublish = ({
   // This PC's saved profile for the chosen name and type.
   const [profile, setProfile] = useState<PublishProfile | null>(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
+  // In a launcher tab, the published app opens in its place.
+  const launcherTabId = useLauncherTabId();
   const theme = useTheme();
   const { t, i18n } = useTranslation(['auth', 'core', 'group', 'question']);
   const [tag1, setTag1] = useLimitedText(limitQdnTag);
@@ -157,7 +166,20 @@ export const AppPublish = ({
   const prefillRunRef = useRef(0);
   // Fields the user changed since that prefill started: it never overwrites them.
   const editedFieldsRef = useRef(new Set<string>());
-  const markEdited = (field: string) => editedFieldsRef.current.add(field);
+  // Anything the user chose or typed since the form opened or last published.
+  // What a prefill fills in is not counted.
+  const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
+  const noteInput = () => setHasUnsavedInput(true);
+  const markEdited = (field: string) => {
+    editedFieldsRef.current.add(field);
+    noteInput();
+  };
+  const onUnsavedChangeRef = useRef(onUnsavedChange);
+  onUnsavedChangeRef.current = onUnsavedChange;
+  useEffect(() => {
+    onUnsavedChangeRef.current?.(hasUnsavedInput);
+  }, [hasUnsavedInput]);
+  useEffect(() => () => onUnsavedChangeRef.current?.(false), []);
   const maxFileSize = appType === 'APP' ? 50 * 1024 * 1024 : 400 * 1024 * 1024; // 50MB or 400MB
   const showError = (message: string) => {
     setInfoSnack({ type: 'error', message });
@@ -376,6 +398,9 @@ export const AppPublish = ({
         }),
       });
       setOpenSnack(true);
+      // What was typed is published now, before the app opens in the tab.
+      setHasUnsavedInput(false);
+      onUnsavedChangeRef.current?.(false);
       const signature = publishSignature(response);
       const published: PublishProfile = {
         publishedAt: Date.now(),
@@ -412,7 +437,7 @@ export const AppPublish = ({
         created: Date.now(),
       };
       executeEvent('addTab', {
-        data: dataObj,
+        data: inLauncherTab(dataObj, launcherTabId),
       });
     } catch (error) {
       setInfoSnack({
@@ -490,7 +515,10 @@ export const AppPublish = ({
           })}
           displayEmpty
           value={name}
-          onChange={(event) => setName(event?.target.value)}
+          onChange={(event) => {
+            noteInput();
+            setName(event?.target.value);
+          }}
           disabled={isUpdate}
         >
           <MenuItem value="">
@@ -524,7 +552,10 @@ export const AppPublish = ({
           })}
           displayEmpty
           value={appType}
-          onChange={(event) => setAppType(event?.target.value)}
+          onChange={(event) => {
+            noteInput();
+            setAppType(event?.target.value);
+          }}
           disabled={isAppTypeLocked}
         >
           <MenuItem value="">
@@ -818,7 +849,10 @@ export const AppPublish = ({
         <PublishSourcePicker
           changedSince={profileChangedSince(profile)}
           maxSize={maxFileSize}
-          onChange={setSource}
+          onChange={(next) => {
+            noteInput();
+            setSource(next);
+          }}
           onError={showError}
           savedSource={profile?.source}
           source={source}

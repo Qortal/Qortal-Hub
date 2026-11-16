@@ -36,6 +36,7 @@ import {
 } from '../AppsLibrary/libraryStyles';
 import { AppIconTile, DetailsButton, OpenAppButton } from './libraryCardParts';
 import { LibraryRatingSummary } from './LibraryRatingSummary';
+import { inLauncherTab, useLauncherTabId } from '../launcherTabs';
 
 /** A mouse drag shorter than this is still a click. */
 const DRAG_THRESHOLD_PX = 6;
@@ -209,6 +210,7 @@ const FeaturedAppBannerInner = ({
   renderItem,
 }: FeaturedAppBannerProps) => {
   const { t, i18n } = useTranslation(['core']);
+  const launcherTabId = useLauncherTabId();
   const reduce = usePrefersReducedMotion();
   const trackRef = useRef<HTMLUListElement | null>(null);
   const trackId = useId();
@@ -393,10 +395,13 @@ const FeaturedAppBannerInner = ({
     [reduce]
   );
 
-  const handleOpenApp = useCallback((app: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    executeEvent('addTab', { data: app });
-  }, []);
+  const handleOpenApp = useCallback(
+    (app: any, e: React.MouseEvent) => {
+      e.stopPropagation();
+      executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) });
+    },
+    [launcherTabId]
+  );
 
   const handleViewDetails = useCallback(
     (app: any) => {

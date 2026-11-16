@@ -20,6 +20,7 @@ import {
   SectionTitle,
 } from './AppPageParts';
 import { openPageTextLink } from './appPageLink';
+import { useLauncherTabId } from '../launcherTabs';
 import { APP_LINK_KINDS, AppLinkKind, AppPageData } from './appPageData';
 
 const LINK_ICONS: Record<AppLinkKind, React.ReactElement> = {
@@ -90,6 +91,7 @@ export const AppAboutSection = ({
 }) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation(['core']);
+  const launcherTabId = useLauncherTabId();
   const about = page?.about?.trim() || '';
   const whatsNew = page?.whatsNew?.trim() || '';
   const links = APP_LINK_KINDS.filter((kind) => page?.links?.[kind]);
@@ -145,7 +147,9 @@ export const AppAboutSection = ({
                 label={t(`core:app_page.links.${kind}`, {
                   postProcess: 'capitalizeFirstChar',
                 })}
-                onClick={() => void openPageTextLink(page!.links[kind]!)}
+                onClick={() =>
+                  void openPageTextLink(page!.links[kind]!, launcherTabId)
+                }
                 sx={{
                   backgroundColor: alpha(theme.palette.primary.main, 0.12),
                   fontWeight: 600,
