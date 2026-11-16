@@ -313,7 +313,8 @@
       "sort_newest": "più recenti",
       "title": "recensioni",
       "update": "aggiorna recensione",
-      "write": "scrivi una recensione"
+      "write": "scrivi una recensione",
+      "yours_failed": "impossibile controllare la tua recensione precedente: potrai scrivere quando sarà possibile."
     },
     "screenshots": {
       "add": "aggiungi screenshot",

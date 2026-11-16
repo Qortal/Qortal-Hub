@@ -278,13 +278,16 @@ export const AppPage = ({
       failed={reviews.failed}
       hasMore={reviews.hasMore}
       loading={reviews.loading}
+      loadingMore={reviews.loadingMore}
       myName={myName}
       myRating={myRating}
       myReview={reviews.myReview}
+      myReviewStatus={reviews.myReviewStatus}
       onDismissPrompt={() => setPrompt(null)}
       onLoadMore={reviews.loadMore}
       onResult={onReviewResult}
       onRetry={reviews.reload}
+      onRetryMyReview={reviews.retryMyReview}
       prompt={prompt}
       ratingByAddress={ratingByAddress}
       removeItem={reviews.removeItem}

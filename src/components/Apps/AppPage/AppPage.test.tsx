@@ -64,6 +64,8 @@ import { clearAppPageCache } from './useAppPage';
 import { clearReviewRecordCache } from './useAppReviews';
 
 const KEY = appReviewKey('APP', 'Q-Blog');
+/** The search for the signed-in user's own review. */
+const OWN_SEARCH = `identifier=${KEY}&prefix=true&includemetadata=true&name=Me&`;
 const REPLY = replyIdentifier(KEY, 'abcdef');
 const addressOf = (key: string) => `Q${key.length}.${key.charCodeAt(0)}`;
 const CREATOR_KEY = 'CREATORKEY';
@@ -315,6 +317,89 @@ describe('the app page', () => {
     expect(
       screen.queryByRole('button', { name: 'app_page.edit.open' })
     ).toBeNull();
+  });
+
+  it("keeps Write a review off until it knows whether you've written one", async () => {
+    routes({ [OWN_SEARCH]: never });
+    renderPage();
+    expect(
+      await screen.findByRole('button', { name: 'app_page.reviews.write' })
+    ).toBeDisabled();
+  });
+
+  it("offers Retry, not an empty review, when your own couldn't be checked", async () => {
+    let own: Handler = () => new Response('', { status: 500 });
+    routes({
+      [OWN_SEARCH]: (url: string, init?: RequestInit) => own(url, init),
+      [`/arbitrary/COMMENT/Me/${KEY}`]: {
+        v: 1,
+        kind: 'review',
+        text: 'My review, in full.',
+        created: 3,
+      },
+    });
+    renderPage();
+    expect(
+      await screen.findByText('app_page.reviews.yours_failed')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'app_page.reviews.write' })
+    ).toBeDisabled();
+
+    // After a vote, the review box doesn't start empty over the unknown one.
+    await screen.findByText('4.3');
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('radio')[4]);
+    });
+    expect(
+      await screen.findByText('app_page.reviews.prompt_title')
+    ).toBeInTheDocument();
+    const alert = screen.getByText('app_page.reviews.yours_failed');
+    expect(alert).toHaveAttribute('role', 'alert');
+    expect(
+      screen.queryByPlaceholderText('app_page.reviews.placeholder')
+    ).toBeNull();
+
+    own = () => [
+      {
+        name: 'Me',
+        identifier: KEY,
+        created: 1_700_000_300_000,
+        metadata: { description: 'My review' },
+      },
+    ];
+    fireEvent.click(within(alert).getByRole('button', { name: 'retry' }));
+    expect(
+      await screen.findByDisplayValue('My review, in full.')
+    ).toBeInTheDocument();
+  });
+
+  it('keeps Load more off while its page loads', async () => {
+    const page = Array.from({ length: 50 }, (_, index) => ({
+      name: `Fan ${index}`,
+      identifier: KEY,
+      created: 1_700_000_000_000 - index,
+      metadata: { description: `Review ${index}` },
+    }));
+    routes({
+      [`identifier=${KEY}&`]: (url: string, init?: RequestInit) =>
+        url.includes('offset=50') ? never(url, init) : page,
+    });
+    renderPage();
+    const more = await screen.findByRole('button', {
+      name: 'app_page.reviews.load_more',
+    });
+    fireEvent.click(more);
+    await waitFor(() => expect(more).toBeDisabled());
+    fireEvent.click(more);
+    const secondPage = vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url]) =>
+          String(url).includes(`identifier=${KEY}&`) &&
+          String(url).includes('offset=50')
+      );
+    expect(secondPage).toHaveLength(1);
   });
 
   it("gives a review its writer's vote, also when they created the poll", async () => {

@@ -313,7 +313,8 @@
       "sort_newest": "más recientes",
       "title": "reseñas",
       "update": "actualizar reseña",
-      "write": "escribir una reseña"
+      "write": "escribir una reseña",
+      "yours_failed": "no se pudo comprobar tu reseña anterior; podrás escribir cuando se pueda."
     },
     "screenshots": {
       "add": "añadir capturas",

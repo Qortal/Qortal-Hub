@@ -55,6 +55,14 @@ export type ReviewActionResult =
   | { ok: true }
   | { ok: false; cancelled?: boolean; message?: string };
 
+/**
+ * Whether the user's own review is known: "loading" until the search by
+ * their name has answered and a review it found has its whole text, and
+ * "failed" when either couldn't be read. Writing waits for "ready": a review
+ * written before then could replace one the user hasn't seen.
+ */
+export type MyReviewStatus = 'loading' | 'ready' | 'failed';
+
 type Rows = Record<ReviewKind, number>;
 
 /** One list, each item once, the newest version of each. */
@@ -94,6 +102,16 @@ export const useAppReviews = (
   });
   const [token, setToken] = useState(0);
   const [recordRetry, setRecordRetry] = useState(0);
+  // The search for the user's own review: until it has answered, nobody
+  // knows whether writing would replace one.
+  const [ownLookup, setOwnLookup] = useState<'loading' | 'done' | 'failed'>(
+    name && myName ? 'loading' : 'done'
+  );
+  const ownForRef = useRef('');
+  // Records the node couldn't serve RECORD_TRIES times.
+  const [gaveUp, setGaveUp] = useState<ReadonlySet<string>>(() => new Set());
+  const loadingMoreRef = useRef(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const inFlight = useRef(new Set<string>());
   const mounted = useRef(true);
   // Rows loaded per kind, so a reload brings back as many as Load more did.
@@ -161,6 +179,16 @@ export const useAppReviews = (
       setMore({ review: false, reply: false });
     }
     const empty: ReviewSearchPage = { items: [], rows: 0 };
+    const ownFor = `${key}\n${myName.toLowerCase()}`;
+    if (!myName) {
+      setOwnLookup('done');
+    } else if (ownForRef.current !== ownFor) {
+      ownForRef.current = ownFor;
+      setOwnLookup('loading');
+    } else {
+      // Looking again keeps what is known; a failed search is asked again.
+      setOwnLookup((status) => (status === 'failed' ? 'loading' : status));
+    }
     setLoading(true);
     setFailed(false);
     (async () => {
@@ -178,19 +206,31 @@ export const useAppReviews = (
             limit: replyLimit,
             signal,
           }),
-          // The user's own review, so it can be edited from any page.
+          // The user's own review, so it can be edited from any page. A
+          // search that failed isn't "no review": writing waits for it.
           myName
             ? searchAppReviews(base, ref, {
                 kind: 'review',
                 name: myName,
                 limit: 5,
                 signal,
-              }).catch(() => empty)
-            : Promise.resolve(empty),
+              }).then(
+                (page) => ({ ok: true, page }),
+                () => ({ ok: false, page: empty })
+              )
+            : Promise.resolve({ ok: true, page: empty }),
         ]);
+        // Without an answer, the user's review shown so far stays listed.
+        const lower = myName.toLowerCase();
+        const ownItems = own.ok
+          ? own.page.items
+          : resourcesRef.current.filter(
+              (item) =>
+                item.kind === 'review' && item.name.toLowerCase() === lower
+            );
         const parents = await findParents(
           replies.items,
-          [...reviews.items, ...own.items],
+          [...reviews.items, ...ownItems],
           signal
         );
         if (signal.aborted) return;
@@ -199,15 +239,17 @@ export const useAppReviews = (
           rows: { review: reviews.rows, reply: replies.rows },
         };
         setResources(
-          mergeResources(reviews.items, own.items, parents, replies.items)
+          mergeResources(reviews.items, ownItems, parents, replies.items)
         );
         setMore({
           review: reviews.rows >= reviewLimit,
           reply: replies.rows >= replyLimit,
         });
+        setOwnLookup(own.ok ? 'done' : 'failed');
       } catch (error) {
         if ((error as Error)?.name !== 'AbortError' && !signal.aborted) {
           setFailed(true);
+          if (myName) setOwnLookup('failed');
         }
       } finally {
         if (!signal.aborted) setLoading(false);
@@ -219,6 +261,11 @@ export const useAppReviews = (
   const reload = useCallback(() => setToken((value) => value + 1), []);
 
   const loadMore = useCallback(async () => {
+    // One page at a time: two requests at once would ask for the same page,
+    // and each would move the offset past it.
+    if (loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
     const base = getBaseApiReact();
     const ref = { service, name };
     const { rows } = rowsRef.current;
@@ -247,8 +294,11 @@ export const useAppReviews = (
       const nextRows = { ...rowsRef.current.rows };
       const nextMore = { ...more };
       kinds.forEach((kind, index) => {
+        // Past the page just loaded, from where it was asked for, unless
+        // looking again has counted the rows anew meanwhile.
+        if (rowsRef.current.rows[kind] !== rows[kind]) return;
         const size = kind === 'reply' ? REPLY_PAGE_SIZE : PAGE_SIZE;
-        nextRows[kind] += pages[index].rows;
+        nextRows[kind] = rows[kind] + pages[index].rows;
         nextMore[kind] = pages[index].rows >= size;
       });
       rowsRef.current = { key, rows: nextRows };
@@ -256,6 +306,9 @@ export const useAppReviews = (
       setMore(nextMore);
     } catch {
       setMore({ review: false, reply: false });
+    } finally {
+      loadingMoreRef.current = false;
+      if (mounted.current) setLoadingMore(false);
     }
   }, [findParents, key, more, name, service]);
 
@@ -303,7 +356,11 @@ export const useAppReviews = (
         inFlight.current.delete(cacheKey);
         if (record === undefined) {
           // Not on the node yet (or it timed out): try again in a while.
-          recordFailures.set(cacheKey, (recordFailures.get(cacheKey) || 0) + 1);
+          const failures = (recordFailures.get(cacheKey) || 0) + 1;
+          recordFailures.set(cacheKey, failures);
+          if (failures >= RECORD_TRIES && mounted.current) {
+            setGaveUp((previous) => new Set(previous).add(cacheKey));
+          }
           unavailable = true;
           continue;
         }
@@ -373,6 +430,36 @@ export const useAppReviews = (
       )?.review || null
     );
   }, [myName, threads]);
+
+  const myReviewStatus: MyReviewStatus = useMemo(() => {
+    if (!myName) return 'ready';
+    if (ownLookup === 'loading') return 'loading';
+    if (ownLookup === 'failed') return 'failed';
+    if (!myReview || myReview.complete) return 'ready';
+    const itemKey = reviewItemKey(myReview.name, myReview.identifier);
+    // The node couldn't serve its record, or it isn't a review: there is no
+    // text to start from, so writing waits for a Retry.
+    return gaveUp.has(recordCacheKey(myReview)) ||
+      (records.has(itemKey) && records.get(itemKey) === null)
+      ? 'failed'
+      : 'loading';
+  }, [gaveUp, myName, myReview, ownLookup, records]);
+
+  /** Looks for the user's own review, or its text, again. */
+  const retryMyReview = useCallback(() => {
+    if (myReview && !myReview.complete) {
+      const cacheKey = recordCacheKey(myReview);
+      recordFailures.delete(cacheKey);
+      if (recordCache.get(cacheKey) === null) recordCache.delete(cacheKey);
+      setGaveUp((previous) => {
+        const next = new Set(previous);
+        next.delete(cacheKey);
+        return next;
+      });
+      setRecordRetry((value) => value + 1);
+    }
+    if (ownLookup === 'failed') reload();
+  }, [myReview, ownLookup, reload]);
 
   /** What the node lists, and what was sent, for an item about to change. */
   const snapshot = useCallback((author: string, identifier: string) => {
@@ -448,8 +535,20 @@ export const useAppReviews = (
   );
 
   const submitReview = useCallback(
-    (text: string) =>
-      run(
+    (text: string): Promise<ReviewActionResult> => {
+      // Until the user's own review is known, writing could replace it.
+      if (myReviewStatus !== 'ready') {
+        return Promise.resolve({
+          ok: false,
+          message: t(
+            myReviewStatus === 'loading'
+              ? 'core:app_page.reviews.loading_yours'
+              : 'core:app_page.reviews.yours_failed',
+            { postProcess: 'capitalizeFirstChar' }
+          ),
+        });
+      }
+      return run(
         t(
           myReview
             ? 'core:app_page.reviews.confirm_update'
@@ -461,8 +560,9 @@ export const useAppReviews = (
           publishReview({ service, name }, myName, text, {
             created: myReview?.created,
           })
-      ),
-    [myName, myReview, name, run, service, t]
+      );
+    },
+    [myName, myReview, myReviewStatus, name, run, service, t]
   );
 
   const submitReply = useCallback(
@@ -502,8 +602,11 @@ export const useAppReviews = (
     loading,
     failed,
     hasMore: more.review || more.reply,
+    loadingMore,
     threads,
     myReview,
+    myReviewStatus,
+    retryMyReview,
     reload,
     loadMore,
     submitReview,

@@ -313,7 +313,8 @@
       "sort_newest": "最新",
       "title": "评论",
       "update": "更新评论",
-      "write": "写评论"
+      "write": "写评论",
+      "yours_failed": "无法检查你之前的评论，检查成功后才能撰写。"
     },
     "screenshots": {
       "add": "添加截图",

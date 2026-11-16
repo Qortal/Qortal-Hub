@@ -313,7 +313,8 @@
       "sort_newest": "neueste",
       "title": "Rezensionen",
       "update": "Rezension aktualisieren",
-      "write": "Rezension schreiben"
+      "write": "Rezension schreiben",
+      "yours_failed": "Ihre frühere Rezension konnte nicht geprüft werden. Schreiben ist erst möglich, wenn das gelingt."
     },
     "screenshots": {
       "add": "Screenshots hinzufügen",

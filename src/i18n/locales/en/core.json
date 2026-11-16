@@ -313,7 +313,8 @@
       "sort_newest": "newest",
       "title": "reviews",
       "update": "update review",
-      "write": "write a review"
+      "write": "write a review",
+      "yours_failed": "couldn't check for your earlier review, so writing waits until that works."
     },
     "screenshots": {
       "add": "add screenshots",

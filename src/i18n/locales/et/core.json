@@ -313,7 +313,8 @@
       "sort_newest": "uusimad",
       "title": "arvustused",
       "update": "uuenda arvustust",
-      "write": "kirjuta arvustus"
+      "write": "kirjuta arvustus",
+      "yours_failed": "sinu varasemat arvustust ei õnnestunud kontrollida, seega saab kirjutada alles siis, kui see õnnestub."
     },
     "screenshots": {
       "add": "lisa ekraanipilte",

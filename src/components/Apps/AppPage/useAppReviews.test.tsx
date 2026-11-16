@@ -7,16 +7,23 @@ import { I18nextProvider } from 'react-i18next';
 
 i18n.init({ lng: 'en', fallbackLng: 'en', resources: { en: { core: {} } } });
 
+const { show } = vi.hoisted(() => ({
+  show: vi.fn(async (_options: unknown) => undefined),
+}));
 vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://node',
-  QORTAL_APP_CONTEXT: createContext({ show: async () => undefined }),
+  QORTAL_APP_CONTEXT: createContext({ show }),
 }));
 vi.mock('../../../background/background', () => ({
   getFee: async () => ({ fee: '0.01' }),
 }));
 
 import { appReviewKey, replyIdentifier, replyPrefixOf } from './appPageIds';
-import { clearReviewRecordCache, useAppReviews } from './useAppReviews';
+import {
+  clearReviewRecordCache,
+  ReviewActionResult,
+  useAppReviews,
+} from './useAppReviews';
 
 const KEY = appReviewKey('APP', 'Q-Blog');
 
@@ -29,17 +36,22 @@ const reviewRow = (index: number) => ({
 
 type Answer = (url: URL) => unknown;
 
-/** Answers searches with slices of `reviews` and `replies`, by limit/offset. */
+/**
+ * Answers searches with slices of `reviews` and `replies`, by limit/offset.
+ * `own`, when given, answers the search for one author's review.
+ */
 const node = ({
   reviews = [] as unknown[],
   replies = [] as unknown[],
   record = (() => new Response('', { status: 404 })) as Answer,
+  own = undefined as undefined | ((url: URL) => Promise<Response> | Response),
 } = {}) =>
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = new URL(String(input));
     if (url.pathname.endsWith('/resources/search')) {
       const identifier = url.searchParams.get('identifier');
       const name = url.searchParams.get('name');
+      if (name && own) return own(url);
       const limit = Number(url.searchParams.get('limit'));
       const offset = Number(url.searchParams.get('offset') || 0);
       let list = identifier === KEY ? reviews : replies;
@@ -68,6 +80,7 @@ const renderReviews = (me: { name?: string } = {}) => {
 
 beforeEach(() => {
   clearReviewRecordCache();
+  show.mockClear();
 });
 
 afterEach(() => {
@@ -169,5 +182,134 @@ describe('loading the whole text', () => {
         complete: true,
       })
     );
+  });
+});
+
+describe("the user's own review, before writing", () => {
+  const mine = {
+    ...reviewRow(7),
+    name: 'Me',
+    metadata: { description: 'My old review' },
+  };
+  const fullText = { v: 1, kind: 'review', text: 'My old review, in full.' };
+
+  it("doesn't write until the search for it has answered", async () => {
+    node({
+      reviews: [reviewRow(1)],
+      own: () => new Promise<Response>(() => {}),
+    });
+    const { result } = renderReviews({ name: 'Me' });
+    expect(result.current.myReviewStatus).toBe('loading');
+    let outcome: ReviewActionResult | undefined;
+    await act(async () => {
+      outcome = await result.current.submitReview('Great app');
+    });
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'app_page.reviews.loading_yours',
+    });
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it("doesn't take a failed search for no review, and looks again on Retry", async () => {
+    let answer = (): Response => new Response('', { status: 500 });
+    node({
+      reviews: [reviewRow(1)],
+      own: () => answer(),
+      record: (url) =>
+        url.pathname.includes('/Me/')
+          ? fullText
+          : new Response('', { status: 404 }),
+    });
+    const { result } = renderReviews({ name: 'Me' });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.myReviewStatus).toBe('failed');
+    // The other reviews still show.
+    expect(result.current.threads.map((thread) => thread.review.name)).toEqual([
+      'Reviewer 1',
+    ]);
+    let outcome: ReviewActionResult | undefined;
+    await act(async () => {
+      outcome = await result.current.submitReview('A new review');
+    });
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'app_page.reviews.yours_failed',
+    });
+    expect(show).not.toHaveBeenCalled();
+
+    answer = () => new Response(JSON.stringify([mine]));
+    act(() => result.current.retryMyReview());
+    await waitFor(() => expect(result.current.myReviewStatus).toBe('ready'));
+    expect(result.current.myReview).toMatchObject({
+      name: 'Me',
+      text: 'My old review, in full.',
+      complete: true,
+    });
+  });
+
+  it("waits for its whole text, and offers Retry when that can't load", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let served = false;
+    node({
+      reviews: [mine],
+      record: () =>
+        served
+          ? fullText
+          : new Response('Data unavailable. Please try again later.', {
+              status: 404,
+            }),
+    });
+    const recordFetches = () =>
+      vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) =>
+          String(url).includes('/arbitrary/COMMENT/Me/')
+        ).length;
+    const { result } = renderReviews({ name: 'Me' });
+    await waitFor(() => expect(result.current.myReview?.name).toBe('Me'));
+    expect(result.current.myReviewStatus).toBe('loading');
+    // Asked three times, 20 s apart, then given up on.
+    await waitFor(() => expect(recordFetches()).toBe(1));
+    for (const tries of [2, 3]) {
+      await act(async () => vi.advanceTimersByTimeAsync(21_000));
+      await waitFor(() => expect(recordFetches()).toBe(tries));
+    }
+    await waitFor(() => expect(result.current.myReviewStatus).toBe('failed'));
+
+    served = true;
+    act(() => result.current.retryMyReview());
+    await waitFor(() => expect(result.current.myReviewStatus).toBe('ready'));
+    expect(result.current.myReview?.text).toBe('My old review, in full.');
+  });
+});
+
+describe('Load more', () => {
+  it('asks for one page at a time, and moves past each page once', async () => {
+    const reviews = Array.from({ length: 160 }, (_, index) => reviewRow(index));
+    const fetches = node({ reviews });
+    const { result } = renderReviews();
+    await waitFor(() => expect(result.current.threads).toHaveLength(50));
+
+    // Two quick clicks ask for the next page once.
+    await act(async () => {
+      await Promise.all([result.current.loadMore(), result.current.loadMore()]);
+    });
+    for (let page = 0; page < 3 && result.current.hasMore; page++) {
+      await act(async () => {
+        await result.current.loadMore();
+      });
+    }
+    expect(result.current.threads).toHaveLength(160);
+    expect(result.current.loadingMore).toBe(false);
+    const offsets = fetches.mock.calls
+      .map(([input]) => new URL(String(input)))
+      .filter(
+        (url) =>
+          url.pathname.endsWith('/resources/search') &&
+          url.searchParams.get('identifier') === KEY
+      )
+      .map((url) => Number(url.searchParams.get('offset')));
+    expect(offsets).toEqual([0, 50, 100, 150]);
   });
 });
