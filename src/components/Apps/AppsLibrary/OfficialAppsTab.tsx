@@ -1,171 +1,139 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAtomValue } from 'jotai';
-import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
-import { Spacer } from '../../../common/Spacer';
-import { AppCardEnhanced, FeaturedAppBanner } from '../AppCard';
-import {
-  isFeaturedApp,
-  officialAppList,
-  sortFeaturedApps,
-} from '../config/officialApps';
+import SearchOffRoundedIcon from '@mui/icons-material/SearchOffRounded';
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
+import { AppsWidthLimiter } from '../Apps-styles';
+import { FeaturedAppBanner } from '../AppCard';
+import { isFeaturedApp } from '../config/officialApps';
 import {
   featuredRatingsMapAtomFamily,
   getCacheKey,
   useAppRatings,
 } from '../../../hooks/useAppRatings';
-
-const AppsGrid = styled(Box)({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-  gap: '16px',
-  width: '100%',
-});
-
-const SectionHeader = styled(Box)({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  width: '100%',
-  marginBottom: '20px',
-});
+import { AppCollection } from './AppCollection';
+import { officialAppsOf } from './libraryApps';
+import { APP_SKELETON } from './libraryLayout';
+import {
+  LibraryEmptyState,
+  LibrarySection,
+  LibraryWaiting,
+} from './LibrarySection';
+import { cap } from './libraryStyles';
+import { libraryViewAtom } from './libraryView';
+import type { LibraryStatus } from './useLibraryStatus';
+import {
+  useStableBestRatedOrder,
+  useStableFeaturedOrder,
+} from './useStableFeaturedOrder';
 
 interface OfficialAppsTabProps {
   availableQapps: any[];
   myName?: string;
+  /** No longer used: the launcher's own search covers the library. */
   searchValue?: string;
+  libraryStatus?: LibraryStatus;
 }
 
 export const OfficialAppsTab = ({
   availableQapps,
   myName = '',
-  searchValue = '',
+  libraryStatus = 'loading',
 }: OfficialAppsTabProps) => {
-  const theme = useTheme();
-  const { t } = useTranslation(['core']);
+  const { t, i18n } = useTranslation(['core']);
+  const view = useAtomValue(libraryViewAtom);
   const { fetchRating } = useAppRatings();
   const fetchedAppsRef = useRef<Set<string>>(new Set());
 
-  // Filter to get only official apps, then apply search
-  const officialApps = useMemo(() => {
-    let result = availableQapps.filter(
-      (app) =>
-        app.service === 'APP' &&
-        officialAppList.includes(app?.name?.toLowerCase())
-    );
-
-    if (searchValue) {
-      const searchLower = searchValue.toLowerCase();
-      result = result.filter(
-        (app) =>
-          app.name.toLowerCase().includes(searchLower) ||
-          (app?.metadata?.title &&
-            app.metadata.title.toLowerCase().includes(searchLower)) ||
-          (app?.metadata?.description &&
-            app.metadata.description.toLowerCase().includes(searchLower))
-      );
-    }
-
-    return result;
-  }, [availableQapps, searchValue]);
+  // The official Q-Apps, by title: the order of apps rated alike.
+  const officialAppsByTitle = useMemo(() => {
+    const locale = i18n?.language;
+    const titleOf = (app: any) => app?.metadata?.title || app?.name || '';
+    return officialAppsOf(availableQapps).sort((a, b) => {
+      try {
+        return titleOf(a).localeCompare(titleOf(b), locale);
+      } catch {
+        return titleOf(a).localeCompare(titleOf(b));
+      }
+    });
+  }, [availableQapps, i18n?.language]);
 
   // Featured app list (stable so we can subscribe only to their ratings)
   const featuredAppsBase = useMemo(
-    () => officialApps.filter((app) => isFeaturedApp(app.name)),
-    [officialApps]
+    () => officialAppsByTitle.filter((app) => isFeaturedApp(app.name)),
+    [officialAppsByTitle]
   );
 
-  // Stable key string for the set of featured app cache keys (order-independent)
-  const featuredKeysStable = useMemo(() => {
-    const keys = featuredAppsBase.map((a) =>
-      getCacheKey(a.name, a.service)
-    );
+  // Stable key string for the official apps' cache keys (order-independent)
+  const officialKeysStable = useMemo(() => {
+    const keys = officialAppsByTitle.map((a) => getCacheKey(a.name, a.service));
     return [...new Set(keys)].sort().join(',');
-  }, [featuredAppsBase]);
+  }, [officialAppsByTitle]);
 
-  // Subscribe only to featured apps' ratings – re-render only when one of these changes
-  const ratingsForFeaturedMap = useAtomValue(
-    featuredRatingsMapAtomFamily(featuredKeysStable)
+  // Subscribe only to the official apps' ratings – re-render only when one of these changes
+  const ratingsForOfficialMap = useAtomValue(
+    featuredRatingsMapAtomFamily(officialKeysStable)
   );
 
   // Fetch ratings for official apps (limited set ~17 apps) - only once per app
   useEffect(() => {
-    officialApps.forEach((app) => {
+    officialAppsByTitle.forEach((app) => {
       const key = getCacheKey(app.name, app.service);
       if (!fetchedAppsRef.current.has(key)) {
         fetchedAppsRef.current.add(key);
         fetchRating(app.name, app.service);
       }
     });
-  }, [officialApps, fetchRating]);
+  }, [officialAppsByTitle, fetchRating]);
 
-  // Get featured apps: the configured lead first, then sorted by rating
-  // (depends only on featured ratings map)
-  const featuredApps = useMemo(
-    () =>
-      sortFeaturedApps(
-        featuredAppsBase,
-        (app) => ratingsForFeaturedMap[getCacheKey(app.name, app.service)]
-      ),
-    [featuredAppsBase, ratingsForFeaturedMap]
+  // The configured lead first, then by rating; held still while ratings
+  // reload after a refresh.
+  const featuredApps = useStableFeaturedOrder(
+    featuredAppsBase,
+    ratingsForOfficialMap
+  );
+  // All of them, best rated first, held still the same way.
+  const officialApps = useStableBestRatedOrder(
+    officialAppsByTitle,
+    ratingsForOfficialMap
   );
 
+  const allAppsTitle = t('core:official_apps.all_apps', cap);
+
   return (
-    <AppsWidthLimiter>
-      {/* Featured Apps Carousel - Top 4 by rating */}
+    <AppsWidthLimiter sx={{ alignItems: 'stretch', gap: '16px' }}>
       {featuredApps.length > 0 && (
-        <>
-          <AppLibrarySubTitle
-            sx={{
-              fontSize: '20px',
-              marginBottom: '24px',
-            }}
-          >
-            {t('core:official_apps.featured', {
-              postProcess: 'capitalizeFirstChar',
-              defaultValue: 'Featured',
-            })}
-          </AppLibrarySubTitle>
-
-          <FeaturedAppBanner featuredApps={featuredApps} />
-
-          <Spacer height="40px" />
-        </>
+        <FeaturedAppBanner featuredApps={featuredApps} />
       )}
 
-      {/* All Official Apps Grid */}
-      <SectionHeader>
-        <AppLibrarySubTitle
-          sx={{
-            fontSize: '20px',
-          }}
-        >
-          {t('core:apps_official', {
-            postProcess: 'capitalizeFirstChar',
-          })}{' '}
-          <Typography
-            component="span"
-            sx={{
-              fontSize: '16px',
-              color: theme.palette.text.secondary,
-              fontWeight: 400,
-            }}
-          >
-            ({officialApps.length})
-          </Typography>
-        </AppLibrarySubTitle>
-      </SectionHeader>
-
-      <AppsGrid>
-        {officialApps.map((app) => (
-          <AppCardEnhanced
-            key={`${app?.service}-${app?.name}`}
-            app={app}
-            myName={myName}
+      <LibrarySection
+        count={officialApps.length || undefined}
+        hint={t('core:launcher.library.official_hint', cap)}
+        icon={<VerifiedRoundedIcon />}
+        title={allAppsTitle}
+      >
+        {availableQapps.length === 0 ? (
+          <LibraryWaiting
+            {...APP_SKELETON}
+            count={8}
+            status={libraryStatus}
+            view={view}
           />
-        ))}
-      </AppsGrid>
+        ) : officialApps.length === 0 ? (
+          <LibraryEmptyState
+            compact
+            icon={<SearchOffRoundedIcon />}
+            title={t('core:message.generic.no_results', cap)}
+          />
+        ) : (
+          <AppCollection
+            apps={officialApps}
+            label={allAppsTitle}
+            myName={myName}
+            virtualize={false}
+          />
+        )}
+      </LibrarySection>
     </AppsWidthLimiter>
   );
 };
