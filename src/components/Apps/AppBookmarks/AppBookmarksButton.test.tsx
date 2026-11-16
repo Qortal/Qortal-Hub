@@ -32,9 +32,13 @@ vi.mock('../../Chat/MessageDisplay', () => ({
   },
 }));
 
-vi.mock('../../../utils/events', () => ({
-  executeEvent: (...args: unknown[]) => executeEvent(...args),
-}));
+vi.mock('../../../utils/events', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../utils/events')>();
+  return {
+    ...actual,
+    executeEvent: (...args: unknown[]) => executeEvent(...args),
+  };
+});
 
 import { darkTheme } from '../../../styles/theme-dark';
 import { AppBookmarksButton } from './AppBookmarksButton';
@@ -253,5 +257,51 @@ describe('the bookmarks menu', () => {
 
     expect(screen.getByText('core:bookmarks.no_bookmarks')).toBeVisible();
     expect(screen.getByText('core:bookmarks.no_bookmarks_hint')).toBeVisible();
+  });
+});
+
+describe('the apps bar, from the bookmarks menu', () => {
+  const barSwitch = () =>
+    screen.getByRole('checkbox', { name: 'core:apps_bar.show' });
+
+  it('offers to show the pinned apps and bookmarks in the title bar', async () => {
+    await show([], [bookmark('b1', 'Q-Tube')]);
+
+    expect(barSwitch()).not.toBeChecked();
+    expect(screen.getByText('core:apps_bar.show_hint')).toBeVisible();
+    expect(
+      screen.queryByRole('checkbox', { name: 'core:apps_bar.show_names' })
+    ).toBeNull();
+  });
+
+  it('turns the bar on for this account', async () => {
+    const { user } = await show([], [bookmark('b1', 'Q-Tube')]);
+
+    await user.click(barSwitch());
+
+    expect(barSwitch()).toBeChecked();
+    expect(
+      JSON.parse(localStorage.getItem('qortal_apps_bar_by_address') || '{}')
+    ).toEqual({ [ADDRESS]: { enabled: true, showNames: true, names: {} } });
+  });
+
+  it('offers to take the names away once the bar is on', async () => {
+    const { user } = await show([], [bookmark('b1', 'Q-Tube')]);
+    await user.click(barSwitch());
+
+    const names = screen.getByRole('checkbox', {
+      name: 'core:apps_bar.show_names',
+    });
+    expect(names).toBeChecked();
+    expect(screen.getByText('core:apps_bar.rename_tip')).toBeVisible();
+
+    await user.click(names);
+
+    expect(names).not.toBeChecked();
+    expect(
+      JSON.parse(localStorage.getItem('qortal_apps_bar_by_address') || '{}')[
+        ADDRESS
+      ].showNames
+    ).toBe(false);
   });
 });

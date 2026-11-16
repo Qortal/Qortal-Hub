@@ -7,7 +7,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, ButtonBase, Tooltip, useTheme } from '@mui/material';
+import { Box, ButtonBase, Tooltip, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
@@ -37,13 +37,18 @@ type HomeQuickToolsPadProps = {
 
 type QuickToolItem = {
   accent: string;
+  /** A short line under the name, on a button with room for it. */
+  detail: string;
   draggable?: boolean;
   iconOffsetX?: number;
   iconOffsetY?: number;
   iconScale?: number;
   isActive?: boolean;
   key: string;
+  /** The tooltip and the button's accessible name. */
   label: string;
+  /** The name a big enough button shows, when it isn't the label. */
+  name?: string;
   onAction: (event: MouseEvent<HTMLElement>) => void;
   onDragStart?: (event: DragEvent<HTMLElement>) => void;
   renderIcon: () => React.ReactNode;
@@ -54,13 +59,16 @@ const QUICK_TOOL_ICON_BOX_SIZE_PX = 20;
 const QUICK_TOOL_DOT_OFFSET = '7px';
 const QUICK_TOOL_DOT_SIZE = '5px';
 const QUICK_TOOL_LED_COLOR = '#8FD8FF';
+/** The ink on the dark theme's buttons. */
+const QUICK_TOOL_DARK_INK = '#F6F8FB';
 const QUICK_TOOLS_PANEL_GRADIENT_DEFAULT = {
   angle: 197,
   spread: 76,
 };
 /**
  * The tools in reading order. The grid has 4 columns and 2 rows, or 8 and 1
- * in a wide, short Home window, or 2 and 4 in a narrow, tall one.
+ * in a wide, short Home window, or 2 and 4 in a narrow, tall one. A bigger
+ * window makes bigger buttons, which show more (QUICK_TOOL_*).
  */
 const QUICK_TOOL_ORDER = [
   'lookup-user',
@@ -76,6 +84,37 @@ const HOME_WINDOW_WIDE_AND_SHORT =
   '@container home-window (min-aspect-ratio: 3 / 1)';
 const HOME_WINDOW_NARROW_AND_TALL =
   '@container home-window (max-aspect-ratio: 3 / 4)';
+/**
+ * Each tool button is a container ("quick-tool"): the icon alone at first,
+ * then the tool's name, then a detail line too, as the button grows. The
+ * text goes under the icon, or beside it on a button at least twice as
+ * wide as it is tall.
+ */
+const QUICK_TOOL_WIDE = '@container quick-tool (min-aspect-ratio: 2 / 1)';
+const QUICK_TOOL_NAME_UNDER =
+  '@container quick-tool (max-aspect-ratio: 2 / 1) and (min-width: 72px) and (min-height: 60px)';
+const QUICK_TOOL_DETAIL_UNDER =
+  '@container quick-tool (max-aspect-ratio: 2 / 1) and (min-width: 130px) and (min-height: 96px)';
+const QUICK_TOOL_NAME_BESIDE =
+  '@container quick-tool (min-aspect-ratio: 2 / 1) and (min-width: 110px) and (min-height: 28px)';
+const QUICK_TOOL_DETAIL_BESIDE =
+  '@container quick-tool (min-aspect-ratio: 2 / 1) and (min-width: 200px) and (min-height: 46px)';
+/**
+ * Text beside the icon stops this much short of the face's 10px padding:
+ * 18px from the edge, clear of the LED dot in the top right corner. On
+ * the text, so an icon without text stays in the middle.
+ */
+const QUICK_TOOL_TEXT_BESIDE_END_PADDING = '8px';
+/** Long names end in an ellipsis rather than breaking inside a word. */
+const QUICK_TOOL_TEXT_SX = {
+  maxWidth: '100%',
+  overflow: 'hidden',
+  overflowWrap: 'normal',
+  textOverflow: 'ellipsis',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 2,
+  wordBreak: 'normal',
+} as const;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -191,10 +230,17 @@ export const HomeQuickToolsPad = ({
     [isDarkMode]
   );
 
+  // The detail line is a fainter tone of the buttons' ink.
+  const detailColor = alpha(
+    isDarkMode ? QUICK_TOOL_DARK_INK : theme.palette.text.primary,
+    0.64
+  );
+
   const items = useMemo<QuickToolItem[]>(
     () => [
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.user_search'),
         iconScale: 1.08,
         key: 'lookup-user',
         label: t('quick_tools_pad.user_search'),
@@ -207,6 +253,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.wallets'),
         draggable: true,
         iconScale: 1.08,
         key: 'wallets',
@@ -231,6 +278,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.minting'),
         iconScale: 1.04,
         key: 'minting',
         label: t('quick_tools_pad.minting'),
@@ -248,6 +296,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.backup_wallet'),
         iconScale: 1.08,
         key: 'backup-wallet',
         label: t('quick_tools_pad.backup_wallet'),
@@ -265,6 +314,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.q_chat'),
         iconOffsetY: -0.15,
         iconScale: 0.9,
         key: 'q-chat',
@@ -278,12 +328,17 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: notificationsMuted
+          ? t('core:quick_tools_pad.detail.notifications_muted')
+          : t('core:quick_tools_pad.detail.notifications_on'),
         iconScale: 1.07,
         isActive: !notificationsMuted,
         key: 'notifications',
+        // The label says what a click does; the name says what the tool is.
         label: notificationsMuted
           ? t('quick_tools_pad.notifications_enable')
           : t('quick_tools_pad.notifications_mute'),
+        name: t('core:quick_tools_pad.notifications'),
         onAction: () => {
           void handleToggleNotifications();
         },
@@ -300,6 +355,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.apps'),
         iconScale: 0.9,
         key: 'apps',
         label: t('quick_tools_pad.apps'),
@@ -312,6 +368,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        detail: t('core:quick_tools_pad.detail.qortal_land'),
         iconScale: 1.04,
         key: 'qortal-land',
         label: 'QortalLand',
@@ -397,6 +454,7 @@ export const HomeQuickToolsPad = ({
             title={item.label}
           >
             <ButtonBase
+              aria-label={item.label}
               data-tour={
                 item.key === 'qortal-land'
                   ? 'hub-dashboard-qortal-land'
@@ -421,11 +479,13 @@ export const HomeQuickToolsPad = ({
                   ? `inset 0 1px 0 rgba(255,255,255,0.075), inset 0 0 0 1px rgba(255,255,255,0.012), inset 0 -1px 0 rgba(0,0,0,0.44), inset -1px -1px 0 rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.17), 0 0 0 1px ${alpha(item.accent, item.isActive ? 0.03 : 0.012)}`
                   : `inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)`,
                 color: isDarkMode
-                  ? alpha('#F6F8FB', item.isActive ? 0.96 : 0.88)
+                  ? alpha(QUICK_TOOL_DARK_INK, item.isActive ? 0.96 : 0.88)
                   : alpha(
                       theme.palette.text.primary,
                       item.isActive ? 0.92 : 0.84
                     ),
+                containerName: 'quick-tool',
+                containerType: 'size',
                 display: 'flex',
                 height: '100%',
                 justifyContent: 'center',
@@ -480,32 +540,121 @@ export const HomeQuickToolsPad = ({
                       '0 0 4px rgba(124, 199, 255, 1), 0 0 8px rgba(124, 199, 255, 0.6)',
                   },
                 },
+                // The name and the detail show as the button grows. On a
+                // button exactly twice as wide as it is tall, both detail
+                // rules match, and "beside" wins by coming later: MUI puts
+                // @container rules in min-width order (200px after 130px).
+                [QUICK_TOOL_WIDE]: {
+                  '& .quick-tool-face': {
+                    flexDirection: 'row',
+                    gap: '8px',
+                    paddingInline: '10px',
+                  },
+                  '& .quick-tool-text': {
+                    alignItems: 'flex-start',
+                    paddingRight: QUICK_TOOL_TEXT_BESIDE_END_PADDING,
+                    textAlign: 'left',
+                  },
+                  '& .quick-tool-name': { display: 'block' },
+                  '& .quick-tool-name, & .quick-tool-detail': {
+                    whiteSpace: 'nowrap',
+                  },
+                },
+                [QUICK_TOOL_NAME_UNDER]: {
+                  '& .quick-tool-text': { display: 'flex' },
+                },
+                [QUICK_TOOL_DETAIL_UNDER]: {
+                  '& .quick-tool-detail': { display: '-webkit-box' },
+                },
+                [QUICK_TOOL_NAME_BESIDE]: {
+                  '& .quick-tool-text': { display: 'flex' },
+                },
+                [QUICK_TOOL_DETAIL_BESIDE]: {
+                  '& .quick-tool-detail': { display: 'block' },
+                },
               }}
             >
               <Box
+                className="quick-tool-face"
                 sx={{
                   alignItems: 'center',
-                  color: 'inherit',
-                  display: 'inline-flex',
-                  height: `${QUICK_TOOL_ICON_BOX_SIZE_PX}px`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  height: '100%',
                   justifyContent: 'center',
-                  lineHeight: 1,
-                  overflow: 'visible',
-                  width: `${QUICK_TOOL_ICON_BOX_SIZE_PX}px`,
+                  minWidth: 0,
+                  padding: '4px 6px',
+                  width: '100%',
                 }}
               >
                 <Box
                   sx={{
                     alignItems: 'center',
+                    color: 'inherit',
                     display: 'inline-flex',
+                    flexShrink: 0,
+                    height: `${QUICK_TOOL_ICON_BOX_SIZE_PX}px`,
                     justifyContent: 'center',
-                    transform: `translate(${item.iconOffsetX ?? 0}px, ${
-                      item.iconOffsetY ?? 0
-                    }px) scale(${item.iconScale ?? 1})`,
-                    transformOrigin: 'center',
+                    lineHeight: 1,
+                    overflow: 'visible',
+                    width: `${QUICK_TOOL_ICON_BOX_SIZE_PX}px`,
                   }}
                 >
-                  {item.renderIcon()}
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'inline-flex',
+                      justifyContent: 'center',
+                      transform: `translate(${item.iconOffsetX ?? 0}px, ${
+                        item.iconOffsetY ?? 0
+                      }px) scale(${item.iconScale ?? 1})`,
+                      transformOrigin: 'center',
+                    }}
+                  >
+                    {item.renderIcon()}
+                  </Box>
+                </Box>
+                {/* Hidden until the button has room (QUICK_TOOL_*). */}
+                <Box
+                  className="quick-tool-text"
+                  sx={{
+                    alignItems: 'center',
+                    display: 'none',
+                    flexDirection: 'column',
+                    gap: '2px',
+                    maxWidth: '100%',
+                    minWidth: 0,
+                    textAlign: 'center',
+                  }}
+                >
+                  <Typography
+                    className="quick-tool-name"
+                    component="span"
+                    sx={{
+                      ...QUICK_TOOL_TEXT_SX,
+                      display: '-webkit-box',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {item.name ?? item.label}
+                  </Typography>
+                  <Typography
+                    className="quick-tool-detail"
+                    component="span"
+                    sx={{
+                      ...QUICK_TOOL_TEXT_SX,
+                      color: detailColor,
+                      display: 'none',
+                      fontSize: '0.64rem',
+                      fontWeight: 500,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {item.detail}
+                  </Typography>
                 </Box>
               </Box>
             </ButtonBase>

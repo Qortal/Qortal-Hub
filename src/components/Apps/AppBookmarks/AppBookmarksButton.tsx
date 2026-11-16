@@ -11,12 +11,14 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   Menu,
   MenuItem,
   Popover,
   Select,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -42,6 +44,7 @@ import { atomWithStorage } from 'jotai/utils';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../../utils/events';
+import { useAppsBarSettings } from '../../Desktop/AppsBar/useAppsBar';
 import type {
   AppBookmark,
   AppBookmarkFolder,
@@ -143,6 +146,10 @@ export function AppBookmarksButton({
     | null
   >(null);
   const [viewByAddress, setViewByAddress] = useAtom(bookmarkViewByAddressAtom);
+  // The apps bar shows these same bookmarks, and the pinned apps, in the
+  // title bar. It is turned on from here.
+  const { settings: appsBarSettings, change: changeAppsBar } =
+    useAppsBarSettings(address);
 
   const currentFolderId = address ? viewByAddress[address] || null : null;
 
@@ -691,6 +698,66 @@ export function AppBookmarksButton({
               </Button>
             )}
           </Box>
+
+          {!currentFolder && !!address && (
+            <Box
+              sx={{
+                border: `1px solid ${panelBorderColor}`,
+                borderRadius: '12px',
+                mt: 1.5,
+                px: 1.25,
+                py: 1,
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={appsBarSettings.enabled}
+                    onChange={(event) =>
+                      changeAppsBar({ enabled: event.target.checked })
+                    }
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 600 }}>
+                    {t('core:apps_bar.show')}
+                  </Typography>
+                }
+                sx={{ gap: 1, m: 0 }}
+              />
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: 11.5,
+                  lineHeight: 1.45,
+                }}
+              >
+                {appsBarSettings.enabled
+                  ? t('core:apps_bar.rename_tip')
+                  : t('core:apps_bar.show_hint')}
+              </Typography>
+              {appsBarSettings.enabled && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={appsBarSettings.showNames}
+                      onChange={(event) =>
+                        changeAppsBar({ showNames: event.target.checked })
+                      }
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography sx={{ fontSize: 12.5 }}>
+                      {t('core:apps_bar.show_names')}
+                    </Typography>
+                  }
+                  sx={{ gap: 1, m: 0, mt: 0.5 }}
+                />
+              )}
+            </Box>
+          )}
 
           {isLoading && (
             <Box
