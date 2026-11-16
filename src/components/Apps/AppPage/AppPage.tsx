@@ -396,7 +396,14 @@ export const AppPage = ({
     }, 90_000);
   };
 
-  const openEditor = (tab: EditorTab) => setEditor({ open: true, tab });
+  // The editor starts from the page text and screenshots the node has: it
+  // opens only once both have loaded, from Edit and from Add screenshots,
+  // or its empty fields could be published over them.
+  const editorLoading = pageData.loading || pageData.shotsLoading;
+  const openEditor = (tab: EditorTab) => {
+    if (editorLoading) return;
+    setEditor({ open: true, tab });
+  };
   const title = listingApp?.metadata?.title || app?.name || '';
 
   const about = (
@@ -440,7 +447,7 @@ export const AppPage = ({
         iconUrl={iconUrl}
         isInstalled={isInstalled}
         isPinned={isPinned}
-        editLoading={pageData.loading || pageData.shotsLoading}
+        editLoading={editorLoading}
         hiddenState={hiddenState}
         hideBusy={hideBusy}
         isPublisher={isPublisher}
@@ -468,6 +475,7 @@ export const AppPage = ({
         <AppScreenshots
           appTitle={title}
           isPublisher={isPublisher}
+          addLoading={editorLoading}
           loading={pageData.shotsLoading}
           onAdd={() => openEditor('screenshots')}
           shots={gallery}
@@ -546,9 +554,11 @@ export const AppPage = ({
           }}
           open={editor.open}
           page={page}
+          pageLoading={pageData.loading}
           pageUnreadable={pageUnreadable}
           savedShots={savedShots}
           shots={pageData.shots}
+          shotsLoading={pageData.shotsLoading}
           shotsUnreadable={shotsUnreadable}
           shotsVersion={shotsSignature}
         />
