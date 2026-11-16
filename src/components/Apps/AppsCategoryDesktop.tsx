@@ -28,6 +28,7 @@ import {
   libraryMuted,
 } from './AppsLibrary/libraryStyles';
 import { LibraryViewToggle } from './AppsLibrary/LibraryViewToggle';
+import { TopRatedAppsBanner } from './AppsLibrary/TopRatedAppsBanner';
 import { useRatingsForSort } from './AppsLibrary/useRatingsForSort';
 import { CategoryIcon } from './config/categoryIconComponents';
 import { LibraryFilterField } from './Filters/LibraryFilterField';
@@ -35,6 +36,9 @@ import { SortDropdown } from './Filters/SortDropdown';
 import { StatusFilter, type StatusFilterOption } from './Filters/StatusFilter';
 
 const SEARCH_DEBOUNCE_MS = 350;
+
+/** The Featured row lines up with the list below it. */
+const FEATURED_SX = { mb: 2, width: '90%' };
 
 interface AppsCategoryDesktopProps {
   availableQapps: any[];
@@ -113,11 +117,25 @@ export const AppsCategoryDesktop = ({
     [categoryList, debouncedValue, ratingsMap, sortOption, status]
   );
 
+  // The Featured row picks from the category's apps, official ones too, with
+  // the status filter (A to Z, so apps rated alike keep that order).
+  const appsForFeatured = useMemo(
+    () =>
+      filterAndSortApps(categoryList, {
+        sort: 'alphabetical',
+        category: 'all',
+        status,
+        search: '',
+      }),
+    [categoryList, status]
+  );
+
   const title =
     category?.id === 'all'
       ? t('core:launcher.library.all_categories', cap)
       : (category?.name ?? '');
-  const isFiltered = !!debouncedValue.trim() || status !== 'all';
+  const isSearching = !!debouncedValue.trim();
+  const isFiltered = isSearching || status !== 'all';
   const locale = i18n?.language;
   // Spoken after the search's own pause, so not at every key.
   const resultsMessage = !isFiltered
@@ -288,6 +306,15 @@ export const AppsCategoryDesktop = ({
             </Box>
           </Box>
 
+          {isSearching ? null : (
+            // Another category or filter starts the row from its first card.
+            <TopRatedAppsBanner
+              apps={appsForFeatured}
+              isFromCategory
+              key={`${category?.id}|${status}`}
+              sx={FEATURED_SX}
+            />
+          )}
           <LibraryPanel sx={{ mb: 4, width: '90%' }}>
             {shown.length > 0 ? (
               <AppCollection
