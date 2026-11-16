@@ -56,9 +56,46 @@ describe('extractComponents', () => {
     });
   });
 
+  it('reads the protocol in any case', () => {
+    expect(extractComponents('QORTAL://APP/Q-Tube')).toEqual({
+      service: 'APP',
+      name: 'Q-Tube',
+      identifier: undefined,
+      path: '',
+    });
+    expect(extractComponents('Qortal://website/name')).toEqual({
+      service: 'WEBSITE',
+      name: 'name',
+      identifier: undefined,
+      path: '',
+    });
+    expect(
+      extractComponents('qOrTaL://app/Q-Blog/post/1?identifier=abc&x=1')
+    ).toEqual({
+      service: 'APP',
+      name: 'Q-Blog',
+      identifier: 'abc',
+      path: 'post/1?x=1',
+    });
+    expect(extractComponents('QORTAL://alice')).toEqual({
+      service: 'WEBSITE',
+      name: 'alice',
+      identifier: undefined,
+      path: '',
+    });
+  });
+
+  it('returns null for qortal://use-* links in any case', () => {
+    expect(
+      extractComponents('QORTAL://USE-GROUP/action-join/groupid-5')
+    ).toBeNull();
+    expect(extractComponents('Qortal://use-embed/x')).toBeNull();
+  });
+
   // a couple of edge cases
   it('handles just protocol (no content) as null', () => {
     expect(extractComponents('qortal://')).toBeNull();
+    expect(extractComponents('QORTAL://')).toBeNull();
   });
 
   it('handles single-segment non-empty after protocol with spaces', () => {

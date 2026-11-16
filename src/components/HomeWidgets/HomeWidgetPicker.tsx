@@ -25,13 +25,13 @@ import {
   HOME_WIDGET_LIMIT,
   homeWidgetKey,
   type HomeWidgetListing,
-  type SavedHomeWidget,
 } from './homeWidgets';
 
 type HomeWidgetPickerProps = {
   open: boolean;
   onClose: () => void;
-  added: readonly SavedHomeWidget[];
+  /** The widgets already on Home, wherever they are: marked added. */
+  added: readonly { name: string; identifier: string | null }[];
   onAdd: (listing: HomeWidgetListing) => void;
 };
 
