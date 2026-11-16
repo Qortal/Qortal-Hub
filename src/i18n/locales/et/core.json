@@ -824,6 +824,29 @@
     "selected_file": "valitud fail: {{filename}}"
   },
   "publish": "avalda",
+  "publish_source": {
+    "changed_files": "alates {{date}} muudetud faile: {{number}}",
+    "choose_another": "vali muu",
+    "choose_folder": "vali kaust",
+    "read_error": "valitud kausta või faili ei õnnestunud lugeda",
+    "same_file": "sama fail mis eelmisel korral",
+    "same_folder": "sama kaust mis eelmisel korral",
+    "selected_file": "valitud fail: {{name}}",
+    "selected_folder": "valitud kaust: {{name}}"
+  },
+  "publish_update": {
+    "admin_unknown": "ei õnnestunud kontrollida, kas oled endiselt rühma {{group}} administraator. Proovi hiljem uuesti.",
+    "checking_admin": "kontrollitakse, kas oled endiselt rühma {{group}} administraator…",
+    "current_unavailable": "praegust versiooni ei õnnestunud laadida, seega ei saa rakenduse nime ja logo säilitada. Sisesta need uuesti.",
+    "filled_from_profile": "selle rakenduse andmeid ei õnnestunud võrgust laadida, seega täideti need selle arvuti viimase avaldamise põhjal. Kontrolli neid enne avaldamist.",
+    "identifier_locked": "uuendamisel ei saa identifikaatorit muuta: teine identifikaator avaldaks uue rakenduse.",
+    "is_admin": "oled rühma {{group}} administraator",
+    "last_published": "viimati sellest arvutist avaldatud: {{date}}",
+    "loading_current": "praeguse versiooni laadimine…",
+    "logo_kept": "logo säilitatakse praegusest versioonist",
+    "not_admin": "sa ei ole enam rühma {{group}} administraator, seega ei saa seda rakendust sellelt kontolt uuendada.",
+    "title": "uuenda: {{name}}"
+  },
   "q_apps": {
     "about": "rakenduse kohta",
     "q_mail": "Q-Mail",

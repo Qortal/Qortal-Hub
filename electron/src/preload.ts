@@ -1025,10 +1025,20 @@ try {
     onUpdateDownloaded: (callback) =>
       ipcRenderer.on('update_downloaded', callback),
     restartApp: () => ipcRenderer.send('restart_app'),
-    selectFile: async () => ipcRenderer.invoke('dialog:openFile'),
+    selectFile: async (options?: { defaultPath?: string }) =>
+      ipcRenderer.invoke('dialog:openFile', options),
     readFile: async (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
-    selectAndZipDirectory: async (filePath) =>
-      ipcRenderer.invoke('fs:selectAndZip', filePath),
+    selectAndZipDirectory: async (
+      filePath?: string,
+      options?: { defaultPath?: string; changedSince?: number }
+    ) => ipcRenderer.invoke('fs:selectAndZip', filePath, options),
+    getPathForFile: (file: File) => {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch {
+        return '';
+      }
+    },
     // Streaming file save methods
     startStreamSave: async (options: { filename: string; mimeType?: string }) =>
       ipcRenderer.invoke('file:startStreamSave', options),
@@ -1036,6 +1046,13 @@ try {
       ipcRenderer.invoke('file:writeChunk', filePath, chunk, append),
     deleteFile: async (filePath: string) =>
       ipcRenderer.invoke('file:deleteFile', filePath),
+  });
+
+  // Saved publish profiles (userData/publish-profiles.json), this PC only.
+  contextBridge.exposeInMainWorld('publishProfiles', {
+    get: (key: unknown) => ipcRenderer.invoke('publishProfiles:get', key),
+    merge: (key: unknown, patch: unknown) =>
+      ipcRenderer.invoke('publishProfiles:merge', key, patch),
   });
 
   // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
