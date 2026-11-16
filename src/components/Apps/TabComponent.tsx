@@ -1,6 +1,7 @@
 import {
   Avatar,
   Box,
+  Divider,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -12,7 +13,9 @@ import {
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseFullscreenRoundedIcon from '@mui/icons-material/CloseFullscreenRounded';
+import KeyboardTabRoundedIcon from '@mui/icons-material/KeyboardTabRounded';
 import LockIcon from '@mui/icons-material/Lock';
+import TabUnselectedRoundedIcon from '@mui/icons-material/TabUnselectedRounded';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import { useRef, useState, type MutableRefObject } from 'react';
@@ -45,14 +48,24 @@ function devTabLabel(app: any): string {
   return 'Dev';
 }
 
+/** How a tab was closed. */
+export type TabCloseRequest = {
+  /** With the mouse: a click on its × or a middle click, not the keyboard. */
+  byPointer: boolean;
+};
+
 type TabComponentProps = {
   app: any;
   onCloseAll: () => void;
+  /** Closes the other tabs. Without it, the menu item is greyed out. */
+  onCloseOthers?: () => void;
+  /** Closes the tabs after this one. Without it, the item is greyed out. */
+  onCloseToTheRight?: () => void;
   onDuplicate: () => void;
   isEntering?: boolean;
   isSelected: boolean;
   isVisuallySelected?: boolean;
-  onClose: () => void;
+  onClose: (request?: TabCloseRequest) => void;
   onSelect: () => void;
   /** Dev-mode / local preview tabs (label + icon only; same chrome as app tabs) */
   isDevApp?: boolean;
@@ -71,6 +84,8 @@ type TabComponentProps = {
 const TabComponent = ({
   app,
   onCloseAll,
+  onCloseOthers,
+  onCloseToTheRight,
   onDuplicate,
   isEntering = false,
   isSelected,
@@ -199,7 +214,7 @@ const TabComponent = ({
         event.stopPropagation();
         // A pinned tab is unpinned before it closes.
         if (isPinned) return;
-        onClose();
+        onClose({ byPointer: true });
       }}
       onContextMenu={(event) => {
         if (interactionLockRef.current) {
@@ -387,7 +402,8 @@ const TabComponent = ({
               event.preventDefault();
               return;
             }
-            onClose();
+            // `detail` counts mouse clicks: it is 0 for Enter or Space.
+            onClose({ byPointer: event.detail > 0 });
           }}
           onAuxClick={(event) => {
             if (interactionLockRef.current) {
@@ -398,7 +414,7 @@ const TabComponent = ({
             if (event.button !== 1) return;
             event.preventDefault();
             event.stopPropagation();
-            onClose();
+            onClose({ byPointer: true });
           }}
           onPointerDown={(event) => {
             event.stopPropagation();
@@ -509,6 +525,55 @@ const TabComponent = ({
             />
           </MenuItem>
         )}
+        {(onTogglePin || canDuplicate) && (
+          <Divider sx={{ borderColor: theme.palette.border.subtle }} />
+        )}
+        <MenuItem
+          disabled={!onCloseOthers}
+          onClick={() => {
+            onCloseOthers?.();
+            setMenuPosition(null);
+          }}
+        >
+          <ListItemIcon sx={menuItemIconSx}>
+            <TabUnselectedRoundedIcon
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: 18,
+              }}
+            />
+          </ListItemIcon>
+
+          <ListItemText
+            sx={menuItemTextSx}
+            primary={t('core:app_tab.close_others', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          />
+        </MenuItem>
+        <MenuItem
+          disabled={!onCloseToTheRight}
+          onClick={() => {
+            onCloseToTheRight?.();
+            setMenuPosition(null);
+          }}
+        >
+          <ListItemIcon sx={menuItemIconSx}>
+            <KeyboardTabRoundedIcon
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: 18,
+              }}
+            />
+          </ListItemIcon>
+
+          <ListItemText
+            sx={menuItemTextSx}
+            primary={t('core:app_tab.close_right', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          />
+        </MenuItem>
         <MenuItem
           onClick={() => {
             onCloseAll();

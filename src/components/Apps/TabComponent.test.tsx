@@ -1,7 +1,7 @@
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { ThemeProvider } from '@mui/material/styles';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
@@ -89,6 +89,23 @@ describe('TabComponent', () => {
     expect(handlers.onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('says whether a tab was closed with the mouse or the keyboard', () => {
+    const handlers = renderTab({ widthPx: 180 });
+
+    fireEvent.click(closeButton()!, { detail: 1 });
+    middleClick(theTab());
+    middleClick(closeButton()!);
+    // Enter or Space on the × clicks it with a `detail` of 0.
+    fireEvent.click(closeButton()!, { detail: 0 });
+
+    expect(handlers.onClose.mock.calls).toEqual([
+      [{ byPointer: true }],
+      [{ byPointer: true }],
+      [{ byPointer: true }],
+      [{ byPointer: false }],
+    ]);
+  });
+
   it('draws a pinned tab as its icon only, without a ×', () => {
     renderTab({
       app: { ...QTUBE, pinned: true },
@@ -121,10 +138,46 @@ describe('TabComponent', () => {
     expect(items.map((item) => item.textContent)).toEqual([
       'Pin tab',
       'Duplicate tab',
+      'Close other tabs',
+      'Close tabs to the right',
       'Close all tabs',
     ]);
     await user.click(screen.getByRole('menuitem', { name: 'Pin tab' }));
     expect(handlers.onTogglePin).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the other tabs, or those to the right, from its menu', async () => {
+    const user = userEvent.setup();
+    const onCloseOthers = vi.fn();
+    const onCloseToTheRight = vi.fn();
+    const handlers = renderTab({ onCloseOthers, onCloseToTheRight });
+
+    fireEvent.contextMenu(theTab());
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Close other tabs' })
+    );
+    expect(onCloseOthers).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+
+    fireEvent.contextMenu(theTab());
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Close tabs to the right' })
+    );
+    expect(onCloseToTheRight).toHaveBeenCalledTimes(1);
+    expect(handlers.onClose).not.toHaveBeenCalled();
+    expect(handlers.onCloseAll).not.toHaveBeenCalled();
+  });
+
+  it('greys out a close item that would close nothing', () => {
+    renderTab({ onCloseOthers: vi.fn() });
+
+    fireEvent.contextMenu(theTab());
+    expect(
+      screen.getByRole('menuitem', { name: 'Close other tabs' })
+    ).not.toHaveAttribute('aria-disabled');
+    expect(
+      screen.getByRole('menuitem', { name: 'Close tabs to the right' })
+    ).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('offers Unpin tab in the menu of a pinned tab', async () => {
@@ -165,6 +218,10 @@ describe('TabComponent', () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: 'New tab' }));
     expect(
       screen.getAllByRole('menuitem').map((item) => item.textContent)
-    ).toEqual(['Close all tabs']);
+    ).toEqual([
+      'Close other tabs',
+      'Close tabs to the right',
+      'Close all tabs',
+    ]);
   });
 });

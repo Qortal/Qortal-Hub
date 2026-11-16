@@ -336,7 +336,11 @@ describe('AppsDesktop launcher tabs: opening', () => {
     const items = screen
       .getAllByRole('menuitem')
       .map((item) => item.textContent);
-    expect(items).toEqual(['Close all tabs']);
+    expect(items).toEqual([
+      'Close other tabs',
+      'Close tabs to the right',
+      'Close all tabs',
+    ]);
   });
 });
 
@@ -561,6 +565,30 @@ describe('AppsDesktop launcher tabs: closing', () => {
 
     expect(stripIds()).toEqual([keeping]);
     expect(shownLauncherId()).toBe(keeping);
+    expect(notes).toContain(
+      'Locked tabs stay open. Close each one on its own to confirm.'
+    );
+  });
+
+  it('keeps a launcher tab with unsaved input open on Close other tabs', async () => {
+    const user = userEvent.setup();
+    renderApps();
+    openApp('Q-Mail');
+    await pressPlus(user);
+    const keeping = newestTabId();
+    await fillPublishForm(user, keeping);
+    openApp('Q-Tube');
+
+    fireEvent.contextMenu(tabButton(stripIds()[0]));
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Close other tabs' })
+    );
+
+    expect(stripNames()).toEqual(['Q-Mail', NEW_TAB]);
+    expect(dialog()).toBeNull();
+    expect(inLauncher(keeping).getByLabelText('publish title')).toHaveValue(
+      'x'
+    );
     expect(notes).toContain(
       'Locked tabs stay open. Close each one on its own to confirm.'
     );

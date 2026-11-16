@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "cerrar pestaña",
     "close_all": "cerrar todas las pestañas",
+    "close_others": "cerrar otras pestañas",
+    "close_right": "cerrar pestañas a la derecha",
     "duplicate": "duplicar pestaña",
     "limit_reached": "se alcanzó el número máximo de pestañas. Cierra una para abrir otra.",
     "locked_kept_open": "las pestañas bloqueadas siguen abiertas. Ciérralas una por una para confirmar.",

@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "sulge vaheleht",
     "close_all": "sulge kõik vahelehed",
+    "close_others": "sulge teised vahelehed",
+    "close_right": "sulge paremal olevad vahelehed",
     "duplicate": "dubleeri vaheleht",
     "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
     "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada.",

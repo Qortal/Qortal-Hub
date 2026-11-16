@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "chiudi scheda",
     "close_all": "chiudi tutte le schede",
+    "close_others": "chiudi le altre schede",
+    "close_right": "chiudi le schede a destra",
     "duplicate": "duplica scheda",
     "limit_reached": "numero massimo di schede raggiunto. Chiudine una per aprirne un'altra.",
     "locked_kept_open": "le schede bloccate restano aperte. Chiudile una alla volta per confermare.",

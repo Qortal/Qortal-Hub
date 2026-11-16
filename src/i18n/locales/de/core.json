@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "Tab schließen",
     "close_all": "alle Tabs schließen",
+    "close_others": "andere Tabs schließen",
+    "close_right": "Tabs rechts schließen",
     "duplicate": "Tab duplizieren",
     "limit_reached": "maximale Anzahl an Tabs erreicht. Schließe einen, um einen weiteren zu öffnen.",
     "locked_kept_open": "gesperrte Tabs bleiben offen. Schließe jeden einzeln, um es zu bestätigen.",

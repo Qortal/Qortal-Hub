@@ -79,11 +79,11 @@ const tab = (name: string) => nav.tabs.find((item) => item.name === name);
 const SLOW = { timeout: 3000 };
 
 /**
- * Closing a tab tells the top bar once more, 400 ms later. A test can end
+ * Selecting a tab tells the top bar once more, 100 ms later. A test can end
  * before that: the update must fire then, not during the next test, where it
  * would read as that test's selection.
  */
-const LATE_TOP_BAR_UPDATE_MS = 400;
+const LATE_TOP_BAR_UPDATE_MS = 100;
 
 const openTabs = async (...names: string[]) => {
   for (const name of names) {
@@ -166,5 +166,14 @@ describe('closing a tab after selecting another', () => {
 
     await waitFor(() => expect(tabNames()).toEqual(['Torq', 'Q-Share']), SLOW);
     expect(selectedName()).toBe('Torq');
+  });
+
+  it('tells the top bar at once', async () => {
+    await openTabs('Q-Mail', 'Torq');
+
+    close('Torq');
+
+    expect(tabNames()).toEqual(['Q-Mail']);
+    expect(selectedName()).toBe('Q-Mail');
   });
 });

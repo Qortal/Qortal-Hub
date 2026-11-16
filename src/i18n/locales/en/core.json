@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "close tab",
     "close_all": "close all tabs",
+    "close_others": "close other tabs",
+    "close_right": "close tabs to the right",
     "duplicate": "duplicate tab",
     "limit_reached": "maximum number of tabs reached. Close one to open another.",
     "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm.",

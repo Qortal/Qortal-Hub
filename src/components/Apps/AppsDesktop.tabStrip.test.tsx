@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createStore, Provider } from 'jotai';
@@ -98,6 +99,23 @@ const tabNamed = (name: string) => screen.getByRole('button', { name });
 const tabIdOf = (name: string) => tabNamed(name).dataset.tabId;
 /** The strip's row: the pinned tabs, the other tabs and the + button. */
 const strip = () => group('unpinned')!.parentElement!;
+/** The bar the strip sits in, which the pointer leaves. */
+const tabBar = () => strip().parentElement!;
+const closeButtonOf = (name: string) =>
+  within(tabNamed(name)).getByRole('button', { name: 'Close tab' });
+/** A click on a tab's ×, with the mouse (detail 1) or from the keyboard. */
+const clickClose = (name: string, { byKeyboard = false } = {}) =>
+  act(() => {
+    fireEvent.click(closeButtonOf(name), { detail: byKeyboard ? 0 : 1 });
+  });
+const middleClick = (name: string) =>
+  act(() => {
+    fireEvent(
+      tabNamed(name),
+      new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true })
+    );
+  });
+const menuItem = (name: string) => screen.getByRole('menuitem', { name });
 
 /** Room for a busy test machine: the top bar hears of tabs after 100 ms. */
 const SLOW = { timeout: 3000 };
@@ -119,10 +137,13 @@ const recordNote = (event: CustomEvent) => notes.push(event.detail?.message);
  * goes by it too, so it has to match the strip. Pinned tabs end with *.
  */
 let tabOrder: string[] = [];
+/** The tab on screen, as the top bar last heard of it. */
+let shownTab: string | null = null;
 const recordTabOrder = (event: CustomEvent) => {
   tabOrder = (event.detail?.data?.tabs ?? []).map(
     (tab) => `${tab.name}${tab.pinned ? '*' : ''}`
   );
+  shownTab = event.detail?.data?.selectedTab?.name ?? null;
 };
 
 const realResizeObserver = globalThis.ResizeObserver;
@@ -145,6 +166,7 @@ beforeEach(() => {
     vi.fn(async () => ({ ok: false }))
   );
   tabOrder = [];
+  shownTab = null;
   subscribeToEvent('openGlobalSnackBar', recordNote);
   subscribeToEvent('setTabsToNav', recordTabOrder);
 });
@@ -258,6 +280,105 @@ describe('AppsDesktop tab strip: pinned tabs', () => {
   });
 });
 
+describe('AppsDesktop tab strip: closing from a tab’s menu', () => {
+  it('closes the other tabs, but not the pinned ones, and stays on the tab', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    openTab('Q-Share');
+    await chooseFromMenu(user, 'Q-Tube', 'Pin tab');
+    const closedIds = [tabIdOf('Q-Mail'), tabIdOf('Q-Share')];
+    clearSessionPermissionsByTabId.mockClear();
+
+    await chooseFromMenu(user, 'Q-Blog', 'Close other tabs');
+
+    expect(tabsIn('pinned')).toEqual(['Q-Tube']);
+    expect(tabsIn('unpinned')).toEqual(['Q-Blog']);
+    // The last word the top bar hears (selecting Q-Tube for its menu earlier
+    // told it too, 100 ms later).
+    await waitFor(() => expect(shownTab).toBe('Q-Blog'), SLOW);
+    // Pinned tabs aren't among the other tabs: no note about them.
+    expect(notes).toEqual([]);
+    expect(
+      clearSessionPermissionsByTabId.mock.calls.map(([tabId]) => tabId)
+    ).toEqual(closedIds);
+  });
+
+  it('closes the tabs to the right, but not the pinned ones', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    openTab('Q-Share');
+    await chooseFromMenu(user, 'Q-Share', 'Pin tab');
+
+    await chooseFromMenu(user, 'Q-Mail', 'Close tabs to the right');
+    expect(tabsIn('pinned')).toEqual(['Q-Share']);
+    expect(tabsIn('unpinned')).toEqual(['Q-Tube', 'Q-Mail']);
+
+    // Every other tab is to the right of a pinned one.
+    await chooseFromMenu(user, 'Q-Share', 'Close tabs to the right');
+    expect(tabsIn('pinned')).toEqual(['Q-Share']);
+    expect(group('unpinned')).toBeNull();
+    expect(notes).toEqual([]);
+  });
+
+  it('keeps a locked tab open, says why, and asks when it is closed on its own', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    act(() => {
+      executeEvent('addLock', { data: { tabId: tabIdOf('Q-Mail') } });
+    });
+
+    await chooseFromMenu(user, 'Q-Tube', 'Close other tabs');
+
+    expect(tabsIn('unpinned')).toEqual(['Q-Tube', 'Q-Mail']);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(notes).toEqual([
+      'Locked tabs stay open. Close each one on its own to confirm.',
+    ]);
+
+    clickClose('Q-Mail');
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Close Tab Confirmation'
+    );
+    expect(tabsIn('unpinned')).toEqual(['Q-Tube', 'Q-Mail']);
+  });
+
+  it('greys out an item that would close nothing', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    await chooseFromMenu(user, 'Q-Tube', 'Pin tab');
+
+    // Q-Mail is the last tab, and the only other one is pinned.
+    fireEvent.contextMenu(tabNamed('Q-Mail'));
+    expect(menuItem('Close other tabs')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    expect(menuItem('Close tabs to the right')).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull(), SLOW);
+
+    fireEvent.contextMenu(tabNamed('Q-Tube'));
+    expect(menuItem('Close other tabs')).not.toHaveAttribute('aria-disabled');
+    expect(menuItem('Close tabs to the right')).not.toHaveAttribute(
+      'aria-disabled'
+    );
+  });
+});
+
 describe('AppsDesktop tab strip: widths and scrolling', () => {
   const undoStubs: (() => void)[] = [];
   /** Gives `target` a fixed `key`, as a browser's layout would. */
@@ -323,6 +444,103 @@ describe('AppsDesktop tab strip: widths and scrolling', () => {
     expect(widthOf('App 1')).toBe('72px');
     // Narrow tabs show their icon, and keep their title as their name.
     expect(tabNamed('App 1')).not.toHaveTextContent('App 1');
+  });
+
+  it('keeps the tab widths while tabs are closed with the mouse, until the pointer leaves', () => {
+    renderStrip();
+    openTab('App 1');
+    stub(strip(), 'clientWidth', () => 620);
+    for (let i = 2; i <= 4; i++) openTab(`App ${i}`);
+    const shrunk = widthOf('App 1');
+    expect(parseFloat(shrunk)).toBeLessThan(180);
+
+    // Three tabs would fit at 180 px, two even more so.
+    clickClose('App 2');
+    expect(tabsIn('unpinned')).toEqual(['App 1', 'App 3', 'App 4']);
+    expect(widthOf('App 3')).toBe(shrunk);
+    middleClick('App 3');
+    expect(tabsIn('unpinned')).toEqual(['App 1', 'App 4']);
+    expect(widthOf('App 4')).toBe(shrunk);
+
+    act(() => {
+      fireEvent.pointerLeave(tabBar());
+    });
+    expect(widthOf('App 4')).toBe('180px');
+  });
+
+  it('fits the tabs again at once after a close from the keyboard or the menu', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('App 1');
+    stub(strip(), 'clientWidth', () => 620);
+    for (let i = 2; i <= 4; i++) openTab(`App ${i}`);
+    const fourWide = widthOf('App 1');
+    openTab('App 5');
+    expect(parseFloat(widthOf('App 1'))).toBeLessThan(parseFloat(fourWide));
+
+    clickClose('App 2', { byKeyboard: true });
+    expect(widthOf('App 1')).toBe(fourWide);
+
+    clickClose('App 3');
+    expect(widthOf('App 1')).toBe(fourWide);
+    await chooseFromMenu(user, 'App 1', 'Close other tabs');
+    expect(tabsIn('unpinned')).toEqual(['App 1']);
+    expect(widthOf('App 1')).toBe('180px');
+  });
+
+  it('fits the tabs again once a tab is pinned', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('App 1');
+    stub(strip(), 'clientWidth', () => 620);
+    for (let i = 2; i <= 4; i++) openTab(`App ${i}`);
+    const shrunk = widthOf('App 1');
+
+    clickClose('App 2');
+    expect(widthOf('App 3')).toBe(shrunk);
+    await chooseFromMenu(user, 'App 1', 'Pin tab');
+
+    expect(tabsIn('unpinned')).toEqual(['App 3', 'App 4']);
+    expect(widthOf('App 3')).toBe('180px');
+  });
+
+  it('leaves the tabs under the pointer in place while it closes them', () => {
+    // Tabs 72 px wide with a 2 px gap, side by side.
+    stub(HTMLElement.prototype, 'offsetLeft', function () {
+      if (!this.dataset?.tabId) return 0;
+      return Array.from(this.parentElement!.children).indexOf(this) * 74;
+    });
+    stub(HTMLElement.prototype, 'offsetWidth', function () {
+      return this.dataset?.tabId ? 72 : 0;
+    });
+    renderStrip();
+    openTab('App 1');
+    const area = group('unpinned')!;
+    const scrollLeft = scrollable(area);
+    stub(area, 'clientWidth', () => 300);
+    for (let i = 2; i <= 6; i++) openTab(`App ${i}`);
+    act(() => {
+      fireEvent.click(tabNamed('App 1'));
+    });
+    act(() => {
+      fireEvent.click(tabNamed('App 6'));
+    });
+    expect(scrollLeft()).toBe(442 - 300);
+
+    // App 1, viewed before App 6, shows in its place: it comes into view
+    // only once the pointer leaves the strip.
+    clickClose('App 6');
+    expect(scrollLeft()).toBe(442 - 300);
+    act(() => {
+      fireEvent.pointerLeave(tabBar());
+    });
+    expect(scrollLeft()).toBe(0);
+
+    // A tab that opens fits the strip again, and comes into view.
+    clickClose('App 2');
+    openTab('App 7');
+    // App 7 is the fifth tab now: from 4 × 74 = 296 to 368.
+    expect(scrollLeft()).toBe(368 - 300);
   });
 
   it('gives pinned tabs their own fixed width', async () => {

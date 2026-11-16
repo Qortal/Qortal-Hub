@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "fermer l'onglet",
     "close_all": "fermer tous les onglets",
+    "close_others": "fermer les autres onglets",
+    "close_right": "fermer les onglets à droite",
     "duplicate": "dupliquer l'onglet",
     "limit_reached": "nombre maximal d'onglets atteint. Fermez-en un pour en ouvrir un autre.",
     "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer.",

@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "fechar aba",
     "close_all": "fechar todas as abas",
+    "close_others": "fechar as outras abas",
+    "close_right": "fechar as abas à direita",
     "duplicate": "duplicar aba",
     "limit_reached": "número máximo de abas atingido. Feche uma para abrir outra.",
     "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar.",

@@ -176,6 +176,8 @@
   "app_tab": {
     "close": "sulje välilehti",
     "close_all": "sulje kaikki välilehdet",
+    "close_others": "sulje muut välilehdet",
+    "close_right": "sulje oikealla olevat välilehdet",
     "duplicate": "monista välilehti",
     "limit_reached": "välilehtien enimmäismäärä saavutettu. Sulje yksi avataksesi uuden.",
     "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi.",
