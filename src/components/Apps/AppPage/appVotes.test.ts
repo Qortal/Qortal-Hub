@@ -5,6 +5,7 @@ import {
   initialRating,
   isPendingVoteConfirmed,
   ratingPollName,
+  ratingsByAddress,
   summarizeVoteCounts,
   summaryFromVoters,
   voterOf,
@@ -137,6 +138,31 @@ describe('rating polls', () => {
     });
     expect(voterOf(voted, 'QNobody')).toBeNull();
     expect(voterOf(voted, undefined)).toBeNull();
+  });
+
+  it("gives each person's stars: their vote, or else their first rating", () => {
+    // Created with 1 star, then voted 5; the rows come highest first.
+    const voters = votersFromPoll(
+      {
+        creatorPublicKey: 'Owner',
+        pollOptions: [...options.slice(0, 5), { optionName: 'initialValue-1' }],
+      },
+      [
+        { optionIndex: 4, voterPublicKey: 'Owner' },
+        { optionIndex: 2, voterPublicKey: 'A' },
+      ],
+      addressOf
+    );
+    expect(ratingsByAddress(voters)).toEqual(
+      new Map([
+        ['QOwner', 5],
+        ['QA', 3],
+      ])
+    );
+    expect(ratingsByAddress([...voters].reverse()).get('QOwner')).toBe(5);
+    expect(
+      ratingsByAddress(votersFromPoll(poll, [], addressOf)).get('QOwner')
+    ).toBe(5);
   });
 
   it('skips votes whose voter cannot be read', () => {

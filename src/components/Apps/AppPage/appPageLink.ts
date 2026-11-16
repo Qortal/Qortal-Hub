@@ -7,7 +7,7 @@ import { normalizeAppService } from './appPageIds';
 
 /**
  * `qortal://use-app-page/<SERVICE>/<name>` opens an app's or website's page
- * in the library (screenshots, ratings) instead of the app itself,
+ * in the library (screenshots, ratings, reviews) instead of the app itself,
  * like the existing `qortal://use-group/...` links do for groups.
  */
 

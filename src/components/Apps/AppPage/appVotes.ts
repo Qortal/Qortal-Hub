@@ -175,6 +175,20 @@ export const voterOf = (
       voters.find((voter) => voter.address === address))) ||
   null;
 
+/**
+ * Each person's stars, as their review shows them: their latest vote, or else
+ * the first rating they gave by creating the poll.
+ */
+export const ratingsByAddress = (voters: Voter[]): Map<string, number> => {
+  const ratings = new Map<string, number>();
+  voters.forEach((voter) => {
+    if (!voter.isInitial || !ratings.has(voter.address)) {
+      ratings.set(voter.address, voter.rating);
+    }
+  });
+  return ratings;
+};
+
 export const fetchPollVotes = async (
   base: string,
   service: string,
