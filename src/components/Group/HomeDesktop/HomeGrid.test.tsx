@@ -104,6 +104,27 @@ describe('HomeGrid', () => {
     expect(screen.queryAllByRole('group')).toHaveLength(0);
   });
 
+  it('tells when editing starts and stops, with its extra buttons meanwhile', () => {
+    const onEditingChange = vi.fn();
+    renderGrid({
+      editActions: <button type="button">Restore from QDN</button>,
+      onEditingChange,
+    });
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+    expect(
+      screen.queryByRole('button', { name: 'Restore from QDN' })
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+    expect(onEditingChange).toHaveBeenLastCalledWith(true);
+    expect(
+      screen.getByRole('button', { name: 'Restore from QDN' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('starts editing when the Modules settings ask', () => {
     renderGrid();
     act(() => executeEvent(HOME_EDIT_LAYOUT_EVENT, {}));

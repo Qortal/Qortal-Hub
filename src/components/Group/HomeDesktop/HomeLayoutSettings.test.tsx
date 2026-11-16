@@ -76,6 +76,7 @@ describe('HomeLayoutSettings', () => {
 
     expect(panelSwitch('Featured Q-Apps')).not.toBeChecked();
     expect(stored()).toEqual({
+      changedAt: expect.any(Number),
       hidden: ['featured'],
       stack: ['widgets', 'groupActivity', 'feed'],
       version: 2,
@@ -110,6 +111,7 @@ describe('HomeLayoutSettings', () => {
     fireEvent.click(reset);
     expect(panelSwitch('Qortino')).toBeChecked();
     expect(stored()).toEqual({
+      changedAt: expect.any(Number),
       hidden: [],
       stack: ['widgets', 'groupActivity', 'feed'],
       version: 2,
@@ -134,6 +136,7 @@ describe('HomeLayoutSettings', () => {
     fireEvent.click(reset);
 
     expect(stored()).toEqual({
+      changedAt: expect.any(Number),
       hidden: [],
       stack: ['widgets', 'groupActivity', 'feed'],
       version: 2,
