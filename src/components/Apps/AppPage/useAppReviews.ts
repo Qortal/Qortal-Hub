@@ -45,14 +45,12 @@ const RECORD_RETRY_MS = 20_000;
 const RECORD_TRIES = 3;
 
 const recordCache = new Map<string, ReviewRecord | null>();
-const recordFailures = new Map<string, number>();
 const recordCacheKey = (resource: ReviewResource) =>
   `${reviewItemKey(resource.name, resource.identifier)}\n${resource.updated}`;
 
 /** Forgets loaded records (tests start each case clean). */
 export const clearReviewRecordCache = () => {
   recordCache.clear();
-  recordFailures.clear();
 };
 
 export type ReviewActionResult =
@@ -116,7 +114,10 @@ export const useAppReviews = (
     name && myName ? 'loading' : 'done'
   );
   const ownForRef = useRef('');
-  // Records the node couldn't serve RECORD_TRIES times.
+  // Tries per record the node couldn't serve, and the records given up on
+  // after RECORD_TRIES. Both belong to this page: opened again, it tries
+  // each record afresh, rather than wait on one an earlier page gave up on.
+  const recordFailures = useRef(new Map<string, number>());
   const [gaveUp, setGaveUp] = useState<ReadonlySet<string>>(() => new Set());
   const loadingMoreRef = useRef(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -328,7 +329,7 @@ export const useAppReviews = (
       return (
         !recordCache.has(cacheKey) &&
         !inFlight.current.has(cacheKey) &&
-        (recordFailures.get(cacheKey) || 0) < RECORD_TRIES
+        (recordFailures.current.get(cacheKey) || 0) < RECORD_TRIES
       );
     });
     const known = new Map<string, ReviewRecord | null>();
@@ -364,8 +365,8 @@ export const useAppReviews = (
         inFlight.current.delete(cacheKey);
         if (record === undefined) {
           // Not on the node yet (or it timed out): try again in a while.
-          const failures = (recordFailures.get(cacheKey) || 0) + 1;
-          recordFailures.set(cacheKey, failures);
+          const failures = (recordFailures.current.get(cacheKey) || 0) + 1;
+          recordFailures.current.set(cacheKey, failures);
           if (failures >= RECORD_TRIES && mounted.current) {
             setGaveUp((previous) => new Set(previous).add(cacheKey));
           }
@@ -457,7 +458,7 @@ export const useAppReviews = (
   const retryMyReview = useCallback(() => {
     if (myReview && !myReview.complete) {
       const cacheKey = recordCacheKey(myReview);
-      recordFailures.delete(cacheKey);
+      recordFailures.current.delete(cacheKey);
       if (recordCache.get(cacheKey) === null) recordCache.delete(cacheKey);
       setGaveUp((previous) => {
         const next = new Set(previous);
