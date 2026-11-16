@@ -21,8 +21,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
 import { AppsHorizontalTabButton, AppsHorizontalTabLabel } from './Apps-styles';
 import { getBaseApiReact } from '../../App';
+import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { useTranslation } from 'react-i18next';
+import { isLauncherTab } from './launcherTabs';
 import { TAB_IDEAL_WIDTH_PX, tabShowsLabel } from './tabStripLayout';
 
 /** The × of a narrow tab shows on hover through this class. */
@@ -101,13 +103,16 @@ const TabComponent = ({
   const interactionLockRef = tabInteractionLockedRef ?? localInteractionLockRef;
 
   const treatAsDevApp = Boolean(isDevApp);
+  const isLauncher = isLauncherTab(app);
   const canDuplicate = !app?.internal && !!app?.service;
-  const label = treatAsDevApp
-    ? devTabLabel(app)
-    : app?.privateAppProperties?.name ||
-      app?.metadata?.title ||
-      app?.name ||
-      '';
+  const label = isLauncher
+    ? t('core:app_tab.new_tab', { postProcess: 'capitalizeFirstChar' })
+    : treatAsDevApp
+      ? devTabLabel(app)
+      : app?.privateAppProperties?.name ||
+        app?.metadata?.title ||
+        app?.name ||
+        '';
   // A narrow or pinned tab shows its icon, with its title in a tooltip.
   const iconOnly = isPinned || !tabShowsLabel(widthPx);
   // Next to the icon of a narrow tab there is room only for the × of the
@@ -278,7 +283,23 @@ const TabComponent = ({
         }),
       }}
     >
-      {app?.isPrivate && !app?.privateAppProperties?.logo ? (
+      {isLauncher ? (
+        <Box
+          sx={{
+            alignItems: 'center',
+            color: isVisuallySelected
+              ? selectedTabTextColor
+              : theme.palette.text.secondary,
+            display: 'flex',
+            flexShrink: 0,
+            height: '22px',
+            justifyContent: 'center',
+            width: '22px',
+          }}
+        >
+          <AppsIcon color="currentColor" height={14} width={14} />
+        </Box>
+      ) : app?.isPrivate && !app?.privateAppProperties?.logo ? (
         <Box
           sx={{
             alignItems: 'center',

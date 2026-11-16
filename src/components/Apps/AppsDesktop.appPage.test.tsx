@@ -68,10 +68,12 @@ const Harness = () => {
   );
 };
 
-/** The selected tab, as the top bar last heard of it. */
+/** The tabs and the selected one, as the top bar last heard of them. */
 let selected: any = null;
+let tabs: any[] = [];
 const recordNav = (event: CustomEvent) => {
   selected = event.detail?.data?.selectedTab ?? null;
+  tabs = event.detail?.data?.tabs ?? [];
 };
 
 /** Room for a busy test machine: the top bar hears of tabs after 100 ms. */
@@ -91,6 +93,7 @@ afterAll(() => {
 
 beforeEach(() => {
   selected = null;
+  tabs = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({ ok: false }))
@@ -123,6 +126,12 @@ describe('a qortal://use-app-page link', () => {
     });
 
     expect(await screen.findByTestId('app-page')).toHaveTextContent('Q-Blog');
-    await waitFor(() => expect(selected).toBeNull(), SLOW);
+    // The page shows in a launcher tab of its own, in front; the app's tab
+    // stays open.
+    await waitFor(() => expect(selected?.internal).toBe('launcher'), SLOW);
+    expect(tabs.map((tab) => tab.name ?? tab.internal)).toEqual([
+      'Q-Tube',
+      'launcher',
+    ]);
   });
 });

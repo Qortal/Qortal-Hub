@@ -29,6 +29,7 @@ import { executeEvent } from '../../../utils/events';
 import { AppRating } from '../AppRating';
 import { formatLongDate, formatRelative } from './AppPageParts';
 import { buildAppOpenLink, buildAppPageLink } from './appPageLink';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 interface AppPageHeroProps {
   app: any;
@@ -69,6 +70,8 @@ export const AppPageHero = ({
   const { t, i18n } = useTranslation(['core']);
   const [iconFailed, setIconFailed] = useState(false);
   const [shareAnchor, setShareAnchor] = useState<HTMLElement | null>(null);
+  // In a hidden launcher tab the menu steps aside, and comes back with it.
+  const shareMenuShown = useLauncherTabDialog(!!shareAnchor);
   const glow = accent || theme.palette.primary.main;
   const isWebsite = app?.service === 'WEBSITE';
   const title = app?.metadata?.title || app?.name;
@@ -379,7 +382,7 @@ export const AppPageHero = ({
       <Menu
         anchorEl={shareAnchor}
         onClose={() => setShareAnchor(null)}
-        open={!!shareAnchor}
+        {...shareMenuShown}
       >
         <MenuItem
           onClick={() => copy(buildAppOpenLink(app?.service, app?.name))}

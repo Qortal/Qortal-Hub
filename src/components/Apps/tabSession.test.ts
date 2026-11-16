@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildQortalResourceLink } from '../../utils/qortalLink';
 import { QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
+import { newLauncherTab } from './launcherTabs';
 import {
   createTabSessionWriter,
   isPrivateTabToReopen,
@@ -254,6 +255,20 @@ describe('toSavedTab', () => {
         service: 'INTERNAL',
       })
     ).toBeNull();
+  });
+
+  it('skips launcher tabs: what they held belongs to the run', () => {
+    expect(toSavedTab(newLauncherTab('l1'))).toBeNull();
+    expect(
+      serializeTabSession(
+        [newLauncherTab('l1'), { tabId: 't1', service: 'APP', name: 'Q-Tube' }],
+        'l1',
+        LIMIT
+      )
+    ).toEqual({
+      tabs: [{ tabId: 't1', service: 'APP', name: 'Q-Tube' }],
+      selectedTabId: null,
+    });
   });
 
   it("keeps what reopens a private app, never its preview's address", () => {

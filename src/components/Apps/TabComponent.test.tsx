@@ -142,4 +142,29 @@ describe('TabComponent', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Unpin tab' }));
     expect(handlers.onTogglePin).toHaveBeenCalledTimes(1);
   });
+
+  it('names a launcher tab New tab, with the Apps picture', () => {
+    renderTab({
+      app: { tabId: 'tab-2', internal: 'launcher', service: 'INTERNAL' },
+      widthPx: 180,
+    });
+
+    const tab = screen.getByRole('button', { name: 'New tab' });
+    expect(tab).toHaveTextContent('New tab');
+    // No thumbnail is asked of the node: it has no app.
+    expect(tab.querySelector('img')).toBeNull();
+    expect(tab.querySelector('svg')).not.toBeNull();
+  });
+
+  it('offers neither Pin nor Duplicate for a launcher tab', () => {
+    renderTab({
+      app: { tabId: 'tab-2', internal: 'launcher', service: 'INTERNAL' },
+      onTogglePin: undefined,
+    });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'New tab' }));
+    expect(
+      screen.getAllByRole('menuitem').map((item) => item.textContent)
+    ).toEqual(['Close all tabs']);
+  });
 });

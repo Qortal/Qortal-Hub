@@ -1,5 +1,7 @@
 import { QORTAL_PROTOCOL } from '../../../constants/constants';
 import { executeEvent } from '../../../utils/events';
+import { inLauncherTab } from '../launcherTabs';
+import type { OpenQortalLinkOptions } from '../../../utils/qortalLink/openQortalLink';
 import { normalizeAppService } from './appPageIds';
 
 /**
@@ -41,24 +43,50 @@ export const parseAppPageLink = (
 
 /**
  * Opens the page of an app or website, from anywhere in Hub. The apps view
- * puts the page in front of any tab that was on screen.
+ * puts the page in front of any tab that was on screen. From a page in a
+ * launcher tab (`launcherTabId`), the new page takes that one's place.
  */
-export const openAppPage = (app: { service: string; name: string }) => {
+export const openAppPage = (
+  app: { service: string; name: string },
+  launcherTabId: string | null = null
+) => {
   executeEvent('open-apps-mode', {});
   // The apps view may only now be shown; give it a moment to listen.
   setTimeout(() => {
     executeEvent('selectedAppInfo', {
-      data: { name: app.name, service: normalizeAppService(app.service) },
+      data: inLauncherTab(
+        { name: app.name, service: normalizeAppService(app.service) },
+        launcherTabId
+      ),
     });
   }, 0);
 };
 
-export const openAppPageLink = (input: string | null | undefined) => {
+export const openAppPageLink = (
+  input: string | null | undefined,
+  launcherTabId: string | null = null
+) => {
   const app = parseAppPageLink(input);
   if (!app) return false;
-  openAppPage(app);
+  openAppPage(app, launcherTabId);
   return true;
 };
+
+/**
+ * How links open from inside a launcher tab: a Q-App, website or app's page
+ * takes the tab's place, as the page's Open does (openQortalLink's options).
+ */
+export const launcherTabLinkOptions = (
+  launcherTabId: string | null
+): OpenQortalLinkOptions => ({
+  openResource: ({ service, name, identifier, path }) => {
+    executeEvent('addTab', {
+      data: inLauncherTab({ service, name, identifier, path }, launcherTabId),
+    });
+    executeEvent('open-apps-mode', {});
+  },
+  openPage: (page) => openAppPage(page, launcherTabId),
+});
 
 const LINK_PATTERN = /\b(?:https?:\/\/|qortal:\/\/)[^\s<>"'`]+/gi;
 

@@ -11,7 +11,8 @@ import {
 import { getBaseApiReact } from '../../../App';
 import { appIconUrl } from './appPageQdn';
 import { openTextLink } from '../../../utils/qortalLink/openQortalLink';
-import { splitTextLinks } from './appPageLink';
+import { launcherTabLinkOptions, splitTextLinks } from './appPageLink';
+import { useLauncherTabId } from '../launcherTabs';
 
 export const SectionCard = ({
   children,
@@ -153,6 +154,7 @@ export const LinkifiedText = ({
   sx?: object;
 }) => {
   const parts = useMemo(() => splitTextLinks(text || ''), [text]);
+  const launcherTabId = useLauncherTabId();
   return (
     <Typography
       component="div"
@@ -169,7 +171,12 @@ export const LinkifiedText = ({
           <Link
             component="button"
             key={index}
-            onClick={() => void openTextLink(part.value)}
+            onClick={() =>
+              void openTextLink(
+                part.value,
+                launcherTabLinkOptions(launcherTabId)
+              )
+            }
             sx={{
               font: 'inherit',
               textAlign: 'left',

@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../utils/events', () => ({ executeEvent: vi.fn() }));
 
 import { executeEvent } from '../../../utils/events';
+import { openTextLink } from '../../../utils/qortalLink/openQortalLink';
 import {
   buildAppOpenLink,
   buildAppPageLink,
+  launcherTabLinkOptions,
   openAppPageLink,
   parseAppPageLink,
   splitTextLinks,
@@ -75,5 +77,21 @@ describe('links in page text', () => {
     expect(splitTextLinks('no links')).toEqual([
       { kind: 'text', value: 'no links' },
     ]);
+  });
+
+  it("from a page's text in a launcher tab, name that tab", async () => {
+    vi.useFakeTimers();
+    await openTextLink(
+      'qortal://use-app-page/WEBSITE/Q-Blog',
+      launcherTabLinkOptions('launcher-tab-1')
+    );
+    vi.runAllTimers();
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', {
+      data: {
+        name: 'Q-Blog',
+        service: 'WEBSITE',
+        fromLauncherTabId: 'launcher-tab-1',
+      },
+    });
   });
 });

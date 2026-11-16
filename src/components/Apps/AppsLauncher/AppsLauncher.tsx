@@ -18,6 +18,7 @@ import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import type { AppRatingData } from '../../../types/ratings';
 import { executeEvent } from '../../../utils/events';
 import { openQortalLink } from '../../../utils/qortalLink/openQortalLink';
+import { launcherTabLinkOptions } from '../AppPage/appPageLink';
 import {
   getPinnedAppKey,
   type PinnedApp,
@@ -25,6 +26,11 @@ import {
 } from '../../../utils/pinnedAppsSettings';
 import { AppsLibraryContainer, AppsWidthLimiter } from '../Apps-styles';
 import type { AppsLibraryTabValue } from '../AppsLibrary';
+import {
+  inLauncherTab,
+  type PublishEditTarget,
+  useLauncherTabId,
+} from '../launcherTabs';
 import {
   LauncherBookmarkTile,
   openLauncherBookmark,
@@ -94,7 +100,8 @@ interface AppsLauncherProps {
   myName: string;
   myWebsite?: PinnedApp | null;
   request?: AppsLauncherRequest;
-  setMode: (mode: string) => void;
+  /** Opens a page from the launcher (My apps' publish pages). */
+  setMode: (mode: string, publishEditTarget?: PublishEditTarget | null) => void;
 }
 
 /**
@@ -124,6 +131,8 @@ const AppsLauncherPage = ({
   setMode,
 }: AppsLauncherProps) => {
   const { t } = useTranslation(['core']);
+  // In a launcher tab, what opens from here opens in its place.
+  const launcherTabId = useLauncherTabId();
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const libraryStartRef = useRef<HTMLDivElement | null>(null);
@@ -234,14 +243,14 @@ const AppsLauncherPage = ({
             />
           ),
           open: () => {
-            openLauncherBookmark(bookmark);
+            openLauncherBookmark(bookmark, launcherTabId);
             clearQuery();
           },
         });
       }
       return results;
     },
-    [bookmarks, clearQuery, openPrivateApp, pinnedApps, t]
+    [bookmarks, clearQuery, launcherTabId, openPrivateApp, pinnedApps, t]
   );
   const savedResults = useMemo(
     () => (link || !deferredQuery ? [] : findSaved(deferredQuery, appResults)),
@@ -341,10 +350,13 @@ const AppsLauncherPage = ({
 
   // --- Opening things -------------------------------------------------------
 
-  const openLink = useCallback((target: LauncherLink) => {
-    void openQortalLink(target);
-    setQuery('');
-  }, []);
+  const openLink = useCallback(
+    (target: LauncherLink) => {
+      void openQortalLink(target, launcherTabLinkOptions(launcherTabId));
+      setQuery('');
+    },
+    [launcherTabId]
+  );
 
   // Enter opens the address that was typed, or the best match.
   const handleSubmit = useCallback(() => {
@@ -357,13 +369,20 @@ const AppsLauncherPage = ({
     }
     const [bestApp] = searchLauncherApps(availableQapps, text, searchOptions);
     if (bestApp) {
-      executeEvent('addTab', { data: bestApp });
+      executeEvent('addTab', { data: inLauncherTab(bestApp, launcherTabId) });
       executeEvent('open-apps-mode', {});
       setQuery('');
       return;
     }
     findSaved(text, [])[0]?.open();
-  }, [availableQapps, findSaved, openLink, query, searchOptions]);
+  }, [
+    availableQapps,
+    findSaved,
+    launcherTabId,
+    openLink,
+    query,
+    searchOptions,
+  ]);
 
   const enterOpens = useMemo(() => {
     if (link) return null;
