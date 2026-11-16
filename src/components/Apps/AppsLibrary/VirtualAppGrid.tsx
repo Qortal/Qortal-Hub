@@ -7,24 +7,33 @@ import {
 } from 'react';
 import { Box } from '@mui/material';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { fittedColumnsTemplate } from './libraryLayout';
 
 /** A shorter list renders as a plain grid: virtual rows gain nothing there. */
 export const VIRTUAL_GRID_MIN_ITEMS = 48;
 
-/** How many columns of at least `minColumnWidth` fit into `width`. */
+/**
+ * How many columns of at least `minColumnWidth` fit into `width`, at most
+ * `maxColumns` (left out, no limit).
+ */
 export const virtualGridColumns = (
   width: number,
   minColumnWidth: number,
-  gap: number
-): number =>
-  width > 0
-    ? Math.max(1, Math.floor((width + gap) / (minColumnWidth + gap)))
-    : 1;
+  gap: number,
+  maxColumns?: number
+): number => {
+  const fitted =
+    width > 0
+      ? Math.max(1, Math.floor((width + gap) / (minColumnWidth + gap)))
+      : 1;
+  return maxColumns ? Math.max(1, Math.min(maxColumns, fitted)) : fitted;
+};
 
 interface VirtualAppGridProps<T> {
   items: T[];
   getKey: (item: T) => string;
-  renderItem: (item: T) => ReactNode;
+  /** `index` is the item's place in `items`. */
+  renderItem: (item: T, index: number) => ReactNode;
   /** The element that scrolls. The grid may start anywhere inside it. */
   scrollElement: HTMLElement | null;
   minColumnWidth: number;
@@ -34,6 +43,12 @@ interface VirtualAppGridProps<T> {
   /** False while the grid is hidden, so it stops measuring and rendering. */
   active?: boolean;
   overscan?: number;
+  /** A fixed number of columns; left out, as many as fit. */
+  columns?: number;
+  /** As many columns as fit, but never more than this (a list has two). */
+  maxColumns?: number;
+  /** False renders every item, however long the list. */
+  virtualize?: boolean;
 }
 
 /**
@@ -51,10 +66,13 @@ export function VirtualAppGrid<T>({
   gap,
   active = true,
   overscan = 4,
+  columns,
+  maxColumns,
+  virtualize = true,
 }: VirtualAppGridProps<T>) {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState({ width: 0, offset: 0 });
-  const isVirtual = items.length >= VIRTUAL_GRID_MIN_ITEMS;
+  const isVirtual = virtualize && items.length >= VIRTUAL_GRID_MIN_ITEMS;
 
   useLayoutEffect(() => {
     const grid = gridRef.current;
@@ -86,7 +104,9 @@ export function VirtualAppGrid<T>({
     return () => observer.disconnect();
   }, [active, isVirtual, scrollElement]);
 
-  const columnCount = virtualGridColumns(layout.width, minColumnWidth, gap);
+  const columnCount =
+    columns ??
+    virtualGridColumns(layout.width, minColumnWidth, gap, maxColumns);
   const rowCount = Math.ceil(items.length / columnCount);
 
   const rowVirtualizer = useVirtualizer({
@@ -114,13 +134,15 @@ export function VirtualAppGrid<T>({
         sx={{
           display: 'grid',
           gap: `${gap}px`,
-          gridTemplateColumns: `repeat(auto-fill, minmax(${minColumnWidth}px, 1fr))`,
+          gridTemplateColumns: columns
+            ? `repeat(${columns}, minmax(0, 1fr))`
+            : fittedColumnsTemplate(minColumnWidth, gap, maxColumns),
           width: '100%',
         }}
       >
-        {items.map((item) => (
+        {items.map((item, index) => (
           <Box key={getKey(item)} sx={{ minWidth: 0 }}>
-            {renderItem(item)}
+            {renderItem(item, index)}
           </Box>
         ))}
       </Box>
@@ -154,11 +176,13 @@ export function VirtualAppGrid<T>({
               width: '100%',
             }}
           >
-            {items.slice(rowStart, rowStart + columnCount).map((item) => (
-              <Box key={getKey(item)} sx={{ minWidth: 0 }}>
-                {renderItem(item)}
-              </Box>
-            ))}
+            {items
+              .slice(rowStart, rowStart + columnCount)
+              .map((item, column) => (
+                <Box key={getKey(item)} sx={{ minWidth: 0 }}>
+                  {renderItem(item, rowStart + column)}
+                </Box>
+              ))}
           </Box>
         );
       })}

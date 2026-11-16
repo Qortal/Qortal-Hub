@@ -33,6 +33,37 @@ describe('toWidgetListing', () => {
       title: 'Clock',
       description: 'The time',
       updated: 5,
+      tags: ['time'],
+    });
+  });
+
+  it('keeps what the library shows: category, other tags, size, first publish', () => {
+    expect(
+      toWidgetListing({
+        name: 'Q-Weather',
+        service: 'APP',
+        identifier: 'go-widget-now',
+        metadata: {
+          title: 'Weather Now',
+          tags: ['go-widget', ' weather ', '', 7],
+          category: 'WEATHER',
+          categoryName: 'Weather',
+        },
+        created: 100,
+        updated: 200,
+        size: 23616,
+      })
+    ).toEqual({
+      name: 'Q-Weather',
+      identifier: 'go-widget-now',
+      title: 'Weather Now',
+      description: '',
+      updated: 200,
+      created: 100,
+      category: 'WEATHER',
+      categoryName: 'Weather',
+      tags: ['weather'],
+      size: 23616,
     });
   });
 

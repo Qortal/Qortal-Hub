@@ -28,6 +28,9 @@ const Row = ({
   </Box>
 );
 
+/** A label and its value, as the details card lays them out. */
+export { Row as DetailsRow };
+
 export const appTags = (app: any): string[] => {
   const tags = app?.metadata?.tags;
   if (!tags) return [];

@@ -49,6 +49,7 @@ import {
   RatingsCacheInitializer,
   useAppRatings,
 } from '../../hooks/useAppRatings';
+import { PendingVotesWatcher } from './AppPage/PendingVotesWatcher';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
@@ -94,6 +95,7 @@ import {
   pickNextTabFromMru,
   tabsLeftByCloseAll,
 } from './tabSelection';
+import { namesOwnResources } from './libraryResources';
 import {
   isPinnedTab,
   moveTabWithinGroup,
@@ -780,7 +782,7 @@ export const AppsDesktop = ({
       apps = responseData;
       websites = responseDataWebsites;
       const combine = [...apps, ...websites];
-      const nextAvailableQapps = combine?.filter((res) => !res?.identifier);
+      const nextAvailableQapps = namesOwnResources(combine);
       availableQappsCountRef.current = nextAvailableQapps.length;
       setAvailableQapps(nextAvailableQapps);
     } catch (error) {
@@ -1924,6 +1926,8 @@ export const AppsDesktop = ({
       }}
     >
       <RatingsCacheInitializer />
+      {/* A vote whose app page closed before the node had it. */}
+      <PendingVotesWatcher />
       <Box
         sx={{
           display: 'flex',
