@@ -20,9 +20,18 @@ import {
 interface PrivateTabProps {
   myName: string;
   myAddress: string;
+  /**
+   * False while the tab is out of sight, as when its launcher tab is hidden:
+   * a dialog it opened steps aside, keeping what was entered.
+   */
+  isActive?: boolean;
 }
 
-export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
+export const PrivateTab = ({
+  myName,
+  myAddress,
+  isActive = true,
+}: PrivateTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -93,6 +102,7 @@ export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
       </SectionContainer>
 
       <AppsPrivate
+        isShown={isActive}
         myName={myName}
         myAddress={myAddress}
         action={action}

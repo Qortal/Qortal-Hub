@@ -22,7 +22,6 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('../AppsLauncher', () => ({
   AppsLauncher: () => null,
-  isLauncherShown: () => false,
   isLauncherSubPage: () => false,
 }));
 vi.mock('../AppsDevModeHome', () => ({ AppsDevModeHome: () => null }));
@@ -314,17 +313,44 @@ describe('AppsDesktop open tabs after a restart', () => {
     });
   });
 
-  it('remembers the last selected tab while the launcher shows', () => {
+  it('keeps no launcher tab, and remembers the last app tab while one shows', () => {
     renderApps('QAlice');
     addTab({ service: 'APP', name: 'Q-Tube' });
     addTab({ service: 'APP', name: 'Q-Mail' });
     click('open Q-Tube');
-    const [tube] = strip();
+    const [tube, mail] = strip();
     act(() => {
       document.dispatchEvent(new CustomEvent('newTabWindow', {}));
     });
-    expect(strip().some((tab) => tab.selected)).toBe(false);
-    expect(saved('QAlice').selectedTabId).toBe(tube.tabId);
+    const [, , launcher] = strip();
+    expect(launcher).toEqual({ tabId: expect.any(String), selected: true });
+    expect(saved('QAlice')).toEqual({
+      version: 1,
+      tabs: [
+        { tabId: tube.tabId, service: 'APP', name: 'Q-Tube' },
+        { tabId: mail.tabId, service: 'APP', name: 'Q-Mail' },
+      ],
+      selectedTabId: tube.tabId,
+    });
+  });
+
+  it('shows the tab that was selected when the Apps button finds the strip full', () => {
+    const tabs = Array.from({ length: 10 }, (_, index) => ({
+      tabId: `t${index + 1}`,
+      service: 'APP',
+      name: `App ${index + 1}`,
+    }));
+    save('QAlice', { tabs, selectedTabId: 't3' });
+    renderApps('QAlice');
+
+    // No launcher tab fits: the note says so, over the tab viewed last.
+    act(() => {
+      document.dispatchEvent(new CustomEvent('showLauncherTab', {}));
+    });
+
+    expect(strip()).toHaveLength(10);
+    expect(strip().find((tab) => tab.selected)?.tabId).toBe('t3');
+    expect(viewers().map((viewer) => viewer.tabId)).toEqual(['t3']);
   });
 
   it('falls back to the tab that was selected before the restart', () => {

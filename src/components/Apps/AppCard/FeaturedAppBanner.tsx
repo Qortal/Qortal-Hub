@@ -15,6 +15,7 @@ import { getBaseApiReact } from '../../../App';
 import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../../utils/events';
 import { AppButton, AppButtonText } from '../Apps-styles';
+import { inLauncherTab, useLauncherTabId } from '../launcherTabs';
 
 const CarouselContainer = styled(Box)({
   display: 'flex',
@@ -141,6 +142,7 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const [startIndex, setStartIndex] = useState(0);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const launcherTabId = useLauncherTabId();
 
   // Responsive breakpoints
   const isXSmall = useMediaQuery(theme.breakpoints.down('sm')); // < 600px
@@ -156,6 +158,29 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
   };
 
   const visibleCount = getVisibleCount();
+  const appCount = featuredApps?.length ?? 0;
+
+  // The hooks come before the early return below, in the same order every
+  // render.
+  const handlePrev = useCallback(() => {
+    setStartIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const handleNext = useCallback(() => {
+    setStartIndex((prev) => Math.min(appCount - visibleCount, prev + 1));
+  }, [appCount, visibleCount]);
+
+  const handleOpenApp = useCallback(
+    (app: any, e: React.MouseEvent) => {
+      e.stopPropagation();
+      executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) });
+    },
+    [launcherTabId]
+  );
+
+  const handleViewDetails = useCallback((app: any) => {
+    executeEvent('selectedAppInfo', { data: app });
+  }, []);
 
   if (!featuredApps || featuredApps.length === 0) {
     return null;
@@ -175,25 +200,6 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
 
   const canGoBack = startIndex > 0;
   const canGoForward = startIndex + visibleCount < featuredApps.length;
-
-  const handlePrev = useCallback(() => {
-    setStartIndex((prev) => Math.max(0, prev - 1));
-  }, []);
-
-  const handleNext = useCallback(() => {
-    setStartIndex((prev) =>
-      Math.min(featuredApps.length - visibleCount, prev + 1)
-    );
-  }, [featuredApps.length, visibleCount]);
-
-  const handleOpenApp = useCallback((app: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    executeEvent('addTab', { data: app });
-  }, []);
-
-  const handleViewDetails = useCallback((app: any) => {
-    executeEvent('selectedAppInfo', { data: app });
-  }, []);
 
   return (
     <CarouselContainer>

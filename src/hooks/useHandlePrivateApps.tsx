@@ -9,6 +9,10 @@ import {
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
+import {
+  inLauncherTab,
+  useLauncherTabId,
+} from '../components/Apps/launcherTabs';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useAtom, useSetAtom } from 'jotai';
@@ -35,6 +39,8 @@ export const useHandlePrivateApps = () => {
   const [infoSnackCustom, setInfoSnackCustom] = useAtom(infoSnackGlobalAtom);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  // Inside a launcher tab the app opens in its place, once it is decrypted.
+  const launcherTabId = useLauncherTabId();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
 
   const openApp = async (
@@ -250,7 +256,7 @@ export const useHandlePrivateApps = () => {
             openTab(dataBody);
           } else {
             executeEvent('addTab', {
-              data: dataBody,
+              data: inLauncherTab(dataBody, launcherTabId),
             });
           }
           setInfoSnackCustom({

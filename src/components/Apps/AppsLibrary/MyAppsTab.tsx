@@ -4,13 +4,13 @@ import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
 import AddIcon from '@mui/icons-material/Add';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../../../atoms/global';
-import { publishEditTargetAtom } from '../../../atoms/appsAtoms';
 import { getBaseApiReact } from '../../../App';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { PublishedAppCard } from '../AppCard';
+import type { PublishEditTarget } from '../launcherTabs';
 import {
   EmptyStateBox,
   PublishButton,
@@ -23,7 +23,8 @@ import {
 interface MyAppsTabProps {
   myName: string;
   availableQapps: any[];
-  setMode: (mode: string) => void;
+  /** Opens a publish page: Update passes the app or website it updates. */
+  setMode: (mode: string, publishEditTarget?: PublishEditTarget | null) => void;
   searchValue?: string;
 }
 
@@ -36,7 +37,6 @@ export const MyAppsTab = ({
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const userInfo = useAtomValue(userInfoAtom);
-  const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
   const myAddress = userInfo?.address ?? null;
   const [myNames, setMyNames] = useState<string[]>([]);
   const [namesLoaded, setNamesLoaded] = useState(false);
@@ -182,7 +182,7 @@ export const MyAppsTab = ({
                   key={`${app.service}-${app.name}`}
                   app={app}
                   onUpdate={() => {
-                    setPublishEditTarget({
+                    setMode('publish', {
                       name: app.name,
                       service:
                         app.service === 'WEBSITE' ||
@@ -190,7 +190,6 @@ export const MyAppsTab = ({
                           ? 'WEBSITE'
                           : 'APP',
                     });
-                    setMode('publish');
                   }}
                 />
               ))}
@@ -214,7 +213,7 @@ export const MyAppsTab = ({
                   key={`${site.service}-${site.name}`}
                   app={site}
                   onUpdate={() => {
-                    setPublishEditTarget({
+                    setMode('publish', {
                       name: site.name,
                       service:
                         site.service === 'WEBSITE' ||
@@ -222,7 +221,6 @@ export const MyAppsTab = ({
                           ? 'WEBSITE'
                           : 'APP',
                     });
-                    setMode('publish');
                   }}
                 />
               ))}
@@ -301,7 +299,6 @@ export const MyAppsTab = ({
             <PublishButton
               onClick={() => {
                 // A new app or website: nothing is locked.
-                setPublishEditTarget(null);
                 setMode('publish-app');
               }}
             >
@@ -323,7 +320,6 @@ export const MyAppsTab = ({
             <PublishButton
               onClick={() => {
                 // A new app or website: nothing is locked.
-                setPublishEditTarget(null);
                 setMode('publish-website');
               }}
             >

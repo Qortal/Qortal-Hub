@@ -179,10 +179,12 @@
     "duplicate": "dubleeri vaheleht",
     "limit_reached": "vahelehtede maksimaalne arv on täis. Sulge üks, et avada uus.",
     "locked_kept_open": "lukustatud vahelehed jäävad avatuks. Sulge need ükshaaval, et kinnitada.",
+    "new_tab": "uus vaheleht",
     "pin": "kinnita vaheleht",
     "pinned_and_locked_kept_open": "kinnitatud ja lukustatud vahelehed jäävad avatuks. Eemalda kinnitatud vahelehe kinnitus enne selle sulgemist ja sulge lukustatud vahelehed ükshaaval, et kinnitada.",
     "pinned_kept_open": "kinnitatud vahelehed jäävad avatuks. Eemalda vahelehe kinnitus, et see sulgeda.",
-    "unpin": "eemalda vahelehe kinnitus"
+    "unpin": "eemalda vahelehe kinnitus",
+    "unsaved_publish": "avaldamisvormi andmed pole veel avaldatud ja vahelehe sulgemine kustutab need."
   },
   "apps_bar": {
     "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",
