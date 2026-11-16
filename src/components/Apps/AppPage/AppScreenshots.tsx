@@ -3,6 +3,7 @@ import {
   alpha,
   Box,
   ButtonBase,
+  CircularProgress,
   Dialog,
   IconButton,
   Skeleton,
@@ -178,12 +179,15 @@ export const AppScreenshots = ({
   appTitle,
   isPublisher,
   onAdd,
+  addLoading = false,
 }: {
   shots: GalleryShot[];
   loading: boolean;
   appTitle: string;
   isPublisher: boolean;
   onAdd: () => void;
+  /** The page is still loading: Add waits for it, as the header's Edit does. */
+  addLoading?: boolean;
 }) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -304,6 +308,7 @@ export const AppScreenshots = ({
               })}
           {isPublisher && !loading && shots.length < 5 && (
             <ButtonBase
+              disabled={addLoading}
               onClick={onAdd}
               sx={{
                 alignItems: 'center',
@@ -330,7 +335,11 @@ export const AppScreenshots = ({
                 },
               }}
             >
-              <AddPhotoAlternateRoundedIcon />
+              {addLoading ? (
+                <CircularProgress color="inherit" size={22} />
+              ) : (
+                <AddPhotoAlternateRoundedIcon />
+              )}
               <Typography sx={{ fontSize: '14px', fontWeight: 600 }}>
                 {t('core:app_page.screenshots.add', {
                   postProcess: 'capitalizeFirstChar',
