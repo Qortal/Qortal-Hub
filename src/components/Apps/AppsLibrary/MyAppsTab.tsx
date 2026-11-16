@@ -1,23 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, CircularProgress, Typography, useTheme } from '@mui/material';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
-import AddIcon from '@mui/icons-material/Add';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
+import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
+import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded';
 import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../../../atoms/global';
 import { getBaseApiReact } from '../../../App';
+import { executeEvent } from '../../../utils/events';
 import { AppsWidthLimiter } from '../Apps-styles';
-import { Spacer } from '../../../common/Spacer';
 import { PublishedAppCard } from '../AppCard';
+import { LibraryActionButton } from '../AppCard/libraryCardParts';
 import type { PublishEditTarget } from '../launcherTabs';
+import { AppCollection } from './AppCollection';
+import { APP_SKELETON } from './libraryLayout';
 import {
-  EmptyStateBox,
+  LibraryEmptyState,
+  LibrarySection,
+  LibrarySkeleton,
+} from './LibrarySection';
+import { cap } from './libraryStyles';
+import { libraryViewAtom } from './libraryView';
+import {
   PublishButton,
   PublishNewContainer,
   SectionContainer,
-  SectionTitle,
-  StyledDivider,
 } from './LibraryTab-styles';
 
 interface MyAppsTabProps {
@@ -26,16 +36,25 @@ interface MyAppsTabProps {
   /** Opens a publish page: Update passes the app or website it updates. */
   setMode: (mode: string, publishEditTarget?: PublishEditTarget | null) => void;
   searchValue?: string;
+  /** Changes when the library's refresh button is pressed. */
+  libraryRefreshKey?: number;
 }
+
+const serviceOf = (app: any): 'APP' | 'WEBSITE' =>
+  app.service === 'WEBSITE' || app.service?.includes?.('WEBSITE')
+    ? 'WEBSITE'
+    : 'APP';
 
 export const MyAppsTab = ({
   myName,
   availableQapps,
   setMode,
   searchValue = '',
+  libraryRefreshKey = 0,
 }: MyAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const view = useAtomValue(libraryViewAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress = userInfo?.address ?? null;
   const [myNames, setMyNames] = useState<string[]>([]);
@@ -64,6 +83,15 @@ export const MyAppsTab = ({
     setNamesLoaded(false);
     getNames();
   }, [getNames]);
+
+  // The refresh button reloads the names too, without the placeholders: the
+  // apps stay on screen while the node answers.
+  const lastRefreshRef = useRef(libraryRefreshKey);
+  useEffect(() => {
+    if (lastRefreshRef.current === libraryRefreshKey) return;
+    lastRefreshRef.current = libraryRefreshKey;
+    getNames();
+  }, [getNames, libraryRefreshKey]);
 
   // Find user's published apps and websites (all names), applying search filter
   const myApps = useMemo(() => {
@@ -113,188 +141,112 @@ export const MyAppsTab = ({
   const isLoadingNames = myAddress != null && !namesLoaded;
   const hasNoNames = myAddress != null && namesLoaded && myNames.length === 0;
 
+  const appsTitle = t('core:developer.your_published_apps', cap);
+  const sitesTitle = t('core:developer.your_published_websites', cap);
+
   if (isLoadingNames) {
     return (
-      <AppsWidthLimiter>
-        <EmptyStateBox>
-          <CircularProgress sx={{ mb: 2 }} />
-          <Typography
-            sx={{
-              fontSize: '14px',
-              color: theme.palette.text.secondary,
-            }}
-          >
-            {t('core:loading.generic', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </EmptyStateBox>
+      <AppsWidthLimiter sx={{ alignItems: 'stretch', gap: '16px' }}>
+        <LibrarySection icon={<AppsRoundedIcon />} title={appsTitle}>
+          <LibrarySkeleton {...APP_SKELETON} count={2} view={view} />
+        </LibrarySection>
       </AppsWidthLimiter>
     );
   }
 
   if (!myAddress || hasNoNames) {
     return (
-      <AppsWidthLimiter>
-        <EmptyStateBox>
-          <Typography
-            sx={{
-              fontSize: '18px',
-              fontWeight: 500,
-              marginBottom: '12px',
-            }}
-          >
-            {t('core:message.generic.name_publish', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '14px',
-              color: theme.palette.text.secondary,
-            }}
-          >
-            {t('core:message.generic.register_name', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </EmptyStateBox>
+      <AppsWidthLimiter sx={{ alignItems: 'stretch', gap: '16px' }}>
+        <LibrarySection
+          icon={<AppsRoundedIcon />}
+          title={t('core:tabs.my_apps', cap)}
+        >
+          <LibraryEmptyState
+            action={
+              <LibraryActionButton
+                kind="primary"
+                onClick={() => executeEvent('openRegisterName', {})}
+              >
+                {t('core:action.register_name', cap)}
+              </LibraryActionButton>
+            }
+            icon={<BadgeRoundedIcon />}
+            text={t('core:launcher.library.no_name_text', cap)}
+            title={t('core:message.generic.name_publish', cap)}
+          />
+        </LibrarySection>
       </AppsWidthLimiter>
     );
   }
 
+  const renderOwn = (app: any, itemView: 'grid' | 'list') => (
+    <PublishedAppCard
+      app={app}
+      myName={myName}
+      onUpdate={() => {
+        setMode('publish', { name: app.name, service: serviceOf(app) });
+      }}
+      view={itemView}
+    />
+  );
+
   return (
-    <AppsWidthLimiter>
+    <AppsWidthLimiter sx={{ alignItems: 'stretch' }}>
       <SectionContainer>
         {/* Published Apps Section */}
-        {myApps.length > 0 && (
-          <Box>
-            <SectionTitle>
-              <AppsIcon sx={{ fontSize: '20px' }} />
-              {t('core:developer.your_published_apps', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </SectionTitle>
-            <Spacer height="16px" />
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-              {myApps.map((app) => (
-                <PublishedAppCard
-                  key={`${app.service}-${app.name}`}
-                  app={app}
-                  onUpdate={() => {
-                    setMode('publish', {
-                      name: app.name,
-                      service:
-                        app.service === 'WEBSITE' ||
-                        app.service?.includes?.('WEBSITE')
-                          ? 'WEBSITE'
-                          : 'APP',
-                    });
-                  }}
-                />
-              ))}
-            </Box>
-          </Box>
-        )}
+        <LibrarySection
+          count={myApps.length}
+          hint={t('core:launcher.library.my_apps_hint', cap)}
+          icon={<AppsRoundedIcon />}
+          title={appsTitle}
+        >
+          {myApps.length > 0 ? (
+            <AppCollection
+              apps={myApps}
+              label={appsTitle}
+              myName={myName}
+              renderItem={renderOwn}
+              virtualize={false}
+            />
+          ) : (
+            <LibraryEmptyState
+              compact
+              icon={<AppsRoundedIcon />}
+              title={t('core:developer.no_apps_yet', cap)}
+            />
+          )}
+        </LibrarySection>
 
         {/* Published Websites Section */}
-        {myWebsites.length > 0 && (
-          <Box>
-            <SectionTitle>
-              <LanguageIcon sx={{ fontSize: '20px' }} />
-              {t('core:developer.your_published_websites', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </SectionTitle>
-            <Spacer height="16px" />
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-              {myWebsites.map((site) => (
-                <PublishedAppCard
-                  key={`${site.service}-${site.name}`}
-                  app={site}
-                  onUpdate={() => {
-                    setMode('publish', {
-                      name: site.name,
-                      service:
-                        site.service === 'WEBSITE' ||
-                        site.service?.includes?.('WEBSITE')
-                          ? 'WEBSITE'
-                          : 'APP',
-                    });
-                  }}
-                />
-              ))}
-            </Box>
-          </Box>
-        )}
-
-        {/* Empty State for Apps */}
-        {myApps.length === 0 && (
-          <Box>
-            <SectionTitle>
-              <AppsIcon sx={{ fontSize: '20px' }} />
-              {t('core:developer.your_published_apps', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </SectionTitle>
-            <Spacer height="16px" />
-            <EmptyStateBox>
-              <AppsIcon
-                sx={{ fontSize: '48px', color: 'text.disabled', mb: 2 }}
-              />
-              <Typography
-                sx={{
-                  fontSize: '16px',
-                  color: theme.palette.text.secondary,
-                }}
-              >
-                {t('core:developer.no_apps_yet', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-            </EmptyStateBox>
-          </Box>
-        )}
-
-        {/* Empty State for Websites */}
-        {myWebsites.length === 0 && (
-          <Box>
-            <SectionTitle>
-              <LanguageIcon sx={{ fontSize: '20px' }} />
-              {t('core:developer.your_published_websites', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </SectionTitle>
-            <Spacer height="16px" />
-            <EmptyStateBox>
-              <LanguageIcon
-                sx={{ fontSize: '48px', color: 'text.disabled', mb: 2 }}
-              />
-              <Typography
-                sx={{
-                  fontSize: '16px',
-                  color: theme.palette.text.secondary,
-                }}
-              >
-                {t('core:developer.no_sites_yet', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-            </EmptyStateBox>
-          </Box>
-        )}
-
-        <StyledDivider />
+        <LibrarySection
+          count={myWebsites.length}
+          hint={t('core:launcher.library.my_apps_hint', cap)}
+          icon={<LanguageRoundedIcon />}
+          title={sitesTitle}
+        >
+          {myWebsites.length > 0 ? (
+            <AppCollection
+              apps={myWebsites}
+              label={sitesTitle}
+              myName={myName}
+              renderItem={renderOwn}
+              virtualize={false}
+            />
+          ) : (
+            <LibraryEmptyState
+              compact
+              icon={<LanguageRoundedIcon />}
+              title={t('core:developer.no_sites_yet', cap)}
+            />
+          )}
+        </LibrarySection>
 
         {/* Publish New Section */}
-        <Box>
-          <SectionTitle>
-            <AddIcon sx={{ fontSize: '20px' }} />
-            {t('core:developer.publish_new', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </SectionTitle>
-          <Spacer height="16px" />
+        <LibrarySection
+          hint={t('core:message.generic.one_app_per_name', cap)}
+          icon={<AddRoundedIcon />}
+          title={t('core:developer.publish_new', cap)}
+        >
           <PublishNewContainer>
             <PublishButton
               onClick={() => {
@@ -339,28 +291,7 @@ export const MyAppsTab = ({
               </Typography>
             </PublishButton>
           </PublishNewContainer>
-        </Box>
-
-        {/* Developer Note */}
-        <Box
-          sx={{
-            padding: '16px',
-            borderRadius: '8px',
-            backgroundColor: theme.palette.action.hover,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: '13px',
-              color: theme.palette.text.secondary,
-              fontStyle: 'italic',
-            }}
-          >
-            {t('core:message.generic.one_app_per_name', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </Box>
+        </LibrarySection>
       </SectionContainer>
     </AppsWidthLimiter>
   );

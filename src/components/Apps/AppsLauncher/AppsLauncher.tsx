@@ -25,6 +25,7 @@ import {
 } from '../../../utils/pinnedAppsSettings';
 import { AppsLibraryContainer, AppsWidthLimiter } from '../Apps-styles';
 import type { AppsLibraryTabValue } from '../AppsLibrary';
+import { libraryMuted } from '../AppsLibrary/libraryStyles';
 import {
   inLauncherTab,
   type PublishEditTarget,
@@ -74,9 +75,9 @@ type SavedResult = {
 
 const sectionTitleSx = {
   color: 'text.primary',
-  fontSize: '15px',
-  fontWeight: 600,
-  lineHeight: 1.3,
+  fontSize: '17px',
+  fontWeight: 650,
+  lineHeight: '28px',
   margin: 0,
 } as const;
 
@@ -521,8 +522,8 @@ const AppsLauncherPage = ({
                   </Typography>
                   <Typography
                     sx={(theme) => ({
-                      color: theme.palette.text.secondary,
-                      fontSize: '12.5px',
+                      color: libraryMuted(theme),
+                      fontSize: '13px',
                     })}
                   >
                     {t('core:launcher.pinned_hint', {
