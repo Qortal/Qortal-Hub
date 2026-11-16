@@ -1,6 +1,4 @@
-import { useEffect, useId, useState } from 'react';
-import { Box, Button, Paper, Slide, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { useEffect, useState } from 'react';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
@@ -10,6 +8,11 @@ import {
   isUsingImportExportSettingsAtom,
   settingsQDNLastUpdatedAtom,
 } from '../../../atoms/global';
+import {
+  QDN_CARD_DONE_MS,
+  QdnCardDock,
+  QdnSettingsCard,
+} from '../../Save/QdnSettingsCard';
 import { useSaveSettingsToQdn } from '../../Save/useSaveSettingsToQdn';
 import type { AppBookmarksForAddress } from '../AppBookmarks/bookmarkTypes';
 import {
@@ -19,7 +22,7 @@ import {
 } from './launcherQdnSync';
 
 /** How long "saved" stays before the window goes. */
-export const SAVED_NOTICE_MS = 2500;
+export const SAVED_NOTICE_MS = QDN_CARD_DONE_MS;
 
 interface LauncherSaveWindowProps {
   /** The account's bookmarks as the launcher shows them, or null. */
@@ -43,8 +46,6 @@ export const LauncherSaveWindow = ({
   myName,
 }: LauncherSaveWindowProps) => {
   const { t } = useTranslation(['core']);
-  const titleId = useId();
-  const textId = useId();
   const edits = useAtomValue(launcherEditsAtom);
   const saved = useAtomValue(savedLauncherAtom);
   const isUsingImportExport = useAtomValue(isUsingImportExportSettingsAtom);
@@ -122,124 +123,47 @@ export const LauncherSaveWindow = ({
         : CloudUploadOutlinedIcon;
 
   return (
-    <Box
-      sx={{
-        bottom: 20,
-        display: 'flex',
-        justifyContent: 'center',
-        left: 0,
-        paddingInline: '16px',
-        pointerEvents: 'none',
-        position: 'absolute',
-        right: 0,
-        zIndex: 5,
-      }}
-    >
-      <Slide direction="up" in={isOpen} mountOnEnter unmountOnExit>
-        <Paper
-          aria-describedby={phase === 'saved' ? undefined : textId}
-          aria-labelledby={titleId}
-          aria-modal={phase === 'saved' ? undefined : false}
-          elevation={8}
-          role={phase === 'saved' ? 'status' : 'dialog'}
-          sx={(theme) => ({
-            alignItems: 'center',
-            backgroundImage: 'none',
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: '16px',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '12px 14px',
-            maxWidth: 600,
-            padding: '14px 16px',
-            pointerEvents: 'auto',
-            width: '100%',
-          })}
-        >
-          <Box
-            aria-hidden
-            sx={(theme) => {
-              const tone =
-                phase === 'saved'
-                  ? theme.palette.success.main
-                  : phase === 'failed'
-                    ? theme.palette.error.main
-                    : theme.palette.primary.main;
-              return {
-                alignItems: 'center',
-                backgroundColor: alpha(tone, 0.14),
-                borderRadius: '50%',
-                color: tone,
-                display: 'flex',
-                flexShrink: 0,
-                height: 40,
-                justifyContent: 'center',
-                width: 40,
-              };
-            }}
-          >
-            <Icon sx={{ fontSize: 22 }} />
-          </Box>
-          <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
-            <Typography
-              id={titleId}
-              sx={{ fontSize: '14px', fontWeight: 600, lineHeight: 1.4 }}
-            >
-              {title}
-            </Typography>
-            {phase === 'saved' ? null : (
-              <Typography
-                id={textId}
-                sx={(theme) => ({
-                  color: theme.palette.text.secondary,
-                  fontSize: '12.5px',
-                  lineHeight: 1.45,
-                  overflowWrap: 'anywhere',
-                })}
-              >
-                {text}
-              </Typography>
-            )}
-          </Box>
-          {phase === 'saved' ? null : (
-            <Box
-              sx={{
-                display: 'flex',
-                flexShrink: 0,
-                gap: '8px',
-                justifyContent: 'flex-end',
-                marginLeft: 'auto',
-              }}
-            >
-              <Button
-                color="inherit"
-                disabled={phase === 'saving'}
-                onClick={putOff}
-                sx={{ textTransform: 'none' }}
-              >
-                {t('core:launcher.save_later', {
+    <QdnCardDock>
+      <QdnSettingsCard
+        icon={Icon}
+        open={isOpen}
+        primary={
+          phase === 'saved'
+            ? undefined
+            : {
+                label:
+                  phase === 'failed'
+                    ? t('core:launcher.save_retry', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('core:message.generic.save_qdn', {
+                        postProcess: 'capitalizeFirstChar',
+                      }),
+                loading: phase === 'saving',
+                onClick: handleSave,
+              }
+        }
+        secondary={
+          phase === 'saved'
+            ? undefined
+            : {
+                disabled: phase === 'saving',
+                label: t('core:launcher.save_later', {
                   postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-              <Button
-                disableElevation
-                loading={phase === 'saving'}
-                onClick={handleSave}
-                sx={{ borderRadius: '10px', textTransform: 'none' }}
-                variant="contained"
-              >
-                {phase === 'failed'
-                  ? t('core:launcher.save_retry', {
-                      postProcess: 'capitalizeFirstChar',
-                    })
-                  : t('core:message.generic.save_qdn', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-              </Button>
-            </Box>
-          )}
-        </Paper>
-      </Slide>
-    </Box>
+                }),
+                onClick: putOff,
+              }
+        }
+        text={phase === 'saved' ? undefined : text}
+        title={title}
+        tone={
+          phase === 'saved'
+            ? 'success'
+            : phase === 'failed'
+              ? 'error'
+              : 'primary'
+        }
+      />
+    </QdnCardDock>
   );
 };

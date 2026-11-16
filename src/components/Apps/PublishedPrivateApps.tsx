@@ -26,17 +26,22 @@ import { PrivateAppItem, PrivateAppList } from './AppsLibrary/PrivateAppItem';
 interface PublishedPrivateAppsProps {
   myAddress: string;
   refreshKey?: number;
+  /** Opens the publish form to update one of the account's own apps. */
+  onUpdate?: (app: PublishedPrivateApp) => void;
 }
 
 export const PublishedPrivateApps = ({
   myAddress,
   refreshKey = 0,
+  onUpdate,
 }: PublishedPrivateAppsProps) => {
   const { t } = useTranslation(['core', 'group']);
   const view = useAtomValue(libraryViewAtom);
   const { openApp } = useHandlePrivateApps();
   const memberGroups = useAtomValue(memberGroupsAtom);
   const [apps, setApps] = useState<PublishedPrivateApp[]>([]);
+  // The account's names, lower case: only their apps can be updated.
+  const [ownNames, setOwnNames] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
@@ -68,6 +73,7 @@ export const PublishedPrivateApps = ({
       const names: string[] = Array.isArray(namesData)
         ? namesData.map((item) => item?.name).filter(Boolean)
         : [];
+      setOwnNames(new Set(names.map((name) => name.toLowerCase())));
       if (!names.length) {
         setApps([]);
         setHasError(false);
@@ -150,6 +156,19 @@ export const PublishedPrivateApps = ({
               sx={{ minWidth: 0 }}
             >
               <PrivateAppItem
+                actions={
+                  onUpdate && ownNames.has(app.name.toLowerCase())
+                    ? (titleId) => (
+                        <LibraryActionButton
+                          describedBy={titleId}
+                          kind="secondary"
+                          onClick={() => onUpdate(app)}
+                        >
+                          {t('core:developer.update', cap)}
+                        </LibraryActionButton>
+                      )
+                    : null
+                }
                 app={app}
                 groupName={
                   groupNames.get(app.groupId) ??

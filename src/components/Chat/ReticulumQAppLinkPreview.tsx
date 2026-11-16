@@ -17,6 +17,7 @@ import i18n from '../../i18n/i18n';
 import { getBaseApiReact } from '../../utils/globalApi';
 import { executeEvent } from '../../utils/events';
 import qortalWhiteLogo from '../../assets/sidebar/qortal-logo-white.png';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 
 type QAppPreviewKind = 'qtube' | 'quitter' | 'subwire';
 
@@ -614,7 +615,13 @@ function AppHeader({ link }: { link: ReticulumQAppLink }) {
           width: 24,
         }}
       >
-        {link.appName.slice(0, 1)}
+        <Box
+          alt=""
+          component="img"
+          draggable={false}
+          src={LogoSelected}
+          sx={{ height: 'auto', width: '64%' }}
+        />
       </Avatar>
       <Typography
         sx={{ color: 'text.secondary', fontSize: 11.5, fontWeight: 650 }}
