@@ -26,6 +26,11 @@ import {
   EditorTab,
 } from './AppPageEditorDialog';
 import { SectionCard, SectionTitle } from './AppPageParts';
+import {
+  inLauncherTab,
+  LauncherTabShownContext,
+  useLauncherTabId,
+} from '../launcherTabs';
 import { appIconUrl, shotImageUrl } from './appPageQdn';
 import { AppPageData, EMPTY_APP_PAGE, isVersionCurrent } from './appPageData';
 import { HideAppDialog } from './HideAppDialog';
@@ -94,15 +99,18 @@ export const AppPage = ({
     [service, app?.name]
   );
   const base = getBaseApiReact();
+  const launcherTabId = useLauncherTabId();
 
-  // On screen: the top bar shows this page's link.
+  // On screen: the top bar shows this page's link. A page in a launcher tab
+  // that is hidden behind another tab is not.
+  const isTabShown = useContext(LauncherTabShownContext);
   const setShownAppPage = useSetAtom(shownAppPageAtom);
   useEffect(() => {
-    if (!ref.name) return;
+    if (!ref.name || !isTabShown) return;
     setShownAppPage(ref);
     return () =>
       setShownAppPage((current) => (current === ref ? null : current));
-  }, [ref, setShownAppPage]);
+  }, [isTabShown, ref, setShownAppPage]);
 
   const pageData = useAppPageData(ref);
   const ownedNames = useOwnedNames(myAddress);
@@ -447,7 +455,9 @@ export const AppPage = ({
         }
         onEdit={() => openEditor('page')}
         onHide={() => setHideOpen(true)}
-        onOpen={() => executeEvent('addTab', { data: app })}
+        onOpen={() =>
+          executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) })
+        }
         onShowAgain={() => void showInLibrary()}
         onTogglePin={togglePin}
         version={page?.version || ''}
