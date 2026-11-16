@@ -374,6 +374,58 @@ describe('the app page', () => {
     ).toBeInTheDocument();
   });
 
+  it('tries your review again when the page is opened again, after giving up', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let served = false;
+      routes({
+        [OWN_SEARCH]: [
+          {
+            name: 'Me',
+            identifier: KEY,
+            created: 1_700_000_400_000,
+            metadata: { description: 'My review' },
+          },
+        ],
+        [`/arbitrary/COMMENT/Me/${KEY}`]: () =>
+          served
+            ? { v: 1, kind: 'review', text: 'My review, in full.', created: 4 }
+            : new Response('Data unavailable. Please try again later.', {
+                status: 404,
+              }),
+      });
+      const recordFetches = () =>
+        vi
+          .mocked(fetch)
+          .mock.calls.filter(([url]) =>
+            String(url).includes(`/arbitrary/COMMENT/Me/${KEY}`)
+          ).length;
+      const first = renderPage();
+      // Three tries, 20 s apart, then Retry.
+      await waitFor(() => expect(recordFetches()).toBe(1));
+      for (const tries of [2, 3]) {
+        await act(async () => vi.advanceTimersByTimeAsync(21_000));
+        await waitFor(() => expect(recordFetches()).toBe(tries));
+      }
+      expect(
+        await screen.findByText('app_page.reviews.yours_failed')
+      ).toBeInTheDocument();
+
+      // Closed, the node recovers, and the page is opened again.
+      first.unmount();
+      served = true;
+      renderPage();
+      const edit = await screen.findByRole('button', {
+        name: 'app_page.reviews.edit_yours',
+      });
+      await waitFor(() => expect(edit).toBeEnabled());
+      expect(screen.queryByText('app_page.reviews.yours_failed')).toBeNull();
+      expect(recordFetches()).toBe(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps Load more off while its page loads', async () => {
     const page = Array.from({ length: 50 }, (_, index) => ({
       name: `Fan ${index}`,
