@@ -1,12 +1,15 @@
-import {
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  SelectChangeEvent,
-  styled,
-} from '@mui/material';
+import { useId, useState } from 'react';
+import { Menu, MenuItem } from '@mui/material';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import DownloadDoneRoundedIcon from '@mui/icons-material/DownloadDoneRounded';
 import { useTranslation } from 'react-i18next';
+import {
+  cap,
+  libraryMenuItemSx,
+  libraryMenuPaperSx,
+  usePrefersReducedMotion,
+} from '../AppsLibrary/libraryStyles';
+import { FilterPill } from './FilterPill';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
@@ -15,56 +18,69 @@ interface StatusFilterProps {
   onChange: (value: StatusFilterOption) => void;
 }
 
-const StyledFormControl = styled(FormControl)(({ theme }) => ({
-  minWidth: '140px',
-  '& .MuiInputBase-root': {
-    height: '36px',
-    fontSize: '14px',
-  },
-  '& .MuiInputLabel-root': {
-    fontSize: '14px',
-    transform: 'translate(14px, 8px) scale(1)',
-    '&.Mui-focused, &.MuiFormLabel-filled': {
-      transform: 'translate(14px, -9px) scale(0.75)',
-    },
-  },
-}));
+const STATUS_OPTIONS: StatusFilterOption[] = [
+  'all',
+  'installed',
+  'not_installed',
+];
 
+/** Whether the node has an app ready: a pill that opens a short menu. */
 export const StatusFilter = ({ value, onChange }: StatusFilterProps) => {
   const { t } = useTranslation(['core']);
-
-  const handleChange = (event: SelectChangeEvent) => {
-    onChange(event.target.value as StatusFilterOption);
-  };
+  const reduce = usePrefersReducedMotion();
+  const popupId = useId();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const label = t('core:filter.status', cap);
+  const close = () => setAnchor(null);
+  const optionLabel = (option: StatusFilterOption) =>
+    t(`core:filter.${option}`, cap);
 
   return (
-    <StyledFormControl size="small">
-      <InputLabel id="status-filter-label">
-        {t('core:filter.status', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </InputLabel>
-      <Select
-        labelId="status-filter-label"
-        id="status-filter"
-        value={value}
-        label={t('core:filter.status', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-        onChange={handleChange}
+    <>
+      <FilterPill
+        active={value !== 'all'}
+        icon={<DownloadDoneRoundedIcon />}
+        label={label}
+        onClick={(event) => setAnchor(event.currentTarget)}
+        open={!!anchor}
+        popupId={popupId}
+        popupRole="menu"
+        valueLabel={optionLabel(value)}
+      />
+      <Menu
+        anchorEl={anchor}
+        anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        id={popupId}
+        onClose={close}
+        open={!!anchor}
+        slotProps={{
+          list: { 'aria-label': label, sx: { py: 0.75 } },
+          paper: {
+            sx: (theme) => ({ ...libraryMenuPaperSx(theme), minWidth: 220 }),
+          },
+        }}
+        transformOrigin={{ horizontal: 'left', vertical: 'top' }}
+        // Menu passes this to the Popover, which sets the transition's
+        // timeout from it, over slotProps.
+        transitionDuration={reduce ? 0 : 'auto'}
       >
-        <MenuItem value="all">
-          {t('core:filter.all', { postProcess: 'capitalizeFirstChar' })}
-        </MenuItem>
-        <MenuItem value="installed">
-          {t('core:filter.installed', { postProcess: 'capitalizeFirstChar' })}
-        </MenuItem>
-        <MenuItem value="not_installed">
-          {t('core:filter.not_installed', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </MenuItem>
-      </Select>
-    </StyledFormControl>
+        {STATUS_OPTIONS.map((option) => (
+          <MenuItem
+            aria-checked={option === value}
+            key={option}
+            onClick={() => {
+              onChange(option);
+              close();
+            }}
+            role="menuitemradio"
+            selected={option === value}
+            sx={libraryMenuItemSx}
+          >
+            {optionLabel(option)}
+            <CheckRoundedIcon aria-hidden className="libraryCheck" />
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 };

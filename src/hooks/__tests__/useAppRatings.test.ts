@@ -239,6 +239,72 @@ describe('RatingsCacheInitializer — network error', () => {
   });
 });
 
+describe('allRatingsLoadedAtom — whether every rating is known', () => {
+  const mockModules = () => {
+    vi.doMock('../../App', () => ({ getBaseApiReact: () => BASE_URL }));
+    vi.doMock('../../utils/ratingsIndexedDB', () => ({
+      loadRatingsCacheFromDB: vi.fn().mockResolvedValue(new Map()),
+      saveRatingsCacheToDB: vi.fn(),
+    }));
+    vi.doMock('../../constants/constants', () => ({
+      RATING_CACHE_TTL: 30 * 60 * 1000,
+    }));
+  };
+
+  const renderLoaded = async () => {
+    const mod = await freshImport();
+    const { useAtomValue } = await import('jotai');
+    const hook = renderHook(
+      () => ({
+        loaded: useAtomValue(mod.allRatingsLoadedAtom),
+        ratings: mod.useAppRatings(),
+      }),
+      {
+        wrapper: ({ children }) =>
+          React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(mod.RatingsCacheInitializer),
+            children
+          ),
+      }
+    );
+    return hook.result;
+  };
+
+  it('is true once the node sent its list of all ratings', async () => {
+    mockModules();
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(fakeResponse(200, makeBulkResponse()));
+    const result = await renderLoaded();
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+  });
+
+  it('is false on a node without that list', async () => {
+    mockModules();
+    global.fetch = vi.fn().mockResolvedValue(fakeResponse(404, {}));
+    const result = await renderLoaded();
+    await waitFor(() => expect(result.current.loaded).toBe(false));
+  });
+
+  it('is false when the list did not come, and true again after a refresh that gets it', async () => {
+    mockModules();
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    const result = await renderLoaded();
+    await waitFor(() => expect(result.current.loaded).toBe(false));
+
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(fakeResponse(200, makeBulkResponse()));
+    const { act } = await import('@testing-library/react');
+    await act(async () => {
+      await result.current.ratings.refreshRatings();
+    });
+    expect(result.current.loaded).toBe(true);
+  });
+});
+
 describe('RatingsCacheInitializer — IndexedDB cache hit', () => {
   it('bulk data overwrites cached data with fresher values', async () => {
     vi.doMock('../../App', () => ({ getBaseApiReact: () => BASE_URL }));
@@ -278,5 +344,86 @@ describe('RatingsCacheInitializer — IndexedDB cache hit', () => {
       const r = result.current.ratings.getRating('Q-Tube', 'APP');
       expect(r?.averageRating).toBe(4.5);
     });
+  });
+});
+
+describe('refreshRatings — cards already on screen', () => {
+  it('gives a visible card without a poll its empty rating again', async () => {
+    vi.doMock('../../App', () => ({ getBaseApiReact: () => BASE_URL }));
+    vi.doMock('../../utils/ratingsIndexedDB', () => ({
+      loadRatingsCacheFromDB: vi.fn().mockResolvedValue(new Map()),
+      saveRatingsCacheToDB: vi.fn(),
+    }));
+    vi.doMock('../../constants/constants', () => ({
+      RATING_CACHE_TTL: 30 * 60 * 1000,
+    }));
+
+    // Like a real observer: one report when an element starts being watched,
+    // and none while it stays in view.
+    const originalObserver = globalThis.IntersectionObserver;
+    class FakeIntersectionObserver {
+      constructor(
+        private readonly callback: (
+          entries: unknown[],
+          observer: unknown
+        ) => void
+      ) {}
+      observe(target: Element) {
+        setTimeout(
+          () => this.callback([{ target, isIntersecting: true }], this),
+          0
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+    globalThis.IntersectionObserver =
+      FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+
+    // Only Q-Tube has a poll.
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(fakeResponse(200, makeBulkResponse()));
+
+    try {
+      const mod = await freshImport();
+      const { render, screen, act } = await import('@testing-library/react');
+      const refresh: { current: (() => Promise<void>) | null } = {
+        current: null,
+      };
+      const Card = () => {
+        const { refreshRatings } = mod.useAppRatings();
+        refresh.current = refreshRatings;
+        const { rating, containerRef } = mod.useAppRating('Q-Chess', 'APP');
+        return React.createElement(
+          'div',
+          { ref: containerRef },
+          rating ? `votes ${rating.totalVotes}` : 'waiting'
+        );
+      };
+      render(
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(mod.RatingsCacheInitializer),
+          React.createElement(Card)
+        )
+      );
+
+      expect(await screen.findByText('votes 0')).toBeInTheDocument();
+
+      await act(async () => {
+        await refresh.current?.();
+      });
+      expect(screen.getByText('waiting')).toBeInTheDocument();
+
+      // Without a fresh report the card would wait until it scrolled away.
+      expect(await screen.findByText('votes 0')).toBeInTheDocument();
+    } finally {
+      globalThis.IntersectionObserver = originalObserver;
+    }
   });
 });

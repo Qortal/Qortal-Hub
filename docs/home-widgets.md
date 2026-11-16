@@ -15,8 +15,9 @@ implements it.
 
 - A normal Q-App (QDN service `APP`), loaded by the Hub in a small frame on
   Home.
-- The user picks it from **Home → Widgets → Add widget**. Nothing runs until
-  the user adds it.
+- The user picks it from **Home → Widgets → Add widget**, or finds it in the
+  launcher's **Widgets** tab, where people rate and review widgets and add
+  them to Home. Nothing runs until the user adds it.
 - The user can move and resize it on a grid at any time, so it must look right
   at any size it allows.
 - It shows things and opens apps. It **cannot** pay, publish, sign, decrypt,
@@ -34,8 +35,10 @@ letter case). Give it an identifier starting with `go-widget` as well, e.g.
   only found by reading all APP metadata.
 
 The picker shows the resource's **title** and **description** and the name's
-avatar. `WEBSITE` resources are never widgets; publish the widget page as an
-`APP`. Blocked names are left out by the node.
+avatar; the Widgets tab also shows its **category** and **tags**. Ratings and
+reviews are kept per widget (name and identifier), see `docs/app-pages.md`.
+`WEBSITE` resources are never widgets; publish the widget page as an `APP`.
+Blocked names are left out by the node.
 
 The Hub's own publish form does this too: pick **Widget** beside Q-App and
 Website, give it an ID (published as `go-widget-<ID>`), and it adds the tag.
