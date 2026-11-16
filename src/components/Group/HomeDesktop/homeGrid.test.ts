@@ -11,6 +11,9 @@ import {
   homeGridRowsFor,
   homeGridShown,
   homeGridSizeFor,
+  homeWidgetWindowId,
+  homeWindowMinSize,
+  isHomeWidgetWindowId,
   mergeHomeGrid,
   moveHomeWindow,
   normalizeHomeGrid,
@@ -172,6 +175,7 @@ describe('saving with hidden windows', () => {
     const saved = normalizeHomeGrid(
       mergeHomeGrid(grid, moved),
       undefined,
+      [],
       hidden
     );
 
@@ -304,5 +308,64 @@ describe('px helpers', () => {
     expect(homeGridRowsFor(172)).toBe(20);
     expect(homeGridRowsFor(180)).toBe(20);
     expect(homeGridRowsFor(181)).toBe(21);
+  });
+});
+
+describe('widget windows', () => {
+  const clock = homeWidgetWindowId({ name: 'GO Clock', identifier: null });
+  const weather = homeWidgetWindowId({
+    name: 'Q-Weather',
+    identifier: 'go-widget-now',
+  });
+
+  it('keys a widget window by its name and identifier', () => {
+    expect(clock).toBe('widget:GO%20Clock:');
+    expect(weather).toBe('widget:Q-Weather:go-widget-now');
+    expect(isHomeWidgetWindowId(weather)).toBe(true);
+    expect(isHomeWidgetWindowId('wallet')).toBe(false);
+  });
+
+  it('keeps the widget windows the layout lists, and adds the missing ones under everything', () => {
+    const stored = [
+      ...homeDefaultGrid(),
+      { key: clock, x: 0, y: 500, w: 8, h: 30 },
+      { key: 'widget:Gone:', x: 6, y: 500, w: 6, h: 20 },
+    ];
+    const grid = normalizeHomeGrid(stored, undefined, [clock, weather]);
+
+    expect(at(grid, 'widget:Gone:')).toBeUndefined();
+    // Risen to the bottom of Group Activity, the lowest in its columns.
+    expect(rect(grid, clock)).toEqual([0, 147, 8, 30]);
+    expect(rect(grid, weather)).toEqual([0, 177, 6, 27]);
+    expect(grid.map((item) => item.key).slice(-2)).toEqual([clock, weather]);
+  });
+
+  it('keeps a widget window within its own sizes', () => {
+    expect(homeWindowMinSize(clock)).toEqual({ w: 3, h: 10 });
+    const grid = normalizeHomeGrid(
+      [{ key: clock, x: 0, y: 0, w: 1, h: 2 }],
+      undefined,
+      [clock]
+    );
+    expect(rect(grid, clock)).toEqual([0, 0, 3, 10]);
+    expect(rect(resizeHomeWindow(grid, clock, 1, 1), clock)).toEqual([
+      0, 0, 3, 10,
+    ]);
+  });
+
+  it('keeps widget windows when a changed layout is merged', () => {
+    const stored = normalizeHomeGrid(
+      [...homeDefaultGrid(), { key: clock, x: 0, y: 200, w: 6, h: 20 }],
+      undefined,
+      [clock]
+    );
+    const moved = { ...at(stored, clock), x: 6 };
+    const merged = mergeHomeGrid(stored, [moved]);
+
+    expect(merged).toHaveLength(stored.length);
+    expect(at(merged, clock)?.x).toBe(6);
+    expect(mergeHomeGrid(stored.slice(0, -1), [moved])).toHaveLength(
+      stored.length
+    );
   });
 });
