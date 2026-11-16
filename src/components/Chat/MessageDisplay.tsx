@@ -26,13 +26,17 @@ const decodeQortalName = (name: string): string => {
   }
 };
 
+// The protocol is read in any case: QORTAL://APP/Q-Tube works too.
+const QORTAL_LINK_PATTERN = /^qortal:\/\//i;
+const QORTAL_USE_LINK_PATTERN = /^qortal:\/\/use-/i;
+
 export const extractComponents = (url: string) => {
-  if (!url || !url.startsWith(QORTAL_PROTOCOL)) {
+  if (!url || !QORTAL_LINK_PATTERN.test(url)) {
     return null;
   }
 
   // Skip links starting with "qortal://use-"
-  if (url.startsWith(QORTAL_PROTOCOL + 'use-')) {
+  if (QORTAL_USE_LINK_PATTERN.test(url)) {
     return null;
   }
 
