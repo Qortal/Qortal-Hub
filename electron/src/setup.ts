@@ -2034,7 +2034,6 @@ export interface AppSettings {
   legacyPublicStunFallback?: boolean;
   /** Contribute this device as an anonymously advertised community STUN server. */
   communityStunContributionEnabled?: boolean;
-  /**
   /** When false, skip UPnP for Reticulum hub mesh TCP listen port (default true). */
   reticulumMeshUpnpEnabled?: boolean;
   /** When false, do not write/regenerate Qortal Hub's managed Reticulum config. */
@@ -2276,7 +2275,7 @@ ipcMain.handle(
 ipcMain.handle('hub:getIceServers', async () => {
   const c = getStunCoordinator();
   if (!c) return [];
-  return await new Promise<RTCIceServer[]>((resolve, reject) => {
+  return await new Promise<{ urls: string }[]>((resolve, reject) => {
     const slots: { immediate?: ReturnType<typeof setImmediate> } = {};
     const timeoutId = setTimeout(() => {
       const im = slots.immediate;

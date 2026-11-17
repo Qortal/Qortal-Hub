@@ -2900,8 +2900,7 @@ try {
   contextBridge.exposeInMainWorld('hub', {
     getBootstrapIceServers: () => hubP2pBootstrapIceServers,
     getIceServers: () =>
-      ipcRenderer.invoke('hub:getIceServers') as Promise<RTCIceServer[]>,
-    /** P-5: `'relay'` when the user forces all media through TURN. */
+      ipcRenderer.invoke('hub:getIceServers') as Promise<{ urls: string }[]>,
     reportStunCallOutcome: (stunUrls: string[], success: boolean) =>
       ipcRenderer.invoke('hub:reportStunCallOutcome', stunUrls, success),
     reportObservedStunSources: (stunUrls: string[]) =>

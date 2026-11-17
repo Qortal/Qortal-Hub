@@ -718,8 +718,7 @@ declare global {
     /** Decentralized STUN bootstrap + ICE server list (Electron preload + main). */
     hub?: {
       getBootstrapIceServers: () => { urls: string }[];
-      /** Full `RTCIceServer` objects — TURN credentials must survive the IPC hop. */
-      getIceServers: () => Promise<RTCIceServer[]>;
+      getIceServers: () => Promise<{ urls: string }[]>;
       reportStunCallOutcome: (
         stunUrls: string[],
         success: boolean
