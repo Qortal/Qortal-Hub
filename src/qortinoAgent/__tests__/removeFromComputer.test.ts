@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls = vi.hoisted(() => [] as string[]);
 const llm = vi.hoisted(() => ({
+  cancel: vi.fn(async () => undefined),
   cleanupStorage: vi.fn(async () => {
     calls.push('cleanupStorage');
     return { deletedFiles: 4, freedBytes: 2_497_279_104 };
@@ -17,6 +18,7 @@ const session = vi.hoisted(() => ({
     calls.push('unload');
   }),
   forgetQortinoModel: vi.fn(),
+  isQortinoModelPathInUse: vi.fn(() => true),
 }));
 const store = vi.hoisted(() => ({
   clearInstallState: vi.fn(async () => {
@@ -39,6 +41,7 @@ import {
   hasPendingQortinoInstall,
   setPendingQortinoInstall,
 } from '../installPending';
+import { addFileModel, resetQortinoModelsForTests } from '../models';
 import { removeQortinoFromComputer } from '../removeFromComputer';
 
 describe('Remove Qortino from this phone', () => {
@@ -75,6 +78,22 @@ describe('Remove Qortino from this phone', () => {
       // The Qortino window is still the one showing it.
       viewOpen: true,
     });
+  });
+
+  it('leaves another model in use, and its answer, alone', async () => {
+    // Qortino's own model is neither loaded nor the one the chat loads.
+    session.isQortinoModelPathInUse.mockReturnValueOnce(false);
+    addFileModel({ path: '/m/other.gguf', name: 'other.gguf', size: 10 });
+    try {
+      await removeQortinoFromComputer('/q/models/qortino.gguf');
+      expect(llm.cancel).not.toHaveBeenCalled();
+      expect(session.unloadQortinoModelNow).not.toHaveBeenCalled();
+      expect(llm.cleanupStorage).toHaveBeenCalledWith({ keep: [] });
+      expect(store.clearInstallState).toHaveBeenCalled();
+    } finally {
+      resetQortinoModelsForTests();
+      localStorage.clear();
+    }
   });
 
   it('keeps the install record when the files could not be deleted', async () => {

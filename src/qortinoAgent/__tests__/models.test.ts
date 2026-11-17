@@ -21,6 +21,7 @@ const llm = vi.hoisted(() => {
       knowledgeDir: '/data/Qortino AI/knowledge',
     })),
     downloadUrl: vi.fn(),
+    cancel: vi.fn(async () => undefined),
     cancelDownload: vi.fn(async () => undefined),
     removeOtherModel: vi.fn(async () => ({ freedBytes: 1 })),
     addListener: vi.fn(async (_name: string, listener: DownloadListener) => {
@@ -214,6 +215,32 @@ describe("Qortino's models", () => {
   it('refuses something that is not a web link', async () => {
     await expect(addLinkModel({ url: 'ftp://x/y.gguf' })).rejects.toThrow(
       'invalid_link'
+    );
+  });
+
+  it('refuses a link to one part of a split model without downloading it', async () => {
+    for (const url of [
+      'https://huggingface.co/x/resolve/main/m-00001-of-00003.gguf?download=true',
+      'https://e.com/m-00003-of-00003.gguf',
+    ]) {
+      await expect(addLinkModel({ url })).rejects.toThrow('split_link');
+    }
+    expect(llm.otherModelPath).not.toHaveBeenCalled();
+    expect(llm.downloadUrl).not.toHaveBeenCalled();
+    expect(getQortinoModels().others).toEqual([]);
+  });
+
+  it('downloads a model whose one file is named part 1 of 1', async () => {
+    llm.downloadUrl.mockImplementation(() => new Promise(() => undefined));
+    const name = 'm-00001-of-00001.gguf';
+    // Choosing that same file on this computer is allowed too.
+    expect(isLaterSplitPart(name)).toBe(false);
+
+    const model = await addLinkModel({ url: `https://e.com/${name}` });
+
+    expect(model.status).toBe('downloading');
+    expect(llm.downloadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ url: `https://e.com/${name}` })
     );
   });
 

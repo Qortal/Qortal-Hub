@@ -10,7 +10,7 @@
  *   never see them.
  */
 import { app, dialog, ipcMain, utilityProcess } from 'electron';
-import type { IpcMainInvokeEvent, UtilityProcess } from 'electron';
+import type { IpcMainInvokeEvent, UtilityProcess, WebContents } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -24,6 +24,7 @@ import {
   type QortinoWorkerReply,
 } from './qortino-llm-protocol';
 import {
+  ABORT_KEEPING_PART,
   availableMemoryBytes,
   cleanupStorage,
   diskSpace,
@@ -31,7 +32,9 @@ import {
   downloadToFile,
   fileSize,
   isDownloadTarget,
+  isGgufFile,
   isLoadableModelPath,
+  NOT_GGUF,
   OTHER_MODELS_DIR,
   otherModelRelativePath,
   QORTINO_ROOT_NAME,
@@ -59,7 +62,11 @@ function picked(): Set<string> {
 }
 
 function mainContents() {
-  return myCapacitorApp?.getMainWindow?.()?.webContents;
+  const hubWindow = myCapacitorApp?.getMainWindow?.();
+  // A destroyed window throws when asked for its page.
+  return hubWindow && !hubWindow.isDestroyed()
+    ? hubWindow.webContents
+    : undefined;
 }
 
 function requireHub(event: IpcMainInvokeEvent): void {
@@ -201,10 +208,39 @@ export function stopQortinoWorker(): void {
 
 const downloads = new Map<string, AbortController>();
 
+/** Left free on the disk by a model downloaded by link, as by Qortino's own. */
+const LINK_DOWNLOAD_HEADROOM_BYTES = 300 * 1024 ** 2;
+
 function cancelDownloads(relativePath?: string): void {
   for (const [key, controller] of downloads) {
     if (!relativePath || key === relativePath) controller.abort();
   }
+}
+
+/* -------------------------------------------------------------- the page */
+
+const watchedPages = new WeakSet<WebContents>();
+
+/**
+ * The Hub page that asked is gone (reloaded, crashed or closed). Its timer
+ * that unloads the model went with it, and nothing follows its downloads:
+ * the model is let go of, and the downloads stop where they are, keeping
+ * their `.part` for the page that comes next.
+ */
+function releaseForLostPage(): void {
+  for (const controller of downloads.values()) {
+    controller.abort(ABORT_KEEPING_PART);
+  }
+  void callWorker('cancel').catch(() => undefined);
+  void unloadWorker().catch(() => undefined);
+}
+
+function watchHubPage(contents: WebContents): void {
+  if (watchedPages.has(contents)) return;
+  watchedPages.add(contents);
+  contents.on('did-navigate', releaseForLostPage);
+  contents.on('render-process-gone', releaseForLostPage);
+  contents.on('destroyed', releaseForLostPage);
 }
 
 /* -------------------------------------------------------------- handlers */
@@ -214,6 +250,7 @@ type Handler = (event: IpcMainInvokeEvent, args: any) => unknown;
 function handle(channel: string, handler: Handler): void {
   ipcMain.handle(channel, async (event, args) => {
     requireHub(event);
+    watchHubPage(event.sender);
     return handler(event, args ?? {});
   });
 }
@@ -276,6 +313,7 @@ export function registerQortinoLlmIpcHandlers(): void {
       throw new Error('Only model files can be downloaded here');
     }
     const target = resolveInsideRoot(qortinoRoot(), relativePath);
+    const isLink = relativePath.startsWith(`${OTHER_MODELS_DIR}/`);
     if (downloads.has(relativePath)) {
       throw new Error('This file is already downloading');
     }
@@ -286,32 +324,46 @@ export function registerQortinoLlmIpcHandlers(): void {
     // proxy settings, which Node's fetch does not.
     const hubSession = mainContents()?.session;
     try {
-      const result = await downloadToFile({
-        url: String(args.url || ''),
-        apiKey: typeof args.apiKey === 'string' ? args.apiKey : undefined,
-        target,
-        signal: controller.signal,
-        fetchImpl: hubSession
-          ? (((input, init) =>
-              hubSession.fetch(input as string, {
-                ...init,
-                credentials: 'omit',
-                cache: 'no-store',
-              })) as typeof fetch)
-          : undefined,
-        // With the node's API key: redirects one by one, the key only on
-        // the node's own origin.
-        hop: hubSession ? sessionHop(hubSession) : undefined,
-        events: {
-          onProgress: (bytesReceived, bytesTotal) =>
-            sendToHub('downloadProgress', {
-              relativePath,
-              bytesReceived,
-              bytesTotal,
-              done: false,
-            }),
-        },
-      });
+      // A link's file that a last try saved but could not read is checked
+      // again, not downloaded again.
+      const kept = isLink ? await fileSize(target) : null;
+      const result = kept
+        ? { path: target, bytesWritten: kept }
+        : await downloadToFile({
+            url: String(args.url || ''),
+            apiKey: typeof args.apiKey === 'string' ? args.apiKey : undefined,
+            target,
+            signal: controller.signal,
+            fetchImpl: hubSession
+              ? (((input, init) =>
+                  hubSession.fetch(input as string, {
+                    ...init,
+                    credentials: 'omit',
+                    cache: 'no-store',
+                  })) as typeof fetch)
+              : undefined,
+            // With the node's API key: redirects one by one, the key only on
+            // the node's own origin.
+            hop: hubSession ? sessionHop(hubSession) : undefined,
+            // Qortino's own parts are checked against the free space before
+            // each try; a link is checked here.
+            reserveBytes: isLink ? LINK_DOWNLOAD_HEADROOM_BYTES : undefined,
+            events: {
+              onProgress: (bytesReceived, bytesTotal) =>
+                sendToHub('downloadProgress', {
+                  relativePath,
+                  bytesReceived,
+                  bytesTotal,
+                  done: false,
+                }),
+            },
+          });
+      // A link to a model's web page brings the page, not the model. A file
+      // that cannot be read throws here and stays for the next try.
+      if (isLink && !(await isGgufFile(result.path))) {
+        await fs.promises.rm(result.path, { force: true });
+        throw new Error(NOT_GGUF);
+      }
       sendToHub('downloadProgress', {
         relativePath,
         bytesReceived: result.bytesWritten,
@@ -333,11 +385,8 @@ export function registerQortinoLlmIpcHandlers(): void {
         done: true,
         error: message,
       });
-      // A link's folder left empty by a cancel goes too.
-      if (
-        message === 'cancelled' &&
-        relativePath.startsWith(`${OTHER_MODELS_DIR}/`)
-      ) {
+      // A link's folder left empty (nothing kept to carry on from) goes too.
+      if (isLink) {
         await fs.promises.rmdir(path.dirname(target)).catch(() => undefined);
       }
       throw new Error(message);

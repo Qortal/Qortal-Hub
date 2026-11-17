@@ -260,4 +260,25 @@ describe('Qortino model session', () => {
       expect(loadedQortinoModelPath()).toBe(LOAD.path);
     });
   });
+
+  describe('after a load that failed', () => {
+    it('lets the model process go after a first load that failed', async () => {
+      // A file llama.cpp cannot read: the process was started for nothing.
+      llm.loadModel.mockRejectedValueOnce(
+        new Error('unknown model architecture')
+      );
+      await expect(
+        ensureQortinoModel({
+          path: '/agent/other-models/abc/broken.gguf',
+          nCtx: 4096,
+        })
+      ).rejects.toThrow('unknown model architecture');
+
+      // The panel closes; nothing is loaded, so no release is scheduled.
+      releaseQortinoModelAfterClose();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(llm.unload).toHaveBeenCalledTimes(1);
+    });
+  });
 });

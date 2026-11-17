@@ -3,6 +3,7 @@ import { alpha } from '@mui/material/styles';
 import type { MouseEvent, ReactNode } from 'react';
 import { openQortalDeepLink } from '../../../qortinoAgent/qdnAppLinks';
 import { parkQortinoAgentSheet } from '../../../qortinoAgent/qortinoSheetNav';
+import { parseQortalUseGroupLink } from '../../../utils/qortalGroupLinks';
 
 /** A link label, as typed: "100%" or a broken escape is shown raw, not thrown. */
 function safeDecode(value: string): string {
@@ -150,6 +151,19 @@ function splitBlocks(raw: string): Block[] {
   return out;
 }
 
+/**
+ * Whether a click on this address opens something: a web page, a Q-App or
+ * website by its name, or a group link. Examples in answers, such as
+ * qortal://APP/<Name>, qortal://SERVICE/name/… or qortal://pay?…, are not.
+ */
+function canOpenLink(href: string): boolean {
+  if (/^https?:\/\//i.test(href)) return true;
+  if (/^qortal:\/\/use-/i.test(href)) {
+    return parseQortalUseGroupLink(href) !== null;
+  }
+  return /^qortal:\/\/(APP|WEBSITE)\/[^/?#]/i.test(href) && !/[<>…]/.test(href);
+}
+
 function openRichLink(href: string, e: MouseEvent): void {
   e.preventDefault();
   if (/^qortal:\/\//i.test(href)) {
@@ -163,10 +177,12 @@ function openRichLink(href: string, e: MouseEvent): void {
 }
 
 function renderInline(text: string): ReactNode[] {
-  // Order: code, markdown links, bare qortal://, bold, italic
+  // Order: code, markdown links, bare qortal://, bold, italic. An underscore
+  // inside a word (OPEN_NEW_TAB) and an asterisk with a space beside it
+  // (2 * 3) are part of the text, not italics.
   const nodes: ReactNode[] = [];
   const re =
-    /(`[^`]+`)|(\[[^\]]+\]\([^)]+\))|(qortal:\/\/[^\s)]+)|(https?:\/\/[^\s)]+)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g;
+    /(`[^`]+`)|(\[[^\]]+\]\([^)]+\))|(qortal:\/\/[^\s)]+)|(https?:\/\/[^\s)]+)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*(?!\s)[^*]+(?<!\s)\*)|((?<![\p{L}\p{N}_])_[^_]+_(?![\p{L}\p{N}_]))/gu;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
@@ -179,7 +195,11 @@ function renderInline(text: string): ReactNode[] {
       nodes.push(<code key={key++}>{tok.slice(1, -1)}</code>);
     } else if (tok.startsWith('[')) {
       const lm = tok.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (lm) {
+      if (lm && !canOpenLink(lm[2]!)) {
+        // Nothing a click here opens (a path, a file, a mail address, an
+        // example): its words, without an address the window could be sent to.
+        nodes.push(lm[1]);
+      } else if (lm) {
         const href = lm[2]!;
         nodes.push(
           <a
@@ -193,6 +213,12 @@ function renderInline(text: string): ReactNode[] {
           </a>
         );
       } else nodes.push(tok);
+    } else if (
+      /^qortal:\/\//i.test(tok) &&
+      !canOpenLink(tok.replace(/[.,;:!?]+$/, ''))
+    ) {
+      // An example of a link (qortal://pay?…, qortal://APP/<Name>): text.
+      nodes.push(tok);
     } else if (/^(qortal:\/\/|https?:\/\/)/i.test(tok)) {
       const href = tok.replace(/[.,;:!?]+$/, '');
       const label = href.startsWith('qortal://')

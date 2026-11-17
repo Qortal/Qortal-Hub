@@ -33,6 +33,9 @@ import {
   cancelOtherModelDownload,
   isLaterSplitPart,
   isOtherModelLink,
+  isSplitModelLink,
+  OTHER_MODEL_NO_SPACE,
+  OTHER_MODEL_NOT_GGUF,
   QORTINO_OWN_MODEL_ID,
   removeOtherModel,
   retryOtherModelDownload,
@@ -206,6 +209,18 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
     return parts.join(' · ');
   };
 
+  const failedText = (model: OtherModel): string => {
+    if (model.error === OTHER_MODEL_NOT_GGUF) {
+      return t('core:qortino_agent.models.not_gguf');
+    }
+    if (model.error === OTHER_MODEL_NO_SPACE) {
+      return t('core:qortino_agent.models.no_space');
+    }
+    return model.error
+      ? t('core:qortino_agent.models.failed_reason', { reason: model.error })
+      : t('core:qortino_agent.models.stopped');
+  };
+
   return (
     <QortinoSettingsGroup title={t('core:qortino_agent.models.title')}>
       <Typography
@@ -258,7 +273,9 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
                 details={detailsOf(model)}
                 onSelect={() => setActiveQortinoModel(model.id)}
               >
-                {model.status === 'failed' ? (
+                {/* The same link would bring the same web page again. */}
+                {model.status === 'failed' &&
+                model.error !== OTHER_MODEL_NOT_GGUF ? (
                   <IconButton
                     aria-label={t('core:qortino_agent.models.retry')}
                     onClick={() => void retryOtherModelDownload(model.id)}
@@ -321,11 +338,7 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
                     px: 1,
                   }}
                 >
-                  {model.error
-                    ? t('core:qortino_agent.models.failed_reason', {
-                        reason: model.error,
-                      })
-                    : t('core:qortino_agent.models.stopped')}
+                  {failedText(model)}
                 </Typography>
               ) : null}
               {removeError?.id === model.id ? (
@@ -493,6 +506,10 @@ function QortinoAddModelDialog({
     }
     if (!/\.gguf(\?|#|$)/i.test(url.trim())) {
       setError(t('core:qortino_agent.models.gguf_only'));
+      return;
+    }
+    if (isSplitModelLink(url)) {
+      setError(t('core:qortino_agent.models.split_link'));
       return;
     }
     setBusy(true);

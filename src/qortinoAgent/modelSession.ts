@@ -92,7 +92,6 @@ export async function ensureQortinoModel(
   // The model process lets go of the current model before it loads another,
   // so until this load succeeds no model is loaded (a failed switch must not
   // leave the old one looking ready).
-  const hadModel = loadedKey !== null || loading !== null;
   if (loadedKey !== null) {
     loadedKey = null;
     kvOwner = null;
@@ -109,8 +108,9 @@ export async function ensureQortinoModel(
       });
     } catch (error) {
       // Refused before the model process saw it (a missing file, say), the
-      // old model may still be in memory with nothing here holding it.
-      if (hadModel && generation === startedAt) {
+      // old model may still be in memory with nothing here holding it. And
+      // a model process started for this load has nothing left to stay for.
+      if (generation === startedAt) {
         void QortinoLlm.unload().catch(() => undefined);
       }
       throw error;

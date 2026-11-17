@@ -274,6 +274,22 @@ export function availableMemoryBytes(): number {
   return os.freemem();
 }
 
+/**
+ * A GGUF file starts with the four bytes "GGUF". Throws when the file cannot
+ * be read, so that is never taken for a file that is something else.
+ */
+export async function isGgufFile(filePath: string): Promise<boolean> {
+  let file: fs.promises.FileHandle | undefined;
+  try {
+    file = await fs.promises.open(filePath, 'r');
+    const head = Buffer.alloc(4);
+    const { bytesRead } = await file.read(head, 0, 4, 0);
+    return bytesRead === 4 && head.toString('latin1') === 'GGUF';
+  } finally {
+    await file?.close().catch(() => undefined);
+  }
+}
+
 export async function diskSpace(
   dir: string
 ): Promise<{ availBytes: number; totalBytes: number }> {
@@ -358,6 +374,17 @@ export class DownloadCancelledError extends Error {
 }
 
 /**
+ * Abort reason for a download stopped by something other than its cancel
+ * button (the page that asked for it went away): the `.part` stays.
+ */
+export const ABORT_KEEPING_PART = 'keep-part';
+
+/** Error for a download the disk has no room for. */
+export const NOT_ENOUGH_SPACE = 'not_enough_space';
+/** Error for a link that brought something other than a GGUF model. */
+export const NOT_GGUF = 'not_gguf';
+
+/**
  * Download `url` to `target`, through `<target>.part`. A `.part` left by a
  * download that broke off is carried on with a Range request (a node behind
  * a proxy may cut long transfers). Cancel deletes the `.part`; any other
@@ -377,6 +404,12 @@ export async function downloadToFile(options: {
    * keyed download refuses redirects.
    */
   hop?: DownloadHop;
+  /**
+   * Bytes to leave free on the disk: a download that would go below them is
+   * refused before it writes, and one that fills the disk drops its `.part`.
+   * Both end with NOT_ENOUGH_SPACE.
+   */
+  reserveBytes?: number;
 }): Promise<{ path: string; bytesWritten: number }> {
   const { target, signal, events } = options;
   const doFetch = options.fetchImpl ?? fetch;
@@ -445,6 +478,18 @@ export async function downloadToFile(options: {
       from = start;
     }
     const length = Number(res.headers.get('content-length') || 0);
+    if (options.reserveBytes !== undefined && length > 0) {
+      // A whole new file (200) is written over what the `.part` held.
+      const replaced = from > 0 ? 0 : ((await fileSize(partPath)) ?? 0);
+      const { availBytes, totalBytes } = await diskSpace(path.dirname(target));
+      if (
+        totalBytes > 0 &&
+        availBytes < length - replaced + options.reserveBytes
+      ) {
+        await res.body.cancel().catch(() => undefined);
+        throw new Error(NOT_ENOUGH_SPACE);
+      }
+    }
     const total = length > 0 ? from + length : 0;
     let received = from;
     let lastReport = 0;
@@ -478,8 +523,18 @@ export async function downloadToFile(options: {
     return { path: target, bytesWritten: written };
   } catch (error) {
     if (signal.aborted) {
-      await fs.promises.rm(partPath, { force: true }).catch(() => undefined);
+      if (signal.reason !== ABORT_KEEPING_PART) {
+        await fs.promises.rm(partPath, { force: true }).catch(() => undefined);
+      }
       throw new DownloadCancelledError();
+    }
+    if (
+      options.reserveBytes !== undefined &&
+      (error as NodeJS.ErrnoException)?.code === 'ENOSPC'
+    ) {
+      // The disk is full: what was saved goes, so it is not left at zero.
+      await fs.promises.rm(partPath, { force: true }).catch(() => undefined);
+      throw new Error(NOT_ENOUGH_SPACE);
     }
     throw error;
   }

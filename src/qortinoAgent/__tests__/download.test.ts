@@ -6,8 +6,12 @@ const KEY = 'SECRET_NODE_KEY';
 /** Fake phone storage: relative path -> { size, sha256 }. */
 const disk = new Map<string, { size: number; sha256: string }>();
 
+type Listener = (event: Record<string, unknown>) => void;
+const listeners = new Map<string, Listener>();
+const hooks: { onKeyRead?: () => void } = {};
+
 const llm = vi.hoisted(() => ({
-  addListener: vi.fn(async () => ({ remove: async () => undefined })),
+  addListener: vi.fn(),
   cancelDownload: vi.fn(async () => undefined),
   cleanupStorage: vi.fn(),
   downloadUrl: vi.fn(),
@@ -35,7 +39,10 @@ const store = vi.hoisted(() => ({
 vi.mock('../../background/background', () => ({
   createEndpoint: async (path: string) =>
     `${NODE}${path}${path.includes('?') ? '&' : '?'}apiKey=${KEY}`,
-  getApiKeyFromStorage: async () => ({ apikey: KEY, url: NODE }),
+  getApiKeyFromStorage: async () => {
+    hooks.onKeyRead?.();
+    return { apikey: KEY, url: NODE };
+  },
   getBaseApi: async () => NODE,
 }));
 vi.mock('../qortinoLlm', () => ({
@@ -62,6 +69,7 @@ import {
   savedModelBytes,
   QortinoInstallError,
   resolveModelParts,
+  type DownloadProgress,
 } from '../download';
 import {
   modelPartRelativePath,
@@ -112,6 +120,9 @@ describe('Qortino model install', () => {
   beforeEach(() => {
     disk.clear();
     vi.clearAllMocks();
+    llm.addListener.mockImplementation(async () => ({
+      remove: async () => undefined,
+    }));
     discovery.discoverQortinoQshareFiles.mockResolvedValue(shareMap());
     discovery.knownPublishedEntry.mockReturnValue(undefined);
     discovery.listQortinoResources.mockResolvedValue([]);
@@ -381,5 +392,236 @@ describe('resolveModelParts', () => {
     const failure = await resolveModelParts(MODEL).catch((e: unknown) => e);
 
     expect((failure as QortinoInstallError).code).toBe('not_published');
+  });
+});
+
+describe('Qortino model install: progress, failed requests and cancel', () => {
+  const ready = () => new Response(JSON.stringify({ status: 'READY' }));
+
+  beforeEach(() => {
+    disk.clear();
+    listeners.clear();
+    hooks.onKeyRead = undefined;
+    vi.clearAllMocks();
+    llm.cleanupStorage.mockResolvedValue({ deletedFiles: 0, freedBytes: 0 });
+    discovery.discoverQortinoQshareFiles.mockResolvedValue(shareMap());
+    discovery.knownPublishedEntry.mockReturnValue(undefined);
+    discovery.listQortinoResources.mockResolvedValue([]);
+    discovery.resourcePublishState.mockResolvedValue('published');
+    llm.addListener.mockImplementation(
+      async (name: string, listener: Listener) => {
+        listeners.set(name, listener);
+        return {
+          remove: async () => {
+            if (listeners.get(name) === listener) listeners.delete(name);
+          },
+        };
+      }
+    );
+    llm.fileExists.mockImplementation(
+      async ({ relativePath }: { relativePath: string }) => {
+        const hit = disk.get(relativePath);
+        return {
+          exists: !!hit,
+          path: `/agent/${relativePath}`,
+          size: hit?.size ?? 0,
+        };
+      }
+    );
+    llm.sha256File.mockImplementation(
+      async ({ relativePath }: { relativePath: string }) => {
+        const hit = disk.get(relativePath);
+        return { sha256: hit?.sha256 ?? '', size: hit?.size ?? 0 };
+      }
+    );
+    llm.downloadUrl.mockImplementation(
+      async ({ relativePath, url }: { relativePath: string; url: string }) => {
+        const size = url.endsWith('P1') ? 1000 : 700;
+        disk.set(relativePath, { size, sha256: SHA_BY_SIZE[size] });
+        return { bytesWritten: size, path: `/agent/${relativePath}` };
+      }
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ready())
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('keeps the saved bytes on show when saving a part breaks off', async () => {
+    const seen: DownloadProgress[] = [];
+    llm.downloadUrl.mockImplementation(
+      async ({ relativePath }: { relativePath: string }) => {
+        const emit = listeners.get('downloadProgress');
+        emit?.({
+          relativePath,
+          bytesReceived: 600,
+          bytesTotal: 1000,
+          done: false,
+        });
+        // What the main process sends when the transfer fails.
+        emit?.({
+          relativePath,
+          bytesReceived: 0,
+          bytesTotal: 0,
+          done: true,
+          error: 'HTTP 502',
+        });
+        throw new Error('HTTP 502');
+      }
+    );
+
+    const failure = await installQortinoModel({
+      model: MODEL,
+      onProgress: (progress) => seen.push(progress),
+    }).catch((error: unknown) => error);
+
+    expect((failure as QortinoInstallError).code).toBe('download');
+    const saved = seen.filter((progress) => progress.phase === 'save');
+    // The 600 bytes are still in the half-saved file for the next try.
+    expect(saved[saved.length - 1]?.bytesDone).toBe(600);
+  });
+
+  it('does not show a part back at zero when one status request fails', async () => {
+    vi.useFakeTimers();
+    const seen: DownloadProgress[] = [];
+    let polls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (!url.includes('/arbitrary/resource/status/')) {
+          return new Response('{}');
+        }
+        if (!url.includes('_P1')) return ready();
+        polls += 1;
+        if (polls === 1) {
+          return new Response(
+            JSON.stringify({
+              status: 'DOWNLOADING',
+              localChunkCount: 6,
+              totalChunkCount: 10,
+            })
+          );
+        }
+        // The node did not answer this once.
+        if (polls === 2) throw new TypeError('Failed to fetch');
+        return ready();
+      })
+    );
+
+    const done = installQortinoModel({
+      model: MODEL,
+      onProgress: (progress) => seen.push(progress),
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await done;
+
+    const fetched = seen
+      .filter(
+        (progress) => progress.phase === 'fetch' && progress.partIndex === 1
+      )
+      .map((progress) => progress.bytesDone);
+    expect(fetched).toEqual([600, 1000]);
+  });
+
+  it('does not leave the answer to "start fetching" unread', async () => {
+    const kicks: Array<{ cancelled: boolean }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (!url.includes('async=true')) return ready();
+        // A node that already holds the part answers with the whole file.
+        const kick = { cancelled: false };
+        kicks.push(kick);
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              controller.enqueue(new Uint8Array(1024));
+            },
+            cancel() {
+              kick.cancelled = true;
+            },
+          })
+        );
+      })
+    );
+
+    await installQortinoModel({ model: MODEL });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(kicks).toHaveLength(2);
+    expect(kicks.every((kick) => kick.cancelled)).toBe(true);
+  });
+
+  it('starts no transfer for a download cancelled just before it', async () => {
+    const controller = new AbortController();
+    // Cancelled while the node address is being read for the first part.
+    hooks.onKeyRead = () => controller.abort();
+
+    const failure = await installQortinoModel({
+      model: MODEL,
+      signal: controller.signal,
+    }).catch((error: unknown) => error);
+
+    expect((failure as QortinoInstallError).code).toBe('cancelled');
+    expect(llm.downloadUrl).not.toHaveBeenCalled();
+  });
+
+  it('stops looking for the model as soon as it is cancelled', async () => {
+    const controller = new AbortController();
+    // A cold node: the Q-Share list takes minutes to come.
+    discovery.discoverQortinoQshareFiles.mockReturnValue(
+      new Promise(() => undefined)
+    );
+    let outcome: unknown = 'pending';
+    void installQortinoModel({ model: MODEL, signal: controller.signal }).catch(
+      (error: unknown) => {
+        outcome = error;
+      }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcome).toBe('pending');
+
+    controller.abort();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect((outcome as QortinoInstallError).code).toBe('cancelled');
+  });
+
+  it('stops waiting for peers as soon as it is cancelled', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/arbitrary/resource/status/')
+          ? new Response(
+              JSON.stringify({
+                status: 'DOWNLOADING',
+                localChunkCount: 3,
+                totalChunkCount: 10,
+              })
+            )
+          : new Response('{}')
+      )
+    );
+    let outcome: unknown = 'pending';
+    void installQortinoModel({ model: MODEL, signal: controller.signal }).catch(
+      (error: unknown) => {
+        outcome = error;
+      }
+    );
+    // Well into the wait between two status checks.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(outcome).toBe('pending');
+
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect((outcome as QortinoInstallError).code).toBe('cancelled');
   });
 });

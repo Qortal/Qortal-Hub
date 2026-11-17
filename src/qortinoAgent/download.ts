@@ -205,7 +205,41 @@ async function kickPartFetch(
   signal?: AbortSignal
 ): Promise<void> {
   const url = await createEndpoint(`${resourcePath(part)}?async=true`);
-  void fetch(url, { signal }).catch(() => undefined);
+  // A node that already holds the part answers with the whole file: only
+  // the asking matters, so the answer is let go of unread.
+  void fetch(url, { signal })
+    .then((res) => res.body?.cancel())
+    .catch(() => undefined);
+}
+
+/** Wait `ms`, or until `signal` aborts. */
+function pause(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
+
+/**
+ * `work`, or a "cancelled" failure as soon as `signal` aborts (the work
+ * itself is left to end on its own).
+ */
+function untilCancelled<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new QortinoInstallError('cancelled'));
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+    void work
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }
 
 /**
@@ -233,13 +267,17 @@ async function waitForPartReady(
     const state = String(status?.status || '');
     const local = Number(status?.localChunkCount || 0);
     const total = Number(status?.totalChunkCount || 0);
-    onPercent(
-      state === 'READY'
-        ? 100
-        : total > 0
-          ? Math.min(99, Math.round((local / total) * 100))
-          : 0
-    );
+    // After the first one, a status request the node did not answer says
+    // nothing new about the part.
+    if (status || bestChunks < 0) {
+      onPercent(
+        state === 'READY'
+          ? 100
+          : total > 0
+            ? Math.min(99, Math.round((local / total) * 100))
+            : 0
+      );
+    }
 
     if (state === 'READY') return;
     if (TERMINAL_STATUS_FAILURES.has(state)) {
@@ -268,7 +306,7 @@ async function waitForPartReady(
       void fetch(buildUrl, { signal }).catch(() => undefined);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await pause(delay, signal);
     delay = Math.min(3_000, Math.round(delay * 1.2));
   }
 }
@@ -285,6 +323,8 @@ async function savePart(
     (event) => {
       // Another model may be downloading at the same time.
       if (event.relativePath && event.relativePath !== relativePath) return;
+      // A failed transfer reports no bytes; what it saved is still there.
+      if (event.error) return;
       if (typeof event.bytesReceived === 'number') onBytes(event.bytesReceived);
     }
   );
@@ -296,6 +336,8 @@ async function savePart(
     // The main process sends the API key as an X-API-KEY header, so the
     // URL it logs and reports never contains it.
     const { apiKey, url } = await createNativeNodeRequest(resourcePath(part));
+    // Cancelled before the transfer was asked for: there is nothing to stop.
+    if (signal?.aborted) throw new QortinoInstallError('cancelled');
     try {
       await QortinoLlm.downloadUrl({
         ...(apiKey ? { apiKey } : {}),
@@ -434,7 +476,8 @@ export async function installQortinoModel(options: {
   ) => onProgress?.({ phase, partIndex, partCount, bytesDone, bytesTotal });
 
   report('locate', 1, 0, 0);
-  const resolved = await resolveModelParts(model);
+  // A cold node can take minutes over this; a cancel does not wait for it.
+  const resolved = await untilCancelled(resolveModelParts(model), signal);
   if (signal?.aborted) throw new QortinoInstallError('cancelled');
   const onDisk = await Promise.all(
     resolved.map(async (part) => {
@@ -499,6 +542,8 @@ export async function installQortinoModel(options: {
       throw new QortinoInstallError('checksum', part.filename);
     }
   }
+  // Cancelled while the last part was being checked.
+  if (signal?.aborted) throw new QortinoInstallError('cancelled');
 
   report('finalizing', partCount, 0, 0);
   // The model is whole: the other layout's leftovers can go.

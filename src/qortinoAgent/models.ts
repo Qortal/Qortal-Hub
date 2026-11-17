@@ -21,6 +21,11 @@ export const OTHER_MODEL_CONTEXT_TOKENS = 4096;
 
 export type OtherModelStatus = 'ready' | 'downloading' | 'failed';
 
+/** A failed link download's `error` when the link brought no GGUF file. */
+export const OTHER_MODEL_NOT_GGUF = 'not_gguf';
+/** A failed link download's `error` when the disk had no room for it. */
+export const OTHER_MODEL_NO_SPACE = 'not_enough_space';
+
 export type OtherModel = {
   id: string;
   /** Shown in the list; the file name unless the user named it. */
@@ -153,6 +158,23 @@ export function isLaterSplitPart(name: string): boolean {
   return Boolean(match && Number(match[1]) > 1);
 }
 
+/**
+ * A link to one part of a split GGUF (name-00001-of-00003.gguf): one part
+ * alone never loads, so it is not downloaded. Part 1 of 1 is the whole model.
+ */
+export function isSplitModelLink(url: string): boolean {
+  try {
+    const name = new URL(url.trim()).pathname.split('/').pop() || '';
+    const match = /-\d+-of-(\d+)\.gguf$/i.exec(decodeURIComponent(name));
+    return Boolean(match && Number(match[1]) > 1);
+  } catch {
+    return false;
+  }
+}
+
+/** Counts choices of the model in use, so a download ends without undoing one. */
+let choices = 0;
+
 export function setActiveQortinoModel(id: string): void {
   const current = getQortinoModels();
   if (
@@ -162,6 +184,7 @@ export function setActiveQortinoModel(id: string): void {
     return;
   }
   if (current.activeId === id) return;
+  choices += 1;
   write({ ...current, activeId: id });
 }
 
@@ -173,6 +196,7 @@ export function addFileModel(file: {
 }): OtherModel {
   const current = getQortinoModels();
   const existing = current.others.find((model) => model.path === file.path);
+  choices += 1;
   if (existing) {
     write({ ...current, activeId: existing.id });
     return existing;
@@ -239,6 +263,7 @@ export function isOtherModelLink(url: string): boolean {
 async function runDownload(model: OtherModel): Promise<void> {
   if (!model.url || !model.relativePath) return;
   const relativePath = model.relativePath;
+  const choicesAtStart = choices;
   downloads.set(model.id, { bytesReceived: 0, bytesTotal: model.sizeBytes });
   emitDownloads();
   const handle = await QortinoLlm.addListener('downloadProgress', (event) => {
@@ -262,7 +287,10 @@ async function runDownload(model: OtherModel): Promise<void> {
     });
     // Nothing else chosen in the meantime: use the new model.
     const current = getQortinoModels();
-    if (current.activeId === QORTINO_OWN_MODEL_ID) {
+    if (
+      current.activeId === QORTINO_OWN_MODEL_ID &&
+      choices === choicesAtStart
+    ) {
       setActiveQortinoModel(model.id);
     }
   } catch (error) {
@@ -286,6 +314,7 @@ export async function addLinkModel(input: {
 }): Promise<OtherModel> {
   const url = input.url.trim();
   if (!isOtherModelLink(url)) throw new Error('invalid_link');
+  if (isSplitModelLink(url)) throw new Error('split_link');
   const { relativePath, filename } = await QortinoLlm.otherModelPath({ url });
   // The same file again (the same link, or with ?download=true): no second
   // copy, and no second download over the first.
@@ -365,6 +394,8 @@ export async function removeOtherModel(id: string): Promise<void> {
     isQortinoModelPathInUse(model.path) ||
     getQortinoModels().activeId === id
   ) {
+    // An answer being written would keep the unload waiting until it ends.
+    await QortinoLlm.cancel().catch(() => undefined);
     await unloadQortinoModelNow();
   }
   if (model.source === 'link' && model.relativePath) {
@@ -472,6 +503,7 @@ export const SUGGESTED_OTHER_MODELS: SuggestedModel[] = [
 
 export function resetQortinoModelsForTests(): void {
   state = null;
+  choices = 0;
   listeners.clear();
   downloads.clear();
   downloadListeners.clear();

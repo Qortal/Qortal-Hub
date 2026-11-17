@@ -600,10 +600,12 @@ export function formatQAppAnswer(
   entry: QAppCatalogEntry,
   publisher?: QAppPublisherInfo | null
 ): string {
+  // Encoded, so a name with spaces ("Welcome to Qortal") stays one link.
+  const link = `qortal://${entry.service}/${encodeURIComponent(entry.name)}`;
   const where =
     entry.service === 'WEBSITE'
-      ? `Open it as WEBSITE “${entry.name}” (qortal://${entry.service}/${entry.name}).`
-      : `Open it as APP “${entry.name}” (qortal://${entry.service}/${entry.name}).`;
+      ? `Open it as WEBSITE “${entry.name}” (${link}).`
+      : `Open it as APP “${entry.name}” (${link}).`;
   let pub = '';
   if (publisher) {
     const same =

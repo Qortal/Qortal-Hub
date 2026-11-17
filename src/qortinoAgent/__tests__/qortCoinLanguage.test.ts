@@ -30,3 +30,28 @@ describe('golden follow-up isolation', () => {
     expect(matchGoldenAnswer('what are q-apps')?.entry.id).toBe('qortal-014');
   });
 });
+
+describe('A pack in an answer', () => {
+  it('stays a backpack', () => {
+    const answer =
+      'Keep a whistle, a headlamp and a space blanket in your pack, and check my pack list before you leave.';
+    expect(normalizeQortCoinLanguage(answer)).toBe(answer);
+  });
+
+  it('stays a backpack in a hiking answer', () => {
+    const answer =
+      'Keep a headlamp, a water filter and a first-aid kit in your pack.';
+    expect(normalizeQortCoinLanguage(answer)).toBe(answer);
+  });
+
+  it('stays a backpack when the model talks about its own pack', () => {
+    const answer = 'I always carry a spare tarp in my pack when I camp.';
+    expect(normalizeQortCoinLanguage(answer)).toBe(answer);
+  });
+
+  it("still names a knowledge pack as Qortino's knowledge", () => {
+    expect(
+      normalizeQortCoinLanguage('This comes from my knowledge pack.')
+    ).toBe("This comes from Qortino's on-device knowledge.");
+  });
+});

@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useStore } from 'jotai';
 import {
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
@@ -54,6 +54,7 @@ import {
   balanceAtom,
   qortinoAgentOpenAtom,
   qortinoAgentParkedAtom,
+  rawWalletAtom,
   resourceKeySelector,
   txListAtom,
   userInfoAtom,
@@ -95,6 +96,7 @@ import {
   type QortinoLookDebugSettings,
 } from './qortinoLookDebug';
 import { isQortinoLlmInferenceAvailable } from '../../qortinoAgent/qortinoLlm';
+import { releaseQortinoAfterHomeDraft } from '../../qortinoAgent/homeDraftWarmup';
 import { askQortino } from '../../qortinoAgent/pendingQuestion';
 import { QortinoHomeComposer } from './qortinoHome/QortinoHomeComposer';
 import {
@@ -2135,6 +2137,7 @@ export const HomeQortinoWorkspaceCard = ({
   const [isQortinoTickled, setIsQortinoTickled] = useState(false);
   const [qortinoSheetOpen, setQortinoAgentOpen] = useAtom(qortinoAgentOpenAtom);
   const [, setQortinoAgentParked] = useAtom(qortinoAgentParkedAtom);
+  const jotaiStore = useStore();
   // Qortino AI on Home: now and then a line from his mouth and, once Qortino
   // AI has a model on this computer, a box next to him to ask it something.
   const qortinoAiPossible = isQortinoLlmInferenceAvailable();
@@ -4006,10 +4009,22 @@ export const HomeQortinoWorkspaceCard = ({
       setQortinoComposerFocused(false);
       setQortinoHopKey((key) => key + 1);
       flashQortinoEyes('happy', 1_400);
+      const account = () =>
+        jotaiStore.get(rawWalletAtom)?.address0 ||
+        jotaiStore.get(userInfoAtom)?.address;
+      const asker = account();
       // A moment to see him hop before his window opens.
-      window.setTimeout(() => askQortino(question), 380);
+      window.setTimeout(() => {
+        // Signed out meanwhile: the question is not left for the next
+        // account, and the model loaded for it is let go.
+        if (!asker || account() !== asker) {
+          releaseQortinoAfterHomeDraft();
+          return;
+        }
+        askQortino(question);
+      }, 380);
     },
-    [flashQortinoEyes]
+    [flashQortinoEyes, jotaiStore]
   );
   // Late at night, with nothing to do, Qortino dozes off.
   const qortinoSleepy =

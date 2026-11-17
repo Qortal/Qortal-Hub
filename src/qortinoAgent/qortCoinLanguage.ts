@@ -1,6 +1,6 @@
 /**
  * Display cleanup for assistant text: QORT is a coin (never "token"),
- * and knowledge is Qortino's — never "my/your pack".
+ * and knowledge is Qortino's — never "my/your knowledge pack".
  */
 export function normalizeQortCoinLanguage(text: string): string {
   return normalizeAssistantDisplayText(text);
@@ -39,12 +39,12 @@ function normalizeAssistantDisplayText(text: string): string {
     '$1coins$2'
   );
 
-  // Community-facing: knowledge belongs to Qortino, not "your/my pack".
+  // Community-facing: knowledge belongs to Qortino, not "your/my knowledge
+  // pack". A pack on its own is a backpack.
   t = t.replace(
     /\b(my|your)\s+knowledge\s+pack\b/gi,
     "Qortino's on-device knowledge"
   );
-  t = t.replace(/\b(my|your)\s+pack\b/gi, "Qortino's on-device knowledge");
   t = t.replace(
     /\bfrom\s+(my|your)\s+notes\b/gi,
     "from Qortino's on-device knowledge"

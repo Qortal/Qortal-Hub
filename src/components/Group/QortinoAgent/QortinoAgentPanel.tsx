@@ -159,7 +159,11 @@ export function QortinoAgentPanel() {
       setInstall(next);
       if (next.installed && next.llmPath) {
         // The parts were just written, so they are still in the page cache.
-        preloadModel(resolveActiveQortinoModel(next.llmPath));
+        // Not for a panel closed meanwhile (the download screen reports as
+        // it fades out): nothing would let go of the model.
+        if (wasOpenRef.current) {
+          preloadModel(resolveActiveQortinoModel(next.llmPath));
+        }
         void loadChat();
       }
     },
@@ -197,7 +201,13 @@ export function QortinoAgentPanel() {
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      // The Escape that drops a word being picked in a Japanese or Chinese
+      // input method belongs to it.
+      if (event.nativeEvent.isComposing || event.keyCode === 229) return;
       event.preventDefault();
+      // Only this layer: what is open under the panel (Home being edited,
+      // say) does not end on the same Escape.
+      event.stopPropagation();
       if (settingsOpen) setSettingsOpen(false);
       else void handleClose();
     },

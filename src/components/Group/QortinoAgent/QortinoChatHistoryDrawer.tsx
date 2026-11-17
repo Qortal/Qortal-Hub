@@ -12,7 +12,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import PushPinRoundedIcon from '@mui/icons-material/PushPinRounded';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   UNTITLED_CHAT_TITLE,
@@ -51,6 +51,8 @@ export function QortinoChatHistoryDrawer({
   const isDark = theme.palette.mode === 'dark';
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  // On performance.now(), which never goes back as the computer's clock can.
+  const lastDeleteAtRef = useRef(-Infinity);
 
   useEffect(() => {
     if (!open) return;
@@ -292,7 +294,14 @@ export function QortinoChatHistoryDrawer({
                     <IconButton
                       aria-label={t('core:qortino_agent.history.delete_chat')}
                       size="small"
-                      onClick={() => onDelete(s.id)}
+                      onClick={() => {
+                        // The second click of a double click lands on the
+                        // chat that moved up: it is not deleted too.
+                        const now = performance.now();
+                        if (now - lastDeleteAtRef.current < 400) return;
+                        lastDeleteAtRef.current = now;
+                        onDelete(s.id);
+                      }}
                     >
                       <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
                     </IconButton>

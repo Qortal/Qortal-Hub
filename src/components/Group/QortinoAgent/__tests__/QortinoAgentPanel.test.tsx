@@ -16,12 +16,25 @@ const session = vi.hoisted(() => ({
 
 vi.mock('../../../../qortinoAgent/store', () => store);
 vi.mock('../../../../qortinoAgent/modelSession', () => session);
+type Install = { installed: boolean; llmPath?: string };
+const gate = vi.hoisted(() => ({
+  onInstalled: null as null | ((install: Install) => void),
+}));
 vi.mock('../QortinoAgentGate', () => ({
-  QortinoAgentGate: ({ onOpenModels }: { onOpenModels: () => void }) => (
-    <button type="button" onClick={onOpenModels}>
-      gate
-    </button>
-  ),
+  QortinoAgentGate: ({
+    onOpenModels,
+    onInstalled,
+  }: {
+    onOpenModels: () => void;
+    onInstalled: (install: Install) => void;
+  }) => {
+    gate.onInstalled = onInstalled;
+    return (
+      <button type="button" onClick={onOpenModels}>
+        gate
+      </button>
+    );
+  },
 }));
 vi.mock('../loadQortinoAgentChat', () => ({
   loadQortinoAgentChat: async () => ({
@@ -188,5 +201,105 @@ describe("Qortino's panel", () => {
       screen.getByRole('button', { name: 'Make the panel narrower' })
     ).toBeInTheDocument();
     expect(localStorage.getItem('qortino:panel-wide:v1')).toBe('1');
+  });
+});
+
+describe("Qortino's panel when its download ends", () => {
+  beforeEach(() => {
+    resetQortinoModelsForTests();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetQortinoModelsForTests();
+    localStorage.clear();
+  });
+
+  it('loads no model for a download that ends as the panel closes', async () => {
+    const jotai = renderPanel();
+    await screen.findByRole('button', { name: 'gate' });
+    await act(async () => {
+      jotai.set(qortinoAgentOpenAtom, false);
+    });
+    // The download screen is still fading out when its download ends.
+    await act(async () => {
+      gate.onInstalled?.({
+        installed: true,
+        llmPath: '/q/models/qortino-00001-of-00002.gguf',
+      });
+    });
+    expect(session.ensureQortinoModel).not.toHaveBeenCalled();
+  });
+
+  it('loads the model for a download that ends while the panel is open', async () => {
+    renderPanel();
+    await screen.findByRole('button', { name: 'gate' });
+    await act(async () => {
+      gate.onInstalled?.({
+        installed: true,
+        llmPath: '/q/models/qortino-00001-of-00002.gguf',
+      });
+    });
+    expect(session.ensureQortinoModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/q/models/qortino-00001-of-00002.gguf',
+      })
+    );
+    expect(await screen.findByText(/^chat with/)).toBeInTheDocument();
+  });
+});
+
+describe("Qortino's panel and the keyboard", () => {
+  beforeEach(() => {
+    resetQortinoModelsForTests();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetQortinoModelsForTests();
+    localStorage.clear();
+  });
+
+  it('keeps its Escape from what is open under it', async () => {
+    // Home's edit mode, a widget being arranged: they end on an Escape that
+    // reaches the window.
+    const underneath = vi.fn();
+    const onWindowKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') underneath();
+    };
+    window.addEventListener('keydown', onWindowKey);
+    try {
+      const jotai = renderPanel();
+      await screen.findByRole('button', { name: 'gate' });
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      const panel = screen.getByTestId('qortino-agent-panel');
+      // First its settings, then the panel itself.
+      fireEvent.keyDown(panel, { key: 'Escape' });
+      expect(
+        screen.queryByRole('button', { name: 'settings view' })
+      ).not.toBeInTheDocument();
+      await act(async () => {
+        fireEvent.keyDown(panel, { key: 'Escape' });
+      });
+      expect(jotai.get(qortinoAgentOpenAtom)).toBe(false);
+      expect(underneath).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('keydown', onWindowKey);
+    }
+  });
+
+  it('stays open on the Escape that ends an input-method word', async () => {
+    addFileModel({ path: '/m/a.gguf', name: 'a.gguf', size: 10 });
+    const jotai = renderPanel();
+    const chat = await screen.findByText(/^chat with/);
+    // Typing Japanese or Chinese: Escape drops the word being picked.
+    await act(async () => {
+      fireEvent.keyDown(chat, {
+        key: 'Escape',
+        keyCode: 229,
+        isComposing: true,
+      });
+    });
+    expect(jotai.get(qortinoAgentOpenAtom)).toBe(true);
   });
 });

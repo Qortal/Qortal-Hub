@@ -43,4 +43,21 @@ describe('A question from Home on its way to the chat', () => {
     clearPendingQortinoQuestion();
     expect(getPendingQortinoQuestion()).toBeNull();
   });
+
+  it('keeps questions asked one after another in the order they were asked', () => {
+    askQortino('first');
+    askQortino('second');
+    expect(getPendingQortinoQuestion()).toBe('first');
+    expect(takePendingQortinoQuestion()).toBe('first');
+    expect(getPendingQortinoQuestion()).toBe('second');
+    expect(takePendingQortinoQuestion()).toBe('second');
+    expect(takePendingQortinoQuestion()).toBeNull();
+  });
+
+  it('forgets every waiting question when Qortino closes', () => {
+    askQortino('first');
+    askQortino('second');
+    clearPendingQortinoQuestion();
+    expect(getPendingQortinoQuestion()).toBeNull();
+  });
 });

@@ -13,11 +13,8 @@ const ACTIVE_KEY = 'qortino_chat_active_v1';
 export const CHAT_STORAGE_BUDGET_CHARS = 1_500_000;
 const MAX_SESSIONS = 80;
 
-/**
- * The storage key for the signed-in account, or null while no account is
- * known: then nothing is read or saved, rather than mixing accounts.
- */
-function accountKey(base: string): string | null {
+/** The signed-in account's address, or null while no account is known. */
+export function chatAccount(): string | null {
   let address: unknown;
   try {
     const store = getDefaultStore();
@@ -28,7 +25,19 @@ function accountKey(base: string): string | null {
   } catch {
     address = undefined;
   }
-  return typeof address === 'string' && address ? `${base}:${address}` : null;
+  return typeof address === 'string' && address ? address : null;
+}
+
+/**
+ * The storage key for `account` (by default the signed-in one), or null
+ * while no account is known: then nothing is read or saved, rather than
+ * mixing accounts.
+ */
+function accountKey(
+  base: string,
+  account: string | null = chatAccount()
+): string | null {
+  return account ? `${base}:${account}` : null;
 }
 
 type QortinoChatMode = 'offline' | 'qdn';
@@ -124,7 +133,9 @@ export function capChatSessions(
 ): QortinoChatSession[] {
   const byRecent = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
   const pinned = byRecent.filter((session) => session.pinned);
-  const room = Math.max(0, MAX_SESSIONS - pinned.length);
+  // However many are pinned, the newest other chat (the one being written
+  // in) has a place.
+  const room = Math.max(1, MAX_SESSIONS - pinned.length);
   const others = byRecent.filter((session) => !session.pinned).slice(0, room);
   const keptIds = new Set([...pinned, ...others].map((session) => session.id));
   const kept = byRecent
@@ -133,7 +144,8 @@ export function capChatSessions(
       ...session,
       messages: session.messages.map(compactBubble),
     }));
-  const newestId = kept[0]?.id;
+  // Pinned chats are never dropped: the newest one that could be is kept.
+  const newestId = others[0]?.id;
   let size = JSON.stringify(kept).length;
   while (size > CHAT_STORAGE_BUDGET_CHARS) {
     let drop = -1;
@@ -151,10 +163,15 @@ export function capChatSessions(
   return kept;
 }
 
+/**
+ * Saves under the signed-in account, or under `account` when given: a chat
+ * closing as its account signs out is saved under that account.
+ */
 export async function saveChatSessions(
-  sessions: QortinoChatSession[]
+  sessions: QortinoChatSession[],
+  account?: string | null
 ): Promise<void> {
-  const key = accountKey(SESSIONS_KEY);
+  const key = accountKey(SESSIONS_KEY, account);
   if (!key) return;
   await Preferences.set({
     key,

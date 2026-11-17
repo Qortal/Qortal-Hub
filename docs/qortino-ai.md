@@ -25,8 +25,15 @@ It is off until the user opens it. Nothing is downloaded unless they ask.
   Qortal answers open the app in a Hub tab, next to the panel.
 - **Other models:** settings → Model → Add a model. Any open model in GGUF
   format, from a file on this computer (used where it is) or a download link
-  (saved in Qortino's folder). A few suggestions fill the link in. The
-  curated answers and Qortino's persona work with every model.
+  (saved in Qortino's folder). A few suggestions fill the link in. A link to
+  one part of a model split into several files is refused: the user
+  downloads all of its parts into one folder and picks the first one with
+  "Choose a file…". A link download is refused when the disk has no room
+  for it (with 300 MB to spare), and a downloaded file that does not start
+  with `GGUF` (a model's web page, say) is deleted. A finished file that
+  cannot be read for that check is kept, and "Try the download again"
+  checks it again without downloading it. The curated answers and Qortino's persona work
+  with every model.
 - **Settings:** answer length, text size, Enter sends, how long the model
   stays loaded after closing, graphics card on/off, delete all chats, remove
   Qortino's model.
@@ -75,15 +82,22 @@ Model process
 - **Only the Hub window** can call `qortino:*` IPC (`requireMainWindowSender`);
   Q-Apps cannot.
 - **Storage:** chats, settings, the install record and the models list are in
-  the window's localStorage under `qortino:` keys.
+  the window's localStorage under `qortino:` keys. The open chat is saved
+  after each finished reply, and as it stands (with the part of a reply
+  written so far) when the panel closes, on sign-out and on a page reload.
+  Quit Completely ends the page without unload events, so a question still
+  being answered then, and its reply so far, are not kept.
 
 ## Notes for development
 
 - Qortino AI needs the desktop app; the browser dev server shows no sidebar
   entry and no Home lines.
 - `npx vitest run src/qortinoAgent src/components/Group/QortinoAgent
-src/components/Group/qortinoHome electron/src/qortino-llm-files.test.ts`
-  runs its tests.
+src/components/Group/qortinoHome
+src/components/Group/__tests__/HomeQortinoWorkspaceCard electron/src/qortino-llm`
+  runs its tests. The last two match by the start of the file name:
+  `HomeQortinoWorkspaceCard*.test.tsx` and `qortino-llm*.test.ts` (the
+  main process's tests, such as `qortino-llm.linkDownloads.test.ts`).
 - The curated answers, the Q-App catalog and the persona are written in
   English (as in GO); the model answers in the user's language when asked
   in it. All of the UI is translated.

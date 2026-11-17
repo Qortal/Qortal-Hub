@@ -112,6 +112,8 @@ function banner(type: 'success' | 'error' | 'info', message: string): void {
 /** Said once when the window closes while the download goes on. */
 export function announceQortinoBackgroundDownload(): void {
   if (!isQortinoInstallJobActive()) return;
+  // Cancelled: it is only winding down.
+  if (controller?.signal.aborted) return;
   banner('info', t('core:qortino_agent.notify.background'));
 }
 
@@ -186,11 +188,14 @@ async function run(signal: AbortSignal): Promise<void> {
       }
 
       let reached = -1;
+      // Whether this try got further than looking the parts up.
+      let located = false;
       try {
         const install = await installQortinoModel({
           signal,
           model,
           onProgress: (progress) => {
+            if (progress.phase !== 'locate') located = true;
             reached = Math.max(reached, progressScore(progress));
             set({ progress });
           },
@@ -206,7 +211,7 @@ async function run(signal: AbortSignal): Promise<void> {
         if (
           error.code === 'not_published' &&
           !triedOtherLayout &&
-          reached < 0 &&
+          !located &&
           (await savedModelBytes(model)) === 0
         ) {
           triedOtherLayout = true;

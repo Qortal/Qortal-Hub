@@ -10,8 +10,15 @@ import {
 import QortinoLlm from '../../../qortinoAgent/qortinoLlm';
 import { removeQortinoFromComputer } from '../../../qortinoAgent/removeFromComputer';
 import type { QortinoInstallState } from '../../../qortinoAgent/store';
-import { executeEvent } from '../../../utils/events';
-import { QORTINO_CHATS_CLEARED_EVENT } from './qortinoChatEvents';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../../utils/events';
+import {
+  QORTINO_CHATS_CLEARED_EVENT,
+  QORTINO_CHATS_SAVED_EVENT,
+} from './qortinoChatEvents';
 import { QortinoModelsSection } from './QortinoModelsSection';
 import { QortinoSettingsSection } from './QortinoSettingsSection';
 
@@ -31,11 +38,17 @@ export function QortinoSettingsView({ install, onBack, onRemoved }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    void hasSavedQortinoChats().then((value) => {
-      if (!cancelled) setHasChats(value);
-    });
+    const readHasChats = () => {
+      void hasSavedQortinoChats().then((value) => {
+        if (!cancelled) setHasChats(value);
+      });
+    };
+    readHasChats();
+    // The chat under the settings saves an answer that ended meanwhile.
+    subscribeToEvent(QORTINO_CHATS_SAVED_EVENT, readHasChats);
     return () => {
       cancelled = true;
+      unsubscribeFromEvent(QORTINO_CHATS_SAVED_EVENT, readHasChats);
     };
   }, []);
 
@@ -47,10 +60,9 @@ export function QortinoSettingsView({ install, onBack, onRemoved }: Props) {
   }, []);
 
   const handleRemoveQortino = useCallback(async () => {
-    await QortinoLlm.cancel().catch(() => undefined);
-    await removeQortinoFromComputer();
+    await removeQortinoFromComputer(install.llmPath);
     onRemoved();
-  }, [onRemoved]);
+  }, [install.llmPath, onRemoved]);
 
   return (
     <Box

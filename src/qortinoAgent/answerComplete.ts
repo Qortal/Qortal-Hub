@@ -39,11 +39,15 @@ export function looksIncompleteAnswer(text: string): boolean {
     return true;
   }
 
-  // Short dangling bullet / numbered step (no terminal punctuation).
-  if (/^[-*•]\s+\S.{0,80}$/.test(last) && !/[.!?…)]$/.test(last)) {
+  // Short dangling bullet / numbered step (no terminal punctuation). Chinese
+  // and Japanese sentences end in full-width marks.
+  if (/^[-*•]\s+\S.{0,80}$/.test(last) && !/[.!?…)。！？」』）”]$/.test(last)) {
     return true;
   }
-  if (/^\d+[.)]\s+\S.{0,80}$/.test(last) && !/[.!?…)]$/.test(last)) {
+  if (
+    /^\d+[.)]\s+\S.{0,80}$/.test(last) &&
+    !/[.!?…)。！？」』）”]$/.test(last)
+  ) {
     return true;
   }
 
@@ -51,7 +55,7 @@ export function looksIncompleteAnswer(text: string): boolean {
   if (
     last.length > 20 &&
     !/^[-*•\d#]/.test(last) &&
-    !/[.!?…)"\]]\s*$/.test(last) &&
+    !/[.!?…)"\]。！？」』）”]\s*$/.test(last) &&
     !/:\s*$/.test(last)
   ) {
     return true;
@@ -120,7 +124,7 @@ export function trimIncompleteTail(text: string): string {
       /\b(and|or|with|to|for|of|the|a|an)\s*$/i.test(last) ||
       (last.length > 20 &&
         !/^[-*•\d#]/.test(last) &&
-        !/[.!?…)"\]]\s*$/.test(last));
+        !/[.!?…)"\]。！？」』）”]\s*$/.test(last));
     if (!isDangling) break;
     lines.pop();
   }

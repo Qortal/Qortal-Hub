@@ -25,6 +25,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  chatAccount,
   createEmptySession,
   loadActiveSessionIds,
   loadChatSessions,
@@ -81,8 +82,15 @@ import {
   OTHER_MODEL_SAMPLING,
   type ActiveQortinoModel,
 } from '../../../qortinoAgent/models';
-import { subscribeToEvent, unsubscribeFromEvent } from '../../../utils/events';
-import { QORTINO_CHATS_CLEARED_EVENT } from './qortinoChatEvents';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../../utils/events';
+import {
+  QORTINO_CHATS_CLEARED_EVENT,
+  QORTINO_CHATS_SAVED_EVENT,
+} from './qortinoChatEvents';
 import {
   continuedAnswerSource,
   isQortinoAnswerSource,
@@ -168,6 +176,27 @@ function fromStoredBubbles(messages: StoredChatBubble[]): ChatBubble[] {
     continueQuery: m.continueQuery,
     source: isQortinoAnswerSource(m.source) ? m.source : undefined,
   }));
+}
+
+/** The chats, with chat `id` holding `messages` as they stand now. */
+function sessionsWithMessages(
+  sessions: QortinoChatSession[],
+  id: string | null,
+  messages: ChatBubble[]
+): QortinoChatSession[] {
+  if (!id) return sessions;
+  const stored = toStoredBubbles(messages);
+  return sessions.map((s) =>
+    s.id === id
+      ? {
+          ...s,
+          messages: stored,
+          title: s.titleCustom ? s.title : titleFromMessages(stored),
+          updatedAt: Date.now(),
+          mode: 'offline' as const,
+        }
+      : s
+  );
 }
 
 type Props = {
@@ -429,11 +458,24 @@ export function QortinoAgentChat({
    * down; the next question waits for it rather than being refused.
    */
   const completionRef = useRef<Promise<unknown> | null>(null);
+  /**
+   * Bumped by Stop and when the chat closes: a reply still waiting to start
+   * (for the one before it, or for the model to load again) never does.
+   */
+  const cancelEpochRef = useRef(0);
+  /**
+   * When Send was last clicked: Stop takes its place under the pointer. On
+   * performance.now(), which never goes back as the computer's clock can.
+   */
+  const sentAtRef = useRef(-Infinity);
+  /** The account the chats were loaded for: the closing save goes there. */
+  const accountRef = useRef<string | null>(null);
 
   // Restore persisted chat history once on mount. Sessions from the old QDN
   // chat stay stored but hidden.
   useEffect(() => {
     let cancelled = false;
+    accountRef.current = chatAccount();
     (async () => {
       const [loaded, activeIds] = await Promise.all([
         loadChatSessions(),
@@ -479,7 +521,10 @@ export function QortinoAgentChat({
               }
             : s
         );
-        void saveChatSessions(next);
+        void saveChatSessions(next).then(() => {
+          // Settings, open over the chat, can delete chats from now on.
+          if (stored.length > 0) executeEvent(QORTINO_CHATS_SAVED_EVENT, {});
+        });
         return next;
       });
     }, 350);
@@ -496,24 +541,37 @@ export function QortinoAgentChat({
   }, []);
 
   const handleNewChat = useCallback(() => {
-    if (busy) return;
+    // An empty chat already is a new one, whichever button asks.
+    if (busy || messages.length === 0) return;
     const session = createEmptySession('offline');
     setSessions((prev) => {
-      const next = [session, ...prev];
+      // The chat being left is saved as it stands: its own save waits for a
+      // pause, and is dropped once another chat is open.
+      const next = [
+        session,
+        ...sessionsWithMessages(prev, activeSessionId, messages),
+      ];
       void saveChatSessions(next);
       return next;
     });
     selectSession(session);
-  }, [busy, selectSession]);
+  }, [activeSessionId, busy, messages, selectSession]);
 
   const handleSelectSession = useCallback(
     (id: string) => {
-      if (busy) return;
+      // The open chat chosen again: nothing to leave or to load.
+      if (busy || id === activeSessionId) return;
       const session = sessions.find((s) => s.id === id);
       if (!session || session.mode !== 'offline') return;
+      // As for a new chat: the one being left is saved as it stands.
+      setSessions((prev) => {
+        const next = sessionsWithMessages(prev, activeSessionId, messages);
+        void saveChatSessions(next);
+        return next;
+      });
       selectSession(session);
     },
-    [busy, selectSession, sessions]
+    [activeSessionId, busy, messages, selectSession, sessions]
   );
 
   const handleRenameSession = useCallback((id: string, title: string) => {
@@ -668,43 +726,53 @@ export function QortinoAgentChat({
 
   // Closing the panel unmounts the chat. Keep the model for a while so
   // reopening is instant; it is released after that. The chat is saved as it
-  // stands: the save above waits for a reply to finish, and for a pause.
-  useEffect(
-    () => () => {
+  // stands: the save above waits for a reply to finish, and for a pause. It
+  // goes to the account the chats were loaded for (signing out clears the
+  // account before the chat closes), and is also saved when the page is
+  // reloaded, which unmounts nothing. Quit Completely ends the page without
+  // these events, so a question still being answered then is not kept.
+  useEffect(() => {
+    const saveAsItStands = () => {
       const latest = latestRef.current;
-      if (latest.historyReady && latest.activeSessionId) {
-        const stored = toStoredBubbles(
-          latest.messages
-            .map((m) => (m.streaming ? { ...m, streaming: false } : m))
-            .filter((m) => m.role !== 'assistant' || m.content.trim())
-        );
-        const next = latest.sessions.map((session) =>
-          session.id === latest.activeSessionId
-            ? {
-                ...session,
-                messages: stored,
-                title: session.titleCustom
-                  ? session.title
-                  : titleFromMessages(stored),
-                updatedAt:
-                  stored.length === session.messages.length
-                    ? session.updatedAt
-                    : Date.now(),
-              }
-            : session
-        );
-        void saveChatSessions(next);
-      }
+      if (!latest.historyReady || !latest.activeSessionId) return;
+      const stored = toStoredBubbles(
+        latest.messages
+          .map((m) => (m.streaming ? { ...m, streaming: false } : m))
+          .filter((m) => m.role !== 'assistant' || m.content.trim())
+      );
+      const next = latest.sessions.map((session) =>
+        session.id === latest.activeSessionId
+          ? {
+              ...session,
+              messages: stored,
+              title: session.titleCustom
+                ? session.title
+                : titleFromMessages(stored),
+              updatedAt:
+                stored.length === session.messages.length
+                  ? session.updatedAt
+                  : Date.now(),
+            }
+          : session
+      );
+      void saveChatSessions(next, accountRef.current);
+    };
+    window.addEventListener('pagehide', saveAsItStands);
+    window.addEventListener('beforeunload', saveAsItStands);
+    return () => {
+      window.removeEventListener('pagehide', saveAsItStands);
+      window.removeEventListener('beforeunload', saveAsItStands);
+      saveAsItStands();
       revealCancelRef.current = true;
+      cancelEpochRef.current += 1;
       void QortinoLlm.cancel().catch(() => undefined);
       void listenerRef.current?.remove();
       void progressListenerRef.current?.remove();
       listenerRef.current = null;
       progressListenerRef.current = null;
       releaseQortinoModelAfterClose();
-    },
-    []
-  );
+    };
+  }, []);
 
   useEffect(() => {
     const el = listRef.current;
@@ -746,6 +814,7 @@ export function QortinoAgentChat({
 
   const stop = useCallback(async () => {
     revealCancelRef.current = true;
+    cancelEpochRef.current += 1;
     await QortinoLlm.cancel().catch(() => undefined);
     setBusy(false);
     setMessages((prev) =>
@@ -792,9 +861,12 @@ export function QortinoAgentChat({
         updateBubble(assistantId, { content: prefix + streamed });
       };
 
+      const epoch = cancelEpochRef.current;
       // A stopped reply may still be winding down: let it finish first, so
       // its last events never land in this answer.
       await completionRef.current?.catch(() => undefined);
+      // Stopped, or the chat closed, during that wait: this reply never starts.
+      if (epoch !== cancelEpochRef.current) throw new Error('cancelled');
       await listenerRef.current?.remove();
       await progressListenerRef.current?.remove();
       progressListenerRef.current = await QortinoLlm.addListener(
@@ -862,12 +934,21 @@ export function QortinoAgentChat({
           if (errorText(e) !== 'Model is not loaded' || !model.path) {
             throw e;
           }
+          // Stopped, or the chat closed: no model is loaded for a reply
+          // nobody waits for, and none is written after the load.
+          const stopped = () => {
+            if (epoch === cancelEpochRef.current) return;
+            settleDone();
+            throw new Error('cancelled');
+          };
+          stopped();
           forgetQortinoModel();
           await ensureQortinoModel({
             path: model.path,
             nCtx: model.contextTokens,
             gpu: settings.useGpu,
           });
+          stopped();
           // What the lost attempt wrote is not part of the new answer.
           if (rafId) {
             window.cancelAnimationFrame(rafId);
@@ -1219,7 +1300,22 @@ export function QortinoAgentChat({
     ]
   );
 
-  const send = useCallback(() => sendText(input), [input, sendText]);
+  /** What the user was typing when a question from Home took the box. */
+  const draftRef = useRef('');
+  /** A question from Home the user edited is in the box, not sent yet. */
+  const editedHomeQuestionRef = useRef(false);
+
+  const send = useCallback(() => {
+    const sends = input.trim() !== '' && !busy && modelReady;
+    void sendText(input);
+    // The edited question from Home is sent: what the user was typing
+    // before it comes back, and the next question from Home can come in.
+    if (sends && editedHomeQuestionRef.current) {
+      editedHomeQuestionRef.current = false;
+      setInput(draftRef.current);
+      draftRef.current = '';
+    }
+  }, [busy, input, modelReady, sendText]);
 
   // A question typed next to Qortino on Home: a new chat for it (the empty
   // one open already is one), shown in the box until the model is loaded.
@@ -1230,17 +1326,37 @@ export function QortinoAgentChat({
   );
   const [queuedQuestion, setQueuedQuestion] = useState<string | null>(null);
   useEffect(() => {
-    if (!pendingQuestion || !historyReady || busy) return;
+    // The next one waits until the question before it has been sent.
+    if (
+      !pendingQuestion ||
+      !historyReady ||
+      busy ||
+      queuedQuestion ||
+      editedHomeQuestionRef.current
+    )
+      return;
     const question = takePendingQortinoQuestion();
     if (!question) return;
     if (messages.length > 0) handleNewChat();
+    if (input.trim()) draftRef.current = input;
     setInput(question);
     setQueuedQuestion(question);
-  }, [busy, handleNewChat, historyReady, messages.length, pendingQuestion]);
+  }, [
+    busy,
+    handleNewChat,
+    historyReady,
+    input,
+    messages.length,
+    pendingQuestion,
+    queuedQuestion,
+  ]);
   useEffect(() => {
     if (!queuedQuestion || !modelReady || busy) return;
     setQueuedQuestion(null);
     void sendText(queuedQuestion);
+    // The question is sent: what the user was typing comes back.
+    setInput(draftRef.current);
+    draftRef.current = '';
   }, [busy, modelReady, queuedQuestion, sendText]);
 
   const subtitle = t('core:qortino_agent.chat.subtitle', {
@@ -1804,7 +1920,26 @@ export function QortinoAgentChat({
             placeholder={t('core:qortino_agent.chat.placeholder')}
             size="small"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // A question from Home edited while the model loads is the
+              // user's to send: it is not sent by itself as first typed, and
+              // the next one from Home waits until it is sent.
+              if (queuedQuestion !== null) {
+                setQueuedQuestion(null);
+                editedHomeQuestionRef.current = true;
+              }
+              // The question from Home is erased: what the user was typing
+              // before it comes back, and the next one from Home can come in.
+              if (
+                editedHomeQuestionRef.current &&
+                e.target.value.trim() === ''
+              ) {
+                editedHomeQuestionRef.current = false;
+                setInput(draftRef.current);
+                draftRef.current = '';
+              }
+            }}
             onKeyDown={(e) => {
               if (
                 e.key === 'Enter' &&
@@ -1855,7 +1990,11 @@ export function QortinoAgentChat({
             <IconButton
               aria-label={t('core:qortino_agent.aria.stop')}
               color="primary"
-              onClick={() => void stop()}
+              onClick={() => {
+                // The second click of a double click on Send is not a Stop.
+                if (performance.now() - sentAtRef.current < 400) return;
+                void stop();
+              }}
             >
               <StopRoundedIcon />
             </IconButton>
@@ -1864,7 +2003,10 @@ export function QortinoAgentChat({
               aria-label={t('core:qortino_agent.aria.send')}
               color="primary"
               disabled={!modelReady || !input.trim()}
-              onClick={() => void send()}
+              onClick={() => {
+                sentAtRef.current = performance.now();
+                void send();
+              }}
               sx={{
                 background: alpha('#7EB6FF', isDark ? 0.22 : 0.16),
                 borderRadius: '14px',
@@ -1885,7 +2027,11 @@ export function QortinoAgentChat({
         onSelect={handleSelectSession}
         onRename={handleRenameSession}
         onTogglePin={handleTogglePin}
-        onDelete={handleDeleteSession}
+        onDelete={(id) => {
+          // The chat being answered goes: so does its reply.
+          if (busy && id === activeSessionId) void stop();
+          handleDeleteSession(id);
+        }}
       />
 
       <QortinoReportDialog
