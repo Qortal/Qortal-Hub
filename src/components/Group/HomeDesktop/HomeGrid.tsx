@@ -86,7 +86,11 @@ type Drag = {
 export type HomeGridWindowAction = {
   icon: ReactNode;
   label: string;
-  onClick: () => void;
+  /**
+   * Gets the grid as it shows: the shown windows where and as tall as they
+   * show (homeGridShown), the hidden ones where they're kept.
+   */
+  onClick: (shown: HomeGridItem[]) => void;
 };
 
 export type HomeGridWindow = {
@@ -941,7 +945,11 @@ export const HomeGrid = ({
             <Tooltip key={action.label} title={action.label}>
               <IconButton
                 aria-label={action.label}
-                onClick={action.onClick}
+                onClick={() =>
+                  action.onClick(
+                    mergeHomeGrid(gridPropRef.current, layoutRef.current)
+                  )
+                }
                 onPointerDown={(event) => event.stopPropagation()}
                 size="small"
                 sx={{ color: theme.palette.text.secondary, p: '4px' }}

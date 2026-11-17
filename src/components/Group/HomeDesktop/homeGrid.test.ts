@@ -1,9 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   type HomeGridItem,
   type HomeWindowId,
   homeDefaultGrid,
-  homeGridAfterGettingStarted,
   homeGridCellAt,
   homeGridColumnPx,
   homeGridFlow,
@@ -18,11 +17,25 @@ import {
   homeWindowMinSize,
   homeWorkspaceCopyId,
   isHomeWidgetWindowId,
+  isHomeWorkspaceCopyId,
   mergeHomeGrid,
   moveHomeWindow,
   normalizeHomeGrid,
   resizeHomeWindow,
 } from './homeGrid';
+import {
+  type HomeLayout,
+  type HomePanelId,
+  HOME_LAYOUT_DEFAULT,
+  homeLayoutGrid,
+  isHomePanelShown,
+  readHomeLayout,
+  saveHomeLayout,
+  withHomeGrid,
+  withHomePanelShown,
+  withHomeWorkspaceCopy,
+  withoutHomeWorkspaceCopy,
+} from './homeLayout';
 
 const at = (items: readonly HomeGridItem[], key: HomeWindowId) =>
   items.find((item) => item.key === key);
@@ -267,26 +280,6 @@ describe('while Getting started shows', () => {
       0
     );
     expect(homeGridForGettingStarted(grid)).toEqual(grid);
-  });
-
-  it("keeps Qortino in its own rows in what's saved meanwhile", () => {
-    const grid = homeDefaultGrid([...stack]);
-    const during = homeGridForGettingStarted(grid);
-    // Another window moved in Edit Home (the Workspace not shown): Qortino's
-    // place is kept as it was.
-    const shown = homeGridShown(during, (key) => key !== 'workspace');
-    const moved = mergeHomeGrid(during, moveHomeWindow(shown, 'wallet', 18, 0));
-    expect(at(homeGridAfterGettingStarted(moved, grid), 'qortino')).toEqual(
-      at(grid, 'qortino')
-    );
-    // Qortino's window made wider: kept, in its own rows.
-    const wider = during.map((item) =>
-      item.key === 'qortino' ? { ...item, w: item.w + 2 } : item
-    );
-    expect(at(homeGridAfterGettingStarted(wider, grid), 'qortino')).toEqual({
-      ...at(grid, 'qortino')!,
-      w: at(grid, 'qortino')!.w + 2,
-    });
   });
 });
 
@@ -585,5 +578,162 @@ describe('widget windows', () => {
     expect(mergeHomeGrid(stored.slice(0, -1), [moved])).toHaveLength(
       stored.length
     );
+  });
+});
+
+const ALICE = 'QaliceAddress00000000000000000000';
+
+/**
+ * Home as HomeDesktop lays it out for a layout (Getting started done), with
+ * the content measured in the windows that follow it.
+ */
+const homeView = (
+  layout: HomeLayout,
+  measured: Partial<Record<HomeWindowId, number>> = {}
+) => {
+  const stored = homeLayoutGrid(layout);
+  const isShown = (key: HomeWindowId) =>
+    key === 'account' ||
+    isHomeWidgetWindowId(key) ||
+    isHomeWorkspaceCopyId(key) ||
+    isHomePanelShown(layout, key as HomePanelId);
+  return { shown: homeGridShown(stored, isShown, measured), stored };
+};
+
+/**
+ * A change made in Edit Home (a window moved or resized, from what shows),
+ * saved and read back as Home does.
+ */
+const editHome = (
+  layout: HomeLayout,
+  change: (shown: HomeGridItem[]) => HomeGridItem[]
+) => {
+  const view = homeView(layout);
+  saveHomeLayout(
+    ALICE,
+    withHomeGrid(layout, mergeHomeGrid(view.stored, change(view.shown)))
+  );
+  return { saved: readHomeLayout(ALICE) };
+};
+
+describe('Duplicate and remove, as kept', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+  const save = (layout: HomeLayout) => {
+    saveHomeLayout(ALICE, layout);
+    return readHomeLayout(ALICE);
+  };
+  const keys = ['k1', 'k2', 'k3'];
+
+  it('adds copies without moving the feed over Widgets, and removing them leaves Home as it was', () => {
+    const before = homeView(HOME_LAYOUT_DEFAULT).shown;
+
+    // Three copies make the left column 69 rows longer than the others.
+    let layout = HOME_LAYOUT_DEFAULT as HomeLayout;
+    for (const key of keys) {
+      layout = save(withHomeWorkspaceCopy(layout, 'workspace', key));
+    }
+    const shown = homeView(layout).shown;
+    expect(rect(shown, 'tools')).toEqual([0, 115, 6, 18]);
+    // What was under them is still one under the other.
+    expect(rect(shown, 'widgets')).toEqual([0, 133, 24, 20]);
+    expect(rect(shown, 'groupActivity')).toEqual([0, 153, 12, 63]);
+    expect(rect(shown, 'feed')).toEqual([12, 153, 12, 63]);
+
+    for (const key of keys) {
+      layout = save(withoutHomeWorkspaceCopy(layout, homeWorkspaceCopyId(key)));
+    }
+    expect(homeView(layout).shown).toEqual(before);
+  });
+
+  it('keeps the feed beside Group Activity when Widgets measures taller than it is kept', () => {
+    // Widgets' content one row taller than the 20 it has until measured.
+    const measured = { widgets: 21 };
+    let layout = HOME_LAYOUT_DEFAULT as HomeLayout;
+    for (const key of keys) {
+      // As Home duplicates: among the windows as they show.
+      const view = homeView(layout, measured);
+      layout = save(
+        withHomeWorkspaceCopy(
+          withHomeGrid(layout, mergeHomeGrid(view.stored, view.shown)),
+          'workspace',
+          key
+        )
+      );
+    }
+
+    const shown = homeView(layout, measured).shown;
+
+    expect(rect(shown, 'widgets')).toEqual([0, 133, 24, 21]);
+    expect(rect(shown, 'groupActivity')).toEqual([0, 154, 12, 63]);
+    expect(rect(shown, 'feed')).toEqual([12, 154, 12, 63]);
+  });
+
+  it('adds the copy right under a Workspace that sits over a wider window', () => {
+    // The Workspace at the bottom of the right column, right over Widgets,
+    // which starts further left.
+    const layout = save(
+      withHomeGrid(
+        HOME_LAYOUT_DEFAULT,
+        moveHomeWindow(homeDefaultGrid(), 'workspace', 18, 40)
+      )
+    );
+    const before = homeView(layout).shown;
+    expect(rect(before, 'workspace')).toEqual([18, 64, 6, 23]);
+    expect(rect(before, 'widgets')).toEqual([0, 87, 24, 20]);
+
+    const added = save(withHomeWorkspaceCopy(layout, 'workspace', 'k1'));
+
+    const shown = homeView(added).shown;
+    expect(rect(shown, homeWorkspaceCopyId('k1'))).toEqual([18, 87, 6, 23]);
+    // Widgets and what is under it make room, still one under the other.
+    expect(rect(shown, 'widgets')).toEqual([0, 110, 24, 20]);
+    expect(rect(shown, 'groupActivity')).toEqual([0, 130, 12, 63]);
+    expect(rect(shown, 'feed')).toEqual([12, 130, 12, 63]);
+    expect(
+      homeView(save(withoutHomeWorkspaceCopy(added, homeWorkspaceCopyId('k1'))))
+        .shown
+    ).toEqual(before);
+  });
+
+  it('moves only what is under the new copy, with the Workspace hidden', () => {
+    // A copy, the Workspace hidden, then Featured Q-Apps at the top left.
+    let layout = save(
+      withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace', 'k1')
+    );
+    layout = save(withHomePanelShown(layout, 'workspace', false));
+    layout = editHome(layout, (shown) =>
+      moveHomeWindow(shown, 'featured', 0, 0)
+    ).saved;
+    const before = homeView(layout);
+    const copy = at(before.shown, homeWorkspaceCopyId('k1'))!;
+
+    const added = save(
+      withHomeWorkspaceCopy(layout, homeWorkspaceCopyId('k1'), 'k2')
+    );
+
+    const shown = homeView(added).shown;
+    expect(rect(shown, homeWorkspaceCopyId('k2'))).toEqual([
+      copy.x,
+      copy.y + copy.h,
+      copy.w,
+      copy.h,
+    ]);
+    // Each other window is where it was, or lower by the copy's height.
+    for (const item of before.shown) {
+      const now = at(shown, item.key)!;
+      expect([item.key, now.y - item.y]).toEqual([
+        item.key,
+        now.y === item.y ? 0 : copy.h,
+      ]);
+    }
+    expect(at(homeLayoutGrid(added), 'workspace')).toEqual(
+      at(before.stored, 'workspace')
+    );
+    expect(
+      homeView(save(withoutHomeWorkspaceCopy(added, homeWorkspaceCopyId('k2'))))
+        .shown
+    ).toEqual(before.shown);
   });
 });

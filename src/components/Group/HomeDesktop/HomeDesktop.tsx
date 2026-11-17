@@ -81,7 +81,6 @@ import {
   HOME_WINDOW_IDS,
   type HomeFixedWindowId,
   type HomeWindowId,
-  homeGridAfterGettingStarted,
   homeGridForGettingStarted,
   homeWidgetWindowId,
   homeWorkspaceCopyId,
@@ -156,15 +155,24 @@ export const HomeDesktop = ({
 }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const [homeLayout, updateHomeLayout] = useHomeLayout(myAddress);
-  // While Getting started shows in Qortino's window, the Workspace makes way.
+  // While Getting started shows in Qortino's window, the Workspace makes way,
+  // but not in Edit Home: there the layout shows as it's kept, so what's
+  // arranged is what's saved.
   const [gettingStartedShown, setGettingStartedShown] = useState(false);
+  const [isEditingHome, setIsEditingHome] = useState(false);
+  const makingWayForGettingStarted = gettingStartedShown && !isEditingHome;
   const isShown = (id: HomePanelId) =>
     isHomePanelShownNow(homeLayout, id, {
-      gettingStarted: gettingStartedShown,
+      gettingStarted: makingWayForGettingStarted,
     }) &&
     (id !== 'widgets' || canHostHomeWidgets());
   const [slots, slotRef] = useWindowSlots();
   const workspaceCopies = homeLayout.workspaces ?? [];
+  // Every Workspace window's key: the first one's, then the copies'.
+  const workspaceKeys = useMemo(
+    () => ['', ...(homeLayout.workspaces ?? [])],
+    [homeLayout]
+  );
   const copyTitle = useHomeWorkspaceCopyTitle();
   // The Qortino card runs while one of its windows shows.
   const showQortinoCard =
@@ -184,7 +192,6 @@ export const HomeDesktop = ({
   const theme = useTheme();
   const titles = useHomeWindowTitles();
   const homeActive = desktopViewMode === 'home';
-  const [isEditingHome, setIsEditingHome] = useState(false);
   const wasEditingHomeRef = useRef(false);
   const [isWidgetPickerOpen, setIsWidgetPickerOpen] = useState(false);
   const [widgetReloadKeys, setWidgetReloadKeys] = useState<
@@ -410,7 +417,9 @@ export const HomeDesktop = ({
       };
     }
   );
-  // Duplicate: a new, empty Workspace right under this one.
+  // Duplicate: a new, empty Workspace right under this one. It's placed
+  // among the windows as they show, so the ones whose height follows their
+  // content make room at the height they show.
   const duplicateActions = (
     id: HomeWindowId,
     title: string
@@ -420,8 +429,10 @@ export const HomeDesktop = ({
           {
             icon: <LibraryAddRoundedIcon sx={{ fontSize: 16 }} />,
             label: t('group:dashboard.duplicate_window', { window: title }),
-            onClick: () =>
-              updateHomeLayout((current) => withHomeWorkspaceCopy(current, id)),
+            onClick: (shown) =>
+              updateHomeLayout((current) =>
+                withHomeWorkspaceCopy(withHomeGrid(current, shown), id)
+              ),
           },
         ]
       : [];
@@ -450,7 +461,7 @@ export const HomeDesktop = ({
   // takes its rows too, at that height: the rest of Home stays where it is,
   // and nothing moves when the Workspace comes back.
   const workspaceMakingWay =
-    gettingStartedShown &&
+    makingWayForGettingStarted &&
     isShown('qortino') &&
     isHomePanelShown(homeLayout, 'workspace');
   const grid = useMemo(
@@ -458,10 +469,14 @@ export const HomeDesktop = ({
       workspaceMakingWay ? homeGridForGettingStarted(storedGrid) : storedGrid,
     [storedGrid, workspaceMakingWay]
   );
+  // Qortino's window keeps its place's height while it fills the
+  // Workspace's rows, and in Edit Home while Getting started shows in it:
+  // there it's as big as it's kept, Getting started inside it.
   const qortinoFills =
-    workspaceMakingWay &&
-    grid.find((item) => item.key === 'qortino')?.h !==
-      storedGrid.find((item) => item.key === 'qortino')?.h;
+    (workspaceMakingWay &&
+      grid.find((item) => item.key === 'qortino')?.h !==
+        storedGrid.find((item) => item.key === 'qortino')?.h) ||
+    (isEditingHome && gettingStartedShown);
   const windows: HomeGridWindow[] = [
     ...HOME_WINDOW_IDS.filter((id) => id === 'account' || isShown(id)).map(
       (id) => ({
@@ -520,7 +535,7 @@ export const HomeDesktop = ({
         </ErrorBoundary>
       ) : (
         // Keeps Qortino's music playing while none of its windows shows.
-        <QortinoMusicPlaybackController />
+        <QortinoMusicPlaybackController workspaceKeys={workspaceKeys} />
       )}
       <Activity mode={homeActive ? 'visible' : 'hidden'}>
         <motion.div
@@ -579,14 +594,7 @@ export const HomeDesktop = ({
               }
               hiddenWindows={hiddenWindows}
               onChangeGrid={(next) =>
-                updateHomeLayout((current) =>
-                  withHomeGrid(
-                    current,
-                    qortinoFills
-                      ? homeGridAfterGettingStarted(next, storedGrid)
-                      : next
-                  )
-                )
+                updateHomeLayout((current) => withHomeGrid(current, next))
               }
               onEditingChange={(editing) => {
                 setIsEditingHome(editing);

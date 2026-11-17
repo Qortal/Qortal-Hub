@@ -21,6 +21,7 @@ import {
   homeWidgetWindowId,
   homeWorkspaceCopyId,
   homeWorkspaceCopyKey,
+  isHomeGridPlaceFree,
   mergeHomeGrid,
   normalizeHomeGrid,
   resizeHomeWindow,
@@ -489,6 +490,132 @@ export const withoutHomeWorkspaceCopy = (
     grid: layout.grid?.filter((item) => item.key !== id),
     version: HOME_LAYOUT_VERSION,
     workspaces: (layout.workspaces ?? []).filter((other) => other !== key),
+  });
+};
+
+/**
+ * Where the Qortino card keeps what the Workspaces hold on this device, per
+ * account (`<key>_<address>`): each copy's in `windows`, by its key.
+ */
+export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
+
+/**
+ * What the account's user settings hold under the Qortino card's key, as
+ * last read or written on this device, by address. `null`: nothing there,
+ * so the card goes by its localStorage copy.
+ */
+const qortinoWorkspaceSettings = new Map<string, unknown>();
+
+/** Notes what the account's user settings hold under the Qortino card's key. */
+export const noteQortinoWorkspaceSettings = (
+  address: string | undefined,
+  value: unknown
+) => {
+  if (address) qortinoWorkspaceSettings.set(address, value ?? null);
+};
+
+/**
+ * Reads the account's user settings under the Qortino card's key, as the
+ * card does, and notes what they hold.
+ */
+export const loadQortinoWorkspaceSettings = async (address: string) => {
+  let value: unknown = null;
+  try {
+    if (typeof window.sendMessage === 'function') {
+      const stored = (await window.sendMessage('getUserSettings', {
+        key: QORTINO_WORKSPACE_SETTINGS_KEY,
+      })) as { error?: unknown } | null;
+      if (stored && !stored.error) value = stored;
+    }
+  } catch {
+    // The card goes by its localStorage copy then too.
+  }
+  noteQortinoWorkspaceSettings(address, value);
+};
+
+/**
+ * The keys of the Workspace's copies that hold something on this device: a
+ * module picked in them, or apps put in. Read as the Qortino card reads them:
+ * the account's user settings first, then the localStorage copy.
+ */
+export const readHeldHomeWorkspaceCopies = (address: string): string[] => {
+  try {
+    const stored = (qortinoWorkspaceSettings.get(address) ??
+      JSON.parse(
+        window.localStorage.getItem(
+          `${QORTINO_WORKSPACE_SETTINGS_KEY}_${address}`
+        ) || 'null'
+      )) as { windows?: unknown } | null;
+    const windows = stored?.windows;
+    if (!windows || typeof windows !== 'object') return [];
+    return Object.entries(windows).flatMap(([key, held]) => {
+      const { hotkeys, mode } = (held ?? {}) as {
+        hotkeys?: unknown;
+        mode?: unknown;
+      };
+      const holds =
+        mode === 'hotkeys' ||
+        mode === 'music' ||
+        (Array.isArray(hotkeys) &&
+          hotkeys.some((slot) => typeof slot === 'string' && !!slot.trim()));
+      return holds ? [key] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * `taken`, a layout taken in from elsewhere in place of `local`, with the
+ * Workspace's copies `local` has that hold something on this device
+ * (`held`), so what they hold isn't let go of. Each stays listed, where it
+ * was when no shown window of `taken` is there, or else right under the
+ * Workspace, as Duplicate puts a copy. Within HOME_WORKSPACE_COPY_LIMIT the
+ * copies holding something here go first; the others are as `taken` has
+ * them. `taken` itself when it lists them all.
+ */
+export const withHeldHomeWorkspaceCopies = (
+  taken: HomeLayout,
+  local: HomeLayout,
+  held: readonly string[]
+): HomeLayout => {
+  const holds = (key: string) =>
+    held.includes(key) && (local.workspaces ?? []).includes(key);
+  const takenCopies = taken.workspaces ?? [];
+  const kept = (local.workspaces ?? []).filter(
+    (key) => holds(key) && !takenCopies.includes(key)
+  );
+  if (kept.length === 0) return taken;
+  // The copies that hold nothing here make room, the newest first.
+  const empty = takenCopies.filter((key) => !holds(key));
+  const room =
+    HOME_WORKSPACE_COPY_LIMIT -
+    kept.length -
+    (takenCopies.length - empty.length);
+  const dropped = empty.slice(Math.max(0, room));
+  const copies = takenCopies.filter((key) => !dropped.includes(key));
+  const hidden: readonly HomeWindowId[] = taken.hidden;
+  const localGrid = homeLayoutGrid(local);
+  let grid = homeLayoutGrid(
+    normalizeHomeLayout({
+      ...taken,
+      version: HOME_LAYOUT_VERSION,
+      workspaces: copies,
+    })
+  );
+  for (const key of kept) {
+    const id = homeWorkspaceCopyId(key);
+    const place = localGrid.find((item) => item.key === id);
+    grid =
+      place && isHomeGridPlaceFree(grid, place, hidden)
+        ? [...grid, place]
+        : homeGridWithWindowUnder(grid, 'workspace', id, hidden);
+  }
+  return normalizeHomeLayout({
+    ...taken,
+    grid,
+    version: HOME_LAYOUT_VERSION,
+    workspaces: [...copies, ...kept],
   });
 };
 
