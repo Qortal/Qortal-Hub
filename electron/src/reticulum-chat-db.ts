@@ -59,8 +59,11 @@ export function normalizeReticulumChatDisplayName(
   value: unknown,
   fallback = ''
 ): string {
+  // Stripping control characters is the point: a channel name may not carry
+  // them into the database or back out to the UI.
   const normalized = (typeof value === 'string' ? value : '')
     .normalize('NFC')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
     .trim();
   const safeName = Array.from(normalized).slice(0, 80).join('');

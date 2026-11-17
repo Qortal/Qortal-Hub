@@ -2582,8 +2582,12 @@ function checkBoxLengths(pk, sk) {
     throw new Error('bad secret key size');
 }
 
+// Vendored TweetNaCl. Kept byte-for-byte close to upstream so it stays
+// auditable against it; rewriting `arguments` here would diverge from the
+// reference implementation for a style rule.
 function checkArrayTypes() {
   var t, i;
+  /* eslint-disable prefer-rest-params */
   for (i = 0; i < arguments.length; i++) {
     if (
       (t = Object.prototype.toString.call(arguments[i])) !==
@@ -2591,6 +2595,7 @@ function checkArrayTypes() {
     )
       throw new TypeError('unexpected type ' + t + ', use Uint8Array');
   }
+  /* eslint-enable prefer-rest-params */
 }
 
 function cleanup(arr) {

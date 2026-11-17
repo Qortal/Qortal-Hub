@@ -47,7 +47,6 @@ import {
   txListAtom,
   isUsingImportExportSettingsAtom,
 } from '../atoms/global';
-import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   appCategoryFilterAtom,
   appSearchQueryAtom,

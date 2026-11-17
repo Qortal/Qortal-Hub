@@ -1922,7 +1922,7 @@ export const publishQDNResource = async (
         }),
       }));
   }
-  if (!!data?.encrypt) {
+  if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
 

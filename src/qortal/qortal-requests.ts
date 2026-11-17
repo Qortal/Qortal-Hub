@@ -92,7 +92,6 @@ import { serializeQortalRequestError } from './qortal-request-errors.ts';
 import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
-import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {

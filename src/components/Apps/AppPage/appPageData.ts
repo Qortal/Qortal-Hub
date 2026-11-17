@@ -77,6 +77,8 @@ export const normalizeAppLink = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > APP_PAGE_LIMITS.link) return null;
+  // Control characters are the point: a link carrying one is rejected.
+  // eslint-disable-next-line no-control-regex
   if (/[\s\u0000-\u001f\u007f]/.test(trimmed)) return null;
   if (/^qortal:\/\/\S+/i.test(trimmed)) {
     return `qortal://${trimmed.slice('qortal://'.length)}`;

@@ -48,87 +48,99 @@ export async function ensureAudioSurfaceHttpsServer(
   const origin = getAudioSurfaceHttpsOrigin();
 
   audioSurfaceServerReady = new Promise<string>(
-    async (resolvePromise, rejectPromise) => {
-      try {
-        const notAfterDate = new Date();
-        notAfterDate.setFullYear(notAfterDate.getFullYear() + 10);
-        const pems = await generateCert([{ name: 'commonName', value: host }], {
-          algorithm: 'sha256',
-          keySize: 2048,
-          notAfterDate,
-          extensions: [
-            { name: 'basicConstraints', cA: false },
+    (resolvePromise, rejectPromise) => {
+      // The async work runs in its own call rather than in an async promise
+      // executor, so a throw can still reject this promise through the catch
+      // below instead of stranding it pending.
+      void (async () => {
+        try {
+          const notAfterDate = new Date();
+          notAfterDate.setFullYear(notAfterDate.getFullYear() + 10);
+          const pems = await generateCert(
+            [{ name: 'commonName', value: host }],
             {
-              name: 'keyUsage',
-              digitalSignature: true,
-              keyEncipherment: true,
-            },
-            {
-              name: 'subjectAltName',
-              altNames: [
-                { type: 2, value: host },
-                { type: 2, value: 'localhost' },
-                { type: 7, ip: '127.0.0.1' },
+              algorithm: 'sha256',
+              keySize: 2048,
+              notAfterDate,
+              extensions: [
+                { name: 'basicConstraints', cA: false },
+                {
+                  name: 'keyUsage',
+                  digitalSignature: true,
+                  keyEncipherment: true,
+                },
+                {
+                  name: 'subjectAltName',
+                  altNames: [
+                    { type: 2, value: host },
+                    { type: 2, value: 'localhost' },
+                    { type: 7, ip: '127.0.0.1' },
+                  ],
+                },
               ],
-            },
-          ],
-        });
-
-        trustPinnedCertificateForHost(host, pems.cert);
-
-        const server = https.createServer(
-          {
-            key: pems.private,
-            cert: pems.cert,
-          },
-          async (req, res) => {
-            try {
-              const requestUrl = new URL(req.url || '/', origin);
-              const result = await buildStaticResponse(
-                requestUrl.pathname,
-                directory
-              );
-              if (shouldTraceAudioSurfaceIsolationAsset(requestUrl.pathname)) {
-                loggerLog('[GCall:audio-surface][https] response', {
-                  url: requestUrl.toString(),
-                  pathname: requestUrl.pathname,
-                  contentType: result.contentType,
-                  coop: result.headers['Cross-Origin-Opener-Policy'] ?? null,
-                  coep: result.headers['Cross-Origin-Embedder-Policy'] ?? null,
-                  corp: result.headers['Cross-Origin-Resource-Policy'] ?? null,
-                });
-              }
-              res.writeHead(result.status, {
-                ...result.headers,
-                'content-type': result.contentType,
-              });
-              res.end(result.body);
-            } catch {
-              res.writeHead(500, {
-                'content-type': 'text/plain; charset=utf-8',
-              });
-              res.end('Internal Server Error');
             }
-          }
-        );
+          );
 
-        server.once('error', (error) => {
+          trustPinnedCertificateForHost(host, pems.cert);
+
+          const server = https.createServer(
+            {
+              key: pems.private,
+              cert: pems.cert,
+            },
+            async (req, res) => {
+              try {
+                const requestUrl = new URL(req.url || '/', origin);
+                const result = await buildStaticResponse(
+                  requestUrl.pathname,
+                  directory
+                );
+                if (
+                  shouldTraceAudioSurfaceIsolationAsset(requestUrl.pathname)
+                ) {
+                  loggerLog('[GCall:audio-surface][https] response', {
+                    url: requestUrl.toString(),
+                    pathname: requestUrl.pathname,
+                    contentType: result.contentType,
+                    coop: result.headers['Cross-Origin-Opener-Policy'] ?? null,
+                    coep:
+                      result.headers['Cross-Origin-Embedder-Policy'] ?? null,
+                    corp:
+                      result.headers['Cross-Origin-Resource-Policy'] ?? null,
+                  });
+                }
+                res.writeHead(result.status, {
+                  ...result.headers,
+                  'content-type': result.contentType,
+                });
+                res.end(result.body);
+              } catch {
+                res.writeHead(500, {
+                  'content-type': 'text/plain; charset=utf-8',
+                });
+                res.end('Internal Server Error');
+              }
+            }
+          );
+
+          server.once('error', (error) => {
+            audioSurfaceServerReady = null;
+            rejectPromise(error);
+          });
+          server.listen(port, '127.0.0.1', () => {
+            audioSurfaceServer = { host, origin, port, server };
+            loggerLog('[GCall:audio-surface][https] listening', {
+              host,
+              origin,
+              port,
+            });
+            resolvePromise(origin);
+          });
+        } catch (error) {
           audioSurfaceServerReady = null;
           rejectPromise(error);
-        });
-        server.listen(port, '127.0.0.1', () => {
-          audioSurfaceServer = { host, origin, port, server };
-          loggerLog('[GCall:audio-surface][https] listening', {
-            host,
-            origin,
-            port,
-          });
-          resolvePromise(origin);
-        });
-      } catch (error) {
-        audioSurfaceServerReady = null;
-        rejectPromise(error);
-      }
+        }
+      })();
     }
   );
 

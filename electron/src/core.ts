@@ -751,34 +751,23 @@ export async function checkOsPlatform() {
 }
 
 export async function isCoreRunning(onSystem = false) {
-  return new Promise(async (res, rej) => {
-    if (process.platform === 'win32') {
-      if (!onSystem) {
-        const isPortRunning = await isCorePortRunning();
-        if (isPortRunning) {
-          res(true);
-          return;
-        }
-      }
+  // The port check is awaited before the promise is built: an async promise
+  // executor would leave the promise pending forever if it threw, since a
+  // throw there rejects neither the promise nor anything the caller sees.
+  if (process.platform === 'win32' && !onSystem) {
+    if (await isCorePortRunning()) return true;
+  }
 
-      isRunning('qortal.exe', (status) => {
-        if (status == true) {
-          res(true);
-        } else {
-          res(false);
-        }
-      });
-    } else if (process.platform === 'linux' || process.platform === 'darwin') {
-      isRunning('qortal.jar', (status) => {
-        if (status == true) {
-          res(true);
-        } else {
-          res(false);
-        }
-      });
-    } else {
-      rej('Cannot determine OS');
-    }
+  const executable =
+    process.platform === 'win32'
+      ? 'qortal.exe'
+      : process.platform === 'linux' || process.platform === 'darwin'
+        ? 'qortal.jar'
+        : null;
+  if (!executable) throw new Error('Cannot determine OS');
+
+  return new Promise<boolean>((res) => {
+    isRunning(executable, (status) => res(status == true));
   });
 }
 

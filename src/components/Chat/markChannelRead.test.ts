@@ -372,11 +372,7 @@ describe('deferred markRead consumption', () => {
 
     // First key defer condition expires
     if (deferredSet.has(readKey1)) {
-      if (false) {
-        // no-op
-      } else {
-        deferredSet.delete(readKey1);
-      }
+      deferredSet.delete(readKey1);
     }
     expect(deferredSet.has(readKey1)).toBe(false);
     // Second key still deferred
