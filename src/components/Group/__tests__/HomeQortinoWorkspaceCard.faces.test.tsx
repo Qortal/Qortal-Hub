@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -90,6 +90,15 @@ const wait = (ms: number) =>
     vi.advanceTimersByTime(ms);
   });
 
+/** Lets the node's answers (the avatar lookup) come in. */
+const settle = () =>
+  act(async () => {
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  });
+
+/** The Zzz rising from his head while he dozes. */
+const zzz = (stage: HTMLElement) => within(stage).queryAllByText('z');
+
 describe("Qortino's faces on Home", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -175,5 +184,57 @@ describe("Qortino's faces on Home", () => {
     expect(eyes(stage)).toBe('wink');
     wait(800);
     expect(eyes(stage)).toBe('sleepy');
+  });
+
+  describe('at night', () => {
+    it('stops dozing while he is being tickled', async () => {
+      vi.setSystemTime(new Date(2026, 10, 15, 23, 30));
+      const stage = renderSetUpCard();
+      await settle();
+      expect(eyes(stage)).toBe('sleepy');
+      expect(zzz(stage)).toHaveLength(3);
+
+      press(stage);
+      wait(500);
+      expect(screen.getByText('ticklish')).toBeInTheDocument();
+      // Tickled, he is wide awake: no Zzz over a laughing face.
+      expect(eyes(stage)).toBe('open');
+      expect(zzz(stage)).toHaveLength(0);
+    });
+
+    it('gets sleepy when the night begins, with Home left open', async () => {
+      vi.setSystemTime(new Date(2026, 10, 15, 22, 59, 0));
+      const stage = renderSetUpCard();
+      await settle();
+      expect(eyes(stage)).toBe('open');
+      expect(screen.getByText('idle')).toBeInTheDocument();
+
+      // Two minutes on it's 23:01: nothing else on Home has changed.
+      wait(120_000);
+      expect(eyes(stage)).toBe('sleepy');
+      expect(screen.getByText('sleepy')).toBeInTheDocument();
+    });
+
+    it('wakes up when the night ends, with Home left open', async () => {
+      vi.setSystemTime(new Date(2026, 10, 16, 4, 59, 0));
+      const stage = renderSetUpCard();
+      await settle();
+      expect(eyes(stage)).toBe('sleepy');
+
+      wait(120_000);
+      expect(eyes(stage)).toBe('open');
+      expect(screen.getByText('idle')).toBeInTheDocument();
+    });
+  });
+
+  describe('status badge', () => {
+    it('keeps his status on one line, however long its translation', async () => {
+      renderSetUpCard();
+      await settle();
+      // The badge is as wide as its text: "à l'écoute" must not break in two.
+      expect(getComputedStyle(screen.getByText('idle')).whiteSpace).toBe(
+        'nowrap'
+      );
+    });
   });
 });

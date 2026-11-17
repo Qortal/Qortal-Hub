@@ -2129,6 +2129,18 @@ export const HomeQortinoWorkspaceCard = ({
     },
     []
   );
+  // Whether it's night, looked at every minute: with Home left open he
+  // dozes off and wakes on time, not at the card's next change.
+  const [isQortinoNight, setIsQortinoNight] = useState(() =>
+    isNightHour(new Date().getHours())
+  );
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setIsQortinoNight(isNightHour(new Date().getHours())),
+      60_000
+    );
+    return () => window.clearInterval(timer);
+  }, []);
   /**
    * The press on Qortino's head: when and where it began, whether the
    * finger wandered off before the tickle began (then it is a swipe or a
@@ -5404,8 +5416,9 @@ export const HomeQortinoWorkspaceCard = ({
     hasName &&
     resolvedHasAvatar &&
     !isOnboardingVisible &&
-    isNightHour(new Date().getHours()) &&
+    isQortinoNight &&
     !qortinoIsTalking &&
+    !isQortinoTickled &&
     (qortinoMood === 'empty' || qortinoMood === 'hotkeys');
   const qortinoStatusKey = isQortinoTickled
     ? 'ticklish'
@@ -5650,6 +5663,8 @@ export const HomeQortinoWorkspaceCard = ({
                         fontSize: '0.58rem',
                         fontWeight: 700,
                         letterSpacing: '0.02em',
+                        // A status of two words stays on one line.
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {statusLabel}
