@@ -43,12 +43,15 @@ export interface QdnAppResource {
     title?: string;
     description?: string;
     tags?: unknown;
+    category?: string;
+    categoryName?: string;
   } | null;
   created?: number;
   updated?: number;
+  size?: number;
 }
 
-/** A widget the picker offers. */
+/** A widget the picker (and the library's Widgets tab) offers. */
 export interface HomeWidgetListing {
   name: string;
   /** null: the name's default APP resource. */
@@ -56,6 +59,14 @@ export interface HomeWidgetListing {
   title: string;
   description: string;
   updated: number;
+  /** When it was first published, when the node says. */
+  created?: number;
+  category?: string;
+  categoryName?: string;
+  /** Its other tags, without go-widget. */
+  tags?: string[];
+  /** Bytes, when the node says. */
+  size?: number;
 }
 
 /**
@@ -78,7 +89,8 @@ export interface SavedHomeWidget extends GridRect {
  */
 export const HOME_WIDGET_LIMIT = 8;
 
-const normalizeIdentifier = (identifier: unknown): string | null =>
+/** A stored identifier: null for the name's default APP resource. */
+export const normalizeIdentifier = (identifier: unknown): string | null =>
   typeof identifier === 'string' &&
   identifier.trim() !== '' &&
   identifier !== 'default'
@@ -90,6 +102,20 @@ const hasWidgetTag = (tags: unknown): boolean =>
   tags.some(
     (tag) => typeof tag === 'string' && tag.trim().toLowerCase() === WIDGET_TAG
   );
+
+const otherTags = (tags: unknown): string[] =>
+  Array.isArray(tags)
+    ? tags
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag && tag.toLowerCase() !== WIDGET_TAG)
+    : [];
+
+const textOf = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+const positive = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 
 /** The listing for `resource` when it is a widget, else null. */
 export const toWidgetListing = (
@@ -109,12 +135,22 @@ export const toWidgetListing = (
     typeof resource.metadata?.description === 'string'
       ? resource.metadata.description.trim()
       : '';
+  const created = positive(resource.created);
+  const category = textOf(resource.metadata?.category);
+  const categoryName = textOf(resource.metadata?.categoryName);
+  const tags = otherTags(resource.metadata?.tags);
+  const size = positive(resource.size);
   return {
     name,
     identifier,
     title,
     description,
     updated: Number(resource.updated ?? resource.created ?? 0) || 0,
+    ...(created ? { created } : {}),
+    ...(category ? { category } : {}),
+    ...(categoryName ? { categoryName } : {}),
+    ...(tags.length ? { tags } : {}),
+    ...(size ? { size } : {}),
   };
 };
 

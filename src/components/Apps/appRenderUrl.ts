@@ -20,3 +20,23 @@ export function buildAppRenderRoot(
   );
   return `${baseUrl}/render/${encodeURIComponent(service)}/${encodedName}`;
 }
+
+/**
+ * An app's address with Hub's own query parameters (`hubQuery`, already
+ * encoded) added. They go after the page's own query and before its fragment,
+ * so neither changes: `search?q=hello#top` becomes
+ * `search?q=hello&theme=dark#top`, and a hash router's `#/search?q=hello`
+ * keeps its fragment whole.
+ */
+export function withHubQuery(address: string, hubQuery: string): string {
+  const fragmentAt = address.indexOf('#');
+  const beforeFragment =
+    fragmentAt === -1 ? address : address.slice(0, fragmentAt);
+  const fragment = fragmentAt === -1 ? '' : address.slice(fragmentAt);
+  const separator = !beforeFragment.includes('?')
+    ? '?'
+    : beforeFragment.endsWith('?') || beforeFragment.endsWith('&')
+      ? ''
+      : '&';
+  return `${beforeFragment}${separator}${hubQuery}${fragment}`;
+}

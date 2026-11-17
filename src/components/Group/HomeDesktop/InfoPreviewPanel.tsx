@@ -6,7 +6,6 @@ import {
   MenuItem,
   Tooltip,
   Typography,
-  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
@@ -31,7 +30,6 @@ import {
 } from '../dashboardPanelEffects';
 import { ProgressiveBlur } from '../../ui/progressive-blur';
 import {
-  HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
   INFO_PANEL_EXPAND_CLOSE_DELAY_MS,
   INFO_PANEL_EXPAND_OPEN_DELAY_MS,
   INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX,
@@ -70,9 +68,9 @@ export const InfoPreviewPanel = ({
     onOpenNodeMenu: handleOpenNodeMenu,
   });
   const forceExpanded = Boolean(nodeMenuAnchorEl);
-  const enableOverlay = useMediaQuery(
-    theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)
-  );
+  // Home's window has a set size: what doesn't fit shows on hover, over
+  // what's below.
+  const enableOverlay = true;
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);

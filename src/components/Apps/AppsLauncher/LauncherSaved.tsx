@@ -31,6 +31,7 @@ import type {
   AppBookmarksForAddress,
 } from '../AppBookmarks/bookmarkTypes';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
+import { useLauncherTabId } from '../launcherTabs';
 import {
   LauncherBookmarkIcon,
   LauncherBookmarkTile,
@@ -88,6 +89,7 @@ import {
   type LauncherMenuTarget,
   LauncherTileMenu,
 } from './LauncherTileMenu';
+import { useCountLauncherEdit } from './launcherQdnSync';
 import { useLauncherView } from './useLauncherView';
 
 // The same ids as the bookmarks menu makes.
@@ -141,7 +143,9 @@ export const LauncherSaved = ({
   const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
   const [view, setView] = useLauncherView(myAddress);
+  const countEdit = useCountLauncherEdit(myAddress);
   const openPin = useOpenLauncherPin();
+  const launcherTabId = useLauncherTabId();
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [drop, setDrop] = useState<LauncherDrop | null>(null);
@@ -251,17 +255,24 @@ export const LauncherSaved = ({
         setSettingsLocalLastUpdated(Date.now());
       }
       if (storeChanged) onBookmarksChange(arrangement.data);
+      const orderChanged =
+        arrangement.view.order.length !== view.order.length ||
+        arrangement.view.order.some((key, index) => key !== view.order[index]);
       setView(arrangement.view);
+      // Something to save to QDN: the window that offers it shows.
+      if (pinsChanged || storeChanged || orderChanged) countEdit();
       return true;
     },
     [
       bookmarks,
+      countEdit,
       onBookmarksChange,
       pins,
       pinsByKey,
       setPinnedApps,
       setSettingsLocalLastUpdated,
       setView,
+      view.order,
     ]
   );
 
@@ -284,9 +295,11 @@ export const LauncherSaved = ({
   const openItem = useCallback(
     (item: LauncherLeafItem) => {
       if (item.pin) void openPin(item.pin.app);
-      else if (item.type === 'bookmark') openLauncherBookmark(item.bookmark);
+      else if (item.type === 'bookmark') {
+        openLauncherBookmark(item.bookmark, launcherTabId);
+      }
     },
-    [openPin]
+    [launcherTabId, openPin]
   );
 
   const startRenaming = useCallback(
@@ -303,9 +316,11 @@ export const LauncherSaved = ({
       setRenamingFolderId(null);
       if (name === null || !bookmarks) return;
       const renamed = renameFolder(bookmarks, folder.id, name, Date.now());
-      if (renamed !== bookmarks) onBookmarksChange(renamed);
+      if (renamed === bookmarks) return;
+      onBookmarksChange(renamed);
+      countEdit();
     },
-    [bookmarks, onBookmarksChange]
+    [bookmarks, countEdit, onBookmarksChange]
   );
 
   const deleteFolder = useCallback(

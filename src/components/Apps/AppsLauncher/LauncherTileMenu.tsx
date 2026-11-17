@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { AppBookmarkFolder } from '../AppBookmarks/bookmarkTypes';
+import { libraryMenuPaperSx } from '../AppsLibrary/libraryStyles';
 import type { LauncherAppItem, LauncherBookmarkItem } from './launcherItems';
 
 /** A tile that is not a folder: a pinned app or a bookmark. */
@@ -179,7 +180,15 @@ export const LauncherTileMenu = ({
       onClose={onClose}
       open={!!target}
       slotProps={{
-        paper: { sx: { borderRadius: '12px', minWidth: 210 } },
+        paper: {
+          // A context menu opens at the pointer, without the gap that the
+          // library's menus leave below their button.
+          sx: (theme) => ({
+            ...libraryMenuPaperSx(theme),
+            minWidth: 210,
+            mt: 0,
+          }),
+        },
       }}
     >
       {target?.kind === 'folder' ? folderItems() : tileItems()}

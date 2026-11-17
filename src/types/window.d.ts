@@ -4,6 +4,7 @@ import type {
   AudioSurfaceCommandResultEnvelope,
   AudioSurfaceEvent,
 } from '../lib/group-call/audioSurfaceBridge';
+import type { TabShortcutAction } from '../../electron/src/tab-shortcuts';
 
 declare global {
   interface ReticulumCalendarRecurrenceInput {
@@ -113,6 +114,20 @@ declare global {
       set: (key: string, value: unknown) => Promise<void>;
       delete: (key: string) => Promise<void>;
     };
+    /** Saved publish profiles, on this PC only (see publish-profiles.ts). */
+    publishProfiles?: {
+      get: (
+        key: import('../components/Apps/publishProfiles').PublishProfileKey
+      ) => Promise<
+        import('../components/Apps/publishProfiles').PublishProfile | null
+      >;
+      merge: (
+        key: import('../components/Apps/publishProfiles').PublishProfileKey,
+        patch: import('../components/Apps/publishProfiles').PublishProfile
+      ) => Promise<
+        import('../components/Apps/publishProfiles').PublishProfile | null
+      >;
+    };
     coreSetup?: {
       isCoreRunning?: () => Promise<boolean>;
       isCoreRunningOnSystem?: () => Promise<boolean>;
@@ -148,6 +163,9 @@ declare global {
         callback: (state: { isMaximized: boolean }) => void
       ) => () => void;
       onSystemLockRequested?: (callback: () => void) => () => void;
+      onTabShortcut?: (
+        callback: (action: TabShortcutAction) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
       onDisplayMediaRequest?: (callback: (request: { requestId: string; origin: string }) => void) => () => void;
       onDisplayMediaCancel?: (callback: (requestId: string) => void) => () => void;
@@ -413,6 +431,11 @@ declare global {
       qappGuestRelease?: (
         owner: { tabId: string; name: string; service: string }
       ) => Promise<boolean>;
+      /** Captures the guest Hub prepared for `owner`: a PNG, at most 1600 px. */
+      qappGuestShot?: (
+        owner: { tabId: string; name: string; service: string },
+        request: { action: 'capture' }
+      ) => Promise<{ png: Uint8Array; width: number; height: number }>;
       onQAppReticulumEvent?: (callback: (payload: any) => void) => () => void;
       qappFileSave?: (owner: any, request: any) => Promise<any>;
       privateChannelOpen?: (

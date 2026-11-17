@@ -16,6 +16,7 @@ import {
 } from './group-call-ipc-contract';
 import { isMainWindowUrl } from './main-window-policy';
 import { openExternalHttp } from './desktop-shell';
+import { subscribeTabShortcuts, type TabShortcutAction } from './tab-shortcuts';
 
 // A preload runs again after navigation. Never expose shell capabilities to
 // remote pages, opaque documents, or subframes, even if navigation is forced
@@ -496,6 +497,9 @@ try {
       ipcRenderer.on('system:lock-requested', handler);
       return () => ipcRenderer.removeListener('system:lock-requested', handler);
     },
+    // Tab shortcuts, from the Hub page or a Q-App (see tab-shortcuts.ts).
+    onTabShortcut: (callback: (action: TabShortcutAction) => void) =>
+      subscribeTabShortcuts(ipcRenderer, callback),
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
     onDisplayMediaRequest: (callback: (request: { requestId: string; origin: string }) => void) => {
       const handler = (_event, request) => callback(request);
@@ -772,6 +776,8 @@ try {
       ipcRenderer.invoke('qappGuest:prepare', owner, url, isDevMode),
     qappGuestRelease: (owner) =>
       ipcRenderer.invoke('qappGuest:release', owner),
+    qappGuestShot: (owner, request) =>
+      ipcRenderer.invoke('qappGuest:shot', owner, request),
     onQAppReticulumEvent: (callback: (payload: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
         callback(payload);
@@ -1051,10 +1057,20 @@ try {
     onUpdateDownloaded: (callback) =>
       ipcRenderer.on('update_downloaded', callback),
     restartApp: () => ipcRenderer.send('restart_app'),
-    selectFile: async () => ipcRenderer.invoke('dialog:openFile'),
+    selectFile: async (options?: { defaultPath?: string }) =>
+      ipcRenderer.invoke('dialog:openFile', options),
     readFile: async (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
-    selectAndZipDirectory: async (filePath) =>
-      ipcRenderer.invoke('fs:selectAndZip', filePath),
+    selectAndZipDirectory: async (
+      filePath?: string,
+      options?: { defaultPath?: string; changedSince?: number }
+    ) => ipcRenderer.invoke('fs:selectAndZip', filePath, options),
+    getPathForFile: (file: File) => {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch {
+        return '';
+      }
+    },
     // Streaming file save methods
     startStreamSave: async (options: { filename: string; mimeType?: string }) =>
       ipcRenderer.invoke('file:startStreamSave', options),
@@ -1062,6 +1078,13 @@ try {
       ipcRenderer.invoke('file:writeChunk', filePath, chunk, append),
     deleteFile: async (filePath: string) =>
       ipcRenderer.invoke('file:deleteFile', filePath),
+  });
+
+  // Saved publish profiles (userData/publish-profiles.json), this PC only.
+  contextBridge.exposeInMainWorld('publishProfiles', {
+    get: (key: unknown) => ipcRenderer.invoke('publishProfiles:get', key),
+    merge: (key: unknown, patch: unknown) =>
+      ipcRenderer.invoke('publishProfiles:merge', key, patch),
   });
 
   // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)

@@ -75,7 +75,11 @@ import {
   subscribeToReticulumGroupOrder,
 } from '../Group/reticulumGroupRail';
 import { QAppWidgetContainer } from './QAppWidgetContainer';
+import { homeWindowWiderThan } from '../Group/HomeDesktop/homeWindows';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
+
+/** From this width of its Home window, three columns and side-by-side rows. */
+const GROUPS_WIDGET_WIDE_PX = 520;
 
 type GroupsWidgetTab = 'notifications' | 'invites' | 'requests' | 'promoted';
 
@@ -2206,9 +2210,9 @@ export const GroupsWidget = ({
         flex: '1 1 auto',
         gap: '12px',
         gridAutoRows: isCompact ? '98px' : '104px',
-        gridTemplateColumns: {
-          xs: 'repeat(2, minmax(0, 1fr))',
-          sm: 'repeat(3, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        [homeWindowWiderThan(GROUPS_WIDGET_WIDE_PX)]: {
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
         },
         minHeight: 0,
         overflowY: 'auto',
@@ -3355,9 +3359,12 @@ export const GroupsWidget = ({
                   display: '-webkit-box',
                   fontSize: isCompact ? '0.72rem' : '0.75rem',
                   lineHeight: 1.38,
-                  maxWidth: { xs: '100%', sm: '62%' },
+                  maxWidth: '100%',
                   overflow: 'hidden',
-                  pr: { sm: '8px' },
+                  [homeWindowWiderThan(GROUPS_WIDGET_WIDE_PX)]: {
+                    maxWidth: '62%',
+                    pr: '8px',
+                  },
                   WebkitBoxOrient: 'vertical',
                   WebkitLineClamp: 2,
                   wordBreak: 'break-word',
@@ -3371,7 +3378,10 @@ export const GroupsWidget = ({
                   color: theme.palette.text.secondary,
                   columnGap: '12px',
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+                  gridTemplateColumns: '1fr',
+                  [homeWindowWiderThan(GROUPS_WIDGET_WIDE_PX)]: {
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                  },
                   pt: '2px',
                   rowGap: '8px',
                 }}
@@ -3398,8 +3408,12 @@ export const GroupsWidget = ({
                   sx={{
                     alignItems: 'center',
                     display: 'flex',
-                    justifySelf: { xs: 'stretch', sm: 'end' },
-                    justifyContent: { xs: 'stretch', sm: 'flex-end' },
+                    justifySelf: 'stretch',
+                    justifyContent: 'stretch',
+                    [homeWindowWiderThan(GROUPS_WIDGET_WIDE_PX)]: {
+                      justifySelf: 'end',
+                      justifyContent: 'flex-end',
+                    },
                     minHeight: '27px',
                   }}
                 >

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAppRenderRoot } from './appRenderUrl';
+import { buildAppRenderRoot, withHubQuery } from './appRenderUrl';
 import { qappGuestUrlAllowed } from '../../../electron/src/qapp-guest-policy';
 
 const base = 'https://core.example';
@@ -108,5 +108,42 @@ describe('QApp render URL compatibility with guest isolation', () => {
     ]) {
       expect(qappGuestUrlAllowed(root, next, owner, false)).toBe(false);
     }
+  });
+});
+
+describe("Hub's own parameters on an app's address", () => {
+  const hub = 'theme=dark&lang=en';
+
+  it.each([
+    ['https://core.example/render/APP/Q-Blog', `?${hub}`],
+    ['https://core.example/render/APP/Q-Blog/search?q=hello', `&${hub}`],
+    ['https://core.example/render/APP/Q-Blog/search?', hub],
+    ['https://core.example/render/APP/Q-Blog/search?q=hello&', hub],
+  ])('adds them to the query of %s', (address, added) => {
+    expect(withHubQuery(address, hub)).toBe(`${address}${added}`);
+  });
+
+  it('keeps the requested query and fragment as they are', () => {
+    const url = new URL(
+      withHubQuery(
+        'https://core.example/render/APP/Q-Blog/search?q=hello&tag=a%2Bb#top',
+        hub
+      )
+    );
+    expect(url.pathname).toBe('/render/APP/Q-Blog/search');
+    expect(url.searchParams.get('q')).toBe('hello');
+    expect(url.searchParams.get('tag')).toBe('a+b');
+    expect(url.searchParams.get('theme')).toBe('dark');
+    expect(url.searchParams.get('lang')).toBe('en');
+    expect(url.hash).toBe('#top');
+  });
+
+  it("goes before a fragment, also a hash router's with its own query", () => {
+    expect(
+      withHubQuery('https://core.example/render/APP/Q-Blog/page#top', hub)
+    ).toBe(`https://core.example/render/APP/Q-Blog/page?${hub}#top`);
+    expect(
+      withHubQuery('https://core.example/render/APP/Q-Blog/#/search?q=a', hub)
+    ).toBe(`https://core.example/render/APP/Q-Blog/?${hub}#/search?q=a`);
   });
 });

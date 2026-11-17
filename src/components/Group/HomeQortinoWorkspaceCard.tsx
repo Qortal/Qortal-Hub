@@ -126,6 +126,7 @@ import {
   QORTINO_DONATION_THANK_YOU_MESSAGE,
 } from './qortinoDonationEasterEgg';
 import { hasRequiredQortinoOnboardingBalance } from './qortinoOnboarding';
+import { namesOwnResources } from '../Apps/libraryResources';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
@@ -143,11 +144,12 @@ const QORTINO_MASCOT_STAGE_PADDING_X = 26;
 const QORTINO_MASCOT_STAGE_PADDING_Y = 28;
 const QORTINO_MASCOT_VERTICAL_LIFT_PX = 12;
 const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 251;
+const QORTINO_COMPANION_MIN_HEIGHT_PX = 130;
 const HOTKEY_SLOT_COUNT = 6;
 const HOTKEY_PICKER_SEARCH_DEBOUNCE_MS = 320;
 const CURATED_HOTKEY_APP_NAMES = [
   'Q-Tube',
-  'Quitter',
+  'Torq',
   'Q-Mail',
   'Q-Blog',
   'Q-Trade',
@@ -186,7 +188,6 @@ type WorkspaceState = {
 
 type HomeQortinoWorkspaceCardProps = {
   onGettingStartedComplete?: () => void;
-  onOpenAppsPanel?: () => void;
 };
 
 type QortinoSectionRuntimeFallbackProps = {
@@ -1793,7 +1794,6 @@ const HotkeyPickerVirtualScroll = memo(function HotkeyPickerVirtualScroll({
 
 export const HomeQortinoWorkspaceCard = ({
   onGettingStartedComplete,
-  onOpenAppsPanel,
 }: HomeQortinoWorkspaceCardProps) => {
   const { t } = useTranslation(['group', 'core']);
   const qw = useCallback(
@@ -1819,21 +1819,12 @@ export const HomeQortinoWorkspaceCard = ({
   const txList = useAtomValue(txListAtom);
   const userAddress = userInfo?.address;
   const name = userInfo?.name;
-  const openApp = useCallback(
-    (appName: string, path = '') => {
-      if (onOpenAppsPanel) {
-        onOpenAppsPanel();
-      } else {
-        executeEvent('newTabWindow', {});
-        executeEvent('open-apps-mode', {});
-      }
-
-      window.setTimeout(() => {
-        dispatchAppTab(appName, path);
-      }, 90);
-    },
-    [onOpenAppsPanel]
-  );
+  // The app gets a tab of its own: a launcher tab opened on the way would be
+  // left behind it.
+  const openApp = useCallback((appName: string, path = '') => {
+    dispatchAppTab(appName, path);
+    executeEvent('open-apps-mode', {});
+  }, []);
 
   const workspaceModules = useMemo<WorkspaceModuleDefinition[]>(
     () => [
@@ -2488,14 +2479,14 @@ export const HomeQortinoWorkspaceCard = ({
         label: 'Q-Tube',
         run: () => openApp('Q-Tube'),
       },
-      quitter: {
+      torq: {
         description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
-          appName: 'Quitter',
+          appName: 'Torq',
         }),
         icon: ForumRoundedIcon,
-        id: 'quitter',
-        label: 'Quitter',
-        run: () => openApp('Quitter'),
+        id: 'torq',
+        label: 'Torq',
+        run: () => openApp('Torq'),
       },
     }),
     [openApp, qw]
@@ -2547,8 +2538,7 @@ export const HomeQortinoWorkspaceCard = ({
       ).flat() as QAppResourceRecord[];
       const nextCatalog = Array.from(
         new Map(
-          (Array.isArray(responseData) ? responseData : [])
-            ?.filter((res) => !res?.identifier)
+          namesOwnResources(responseData)
             .map((resource) => {
               const appName =
                 typeof resource?.name === 'string' ? resource.name.trim() : '';
@@ -5778,7 +5768,9 @@ export const HomeQortinoWorkspaceCard = ({
           containerName: 'qortino-card',
           containerType: 'inline-size',
           display: 'grid',
-          gridTemplateRows: `${workspaceBayHeightPx}px minmax(0, 1fr)`,
+          // In a short Home window the workspace bay gives up room first,
+          // so QORTINO below always shows.
+          gridTemplateRows: `minmax(0, ${workspaceBayHeightPx}px) minmax(${QORTINO_COMPANION_MIN_HEIGHT_PX}px, 1fr)`,
           height: '100%',
           overflow: 'hidden',
           position: 'relative',

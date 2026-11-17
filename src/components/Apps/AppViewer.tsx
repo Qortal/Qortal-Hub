@@ -7,7 +7,7 @@ import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { buildPreviewUrl } from './appPreviewUrl';
-import { buildAppRenderRoot } from './appRenderUrl';
+import { buildAppRenderRoot, withHubQuery } from './appRenderUrl';
 
 type AppViewerProps = {
   app: any;
@@ -49,13 +49,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         setUrl(app?.url + `?theme=${themeMode}&lang=${currentLang}`);
         return;
       }
-      let hasQueryParam = false;
-      if (app?.path && app.path.includes('?')) {
-        hasQueryParam = true;
-      }
-
       setUrl(
-        `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
+        withHubQuery(
+          `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${app?.path != null ? `/${app?.path}` : ''}`,
+          `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
+        )
       );
     }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview]);
 
@@ -330,7 +328,12 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       try {
         await waitForNativeNavigation(previousPath, 1000);
       } catch {
-        setUrl(`${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${previousPath ?? ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier ?? ''}&time=${Date.now()}&isManualNavigation=false`);
+        setUrl(
+          withHubQuery(
+            `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${previousPath ?? ''}`,
+            `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier ?? ''}&time=${Date.now()}&isManualNavigation=false`
+          )
+        );
       }
     };
 
@@ -356,8 +359,13 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         try {
           await waitForNativeNavigation(targetPath, 1000);
         } catch {
+          // Hub's parameters go after the page's own query, before its
+          // fragment: `search?q=hello` keeps q as it was asked for.
           setUrl(
-            `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            withHubQuery(
+              `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}/${targetPath}`,
+              `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            )
           );
         }
       },

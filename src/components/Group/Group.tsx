@@ -80,6 +80,9 @@ import { HomeDesktop } from './HomeDesktop';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
 import { AppsDesktop } from '../Apps/AppsDesktop';
 import { DesktopSideBar } from '../Desktop/DesktopLeftSideBar';
+import { LayoutRestoreOffer } from '../Save/LayoutRestoreOffer';
+import { LayoutSavePrompt } from '../Save/LayoutSavePrompt';
+import { QdnCardDock } from '../Save/QdnSettingsCard';
 import { AdminSpace } from '../Chat/AdminSpace';
 import {
   addressInfoControllerAtom,
@@ -107,7 +110,6 @@ import {
   qortalGroupVoiceCallMinimizedAtom,
   qortalGroupCallPrimaryNamesAtom,
   dmFriendsByAddressAtom,
-  showActionDrawerAtom,
   unreadWelcomeEventIdsAtom,
   globalNotificationFormAtom,
 } from '../../atoms/global';
@@ -955,7 +957,6 @@ export const Group = ({
     isOpenBlockedModalAtom
   );
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = useState('');
-  const showActionDrawer = useAtomValue(showActionDrawerAtom);
   const memberGroupsForReticulum = useAtomValue(memberGroupsAtom);
   const memberGroupsWithReticulumActivity = useAtomValue(
     memberGroupsWithReticulumChatAtom
@@ -5856,6 +5857,10 @@ export const Group = ({
           groupsPropertiesRef={groupsPropertiesRef}
           hasInitializedWebsocketRef={hasInitializedWebsocket}
         />
+        <QdnCardDock page>
+          <LayoutRestoreOffer />
+          <LayoutSavePrompt />
+        </QdnCardDock>
         <DesktopSideBar
           desktopViewMode={desktopViewMode}
           toggleSideViewGroups={toggleSideViewGroups}
@@ -5873,7 +5878,7 @@ export const Group = ({
           setAppsModeDev={setAppsModeDev}
         />
 
-        <MainContentBox hasFixedSidebar={!showActionDrawer}>
+        <MainContentBox>
           {openAddGroup && (
             <Suspense fallback={null}>
               <LazyAddGroup

@@ -1,9 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/system';
 import { AuthenticatedContainerInnerRight } from '../../styles/App-styles';
-import { appChromeOffset } from '../Desktop/CustomTitleBar';
-
-const SIDEBAR_WIDTH_PX = 72;
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 /**
  * Group layout styled components using MUI's styled API.
@@ -19,18 +17,13 @@ export const RootBox = styled(Box)({
   width: '100%',
 });
 
-interface MainContentBoxProps {
-  hasFixedSidebar?: boolean;
-}
-
-export const MainContentBox = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'hasFixedSidebar',
-})<MainContentBoxProps>(({ hasFixedSidebar }) => ({
+export const MainContentBox = styled(Box)({
   width: '100%',
   height: '100%',
+  // Shrinks beside a side panel that stays open.
+  minWidth: 0,
   position: 'relative',
-  marginLeft: hasFixedSidebar ? `${SIDEBAR_WIDTH_PX}px` : 0,
-}));
+});
 
 export const CenterBox = styled(Box)({
   alignItems: 'center',
@@ -92,7 +85,7 @@ export const NotPartGroupDiv = styled('div')(({ theme }) => ({
   alignItems: 'center',
   display: 'flex',
   flexDirection: 'column',
-  height: `calc(100vh - ${70 + appChromeOffset}px)`,
+  height: `calc(100vh - 70px - ${appChromeOffsetPx})`,
   overflow: 'auto',
   padding: theme.spacing(3),
   width: '100%',

@@ -11,6 +11,7 @@ import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { ReticulumUserCard } from './ReticulumUserCard';
 import type { ReticulumUserCardData } from './ReticulumUserCard';
 import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
+import { openAppPageLink } from '../Apps/AppPage/appPageLink';
 
 const stripTrailingQortalLinkPunctuation = (value: string) =>
   value.replace(/[),.;!?]+$/g, '');
@@ -26,13 +27,17 @@ const decodeQortalName = (name: string): string => {
   }
 };
 
+// The protocol is read in any case: QORTAL://APP/Q-Tube works too.
+const QORTAL_LINK_PATTERN = /^qortal:\/\//i;
+const QORTAL_USE_LINK_PATTERN = /^qortal:\/\/use-/i;
+
 export const extractComponents = (url: string) => {
-  if (!url || !url.startsWith(QORTAL_PROTOCOL)) {
+  if (!url || !QORTAL_LINK_PATTERN.test(url)) {
     return null;
   }
 
   // Skip links starting with "qortal://use-"
-  if (url.startsWith(QORTAL_PROTOCOL + 'use-')) {
+  if (QORTAL_USE_LINK_PATTERN.test(url)) {
     return null;
   }
 
@@ -631,6 +636,8 @@ export const MessageDisplay = ({
       openHttpUrlExternally(target.getAttribute('href'));
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
+
+      if (openAppPageLink(url)) return;
 
       try {
         if (await openQortalUseGroupLink(url)) return;

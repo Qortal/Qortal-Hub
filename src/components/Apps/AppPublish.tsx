@@ -12,7 +12,6 @@ import {
   AppsLibraryContainer,
   AppsWidthLimiter,
   PublishQAppCTAButton,
-  PublishQAppChoseFile,
   PublishQAppInfo,
 } from './Apps-styles';
 import {
@@ -20,13 +19,13 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Typography,
   useTheme,
 } from '@mui/material';
 import { styled } from '@mui/system';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
-import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
@@ -45,6 +44,18 @@ import {
   PublishPrefill,
   loadPublishPrefill,
 } from './appPublishPrefill';
+import {
+  PublishProfile,
+  loadPublishProfile,
+  prefillFromProfile,
+  profileChangedSince,
+  publishProfileKey,
+  publishSignature,
+  savePublishProfile,
+} from './publishProfiles';
+import { PublishSource } from './publishSource';
+import { PublishSourcePicker, formatPublishDate } from './PublishSourcePicker';
+import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 
 const TITLE_MAX_CHARS = 80;
 const DESCRIPTION_MAX_CHARS = 240;
@@ -108,6 +119,13 @@ interface AppPublishProps {
   initialName?: string;
   initialAppType?: 'APP' | 'WEBSITE';
   isAppTypeLocked?: boolean;
+  /** Opened from Update on a published app: the name can't be changed. */
+  isUpdate?: boolean;
+  /**
+   * Told whether the form holds input that is not published yet, and false
+   * when it closes: a launcher tab asks before it closes with some.
+   */
+  onUnsavedChange?: (hasUnsavedInput: boolean) => void;
 }
 
 export const AppPublish = ({
@@ -117,6 +135,8 @@ export const AppPublish = ({
   initialName = '',
   initialAppType = 'APP',
   isAppTypeLocked = false,
+  isUpdate = false,
+  onUnsavedChange,
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState(initialName);
@@ -124,10 +144,14 @@ export const AppPublish = ({
   const [description, setDescription] = useLimitedText(limitQdnDescription);
   const [category, setCategory] = useState('');
   const [appType, setAppType] = useState(initialAppType);
-  const [file, setFile] = useState(null);
+  const [source, setSource] = useState<PublishSource | null>(null);
+  // This PC's saved profile for the chosen name and type.
+  const [profile, setProfile] = useState<PublishProfile | null>(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
+  // In a launcher tab, the published app opens in its place.
+  const launcherTabId = useLauncherTabId();
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group', 'question']);
+  const { t, i18n } = useTranslation(['auth', 'core', 'group', 'question']);
   const [tag1, setTag1] = useLimitedText(limitQdnTag);
   const [tag2, setTag2] = useLimitedText(limitQdnTag);
   const [tag3, setTag3] = useLimitedText(limitQdnTag);
@@ -142,35 +166,25 @@ export const AppPublish = ({
   const prefillRunRef = useRef(0);
   // Fields the user changed since that prefill started: it never overwrites them.
   const editedFieldsRef = useRef(new Set<string>());
-  const markEdited = (field: string) => editedFieldsRef.current.add(field);
+  // Anything the user chose or typed since the form opened or last published.
+  // What a prefill fills in is not counted.
+  const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
+  const noteInput = () => setHasUnsavedInput(true);
+  const markEdited = (field: string) => {
+    editedFieldsRef.current.add(field);
+    noteInput();
+  };
+  const onUnsavedChangeRef = useRef(onUnsavedChange);
+  onUnsavedChangeRef.current = onUnsavedChange;
+  useEffect(() => {
+    onUnsavedChangeRef.current?.(hasUnsavedInput);
+  }, [hasUnsavedInput]);
+  useEffect(() => () => onUnsavedChangeRef.current?.(false), []);
   const maxFileSize = appType === 'APP' ? 50 * 1024 * 1024 : 400 * 1024 * 1024; // 50MB or 400MB
-  const { getRootProps, getInputProps } = useDropzone({
-    accept: {
-      'application/zip': ['.zip'], // Only accept zip files
-    },
-    maxSize: maxFileSize, // Set the max size based on appType
-    multiple: false, // Disable multiple file uploads
-    onDrop: (acceptedFiles) => {
-      if (acceptedFiles.length > 0) {
-        setFile(acceptedFiles[0]); // Set the file name
-      }
-    },
-    onDropRejected: (fileRejections) => {
-      fileRejections.forEach(({ file, errors }) => {
-        errors.forEach((error) => {
-          if (error.code === 'file-too-large') {
-            console.error(
-              t('core:message.error.file_too_large', {
-                filename: file.name,
-                size: maxFileSize / (1024 * 1024),
-                postProcess: 'capitalizeFirstChar',
-              })
-            );
-          }
-        });
-      });
-    },
-  });
+  const showError = (message: string) => {
+    setInfoSnack({ type: 'error', message });
+    setOpenSnack(true);
+  };
 
   /** Fills in the form, except fields the user changed meanwhile. */
   const applyPrefill = (prefill: PublishPrefill) => {
@@ -203,19 +217,33 @@ export const AppPublish = ({
     editedFieldsRef.current = new Set();
     const controller = new AbortController();
     setPrefillPending(true);
+    setProfile(null);
 
-    loadPublishPrefill(getBaseApiReact(), appType, name, {
-      signal: controller.signal,
-    })
-      .then((result) => {
+    Promise.all([
+      loadPublishPrefill(getBaseApiReact(), appType, name, {
+        signal: controller.signal,
+      }),
+      loadPublishProfile(publishProfileKey(myAddress, appType, name)),
+    ])
+      .then(([result, savedProfile]) => {
         if (run !== prefillRunRef.current) return;
-        applyPrefill(result.kind === 'found' ? result.prefill : EMPTY_PREFILL);
+        setProfile(savedProfile);
+        // What this PC sent last time, when the network has nothing to give.
+        const fromProfile = prefillFromProfile(savedProfile);
+        applyPrefill(
+          result.kind === 'found'
+            ? result.prefill
+            : (fromProfile ?? EMPTY_PREFILL)
+        );
         if (result.kind === 'unavailable') {
           setInfoSnack({
             type: 'warning',
-            message: t('core:message.generic.app_details_unavailable', {
-              postProcess: 'capitalizeFirstChar',
-            }),
+            message: t(
+              fromProfile
+                ? 'core:publish_update.filled_from_profile'
+                : 'core:message.generic.app_details_unavailable',
+              { postProcess: 'capitalizeFirstChar' }
+            ),
           });
           setOpenSnack(true);
         }
@@ -228,7 +256,7 @@ export const AppPublish = ({
       });
 
     return () => controller.abort();
-  }, [name, appType]);
+  }, [name, appType, myAddress]);
 
   const getNames = useCallback(async () => {
     if (!myAddress) return;
@@ -256,18 +284,20 @@ export const AppPublish = ({
   }, [initialName]);
 
   const mySortedNames = useSortedMyNames(names, myName);
+  const tagLabel = (number: number) =>
+    t('core:tag_number', { number, postProcess: 'capitalizeFirstChar' });
   const activeTagInfo = useMemo(() => {
     switch (activeField) {
       case 'tag1':
-        return { label: 'Tag 1', length: tag1.length };
+        return { number: 1, length: tag1.length };
       case 'tag2':
-        return { label: 'Tag 2', length: tag2.length };
+        return { number: 2, length: tag2.length };
       case 'tag3':
-        return { label: 'Tag 3', length: tag3.length };
+        return { number: 3, length: tag3.length };
       case 'tag4':
-        return { label: 'Tag 4', length: tag4.length };
+        return { number: 4, length: tag4.length };
       case 'tag5':
-        return { label: 'Tag 5', length: tag5.length };
+        return { number: 5, length: tag5.length };
       default:
         return null;
     }
@@ -284,6 +314,7 @@ export const AppPublish = ({
     // Publishing before the form is filled in would replace the app's details.
     if (prefillPending) return;
     try {
+      const file = source?.file;
       const data = {
         name,
         title,
@@ -328,7 +359,7 @@ export const AppPublish = ({
           postProcess: 'capitalizeFirstChar',
         })
       );
-      await new Promise((res, rej) => {
+      const response = await new Promise((res, rej) => {
         window
           .sendMessage('publishOnQDN', {
             data: file,
@@ -367,6 +398,34 @@ export const AppPublish = ({
         }),
       });
       setOpenSnack(true);
+      // What was typed is published now, before the app opens in the tab.
+      setHasUnsavedInput(false);
+      onUnsavedChangeRef.current?.(false);
+      const signature = publishSignature(response);
+      const published: PublishProfile = {
+        publishedAt: Date.now(),
+        metadata: {
+          title,
+          description,
+          category,
+          tags: [tag1, tag2, tag3, tag4, tag5].filter(Boolean),
+        },
+        ...(source.path
+          ? {
+              source: {
+                path: source.path,
+                kind: source.kind,
+                takenAt: source.takenAt,
+              },
+            }
+          : {}),
+        ...(signature ? { signature } : {}),
+      };
+      setProfile((current) => ({ ...current, ...published }));
+      void savePublishProfile(
+        publishProfileKey(myAddress, appType, name),
+        published
+      );
       const dataObj = {
         name: name,
         service: appType,
@@ -378,7 +437,7 @@ export const AppPublish = ({
         created: Date.now(),
       };
       executeEvent('addTab', {
-        data: dataObj,
+        data: inLauncherTab(dataObj, launcherTabId),
       });
     } catch (error) {
       setInfoSnack({
@@ -409,14 +468,30 @@ export const AppPublish = ({
         }}
       >
         <AppLibrarySubTitle>
-          {appType === 'WEBSITE'
-            ? t('core:developer.publish_site', {
+          {isUpdate && name
+            ? t('core:publish_update.title', {
+                name,
                 postProcess: 'capitalizeFirstChar',
               })
-            : t('core:developer.publish_app', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+            : appType === 'WEBSITE'
+              ? t('core:developer.publish_site', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+              : t('core:developer.publish_app', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
         </AppLibrarySubTitle>
+
+        {profile?.publishedAt ? (
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: '13px' }}
+          >
+            {t('core:publish_update.last_published', {
+              date: formatPublishDate(profile.publishedAt, i18n?.language),
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        ) : null}
 
         <Spacer height="18px" />
 
@@ -440,7 +515,11 @@ export const AppPublish = ({
           })}
           displayEmpty
           value={name}
-          onChange={(event) => setName(event?.target.value)}
+          onChange={(event) => {
+            noteInput();
+            setName(event?.target.value);
+          }}
+          disabled={isUpdate}
         >
           <MenuItem value="">
             <em
@@ -473,7 +552,10 @@ export const AppPublish = ({
           })}
           displayEmpty
           value={appType}
-          onChange={(event) => setAppType(event?.target.value)}
+          onChange={(event) => {
+            noteInput();
+            setAppType(event?.target.value);
+          }}
           disabled={isAppTypeLocked}
         >
           <MenuItem value="">
@@ -623,7 +705,7 @@ export const AppPublish = ({
             })}
           </InputLabel>
           {activeTagInfo && (
-            <CounterText>{`${activeTagInfo.label}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`}</CounterText>
+            <CounterText>{`${tagLabel(activeTagInfo.number)}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`}</CounterText>
           )}
         </LabelRow>
 
@@ -643,9 +725,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 1"
+            placeholder={tagLabel(1)}
             inputProps={{
-              'aria-label': 'Tag 1',
+              'aria-label': tagLabel(1),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -666,9 +748,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 2"
+            placeholder={tagLabel(2)}
             inputProps={{
-              'aria-label': 'Tag 2',
+              'aria-label': tagLabel(2),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -689,9 +771,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 3"
+            placeholder={tagLabel(3)}
             inputProps={{
-              'aria-label': 'Tag 3',
+              'aria-label': tagLabel(3),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -712,9 +794,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 4"
+            placeholder={tagLabel(4)}
             inputProps={{
-              'aria-label': 'Tag 4',
+              'aria-label': tagLabel(4),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -735,9 +817,9 @@ export const AppPublish = ({
               height: '36px',
               width: '100px',
             }}
-            placeholder="Tag 5"
+            placeholder={tagLabel(5)}
             inputProps={{
-              'aria-label': 'Tag 5',
+              'aria-label': tagLabel(5),
               fontSize: '14px',
               fontWeight: 400,
               maxLength: TAG_MAX_CHARS,
@@ -755,23 +837,26 @@ export const AppPublish = ({
 
         <Spacer height="10px" />
 
-        <PublishQAppInfo>{`(${
-          appType === 'APP' ? '50mb' : '400mb'
-        } MB maximum)`}</PublishQAppInfo>
-        {file && (
-          <>
-            <Spacer height="5px" />
-            <PublishQAppInfo>{`Selected: (${file?.name})`}</PublishQAppInfo>
-          </>
-        )}
+        <PublishQAppInfo>
+          {t('core:private_apps.max_file_size', {
+            size: maxFileSize / (1024 * 1024),
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </PublishQAppInfo>
 
         <Spacer height="18px" />
 
-        <PublishQAppChoseFile {...getRootProps()}>
-          {' '}
-          <input {...getInputProps()} />
-          {t('core:action.choose_file', { postProcess: 'capitalizeFirstChar' })}
-        </PublishQAppChoseFile>
+        <PublishSourcePicker
+          changedSince={profileChangedSince(profile)}
+          maxSize={maxFileSize}
+          onChange={(next) => {
+            noteInput();
+            setSource(next);
+          }}
+          onError={showError}
+          savedSource={profile?.source}
+          source={source}
+        />
 
         <Spacer height="35px" />
 

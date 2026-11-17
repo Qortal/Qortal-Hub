@@ -15,8 +15,9 @@ implements it.
 
 - A normal Q-App (QDN service `APP`), loaded by the Hub in a small frame on
   Home.
-- The user picks it from **Home → Widgets → Add widget**. Nothing runs until
-  the user adds it.
+- The user picks it from **Home → Widgets → Add widget**, or finds it in the
+  launcher's **Widgets** tab, where people rate and review widgets and add
+  them to Home. Nothing runs until the user adds it.
 - The user can move and resize it on a grid at any time, so it must look right
   at any size it allows.
 - It shows things and opens apps. It **cannot** pay, publish, sign, decrypt,
@@ -34,8 +35,10 @@ letter case). Give it an identifier starting with `go-widget` as well, e.g.
   only found by reading all APP metadata.
 
 The picker shows the resource's **title** and **description** and the name's
-avatar. `WEBSITE` resources are never widgets; publish the widget page as an
-`APP`. Blocked names are left out by the node.
+avatar; the Widgets tab also shows its **category** and **tags**. Ratings and
+reviews are kept per widget (name and identifier), see `docs/app-pages.md`.
+`WEBSITE` resources are never widgets; publish the widget page as an `APP`.
+Blocked names are left out by the node.
 
 **Retiring a widget:** republish it under the same name and identifier
 without the `go-widget` tag, for example as a "moved" notice. It leaves the
@@ -127,11 +130,11 @@ Read-only requests that Core answers inside the page work as in any Q-App
 `LIST_QDN_RESOURCES`, `SEARCH_CHAT_MESSAGES`, `FETCH_BLOCK`, …). Requests that
 reach the Hub are filtered:
 
-| Allowed                    | Requests                                                                                                                                                                                                                                                 |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Always                     | `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `LINK_TO_QDN_RESOURCE`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY` |
-| Only while Home is showing | `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT`, `GET_WALLET_BALANCE` (the last two ask the user, as in any Q-App)                                                                                                                     |
-| Never                      | Everything else: payments, publishing, signing, encryption, chat, files, notifications, Reticulum and private channels, screen capture, full screen, and any unknown action                                                                              |
+| Allowed                    | Requests                                                                                                                                                                                                                                                                                                  |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Always                     | `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `GET_FOREIGN_FEE`, `GET_CROSSCHAIN_SERVER_INFO`, `LINK_TO_QDN_RESOURCE`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY` |
+| Only while Home is showing | `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT`, `GET_WALLET_BALANCE` (the last two ask the user, as in any Q-App)                                                                                                                                                                      |
+| Never                      | Everything else: payments, publishing, signing, encryption, chat, files, notifications, Reticulum and private channels, screen capture, full screen, and any unknown action                                                                                                                               |
 
 A refused request fails with `code` `WIDGET_REQUEST_NOT_ALLOWED` (or
 `WIDGET_NOT_ON_SCREEN`). For anything refused, open your full app:

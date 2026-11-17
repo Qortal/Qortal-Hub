@@ -133,10 +133,6 @@ export const groupsPropertiesAtom = atomWithReset({});
 export const hasSettingsChangedAtom = atomWithReset(false);
 export const isDisabledEditorEnterAtom = atomWithReset(false);
 export const isOpenBlockedModalAtom = atomWithReset(false);
-export const showActionDrawerAtom = atomWithStorage<boolean>(
-  'qortal-hub-show-action-drawer',
-  true
-);
 export const isRunningPublicNodeAtom = atomWithReset(false);
 export const isUsingImportExportSettingsAtom = atomWithReset(null);
 export const memberGroupsAtom = atomWithReset([]);

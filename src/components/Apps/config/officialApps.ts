@@ -11,7 +11,23 @@ export interface OfficialAppConfig {
 
 export const officialAppsConfig = {
   // Apps featured in the carousel
-  featured: ['Q-Tube', 'Quitter', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Wallets'],
+  featured: [
+    'Q-Tube',
+    'Torq',
+    'Q-Mail',
+    'Q-Shop',
+    'Q-Trade',
+    'Q-Wallets',
+    'Q-Share',
+    'Q-Search',
+    'SubWire',
+    'Q-Assets',
+  ],
+
+  // These lead the Featured carousel, in this order; the other featured
+  // apps follow, by rating, and `featuredLast` ends it
+  featuredLead: ['Torq', 'Q-Tube', 'SubWire', 'Q-Share', 'Q-Assets', 'Q-Shop'],
+  featuredLast: ['Q-Search'],
 
   // All official apps with metadata
   all: [
@@ -20,18 +36,21 @@ export const officialAppsConfig = {
     { name: 'Q-Trade', icon: 'swap', featured: true },
     { name: 'Q-Tube', icon: 'video', featured: true },
     { name: 'Q-Wallets', icon: 'wallet', featured: true },
-    { name: 'Quitter', icon: 'social', featured: true },
+    { name: 'Torq', icon: 'social', featured: true },
     { name: 'Names', icon: 'badge' },
-    { name: 'Q-Assets', icon: 'assets' },
+    { name: 'Q-Assets', icon: 'assets', featured: true },
+    { name: 'Q-Drive', icon: 'drive' },
     { name: 'Q-Follow', icon: 'follow' },
     { name: 'Q-Fund', icon: 'fund' },
     { name: 'Q-Manager', icon: 'settings' },
     { name: 'Q-Mintership', icon: 'mint' },
     { name: 'Q-Node', icon: 'node' },
     { name: 'Q-Search', icon: 'search' },
-    { name: 'Q-Share', icon: 'share' },
-    { name: 'Q-Shop', icon: 'shopping' },
+    { name: 'Q-Share', icon: 'share', featured: true },
+    { name: 'Q-Shop', icon: 'shopping', featured: true },
     { name: 'Q-Support', icon: 'support' },
+    { name: 'Subscreen', icon: 'video' },
+    { name: 'SubWire', icon: 'article', featured: true },
   ] as OfficialAppConfig[],
 };
 
@@ -50,6 +69,42 @@ export const isFeaturedApp = (appName: string): boolean => {
   return officialAppsConfig.featured
     .map((n) => n.toLowerCase())
     .includes(appName?.toLowerCase());
+};
+
+type FeaturedAppRating = { averageRating?: number; totalVotes?: number };
+
+// The Featured carousel's order: the apps `featuredLead` names first, in its
+// order, then the others by rating, then by votes, and the apps
+// `featuredLast` names at the end, in its order
+export const sortFeaturedApps = <T extends { name: string }>(
+  apps: readonly T[],
+  ratingOf: (app: T) => FeaturedAppRating | undefined
+): T[] => {
+  const lead = officialAppsConfig.featuredLead.map((name) =>
+    name.toLowerCase()
+  );
+  const last = officialAppsConfig.featuredLast.map((name) =>
+    name.toLowerCase()
+  );
+  const leadIndex = (app: T) => {
+    const name = app?.name?.toLowerCase();
+    const index = lead.indexOf(name);
+    if (index !== -1) return index;
+    const lastIndex = last.indexOf(name);
+    return lastIndex === -1 ? lead.length : lead.length + 1 + lastIndex;
+  };
+  return [...apps].sort((a, b) => {
+    const byLead = leadIndex(a) - leadIndex(b);
+    if (byLead !== 0) return byLead;
+
+    const ratingA = ratingOf(a);
+    const ratingB = ratingOf(b);
+    const avgA = ratingA?.averageRating || 0;
+    const avgB = ratingB?.averageRating || 0;
+    if (avgB !== avgA) return avgB - avgA;
+
+    return (ratingB?.totalVotes || 0) - (ratingA?.totalVotes || 0);
+  });
 };
 
 // Default pinned apps derived from the official apps list

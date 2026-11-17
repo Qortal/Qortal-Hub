@@ -43,6 +43,7 @@ import {
   setPermission,
 } from '../qortal/qortal-requests';
 import { extractComponents } from './Chat/MessageDisplay';
+import { openAppPageLink } from './Apps/AppPage/appPageLink';
 import {
   executeEvent,
   subscribeToEvent,
@@ -450,6 +451,8 @@ export const GeneralNotifications = ({
                   setAnchorEl(null);
                   const link = notification?.link;
                   if (!link) return;
+                  // An app's or website's page opens as a page, not as the app.
+                  if (openAppPageLink(link)) return;
                   const data = extractComponents(link);
                   if (!data) return;
                   executeEvent('addTab', {
