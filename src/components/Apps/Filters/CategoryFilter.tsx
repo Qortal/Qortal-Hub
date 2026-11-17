@@ -121,7 +121,7 @@ export const CategoryFilter = ({
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [query, setQuery] = useState('');
   // In a hidden launcher tab the list steps aside, and comes back with it.
-  const popoverShown = useLauncherTabDialog(!!anchor);
+  const popoverShown = useLauncherTabDialog(!!anchor, () => setAnchor(null));
   const label = t('core:filter.category', cap);
   const allLabel = t('core:launcher.library.all_categories', cap);
   const searchLabel = t('core:launcher.library.search_categories', cap);

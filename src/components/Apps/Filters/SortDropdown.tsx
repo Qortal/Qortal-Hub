@@ -42,7 +42,7 @@ export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
   const popupId = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   // In a hidden launcher tab the menu steps aside, and comes back with it.
-  const menuShown = useLauncherTabDialog(!!anchor);
+  const menuShown = useLauncherTabDialog(!!anchor, () => setAnchor(null));
   const label = t('core:filter.sort_by', cap);
   const close = () => setAnchor(null);
 

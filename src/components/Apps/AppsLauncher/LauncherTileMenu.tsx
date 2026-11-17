@@ -64,7 +64,7 @@ export const LauncherTileMenu = ({
 }: LauncherTileMenuProps) => {
   const { t } = useTranslation(['core']);
   // In a hidden launcher tab the menu steps aside, and comes back with it.
-  const menuShown = useLauncherTabDialog(!!target);
+  const menuShown = useLauncherTabDialog(!!target, onClose);
   const run = (action: () => void) => () => {
     onClose();
     action();
