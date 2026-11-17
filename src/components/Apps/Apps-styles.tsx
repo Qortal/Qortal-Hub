@@ -210,16 +210,6 @@ export const AppButtonText = styled(Typography)({
   lineHeight: 1.2,
 });
 
-export const AppPublishTagsContainer = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '10px',
-  justifyContent: 'flex-start',
-  width: '100%',
-}));
-
 export const AppInfoSnippetMiddle = styled(Box)(({ theme }) => ({
   alignItems: 'flex-start',
   backgroundColor: theme.palette.background.default,
@@ -463,20 +453,6 @@ export const PublishQAppCTARight = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-end',
 }));
 
-export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
-  alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
-  borderColor: theme.palette.text.primary,
-  borderRadius: '25px',
-  borderStyle: 'solid',
-  borderWidth: '1px',
-  color: theme.palette.text.primary,
-  display: 'flex',
-  height: '29px',
-  justifyContent: 'center',
-  width: '101px',
-}));
-
 export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.paper,
@@ -485,31 +461,6 @@ export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
   height: '80px',
   justifyContent: 'center',
   width: '60px',
-}));
-
-export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
-  fontSize: '16px',
-  fontStyle: 'italic',
-  fontWeight: 400,
-  lineHeight: 1.2,
-}));
-
-export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
-  alignItems: 'center',
-  backgroundColor: theme.palette.background.paper,
-  borderRadius: '8px',
-  color: theme.palette.text.primary,
-  display: 'flex',
-  fontSize: '16px',
-  fontWeight: 600,
-  height: '40px',
-  justifyContent: 'center',
-  width: '120px',
-  '&:hover': {
-    backgroundColor: 'action.hover',
-  },
 }));
 
 export const AppsCategoryInfo = styled(Box)(({ theme }) => ({

@@ -31,6 +31,7 @@ import {
   suggestNextVersion,
 } from './appPageData';
 import {
+  AppPageError,
   fetchAppPage,
   fetchShotsManifest,
   findAppPageResources,
@@ -98,8 +99,26 @@ export const screenshotsToPublish = (
 };
 
 /**
+ * The page as the node has it now; null when it lists none or can't say.
+ * Throws when it lists one it can't read: publishing would replace that one.
+ */
+const readCurrentPage = async (app: { service: string; name: string }) => {
+  const base = getBaseApiReact();
+  const listed = await findAppPageResources(base, app).then(
+    (resources) => !!resources.page,
+    () => false
+  );
+  if (!listed) return null;
+  const page = await fetchAppPage(base, app).catch(() => null);
+  if (!page) throw new AppPageError('PAGE_UNREADABLE');
+  return page;
+};
+
+/**
  * Publishes the page parts after the app. `appSignature` is the app's new
- * signature, so the version and What's new describe this upload.
+ * signature, so the version and What's new describe this upload. When the
+ * screenshots fail after the page text went out, the error has
+ * `part: 'screenshots'`.
  */
 export const publishPageExtras = async (
   app: { service: string; name: string },
@@ -108,10 +127,26 @@ export const publishPageExtras = async (
 ) => {
   if (!extras) return;
   if (extras.page) {
-    await publishAppPage(app, { ...extras.page, appSignature });
+    // About and links saved since the form read the page (on the app's page,
+    // or on another device) stay: only the version and What's new are new.
+    const current = await readCurrentPage(app);
+    await publishAppPage(app, {
+      ...(current || extras.page),
+      version: extras.page.version,
+      whatsNew: extras.page.whatsNew,
+      appSignature,
+    });
   }
   if (extras.shots) {
-    await publishAppShots(app, await uploadsFromDrafts(extras.shots));
+    try {
+      await publishAppShots(app, await uploadsFromDrafts(extras.shots));
+    } catch (error) {
+      // The page text went out: say it was the screenshots that failed.
+      if (extras.page && error && typeof error === 'object') {
+        (error as { part?: string }).part = 'screenshots';
+      }
+      throw error;
+    }
   }
 };
 
@@ -144,26 +179,37 @@ export const PublishPageExtras = forwardRef<
   const [error, setError] = useState('');
   const [pageLoad, setPageLoad] = useState<PartLoad>('idle');
   const [shotsLoad, setShotsLoad] = useState<PartLoad>('idle');
+  // Counts the Retry presses after a failed read.
+  const [retry, setRetry] = useState(0);
+  const retryReadRef = useRef(0);
   const shotsTitleId = useId();
 
   // What the app's page has now, for an update.
   useEffect(() => {
-    setExistingPage(null);
-    setExistingShots(null);
-    setShotsVersion('');
-    setShots([]);
-    shotsRef.current = [];
-    setVersion('');
-    setWhatsNew('');
-    setMode('keep');
-    setError('');
+    // A retry reads the parts not known yet (it cuts off one still loading),
+    // and keeps what the form holds.
+    const again = retryReadRef.current !== retry;
+    retryReadRef.current = retry;
+    const readPage = !again || !isKnown(pageLoad);
+    const readShots = !again || !isKnown(shotsLoad);
+    if (!again) {
+      setExistingPage(null);
+      setExistingShots(null);
+      setShotsVersion('');
+      setShots([]);
+      shotsRef.current = [];
+      setVersion('');
+      setWhatsNew('');
+      setMode('keep');
+      setError('');
+    }
     if (!name || !service) {
       setPageLoad('idle');
       setShotsLoad('idle');
       return;
     }
-    setPageLoad('loading');
-    setShotsLoad('loading');
+    if (readPage) setPageLoad('loading');
+    if (readShots) setShotsLoad('loading');
     const controller = new AbortController();
     const { signal } = controller;
     const base = getBaseApiReact();
@@ -215,8 +261,8 @@ export const PublishPageExtras = forwardRef<
       try {
         const resources = await findAppPageResources(base, app, signal);
         await Promise.all([
-          loadPage(!!resources.page),
-          loadShots(resources.shots),
+          readPage && loadPage(!!resources.page),
+          readShots && loadShots(resources.shots),
         ]);
       } catch (cause) {
         if ((cause as Error)?.name === 'AbortError' || signal.aborted) return;
@@ -226,7 +272,7 @@ export const PublishPageExtras = forwardRef<
       }
     })();
     return () => controller.abort();
-  }, [name, service]);
+  }, [name, service, retry]);
 
   const captureSource: CaptureSource | null = useMemo(
     () => (file && name ? { kind: 'zip', service, name, file } : null),
@@ -394,7 +440,20 @@ export const PublishPageExtras = forwardRef<
         </Box>
       )}
       {(pageLoad === 'failed' || shotsLoad === 'failed') && (
-        <Alert severity="warning" sx={{ mb: 1.5 }}>
+        <Alert
+          action={
+            <Button
+              color="inherit"
+              onClick={() => setRetry((value) => value + 1)}
+              size="small"
+              sx={{ textTransform: 'none' }}
+            >
+              {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+            </Button>
+          }
+          severity="warning"
+          sx={{ mb: 1.5 }}
+        >
           {t('core:app_page.publish.page_unreadable', {
             postProcess: 'capitalizeFirstChar',
           })}

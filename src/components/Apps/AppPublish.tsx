@@ -180,6 +180,14 @@ export const AppPublish = ({
     onUnsavedChangeRef.current?.(hasUnsavedInput);
   }, [hasUnsavedInput]);
   useEffect(() => () => onUnsavedChangeRef.current?.(false), []);
+  // Whether the form is still open (its tab closes it, and so does a sign-out).
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   // Screenshots, version and What's new, published right after the app.
   const pageExtrasRef = useRef<PublishExtrasHandle>(null);
   const [extrasSummary, setExtrasSummary] = useState<ExtrasSummary | null>(
@@ -338,8 +346,9 @@ export const AppPublish = ({
       const file = source?.file;
       const data = {
         name,
-        title,
-        description,
+        // Spaces alone are no title or description, as in the checklist.
+        title: title.trim(),
+        description: description.trim(),
         category,
         appType,
         file,
@@ -432,11 +441,10 @@ export const AppPublish = ({
             );
           });
       });
-      // What was typed is published now, before the app opens in the tab.
-      setHasUnsavedInput(false);
-      onUnsavedChangeRef.current?.(false);
       const signature = publishSignature(response);
       let extrasFailed = '';
+      // The page text went out and only the screenshots failed.
+      let onlyShotsFailed = false;
       if (extraParts) {
         try {
           await publishPageExtras(
@@ -446,17 +454,26 @@ export const AppPublish = ({
           );
         } catch (error) {
           // Never empty, and never an internal code such as SHOT_UNAVAILABLE.
-          extrasFailed = appPageErrorText(t, error, { inSentence: true });
+          extrasFailed =
+            error?.code === 'PAGE_UNREADABLE'
+              ? t('core:app_page.publish.page_unreadable')
+              : appPageErrorText(t, error, { inSentence: true });
+          onlyShotsFailed = error?.part === 'screenshots';
         }
       }
       setInfoSnackGlobal(
         extrasFailed
           ? {
               type: 'warning',
-              message: t('core:app_page.publish.extras_failed', {
-                error: extrasFailed,
-                postProcess: 'capitalizeFirstChar',
-              }),
+              message: t(
+                onlyShotsFailed
+                  ? 'core:app_page.publish.shots_failed'
+                  : 'core:app_page.publish.extras_failed',
+                {
+                  error: extrasFailed,
+                  postProcess: 'capitalizeFirstChar',
+                }
+              ),
             }
           : {
               type: 'success',
@@ -490,6 +507,11 @@ export const AppPublish = ({
         publishProfileKey(myAddress, appType, name),
         published
       );
+      // The form closed while its page parts went out: no tab opens.
+      if (!isMountedRef.current) return;
+      // What was typed is published now, before the app opens in the tab.
+      setHasUnsavedInput(false);
+      onUnsavedChangeRef.current?.(false);
       const dataObj = {
         name: name,
         service: appType,

@@ -260,6 +260,7 @@
       "page_unreadable": "il tuo nodo non è riuscito a leggere la pagina attuale dell’app, quindi versione, novità e screenshot non vengono pubblicati con questo aggiornamento. Puoi modificarli più tardi nella pagina dell’app.",
       "shots_change": "modifica gli screenshot",
       "shots_change_hint": "Parti da quelli attuali: rimuovili, riordinali o aggiungi una didascalia, e aggiungine di nuovi.",
+      "shots_failed": "l’app e il testo della sua pagina sono stati pubblicati, ma non è stato possibile aggiornare i suoi screenshot: {{error}}",
       "shots_keep_one": "mantieni lo screenshot attuale",
       "shots_keep_other": "mantieni i {{count}} screenshot attuali",
       "shots_none": "nessuno screenshot",

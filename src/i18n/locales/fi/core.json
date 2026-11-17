@@ -260,6 +260,7 @@
       "page_unreadable": "solmusi ei voinut lukea sovelluksen nykyistä sivua, joten sen versiota, Mitä uutta -tekstiä ja kuvakaappauksia ei julkaista tämän päivityksen mukana. Voit muuttaa niitä myöhemmin sovelluksen sivulla.",
       "shots_change": "muuta kuvakaappauksia",
       "shots_change_hint": "Aloita nykyisistä: poista niitä, järjestä ne uudelleen tai lisää kuvatekstit, ja lisää uusia.",
+      "shots_failed": "sovellus ja sen sivun teksti julkaistiin, mutta sen kuvakaappauksia ei voitu päivittää: {{error}}",
       "shots_keep_one": "säilytä nykyinen kuvakaappaus",
       "shots_keep_other": "säilytä nykyiset {{count}} kuvakaappausta",
       "shots_none": "ei kuvakaappauksia",

@@ -315,6 +315,8 @@ describe('the page part of the publish form', () => {
   });
 
   it('publishes the page with the new app signature, then the screenshots', async () => {
+    // The node is asked for the current page first: it has none.
+    nodeWith(null, null);
     const send = vi.fn().mockResolvedValue({});
     window.sendMessage = send;
     await publishPageExtras(
@@ -413,6 +415,243 @@ describe('the current page, while it loads or when it cannot be read', () => {
     // No editor to add screenshots over the ones not loaded yet.
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(ref.current!.prepare().shots).toBeNull();
+  });
+});
+
+const json = (value: unknown) => new Response(JSON.stringify(value));
+const LISTED_PAGE = [
+  {
+    name: 'MyApp',
+    service: 'JSON',
+    identifier: 'qhub_app_page_v1_APP',
+    latestSignature: 'P',
+  },
+];
+const LISTED_SHOTS = {
+  name: 'MyApp',
+  service: 'IMAGE',
+  identifier: 'qhub_app_shots_v1_APP',
+  latestSignature: 'S',
+};
+const ONE_SHOT = {
+  v: 1,
+  shots: [{ file: '1.webp', caption: 'Home' }],
+  updated: 1,
+};
+
+describe('Retry after a failed read of the current page', () => {
+  const version = () => screen.getByLabelText('app_page.details.version');
+
+  it('reads the page again on Retry, once the node answers', async () => {
+    let nodeDown = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('identifier=qhub_app_'))
+        return nodeDown ? new Response('', { status: 500 }) : json(LISTED_PAGE);
+      if (url.includes('/resource/status/')) return json({ status: 'READY' });
+      if (url.includes('/arbitrary/JSON/')) return json(PAGE);
+      return new Response('', { status: 404 });
+    });
+    const ref = renderExtras();
+    expect(
+      await screen.findByText('app_page.publish.page_unreadable')
+    ).toBeInTheDocument();
+    expect(version()).toBeDisabled();
+
+    nodeDown = false;
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+
+    await waitFor(() => expect(version()).toBeEnabled());
+    expect(screen.queryByText('app_page.publish.page_unreadable')).toBeNull();
+    fireEvent.change(version(), { target: { value: '2.0' } });
+    expect(ref.current!.prepare().page).toMatchObject({
+      about: 'Story',
+      links: { website: 'https://my.app/' },
+      version: '2.0',
+    });
+  });
+
+  it('keeps the screenshots chosen so far when Retry reads the page text', async () => {
+    let pageStatus = 'BUILD_FAILED';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('identifier=qhub_app_')) return json(LISTED_PAGE);
+      if (url.includes('/resource/status/'))
+        return json({ status: pageStatus });
+      if (url.includes('/arbitrary/JSON/')) return json(PAGE);
+      return new Response('', { status: 404 });
+    });
+    const ref = renderExtras();
+    await screen.findByText('app_page.publish.page_unreadable');
+    // The screenshots were read (there are none): one is chosen.
+    await choosePicture();
+    expect(ref.current!.prepare().shots).toHaveLength(1);
+
+    pageStatus = 'READY';
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+    await waitFor(() => expect(version()).toBeEnabled());
+    expect(ref.current!.prepare().shots).toHaveLength(1);
+  });
+
+  it('keeps a version typed so far when Retry reads the screenshots', async () => {
+    let shotsStatus = 'BUILD_FAILED';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('identifier=qhub_app_'))
+        return json([...LISTED_PAGE, LISTED_SHOTS]);
+      if (url.includes('/resource/status/IMAGE/'))
+        return json({ status: shotsStatus });
+      if (url.includes('/resource/status/')) return json({ status: 'READY' });
+      if (url.includes('/arbitrary/JSON/')) return json(PAGE);
+      if (url.includes('filepath=shots.json')) return json(ONE_SHOT);
+      return new Response('', { status: 404 });
+    });
+    const ref = renderExtras();
+    await screen.findByText('app_page.publish.page_unreadable');
+    // The page text was read: a version is typed.
+    await waitFor(() => expect(version()).toBeEnabled());
+    fireEvent.change(version(), { target: { value: '2.0' } });
+
+    shotsStatus = 'READY';
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+    expect(
+      await screen.findByRole('radio', { name: /app_page.publish.shots_keep/ })
+    ).toBeChecked();
+    expect(version()).toHaveValue('2.0');
+    expect(ref.current!.prepare().page).toMatchObject({
+      about: 'Story',
+      version: '2.0',
+    });
+  });
+
+  it('reads again a part that was still loading when Retry was pressed', async () => {
+    let ready = false;
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input);
+      const answer = (value: unknown) => Promise.resolve(json(value));
+      if (url.includes('identifier=qhub_app_'))
+        return answer([...LISTED_PAGE, LISTED_SHOTS]);
+      if (url.includes('/resource/status/JSON/'))
+        return answer({ status: ready ? 'READY' : 'BUILD_FAILED' });
+      if (url.includes('/resource/status/IMAGE/')) {
+        if (ready) return answer({ status: 'READY' });
+        // Not built yet: no answer, until the read is given up.
+        return new Promise<Response>((_resolve, reject) =>
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError'))
+          )
+        );
+      }
+      if (url.includes('/arbitrary/JSON/')) return answer(PAGE);
+      if (url.includes('filepath=shots.json')) return answer(ONE_SHOT);
+      return Promise.resolve(new Response('', { status: 404 }));
+    });
+    renderExtras();
+    await screen.findByText('app_page.publish.page_unreadable');
+    // The page text failed; the screenshots are still being read.
+    expect(
+      screen.getByText('app_page.publish.page_loading')
+    ).toBeInTheDocument();
+
+    ready = true;
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+
+    await waitFor(() => expect(version()).toBeEnabled());
+    expect(
+      await screen.findByRole('radio', { name: /app_page.publish.shots_keep/ })
+    ).toBeChecked();
+    expect(screen.queryByText('app_page.publish.page_loading')).toBeNull();
+  });
+});
+
+describe('publishing the page text over the page the node has now', () => {
+  /** What the form read when the name was chosen, with the new version. */
+  const fromForm = {
+    about: 'Story',
+    whatsNew: 'Faster',
+    version: '2.0',
+    links: { website: 'https://my.app/' },
+    appSignature: '',
+    updated: 1,
+  };
+  const publishedPage = (send: ReturnType<typeof vi.fn>) =>
+    JSON.parse(atob(send.mock.calls[0][1].data));
+
+  it('keeps About and links saved since the form read the page', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('identifier=qhub_app_')) return json(LISTED_PAGE);
+      if (url.includes('/resource/status/')) return json({ status: 'READY' });
+      if (url.includes('/arbitrary/JSON/'))
+        return json({
+          ...PAGE,
+          about: 'A longer story',
+          links: { source: 'https://code.my.app/' },
+        });
+      return new Response('', { status: 404 });
+    });
+    const send = vi.fn().mockResolvedValue({});
+    window.sendMessage = send;
+    await publishPageExtras(
+      { service: 'APP', name: 'MyApp' },
+      { page: fromForm, shots: null },
+      SIG
+    );
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(publishedPage(send)).toMatchObject({
+      about: 'A longer story',
+      links: { source: 'https://code.my.app/' },
+      version: '2.0',
+      whatsNew: 'Faster',
+      appSignature: SIG,
+    });
+  });
+
+  it("goes with the form's copy when the node doesn't answer now", async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    const send = vi.fn().mockResolvedValue({});
+    window.sendMessage = send;
+    await publishPageExtras(
+      { service: 'APP', name: 'MyApp' },
+      { page: fromForm, shots: null },
+      SIG
+    );
+    expect(publishedPage(send)).toMatchObject({
+      about: 'Story',
+      links: { website: 'https://my.app/' },
+      version: '2.0',
+      whatsNew: 'Faster',
+    });
+  });
+
+  it("does not go over a page the node lists but can't read now", async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('identifier=qhub_app_')) return json(LISTED_PAGE);
+      if (url.includes('/resource/status/'))
+        return json({ status: 'BUILD_FAILED' });
+      return new Response('', { status: 404 });
+    });
+    const send = vi.fn().mockResolvedValue({});
+    window.sendMessage = send;
+    await expect(
+      publishPageExtras(
+        { service: 'APP', name: 'MyApp' },
+        {
+          page: fromForm,
+          shots: [
+            {
+              id: 'a',
+              url: 'blob:a',
+              caption: 'One',
+              blob: new Blob([new Uint8Array([1, 2])]),
+            },
+          ],
+        },
+        SIG
+      )
+    ).rejects.toMatchObject({ code: 'PAGE_UNREADABLE' });
+    expect(send).not.toHaveBeenCalled();
   });
 });
 
