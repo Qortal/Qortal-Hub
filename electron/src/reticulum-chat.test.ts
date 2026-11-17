@@ -31816,9 +31816,9 @@ describe('reticulum chat manager', () => {
         requesterPeerHash,
       },
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(sentResources).toHaveLength(1);
+    // The page goes out once the request is checked and read: wait for it
+    // rather than a fixed 20 ms, which a busy CI machine can miss.
+    await vi.waitFor(() => expect(sentResources).toHaveLength(1));
     const page = JSON.parse(
       fs.readFileSync(String(sentResources[0].filePath), 'utf8')
     ) as {
