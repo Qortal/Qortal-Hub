@@ -438,8 +438,10 @@ export const fetchEarbumpTrackById = async (
 /**
  * An artist's EarBump songs, newest first, as EarBump's artist page lists
  * them (its `all-songs/<artist>` links): the songs whose author is the
- * artist, case aside. The node's search finds the artist's name in the
- * songs' descriptions, where EarBump keeps the author.
+ * artist, case aside. The node's search looks for `author=<artist>` in the
+ * songs' descriptions, where EarBump keeps the author, so songs that only
+ * mention the name elsewhere don't crowd them out. A song without an author
+ * is its publisher's, so the name is also searched as before.
  */
 export const fetchEarbumpArtistTracks = async (
   artist: string,
@@ -448,10 +450,33 @@ export const fetchEarbumpArtistTracks = async (
   const wanted = artist.trim().toLowerCase();
   if (!wanted) return [];
 
-  const tracks = await fetchTrackSearch(
-    buildSearchParams(artist.trim(), { limit: options?.limit ?? 100 }),
-    options?.signal
-  );
+  const limit = options?.limit ?? 100;
+  const params = new URLSearchParams({
+    description: `author=${artist.trim()}`,
+    excludeblocked: 'true',
+    identifier: EARBUMP_SONG_IDENTIFIER_PREFIX,
+    includemetadata: 'true',
+    includestatus: 'true',
+    limit: String(limit),
+    mode: 'ALL',
+    offset: '0',
+    reverse: 'true',
+    service: 'AUDIO',
+  });
+  const [byAuthor, byName] = await Promise.allSettled([
+    fetchTrackSearch(params, options?.signal),
+    fetchTrackSearch(
+      buildSearchParams(artist.trim(), { limit }),
+      options?.signal
+    ),
+  ]);
+  if (byAuthor.status === 'rejected' && byName.status === 'rejected') {
+    throw byAuthor.reason;
+  }
+  const tracks = dedupeTracks([
+    ...(byAuthor.status === 'fulfilled' ? byAuthor.value : []),
+    ...(byName.status === 'fulfilled' ? byName.value : []),
+  ]);
   return tracks
     .filter((track) => track.artist.trim().toLowerCase() === wanted)
     .sort(

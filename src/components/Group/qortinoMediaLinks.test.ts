@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useFetchResources } from '../../hooks/useFetchResources';
 import {
+  QORTINO_LINK_TRACK_LIMIT,
   QortinoMediaLinkError,
   parseQortinoMediaLink,
   qortinoMediaUrl,
@@ -464,5 +467,244 @@ describe('EarBump links', () => {
     expect(
       sanitizeQortinoMediaItem({ ...stored, trackIndex: 9 })
     ).toMatchObject({ trackIndex: 1 });
+  });
+});
+
+describe('an EarBump playlist far bigger than the player keeps', () => {
+  it('is read only as far as the songs it keeps', async () => {
+    // A playlist is anyone's to publish: this one lists 5,000 songs.
+    let songsRead = 0;
+    const songs = Array.from({ length: 5000 }, (_, index) => ({
+      get identifier() {
+        songsRead += 1;
+        return `earbump_song_${index}`;
+      },
+      name: 'Publisher',
+      service: 'AUDIO',
+      title: `Song ${index}`,
+    }));
+
+    const item = await resolveQortinoMediaLink(
+      'qortal://APP/EarBump/playlists/Publisher/earbump_playlist_big',
+      { fetchJson: async () => ({ songs }) }
+    );
+
+    expect(item.tracks).toHaveLength(QORTINO_LINK_TRACK_LIMIT);
+    expect(item.tracks?.[199]).toMatchObject({
+      identifier: 'earbump_song_199',
+    });
+    // Not the whole list, each song against all those before it.
+    expect(songsRead).toBeLessThanOrEqual(QORTINO_LINK_TRACK_LIMIT * 2);
+  });
+});
+
+describe('a file whose type the node can’t tell yet', () => {
+  it('is tried as a video when neither the node nor its publish says', async () => {
+    // The node doesn't have the file yet: its properties and its
+    // metadata both answer 404, however often they're asked.
+    const fetchJson = vi.fn(async (url: string) => {
+      throw new Error(`QDN request failed (404) ${url}`);
+    });
+
+    const item = await resolveQortinoMediaLink(
+      'qortal://FILE/PixelMage/qshare_file_john_mp3',
+      { fetchJson }
+    );
+
+    expect(fetchJson).toHaveBeenCalledWith(
+      'http://node/arbitrary/resource/properties/FILE/PixelMage/qshare_file_john_mp3',
+      undefined
+    );
+    expect(fetchJson).toHaveBeenCalledWith(
+      'http://node/arbitrary/metadata/FILE/PixelMage/qshare_file_john_mp3',
+      undefined
+    );
+    // Played, so the node gets it; the player says so if it isn't a video.
+    expect(item).toMatchObject({
+      identifier: 'qshare_file_john_mp3',
+      kind: 'video',
+      name: 'PixelMage',
+      service: 'FILE',
+    });
+  });
+
+  it('plays it by the type it was published with', async () => {
+    const fetchJson = qdn({
+      'http://node/arbitrary/metadata/FILE/a/talk': {
+        mimeType: 'audio/mpeg',
+        title: 'A talk',
+      },
+      'http://node/arbitrary/metadata/FILE/a/film': { mimeType: 'video/mp4' },
+      'http://node/arbitrary/metadata/FILE/a/sheet': {
+        mimeType: 'application/pdf',
+      },
+    });
+
+    expect(
+      await resolveQortinoMediaLink('qortal://FILE/a/talk', { fetchJson })
+    ).toMatchObject({ kind: 'audio' });
+    expect(
+      await resolveQortinoMediaLink('qortal://FILE/a/film', { fetchJson })
+    ).toMatchObject({ kind: 'video' });
+    expect(
+      await problemOf(
+        resolveQortinoMediaLink('qortal://FILE/a/sheet', { fetchJson })
+      )
+    ).toBe('not_playable');
+  });
+});
+
+describe('names a link brings, in the node’s addresses', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the requests for a video a link names on the node’s QDN paths', async () => {
+    // An ordinary looking Q-Tube link; its details on QDN are anyone's to
+    // publish, and name the video to get.
+    const item = await resolveQortinoMediaLink(
+      'qortal://APP/Q-Tube/video/Somebody/qtube_vid_party',
+      {
+        fetchJson: async () => ({
+          title: 'Party',
+          videoReference: {
+            identifier: 'stop',
+            name: '../../../../admin',
+            service: 'VIDEO',
+          },
+        }),
+      }
+    ).catch(() => null);
+    // Refusing to play it is fine too.
+    if (!item) return;
+
+    const requested: string[] = [];
+    global.fetch = vi.fn(async (url: string) => {
+      requested.push(url);
+      return {
+        json: async () => ({ status: 'SEARCHING' }),
+        ok: true,
+      };
+    }) as unknown as typeof fetch;
+
+    // The player asks the node to get it, as it does for every video.
+    const { result, unmount } = renderHook(() => useFetchResources());
+    const metadata = {
+      downloadScope: 'music-player',
+      identifier: item.identifier,
+      name: item.name,
+      service: item.service,
+    };
+    await act(async () => {
+      await result.current(metadata);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    act(() => {
+      result.current.cancelResourceDownload(metadata);
+    });
+    unmount();
+
+    for (const url of requested) {
+      expect(new URL(url).pathname).toMatch(/^\/arbitrary\//);
+    }
+  });
+
+  it('plays nothing whose name or identifier would leave its own path', async () => {
+    for (const link of [
+      'qortal://VIDEO/..%2F..%2F..%2F..%2Fadmin/stop',
+      'qortal://VIDEO/%2e%2E/stop',
+      'qortal://AUDIO/a/.%09.',
+      'qortal://AUDIO/a%5C..%5Cadmin/stop',
+      'qortal://APP/Q-Tube/video/../qtube_vid_party',
+      'qortal://APP/EarBump/playlists/a%2F../earbump_playlist_x',
+    ]) {
+      expect(parseQortinoMediaLink(link)).toBeNull();
+    }
+    // A name with a slash is still a name.
+    expect(parseQortinoMediaLink('qortal://VIDEO/AC%2FDC/live')).toMatchObject({
+      identifier: 'live',
+      name: 'AC/DC',
+    });
+
+    expect(
+      await problemOf(
+        resolveQortinoMediaLink('qortal://APP/Q-Share/share/a/files', {
+          fetchJson: async () => ({
+            files: [
+              {
+                identifier: '..',
+                mimetype: 'audio/mpeg',
+                name: 'admin',
+                service: 'FILE',
+              },
+            ],
+          }),
+        })
+      )
+    ).toBe('not_playable');
+
+    const playlist = await resolveQortinoMediaLink(
+      'qortal://APP/EarBump/playlists/a/earbump_playlist_x',
+      {
+        fetchJson: async () => ({
+          songs: [
+            { identifier: 'stop', name: '../admin', service: 'AUDIO' },
+            { identifier: 'earbump_song_ok', name: 'a', service: 'AUDIO' },
+          ],
+        }),
+      }
+    );
+    expect(playlist.tracks?.map((track) => track.identifier)).toEqual([
+      'earbump_song_ok',
+    ]);
+
+    // Nor is one kept in the Workspace's state brought back.
+    expect(
+      sanitizeQortinoMediaItem({
+        identifier: 'stop',
+        kind: 'video',
+        link: 'qortal://VIDEO/a/v',
+        name: '../../admin',
+        service: 'VIDEO',
+      })
+    ).toBeNull();
+  });
+
+  it('shows no picture whose address would leave its own path', async () => {
+    const pictures = ['.', '..', '%2e%2e', '..\\admin'].flatMap((value) => [
+      { identifier: 'thumb', name: 'Somebody', service: value },
+      { identifier: 'thumb', name: value, service: 'THUMBNAIL' },
+      { identifier: value, name: 'Somebody', service: 'THUMBNAIL' },
+    ]);
+    for (const picture of pictures) {
+      const video = await resolveQortinoMediaLink(
+        'qortal://APP/Q-Tube/video/BigPicture/qtube_vid_gold_bcura2',
+        { fetchJson: async () => ({ ...QTUBE_DETAILS, videoImage: picture }) }
+      );
+      expect(video.thumbnail, JSON.stringify(picture)).toBeUndefined();
+      const share = await resolveQortinoMediaLink(
+        'qortal://APP/Q-Share/share/PixelMage/qshare_file_john_metadata',
+        { fetchJson: async () => ({ ...QSHARE_DETAILS, thumbnail: picture }) }
+      );
+      expect(share.thumbnail, JSON.stringify(picture)).toBeUndefined();
+    }
+
+    // An ordinary picture is still shown.
+    const video = await resolveQortinoMediaLink(
+      'qortal://APP/Q-Tube/video/BigPicture/qtube_vid_gold_bcura2',
+      {
+        fetchJson: async () => ({
+          ...QTUBE_DETAILS,
+          videoImage: {
+            identifier: 'qtube_thumb_gold',
+            name: 'Big Picture',
+            service: 'THUMBNAIL',
+          },
+        }),
+      }
+    );
+    expect(video.thumbnail).toBe(
+      'http://node/arbitrary/THUMBNAIL/Big%20Picture/qtube_thumb_gold?async=true'
+    );
   });
 });

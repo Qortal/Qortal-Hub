@@ -30,6 +30,8 @@ export type QortinoVideoLabels = {
   pause: string;
   play: string;
   unmute: string;
+  /** Why it doesn't play, when the browser can't play what the node has. */
+  failed?: string;
 };
 
 type Props = {
@@ -121,6 +123,8 @@ export const QortinoVideoPlayer = ({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isPointerResting, setIsPointerResting] = useState(true);
   const [hasKeyboardFocus, setHasKeyboardFocus] = useState(false);
+  // The address the browser couldn't play; another one is tried afresh.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   useEffect(() => {
     const onChange = () =>
@@ -173,7 +177,13 @@ export const QortinoVideoPlayer = ({
     else void frame.requestFullscreen?.().catch(() => undefined);
   };
 
-  const ready = !!src;
+  const failed = !!src && failedSrc === src;
+  const ready = !!src && !failed;
+  const shownStatus = failed
+    ? labels.failed
+      ? { error: true, message: labels.failed }
+      : null
+    : status;
   const floatingSx = floatingControlsSx(theme);
   const smallButton = smallTransportButtonSx(theme);
   const keyboardFocusProps = {
@@ -267,6 +277,10 @@ export const QortinoVideoPlayer = ({
                   : 0
               )
             }
+            onError={() => {
+              setFailedSrc(src);
+              setIsPlaying(false);
+            }}
             onPause={() => setIsPlaying(false)}
             onPlay={() => {
               setIsPlaying(true);
@@ -287,9 +301,16 @@ export const QortinoVideoPlayer = ({
           />
         ) : (
           <Box
+            // The picture's address comes from QDN: quoted, so that it
+            // stays one address, and set on the element itself, so that
+            // it never becomes text of the page's style sheet.
+            style={
+              poster
+                ? { backgroundImage: `url(${JSON.stringify(poster)})` }
+                : undefined
+            }
             sx={{
               alignItems: 'center',
-              backgroundImage: poster ? `url("${poster}")` : undefined,
               backgroundPosition: 'center',
               backgroundSize: 'cover',
               display: 'flex',
@@ -298,7 +319,7 @@ export const QortinoVideoPlayer = ({
               p: 1,
             }}
           >
-            {status ? (
+            {shownStatus ? (
               <Box
                 sx={{
                   alignItems: 'center',
@@ -312,11 +333,11 @@ export const QortinoVideoPlayer = ({
                   py: 0.75,
                 }}
               >
-                {status.error ? null : (
+                {shownStatus.error ? null : (
                   <CircularProgress color="inherit" size={14} thickness={5} />
                 )}
                 <Typography sx={{ fontSize: '0.7rem', fontWeight: 600 }}>
-                  {status.message}
+                  {shownStatus.message}
                 </Typography>
               </Box>
             ) : null}

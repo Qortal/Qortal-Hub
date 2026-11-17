@@ -120,6 +120,19 @@ const decodePart = (value: string) => {
   }
 };
 
+/**
+ * Whether a name or identifier stays one part of the node's addresses:
+ * no '.' or '..' part (also written %2e, or with tabs and newlines, which
+ * URLs drop) and no '\', which URLs read as '/'.
+ */
+const isPathSafe = (value: string) => {
+  const plain = value.replace(/[\t\n\r]/g, '');
+  return (
+    !plain.includes('\\') &&
+    !plain.split('/').some((part) => /^(?:\.|%2e){1,2}$/i.test(part))
+  );
+};
+
 /** Q-Tube's and Q-Share's links name the details with or without it. */
 const detailsIdentifiers = (identifier: string) =>
   identifier.endsWith('_metadata')
@@ -135,6 +148,7 @@ export const parseQortinoMediaLink = (
   );
   if (!match) return null;
   const parts = match[1].split('/').filter(Boolean).map(decodePart);
+  if (!parts.every(isPathSafe)) return null;
   const query = new URLSearchParams(match[2] ?? '');
   const [first = '', ...rest] = parts;
   const service = first.toUpperCase();
@@ -235,9 +249,11 @@ const pictureOf = (value: unknown, name: string) => {
   if (/^(data:image\/|https?:\/\/)/i.test(direct)) return direct;
   if (!isRecord(value)) return undefined;
   const service = text(value.service) || 'THUMBNAIL';
+  const owner = text(value.name) || name;
   const identifier = text(value.identifier);
   if (!identifier) return undefined;
-  return `${resourceUrl(service, text(value.name) || name, identifier)}?async=true`;
+  if (![service, owner, identifier].every(isPathSafe)) return undefined;
+  return `${resourceUrl(service, owner, identifier)}?async=true`;
 };
 
 type FetchJson = (url: string, signal?: AbortSignal) => Promise<unknown>;
@@ -266,7 +282,12 @@ const fromVideoDetails = (
   const name = text(reference?.name) || target.name;
   const identifier = text(reference?.identifier);
   const service = text(reference?.service).toUpperCase() || 'VIDEO';
-  if (!identifier || !isPlayableService(service)) {
+  if (
+    !identifier ||
+    !isPlayableService(service) ||
+    !isPathSafe(name) ||
+    !isPathSafe(identifier)
+  ) {
     throw new QortinoMediaLinkError('not_playable');
   }
   return {
@@ -296,12 +317,14 @@ const fromShareDetails = (
     const kind = kindOfMime(text(file.mimetype) || text(file.mimeType));
     const identifier = text(file.identifier);
     const service = text(file.service).toUpperCase() || 'FILE';
+    const name = text(file.name) || target.name;
     if (!kind || !identifier || !isPlayableService(service)) continue;
+    if (!isPathSafe(name) || !isPathSafe(identifier)) continue;
     return {
       identifier,
       kind,
       link,
-      name: text(file.name) || target.name,
+      name,
       publisher: target.name,
       service,
       thumbnail: pictureOf(details.thumbnail, target.name),
@@ -316,11 +339,14 @@ const playlistTracks = (playlist: Record<string, unknown>) => {
   const songs = Array.isArray(playlist.songs) ? playlist.songs : [];
   const tracks: QortinoMediaTrack[] = [];
   for (const song of songs) {
+    // No further than the songs kept, however long the playlist is.
+    if (tracks.length >= QORTINO_LINK_TRACK_LIMIT) break;
     if (!isRecord(song)) continue;
     const identifier = text(song.identifier) || text(song.id);
     const name = text(song.name);
     const service = text(song.service).toUpperCase() || 'AUDIO';
     if (!identifier || !name || service !== 'AUDIO') continue;
+    if (!isPathSafe(name) || !isPathSafe(identifier)) continue;
     if (tracks.some((track) => track.identifier === identifier)) continue;
     tracks.push({
       artist: text(song.author) || text(song.artist),
@@ -376,7 +402,13 @@ type FindArtistTracks = (
 ) => Promise<QortinoMediaTrack[]>;
 
 const findArtistTracksOnNode: FindArtistTracks = async (artist, signal) =>
-  (await fetchEarbumpArtistTracks(artist, { signal }))
+  (
+    await fetchEarbumpArtistTracks(artist, {
+      limit: QORTINO_LINK_TRACK_LIMIT,
+      signal,
+    })
+  )
+    .filter((track) => isPathSafe(track.name) && isPathSafe(track.id))
     .slice(0, QORTINO_LINK_TRACK_LIMIT)
     .map((track) => ({
       artist: track.artist,
@@ -437,13 +469,29 @@ export const resolveQortinoMediaLink = async (
       target.service === 'AUDIO' ? 'audio' : 'video';
     let title = target.identifier;
     if (target.service === 'FILE') {
-      // A file plays by its type.
-      const properties = await fetchJson(
-        `${getBaseApiReact()}/arbitrary/resource/properties/FILE/${encodeURIComponent(
-          target.name
-        )}/${encodeURIComponent(target.identifier)}`,
-        options.signal
-      ).catch(() => null);
+      // A file plays by its type. The node only describes a file it has;
+      // until then, the type given when it was published says. If neither
+      // says, it's tried as a video, which also has the node get it.
+      const path = `FILE/${encodeURIComponent(
+        target.name
+      )}/${encodeURIComponent(target.identifier)}`;
+      let properties: unknown = null;
+      try {
+        properties = await fetchJson(
+          `${getBaseApiReact()}/arbitrary/resource/properties/${path}`,
+          options.signal
+        );
+      } catch (error) {
+        if (options.signal?.aborted) throw error;
+        try {
+          properties = await fetchJson(
+            `${getBaseApiReact()}/arbitrary/metadata/${path}`,
+            options.signal
+          );
+        } catch (metadataError) {
+          if (options.signal?.aborted) throw metadataError;
+        }
+      }
       if (isRecord(properties)) {
         const fileKind = kindOfMime(text(properties.mimeType));
         if (!fileKind && text(properties.mimeType)) {
@@ -504,6 +552,7 @@ export const sanitizeQortinoMediaItem = (
   if (!kind || !isPlayableService(service) || !name || !identifier || !link) {
     return null;
   }
+  if (!isPathSafe(name) || !isPathSafe(identifier)) return null;
   const thumbnail = text(value.thumbnail);
   const tracks = sanitizeTracks(value.tracks);
   return {
@@ -540,6 +589,7 @@ const sanitizeTracks = (value: unknown): QortinoMediaTrack[] | undefined => {
     const name = text(entry.name);
     const identifier = text(entry.identifier);
     if (!name || !identifier) continue;
+    if (!isPathSafe(name) || !isPathSafe(identifier)) continue;
     tracks.push({
       artist: text(entry.artist),
       identifier,
