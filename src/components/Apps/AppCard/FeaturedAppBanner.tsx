@@ -2,6 +2,7 @@ import {
   memo,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -14,6 +15,7 @@ import { alpha } from '@mui/material/styles';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../../utils/events';
 import {
@@ -26,6 +28,7 @@ import { LibrarySection } from '../AppsLibrary/LibrarySection';
 import {
   cap,
   cardSurfaceSx,
+  formatLibraryNumber,
   INSTANT_TOOLTIP,
   libraryFocusRing,
   libraryMuted,
@@ -40,34 +43,71 @@ const DRAG_THRESHOLD_PX = 6;
 
 interface FeaturedAppBannerProps {
   featuredApps: any[];
+  /**
+   * 'official': official apps to start with, chosen for Qortal Hub.
+   * 'top-rated': the best rated by the community, which the row says.
+   */
+  variant?: 'official' | 'top-rated';
+  /** On a category's page: an app's page goes back to the category. */
+  isFromCategory?: boolean;
+  sx?: Record<string, any>;
+  /** Tells the cards apart; by default an app's service and name. */
+  getKey?: (item: any) => string;
+  /** Draws a card for something else than an app (a widget). */
+  renderItem?: (item: any) => ReactNode;
 }
 
 function featuredAppsAreEqual(
   prev: FeaturedAppBannerProps,
   next: FeaturedAppBannerProps
 ): boolean {
+  if (
+    prev.variant !== next.variant ||
+    prev.isFromCategory !== next.isFromCategory ||
+    prev.sx !== next.sx ||
+    prev.getKey !== next.getKey ||
+    prev.renderItem !== next.renderItem
+  ) {
+    return false;
+  }
   if (prev.featuredApps === next.featuredApps) return true;
   const a = prev.featuredApps;
   const b = next.featuredApps;
   if (!a || !b || a.length !== b.length) return false;
-  return a.every(
-    (app: any, i: number) =>
-      b[i]?.name === app?.name && b[i]?.service === app?.service
+  const keyOf = next.getKey;
+  return a.every((app: any, i: number) =>
+    keyOf
+      ? keyOf(b[i]) === keyOf(app)
+      : b[i]?.name === app?.name && b[i]?.service === app?.service
   );
 }
 
 type Edges = { overflow: boolean; canPrev: boolean; canNext: boolean };
 
-const FeaturedCard = ({
-  app,
-  onOpen,
+/**
+ * A card of the row: an icon, a title that opens the item's page, two lines
+ * of description, the rating and one button. Apps get Open; a widget's card
+ * (LibraryWidgetItem) gets Add to Home.
+ */
+export const FeaturedCardLayout = ({
+  iconApp,
+  title,
+  description,
+  ratingName,
+  ratingService,
   onDetails,
+  renderAction,
 }: {
-  app: any;
-  onOpen: (app: any, event: React.MouseEvent) => void;
-  onDetails: (app: any) => void;
+  /** What the icon is taken from: an app, or a widget's publisher. */
+  iconApp: any;
+  title: string;
+  description: string;
+  /** What the rating is kept under (an app's name, a widget's poll name). */
+  ratingName?: string;
+  ratingService?: string;
+  onDetails: () => void;
+  renderAction: (titleId: string) => ReactNode;
 }) => {
-  const { t } = useTranslation(['core']);
   const titleId = useId();
   return (
     <Box
@@ -85,14 +125,14 @@ const FeaturedCard = ({
         width: FEATURED_CARD_WIDTH,
       })}
     >
-      <AppIconTile app={app} size={60} />
+      <AppIconTile app={iconApp} size={60} />
       <DetailsButton
         align="center"
         id={titleId}
-        onClick={() => onDetails(app)}
+        onClick={onDetails}
         textSx={{ fontSize: '14.5px', fontWeight: 650, lineHeight: '20px' }}
       >
-        {app?.metadata?.title || app?.name}
+        {title}
       </DetailsButton>
       <Typography
         sx={(theme) => ({
@@ -110,34 +150,66 @@ const FeaturedCard = ({
           width: '100%',
         })}
       >
-        {app?.metadata?.description ||
-          t('core:message.generic.no_description', cap)}
+        {description}
       </Typography>
       <LibraryRatingSummary
         align="center"
-        name={app?.name}
-        service={app?.service}
+        name={ratingName}
+        service={ratingService}
       />
-      <Box sx={{ mt: 'auto', width: '100%' }}>
+      <Box sx={{ mt: 'auto', width: '100%' }}>{renderAction(titleId)}</Box>
+    </Box>
+  );
+};
+
+const FeaturedCard = ({
+  app,
+  onOpen,
+  onDetails,
+}: {
+  app: any;
+  onOpen: (app: any, event: React.MouseEvent) => void;
+  onDetails: (app: any) => void;
+}) => {
+  const { t } = useTranslation(['core']);
+  return (
+    <FeaturedCardLayout
+      description={
+        app?.metadata?.description ||
+        t('core:message.generic.no_description', cap)
+      }
+      iconApp={app}
+      onDetails={() => onDetails(app)}
+      ratingName={app?.name}
+      ratingService={app?.service}
+      renderAction={(titleId) => (
         <OpenAppButton
           describedBy={titleId}
           fullWidth
           installed={app?.status?.status === 'READY'}
           onClick={(event) => onOpen(app, event)}
         />
-      </Box>
-    </Box>
+      )}
+      title={app?.metadata?.title || app?.name}
+    />
   );
 };
 
 /**
- * The official apps worth starting with, in a row that scrolls sideways: by
- * the arrows (a page at a time), a trackpad, Shift and the wheel, a touch
- * screen, or a mouse drag. It snaps to a card and scrolls smoothly unless
- * the system asks for less motion.
+ * The official apps worth starting with, or the community's best rated, in a
+ * row that scrolls sideways: by the arrows (a page at a time), a trackpad,
+ * Shift and the wheel, a touch screen, or a mouse drag. It snaps to a card
+ * and scrolls smoothly unless the system asks for less motion.
  */
-const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
-  const { t } = useTranslation(['core']);
+const FeaturedAppBannerInner = ({
+  featuredApps,
+  variant = 'official',
+  isFromCategory = false,
+  sx,
+  getKey,
+  renderItem,
+}: FeaturedAppBannerProps) => {
+  const { t, i18n } = useTranslation(['core']);
   const launcherTabId = useLauncherTabId();
   const reduce = usePrefersReducedMotion();
   const trackRef = useRef<HTMLUListElement | null>(null);
@@ -331,9 +403,15 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
     [launcherTabId]
   );
 
-  const handleViewDetails = useCallback((app: any) => {
-    executeEvent('selectedAppInfo', { data: app });
-  }, []);
+  const handleViewDetails = useCallback(
+    (app: any) => {
+      executeEvent(
+        isFromCategory ? 'selectedAppInfoCategory' : 'selectedAppInfo',
+        { data: app }
+      );
+    },
+    [isFromCategory]
+  );
 
   if (!featuredApps || featuredApps.length === 0) {
     return null;
@@ -389,8 +467,22 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
           </>
         ) : null
       }
-      hint={t('core:launcher.library.featured_hint', cap)}
-      icon={<AutoAwesomeRoundedIcon />}
+      hint={
+        variant === 'top-rated'
+          ? t('core:launcher.library.top_rated_hint', {
+              number: formatLibraryNumber(featuredApps.length, i18n?.language),
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('core:launcher.library.featured_hint', cap)
+      }
+      icon={
+        variant === 'top-rated' ? (
+          <StarRoundedIcon />
+        ) : (
+          <AutoAwesomeRoundedIcon />
+        )
+      }
+      sx={sx}
       title={t('core:official_apps.featured', cap)}
     >
       <Box
@@ -443,18 +535,22 @@ const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
         {featuredApps.map((app) => (
           <Box
             component="li"
-            key={`${app?.service}-${app?.name}`}
+            key={getKey ? getKey(app) : `${app?.service}-${app?.name}`}
             sx={{
               flex: `0 0 ${FEATURED_CARD_WIDTH}px`,
               scrollMarginInline: '32px',
               scrollSnapAlign: 'start',
             }}
           >
-            <FeaturedCard
-              app={app}
-              onDetails={handleViewDetails}
-              onOpen={handleOpenApp}
-            />
+            {renderItem ? (
+              renderItem(app)
+            ) : (
+              <FeaturedCard
+                app={app}
+                onDetails={handleViewDetails}
+                onOpen={handleOpenApp}
+              />
+            )}
           </Box>
         ))}
       </Box>

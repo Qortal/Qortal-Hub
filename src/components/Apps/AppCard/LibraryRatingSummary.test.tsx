@@ -21,8 +21,11 @@ vi.mock('../../../hooks/useAppRatings', () => ({
   }),
 }));
 
+import { createStore, Provider } from 'jotai';
 import { LibraryRatingSummary } from './LibraryRatingSummary';
 import { RATING_GRACE_MS } from '../AppsLibrary/libraryLayout';
+import { userInfoAtom } from '../../../atoms/global';
+import { pendingVotesAtom } from '../AppPage/appPageStore';
 
 const renderSummary = () =>
   render(
@@ -30,6 +33,55 @@ const renderSummary = () =>
       <LibraryRatingSummary name="Q-Tube" service="APP" />
     </ThemeProvider>
   );
+
+describe('LibraryRatingSummary, with a vote on its way', () => {
+  const voted = (voter: string) => {
+    const store = createStore();
+    store.set(userInfoAtom, { address: 'QMe' });
+    store.set(pendingVotesAtom, {
+      sent: {
+        voter,
+        rating: 5,
+        createdPoll: false,
+        sentAt: 1,
+        name: 'q-tube',
+        service: 'APP',
+      },
+    });
+    return render(
+      <Provider store={store}>
+        <ThemeProvider theme={createTheme()}>
+          <LibraryRatingSummary name="Q-Tube" service="APP" />
+        </ThemeProvider>
+      </Provider>
+    );
+  };
+
+  beforeEach(() => {
+    // The creator's 3 and one 4: 3.5 from 2.
+    ratingState.rating = {
+      averageRating: 3.5,
+      totalVotes: 2,
+      voteCounts: [
+        { optionName: 'initialValue-3', voteCount: 0 },
+        { optionName: '4', voteCount: 1 },
+      ],
+      hasPublishedRating: true,
+      pollInfo: null,
+      lastFetched: 0,
+    };
+  });
+
+  it("counts the account's own vote at once", () => {
+    voted('QMe');
+    expect(screen.getByRole('img')).toHaveTextContent('4.0(3)');
+  });
+
+  it("leaves another account's vote to that account", () => {
+    voted('QOther');
+    expect(screen.getByRole('img')).toHaveTextContent('3.5(2)');
+  });
+});
 
 describe('LibraryRatingSummary', () => {
   beforeEach(() => {

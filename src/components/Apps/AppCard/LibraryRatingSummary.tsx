@@ -4,6 +4,8 @@ import { alpha } from '@mui/material/styles';
 import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import { useTranslation } from 'react-i18next';
 import { useAppRating } from '../../../hooks/useAppRatings';
+import { ratingWithPendingVote } from '../AppPage/appVotes';
+import { usePendingVoteFor } from '../AppPage/optimisticRatings';
 import { RATING_GRACE_MS } from '../AppsLibrary/libraryLayout';
 import {
   formatLibraryNumber,
@@ -22,7 +24,8 @@ interface LibraryRatingSummaryProps {
 
 /**
  * An app's rating, to read only. Voting is on the app's page: on a card a
- * star click would also open that page.
+ * star click would also open that page. A vote the account just sent there
+ * is counted at once, before its block.
  */
 export const LibraryRatingSummary = ({
   name,
@@ -33,7 +36,11 @@ export const LibraryRatingSummary = ({
   const { t, i18n } = useTranslation(['core']);
   const reduce = usePrefersReducedMotion();
   // The ref lets the rating load once the card scrolls into view.
-  const { rating, containerRef } = useAppRating(name, service);
+  const { rating: storedRating, containerRef } = useAppRating(name, service);
+  const pendingVote = usePendingVoteFor(name, service);
+  const rating = pendingVote
+    ? ratingWithPendingVote(storedRating, pendingVote)
+    : storedRating;
   const votes = rating?.totalVotes ?? 0;
   const isMissing = !rating;
   // A placeholder only for a short while: a rating that has not come by then

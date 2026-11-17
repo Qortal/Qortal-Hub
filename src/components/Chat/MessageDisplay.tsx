@@ -11,6 +11,7 @@ import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { ReticulumUserCard } from './ReticulumUserCard';
 import type { ReticulumUserCardData } from './ReticulumUserCard';
 import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
+import { openAppPageLink } from '../Apps/AppPage/appPageLink';
 
 const stripTrailingQortalLinkPunctuation = (value: string) =>
   value.replace(/[),.;!?]+$/g, '');
@@ -635,6 +636,8 @@ export const MessageDisplay = ({
       openHttpUrlExternally(target.getAttribute('href'));
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
+
+      if (openAppPageLink(url)) return;
 
       try {
         if (await openQortalUseGroupLink(url)) return;
