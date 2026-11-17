@@ -127,7 +127,11 @@ import {
   QORTINO_DONATION_THANK_YOU_MESSAGE,
 } from './qortinoDonationEasterEgg';
 import { hasRequiredQortinoOnboardingBalance } from './qortinoOnboarding';
-import { HOME_WORKSPACE_COPY_LIMIT } from './HomeDesktop/homeLayout';
+import {
+  HOME_WORKSPACE_COPY_LIMIT,
+  noteQortinoWorkspaceSettings,
+  QORTINO_WORKSPACE_SETTINGS_KEY,
+} from './HomeDesktop/homeLayout';
 import { HotkeyAppAvatar, QortinoWorkspaceApps } from './QortinoWorkspaceApps';
 import { QortinoFitBox } from './QortinoFitBox';
 import { QortinoVideoPlayer } from './QortinoVideoPlayer';
@@ -145,7 +149,7 @@ import { namesOwnResources } from '../Apps/libraryResources';
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
 const AVATAR_IDENTIFIER = 'qortal_avatar';
-export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
+export { QORTINO_WORKSPACE_SETTINGS_KEY };
 const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
 const ONBOARDING_RECOGNITION_DURATION_MS = 2600;
@@ -623,6 +627,29 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
   };
 };
 
+/**
+ * The state without what the copies taken off Home held (`signature` has the
+ * keys of the Workspace windows still there, one a line): the music stops if
+ * the player was in one of them. The same state back when none is gone.
+ */
+const withoutWorkspaceWindowsGone = (
+  state: WorkspaceState,
+  signature: string
+): WorkspaceState => {
+  const kept = new Set(signature.split('\n'));
+  const gone = Object.keys(state.windows ?? {}).filter((key) => !kept.has(key));
+  if (gone.length === 0) return state;
+  const musicKey = musicWorkspaceKeyOf(state);
+  const windows = { ...state.windows };
+  gone.forEach((key) => delete windows[key]);
+  return sanitizeWorkspaceState({
+    ...state,
+    musicPlaying:
+      musicKey !== null && gone.includes(musicKey) ? false : state.musicPlaying,
+    windows,
+  });
+};
+
 const openExternalUrl = (url: string) => {
   openHttpUrlExternally(url);
 };
@@ -667,6 +694,7 @@ const persistWorkspaceState = async (
 
   try {
     if (typeof window.sendMessage !== 'function') return;
+    noteQortinoWorkspaceSettings(userAddress, nextState);
     await window.sendMessage('addUserSettings', {
       keyValue: {
         key: QORTINO_WORKSPACE_SETTINGS_KEY,
@@ -686,9 +714,12 @@ const loadWorkspaceState = async (
       const stored = await window.sendMessage('getUserSettings', {
         key: QORTINO_WORKSPACE_SETTINGS_KEY,
       });
+      const held =
+        stored && !(stored as { error?: unknown }).error ? stored : null;
+      noteQortinoWorkspaceSettings(userAddress, held);
 
-      if (stored && !stored.error) {
-        return sanitizeWorkspaceState(stored);
+      if (held) {
+        return sanitizeWorkspaceState(held);
       }
     }
   } catch {
@@ -826,7 +857,16 @@ const EMPTY_MUSIC_TRACK_BASE: MusicTrack = {
 };
 
 export const QortinoMusicPlaybackController = memo(
-  function QortinoMusicPlaybackController() {
+  function QortinoMusicPlaybackController({
+    workspaceKeys,
+  }: {
+    /**
+     * The keys of every Workspace window on Home ('' for the first one). What
+     * a copy left out held is let go of, as the card does. Left out: nothing
+     * is let go.
+     */
+    workspaceKeys?: readonly string[];
+  }) {
     const userInfo = useAtomValue(userInfoAtom);
     const userAddress = userInfo?.address;
     const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
@@ -884,6 +924,15 @@ export const QortinoMusicPlaybackController = memo(
       void persistWorkspaceState(workspaceState, userAddress);
       emitSharedEarbumpActivity(isMusicOn && workspaceState.musicPlaying);
     }, [userAddress, workspaceHydrated, workspaceState]);
+
+    // A copy of the Workspace taken off Home while its card doesn't show.
+    const workspaceKeysSignature = workspaceKeys?.join('\n');
+    useEffect(() => {
+      if (!workspaceHydrated || workspaceKeysSignature === undefined) return;
+      setWorkspaceState((current) =>
+        withoutWorkspaceWindowsGone(current, workspaceKeysSignature)
+      );
+    }, [workspaceHydrated, workspaceKeysSignature]);
 
     useEffect(() => {
       if (!selectedTrackSnapshot?.id) return;
@@ -2527,24 +2576,9 @@ export const HomeQortinoWorkspaceCard = ({
     .join('\n');
   useEffect(() => {
     if (!workspaceHydrated || workspaceKeysSignature === undefined) return;
-    const kept = new Set(workspaceKeysSignature.split('\n'));
-    setWorkspaceState((current) => {
-      const gone = Object.keys(current.windows ?? {}).filter(
-        (key) => !kept.has(key)
-      );
-      if (gone.length === 0) return current;
-      const musicKey = musicWorkspaceKeyOf(current);
-      const windows = { ...current.windows };
-      gone.forEach((key) => delete windows[key]);
-      return sanitizeWorkspaceState({
-        ...current,
-        musicPlaying:
-          musicKey !== null && gone.includes(musicKey)
-            ? false
-            : current.musicPlaying,
-        windows,
-      });
-    });
+    setWorkspaceState((current) =>
+      withoutWorkspaceWindowsGone(current, workspaceKeysSignature)
+    );
   }, [workspaceHydrated, workspaceKeysSignature]);
 
   useEffect(() => {

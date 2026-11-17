@@ -6,12 +6,21 @@ import {
   type SidePanelSettings,
   withSidePanelQdnItem,
 } from '../Desktop/sidePanel';
-import { homeWidgetWindowId } from '../Group/HomeDesktop/homeGrid';
 import {
+  homeDefaultGrid,
+  type HomeWindowId,
+  homeWidgetWindowId,
+  homeWorkspaceCopyId,
+} from '../Group/HomeDesktop/homeGrid';
+import {
+  HOME_LAYOUT_DEFAULT,
+  type HomeLayout,
+  homeLayoutGrid,
   homeLayoutStorageKey,
   readHomeLayout,
   saveHomeLayout,
   withHomeWidgetWindow,
+  withHomeWorkspaceCopy,
 } from '../Group/HomeDesktop/homeLayout';
 import {
   chooseSavedPartUse,
@@ -417,5 +426,172 @@ describe('hasUnsavedLayouts', () => {
     expect(hasUnsavedLayouts(none, ALICE, readLocalLayouts(ALICE))).toBe(false);
     saveSidePanel(ALICE, { ...SIDE_PANEL_DEFAULT, show: 'always' });
     expect(hasUnsavedLayouts(none, ALICE, readLocalLayouts(ALICE))).toBe(true);
+  });
+});
+
+describe("a Home layout taken in, and the Workspace's copies that hold something here", () => {
+  /** What the Workspaces hold on this device, where the Qortino card keeps it. */
+  const holdHere = (
+    windows: Record<string, { hotkeys: string[]; mode: string }>
+  ) =>
+    localStorage.setItem(
+      `home-qortino-workspace-v1_${ALICE}`,
+      JSON.stringify({ hotkeys: [], mode: 'empty', version: 1, windows })
+    );
+  const APPS = { hotkeys: ['APP::Q-Tube'], mode: 'hotkeys' };
+  const MUSIC = { hotkeys: [], mode: 'music' };
+  const NOTHING = { hotkeys: [], mode: 'empty' };
+
+  const withCopies = (
+    layout: HomeLayout,
+    keys: string[],
+    under: HomeWindowId
+  ) =>
+    keys.reduce((next, key) => withHomeWorkspaceCopy(next, under, key), layout);
+
+  /** This device's layout with copies made under `under`, saved to QDN from here. */
+  const savedHere = (keys: string[], under: HomeWindowId = 'workspace') => {
+    vi.spyOn(Date, 'now').mockReturnValue(100);
+    saveHomeLayout(ALICE, withCopies(HOME_LAYOUT_DEFAULT, keys, under));
+    markLayoutsSaved(ALICE, readLocalLayouts(ALICE), NO_SAVED_LAYOUTS);
+  };
+
+  const placeOf = (id: HomeWindowId) =>
+    homeLayoutGrid(readHomeLayout(ALICE)).find((item) => item.key === id);
+
+  /** A layout as a device with copies of the Workspace saves it. */
+  const savedLayout = (layout: HomeLayout, changedAt: number) => ({
+    homeLayout: { v: 1, layout, changedAt },
+  });
+
+  it('keeps them when a layout saved by a Hub without copies is taken in', () => {
+    savedHere(['k1']);
+    holdHere({ k1: APPS });
+
+    // Saved by a Hub without copies of the Workspace: no `workspaces`.
+    const state = takeInSavedLayouts(ALICE, savedSettings(['feed'], 200));
+
+    expect(state.offer).toEqual([]);
+    const layout = readHomeLayout(ALICE);
+    expect(layout.hidden).toEqual(['feed']);
+    expect(layout.workspaces).toEqual(['k1']);
+    // Qortino has its place there: the copy goes right under the Workspace,
+    // as big as it, as Duplicate puts it, and Qortino goes down.
+    const workspace = placeOf('workspace');
+    const copy = placeOf(homeWorkspaceCopyId('k1'));
+    expect(copy).toEqual({
+      key: 'workspace:k1',
+      x: workspace?.x,
+      y: (workspace?.y ?? 0) + (workspace?.h ?? 0),
+      w: workspace?.w,
+      h: workspace?.h,
+    });
+    expect(placeOf('qortino')?.y).toBe((copy?.y ?? 0) + (copy?.h ?? 0));
+
+    // It's no longer the saved layout: it goes with the next save, with a
+    // time of its own.
+    expect(hasUnsavedLayouts(state, ALICE, readLocalLayouts(ALICE))).toBe(true);
+    const fields = toSavedLayoutSettings(
+      readLocalLayouts(ALICE),
+      state.saved
+    ) as {
+      homeLayout: { changedAt: number; layout: HomeLayout };
+    };
+    expect(fields.homeLayout.layout.workspaces).toEqual(['k1']);
+    expect(fields.homeLayout.changedAt).toBeGreaterThan(200);
+
+    // Nothing was changed here since: a newer one still takes its place.
+    const next = takeInSavedLayouts(ALICE, savedSettings(['status'], 300));
+    expect(next.offer).toEqual([]);
+    expect(readHomeLayout(ALICE)).toEqual(
+      expect.objectContaining({ hidden: ['status'], workspaces: ['k1'] })
+    );
+  });
+
+  it("keeps one a newer device's layout doesn't list, where it was when that's free", () => {
+    // Moved to the bottom, under the feed.
+    savedHere(['k1'], 'feed');
+    holdHere({ k1: MUSIC });
+    const was = placeOf(homeWorkspaceCopyId('k1'));
+
+    takeInSavedLayouts(
+      ALICE,
+      savedLayout(
+        { ...HOME_LAYOUT_DEFAULT, grid: homeDefaultGrid(), hidden: ['status'] },
+        200
+      )
+    );
+
+    const layout = readHomeLayout(ALICE);
+    expect(layout.hidden).toEqual(['status']);
+    expect(layout.workspaces).toEqual(['k1']);
+    expect(placeOf(homeWorkspaceCopyId('k1'))).toEqual(was);
+  });
+
+  it('lets copies that hold nothing here go as the layout taken in says', () => {
+    savedHere(['k1', 'k2', 'k3']);
+    holdHere({ k1: APPS, k2: NOTHING });
+
+    takeInSavedLayouts(
+      ALICE,
+      savedLayout(withCopies(HOME_LAYOUT_DEFAULT, ['b1'], 'workspace'), 200)
+    );
+
+    expect(readHomeLayout(ALICE).workspaces).toEqual(['b1', 'k1']);
+    expect(
+      homeLayoutGrid(readHomeLayout(ALICE))
+        .map((item) => item.key)
+        .filter((key) => key.startsWith('workspace:'))
+    ).toEqual(['workspace:b1', 'workspace:k1']);
+  });
+
+  it('keeps the ones that hold something first, within the limit', () => {
+    savedHere(['r1', 'k1']);
+    holdHere({ k1: MUSIC, r1: APPS });
+    const theirs = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8'];
+
+    takeInSavedLayouts(
+      ALICE,
+      savedLayout(withCopies(HOME_LAYOUT_DEFAULT, theirs, 'workspace'), 200)
+    );
+
+    // The newest copy that holds nothing here makes room.
+    expect(readHomeLayout(ALICE).workspaces).toEqual([
+      'r1',
+      'r2',
+      'r3',
+      'r4',
+      'r5',
+      'r6',
+      'r7',
+      'k1',
+    ]);
+  });
+
+  /** A copy that holds apps, made here since the layout was last saved. */
+  const offered = () => {
+    vi.spyOn(Date, 'now').mockReturnValue(100);
+    saveHomeLayout(ALICE, withCopies(HOME_LAYOUT_DEFAULT, ['k1'], 'workspace'));
+    holdHere({ k1: APPS });
+    return takeInSavedLayouts(ALICE, savedSettings(['feed'], 70));
+  };
+
+  it('keeps them when the layout offered is restored', () => {
+    const state = offered();
+    expect(state.offer).toContain('homeLayout');
+
+    restoreSavedLayouts(ALICE, state, ['homeLayout']);
+
+    expect(readHomeLayout(ALICE)).toEqual(
+      expect.objectContaining({ hidden: ['feed'], workspaces: ['k1'] })
+    );
+  });
+
+  it('keeps them through Revert', () => {
+    revertToSavedLayouts(ALICE, offered());
+
+    expect(readHomeLayout(ALICE)).toEqual(
+      expect.objectContaining({ hidden: ['feed'], workspaces: ['k1'] })
+    );
   });
 });

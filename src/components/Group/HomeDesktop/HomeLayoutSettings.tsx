@@ -53,10 +53,12 @@ export const HomeLayoutSettings = ({
   const [layout, updateLayout] = useHomeLayout(address);
   const titles = useHomeWindowTitles();
   // Reset puts Home's own windows back; the widgets added in windows of
-  // their own stay, as the Widgets window's widgets do.
+  // their own stay, as the Widgets window's widgets do, and so do the
+  // Workspace's copies, with what they hold.
   const resetLayout = (current: HomeLayout): HomeLayout => ({
     ...HOME_LAYOUT_DEFAULT,
     ...(current.widgetWindows ? { widgetWindows: current.widgetWindows } : {}),
+    ...(current.workspaces ? { workspaces: current.workspaces } : {}),
   });
 
   const descriptions: Record<HomePanelId, string> = {

@@ -259,6 +259,30 @@ export const settleHomeGrid = (items: readonly HomeGridItem[]) =>
   settle(items, readingRank);
 
 /**
+ * The windows one on another, in reading order (ties keep the list's
+ * order): each lands on the lowest window placed before it in its columns,
+ * wherever that one ended up. So a window put among them makes the ones
+ * under it go down, and none of them passes another. `first` goes before
+ * every window that starts in its row, those further left too.
+ */
+const stackHomeGrid = (
+  items: readonly HomeGridItem[],
+  first?: HomeWindowId
+): HomeGridItem[] => {
+  const order = new Map(
+    items.map((item) => [
+      item.key,
+      readingRank(item.key === first ? { ...item, x: -1 } : item),
+    ])
+  );
+  // From the bottom of the grid, every window placed before it is above it.
+  return settle(
+    items.map((item) => ({ ...item, y: HOME_GRID_MAX_Y })),
+    (item) => order.get(item.key) ?? 0
+  );
+};
+
+/**
  * The default layout: today's three columns at the top (the Workspace over
  * Qortino over Quick Tools, the account card over Featured Q-Apps, Node
  * Status over Wallet Activity), then the stack in its order. Group Activity
@@ -518,40 +542,6 @@ export const homeGridForGettingStarted = (
   );
 };
 
-/**
- * A grid changed while Getting started showed (homeGridForGettingStarted),
- * as it is kept: Qortino back in its own rows, next to the Workspace's.
- * Moved or resized meanwhile, it keeps the change, less the Workspace's
- * rows.
- */
-export const homeGridAfterGettingStarted = (
-  changed: readonly HomeGridItem[],
-  stored: readonly HomeGridItem[]
-): HomeGridItem[] => {
-  const pair = workspaceAndQortino(stored);
-  if (!pair) return [...changed];
-  const { above, qortino, workspace } = pair;
-  const shown = homeGridForGettingStarted(stored).find(
-    (item) => item.key === 'qortino'
-  );
-  return changed.map((item) => {
-    if (item.key !== 'qortino' || !shown) return item;
-    if (
-      item.x === shown.x &&
-      item.y === shown.y &&
-      item.w === shown.w &&
-      item.h === shown.h
-    ) {
-      return qortino;
-    }
-    return {
-      ...item,
-      y: above ? item.y + workspace.h : item.y,
-      h: Math.max(homeWindowMinSize('qortino').h, item.h - workspace.h),
-    };
-  });
-};
-
 /** A changed layout of the shown windows, with the hidden ones kept. */
 export const mergeHomeGrid = (
   stored: readonly HomeGridItem[],
@@ -563,10 +553,18 @@ export const mergeHomeGrid = (
   ...shown.filter((item) => !stored.some((entry) => entry.key === item.key)),
 ];
 
+/** Whether no shown window of `grid` takes any of `rect`'s cells. */
+export const isHomeGridPlaceFree = (
+  grid: readonly HomeGridItem[],
+  rect: GridRect,
+  hidden: readonly HomeWindowId[] = []
+) => !grid.some((item) => !hidden.includes(item.key) && collides(item, rect));
+
 /**
  * `key` added right under `under`, as big as it (under everything, as big
  * as the Workspace, without it). The shown windows in its way go down to
- * make room, as for a resize; the `hidden` ones keep their places.
+ * make room, still one under the other (stackHomeGrid); the `hidden` ones
+ * keep their places.
  */
 export const homeGridWithWindowUnder = (
   grid: readonly HomeGridItem[],
@@ -586,7 +584,9 @@ export const homeGridWithWindowUnder = (
       ? { ...source, key, y: source.y + source.h }
       : { ...HOME_GRID_TOP.workspace, key, y: bottom }
   );
-  const placed = settleHomeGrid(settle([...shown, added], readingRank, key));
+  // Before the windows that start in its row: they go under it, so it
+  // stays right under the one it was added to.
+  const placed = stackHomeGrid([added, ...shown], key);
   return mergeHomeGrid(
     grid.filter((item) => item.key !== key),
     placed
