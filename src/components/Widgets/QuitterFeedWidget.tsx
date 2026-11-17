@@ -763,7 +763,7 @@ export const QuitterFeedWidget = ({
     }
 
     if (itemsRef.current.length === 0) {
-      setReloadToken((value) => value + 1);
+      handleRetryInitialFeed();
       return undefined;
     }
 

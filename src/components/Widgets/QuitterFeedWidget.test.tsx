@@ -260,7 +260,11 @@ describe('QuitterFeedWidget as the Torq feed', () => {
 
     expect(await screen.findByText('my new post')).toBeInTheDocument();
     expect(screen.getByText('Personalized feed')).toBeInTheDocument();
-    expect(followingAuthors().at(-1)).toEqual(['Viewer', 'Alice', 'Spammer']);
+    expect(followingAuthors().slice(-1)[0]).toEqual([
+      'Viewer',
+      'Alice',
+      'Spammer',
+    ]);
   });
 
   it('asks for Your posts once when You follow Yourself', async () => {
@@ -310,5 +314,31 @@ describe('QuitterFeedWidget as the Torq feed', () => {
         expect.objectContaining({ force: true })
       )
     );
+  });
+
+  describe('refreshing an empty feed', () => {
+    it('finds a first post made elsewhere at a manual refresh', async () => {
+      vi.mocked(fetchQuitterFollowedNames).mockResolvedValue([]);
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue({
+        hasMore: false,
+        items: [],
+        nextOffset: 0,
+      });
+      const view = renderWidget(makeStore());
+      await screen.findByText(
+        'Browse Torq and follow accounts to build your feed.'
+      );
+
+      // The account posts in Torq itself, then refreshes Home's feed.
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue({
+        hasMore: false,
+        items: [post('Viewer', 'elsewhere', 'posted from Torq')],
+        nextOffset: 0,
+      });
+      view.refresh(1);
+
+      expect(await screen.findByText('posted from Torq')).toBeInTheDocument();
+      expect(followingAuthors().slice(-1)[0]).toEqual(['Viewer']);
+    });
   });
 });
