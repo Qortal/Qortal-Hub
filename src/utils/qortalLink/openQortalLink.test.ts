@@ -134,6 +134,14 @@ describe('openQortalLink', () => {
     expect(events()).toEqual([]);
   });
 
+  it("says a group's link came from a Q-App or a widget, when it did", async () => {
+    const link = 'qortal://use-group/action-join/groupid-5';
+    expect(await openQortalLink(link, { fromApp: true })).toBe(true);
+    expect(openQortalUseGroupLink).toHaveBeenCalledWith(link, {
+      fromApp: true,
+    });
+  });
+
   it("says so when a group's link couldn't open", async () => {
     vi.mocked(openQortalUseGroupLink).mockRejectedValueOnce(new Error('no'));
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -146,6 +154,90 @@ describe('openQortalLink', () => {
     expect(await openQortalLink('just words')).toBe(false);
     expect(await openQortalLink('qortal://use-embed/POLL?name=x')).toBe(false);
     expect(events()).toEqual([]);
+  });
+});
+
+// A notification's link comes from the node, and a Q-App's from its request:
+// either can be something other than text.
+describe('openQortalLink, given a link that is not text', () => {
+  it('opens a link Hub has read, as it was read', async () => {
+    const link = parseQortalLink('qortal://APP/Q-Mail/inbox?identifier=box');
+    expect(await openQortalLink(link)).toBe(true);
+    expect(events()[0]).toEqual([
+      'addTab',
+      {
+        data: {
+          service: 'APP',
+          name: 'Q-Mail',
+          identifier: 'box',
+          path: 'inbox',
+        },
+      },
+    ]);
+  });
+
+  // The top bar and the launcher hand over the link they read.
+  it("opens an app's page and a group's link Hub has read", async () => {
+    const openPage = vi.fn();
+    const page = parseQortalLink('qortal://use-app-page/website/My%20Site');
+    expect(await openQortalLink(page, { openPage })).toBe(true);
+    expect(openPage).toHaveBeenCalledWith({
+      service: 'WEBSITE',
+      name: 'My Site',
+    });
+
+    const group = parseQortalLink('QORTAL://use-group/action-join/groupid-5');
+    expect(await openQortalLink(group)).toBe(true);
+    expect(openQortalUseGroupLink).toHaveBeenCalledWith(
+      'qortal://use-group/action-join/groupid-5'
+    );
+    expect(events()).toEqual([]);
+  });
+
+  it.each([
+    ['an empty object', {}],
+    ['a number', 5],
+    ['a Q-App or website with no link text', { kind: 'resource' }],
+    [
+      'a Q-App or website made up field by field',
+      { kind: 'resource', service: 'app', name: 7, path: '../x' },
+    ],
+    ["an app's page made up field by field", { kind: 'page', name: 'Q-Shop' }],
+    ["a group's link that is no group link", { kind: 'group', link: 'x' }],
+    [
+      'a link whose text is a list',
+      { kind: 'resource', link: ['qortal://APP/Q-Tube'] },
+    ],
+    [
+      'a link whose text cannot be read as text',
+      { kind: 'resource', link: { toString: 0 } },
+    ],
+  ])('opens nothing for %s', async (_what, input) => {
+    expect(await openQortalLink(input as never)).toBe(false);
+    expect(events()).toEqual([]);
+    expect(openQortalUseGroupLink).not.toHaveBeenCalled();
+  });
+
+  it('opens what the link text says, whatever the other fields say', async () => {
+    const forged = {
+      kind: 'resource',
+      link: 'qortal://APP/Q-Tube',
+      service: 'WEBSITE',
+      name: 'Another',
+      path: 'elsewhere',
+    };
+    expect(await openQortalLink(forged as never)).toBe(true);
+    expect(events()[0]).toEqual([
+      'addTab',
+      {
+        data: {
+          service: 'APP',
+          name: 'Q-Tube',
+          identifier: undefined,
+          path: '',
+        },
+      },
+    ]);
   });
 });
 

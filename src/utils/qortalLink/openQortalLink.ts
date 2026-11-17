@@ -15,8 +15,10 @@ import {
  *
  * Nothing a link opens acts by itself. A Q-App or website, or an app's page,
  * only shows; a group's link opens the group for its members, and for anyone
- * else a window that asks before joining and shows the fee. That holds for
- * links a Q-App opens too (OPEN_NEW_TAB): keep it so for any kind added here.
+ * else a window that asks before joining and shows the fee. A group's link a
+ * Q-App opens (OPEN_NEW_TAB, `fromApp`) only opens that window, for members
+ * too, and never one in place of a window that is open. Keep it so for any
+ * kind added here.
  */
 
 export type OpenQortalLinkOptions = {
@@ -26,6 +28,11 @@ export type OpenQortalLinkOptions = {
   openPage?: (page: { service: string; name: string }) => void;
   /** An app that is open already shows the link's page in its tab. */
   navigateIfAlreadyOpen?: boolean;
+  /**
+   * Opened at a Q-App's or a Home widget's request (OPEN_NEW_TAB), not by the
+   * user: a group's link then only opens the group's join window.
+   */
+  fromApp?: boolean;
 };
 
 /** A Q-App or website in a tab of its own, as Hub opens one from a link. */
@@ -55,8 +62,10 @@ export async function openQortalLink(
   input: string | QortalLink | null | undefined,
   options: OpenQortalLinkOptions = {}
 ): Promise<boolean> {
-  const link: QortalLink | null =
-    typeof input === 'string' ? parseQortalLink(input) : input || null;
+  // A link read before is read again from its text, so only what the parser
+  // reads opens, whatever else was passed in (a Q-App's request, a node's
+  // notification).
+  const link = parseQortalLink(typeof input === 'string' ? input : input?.link);
   if (!link) return false;
 
   if (link.kind === 'page') {
@@ -69,6 +78,9 @@ export async function openQortalLink(
 
   if (link.kind === 'group') {
     try {
+      if (options.fromApp) {
+        return await openQortalUseGroupLink(link.link, { fromApp: true });
+      }
       return await openQortalUseGroupLink(link.link);
     } catch (error) {
       console.error('Could not open the group link', error);

@@ -6313,10 +6313,14 @@ export const openNewTab = async (data, isFromExtension) => {
 
   // Every kind of qortal:// link: a Q-App or website, an app's page, or a
   // group's link. Nothing it opens acts without asking (openQortalLink.ts).
+  // The link is text: anything else a Q-App sends is no link. A Q-App's or
+  // widget's group link only opens the join window, if none is open.
   if (
-    await openQortalLink(data.qortalLink, {
+    typeof data.qortalLink === 'string' &&
+    (await openQortalLink(data.qortalLink, {
       navigateIfAlreadyOpen: !!data.navigateIfAlreadyOpen,
-    })
+      fromApp: true,
+    }))
   ) {
     return true;
   }

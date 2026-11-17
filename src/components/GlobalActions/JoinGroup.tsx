@@ -6,6 +6,7 @@ import {
 } from '../../utils/events';
 import {
   Box,
+  Button,
   ButtonBase,
   CircularProgress,
   Dialog,
@@ -19,8 +20,9 @@ import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import { appLockedAtom } from '../../atoms/presence';
 import { useTranslation } from 'react-i18next';
 
 export const JoinGroup = () => {
@@ -30,40 +32,100 @@ export const JoinGroup = () => {
   // Read when a join link opens, after the listener was set up.
   const memberGroupsRef = useRef(memberGroups);
   memberGroupsRef.current = memberGroups;
+  const isAppLocked = useAtomValue(appLockedAtom);
+  const isAppLockedRef = useRef(isAppLocked);
+  isAppLockedRef.current = isAppLocked;
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
+  // Set only for a group the node knows: Join waits for it.
   const [groupInfo, setGroupInfo] = useState(null);
+  // 'failed' when the node couldn't be read, 'missing' when it doesn't know
+  // the group.
+  const [loadError, setLoadError] = useState<'failed' | 'missing' | null>(null);
+  // The group the window reads, read again by Retry.
+  const shownGroupIdRef = useRef(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  // Read when a link opens, before the window has drawn.
+  const isOpenRef = useRef(false);
+  // Only the latest request's answer is shown; closing drops it.
+  const requestRef = useRef(0);
+  // The join whose fee confirmation is up, if any.
+  const confirmingRef = useRef<object | null>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
+  // Another Hub dialog is open, such as a fee confirmation of a join started
+  // elsewhere or a Q-App's request.
+  const isOtherDialogOpen = () =>
+    Array.from(
+      document.querySelectorAll('.MuiDialog-root:not(.MuiModal-hidden)')
+    ).some((dialog) => dialog !== windowRef.current);
+  const showWindow = (open: boolean) => {
+    isOpenRef.current = open;
+    if (!open) {
+      requestRef.current += 1;
+      setIsLoadingInfo(false);
+    }
+    setIsOpen(open);
+  };
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group', 'question']);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
 
   const handleJoinGroup = async (e) => {
     const groupId = e?.detail?.groupId;
+    // A Q-App's or widget's link only opens this window, for members too,
+    // never changes the group of a window that is open or of a join being
+    // confirmed, and never opens over another Hub dialog or while Hub is
+    // locked.
+    const fromApp = !!e?.detail?.fromApp;
+    if (
+      fromApp &&
+      (!groupId ||
+        isAppLockedRef.current ||
+        isOpenRef.current ||
+        confirmingRef.current ||
+        isOtherDialogOpen())
+    )
+      return;
     // A member opening the group's link goes to the group: there is nothing
     // to join.
     if (
+      !fromApp &&
       groupId &&
       memberGroupsRef.current?.some((group) => +group?.groupId === +groupId)
     ) {
       executeEvent('openGroupMessage', { from: String(groupId) });
       return;
     }
+    if (fromApp) e.detail.opened = true;
     setGroupInfo(null);
     if (groupId) {
-      try {
-        setIsOpen(true);
-        setIsLoadingInfo(true);
-        const response = await fetch(`${getBaseApiReact()}/groups/${groupId}`);
-        const groupData = await response.json();
-        setGroupInfo(groupData);
-      } catch (error) {
-        console.log(error);
-      } finally {
-        setIsLoadingInfo(false);
-      }
+      showWindow(true);
+      await loadGroup(groupId);
     }
+  };
+
+  const loadGroup = async (groupId) => {
+    const request = ++requestRef.current;
+    shownGroupIdRef.current = groupId;
+    setGroupInfo(null);
+    setLoadError(null);
+    setIsLoadingInfo(true);
+    let group = null;
+    let error: 'failed' | 'missing' | null = null;
+    try {
+      const response = await fetch(`${getBaseApiReact()}/groups/${groupId}`);
+      const groupData = response.ok ? await response.json() : null;
+      if (typeof groupData?.groupId === 'number') group = groupData;
+      else error = response.status === 404 ? 'missing' : 'failed';
+    } catch (err) {
+      console.log(err);
+      error = 'failed';
+    }
+    if (request !== requestRef.current) return;
+    setGroupInfo(group);
+    setLoadError(error);
+    setIsLoadingInfo(false);
   };
 
   useEffect(() => {
@@ -81,8 +143,13 @@ export const JoinGroup = () => {
   }, [memberGroups, groupInfo]);
 
   const joinGroup = async (group, isOpen) => {
+    const confirming = {};
+    const confirmed = () => {
+      if (confirmingRef.current === confirming) confirmingRef.current = null;
+    };
     try {
       const groupId = group.groupId;
+      confirmingRef.current = confirming;
       const fee = await getFee('JOIN_GROUP');
 
       await show({
@@ -92,6 +159,7 @@ export const JoinGroup = () => {
         }),
         publishFee: fee.fee + ' QORT',
       });
+      confirmed();
 
       setIsLoadingJoinGroup(true);
 
@@ -175,6 +243,7 @@ export const JoinGroup = () => {
     } catch (error) {
       console.log(error);
     } finally {
+      confirmed();
       setIsLoadingJoinGroup(false);
     }
   };
@@ -182,12 +251,13 @@ export const JoinGroup = () => {
   return (
     <>
       <Dialog
+        ref={windowRef}
         open={isOpen}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
         <DialogContent>
-          {!groupInfo && (
+          {!groupInfo && !loadError && (
             <Box
               sx={{
                 alignItems: 'center',
@@ -203,6 +273,40 @@ export const JoinGroup = () => {
                   color: theme.palette.text.primary,
                 }}
               />
+            </Box>
+          )}
+          {loadError && (
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                justifyContent: 'center',
+                minHeight: '150px',
+                width: '325px',
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                }}
+              >
+                {loadError === 'missing'
+                  ? t('question:message.error.no_group_found', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('group:message.error.group_info', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+              </Typography>
+              {loadError === 'failed' && (
+                <Button onClick={() => loadGroup(shownGroupIdRef.current)}>
+                  {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+                </Button>
+              )}
             </Box>
           )}
           <Box
@@ -281,9 +385,9 @@ export const JoinGroup = () => {
             onClick={() => {
               joinGroup(groupInfo, groupInfo?.isOpen);
 
-              setIsOpen(false);
+              showWindow(false);
             }}
-            disabled={isInGroup}
+            disabled={isInGroup || !groupInfo}
           >
             <CustomButtonAccept
               customColor="black"
@@ -292,7 +396,7 @@ export const JoinGroup = () => {
                 minWidth: '102px',
                 height: '45px',
                 fontSize: '16px',
-                opacity: isInGroup ? 0.1 : 1,
+                opacity: isInGroup || !groupInfo ? 0.1 : 1,
               }}
             >
               {t('core:action.join', {
@@ -308,7 +412,7 @@ export const JoinGroup = () => {
               minWidth: '102px',
               height: '45px',
             }}
-            onClick={() => setIsOpen(false)}
+            onClick={() => showWindow(false)}
           >
             {t('core:action.close', {
               postProcess: 'capitalizeFirstChar',

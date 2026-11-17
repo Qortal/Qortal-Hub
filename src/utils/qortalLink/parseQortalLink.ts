@@ -96,7 +96,8 @@ export type QortalLink =
 export const parseQortalLink = (
   input: string | null | undefined
 ): QortalLink | null => {
-  const text = String(input ?? '').trim();
+  // Only text is read: a list or an object is no link.
+  const text = typeof input === 'string' ? input.trim() : '';
   if (!QORTAL_LINK_PATTERN.test(text)) return null;
   const link = QORTAL_PROTOCOL + text.replace(QORTAL_LINK_PATTERN, '');
 
