@@ -260,6 +260,7 @@
       "page_unreadable": "sinu sõlm ei saanud rakenduse praegust lehte lugeda, seega selle versiooni, „Mis on uut” teksti ja ekraanipilte selle uuendusega ei avaldata. Saad neid hiljem rakenduse lehel muuta.",
       "shots_change": "muuda ekraanipilte",
       "shots_change_hint": "Alusta praegustest: eemalda neid, järjesta need ümber või lisa pildiallkirjad ning lisa uusi.",
+      "shots_failed": "rakendus ja selle lehe tekst avaldati, kuid selle ekraanipilte ei õnnestunud uuendada: {{error}}",
       "shots_keep_one": "säilita praegune ekraanipilt",
       "shots_keep_other": "säilita praegused {{count}} ekraanipilti",
       "shots_none": "ilma ekraanipiltideta",

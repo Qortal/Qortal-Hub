@@ -260,6 +260,7 @@
       "page_unreadable": "seu nó não conseguiu ler a página atual do app, então a versão, as novidades e as capturas de tela não são publicadas com esta atualização. Você pode alterá-las depois na página do app.",
       "shots_change": "alterar as capturas de tela",
       "shots_change_hint": "Comece pelas atuais: remova, reordene ou adicione legendas a elas, e inclua novas.",
+      "shots_failed": "o app e o texto da página dele foram publicados, mas não foi possível atualizar as capturas de tela: {{error}}",
       "shots_keep_one": "manter a captura de tela atual",
       "shots_keep_other": "manter as {{count}} capturas de tela atuais",
       "shots_none": "sem capturas de tela",

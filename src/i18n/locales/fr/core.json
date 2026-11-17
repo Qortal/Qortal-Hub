@@ -260,6 +260,7 @@
       "page_unreadable": "votre nœud n’a pas pu lire la page actuelle de l’app : sa version, ses nouveautés et ses captures d’écran ne sont donc pas publiées avec cette mise à jour. Vous pourrez les modifier plus tard sur la page de l’app.",
       "shots_change": "modifier les captures d’écran",
       "shots_change_hint": "Partez des captures actuelles : retirez-les, changez leur ordre ou ajoutez-leur une légende, et ajoutez-en de nouvelles.",
+      "shots_failed": "l’app et le texte de sa page ont été publiés, mais ses captures d’écran n’ont pas pu être mises à jour : {{error}}",
       "shots_keep_one": "garder la capture d’écran actuelle",
       "shots_keep_other": "garder les {{count}} captures d’écran actuelles",
       "shots_none": "aucune capture d’écran",

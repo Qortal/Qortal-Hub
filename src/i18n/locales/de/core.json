@@ -260,6 +260,7 @@
       "page_unreadable": "Ihr Knoten konnte die aktuelle Seite der App nicht lesen. Version, Neuerungen und Screenshots werden daher mit diesem Update nicht veröffentlicht. Sie können sie später auf der Seite der App ändern.",
       "shots_change": "Screenshots ändern",
       "shots_change_hint": "Ausgehend von den aktuellen: Sie können sie entfernen, umsortieren oder mit Bildunterschriften versehen und neue hinzufügen.",
+      "shots_failed": "die App und ihr Seitentext wurden veröffentlicht, aber ihre Screenshots konnten nicht aktualisiert werden: {{error}}",
       "shots_keep_one": "den aktuellen Screenshot behalten",
       "shots_keep_other": "die aktuellen {{count}} Screenshots behalten",
       "shots_none": "keine Screenshots",
