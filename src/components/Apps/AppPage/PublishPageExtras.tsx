@@ -62,6 +62,18 @@ const isKnown = (load: PartLoad) => load === 'loaded' || load === 'missing';
 export interface PublishExtras {
   shots: ShotDraft[] | null;
   page: AppPageData | null;
+  /** The form read the app's page when it opened (not: the node had none). */
+  pageWasRead?: boolean;
+}
+
+/** A part of the app's page, as the form tells its input apart. */
+export type PagePart = 'page' | 'shots';
+
+/** The page parts that didn't go out, as prepare() gave them, and why. */
+export interface PartsLeft {
+  extras: PublishExtras;
+  /** The page text's error when it failed, else the screenshots'. */
+  error: unknown;
 }
 
 export interface PublishExtrasHandle {
@@ -99,55 +111,67 @@ export const screenshotsToPublish = (
 };
 
 /**
- * The page as the node has it now; null when it lists none or can't say.
- * Throws when it lists one it can't read: publishing would replace that one.
+ * The page as the node has it now; null when it lists none. Throws
+ * PAGE_UNVERIFIED when the node can't say what the page has: its search
+ * fails, it lists a page it can't read, or it lists none although the form
+ * read one. The form's copy would then replace About and links saved since.
  */
-const readCurrentPage = async (app: { service: string; name: string }) => {
+const readCurrentPage = async (
+  app: { service: string; name: string },
+  formReadOne: boolean
+) => {
   const base = getBaseApiReact();
-  const listed = await findAppPageResources(base, app).then(
-    (resources) => !!resources.page,
-    () => false
-  );
-  if (!listed) return null;
+  const resources = await findAppPageResources(base, app).catch(() => null);
+  if (!resources) throw new AppPageError('PAGE_UNVERIFIED');
+  if (!resources.page) {
+    if (formReadOne) throw new AppPageError('PAGE_UNVERIFIED');
+    return null;
+  }
   const page = await fetchAppPage(base, app).catch(() => null);
-  if (!page) throw new AppPageError('PAGE_UNREADABLE');
+  if (!page) throw new AppPageError('PAGE_UNVERIFIED');
   return page;
 };
 
 /**
  * Publishes the page parts after the app. `appSignature` is the app's new
- * signature, so the version and What's new describe this upload. When the
- * screenshots fail after the page text went out, the error has
- * `part: 'screenshots'`.
+ * signature, so the version and What's new describe this upload. Each part
+ * goes out on its own; the ones that failed come back, so they can be tried
+ * again without the app. Null when every part went out.
  */
 export const publishPageExtras = async (
   app: { service: string; name: string },
   extras: PublishExtras | null,
   appSignature: string
-) => {
-  if (!extras) return;
+): Promise<PartsLeft | null> => {
+  if (!extras) return null;
+  const left: PublishExtras = { ...extras, page: null, shots: null };
+  let error: unknown = null;
   if (extras.page) {
-    // About and links saved since the form read the page (on the app's page,
-    // or on another device) stay: only the version and What's new are new.
-    const current = await readCurrentPage(app);
-    await publishAppPage(app, {
-      ...(current || extras.page),
-      version: extras.page.version,
-      whatsNew: extras.page.whatsNew,
-      appSignature,
-    });
+    try {
+      // About and links saved since the form read the page (on the app's
+      // page, or on another device) stay: only the version and What's new are
+      // new.
+      const current = await readCurrentPage(app, !!extras.pageWasRead);
+      await publishAppPage(app, {
+        ...(current || extras.page),
+        version: extras.page.version,
+        whatsNew: extras.page.whatsNew,
+        appSignature,
+      });
+    } catch (cause) {
+      left.page = extras.page;
+      error = cause;
+    }
   }
   if (extras.shots) {
     try {
       await publishAppShots(app, await uploadsFromDrafts(extras.shots));
-    } catch (error) {
-      // The page text went out: say it was the screenshots that failed.
-      if (extras.page && error && typeof error === 'object') {
-        (error as { part?: string }).part = 'screenshots';
-      }
-      throw error;
+    } catch (cause) {
+      left.shots = extras.shots;
+      if (!left.page) error = cause;
     }
   }
+  return left.page || left.shots ? { extras: left, error } : null;
 };
 
 export const PublishPageExtras = forwardRef<
@@ -158,8 +182,8 @@ export const PublishPageExtras = forwardRef<
     file: Blob | null;
     /** Inside a form section that shows the title itself. */
     bare?: boolean;
-    /** Told when the user changes something here (not when it loads). */
-    onInput?: () => void;
+    /** Told when the user changes a part here (not when it loads). */
+    onInput?: (part: PagePart) => void;
     onSummaryChange?: (summary: ExtrasSummary) => void;
   }
 >(({ service, name, file, bare = false, onInput, onSummaryChange }, ref) => {
@@ -297,6 +321,7 @@ export const PublishPageExtras = forwardRef<
         ? screenshotsToPublish(shots, existingShots, mode)
         : null,
       page: pageExtras(),
+      pageWasRead: pageLoad === 'loaded',
     }),
   }));
 
@@ -350,11 +375,11 @@ export const PublishPageExtras = forwardRef<
   summaryRef.current = onSummaryChange;
   // What the user changes, as against what was read from the node.
   const changeShots = (next: ShotDraft[]) => {
-    onInput?.();
+    onInput?.('shots');
     setShots(next);
   };
   const changeVersion = (next: string) => {
-    onInput?.();
+    onInput?.('page');
     setVersion(next);
   };
   useEffect(() => {
@@ -472,7 +497,7 @@ export const PublishPageExtras = forwardRef<
         <RadioGroup
           aria-labelledby={shotsTitleId}
           onChange={(event) => {
-            onInput?.();
+            onInput?.('shots');
             setMode(event.target.value as ShotsMode);
           }}
           value={mode}
@@ -611,7 +636,7 @@ export const PublishPageExtras = forwardRef<
         minRows={2}
         multiline
         onChange={(event) => {
-          onInput?.();
+          onInput?.('page');
           setWhatsNew(event.target.value.slice(0, APP_PAGE_LIMITS.whatsNew));
         }}
         placeholder={t('core:app_page.publish.whats_new_placeholder', {

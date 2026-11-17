@@ -168,7 +168,7 @@ describe('the page part of the publish form', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     await settled();
     const extras = ref.current!.prepare();
-    expect(extras).toEqual({ shots: null, page: null });
+    expect(extras).toEqual({ shots: null, page: null, pageWasRead: false });
     expect(extrasPartCount(extras)).toBe(0);
   });
 
@@ -207,7 +207,11 @@ describe('the page part of the publish form', () => {
     expect(
       screen.getByRole('button', { name: 'app_page.screenshots.take' })
     ).toBeEnabled();
-    expect(ref.current!.prepare()).toEqual({ shots: null, page: null });
+    expect(ref.current!.prepare()).toEqual({
+      shots: null,
+      page: null,
+      pageWasRead: false,
+    });
     await act(async () => undefined);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(qappGuestShot).not.toHaveBeenCalled();
@@ -257,7 +261,11 @@ describe('the page part of the publish form', () => {
     fireEvent.click(
       await screen.findByRole('radio', { name: /app_page.publish.shots_none/ })
     );
-    expect(ref.current!.prepare()).toEqual({ shots: [], page: null });
+    expect(ref.current!.prepare()).toEqual({
+      shots: [],
+      page: null,
+      pageWasRead: false,
+    });
   });
 
   it('changes the current screenshots, starting from them', async () => {
@@ -319,7 +327,7 @@ describe('the page part of the publish form', () => {
     nodeWith(null, null);
     const send = vi.fn().mockResolvedValue({});
     window.sendMessage = send;
-    await publishPageExtras(
+    const left = await publishPageExtras(
       { service: 'APP', name: 'MyApp' },
       {
         page: {
@@ -346,6 +354,8 @@ describe('the page part of the publish form', () => {
       'IMAGE',
     ]);
     expect(JSON.parse(atob(send.mock.calls[0][1].data)).appSignature).toBe(SIG);
+    // Nothing is left to publish again.
+    expect(left).toBeNull();
   });
 });
 
@@ -360,7 +370,11 @@ describe('the current page, while it loads or when it cannot be read', () => {
     expect(version).toBeDisabled();
     // Even with a version typed in some other way, nothing goes out yet.
     fireEvent.change(version, { target: { value: '2.0' } });
-    expect(ref.current!.prepare()).toEqual({ shots: null, page: null });
+    expect(ref.current!.prepare()).toEqual({
+      shots: null,
+      page: null,
+      pageWasRead: false,
+    });
   });
 
   it("won't publish over a page the node lists but couldn't read", async () => {
@@ -372,7 +386,11 @@ describe('the current page, while it loads or when it cannot be read', () => {
       await screen.findByText('app_page.publish.page_unreadable')
     ).toBeInTheDocument();
     expect(screen.getByLabelText('app_page.details.version')).toBeDisabled();
-    expect(ref.current!.prepare()).toEqual({ shots: null, page: null });
+    expect(ref.current!.prepare()).toEqual({
+      shots: null,
+      page: null,
+      pageWasRead: false,
+    });
   });
 
   it('keeps About and links once the page has loaded', async () => {
@@ -391,6 +409,8 @@ describe('the current page, while it loads or when it cannot be read', () => {
       links: { website: 'https://my.app/' },
       version: '2.0',
     });
+    // So the page is published only over one the node still has.
+    expect(ref.current!.prepare().pageWasRead).toBe(true);
   });
 
   it('holds new screenshots back until the current ones have loaded', async () => {
@@ -607,24 +627,63 @@ describe('publishing the page text over the page the node has now', () => {
     });
   });
 
-  it("goes with the form's copy when the node doesn't answer now", async () => {
+  const shot = {
+    id: 'a',
+    url: 'blob:a',
+    caption: 'One',
+    blob: new Blob([new Uint8Array([1, 2])]),
+  };
+  const services = (send: ReturnType<typeof vi.fn>) =>
+    send.mock.calls.map((call) => call[1].service);
+
+  it("publishes no page text when the node can't say what the page has now", async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
     const send = vi.fn().mockResolvedValue({});
     window.sendMessage = send;
-    await publishPageExtras(
+    const left = await publishPageExtras(
       { service: 'APP', name: 'MyApp' },
-      { page: fromForm, shots: null },
+      { page: fromForm, shots: null, pageWasRead: true },
       SIG
     );
-    expect(publishedPage(send)).toMatchObject({
-      about: 'Story',
-      links: { website: 'https://my.app/' },
-      version: '2.0',
-      whatsNew: 'Faster',
+    // The form's copy would replace About and links saved since it read them.
+    expect(send).not.toHaveBeenCalled();
+    expect(left).toMatchObject({
+      extras: { page: fromForm, shots: null },
+      error: { code: 'PAGE_UNVERIFIED' },
     });
   });
 
-  it("does not go over a page the node lists but can't read now", async () => {
+  it('publishes no page text when the node lists none, though the form read one', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json([]));
+    const send = vi.fn().mockResolvedValue({});
+    window.sendMessage = send;
+    const left = await publishPageExtras(
+      { service: 'APP', name: 'MyApp' },
+      { page: fromForm, shots: null, pageWasRead: true },
+      SIG
+    );
+    expect(send).not.toHaveBeenCalled();
+    expect(left?.error).toMatchObject({ code: 'PAGE_UNVERIFIED' });
+  });
+
+  it('publishes the first page of an app that still has none', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json([]));
+    const send = vi.fn().mockResolvedValue({});
+    window.sendMessage = send;
+    const left = await publishPageExtras(
+      { service: 'APP', name: 'MyApp' },
+      { page: { ...fromForm, about: '', links: {} }, shots: null },
+      SIG
+    );
+    expect(left).toBeNull();
+    expect(publishedPage(send)).toMatchObject({
+      version: '2.0',
+      whatsNew: 'Faster',
+      appSignature: SIG,
+    });
+  });
+
+  it("still publishes the screenshots over a page it can't read now", async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('identifier=qhub_app_')) return json(LISTED_PAGE);
@@ -634,24 +693,33 @@ describe('publishing the page text over the page the node has now', () => {
     });
     const send = vi.fn().mockResolvedValue({});
     window.sendMessage = send;
-    await expect(
-      publishPageExtras(
-        { service: 'APP', name: 'MyApp' },
-        {
-          page: fromForm,
-          shots: [
-            {
-              id: 'a',
-              url: 'blob:a',
-              caption: 'One',
-              blob: new Blob([new Uint8Array([1, 2])]),
-            },
-          ],
-        },
-        SIG
-      )
-    ).rejects.toMatchObject({ code: 'PAGE_UNREADABLE' });
-    expect(send).not.toHaveBeenCalled();
+    const left = await publishPageExtras(
+      { service: 'APP', name: 'MyApp' },
+      { page: fromForm, shots: [shot], pageWasRead: true },
+      SIG
+    );
+    // The page the node lists is left as it is; the screenshots don't need it.
+    expect(services(send)).toEqual(['IMAGE']);
+    expect(left).toMatchObject({
+      extras: { page: fromForm, shots: null },
+      error: { code: 'PAGE_UNVERIFIED' },
+    });
+  });
+
+  it('gives back only the screenshots when they fail after the page text', async () => {
+    nodeWith(null, null);
+    const send = vi.fn(async (_action: string, payload: any) =>
+      payload.service === 'IMAGE' ? { error: 'Insufficient balance' } : {}
+    );
+    window.sendMessage = send as unknown as typeof window.sendMessage;
+    const left = await publishPageExtras(
+      { service: 'APP', name: 'MyApp' },
+      { page: fromForm, shots: [shot] },
+      SIG
+    );
+    expect(services(send)).toEqual(['JSON', 'IMAGE']);
+    expect(left?.extras).toMatchObject({ page: null, shots: [shot] });
+    expect(left?.error).toMatchObject({ message: 'Insufficient balance' });
   });
 });
 
