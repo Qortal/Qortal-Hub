@@ -646,4 +646,31 @@ describe('MyAppsTab: widgets published from this Hub, over time', () => {
       within(widgetsRegion()).getByText('core:developer.no_widgets_yet')
     ).toBeInTheDocument();
   });
+
+  it("stops listing a publish the node never lists once its wait is over, though the node can't answer then", async () => {
+    let nodeAnswers = true;
+    global.fetch = vi.fn(async (url: string) => ({
+      ok: isNamesRequest(url) || nodeAnswers,
+      json: async () => (isNamesRequest(url) ? [{ name: 'alice' }] : []),
+    })) as unknown as typeof fetch;
+    const { store } = renderTab();
+    await within(await findWidgetsRegion()).findByText(
+      'core:developer.no_widgets_yet'
+    );
+    vi.useFakeTimers();
+    publishFromForm(store, { identifier: 'go-widget-lost', title: 'Lost' });
+
+    // The node is asked again and doesn't list it yet.
+    await timePasses(3 * MINUTE);
+    expect(card('Lost')).toBeInTheDocument();
+
+    // Then it can't be reached when the wait ends.
+    nodeAnswers = false;
+    await timePasses(14 * MINUTE);
+
+    expect(card('Lost')).not.toBeInTheDocument();
+    expect(
+      within(widgetsRegion()).getByText('core:developer.no_widgets_yet')
+    ).toBeInTheDocument();
+  });
 });

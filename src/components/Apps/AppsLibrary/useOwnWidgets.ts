@@ -105,7 +105,9 @@ export const useOwnWidgets = (names: readonly string[], refreshKey = 0) => {
             namesKey ? namesKey.split(NAMES_SEPARATOR) : []
           )
         : [],
-    [current, namesKey, published]
+    // `recheck`: the clock is read again when a wait ends, also when the
+    // node can't answer then.
+    [current, namesKey, published, recheck]
   );
   const phase: OwnWidgetsPhase = current ? current.phase : 'loading';
   return { phase, widgets, retry };
