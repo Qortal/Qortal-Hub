@@ -86,4 +86,26 @@ describe('useAcceptDelay', () => {
     act(() => vi.advanceTimersByTime(1000));
     expect(result.current).toBe(true);
   });
+
+  it('starts over when Hub’s window comes back to the front', () => {
+    const { result } = render({ active: true, resetKey: 1 });
+    act(() => vi.advanceTimersByTime(1000));
+    expect(result.current).toBe(true);
+
+    // Another window covers Hub; its page stays visible.
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    expect(result.current).toBe(false);
+    act(() => vi.advanceTimersByTime(5000));
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(result.current).toBe(false);
+    act(() => vi.advanceTimersByTime(999));
+    expect(result.current).toBe(false);
+    act(() => vi.advanceTimersByTime(1));
+    expect(result.current).toBe(true);
+  });
 });

@@ -20,6 +20,7 @@ import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import { useAcceptDelay } from '../../hooks/useAcceptDelay';
 import {
+  DECLINE_GUARD_MS,
   permissionSecondsLeft,
   QORTAL_REQUEST_COUNTDOWN_SECONDS,
 } from '../../qortal/permissionPromptQueue';
@@ -95,6 +96,7 @@ export function QortalRequestExtensionDialog({
     });
   }
   const acceptReady = useAcceptDelay(open, message);
+  const declineReady = useAcceptDelay(open, message, DECLINE_GUARD_MS);
   const canAccept =
     acceptReady && (!requestMessage.confirmCheckbox || confirmRequestRead);
   const bodyLines = [
@@ -629,7 +631,7 @@ export function QortalRequestExtensionDialog({
                   transform: 'translateY(-1px)',
                 },
               }}
-              onClick={onCancel}
+              onClick={declineReady ? onCancel : undefined}
             >
               {t('core:action.decline', { postProcess: 'capitalizeFirstChar' })}
             </CustomButtonAccept>

@@ -3,6 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QortalRequestExtensionDialog } from './QortalRequestExtensionDialog';
+import { DECLINE_GUARD_MS } from '../../qortal/permissionPromptQueue';
 import '../../i18n/i18n';
 import { darkTheme } from '../../styles/theme-dark';
 
@@ -17,7 +18,11 @@ const backendRequest = {
     'I understand this Q-App will exchange data with a remote backend outside Qortal Hub.',
 };
 
-const renderDialog = (message: Message, onAccept = vi.fn()) => {
+const renderDialog = (
+  message: Message,
+  onAccept = vi.fn(),
+  onCancel = vi.fn()
+) => {
   const ui = (current: Message) => (
     <ThemeProvider theme={darkTheme}>
       <QortalRequestExtensionDialog
@@ -28,13 +33,17 @@ const renderDialog = (message: Message, onAccept = vi.fn()) => {
         onConfirmRequestReadChange={vi.fn()}
         onCheckbox1Change={vi.fn()}
         onAccept={onAccept}
-        onCancel={vi.fn()}
+        onCancel={onCancel}
         onCountdownComplete={vi.fn()}
       />
     </ThemeProvider>
   );
   const view = render(ui(message));
-  return { onAccept, show: (next: Message) => view.rerender(ui(next)) };
+  return {
+    onAccept,
+    onCancel,
+    show: (next: Message) => view.rerender(ui(next)),
+  };
 };
 
 describe('QortalRequestExtensionDialog', () => {
@@ -125,6 +134,46 @@ describe('QortalRequestExtensionDialog', () => {
     waitASecond();
     fireEvent.click(screen.getByText('Accept'));
     expect(onAccept).toHaveBeenCalledOnce();
+  });
+
+  it('does not take the click that brings Hub back to the front as Accept', () => {
+    // The user works in another window over Hub. Hub is not minimized, so
+    // its page stays visible.
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    // An app in Hub asks meanwhile.
+    const { onAccept } = renderDialog({
+      text1: 'Send 500 QORT to Q-recipient-address?',
+    });
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    // The user clicks on Hub's window to bring it to the front: the window
+    // gets the focus, then the click goes to what is under the pointer.
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    fireEvent.click(screen.getByText('Accept'));
+    expect(onAccept).not.toHaveBeenCalled();
+
+    waitASecond();
+    fireEvent.click(screen.getByText('Accept'));
+    expect(onAccept).toHaveBeenCalledOnce();
+  });
+
+  it('ignores Decline for a moment after a request appears', () => {
+    const { onCancel } = renderDialog({ text1: 'Send 5 QORT to Alice?' });
+
+    fireEvent.click(screen.getByText('Decline'));
+    expect(onCancel).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(DECLINE_GUARD_MS);
+    });
+    fireEvent.click(screen.getByText('Decline'));
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it('counts down only the time a request that waited has left', () => {
