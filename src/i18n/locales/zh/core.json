@@ -1142,7 +1142,7 @@
     "listing_hint": "它在小组件列表中的显示方式。",
     "new_widget": "新小组件",
     "not_listed": "未列出",
-    "note": "以标签 `go-widget` 发布 `{{resource}}`。它会列在 Qortal Hub 和 Qortal GO 的“添加小组件”中，而不是应用库中。",
+    "note": "以标签 `go-widget` 发布 `{{resource}}`。它会列在 Qortal Hub 和 Qortal GO 的“添加小组件”中，以及应用库的“小组件”标签页中。",
     "part_widget": "小组件",
     "preview_title": "在小组件列表中",
     "published": "小组件已发布。可在“首页 → 小组件 → 添加小组件”中添加它；节点可能需要一分钟左右才会列出它。",

@@ -1142,7 +1142,7 @@
     "listing_hint": "cómo aparece en la lista de widgets.",
     "new_widget": "un widget nuevo",
     "not_listed": "no listado",
-    "note": "publica `{{resource}}` con la etiqueta `go-widget`. Aparece en «Agregar widget» de Qortal Hub y Qortal GO, no en la biblioteca de apps.",
+    "note": "publica `{{resource}}` con la etiqueta `go-widget`. Aparece en «Agregar widget» de Qortal Hub y Qortal GO, y en la pestaña Widgets de la biblioteca.",
     "part_widget": "el widget",
     "preview_title": "en la lista de widgets",
     "published": "widget publicado. Agrégalo desde Inicio → Widgets → Agregar widget; el nodo puede tardar un minuto en listarlo.",

@@ -1142,7 +1142,7 @@
     "listing_hint": "kuidas see vidinate loendis paistab.",
     "new_widget": "uus vidin",
     "not_listed": "pole loendis",
-    "note": "avaldab `{{resource}}` sildiga `go-widget`. See on Qortal Hubis ja Qortal GO-s jaotises „Lisa vidin“, mitte rakenduste teegis.",
+    "note": "avaldab `{{resource}}` sildiga `go-widget`. See on Qortal Hubis ja Qortal GO-s jaotises „Lisa vidin“ ning teegi vahekaardil „Vidinad“.",
     "part_widget": "vidin",
     "preview_title": "vidinate loendis",
     "published": "vidin avaldatud. Lisa see: Avaleht → Vidinad → Lisa vidin; sõlmel võib selle loendisse lisamiseks kuluda minut.",

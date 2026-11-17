@@ -159,8 +159,9 @@ type FetchLike = (
 ) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
 
 /**
- * The widgets `name` has published, for the form's "Widget" choice. A failure
- * gives none (the form then offers a new widget only); an abort is passed on.
+ * The widgets `name` has published, for the form's "Widget" choice. Null when
+ * the node couldn't say (a failure, or an answer that isn't a list): that is
+ * never taken for "no widgets". An abort is passed on.
  */
 export const loadNameWidgets = async (
   baseUrl: string,
@@ -169,13 +170,14 @@ export const loadNameWidgets = async (
     fetchFn = fetch as unknown as FetchLike,
     signal,
   }: { fetchFn?: FetchLike; signal?: AbortSignal } = {}
-): Promise<NameWidget[]> => {
+): Promise<NameWidget[] | null> => {
   try {
     const response = await fetchFn(nameWidgetsUrl(baseUrl, name), { signal });
-    if (!response.ok) return [];
-    return nameWidgetsFrom(await response.json(), name);
+    if (!response.ok) return null;
+    const results = await response.json();
+    return Array.isArray(results) ? nameWidgetsFrom(results, name) : null;
   } catch (error) {
     if (signal?.aborted) throw error;
-    return [];
+    return null;
   }
 };

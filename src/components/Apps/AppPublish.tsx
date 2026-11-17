@@ -94,6 +94,18 @@ type PublishKind = 'APP' | 'WIDGET' | 'WEBSITE';
 const NEW_WIDGET = '\u0000new-widget';
 
 /**
+ * A widget published from this form: its list entry and details, and when
+ * the version it replaced was published (0: none), from the node's list.
+ */
+type PublishedHere = {
+  widget: NameWidget;
+  prefill: PublishPrefill;
+  replaces: number;
+};
+const publishedHereKey = (name: string, identifier: string) =>
+  `${name}\u0000${identifier}`;
+
+/**
  * Text state whose setter applies Core's metadata limit, so the form shows what
  * Core will keep: it cuts the title and description by UTF-8 bytes, not
  * characters (see utils/qdnMetadataLimits.ts).
@@ -174,6 +186,11 @@ export const AppPublish = ({
   // A widget: one the name has published ('' for a new one), and a new one's ID.
   const [widgetChoice, setWidgetChoice] = useState('');
   const [widgetSlug, setWidgetSlug] = useState('');
+  // Whether the node has said which widgets the name has.
+  const [nameWidgetsStatus, setNameWidgetsStatus] = useState<
+    'loading' | 'ready' | 'failed'
+  >('loading');
+  const [nameWidgetsAttempt, setNameWidgetsAttempt] = useState(0);
   const [nameWidgets, setNameWidgets] = useState<NameWidget[]>([]);
   const [guideTipOpen, setGuideTipOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -182,6 +199,9 @@ export const AppPublish = ({
   // A widget just published from here: the form already holds its details,
   // which the node may not list yet.
   const justPublishedRef = useRef('');
+  // The widgets published from this form. Until the node lists a version
+  // newer than the one each replaced, the form shows them as published.
+  const publishedHereRef = useRef(new Map<string, PublishedHere>());
   // The name the form's fields were last filled in for.
   const filledForNameRef = useRef<string | null>(null);
   const widgetId = widgetChoice || widgetIdentifier(widgetSlug);
@@ -193,6 +213,10 @@ export const AppPublish = ({
     (widget) => widget.identifier === widgetChoice
   );
   const updatesWidget = !!widgetChoice || !!widgetTakenBy;
+  // A typed ID can't be told from one of the name's widgets before the node
+  // has listed them: publishing waits, so it never replaces one unseen.
+  const widgetsUnknown =
+    isWidget && !!name && !widgetChoice && nameWidgetsStatus !== 'ready';
   // Which resource the form is filled in from.
   const prefillTarget = isWidget
     ? widgetChoice || NEW_WIDGET
@@ -233,7 +257,12 @@ export const AppPublish = ({
   // Anything the user chose or typed since the form opened or last published.
   // What a prefill fills in is not counted.
   const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
-  const noteInput = () => setHasUnsavedInput(true);
+  // Counts the input, so a publish that ends later sees what came after it.
+  const inputCountRef = useRef(0);
+  const noteInput = () => {
+    inputCountRef.current += 1;
+    setHasUnsavedInput(true);
+  };
   const markEdited = (field: string) => {
     editedFieldsRef.current.add(field);
     noteInput();
@@ -296,6 +325,17 @@ export const AppPublish = ({
   // Files chosen before a name was picked are kept: there was no target yet.
   const targetKey = [name, appType, prefillTarget].join('\u0000');
   const targetRef = useRef({ key: targetKey, name });
+  // What the form is set to publish now, a typed ID included, and how often
+  // that changed: a publish that ends later sees whether the form moved on.
+  const formTarget = [targetKey, widgetId].join('\u0000');
+  const targetNowRef = useRef({ key: formTarget, name, changes: 0 });
+  if (targetNowRef.current.key !== formTarget) {
+    targetNowRef.current = {
+      key: formTarget,
+      name,
+      changes: targetNowRef.current.changes + 1,
+    };
+  }
   useEffect(() => {
     const previous = targetRef.current;
     if (previous.key === targetKey) return;
@@ -310,7 +350,6 @@ export const AppPublish = ({
     editedFieldsRef.current = new Set();
     const nameChanged =
       filledForNameRef.current !== null && filledForNameRef.current !== name;
-    filledForNameRef.current = name;
     const identifier =
       prefillTarget === DEFAULT_IDENTIFIER || prefillTarget === NEW_WIDGET
         ? undefined
@@ -318,6 +357,7 @@ export const AppPublish = ({
     if (identifier && identifier === justPublishedRef.current) {
       // Just published from here: the form and its profile are up to date.
       justPublishedRef.current = '';
+      filledForNameRef.current = name;
       setPrefillPending(false);
       return;
     }
@@ -326,6 +366,7 @@ export const AppPublish = ({
       // Nothing published to load. A new widget starts from what the form
       // has (its app's details), but never from another name's.
       if (nameChanged) applyPrefill(EMPTY_PREFILL);
+      filledForNameRef.current = name;
       setPrefillPending(false);
       return;
     }
@@ -346,8 +387,17 @@ export const AppPublish = ({
         setProfile(savedProfile);
         // What this PC sent last time, when the network has nothing to give.
         const fromProfile = prefillFromProfile(savedProfile);
-        const prefill =
-          result.kind === 'found'
+        // Published from this form, and the node doesn't list a newer
+        // version yet: what was published, not the version it replaced.
+        const publishedHere = identifier
+          ? publishedHereRef.current.get(publishedHereKey(name, identifier))
+          : undefined;
+        const fromHere =
+          publishedHere &&
+          !(result.kind === 'found' && result.updated > publishedHere.replaces);
+        const prefill = fromHere
+          ? publishedHere.prefill
+          : result.kind === 'found'
             ? result.prefill
             : (fromProfile ?? EMPTY_PREFILL);
         // A widget's own tag isn't one of the tags the form lets you edit.
@@ -356,7 +406,8 @@ export const AppPublish = ({
             ? { ...prefill, tags: withoutWidgetTag(prefill.tags) }
             : prefill
         );
-        if (result.kind === 'unavailable') {
+        filledForNameRef.current = name;
+        if (result.kind === 'unavailable' && !fromHere) {
           setInfoSnack({
             type: 'warning',
             message: t(
@@ -382,15 +433,40 @@ export const AppPublish = ({
   // The widgets the name has published, to update one of them.
   useEffect(() => {
     setNameWidgets([]);
+    setNameWidgetsStatus('loading');
     if (!isWidget || !name) return;
     const controller = new AbortController();
     loadNameWidgets(getBaseApiReact(), name, { signal: controller.signal })
-      .then(setNameWidgets)
+      .then((widgets) => {
+        // An answer for another name is dropped.
+        if (controller.signal.aborted) return;
+        // A widget published from this form, listed in the version it
+        // replaced: shown as published, as the form fills it in.
+        const shown = (widgets ?? []).map((widget) => {
+          const publishedHere = publishedHereRef.current.get(
+            publishedHereKey(name, widget.identifier)
+          );
+          return publishedHere && !(widget.updated > publishedHere.replaces)
+            ? publishedHere.widget
+            : widget;
+        });
+        // A new widget published from this form that the node doesn't list
+        // yet: still one of the name's.
+        const unlisted = [...publishedHereRef.current]
+          .filter(([key]) => key.startsWith(publishedHereKey(name, '')))
+          .map(([, publishedHere]) => publishedHere.widget)
+          .filter(
+            (widget) =>
+              !shown.some((item) => item.identifier === widget.identifier)
+          );
+        setNameWidgets([...unlisted, ...shown]);
+        setNameWidgetsStatus(widgets ? 'ready' : 'failed');
+      })
       .catch(() => {
         // Aborted: another name, or not a widget any more.
       });
     return () => controller.abort();
-  }, [isWidget, name]);
+  }, [isWidget, name, nameWidgetsAttempt]);
 
   // Another name has other widgets: the choice goes with the name.
   const chooseName = (next: string) => {
@@ -475,7 +551,10 @@ export const AppPublish = ({
 
   const publishApp = async () => {
     // Publishing before the form is filled in would replace the app's details.
-    if (prefillPending) return;
+    if (prefillPending || widgetsUnknown) return;
+    // Compared once the upload ends.
+    const targetChanges = targetNowRef.current.changes;
+    const inputsAtStart = inputCountRef.current;
     try {
       const file = source?.file;
       const data = {
@@ -524,7 +603,8 @@ export const AppPublish = ({
         });
         throw new Error(errorMsg);
       }
-      // A widget has no page in the library.
+      // A widget's page in the library's Widgets tab shows neither page text
+      // nor screenshots: none are published with it.
       const extras = isWidget
         ? null
         : (pageExtrasRef.current?.prepare() ?? null);
@@ -563,6 +643,8 @@ export const AppPublish = ({
           postProcess: 'capitalizeFirstChar',
         })
       );
+      // The node lists this version from about now on.
+      const startedAt = Date.now();
       const response = await new Promise((res, rej) => {
         window
           .sendMessage('publishOnQDN', {
@@ -596,6 +678,13 @@ export const AppPublish = ({
             );
           });
       });
+      // A widget's form stays open: another name, type, widget or ID may have
+      // been picked while this one was publishing, even if it was put back.
+      const movedOn =
+        isWidget && targetNowRef.current.changes !== targetChanges;
+      // Input given while it was publishing isn't published: it stays unsaved.
+      const editedMeanwhile =
+        isWidget && inputCountRef.current !== inputsAtStart;
       const signature = publishSignature(response);
       let extrasFailed = '';
       // The page text went out and only the screenshots failed.
@@ -641,8 +730,14 @@ export const AppPublish = ({
             }
       );
       setOpenSnackGlobal(true);
-      // The widget picker asks the node again until it lists this widget.
-      if (isWidget) rememberPublishedWidget({ name, identifier: widgetId });
+      // The widget picker asks the node again until it lists this version.
+      if (isWidget) {
+        rememberPublishedWidget(
+          { name, identifier: widgetId },
+          Date.now(),
+          startedAt
+        );
+      }
       const published: PublishProfile = {
         publishedAt: Date.now(),
         metadata: {
@@ -662,7 +757,7 @@ export const AppPublish = ({
           : {}),
         ...(signature ? { signature } : {}),
       };
-      setProfile((current) => ({ ...current, ...published }));
+      if (!movedOn) setProfile((current) => ({ ...current, ...published }));
       void savePublishProfile(
         publishProfileKey(myAddress, appType, name, identifier),
         published
@@ -670,8 +765,10 @@ export const AppPublish = ({
       // The form closed while its page parts went out: no tab opens.
       if (!isMountedRef.current) return;
       // What was typed is published now, before the app opens in the tab.
-      setHasUnsavedInput(false);
-      onUnsavedChangeRef.current?.(false);
+      if (!movedOn && !editedMeanwhile) {
+        setHasUnsavedInput(false);
+        onUnsavedChangeRef.current?.(false);
+      }
       // A widget is added from Home, not opened as an app: the form stays,
       // now on this widget, so publishing again updates it.
       if (isWidget) {
@@ -681,10 +778,27 @@ export const AppPublish = ({
           updated: Date.now(),
           listed: true,
         };
-        setNameWidgets((list) => [
-          publishedWidget,
-          ...list.filter((widget) => widget.identifier !== widgetId),
-        ]);
+        // Until the node lists a newer version than the one this replaced,
+        // the form fills it in and lists it as published here.
+        publishedHereRef.current.set(publishedHereKey(name, widgetId), {
+          widget: publishedWidget,
+          prefill: {
+            title,
+            description,
+            category,
+            tags: publishedTags.filter(Boolean),
+          },
+          replaces: (chosenWidget ?? widgetTakenBy)?.updated ?? 0,
+        });
+        // It is one of the name's widgets now: not listed under another name.
+        if (targetNowRef.current.name === name) {
+          setNameWidgets((list) => [
+            publishedWidget,
+            ...list.filter((widget) => widget.identifier !== widgetId),
+          ]);
+        }
+        // The form shows something else now: that is left as it is.
+        if (movedOn) return;
         if (widgetChoice !== widgetId) {
           justPublishedRef.current = widgetId;
           setWidgetChoice(widgetId);
@@ -761,7 +875,7 @@ export const AppPublish = ({
       done: !!category,
     },
   ];
-  // A widget is the widget alone: no page in the library.
+  // A widget is the widget alone: no page text or screenshots.
   const pageSummary = isWidget ? null : extrasSummary;
   const parts = [
     {
@@ -823,7 +937,7 @@ export const AppPublish = ({
     <PublishSummaryCard
       busy={!!isLoading}
       checklist={checklist}
-      disabled={prefillPending}
+      disabled={prefillPending || widgetsUnknown}
       onPublish={publishApp}
       parts={parts}
       publishLabel={t('core:action.publish', capital)}
@@ -1040,6 +1154,26 @@ export const AppPublish = ({
                 />
               )}
             </Box>
+            {widgetsUnknown && nameWidgetsStatus === 'failed' ? (
+              <Typography
+                role="alert"
+                sx={{ ...warningTextSx, fontSize: '13px' }}
+              >
+                {t('group:home_widgets.picker_error', capital)}{' '}
+                <Button
+                  onClick={() => setNameWidgetsAttempt((value) => value + 1)}
+                  size="small"
+                  sx={{
+                    minWidth: 0,
+                    p: '0 4px',
+                    textTransform: 'none',
+                    verticalAlign: 'baseline',
+                  }}
+                >
+                  {t('core:retry', capital)}
+                </Button>
+              </Typography>
+            ) : null}
             <Typography
               sx={{
                 color: 'text.secondary',
@@ -1215,8 +1349,9 @@ export const AppPublish = ({
         </Box>
       </FormSection>
 
-      {/* A widget has no page in the library. Kept mounted, so what was
-          entered here is still there after switching back to Q-App. */}
+      {/* A widget's page in the Widgets tab shows neither page text nor
+          screenshots. Kept mounted, so what was entered here is still there
+          after switching back to Q-App. */}
       <Box sx={isWidget ? { display: 'none' } : undefined}>
         <FormSection
           hint={t('core:app_page.publish.hint', capital)}
@@ -1309,7 +1444,11 @@ export const AppPublish = ({
       </Box>
 
       <LoadingSnackbar
-        open={!!isLoading || prefillPending}
+        open={
+          !!isLoading ||
+          prefillPending ||
+          (widgetsUnknown && nameWidgetsStatus === 'loading')
+        }
         info={{
           message:
             isLoading ||

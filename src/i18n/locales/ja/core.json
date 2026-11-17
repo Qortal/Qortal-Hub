@@ -1142,7 +1142,7 @@
     "listing_hint": "ウィジェット一覧での表示です。",
     "new_widget": "新しいウィジェット",
     "not_listed": "一覧に非表示",
-    "note": "`{{resource}}`をタグ`go-widget`付きで公開します。アプリのライブラリではなく、Qortal HubとQortal GOの「ウィジェットを追加」に表示されます。",
+    "note": "`{{resource}}`をタグ`go-widget`付きで公開します。Qortal HubとQortal GOの「ウィジェットを追加」と、ライブラリの「ウィジェット」タブに表示されます。",
     "part_widget": "ウィジェット",
     "preview_title": "ウィジェット一覧での表示",
     "published": "ウィジェットを公開しました。「ホーム → ウィジェット → ウィジェットを追加」から追加できます。ノードの一覧に載るまで1分ほどかかることがあります。",
