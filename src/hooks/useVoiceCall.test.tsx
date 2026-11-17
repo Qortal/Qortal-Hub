@@ -1153,6 +1153,11 @@ describe('useVoiceCall', () => {
     );
   });
 
+  // Every step before a key goes out is async (joining the room, the audio
+  // surface, the key itself): on a busy CI machine one can take longer than
+  // waitFor's default second.
+  const CALL_STEP_WAIT = { timeout: 5_000 };
+
   it('resends the DM room key when the outbound peer requests it', async () => {
     let callEventHandler:
       | ((event: string, payload: unknown) => void | Promise<void>)
@@ -1277,17 +1282,19 @@ describe('useVoiceCall', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    await waitFor(() => expect(sendKey).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'start-direct-voice-media',
-          roomId,
-          peerAddress: peerAddr,
-          localAddress: myAddr,
-          roomKey: expect.any(ArrayBuffer),
-        })
-      )
+    await waitFor(() => expect(sendKey).toHaveBeenCalled(), CALL_STEP_WAIT);
+    await waitFor(
+      () =>
+        expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'start-direct-voice-media',
+            roomId,
+            peerAddress: peerAddr,
+            localAddress: myAddr,
+            roomKey: expect.any(ArrayBuffer),
+          })
+        ),
+      CALL_STEP_WAIT
     );
     audioSurfaceSendCommand.mockClear();
     await act(async () => {
@@ -1296,13 +1303,15 @@ describe('useVoiceCall', () => {
         outputDeviceId: 'audio-surface-speaker-2',
       });
     });
-    await waitFor(() =>
-      expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'update-direct-voice-media',
-          outputDeviceId: 'audio-surface-speaker-2',
-        })
-      )
+    await waitFor(
+      () =>
+        expect(audioSurfaceSendCommand).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'update-direct-voice-media',
+            outputDeviceId: 'audio-surface-speaker-2',
+          })
+        ),
+      CALL_STEP_WAIT
     );
     expect(store.get(callAudioDevicesAtom).outputDeviceId).toBe(
       'audio-surface-speaker-2'
@@ -1323,10 +1332,10 @@ describe('useVoiceCall', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    await waitFor(() => expect(sendKey).toHaveBeenCalled());
+    await waitFor(() => expect(sendKey).toHaveBeenCalled(), CALL_STEP_WAIT);
     expect(sendKey.mock.calls[0]?.[0]).toBe(roomId);
     expect(sendKey.mock.calls[0]?.[1]).toBe(peerAddr);
-  });
+  }, 30_000);
 
   it('stops after audio-surface DM media start fails', async () => {
     let callEventHandler:
