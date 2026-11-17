@@ -115,4 +115,54 @@ describe('a Q-App request that waits for the user', () => {
     expect(replies).toHaveLength(1);
     expect(JSON.stringify(replies[0])).toContain('timed out');
   });
+
+  // 30 min for each resource is more than a timer can hold from 1,194
+  // resources on: a longer wait runs out at once.
+  it('gets the answer to a batch of 1,200 publishes approved after 45 s', async () => {
+    answerRequestsAfter(45 * SECOND);
+    const replies = askFromApp({
+      action: 'PUBLISH_MULTIPLE_QDN_RESOURCES',
+      resources: Array.from({ length: 1200 }, () => ({})),
+    });
+
+    await vi.advanceTimersByTimeAsync(45 * SECOND);
+
+    expect(replies).toEqual([
+      { result: { answered: 'PUBLISH_MULTIPLE_QDN_RESOURCES' }, error: null },
+    ]);
+  });
+
+  // Reads that Hub shares between identical requests, and that ask the user
+  // in the approval dialog before they answer.
+  describe('a read that asks the user first', () => {
+    it.each([
+      ['GET_USER_WALLET', { coin: 'LTC' }],
+      ['GET_USER_WALLET_INFO', { coin: 'LTC' }],
+      ['GET_USER_WALLET_TRANSACTIONS', { coin: 'LTC' }],
+      ['GET_LIST_ITEMS', { list_name: 'blockedNames' }],
+      ['GET_HOSTED_DATA', {}],
+    ])('gets the answer to %s approved after 45 s', async (action, payload) => {
+      answerRequestsAfter(45 * SECOND);
+      const replies = askFromApp({ action, ...payload });
+
+      await vi.advanceTimersByTimeAsync(45 * SECOND);
+
+      expect(replies).toEqual([{ result: { answered: action }, error: null }]);
+    });
+
+    // The app's own qortalRequest gives the balance alone two minutes.
+    it('gets the answer to a balance that took 75 s after an approval at 50 s', async () => {
+      answerRequestsAfter(125 * SECOND);
+      const replies = askFromApp({
+        action: 'GET_WALLET_BALANCE',
+        coin: 'BTC',
+      });
+
+      await vi.advanceTimersByTimeAsync(125 * SECOND);
+
+      expect(replies).toEqual([
+        { result: { answered: 'GET_WALLET_BALANCE' }, error: null },
+      ]);
+    });
+  });
 });

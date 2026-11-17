@@ -23,7 +23,7 @@ describe('qappRequestTimeoutMs', () => {
     expect(qappRequestTimeoutMs('SEARCH_QDN_RESOURCES', {}, true)).toBe(
       30 * 1000
     );
-    expect(qappRequestTimeoutMs('GET_LIST_ITEMS', {}, true)).toBe(30 * 1000);
+    expect(qappRequestTimeoutMs('GET_NODE_STATUS', {}, true)).toBe(30 * 1000);
   });
 
   it('never gives up before the app’s own qortalRequest does', () => {
@@ -31,9 +31,9 @@ describe('qappRequestTimeoutMs', () => {
     expect(qappRequestTimeoutMs('GET_USER_ACCOUNT', {}, true)).toBe(
       60 * MINUTE
     );
-    expect(qappRequestTimeoutMs('GET_WALLET_BALANCE', {}, true)).toBe(
-      2 * MINUTE
-    );
+    expect(
+      qappRequestTimeoutMs('GET_WALLET_BALANCE', {}, true)
+    ).toBeGreaterThanOrEqual(2 * MINUTE);
     expect(qappRequestTimeoutMs('PUBLISH_QDN_RESOURCE', {}, false)).toBe(
       60 * MINUTE
     );
@@ -62,5 +62,43 @@ describe('qappRequestTimeoutMs', () => {
   it('only looks up real action names', () => {
     expect(qappRequestTimeoutMs('constructor', null, false)).toBe(5 * MINUTE);
     expect(qappRequestTimeoutMs(undefined, undefined, true)).toBe(30 * 1000);
+  });
+});
+
+describe('qappRequestTimeoutMs for reads that ask the user and long batches', () => {
+  it('gives a read that asks the user the time of a request that can change something', () => {
+    for (const action of [
+      'GET_HOSTED_DATA',
+      'GET_LIST_ITEMS',
+      'GET_USER_WALLET',
+      'GET_USER_WALLET_INFO',
+      'GET_USER_WALLET_TRANSACTIONS',
+      'GET_WALLET_BALANCE',
+    ]) {
+      expect(qappRequestTimeoutMs(action, {}, true)).toBe(5 * MINUTE);
+    }
+    // Sign-in asks too, and keeps the hour the app itself waits.
+    expect(qappRequestTimeoutMs('GET_USER_ACCOUNT', {}, true)).toBe(
+      60 * MINUTE
+    );
+  });
+
+  it('never waits longer than a timer can hold', () => {
+    const resources = Array.from({ length: 1200 }, () => ({}));
+    expect(
+      qappRequestTimeoutMs(
+        'PUBLISH_MULTIPLE_QDN_RESOURCES',
+        { resources },
+        false
+      )
+    ).toBe(2 ** 31 - 1);
+    // One resource fewer than the limit keeps its 30 min each.
+    expect(
+      qappRequestTimeoutMs(
+        'PUBLISH_MULTIPLE_QDN_RESOURCES',
+        { resources: resources.slice(0, 1193) },
+        false
+      )
+    ).toBe(1193 * 30 * MINUTE);
   });
 });

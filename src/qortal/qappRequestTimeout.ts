@@ -26,6 +26,23 @@ export const QAPP_ACTION_REQUEST_TIMEOUT_MS =
  */
 export const QAPP_READ_REQUEST_TIMEOUT_MS = TIME_SECONDS_30_IN_MILLISECONDS;
 
+/** The longest wait a timer can hold. A longer one would run out at once. */
+const LONGEST_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * Read-only requests that ask the user in the approval dialog before they
+ * answer. They wait at least as long as a request that can change something.
+ */
+const READS_THAT_ASK_THE_USER = new Set([
+  'GET_HOSTED_DATA',
+  'GET_LIST_ITEMS',
+  'GET_USER_ACCOUNT',
+  'GET_USER_WALLET',
+  'GET_USER_WALLET_INFO',
+  'GET_USER_WALLET_TRANSACTIONS',
+  'GET_WALLET_BALANCE',
+]);
+
 /**
  * How long the app's own qortalRequest waits by default, where Core's
  * q-apps.js (getDefaultTimeout) gives an action more than 30 s. Hub never
@@ -53,7 +70,8 @@ const APP_DEFAULT_TIMEOUT_MS = new Map<string, number>([
 
 /**
  * `readOnly`: the request only reads (Hub's de-duplicated requests). Anything
- * else may wait for an approval and change something.
+ * else may wait for an approval and change something. A read that asks the
+ * user first gets the same time.
  */
 export function qappRequestTimeoutMs(
   action: unknown,
@@ -69,9 +87,17 @@ export function qappRequestTimeoutMs(
     action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' && Array.isArray(resources)
       ? resources.length * TIME_MINUTES_30_IN_MILLISECONDS
       : 0;
-  return Math.max(
-    readOnly ? QAPP_READ_REQUEST_TIMEOUT_MS : QAPP_ACTION_REQUEST_TIMEOUT_MS,
-    typeof action === 'string' ? (APP_DEFAULT_TIMEOUT_MS.get(action) ?? 0) : 0,
-    batchMs
+  const onlyReads =
+    readOnly &&
+    !(typeof action === 'string' && READS_THAT_ASK_THE_USER.has(action));
+  return Math.min(
+    LONGEST_TIMER_MS,
+    Math.max(
+      onlyReads ? QAPP_READ_REQUEST_TIMEOUT_MS : QAPP_ACTION_REQUEST_TIMEOUT_MS,
+      typeof action === 'string'
+        ? (APP_DEFAULT_TIMEOUT_MS.get(action) ?? 0)
+        : 0,
+      batchMs
+    )
   );
 }
