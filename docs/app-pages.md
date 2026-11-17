@@ -114,7 +114,8 @@ Only the app's name can publish under it, so nobody else can hide an app.
 
 Hub leaves a hidden app out of the library, its search and the top bar's
 suggestions, except under the user's own names, so the publisher can still find
-theirs. Links, pins, bookmarks and open tabs still open it.
+theirs. Links, pins, bookmarks, open tabs, its exact name typed in the top bar
+and a widget's page still open it (`allQappsAtom` keeps every app for these).
 
 Each person can still choose to see them: the eye button in the library's
 header leaves them out while it is on (the default) and lists them too once it

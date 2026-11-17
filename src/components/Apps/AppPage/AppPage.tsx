@@ -34,7 +34,14 @@ import { HideAppDialog } from './HideAppDialog';
 import { useShowInLibrary } from './useShowInLibrary';
 import type { ShotDraft } from './ScreenshotsEditor';
 import { normalizeAppService } from './appPageIds';
-import { useAppListing, useAppPageData, useOwnedNames } from './useAppPage';
+import {
+  rememberHiddenState,
+  SavedHiddenState,
+  useAppListing,
+  useAppPageData,
+  useOwnedNames,
+  useSavedHiddenState,
+} from './useAppPage';
 import { ratingsByAddress } from './appVotes';
 import { useAppVotes } from './useAppVotes';
 import { useAppReviews, ReviewActionResult } from './useAppReviews';
@@ -91,7 +98,11 @@ export const AppPage = ({
   const wide = width >= WIDE_PAGE;
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress: string | undefined = userInfo?.address;
-  const { listing: app, reload: reloadListing } = useAppListing(initialApp);
+  const {
+    listing: app,
+    status: listingStatus,
+    reload: reloadListing,
+  } = useAppListing(initialApp);
   const service = normalizeAppService(app?.service);
   const ref = useMemo(
     () => ({ service, name: app?.name || '' }),
@@ -134,17 +145,33 @@ export const AppPage = ({
   }, []);
 
   // Hidden from the library (appHidden.ts): what the publisher just did shows
-  // until the node lists the new record.
+  // until the node lists the new record, also on a page opened again and on
+  // every other page of the app that is open.
   const [hideOpen, setHideOpen] = useState(false);
-  const [savedHidden, setSavedHidden] = useState<{
-    hidden: boolean;
-    replaced: boolean;
-    at: number;
-  } | null>(null);
+  const savedHidden = useSavedHiddenState(ref);
+  const setSavedHidden = (next: SavedHiddenState) =>
+    rememberHiddenState(ref, next);
   const hiddenState =
     savedHidden && savedHidden.at > (pageData.hidden?.updated || 0) - 60_000
       ? savedHidden
       : pageData.hidden;
+  // Hiding goes by what the node lists for the page (its hidden record, page
+  // text and screenshots) and for the app (the replacement keeps its title
+  // and category): it waits until the node has said, and a lookup that
+  // failed isn't "not hidden", "no page text" or "no title".
+  const hideReady =
+    !!pageData.resources &&
+    (listingStatus === 'found' || listingStatus === 'missing');
+  const hideFailed =
+    (!pageData.resources && !pageData.loading) || listingStatus === 'failed';
+  const retryHide = () => {
+    if (!pageData.resources) pageData.reload();
+    if (listingStatus === 'failed') reloadListing();
+  };
+  // Replacing empties these only if the node lists them, or they were
+  // published from here.
+  const hasPage = !!pageData.resources?.page || !!saved.page;
+  const hasShots = !!pageData.resources?.shots || !!saved.shots;
 
   // What the publisher just saved shows until the node has the new version.
   const savedPageNewer =
@@ -262,13 +289,13 @@ export const AppPage = ({
     setHideOpen(false);
     setSavedHidden({ hidden: true, replaced, at });
     if (replaced) {
-      // The page text and screenshots were emptied with the app.
+      // The page text and screenshots it had were emptied with the app.
       setSaved((previous) => ({
         ...previous,
-        page: { ...EMPTY_APP_PAGE, updated: at },
-        pageAt: at,
-        shots: [],
-        shotsAt: at,
+        ...(hasPage
+          ? { page: { ...EMPTY_APP_PAGE, updated: at }, pageAt: at }
+          : {}),
+        ...(hasShots ? { shots: [], shotsAt: at } : {}),
       }));
     }
     notify(
@@ -371,6 +398,8 @@ export const AppPage = ({
         editLoading={editorLoading}
         hiddenState={hiddenState}
         hideBusy={hideBusy}
+        hideFailed={hideFailed}
+        hideReady={hideReady}
         isPublisher={isPublisher}
         onCopied={() =>
           notify(
@@ -390,6 +419,7 @@ export const AppPage = ({
             .getElementById('app-page-ratings-card')
             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
+        onRetryHide={retryHide}
         onShowAgain={() => void showInLibrary()}
         onTogglePin={togglePin}
         summary={votes.summary}
@@ -441,11 +471,12 @@ export const AppPage = ({
       {isPublisher && (
         <HideAppDialog
           app={listingApp}
-          hasPage={!!pageData.resources?.page || !!saved.page}
-          hasShots={!!pageData.resources?.shots || !!saved.shots}
+          hasPage={hasPage}
+          hasShots={hasShots}
           onClose={() => setHideOpen(false)}
           onHidden={onHidden}
           open={hideOpen}
+          ready={hideReady}
         />
       )}
 

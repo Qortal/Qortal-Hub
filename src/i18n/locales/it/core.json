@@ -252,11 +252,12 @@
       "cant_delete_app": "Una Q-App non si può eliminare: tutto ciò che viene pubblicato su Qortal resta sulla sua blockchain e su QDN.",
       "cant_delete_website": "Un sito web non si può eliminare: tutto ciò che viene pubblicato su Qortal resta sulla sua blockchain e su QDN.",
       "confirm_show": "mostrare di nuovo {{title}} nella libreria? Hub lo elencherà di nuovo per tutti.",
-      "done_hidden": "nascosto dalla libreria. Hub smetterà di elencarlo per gli altri entro circa 10 minuti.",
+      "done_hidden": "nascosto dalla libreria. Hub smetterà di elencarlo per gli altri entro circa 10 minuti, a meno che non scelgano di mostrare le app nascoste.",
       "done_shown": "di nuovo visibile nella libreria. Hub lo elencherà per gli altri entro circa 10 minuti.",
       "library_toggle": "nascondi le app nascoste dai loro autori",
       "library_toggle_off": "Le app nascoste dai loro autori vengono mostrate. Fai clic per nasconderle.",
       "library_toggle_on": "Le app nascoste dai loro autori non vengono mostrate. Fai clic per mostrarle.",
+      "load_failed": "impossibile controllare se è nascosto: potrai nasconderlo o mostrarlo quando sarà possibile.",
       "note_hidden": "Il suo autore l’ha nascosto dalla libreria.",
       "note_publisher_hidden": "Nascosto dalla libreria. Tu lo vedi ancora lì, e link, app fissate e segnalibri lo aprono ancora.",
       "note_publisher_replaced": "Nascosto dalla libreria e sostituito da una piccola pagina che dice che l’hai rimosso. Per riaverlo, pubblicalo di nuovo e poi mostralo di nuovo nella libreria.",
@@ -268,7 +269,7 @@
       "replace_help": "Chi lo apre vedrà invece quella pagina. Anche il testo della pagina e gli screenshot vengono sostituiti con versioni vuote. Per riaverlo, pubblicalo di nuovo.",
       "replace_label": "Sostituiscilo anche con una piccola pagina che dice che il suo autore l’ha rimosso",
       "title": "nascondere {{title}} dalla libreria?",
-      "what_hiding_does": "Nasconderlo lo toglie dalla libreria di Hub per tutti: dai suoi elenchi, dalle categorie e dalla ricerca. Link, app fissate e segnalibri lo aprono ancora, e puoi mostrarlo di nuovo in qualsiasi momento."
+      "what_hiding_does": "Nasconderlo lo toglie dalla libreria di Hub per gli altri: dai suoi elenchi, dalle categorie e dalla ricerca. Possono comunque scegliere di mostrare le app nascoste. Link, app fissate e segnalibri lo aprono ancora, e puoi mostrarlo di nuovo in qualsiasi momento."
     },
     "links": {
       "source": "codice sorgente",

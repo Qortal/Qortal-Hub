@@ -252,11 +252,12 @@
       "cant_delete_app": "Uma Q-App não pode ser excluída: tudo o que é publicado no Qortal fica na sua blockchain e na QDN.",
       "cant_delete_website": "Um site não pode ser excluído: tudo o que é publicado no Qortal fica na sua blockchain e na QDN.",
       "confirm_show": "mostrar {{title}} na biblioteca de novo? O Hub volta a listá-lo para todos.",
-      "done_hidden": "ocultado da biblioteca. O Hub deixa de listá-lo para os outros em cerca de 10 minutos.",
+      "done_hidden": "ocultado da biblioteca. O Hub deixa de listá-lo para os outros em cerca de 10 minutos, a menos que eles escolham mostrar os apps ocultos.",
       "done_shown": "mostrado na biblioteca de novo. O Hub volta a listá-lo para os outros em cerca de 10 minutos.",
       "library_toggle": "ocultar apps que os autores ocultaram",
       "library_toggle_off": "Os apps que os autores ocultaram são mostrados. Clique para ocultá-los.",
       "library_toggle_on": "Os apps que os autores ocultaram ficam de fora. Clique para mostrá-los.",
+      "load_failed": "não foi possível verificar se está oculto; será possível ocultar ou mostrar quando for possível.",
       "note_hidden": "O autor o ocultou da biblioteca.",
       "note_publisher_hidden": "Oculto da biblioteca. Você ainda o vê lá, e links, apps fixados e marcadores ainda o abrem.",
       "note_publisher_replaced": "Oculto da biblioteca e substituído por uma pequena página dizendo que você o removeu. Para trazê-lo de volta, publique-o de novo e depois mostre-o na biblioteca.",
@@ -268,7 +269,7 @@
       "replace_help": "Quem abri-lo verá essa página no lugar dele. O texto da página e as capturas de tela também são substituídos por versões vazias. Para trazê-lo de volta, publique-o de novo.",
       "replace_label": "Também substituí-lo por uma pequena página dizendo que o autor o removeu",
       "title": "ocultar {{title}} da biblioteca?",
-      "what_hiding_does": "Ao ocultá-lo, ele sai da biblioteca do Hub para todos: das listas, das categorias e da busca. Links, apps fixados e marcadores ainda o abrem, e você pode mostrá-lo de novo a qualquer momento."
+      "what_hiding_does": "Ao ocultá-lo, ele sai da biblioteca do Hub para os outros: das listas, das categorias e da busca. Mesmo assim, eles podem escolher mostrar os apps ocultos. Links, apps fixados e marcadores ainda o abrem, e você pode mostrá-lo de novo a qualquer momento."
     },
     "links": {
       "source": "código-fonte",

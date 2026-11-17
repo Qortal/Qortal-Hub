@@ -50,6 +50,14 @@ interface AppPageHeroProps {
   hiddenState?: { hidden: boolean; replaced: boolean } | null;
   /** Hiding or showing it is being published. */
   hideBusy?: boolean;
+  /**
+   * The node has said whether it is hidden and what its page has. Until
+   * then the button is off: it would hide what is hidden already.
+   */
+  hideReady?: boolean;
+  /** The node couldn't say: Retry asks it again. */
+  hideFailed?: boolean;
+  onRetryHide?: () => void;
   onOpen: () => void;
   onTogglePin: () => void;
   onEdit: () => void;
@@ -73,6 +81,9 @@ export const AppPageHero = ({
   editLoading = false,
   hiddenState = null,
   hideBusy = false,
+  hideReady = true,
+  hideFailed = false,
+  onRetryHide,
   onOpen,
   onTogglePin,
   onEdit,
@@ -357,6 +368,32 @@ export const AppPageHero = ({
             </Box>
           )}
 
+          {isPublisher && hideFailed && (
+            <Box
+              role="alert"
+              sx={{
+                alignItems: 'center',
+                color: 'text.secondary',
+                display: 'flex',
+                flexWrap: 'wrap',
+                fontSize: '12.5px',
+                gap: 1,
+                mt: 1.5,
+              }}
+            >
+              {t('core:app_page.hide.load_failed', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              <Button
+                onClick={onRetryHide}
+                size="small"
+                sx={{ minWidth: 0, textTransform: 'none' }}
+              >
+                {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+              </Button>
+            </Box>
+          )}
+
           <Box
             sx={{
               alignItems: 'center',
@@ -459,7 +496,7 @@ export const AppPageHero = ({
                 <span>
                   <IconButton
                     aria-label={hideLabel}
-                    disabled={hideBusy}
+                    disabled={hideBusy || !hideReady}
                     onClick={isHidden ? onShowAgain : onHide}
                     sx={{
                       border: `1px solid ${alpha(theme.palette.text.primary, 0.18)}`,

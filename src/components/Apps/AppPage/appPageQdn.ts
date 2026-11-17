@@ -384,7 +384,7 @@ export const publishRemovedApp = async (
     'app.zip',
     { type: 'application/zip' }
   );
-  await publishOnQdn({
+  return publishOnQdn({
     ...(listing.category ? { category: listing.category } : {}),
     data: zip,
     description: listing.description,

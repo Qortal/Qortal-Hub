@@ -8,6 +8,9 @@ import { useOwnedNames } from './useAppPage';
 /** How often the library asks again which apps are hidden. */
 export const HIDDEN_APPS_REFRESH_MS = 10 * 60_000;
 
+/** How soon it asks again after the node couldn't say. */
+export const HIDDEN_APPS_RETRY_MS = 30_000;
+
 const sameSet = (a: Set<string>, b: Set<string>) =>
   a.size === b.size && [...a].every((key) => b.has(key));
 
@@ -17,8 +20,8 @@ const sameList = (a: string[], b: string[]) =>
 /**
  * Keeps the library's list of apps their publishers hid (hiddenAppsAtom)
  * current: when Hub starts, then every 10 minutes. If the node can't say,
- * the list stays as it was. The user's own names come along, so their own
- * hidden apps stay listed for them.
+ * the list stays as it was and is asked for again soon. The user's own names
+ * come along, so their own hidden apps stay listed for them.
  */
 export const useHiddenAppsLoader = (address?: string, myName?: string) => {
   const setHiddenApps = useSetAtom(hiddenAppsAtom);
@@ -39,7 +42,9 @@ export const useHiddenAppsLoader = (address?: string, myName?: string) => {
 
   useEffect(() => {
     const controller = new AbortController();
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const load = () => {
+      clearTimeout(retry);
       fetchHiddenApps(getBaseApiReact(), controller.signal)
         .then((hidden) =>
           setHiddenApps((previous) =>
@@ -48,13 +53,20 @@ export const useHiddenAppsLoader = (address?: string, myName?: string) => {
               : { ...previous, hidden }
           )
         )
-        .catch(() => undefined);
+        .catch(() => {
+          // A node that is starting answers within minutes: waiting for the
+          // next round would list hidden apps until then.
+          if (controller.signal.aborted) return;
+          clearTimeout(retry);
+          retry = setTimeout(load, HIDDEN_APPS_RETRY_MS);
+        });
     };
     load();
     const timer = setInterval(load, HIDDEN_APPS_REFRESH_MS);
     return () => {
       controller.abort();
       clearInterval(timer);
+      clearTimeout(retry);
     };
   }, [setHiddenApps]);
 };

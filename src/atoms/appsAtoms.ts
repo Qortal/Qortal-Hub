@@ -85,6 +85,13 @@ export const availableQappsAtom = atom(
   }
 );
 
+/**
+ * Every published Q-App and website, hidden ones too: for finding a named app
+ * (an exact name typed in the top bar, a widget's app, a pin's details). The
+ * lists people browse read availableQappsAtom.
+ */
+export const allQappsAtom = atom((get) => get(libraryQappsAtom));
+
 type ShownAppPage = { service: string; name: string } | null;
 
 /**

@@ -1126,9 +1126,12 @@ describe('hiding from the library', () => {
       .map((call) => call[1]);
 
   const openHide = async () => {
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'app_page.hide.button_hide' })
-    );
+    const button = await screen.findByRole('button', {
+      name: 'app_page.hide.button_hide',
+    });
+    // Off until the node has said what the page has.
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
     return screen.findByRole('dialog');
   };
 

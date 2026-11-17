@@ -252,11 +252,12 @@
       "cant_delete_app": "Q-Appi ei saa kustutada: kõik Qortalis avaldatu jääb selle plokiahelasse ja QDN-i.",
       "cant_delete_website": "Veebilehte ei saa kustutada: kõik Qortalis avaldatu jääb selle plokiahelasse ja QDN-i.",
       "confirm_show": "kas näidata {{title}} jälle teegis? Hub näitab seda taas kõigile.",
-      "done_hidden": "teegist peidetud. Hub lõpetab selle teistele näitamise umbes 10 minuti jooksul.",
+      "done_hidden": "teegist peidetud. Hub lõpetab selle teistele näitamise umbes 10 minuti jooksul, kui nad just ei vali peidetud rakenduste näitamist.",
       "done_shown": "jälle teegis nähtav. Hub näitab seda teistele umbes 10 minuti jooksul.",
       "library_toggle": "peida avaldajate peidetud rakendused",
       "library_toggle_off": "Avaldajate peidetud rakendusi näidatakse. Klõpsa, et need peita.",
       "library_toggle_on": "Avaldajate peidetud rakendusi ei näidata. Klõpsa, et neid näidata.",
+      "load_failed": "ei õnnestunud kontrollida, kas see on peidetud, seega saab peita ja näidata alles siis, kui see õnnestub.",
       "note_hidden": "Avaldaja peitis selle teegist.",
       "note_publisher_hidden": "Teegist peidetud. Sina näed seda seal endiselt ning lingid, kinnitused ja järjehoidjad avavad selle endiselt.",
       "note_publisher_replaced": "Teegist peidetud ja asendatud väikese lehega, mis ütleb, et sa eemaldasid selle. Selle tagasitoomiseks avalda see uuesti ja näita seda siis jälle teegis.",
@@ -268,7 +269,7 @@
       "replace_help": "Igaüks, kes selle avab, näeb siis selle asemel seda lehte. Ka lehe tekst ja ekraanipildid asendatakse tühjadega. Selle tagasitoomiseks avalda see uuesti.",
       "replace_label": "Asenda see ka väikese lehega, mis ütleb, et avaldaja eemaldas selle",
       "title": "kas peita {{title}} teegist?",
-      "what_hiding_does": "Peitmine eemaldab selle kõigi jaoks Hubi teegist: selle loenditest, kategooriatest ja otsingust. Lingid, kinnitused ja järjehoidjad avavad selle endiselt ning sa saad selle igal ajal uuesti nähtavaks teha."
+      "what_hiding_does": "Peitmine eemaldab selle teiste jaoks Hubi teegist: selle loenditest, kategooriatest ja otsingust. Nad saavad siiski valida, et peidetud rakendusi näidataks. Lingid, kinnitused ja järjehoidjad avavad selle endiselt ning sa saad selle igal ajal uuesti nähtavaks teha."
     },
     "links": {
       "source": "lähtekood",

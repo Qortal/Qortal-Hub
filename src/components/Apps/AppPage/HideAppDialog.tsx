@@ -35,7 +35,10 @@ import {
   publishRemovedApp,
 } from './appPageQdn';
 import { appPageErrorText } from './appPageErrors';
+import { useLauncherTabDialog } from '../launcherTabs';
+import { publishSignature } from '../publishProfiles';
 import { buildRemovedAppPage, removedAppMessages } from './removedAppPage';
+import { rememberUnfinishedHide, unfinishedHideOf } from './useAppPage';
 
 /** What hiding publishes, in this order: the hidden record comes last. */
 type Part = 'app' | 'page' | 'screenshots' | 'record';
@@ -48,6 +51,11 @@ interface HideAppDialogProps {
   /** Its page text and screenshots exist, so replacing covers them too. */
   hasPage: boolean;
   hasShots: boolean;
+  /**
+   * The node has said what the page has (its hidden record, page text and
+   * screenshots): until then nothing is published.
+   */
+  ready?: boolean;
   onClose: () => void;
   onHidden: (state: { replaced: boolean }) => void;
 }
@@ -62,6 +70,7 @@ export const HideAppDialog = ({
   app,
   hasPage,
   hasShots,
+  ready = true,
   onClose,
   onHidden,
 }: HideAppDialogProps) => {
@@ -69,6 +78,10 @@ export const HideAppDialog = ({
   const { t, i18n } = useTranslation(['core']);
   const [replace, setReplace] = useState(false);
   const [fee, setFee] = useState<number | null>(null);
+  // The fee couldn't be looked up: said so, with Retry, and nothing is
+  // published until it is known.
+  const [feeError, setFeeError] = useState('');
+  const [feeToken, setFeeToken] = useState(0);
   const [progress, setProgress] = useState<Partial<Record<Part, PartState>>>(
     {}
   );
@@ -84,26 +97,45 @@ export const HideAppDialog = ({
   );
   // Once anything is published, what is being done stays as it was.
   const started = Object.keys(progress).length > 0;
+  // Put away, with what was chosen kept, while its launcher tab is hidden.
+  const dialogShown = useLauncherTabDialog(open);
 
-  // Each opening starts afresh, with the fee as the node says now.
+  // Each opening starts afresh. Only a try that failed after publishing part
+  // of it is kept: what it published can't be taken back, so the window goes
+  // on from there, also on a page opened again.
   useEffect(() => {
     if (!open) return;
-    setReplace(false);
-    setProgress({});
+    const unfinished = unfinishedHideOf(ref, app?.latestSignature);
+    const kept: Partial<Record<Part, PartState>> = {};
+    unfinished?.done.forEach((part) => {
+      kept[part as Part] = 'done';
+    });
+    setReplace(!!unfinished?.replace);
+    setProgress(kept);
     setError('');
     setWorking(false);
+  }, [open]);
+
+  // The fee as the node says now, at each opening and on Retry.
+  useEffect(() => {
+    if (!open) return;
     setFee(null);
+    setFeeError('');
     let cancelled = false;
     getFee('ARBITRARY')
       .then((value) => {
         const next = Number(value?.fee);
-        if (!cancelled) setFee(Number.isFinite(next) ? next : null);
+        if (cancelled) return;
+        if (Number.isFinite(next)) setFee(next);
+        else setFeeError(appPageErrorText(t, undefined));
       })
-      .catch(() => undefined);
+      .catch((cause) => {
+        if (!cancelled) setFeeError(appPageErrorText(t, cause));
+      });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, feeToken]);
 
   const parts: Part[] = replace
     ? [
@@ -123,11 +155,12 @@ export const HideAppDialog = ({
           postProcess: 'capitalizeFirstChar',
         });
 
-  const publishPart = async (part: Part) => {
+  // Gives the publish's answer for the app, whose signature is its new version.
+  const publishPart = async (part: Part): Promise<unknown> => {
     if (part === 'app') {
       const lang = (i18n.language || 'en').split('-')[0];
       const messages = removedAppMessages(i18n, service);
-      await publishRemovedApp(
+      return publishRemovedApp(
         ref,
         buildRemovedAppPage({ title, lang, messages }),
         {
@@ -147,10 +180,14 @@ export const HideAppDialog = ({
 
   // A retry after a failure publishes only what isn't done yet.
   const hide = async () => {
-    if (working || !ref.name) return;
+    if (working || !ref.name || !ready || fee === null) return;
     setError('');
     setWorking(true);
     const todo = parts.filter((part) => progress[part] !== 'done');
+    const done = parts.filter((part) => progress[part] === 'done');
+    // The app's version before the run and the replacement's, so the run is
+    // dropped once the app is published again (unfinishedHideOf).
+    let versions = unfinishedHideOf(ref)?.versions;
     setProgress((value) => ({
       ...value,
       ...Object.fromEntries(todo.map((part) => [part, 'waiting'])),
@@ -158,15 +195,26 @@ export const HideAppDialog = ({
     for (const part of todo) {
       setProgress((value) => ({ ...value, [part]: 'working' }));
       try {
-        await publishPart(part);
+        const response = await publishPart(part);
+        if (part === 'app') {
+          const replacement = publishSignature(response);
+          versions =
+            app?.latestSignature && replacement
+              ? { before: app.latestSignature, replacement }
+              : undefined;
+        }
+        done.push(part);
         setProgress((value) => ({ ...value, [part]: 'done' }));
       } catch (cause) {
+        if (done.length > 0)
+          rememberUnfinishedHide(ref, { replace, done, versions });
         setProgress((value) => ({ ...value, [part]: 'failed' }));
         setError(appPageErrorText(t, cause));
         setWorking(false);
         return;
       }
     }
+    rememberUnfinishedHide(ref, null);
     setWorking(false);
     onHidden({ replaced: replace });
   };
@@ -185,7 +233,7 @@ export const HideAppDialog = ({
       fullWidth
       maxWidth="sm"
       onClose={working ? undefined : onClose}
-      open={open}
+      {...dialogShown}
     >
       <DialogTitle sx={{ pb: 1, pr: 6 }}>
         {t('core:app_page.hide.title', {
@@ -252,6 +300,24 @@ export const HideAppDialog = ({
             sx={{ alignItems: 'flex-start', m: 0, width: '100%' }}
           />
         </Box>
+        {feeError && (
+          <Alert
+            action={
+              <Button
+                color="inherit"
+                onClick={() => setFeeToken((value) => value + 1)}
+                size="small"
+                sx={{ textTransform: 'none' }}
+              >
+                {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+              </Button>
+            }
+            severity="error"
+            sx={{ mt: 2 }}
+          >
+            {feeError}
+          </Alert>
+        )}
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
             {error}
@@ -318,7 +384,7 @@ export const HideAppDialog = ({
           <Button
             color={replace ? 'error' : 'primary'}
             disableElevation
-            disabled={working || !ref.name}
+            disabled={working || !ref.name || !ready || fee === null}
             onClick={() => void hide()}
             startIcon={
               working ? (

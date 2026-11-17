@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { getBaseApiReact } from '../../../App';
 import { getPrimaryNamesForAddresses } from '../../Group/groupApi';
 import { normalizeAppService } from './appPageIds';
@@ -15,22 +22,39 @@ import type { AppHiddenState } from './appHidden';
 const enc = encodeURIComponent;
 
 /**
+ * Whether the app's own listing entry is known: 'found' also when the page
+ * was opened with it (from a library card); 'missing' when the node answered
+ * without it.
+ */
+export type ListingStatus = 'loading' | 'found' | 'missing' | 'failed';
+
+/**
  * The app's listing as the node has it now: metadata, status, size and the
  * latest signature. A page opened from a link starts with only a name.
  */
 export const useAppListing = (app: any) => {
   const [listing, setListing] = useState<any>(app);
+  const [status, setStatus] = useState<ListingStatus>(
+    app?.metadata ? 'found' : 'loading'
+  );
   const [token, setToken] = useState(0);
 
   useEffect(() => {
     setListing(app);
+    setStatus(app?.metadata ? 'found' : 'loading');
   }, [app]);
 
+  // Asked for again when the app is given again (a link to the page on
+  // screen), or its status would stay at loading.
   useEffect(() => {
     if (!app?.name) return;
     const controller = new AbortController();
     const service = normalizeAppService(app.service);
     const identifier = app.identifier || 'default';
+    // A listing found once stays known while it is asked for again.
+    const unlessFound = (next: ListingStatus) =>
+      setStatus((previous) => (previous === 'found' ? previous : next));
+    unlessFound('loading');
     // mode=ALL: by default Core keeps only one resource per name and service.
     fetch(
       `${getBaseApiReact()}/arbitrary/resources/search?service=${service}` +
@@ -38,16 +62,25 @@ export const useAppListing = (app: any) => {
         `&includestatus=true&mode=ALL&limit=20`,
       { signal: controller.signal }
     )
-      .then((response) => (response.ok ? response.json() : []))
+      .then((response) => {
+        if (!response.ok) throw new Error(`search ${response.status}`);
+        return response.json();
+      })
       .then((list) => {
-        if (!Array.isArray(list)) return;
+        if (!Array.isArray(list)) {
+          unlessFound('failed');
+          return;
+        }
         const entry =
           list.find(
             (item) =>
               item?.name?.toLowerCase() === app.name.toLowerCase() &&
               (item.identifier || 'default') === identifier
           ) || null;
-        if (!entry) return;
+        if (!entry) {
+          unlessFound('missing');
+          return;
+        }
         // Core's search cache writes 'default' for the app's own resource;
         // the library opens it without an identifier, and so does the page.
         const { identifier: found, ...rest } = entry;
@@ -59,13 +92,16 @@ export const useAppListing = (app: any) => {
           metadata: entry.metadata || previous?.metadata,
           status: entry.status || previous?.status,
         }));
+        setStatus('found');
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!controller.signal.aborted) unlessFound('failed');
+      });
     return () => controller.abort();
-  }, [app?.name, app?.service, app?.identifier, token]);
+  }, [app, token]);
 
   const reload = useCallback(() => setToken((value) => value + 1), []);
-  return { listing, reload };
+  return { listing, status, reload };
 };
 
 interface PageState {
@@ -81,8 +117,105 @@ interface PageState {
 const pageCache = new Map<string, { at: number; state: PageState }>();
 const PAGE_CACHE_MS = 60_000;
 
+/** What the publisher hid or showed from here, and when. */
+export interface SavedHiddenState {
+  hidden: boolean;
+  replaced: boolean;
+  at: number;
+}
+
+// By app, beyond the page that published it: a page opened again before the
+// node lists the new record still shows it, and doesn't offer it again.
+// After ten minutes the node has the record, and its answer is the one shown.
+const savedHiddenStates = new Map<string, SavedHiddenState>();
+const SAVED_HIDDEN_MS = 10 * 60_000;
+// Every page showing the app follows it: one in another launcher tab, or one
+// opened while the publish was still going.
+const savedHiddenListeners = new Set<() => void>();
+
+const savedHiddenKey = (app: { service?: string; name?: string }) =>
+  `${normalizeAppService(app?.service)}:${String(app?.name || '').toLowerCase()}`;
+
+const subscribeSavedHidden = (listener: () => void) => {
+  savedHiddenListeners.add(listener);
+  return () => {
+    savedHiddenListeners.delete(listener);
+  };
+};
+
+/** What was hidden or shown from here for the app, in the last ten minutes. */
+export const useSavedHiddenState = (app: {
+  service?: string;
+  name?: string;
+}): SavedHiddenState | null => {
+  const key = savedHiddenKey(app);
+  const saved = useSyncExternalStore(
+    subscribeSavedHidden,
+    () => savedHiddenStates.get(key) ?? null
+  );
+  return saved && Date.now() - saved.at < SAVED_HIDDEN_MS ? saved : null;
+};
+
+export const rememberHiddenState = (
+  app: { service?: string; name?: string },
+  state: SavedHiddenState
+) => {
+  savedHiddenStates.set(savedHiddenKey(app), state);
+  savedHiddenListeners.forEach((listener) => listener());
+};
+
+/** A hide and replace that stopped after publishing part of it. */
+export interface UnfinishedHide {
+  replace: boolean;
+  /** The parts it published. */
+  done: string[];
+  /** The app's latest signature before it and its replacement's, if known. */
+  versions?: { before: string; replacement: string };
+}
+
+// By app too: what it published can't be taken back, so the hide window goes
+// on from there when it is opened again, also on a page opened again.
+const unfinishedHides = new Map<string, UnfinishedHide>();
+
+/**
+ * Given the app's latest signature as the node lists it now, a version that
+ * is neither the one before the run nor its replacement means the app was
+ * published again since: the run is over.
+ */
+export const unfinishedHideOf = (
+  app: { service?: string; name?: string },
+  latestSignature?: string
+): UnfinishedHide | null => {
+  const key = savedHiddenKey(app);
+  const run = unfinishedHides.get(key);
+  if (!run) return null;
+  if (
+    latestSignature &&
+    run.versions &&
+    latestSignature !== run.versions.before &&
+    latestSignature !== run.versions.replacement
+  ) {
+    unfinishedHides.delete(key);
+    return null;
+  }
+  return run;
+};
+
+/** Null once the hide went through. */
+export const rememberUnfinishedHide = (
+  app: { service?: string; name?: string },
+  run: UnfinishedHide | null
+) => {
+  if (run) unfinishedHides.set(savedHiddenKey(app), run);
+  else unfinishedHides.delete(savedHiddenKey(app));
+};
+
 /** Forgets loaded pages (tests start each case clean). */
-export const clearAppPageCache = () => pageCache.clear();
+export const clearAppPageCache = () => {
+  pageCache.clear();
+  savedHiddenStates.clear();
+  unfinishedHides.clear();
+};
 
 /** The publisher's page (About, What's new, links) and screenshots. */
 export const useAppPageData = (app: { service?: string; name?: string }) => {
@@ -249,6 +382,8 @@ export const usePrimaryNames = (addresses: string[]) => {
 };
 
 const ownedNamesCache = new Map<string, string[]>();
+/** How soon the names are asked for again after the node couldn't say. */
+const OWNED_NAMES_RETRY_MS = 30_000;
 
 /** Every name the address owns, so a publisher with several names is found. */
 export const useOwnedNames = (address: string | undefined) => {
@@ -261,21 +396,36 @@ export const useOwnedNames = (address: string | undefined) => {
       return;
     }
     const controller = new AbortController();
-    fetch(`${getBaseApiReact()}/names/address/${enc(address)}?limit=0`, {
-      signal: controller.signal,
-    })
-      .then((response) => (response.ok ? response.json() : []))
-      .then((list) => {
-        const owned = Array.isArray(list)
-          ? list
-              .map((item) => item?.name)
-              .filter((name): name is string => typeof name === 'string')
-          : [];
-        ownedNamesCache.set(address, owned);
-        setNames(owned);
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const load = () => {
+      fetch(`${getBaseApiReact()}/names/address/${enc(address)}?limit=0`, {
+        signal: controller.signal,
       })
-      .catch(() => undefined);
-    return () => controller.abort();
+        .then((response) => {
+          if (!response.ok) throw new Error(`names ${response.status}`);
+          return response.json();
+        })
+        .then((list) => {
+          const owned = Array.isArray(list)
+            ? list
+                .map((item) => item?.name)
+                .filter((name): name is string => typeof name === 'string')
+            : [];
+          ownedNamesCache.set(address, owned);
+          setNames(owned);
+        })
+        .catch(() => {
+          // A failed answer isn't "no names": the library's loader stays
+          // mounted, so ask again rather than keep none for the session.
+          if (controller.signal.aborted) return;
+          retry = setTimeout(load, OWNED_NAMES_RETRY_MS);
+        });
+    };
+    load();
+    return () => {
+      controller.abort();
+      clearTimeout(retry);
+    };
   }, [address]);
   return names;
 };

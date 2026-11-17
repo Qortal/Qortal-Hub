@@ -92,6 +92,8 @@ export type OmniboxGroup =
   | 'tabs';
 
 export type OmniboxSources = {
+  /** Every Q-App and website, hidden ones too: a pin's title. Else apps. */
+  allApps?: readonly SearchableApp[];
   /** The Q-Apps and websites the library has loaded. */
   apps: readonly SearchableApp[];
   bookmarks?: readonly AppBookmark[] | null;
@@ -235,6 +237,7 @@ const byScore = <T extends { order: number; score: number }>(
 export const buildOmniboxOptions = (
   input: string,
   {
+    allApps,
     apps,
     bookmarks,
     names,
@@ -287,6 +290,12 @@ export const buildOmniboxOptions = (
     const key = appOpenCountKey(app?.service, app?.name);
     if (key && !catalog.has(key)) catalog.set(key, app);
   }
+  // A pin keeps its title when its publisher hid it from the library.
+  const pinCatalog = new Map(catalog);
+  for (const app of allApps ?? []) {
+    const key = appOpenCountKey(app?.service, app?.name);
+    if (key && !pinCatalog.has(key)) pinCatalog.set(key, app);
+  }
 
   // Pins first among equal matches, then the bookmarks.
   const pins = removeBrokenPinnedApps(pinnedApps as PinnedApp[]);
@@ -294,7 +303,7 @@ export const buildOmniboxOptions = (
     ...pins.map((app, order) => {
       const catalogApp = app.isPrivate
         ? null
-        : catalog.get(appOpenCountKey(app.service, app.name) ?? '');
+        : pinCatalog.get(appOpenCountKey(app.service, app.name) ?? '');
       const title = app.isPrivate
         ? asText(app.privateAppProperties?.appName)
         : catalogApp
