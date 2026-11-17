@@ -14,8 +14,11 @@ export type PublishPrefill = {
 };
 
 export type PublishPrefillResult =
-  /** The name's resource and its metadata. */
-  | { kind: 'found'; prefill: PublishPrefill }
+  /**
+   * The name's resource and its metadata. `updated`: when the version the
+   * node lists was published, when the node says.
+   */
+  | { kind: 'found'; prefill: PublishPrefill; updated?: number }
   /** The name has no resource of this service yet: a first publish. */
   | { kind: 'none' }
   /** The resource may exist, but its metadata couldn't be loaded. */
@@ -40,6 +43,8 @@ type SearchResult = {
   service?: unknown;
   identifier?: unknown;
   metadata?: ResourceMetadata | null;
+  created?: unknown;
+  updated?: unknown;
 };
 
 export const buildPrefillSearchUrl = (
@@ -185,8 +190,14 @@ export const loadPublishPrefill = async (
     return { kind: 'unavailable' };
   }
   if (!resource) return { kind: 'none' };
+  const updated = Number(resource.updated ?? resource.created ?? 0) || 0;
+  const version = updated ? { updated } : {};
   if (hasMetadata(resource.metadata)) {
-    return { kind: 'found', prefill: prefillFromMetadata(resource.metadata) };
+    return {
+      kind: 'found',
+      prefill: prefillFromMetadata(resource.metadata),
+      ...version,
+    };
   }
 
   // The node knows the resource but hasn't got its metadata file yet.
@@ -198,7 +209,11 @@ export const loadPublishPrefill = async (
     if (response.ok) {
       const metadata = await response.json();
       if (hasMetadata(metadata)) {
-        return { kind: 'found', prefill: prefillFromMetadata(metadata) };
+        return {
+          kind: 'found',
+          prefill: prefillFromMetadata(metadata),
+          ...version,
+        };
       }
     }
   } catch (error) {

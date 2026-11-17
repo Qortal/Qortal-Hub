@@ -145,10 +145,43 @@ export const withPublishedOwnWidget = (
   { replaces = 0, now = Date.now() }: { replaces?: number; now?: number } = {}
 ): PublishedOwnWidget[] => {
   const key = homeWidgetKey(widget);
+  // It replaces an earlier publish of it from here too, whatever version the
+  // form was filled in from: the node listing that one doesn't overtake it.
+  const earlier = list.find(
+    (item) => homeWidgetKey(item) === key && waiting(item, now)
+  );
   return [
-    { ...widget, publishedAt: now, replaces },
+    {
+      ...widget,
+      publishedAt: now,
+      replaces: Math.max(replaces, earlier?.publishedAt ?? 0),
+    },
     ...list.filter((item) => homeWidgetKey(item) !== key && waiting(item, now)),
   ];
+};
+
+/**
+ * The widget published from here that stands in place of the node's version
+ * of it, or null. `nodeUpdated`: when the node's version was published, 0
+ * when it has none. The publish form fills in from it, so Update shows what
+ * My apps shows.
+ */
+export const publishedOwnWidgetInPlace = (
+  published: readonly PublishedOwnWidget[],
+  widget: { name: string; identifier: string | null },
+  nodeUpdated: number,
+  now = Date.now()
+): PublishedOwnWidget | null => {
+  const name = widget.name.toLowerCase();
+  return (
+    published.find(
+      (item) =>
+        item.name.toLowerCase() === name &&
+        item.identifier === widget.identifier &&
+        waiting(item, now) &&
+        !(nodeUpdated > item.replaces)
+    ) ?? null
+  );
 };
 
 /**

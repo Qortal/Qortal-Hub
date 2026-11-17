@@ -23,8 +23,12 @@ vi.mock('../../../hooks/useAppRatings', () => ({
 }));
 
 import { MyAppsTab } from '../AppsLibrary/MyAppsTab';
-import { publishedOwnWidgetsAtom } from '../AppsLibrary/ownWidgets';
+import {
+  publishedOwnWidgetsAtom,
+  withPublishedOwnWidget,
+} from '../AppsLibrary/ownWidgets';
 import { userInfoAtom } from '../../../atoms/global';
+import type { HomeWidgetListing } from '../../HomeWidgets/homeWidgets';
 
 const availableQapps = [
   { name: 'alice', service: 'APP', status: { status: 'READY' } },
@@ -492,6 +496,152 @@ describe('MyAppsTab: the names\u2019 widgets', () => {
       ]);
     });
     expect(screen.queryByRole('article', { name: 'Now' })).toBeNull();
+    expect(
+      within(widgetsRegion()).getByText('core:developer.no_widgets_yet')
+    ).toBeInTheDocument();
+  });
+});
+
+describe('MyAppsTab: widgets published from this Hub, over time', () => {
+  const MINUTE = 60_000;
+
+  /** The node: the name alice, and her APP resources as `listed()` has them. */
+  const mockNode = (listed: () => unknown[]) => {
+    const fetchMock = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => (isNamesRequest(url) ? [{ name: 'alice' }] : listed()),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    return fetchMock;
+  };
+
+  /** What the publish form records when a widget's publish went through. */
+  const publishFromForm = (
+    store: ReturnType<typeof createStore>,
+    widget: Partial<HomeWidgetListing> & { identifier: string; title: string },
+    replaces = 0
+  ) =>
+    act(() => {
+      store.set(
+        publishedOwnWidgetsAtom,
+        withPublishedOwnWidget(
+          store.get(publishedOwnWidgetsAtom),
+          { name: 'alice', description: '', updated: 0, ...widget },
+          { replaces }
+        )
+      );
+    });
+
+  /** Time passes with the launcher tab left open on My apps. */
+  const timePasses = (ms: number) =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+
+  const card = (name: string) =>
+    within(widgetsRegion()).queryByRole('article', { name });
+
+  beforeEach(() => {
+    executeEvent.mockClear();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('still lists a widget published from here once its wait is over and the node has it', async () => {
+    let listed: unknown[] = [];
+    mockNode(() => listed);
+    const { store } = renderTab();
+    await within(await findWidgetsRegion()).findByText(
+      'core:developer.no_widgets_yet'
+    );
+    vi.useFakeTimers();
+
+    // Publish widget: a new one, shown at once.
+    const publishedAt = Date.now();
+    publishFromForm(store, { identifier: 'go-widget-clock', title: 'Clock' });
+    expect(card('Clock')).toBeInTheDocument();
+
+    // The node lists it a minute later.
+    listed = [
+      appResource(
+        'alice',
+        'go-widget-clock',
+        'Clock',
+        ['go-widget'],
+        publishedAt + MINUTE
+      ),
+    ];
+    await timePasses(20 * MINUTE);
+
+    // Then the next widget is published from here.
+    publishFromForm(store, { identifier: 'go-widget-news', title: 'News' });
+    await timePasses(MINUTE);
+    expect(card('News')).toBeInTheDocument();
+
+    // Clock is on the node and was published from here: still listed.
+    expect(card('Clock')).toBeInTheDocument();
+  });
+
+  it("doesn't go back to the version an update replaced once the update's wait is over", async () => {
+    const replaced = Date.now() - 60 * MINUTE;
+    let listed: unknown[] = [
+      appResource('alice', 'go-widget-now', 'Now', ['go-widget'], replaced),
+    ];
+    mockNode(() => listed);
+    const { store } = renderTab();
+    await within(await findWidgetsRegion()).findByRole('article', {
+      name: 'Now',
+    });
+    vi.useFakeTimers();
+
+    // Update: the title becomes "Now 2", shown at once.
+    const publishedAt = Date.now();
+    publishFromForm(
+      store,
+      { identifier: 'go-widget-now', title: 'Now 2' },
+      replaced
+    );
+    expect(card('Now 2')).toBeInTheDocument();
+
+    // The node lists the update two minutes later.
+    listed = [
+      appResource(
+        'alice',
+        'go-widget-now',
+        'Now 2',
+        ['go-widget'],
+        publishedAt + 2 * MINUTE
+      ),
+    ];
+    await timePasses(20 * MINUTE);
+
+    // Then another widget is published from here.
+    publishFromForm(store, { identifier: 'go-widget-news', title: 'News' });
+    await timePasses(MINUTE);
+    expect(card('News')).toBeInTheDocument();
+
+    expect(card('Now')).not.toBeInTheDocument();
+    expect(card('Now 2')).toBeInTheDocument();
+  });
+
+  it('stops listing a publish the node never lists once its wait is over', async () => {
+    mockNode(() => []);
+    const { store } = renderTab();
+    await within(await findWidgetsRegion()).findByText(
+      'core:developer.no_widgets_yet'
+    );
+    vi.useFakeTimers();
+    publishFromForm(store, { identifier: 'go-widget-lost', title: 'Lost' });
+    expect(card('Lost')).toBeInTheDocument();
+
+    // Its transaction never confirms.
+    await timePasses(17 * MINUTE);
+
+    expect(card('Lost')).not.toBeInTheDocument();
     expect(
       within(widgetsRegion()).getByText('core:developer.no_widgets_yet')
     ).toBeInTheDocument();

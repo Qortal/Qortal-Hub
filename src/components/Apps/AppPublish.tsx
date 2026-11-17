@@ -31,7 +31,7 @@ import {
   utf8ByteLength,
 } from '../../utils/qdnMetadataLimits';
 import { useTranslation } from 'react-i18next';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { infoSnackGlobalAtom, openSnackGlobalAtom } from '../../atoms/global';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import {
@@ -82,6 +82,7 @@ import { GuideText } from './WidgetPublish/WidgetGuideParts';
 import { rememberPublishedWidget } from '../HomeWidgets/fetchHomeWidgets';
 import { WIDGET_TAG } from '../HomeWidgets/homeWidgets';
 import {
+  publishedOwnWidgetInPlace,
   publishedOwnWidgetsAtom,
   withPublishedOwnWidget,
 } from './AppsLibrary/ownWidgets';
@@ -201,17 +202,38 @@ export const AppPublish = ({
   // What the widgets published from here show in My apps until the node
   // lists them.
   const setPublishedOwnWidgets = useSetAtom(publishedOwnWidgetsAtom);
+  const store = useStore();
+  // When the version the form is filled in from was published (0: none), or
+  // when the node was asked for it and couldn't say.
+  const loadedVersionRef = useRef(0);
   // A widget just published from here: the form already holds its details,
   // which the node may not list yet.
   const justPublishedRef = useRef('');
   // The name the form's fields were last filled in for.
   const filledForNameRef = useRef<string | null>(null);
   const widgetId = widgetChoice || widgetIdentifier(widgetSlug);
+  // The name's widgets as My apps shows them: one published from here that
+  // the node doesn't list in that version yet, as it was published.
+  const publishedOwnWidgets = useAtomValue(publishedOwnWidgetsAtom);
+  const shownNameWidgets = useMemo(
+    () =>
+      nameWidgets.map((widget) => {
+        const publishedHere = publishedOwnWidgetInPlace(
+          publishedOwnWidgets,
+          { name, identifier: widget.identifier },
+          widget.updated
+        );
+        return publishedHere
+          ? { ...widget, title: publishedHere.title, listed: true }
+          : widget;
+      }),
+    [nameWidgets, publishedOwnWidgets, name]
+  );
   // A typed ID that one of the name's widgets has already.
   const widgetTakenBy = widgetChoice
     ? undefined
-    : nameWidgets.find((widget) => widget.identifier === widgetId);
-  const chosenWidget = nameWidgets.find(
+    : shownNameWidgets.find((widget) => widget.identifier === widgetId);
+  const chosenWidget = shownNameWidgets.find(
     (widget) => widget.identifier === widgetChoice
   );
   const updatesWidget = !!widgetChoice || !!widgetTakenBy;
@@ -335,6 +357,7 @@ export const AppPublish = ({
       setPrefillPending(false);
       return;
     }
+    loadedVersionRef.current = 0;
     setProfile(null);
     if (prefillTarget === NEW_WIDGET) {
       // Nothing published to load. A new widget starts from what the form
@@ -360,8 +383,30 @@ export const AppPublish = ({
         setProfile(savedProfile);
         // What this PC sent last time, when the network has nothing to give.
         const fromProfile = prefillFromProfile(savedProfile);
-        const prefill =
-          result.kind === 'found'
+        const nodeUpdated = result.kind === 'found' ? (result.updated ?? 0) : 0;
+        // A widget published from here that the node doesn't list in that
+        // version yet: its details as published, as My apps shows them, not
+        // the version it replaced.
+        const publishedHere = identifier
+          ? publishedOwnWidgetInPlace(
+              store.get(publishedOwnWidgetsAtom),
+              { name, identifier },
+              nodeUpdated
+            )
+          : null;
+        loadedVersionRef.current = publishedHere
+          ? publishedHere.publishedAt
+          : result.kind === 'unavailable'
+            ? Date.now()
+            : nodeUpdated;
+        const prefill = publishedHere
+          ? {
+              title: publishedHere.title,
+              description: publishedHere.description,
+              category: publishedHere.category ?? '',
+              tags: publishedHere.tags ?? [],
+            }
+          : result.kind === 'found'
             ? result.prefill
             : (fromProfile ?? EMPTY_PREFILL);
         // A widget's own tag isn't one of the tags the form lets you edit.
@@ -371,10 +416,11 @@ export const AppPublish = ({
             : prefill
         );
         if (result.kind === 'unavailable') {
+          // A publish from here is this PC's last publish too.
           setInfoSnack({
             type: 'warning',
             message: t(
-              fromProfile
+              fromProfile || publishedHere
                 ? 'core:publish_update.filled_from_profile'
                 : 'core:message.generic.app_details_unavailable',
               { postProcess: 'capitalizeFirstChar' }
@@ -492,6 +538,8 @@ export const AppPublish = ({
     if (prefillPending) return;
     try {
       const file = source?.file;
+      // As the form has it now: another widget may be picked meanwhile.
+      const loadedVersion = loadedVersionRef.current;
       const data = {
         name,
         title,
@@ -670,7 +718,11 @@ export const AppPublish = ({
                 : {}),
               tags: withoutWidgetTag(publishedTags.filter(Boolean)),
             },
-            { replaces: replaced?.updated ?? 0 }
+            {
+              // The version this one replaces: the one the form loaded, or
+              // the one the name's widgets list has.
+              replaces: Math.max(replaced?.updated ?? 0, loadedVersion),
+            }
           )
         );
       }
@@ -983,7 +1035,7 @@ export const AppPublish = ({
                     {t('core:publish_widget.new_widget', capital)}
                   </MenuItem>
                   {(chosenWidget || !widgetChoice
-                    ? nameWidgets
+                    ? shownNameWidgets
                     : [
                         // Chosen, and not in the node's answer (yet).
                         {
@@ -992,7 +1044,7 @@ export const AppPublish = ({
                           updated: 0,
                           listed: true,
                         },
-                        ...nameWidgets,
+                        ...shownNameWidgets,
                       ]
                   ).map((widget) => (
                     <MenuItem key={widget.identifier} value={widget.identifier}>

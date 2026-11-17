@@ -4,6 +4,7 @@ import {
   loadOwnWidgets,
   ownWidgetsFrom,
   ownWidgetsUrl,
+  publishedOwnWidgetInPlace,
   withPublishedOwnWidget,
   withPublishedOwnWidgets,
   type OwnWidget,
@@ -280,5 +281,74 @@ describe('widgets published from this Hub', () => {
       { now: NOW + 20 + PUBLISHED_OWN_WIDGET_WAIT_MS + 1 }
     );
     expect(later.map((item) => item.title)).toEqual(['X']);
+  });
+
+  it('keep a later update in place of an earlier one from here once the node lists the earlier one', () => {
+    // Two forms filled in from the node's version 500: one publishes, then
+    // the other.
+    let list = withPublishedOwnWidget(
+      [],
+      { ...clock, title: 'Clock 2' },
+      { now: NOW, replaces: 500 }
+    );
+    list = withPublishedOwnWidget(
+      list,
+      { ...clock, title: 'Clock 3' },
+      { now: NOW + 10, replaces: 500 }
+    );
+    expect(list).toEqual([
+      expect.objectContaining({ title: 'Clock 3', replaces: NOW }),
+    ]);
+
+    // The node lists the first one, made before its publish ended.
+    const first = fromNode({ title: 'Clock 2', updated: NOW - 1 });
+    expect(
+      titles(withPublishedOwnWidgets([first], list, ['Alice'], NOW + 20))
+    ).toEqual(['Clock 3']);
+    expect(
+      publishedOwnWidgetInPlace(list, clock, NOW - 1, NOW + 20)?.title
+    ).toBe('Clock 3');
+    // A version newer than the earlier publish still stands.
+    const newer = fromNode({ title: 'Elsewhere', updated: NOW + 5 });
+    expect(
+      titles(withPublishedOwnWidgets([newer], list, ['Alice'], NOW + 20))
+    ).toEqual(['Elsewhere']);
+  });
+
+  it("give the publish form the widget that stands in place of the node's version, by the same rule", () => {
+    const published = withPublishedOwnWidget(
+      [],
+      { ...clock, title: 'Clock, renamed' },
+      { now: NOW, replaces: 500 }
+    );
+    const widget = { name: 'alice', identifier: 'go-widget-clock' };
+    const inPlace = (nodeUpdated: number, now = NOW + 1) =>
+      publishedOwnWidgetInPlace(published, widget, nodeUpdated, now)?.title ??
+      null;
+
+    // The node has the version it replaced, or none it gives a time for.
+    expect(inPlace(500)).toBe('Clock, renamed');
+    expect(inPlace(0)).toBe('Clock, renamed');
+    // The node has a newer one.
+    expect(inPlace(501)).toBeNull();
+    // The wait is over.
+    expect(inPlace(500, NOW + PUBLISHED_OWN_WIDGET_WAIT_MS + 1)).toBeNull();
+    // Another widget of the name, and another name's.
+    expect(
+      publishedOwnWidgetInPlace(
+        published,
+        { name: 'Alice', identifier: 'go-widget-news' },
+        500,
+        NOW
+      )
+    ).toBeNull();
+    expect(
+      publishedOwnWidgetInPlace(
+        published,
+        { name: 'Bob', identifier: 'go-widget-clock' },
+        500,
+        NOW
+      )
+    ).toBeNull();
   });
 });
