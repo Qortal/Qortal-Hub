@@ -73,8 +73,7 @@ export const GCALL_DECRYPT_APPLY_MAX_PER_TURN = 24;
 export const GCALL_JITTER_DRAIN_TICK_BUDGET_MS = 14;
 
 /** Newest-first / receive-path shedding policy engages at this depth (aligns with overload entry). */
-export const PENDING_DECRYPT_NEWEST_FIRST_DEPTH =
-  PENDING_DECRYPT_OVERLOAD_ENTER;
+export const PENDING_DECRYPT_NEWEST_FIRST_DEPTH = PENDING_DECRYPT_OVERLOAD_ENTER;
 /** Near-cap margin where a healthy participant may decrypt inline to avoid dropping at the worker cap. */
 export const PENDING_DECRYPT_SYNC_BYPASS_NEAR_CAP_MARGIN = 8;
 /** Keep sync bypass off if main-thread apply is already backlogged. */
@@ -128,10 +127,7 @@ export function choosePendingDecryptDropCandidate(
     counts.set(incomingIngressPeerAddress, 0);
   }
   const distinctIngresses = Math.max(1, counts.size);
-  const fairShare = Math.max(
-    1,
-    Math.ceil(Math.max(1, pendingMax) / distinctIngresses)
-  );
+  const fairShare = Math.max(1, Math.ceil(Math.max(1, pendingMax) / distinctIngresses));
   let targetIngress: string | null = null;
   let targetCount = 0;
   for (const [ingress, count] of counts) {
@@ -150,10 +146,7 @@ export function choosePendingDecryptDropCandidate(
   let selectedId: number | null = null;
   let selectedStartedAt = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
-    if (
-      targetIngress !== null &&
-      candidate.ingressPeerAddress !== targetIngress
-    ) {
+    if (targetIngress !== null && candidate.ingressPeerAddress !== targetIngress) {
       continue;
     }
     if (candidate.startedAt < selectedStartedAt) {
@@ -297,10 +290,7 @@ export function shouldBypassDecryptWorkerOnHotQueue(input: {
   ) {
     return false;
   }
-  const pendingMax = Math.max(
-    PENDING_DECRYPT_MAX,
-    Math.floor(input.pendingMax)
-  );
+  const pendingMax = Math.max(PENDING_DECRYPT_MAX, Math.floor(input.pendingMax));
   return (
     Math.max(0, Math.floor(input.pendingDepth)) >=
     pendingMax - PENDING_DECRYPT_SYNC_BYPASS_NEAR_CAP_MARGIN
@@ -336,7 +326,10 @@ export function shouldPreemptivelyThrottlePendingDecrypt(input: {
   ) {
     return true;
   }
-  return pendingDepth >= depthFloor && risingDelta >= riseDeltaMin;
+  return (
+    pendingDepth >= depthFloor &&
+    risingDelta >= riseDeltaMin
+  );
 }
 
 export function computePendingDecryptPreOverloadClampMax(input: {

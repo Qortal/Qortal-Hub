@@ -29,7 +29,6 @@ import {
   error as loggerError,
   warn as loggerWarn,
 } from './logger';
-import { deriveAddressFromPublicKey } from './presence';
 import type { PresenceManager } from './presence';
 import type {
   ReticulumBridge,
@@ -240,10 +239,6 @@ export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
 export const GCALL_DISABLE_ROOM_BOOTSTRAP_CACHE = true;
 
 export const MAX_QORTAL_GROUP_CALL_PARTICIPANTS = 15;
-/** S-7 + P-7: call protocol version. Bumped when signed field sets or
- *  election rules change. Peers at different versions cannot join the
- *  same call room — auto-updating ensures rapid migration. */
-export const CALL_PROTOCOL_VERSION = 2;
 const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 5_000;
 /** Must exceed heartbeat interval so peers do not drop `GA` as stale between beats. */
 const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 7_000;
@@ -262,8 +257,6 @@ const GC_RETICULUM_AUDIO_PENDING_HIGH_FANOUT_LIMIT = 12;
 const GC_RETICULUM_LINK_CONTROL_PENDING_MAX_FRAMES = 32;
 const GC_RETICULUM_LINK_CONTROL_PENDING_MAX_AGE_MS = 20_000;
 const GC_RETICULUM_UNRESOLVED_LINK_AUTH_GRACE_MS = 10_000;
-/** B-10: minimum gap between link-auth resends while the peer has not accepted. */
-const GC_RETICULUM_LINK_AUTH_RESEND_MS = 2_000;
 const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_FRAMES = 6;
 const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS = 300;
 const GC_RETICULUM_AUDIO_PREROUTE_RETRY_DELAY_MS = 30;
@@ -966,11 +959,6 @@ export interface GcJoinEnvelope {
   /** Explicit first join for this generation; reannouncements omit it. */
   takeover?: boolean;
   hopsRemaining?: number;
-  /** S-7: signed call protocol version. Wire `pv`. Peers with a mismatched
-   *  version must not join the same room. */
-  protocolVersion?: number;
-  /** X-2: unsigned "do not elect me as forwarder" hint (wire `fwd: 0`). */
-  noForwarderHint?: boolean;
 }
 
 /** Signed companion to split-wire GC_JOIN: carries RNS `rk` when GJ alone would exceed ENCRYPTED_MDU. */
@@ -1012,9 +1000,6 @@ export interface GcTopologyEnvelope {
   rootForwarder: string;
   standbyForwarder: string;
   clusters: ClusterDef[];
-  /** S-7: sha256 of the canonical cluster layout. Signed (wire `ch`) so a
-   *  relay cannot rewrite the topology without breaking the signature. */
-  clustersHash?: string;
   /** Root's local ms timestamp — used for heartbeat tracking by peers. */
   lastSeen: number;
   fromAddress: string;
@@ -1829,21 +1814,6 @@ function sha256Hex(input: string): string {
   return nodeCrypto.createHash('sha256').update(input).digest('hex');
 }
 
-/**
- * S-7: canonical JSON for a cluster layout so sender and receiver hash the
- * same bytes regardless of object key order.
- */
-function canonicalizeClustersForTopologyHash(clusters: ClusterDef[]): string {
-  return JSON.stringify(
-    clusters.map((cluster) => ({
-      forwarder: cluster.forwarder?.trim() ?? '',
-      members: [...(cluster.members ?? [])].map((m) => m?.trim() ?? '').sort(),
-      standby: cluster.standby?.trim() ?? '',
-      standby2: cluster.standby2?.trim() ?? '',
-    }))
-  );
-}
-
 function buildGcKeyDigest(toAddress: string, encryptedKey: string): string {
   return sha256Hex(JSON.stringify({ encryptedKey, toAddress }));
 }
@@ -1867,11 +1837,6 @@ function buildGcJoinSignedFields(env: GcJoinEnvelope): Record<string, unknown> {
     ...(typeof env.joinGeneration === 'number' &&
     Number.isFinite(env.joinGeneration)
       ? { joinGeneration: env.joinGeneration }
-      : {}),
-    // S-7: protocol version is signed so a relay cannot downgrade it
-    ...(typeof env.protocolVersion === 'number' &&
-    Number.isFinite(env.protocolVersion)
-      ? { protocolVersion: env.protocolVersion }
       : {}),
   };
 }
@@ -2210,8 +2175,6 @@ export class GroupCallManager extends EventEmitter {
         linkId: string;
         peerPresenceHash: string;
         peerDestinationHash: string;
-        /** S-4: identity RNS proved on this link; empty until identified. */
-        authenticatedPeerHash?: string;
         incoming: boolean;
       }) => void)
     | null = null;
@@ -2330,9 +2293,6 @@ export class GroupCallManager extends EventEmitter {
 
   /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators. */
   private watchedQortalGroupNumericIds = new Set<number>();
-  /** S-2: Rooms where we've processed at least one verified GC_JOIN.
-   *  Used to gate "call active" badge — don't trust unsigned GA frames alone. */
-  private verifiedGcJoinRoomIds = new Set<string>();
   /** Watched rooms not locally joined: last wall time we received a Reticulum activity hint. */
   private spectatorReticulumLivenessAt = new Map<string, number>();
   /** Watched rooms not locally joined: participant count from latest Reticulum activity hint. */
@@ -2832,13 +2792,13 @@ export class GroupCallManager extends EventEmitter {
         job.kind === 'topology' ||
         job.kind === 'cluster_heartbeat'
       ) {
-        // S-1 fix: never trust the signature-only cache for these types.
-        // Fall through to the full verify path below.
-      } else {
-        // For other types (GC_KEY, GC_KEY_REQUEST, GC_RTC_SIGNAL),
-        // a cache hit means we already processed this — drop it.
-        return;
+        try {
+          this.applyVerifiedJobSync(job);
+        } catch (err) {
+          loggerError('[GCall] Error applying cached verified message:', err);
+        }
       }
+      return;
     }
     if (this.inFlightGcVerify.has(cacheKey)) {
       return;
@@ -2859,19 +2819,7 @@ export class GroupCallManager extends EventEmitter {
           this.logVerifyFailure(job);
           return;
         }
-        // S-1: only cache safe types (GC_KEY, GC_KEY_REQUEST, GC_RTC_SIGNAL)
-        // that actually benefit from dedup. Never cache join/leave/topology
-        // since we always verify those.
-        if (
-          job.kind !== 'join' &&
-          job.kind !== 'join_rk' &&
-          job.kind !== 'link_auth_join' &&
-          job.kind !== 'leave' &&
-          job.kind !== 'topology' &&
-          job.kind !== 'cluster_heartbeat'
-        ) {
-          this.rememberVerifiedGcSignature(env.type, env.signature);
-        }
+        this.rememberVerifiedGcSignature(env.type, env.signature);
         try {
           this.applyVerifiedJobSync(job);
         } catch (err) {
@@ -2935,16 +2883,6 @@ export class GroupCallManager extends EventEmitter {
         job.peerPresenceHash
       );
     }
-    // S-2: track rooms with verified GJ so the "call active" badge
-    // is never gated on unsigned GA frames alone.
-    if (job.kind === 'join' || job.kind === 'join_rk' || job.kind === 'link_auth_join') {
-      this.verifiedGcJoinRoomIds.add(job.env.roomId);
-    } else if (job.kind === 'leave') {
-      // If the last participant left, we may want to clear this
-      // after a delay, but for now we keep the room in the set
-      // since a leave doesn't mean the whole call ended.
-    }
-
     switch (job.kind) {
       case 'join':
         this.applyVerifiedJoin(job.env, job.fromNodeId);
@@ -3477,33 +3415,6 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
-  /**
-   * S-3: a group-call frame may only be relayed onward when the claimed
-   * address really is derived from the claimed public key. Honest frames
-   * always pass; forged ones die at the first relay node. Frames lacking both
-   * fields (legacy/diagnostic) are still relayed.
-   */
-  private isRelayableGroupCallWire(wire: Record<string, unknown>): boolean {
-    const claimedAddress =
-      typeof wire.a === 'string'
-        ? wire.a
-        : typeof wire.fromAddress === 'string'
-          ? wire.fromAddress
-          : '';
-    const claimedPublicKey =
-      typeof wire.k === 'string'
-        ? wire.k
-        : typeof wire.fromPublicKey === 'string'
-          ? wire.fromPublicKey
-          : '';
-    if (!claimedAddress || !claimedPublicKey) return true;
-    try {
-      return deriveAddressFromPublicKey(claimedPublicKey) === claimedAddress;
-    } catch {
-      return true;
-    }
-  }
-
   private enqueuePendingGcJoinBeforeJoinRoom(
     env: GcJoinEnvelope,
     fromNodeId?: string,
@@ -3521,25 +3432,6 @@ export class GroupCallManager extends EventEmitter {
       filtered.splice(0, filtered.length - MAX_PENDING_GC_JOIN_PER_ROOM);
     }
     this.pendingGcJoinBeforeJoinRoom.set(roomId, filtered);
-    // S-3: cap total number of rooms to prevent memory exhaustion from
-    // forged room IDs. Evict the room with the oldest entry when over cap.
-    const MAX_PENDING_GC_JOIN_ROOMS = 64;
-    if (this.pendingGcJoinBeforeJoinRoom.size > MAX_PENDING_GC_JOIN_ROOMS) {
-      this.sweepExpiredPendingGcJoin(now);
-      if (this.pendingGcJoinBeforeJoinRoom.size > MAX_PENDING_GC_JOIN_ROOMS) {
-        // Find room with the earliest deadline and evict it
-        let oldestRoomId: string | undefined;
-        let oldestDeadline = Infinity;
-        for (const [rid, entries] of this.pendingGcJoinBeforeJoinRoom) {
-          const minDeadline = Math.min(...entries.map((e) => e.deadlineMs));
-          if (minDeadline < oldestDeadline) {
-            oldestDeadline = minDeadline;
-            oldestRoomId = rid;
-          }
-        }
-        if (oldestRoomId) this.pendingGcJoinBeforeJoinRoom.delete(oldestRoomId);
-      }
-    }
     this.logGcJoinDropThrottled(
       env.fromAddress,
       'queued_until_join',
@@ -4125,11 +4017,7 @@ export class GroupCallManager extends EventEmitter {
     }
     return {
       overlayId: wire.X,
-      // S-3: clamp hop count to prevent amplification attack
-      hopsRemaining: Math.min(
-        GC_RETICULUM_OVERLAY_HOPS,
-        Math.max(0, Math.trunc(wire.L))
-      ),
+      hopsRemaining: Math.max(0, Math.trunc(wire.L)),
     };
   }
 
@@ -4152,13 +4040,6 @@ export class GroupCallManager extends EventEmitter {
     );
     for (const [id, expiresAt] of this.seenReticulumOverlayIds) {
       if (expiresAt <= now) this.seenReticulumOverlayIds.delete(id);
-    }
-    // S-3: cap seen-id map to prevent O(n) scan DoS
-    const MAX_SEEN_IDS = 8192;
-    while (this.seenReticulumOverlayIds.size > MAX_SEEN_IDS) {
-      const first = this.seenReticulumOverlayIds.keys().next().value;
-      if (first === undefined) break;
-      this.seenReticulumOverlayIds.delete(first);
     }
   }
 
@@ -4315,37 +4196,12 @@ export class GroupCallManager extends EventEmitter {
     retryKind: GcReticulumRetryKind | undefined,
     attempt: number
   ): Promise<void> {
+    void roomId;
     void targetAddresses;
+    void excludeAddresses;
     const overlayFrames = frames.map((frame) =>
       this.attachReticulumOverlayMeta(frame)
     );
-    // P-3: deliver to the room roster and member allowlist directly, so the
-    // whole overlay no longer learns who is in which call (including private
-    // groups, and which pair of accounts is in a DM voice call). The overlay
-    // flood is kept strictly as a fallback for peers we cannot reach directly.
-    const directHashes = this.collectReticulumDestinationHashesForRoom(
-      roomId,
-      excludeAddresses
-    ).filter((hash) => hash.trim().length > 0);
-    if (directHashes.length > 0) {
-      const results = await Promise.all(
-        directHashes.map((hash) =>
-          this.sendReticulumFramesToHash(hash, overlayFrames).catch(
-            () =>
-              ({
-                ok: false,
-                reason: 'bridge-not-ready',
-                error: 'send-failed',
-              }) as GcReticulumSendResult
-          )
-        )
-      );
-      const allDelivered = results.every((result) => result.ok === true);
-      if (allDelivered) return;
-      loggerLog(
-        `[GCall] Direct roster delivery incomplete room=${roomId} peers=${directHashes.length}; falling back to overlay flood`
-      );
-    }
     const firstFailure =
       await this.broadcastReticulumFramesViaOverlay(overlayFrames);
     if (
@@ -4487,9 +4343,10 @@ export class GroupCallManager extends EventEmitter {
         room.participants.size >= MAX_QORTAL_GROUP_CALL_PARTICIPANTS
       );
     }
-    // S-2: GA spectator count is unsigned and can be forged.
-    // Only enforce cap based on verified GC_JOIN roster.
-    return false;
+    return (
+      this.getSpectatorParticipantCount(roomId) >=
+      MAX_QORTAL_GROUP_CALL_PARTICIPANTS
+    );
   }
 
   private shouldRejectRemoteJoinAtParticipantCap(
@@ -4669,14 +4526,7 @@ export class GroupCallManager extends EventEmitter {
             : MAX_QORTAL_GROUP_CALL_PARTICIPANTS;
         continue;
       }
-      // S-2: only show "call active" badge for spectator rooms where
-      // we've seen at least one verified GJ. Unsigned GA frames alone
-      // should not gate the badge.
       if (hasFreshReticulumActivity) {
-        if (!this.verifiedGcJoinRoomIds.has(roomId)) {
-          // No verified GJ seen — don't show badge even if GA says active
-          continue;
-        }
         activeByGroupId[gid] = true;
         if (reticulumCount && reticulumCount > 0) {
           participantCountByGroupId[gid] = reticulumCount;
@@ -4789,14 +4639,6 @@ export class GroupCallManager extends EventEmitter {
         this.rememberReticulumWireLogicalKey(overlayLogicalKey);
       }
       if (overlayMeta.hopsRemaining > 0) {
-        // S-3: never amplify a frame whose address does not match its key.
-        if (!this.isRelayableGroupCallWire(wire)) {
-          loggerWarn(
-            '[GCall] Dropping relay: address/key mismatch',
-            typeof wire.a === 'string' ? wire.a : undefined
-          );
-          return;
-        }
         const forwarded = {
           ...wire,
           L: overlayMeta.hopsRemaining - 1,
@@ -5442,9 +5284,7 @@ export class GroupCallManager extends EventEmitter {
     /** Set only by main after resolving an active authenticated CallManager record. */
     dmVoicePeerDestinationHashVerifiedByCall = false,
     /** Exact CallManager call bound to this DM media room. */
-    dmVoiceCallId?: string,
-    /** X-2: unsigned "do not elect me as forwarder" hint. */
-    noForwarderHint = false
+    dmVoiceCallId?: string
   ): { callSessionId: string; mediaSessionGeneration: number } {
     this.clearReticulumOverlayLogicalDedupeForRoomLifecycle(roomId, 'join');
     if (this.shouldRejectLocalJoinAtParticipantCap(roomId, localAddress)) {
@@ -5642,8 +5482,6 @@ export class GroupCallManager extends EventEmitter {
       ...(signedJoinGeneration !== undefined
         ? { joinGeneration: signedJoinGeneration }
         : {}),
-      // X-2: unsigned hint. `buildGcJoinSignedFields` deliberately omits it.
-      ...(noForwarderHint ? { noForwarderHint: true } : {}),
     };
     this.rememberRetainedVerifiedJoin(env);
     if (rk) {
@@ -5937,10 +5775,6 @@ export class GroupCallManager extends EventEmitter {
       type: 'GC_TOPOLOGY',
       roomId,
       ...topology,
-      // S-7: bind the cluster layout into the signed field set.
-      clustersHash: sha256Hex(
-        canonicalizeClustersForTopologyHash(topology.clusters)
-      ),
       fromPublicKey: publicKey,
       signature,
       timestamp,
@@ -8075,28 +7909,8 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     let sent = 0;
-    // B-10: link-auth is sent as a lossy packet, so a single lost packet (or
-    // one dropped under main-process load) meant the peer never authorised the
-    // link and tore it down after ~10s. Resend until the peer proves it
-    // accepted one: any applied link-auth, key, or heartbeat clears this.
-    const peerAcceptedLinkAuth =
-      state.linkAuthAppliedCount > 0 || state.linkAuthRxCount > 0;
     for (const roomId of state.rooms) {
-      if (
-        !peerAcceptedLinkAuth &&
-        state.linkAuthSentByRoom.get(roomId) === linkId &&
-        state.lastLinkAuthAtMs > 0 &&
-        Date.now() - state.lastLinkAuthAtMs <
-          GC_RETICULUM_LINK_AUTH_RESEND_MS
-      ) {
-        continue;
-      }
-      if (
-        peerAcceptedLinkAuth &&
-        state.linkAuthSentByRoom.get(roomId) === linkId
-      ) {
-        continue;
-      }
+      if (state.linkAuthSentByRoom.get(roomId) === linkId) continue;
       const frame = this.getLocalReticulumLinkAuthJoinWire(roomId);
       if (!frame) continue;
       const encoded = encodeGcLinkControlWire(frame);
@@ -11041,21 +10855,6 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
 
-    // S-7: refuse peers on a different call protocol version. Auto-update
-    // makes this migration fast; a mixed room cannot agree on topology rules.
-    const peerProtocolVersion =
-      typeof env.protocolVersion === 'number' && Number.isFinite(env.protocolVersion)
-        ? Math.trunc(env.protocolVersion)
-        : 1;
-    if (peerProtocolVersion !== CALL_PROTOCOL_VERSION) {
-      this.logGcJoinDropThrottled(
-        env.fromAddress,
-        'protocol_version_mismatch',
-        `[GCall] Dropped GC_JOIN: protocol version mismatch room=${env.roomId} from=${env.fromAddress} peer=${peerProtocolVersion} local=${CALL_PROTOCOL_VERSION}`
-      );
-      return;
-    }
-
     this.enqueueVerify(
       buildGcJoinSignedFields(env),
       env.signature,
@@ -11531,8 +11330,6 @@ export class GroupCallManager extends EventEmitter {
         ...(incomingLogicalJoinGeneration !== undefined
           ? { joinGeneration: incomingLogicalJoinGeneration }
           : {}),
-        // X-2: relay the unsigned forwarder opt-out to the renderer.
-        ...(env.noForwarderHint === true ? { noForwarderHint: true } : {}),
       });
     }
     if (this.isWatchedQortalRoom(env.roomId)) {
@@ -11556,12 +11353,6 @@ export class GroupCallManager extends EventEmitter {
         fromAddress: env.fromAddress,
         fromPublicKey: env.fromPublicKey,
         timestamp: env.timestamp,
-        // S-7: joinGeneration is now signed so a relay cannot make a valid
-        // leave be ignored by rewriting `j`.
-        ...(typeof env.joinGeneration === 'number' &&
-        Number.isFinite(env.joinGeneration)
-          ? { joinGeneration: env.joinGeneration }
-          : {}),
       },
       env.signature,
       env.fromPublicKey,
@@ -11689,10 +11480,6 @@ export class GroupCallManager extends EventEmitter {
         fromAddress: env.fromAddress,
         fromPublicKey: env.fromPublicKey,
         timestamp: env.timestamp,
-        // S-7: clustersHash is now part of the signed field set
-        ...(typeof env.clustersHash === 'string' && env.clustersHash
-          ? { clustersHash: env.clustersHash }
-          : {}),
       },
       env.signature,
       env.fromPublicKey,
@@ -12039,20 +11826,11 @@ export class GroupCallManager extends EventEmitter {
     payload?: {
       peerPresenceHash?: string;
       peerDestinationHash?: string;
-      /** S-4: identity RNS proved on the link, when known. */
-      authenticatedPeerHash?: string;
     }
   ): boolean {
     const room = this.rooms.get(env.roomId);
     const participant = room?.participants.get(env.fromAddress);
     const incomingHash = env.reticulumDestinationHash.trim().toLowerCase();
-    // S-4: when the link identity is authenticated, ONLY a GJ bound to that
-    // identity may be accepted as a stale link-auth. A wire-claimed `r` must
-    // never rebind the link to a different peer.
-    const authenticatedHash = payload?.authenticatedPeerHash?.trim().toLowerCase();
-    if (authenticatedHash) {
-      return Boolean(incomingHash && incomingHash === authenticatedHash);
-    }
     if (
       payload &&
       incomingHash &&

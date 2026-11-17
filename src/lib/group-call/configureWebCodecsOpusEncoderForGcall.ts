@@ -20,10 +20,6 @@ export async function configureWebCodecsOpusEncoderForGcall(
     sampleRate: opts.sampleRate,
     numberOfChannels: opts.numberOfChannels,
     bitrate: tuning.opusBitrate,
-    // P-8: constant bitrate. Variable bitrate makes packet size track speech,
-    // letting an on-path observer (or the forwarder) infer who is talking and,
-    // per published research, recognise phrases.
-    bitrateMode: 'constant' as const,
   };
   const fecEncoderConfig = {
     ...baseEncoderConfig,
@@ -39,17 +35,8 @@ export async function configureWebCodecsOpusEncoderForGcall(
 
   let encoderConfig: Record<string, unknown> = baseEncoderConfig;
   try {
-    const AudioEncoderCtor = (
-      globalThis as unknown as {
-        AudioEncoder?: {
-          isConfigSupported?: (
-            c: unknown
-          ) => Promise<{ supported: boolean; config?: AudioEncoderConfig }>;
-        };
-      }
-    ).AudioEncoder;
-    const supportResult =
-      await AudioEncoderCtor?.isConfigSupported?.(fecEncoderConfig);
+    const AudioEncoderCtor = (globalThis as unknown as { AudioEncoder?: { isConfigSupported?: (c: unknown) => Promise<{ supported: boolean; config?: AudioEncoderConfig }> } }).AudioEncoder;
+    const supportResult = await AudioEncoderCtor?.isConfigSupported?.(fecEncoderConfig);
     if (supportResult?.supported) {
       encoderConfig =
         (supportResult.config as Record<string, unknown> | undefined) ??

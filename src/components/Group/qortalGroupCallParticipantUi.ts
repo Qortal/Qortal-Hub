@@ -5,10 +5,7 @@ export function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-export function initialsFromDisplayLabel(
-  label: string,
-  address: string
-): string {
+export function initialsFromDisplayLabel(label: string, address: string): string {
   const compact = label.replace(/[^a-zA-Z0-9]/g, '');
   if (compact.length >= 2) return compact.slice(0, 2).toUpperCase();
   return address.slice(0, 2).toUpperCase();

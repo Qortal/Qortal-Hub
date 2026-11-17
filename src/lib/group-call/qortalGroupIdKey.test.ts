@@ -16,7 +16,9 @@ describe('qortalMemberGroupIdKey', () => {
 
 describe('meshCallActiveForMemberGroup', () => {
   it('matches canonical key when map uses unpadded id', () => {
-    expect(meshCallActiveForMemberGroup({ '123': true }, '00123')).toBe(true);
+    expect(
+      meshCallActiveForMemberGroup({ '123': true }, '00123')
+    ).toBe(true);
   });
   it('falls back to raw string key', () => {
     expect(meshCallActiveForMemberGroup({ foo: true }, 'foo')).toBe(true);

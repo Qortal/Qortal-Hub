@@ -75,7 +75,10 @@ describe('group-call WebRTC topology transitions', () => {
   });
 
   it('preserves existing WebRTC edges when another participant joins', () => {
-    const joined = buildGroupCallTopology(['Q-root', 'Q-a', 'Q-b', 'Q-c'], 2);
+    const joined = buildGroupCallTopology(
+      ['Q-root', 'Q-a', 'Q-b', 'Q-c'],
+      2
+    );
     expect(
       classifyGroupRtcTopologyEdgeTransition(
         'Q-a',

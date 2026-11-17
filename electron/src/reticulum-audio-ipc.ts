@@ -66,13 +66,8 @@ function readU64BE(buf: Buffer, offset: number): number {
 /**
  * Encode one or more frames into a single message (parent → child or child → parent).
  */
-export function encodeReticulumAudioBatch(
-  frames: ReticulumAudioFrame[]
-): Buffer {
-  if (
-    frames.length === 0 ||
-    frames.length > RETICULUM_AUDIO_MAX_FRAMES_PER_BATCH
-  ) {
+export function encodeReticulumAudioBatch(frames: ReticulumAudioFrame[]): Buffer {
+  if (frames.length === 0 || frames.length > RETICULUM_AUDIO_MAX_FRAMES_PER_BATCH) {
     throw new ReticulumAudioIpcError('invalid frame count');
   }
 
@@ -152,9 +147,7 @@ export function encodeReticulumAudioBatch(
 /**
  * Decode one message; returns frames and bytes consumed (entire buffer must be one message).
  */
-export function decodeReticulumAudioMessage(
-  buf: Buffer
-): ReticulumAudioFrame[] {
+export function decodeReticulumAudioMessage(buf: Buffer): ReticulumAudioFrame[] {
   if (buf.length < RETICULUM_AUDIO_HEADER_BYTES) {
     throw new ReticulumAudioIpcError('truncated header');
   }
@@ -184,8 +177,7 @@ export function decodeReticulumAudioMessage(
   const out: ReticulumAudioFrame[] = [];
   let o = 2;
   for (let i = 0; i < n; i++) {
-    if (o >= body.length)
-      throw new ReticulumAudioIpcError('truncated frame meta');
+    if (o >= body.length) throw new ReticulumAudioIpcError('truncated frame meta');
     const ll = body[o++];
     if (ll > RETICULUM_AUDIO_MAX_LINK_ID_LEN || o + ll > body.length) {
       throw new ReticulumAudioIpcError('bad link id');
@@ -220,8 +212,7 @@ export function decodeReticulumAudioMessage(
     if (o + 2 > body.length) throw new ReticulumAudioIpcError('truncated len');
     const plen = readU16BE(body, o);
     o += 2;
-    if (o + 8 > body.length)
-      throw new ReticulumAudioIpcError('truncated received-at');
+    if (o + 8 > body.length) throw new ReticulumAudioIpcError('truncated received-at');
     const receivedAtWallMs = readU64BE(body, o);
     o += 8;
     if (plen > RETICULUM_AUDIO_MAX_PAYLOAD || o + plen > body.length) {

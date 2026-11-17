@@ -107,11 +107,7 @@ describe('audioPacketCodecSodium', () => {
       defaultSecretBoxProvider
     );
 
-    const viaTweetnacl = decodeAudioPackets(
-      packet,
-      key,
-      defaultSecretBoxProvider
-    );
+    const viaTweetnacl = decodeAudioPackets(packet, key, defaultSecretBoxProvider);
     const viaLibsodium = decodeAudioPackets(packet, key, sodiumProvider);
     expect(viaLibsodium.length).toBe(viaTweetnacl.length);
     for (let i = 0; i < viaTweetnacl.length; i++) {
@@ -139,9 +135,7 @@ describe('audioPacketCodecSodium', () => {
       sodiumProvider
     );
     expect(decodeAudioPacket(packet, keyB, sodiumProvider)).toBeNull();
-    expect(
-      decodeAudioPacket(packet, keyB, defaultSecretBoxProvider)
-    ).toBeNull();
+    expect(decodeAudioPacket(packet, keyB, defaultSecretBoxProvider)).toBeNull();
   });
 
   it('randomNonce produces 24-byte nonces', async () => {

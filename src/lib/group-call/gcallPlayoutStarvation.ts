@@ -137,10 +137,7 @@ export function stepPlayoutStarvationSeverity(input: {
     reason: 'strong-A' | 'strong-B' | 'strong-C' | null;
   };
   mildCandidate: boolean;
-}): {
-  next: PlayoutStarvationSeverity;
-  severityReason: PlayoutStarvationSeverityReason;
-} {
+}): { next: PlayoutStarvationSeverity; severityReason: PlayoutStarvationSeverityReason } {
   const { held, bufferAdequacy, strongMeta, mildCandidate } = input;
   const STRONG_EXIT = GCALL_STARVATION_STRONG_ADEQUACY_EXIT;
   const MILD_EXIT = GCALL_STARVATION_MILD_ADEQUACY_EXIT;

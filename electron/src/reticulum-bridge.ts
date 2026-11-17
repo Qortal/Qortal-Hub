@@ -201,7 +201,6 @@ type BridgeCmdFrame = {
     | 'overlay_note_candidate_failure'
     | 'configure_community_stun'
     | 'get_community_stun_endpoints'
-    | 'get_full_audio_queue_diagnostics'
     | 'get_community_masque_relays'
     | 'relay_ticket_request'
     | 'configure_developer_log_filter'
@@ -693,8 +692,6 @@ type BridgeEventFrame =
         linkId?: string;
         peerPresenceHash?: string;
         peerDestinationHash?: string;
-        /** S-4: identity RNS proved on this link; empty until identified. */
-        authenticatedPeerHash?: string;
         incoming?: boolean;
       };
     }
@@ -3390,38 +3387,10 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
     );
   }
 
-  /**
-   * X-5: request the complete audio queue diagnostics block, which the
-   * periodic `group_audio_queue_state` emit deliberately slims down.
-   */
-  async getFullAudioQueueDiagnostics(): Promise<Record<string, unknown> | null> {
+  async relayTicketRequest(identity: string, path: string, data: Record<string, unknown>): Promise<Record<string, any>> {
     await this.start();
-    if (this.state !== 'ready') return null;
-    const resp = await this.sendCommand(
-      'get_full_audio_queue_diagnostics',
-      {}
-    );
-    if (!resp.ok || !resp.payload) return null;
-    return resp.payload as Record<string, unknown>;
-  }
-
-  async relayTicketRequest(
-    identity: string,
-    path: string,
-    data: Record<string, unknown>
-  ): Promise<Record<string, any>> {
-    await this.start();
-    const result = await this.sendCommand('relay_ticket_request', {
-      identity,
-      path,
-      data,
-    });
-    if (!result.ok || result.payload?.error)
-      throw new Error(
-        String(
-          result.payload?.error || result.error || 'RELAY_AUTH_UNAVAILABLE'
-        )
-      );
+    const result = await this.sendCommand('relay_ticket_request', { identity, path, data });
+    if (!result.ok || result.payload?.error) throw new Error(String(result.payload?.error || result.error || 'RELAY_AUTH_UNAVAILABLE'));
     return result.payload ?? {};
   }
 
@@ -4925,11 +4894,6 @@ export class ReticulumBridge extends EventEmitter implements PresenceTransport {
           peerDestinationHash:
             typeof frame.payload?.peerDestinationHash === 'string'
               ? frame.payload.peerDestinationHash
-              : '',
-          // S-4: identity RNS proved on this link; trusted over wire `r`.
-          authenticatedPeerHash:
-            typeof frame.payload?.authenticatedPeerHash === 'string'
-              ? frame.payload.authenticatedPeerHash
               : '',
           incoming: frame.payload?.incoming === true,
         });

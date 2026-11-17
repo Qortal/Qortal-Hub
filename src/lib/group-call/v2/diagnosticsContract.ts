@@ -84,9 +84,7 @@ export type StreamEpochAdvancedEvent = GcallV2DiagEvent<
 
 export type StateTransitionEvent = GcallV2DiagEvent<
   'state-transition',
-  ReceiveStateTransition & {
-    policyOutput: { maxDecodePerTick: number; targetBufferMs: number };
-  }
+  ReceiveStateTransition & { policyOutput: { maxDecodePerTick: number; targetBufferMs: number } }
 >;
 
 // ---------------------------------------------------------------------------
@@ -227,12 +225,7 @@ export interface GcallV2DiagnosticBundle {
 // Null recorder (used in tests and during replay injection)
 // ---------------------------------------------------------------------------
 
-import type {
-  IDiagnosticsRecorder,
-  DecodeResultInfo,
-  JitterStats,
-  PcmRingStats,
-} from './spec';
+import type { IDiagnosticsRecorder, DecodeResultInfo, JitterStats, PcmRingStats } from './spec';
 
 export class NullDiagnosticsRecorder implements IDiagnosticsRecorder {
   recordStateTransition(
@@ -240,10 +233,7 @@ export class NullDiagnosticsRecorder implements IDiagnosticsRecorder {
     _policyOutput?: { maxDecodePerTick: number; targetBufferMs: number }
   ): void {}
   recordTransportEvidence(_e: TransportEvidence): void {}
-  recordPeerHealth(
-    _s: PeerHealthSnapshot,
-    _activeEvidenceCount?: number
-  ): void {}
+  recordPeerHealth(_s: PeerHealthSnapshot, _activeEvidenceCount?: number): void {}
   recordSendPressure(_r: SendPressureRequest): void {}
   recordDecodeResult(_i: DecodeResultInfo): void {}
   recordJitterStats(_s: JitterStats): void {}
@@ -266,15 +256,12 @@ export class BufferingDiagnosticsRecorder implements IDiagnosticsRecorder {
     payload: P
   ): GcallV2DiagEvent<K, P> {
     const event = {
-      schemaVersion:
-        GCALL_V2_DIAG_SCHEMA_VERSION as typeof GCALL_V2_DIAG_SCHEMA_VERSION,
+      schemaVersion: GCALL_V2_DIAG_SCHEMA_VERSION as typeof GCALL_V2_DIAG_SCHEMA_VERSION,
       kind,
       wallClockMs: performance.now(),
       payload,
     } as GcallV2DiagEvent<K, P>;
-    (this._events as AnyGcallV2Event[]).push(
-      event as unknown as AnyGcallV2Event
-    );
+    (this._events as AnyGcallV2Event[]).push(event as unknown as AnyGcallV2Event);
     return event;
   }
 
@@ -295,7 +282,10 @@ export class BufferingDiagnosticsRecorder implements IDiagnosticsRecorder {
     this.push('transport-evidence', e);
   }
 
-  recordPeerHealth(s: PeerHealthSnapshot, activeEvidenceCount = 0): void {
+  recordPeerHealth(
+    s: PeerHealthSnapshot,
+    activeEvidenceCount = 0
+  ): void {
     this.push('peer-health', { ...s, activeEvidenceCount });
   }
 

@@ -8,10 +8,7 @@
  */
 
 import { test, expect } from 'vitest';
-import {
-  PeerHealthStream,
-  EVIDENCE_TTL_PATH_TIMEOUT_MS,
-} from './peerHealthStream';
+import { PeerHealthStream, EVIDENCE_TTL_PATH_TIMEOUT_MS } from './peerHealthStream';
 import type { TransportEvidence } from './spec';
 
 // ---------------------------------------------------------------------------
@@ -65,10 +62,7 @@ test('PeerHealthStream: packet arrival retires degradation evidence immediately'
   expect(stream.getPeerHealth('peer-A')?.level).not.toBe('healthy');
 
   // Packet arrives.
-  stream.onStreamPacketReceived(
-    { sourceAddr: 'peer-A', streamEpoch: 0, joinGeneration: 1 },
-    42
-  );
+  stream.onStreamPacketReceived({ sourceAddr: 'peer-A', streamEpoch: 0, joinGeneration: 1 }, 42);
 
   now = 101;
   const health = stream.getPeerHealth('peer-A');
@@ -87,9 +81,7 @@ test('PeerHealthStream: fires listener on health change', () => {
   const stream = new PeerHealthStream(() => now);
   const changes: string[] = [];
 
-  stream.onPeerHealthChange((snap) =>
-    changes.push(`${snap.sourceAddr}:${snap.level}`)
-  );
+  stream.onPeerHealthChange((snap) => changes.push(`${snap.sourceAddr}:${snap.level}`));
 
   stream.ingestEvidence(makeEvidence('path-timeout', 'peer-A', 0, 100));
   expect(changes.length).toBeGreaterThanOrEqual(1);

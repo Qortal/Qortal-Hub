@@ -139,10 +139,7 @@ describe('gcall-diagnostics', () => {
     });
     const parsed = JSON.parse(json) as {
       audioSurfaceRuntimeDiagnostics?: {
-        pipelineMode: {
-          crossOriginIsolated: boolean;
-          sharedArrayBufferDefined: boolean;
-        };
+        pipelineMode: { crossOriginIsolated: boolean; sharedArrayBufferDefined: boolean };
         recentEvents: Array<{ payload: { fromAddress: string } }>;
       };
     };
@@ -150,8 +147,7 @@ describe('gcall-diagnostics', () => {
       parsed.audioSurfaceRuntimeDiagnostics?.pipelineMode.crossOriginIsolated
     ).toBe(true);
     expect(
-      parsed.audioSurfaceRuntimeDiagnostics?.recentEvents[0]?.payload
-        ?.fromAddress
+      parsed.audioSurfaceRuntimeDiagnostics?.recentEvents[0]?.payload?.fromAddress
     ).toBe('QcrJnv…Prc3');
   });
 
@@ -263,9 +259,7 @@ describe('gcall-diagnostics', () => {
       liveMetricsSnapshot: {},
       exportWindowMetrics: {},
     });
-    const parsed = JSON.parse(json) as {
-      twoWayDecryptVerificationHint: string;
-    };
+    const parsed = JSON.parse(json) as { twoWayDecryptVerificationHint: string };
     expect(parsed.twoWayDecryptVerificationHint).toBe(
       GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT
     );
@@ -310,9 +304,7 @@ describe('gcall-diagnostics', () => {
       phase2PendingDecryptWindowHint: string;
       phase5PairedVerificationHint: string;
     };
-    expect(parsed.phase0ClassificationHint).toBe(
-      GCALL_PHASE0_CLASSIFICATION_HINT
-    );
+    expect(parsed.phase0ClassificationHint).toBe(GCALL_PHASE0_CLASSIFICATION_HINT);
     expect(parsed.phase2PendingDecryptWindowHint).toBe(
       GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT
     );

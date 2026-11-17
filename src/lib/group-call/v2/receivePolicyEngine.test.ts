@@ -19,10 +19,7 @@ const STREAM_ID: StreamIdentity = {
   joinGeneration: 1,
 };
 
-function makePeerHealth(
-  level: PeerHealthSnapshot['level'],
-  freshMedia = true
-): PeerHealthSnapshot {
+function makePeerHealth(level: PeerHealthSnapshot['level'], freshMedia = true): PeerHealthSnapshot {
   return {
     sourceAddr: 'peer-A',
     level,
@@ -199,9 +196,7 @@ test('steady: arms steady-state recovery after repeated thin-pcm ticks with rece
   });
   const nowBase = performance.now();
 
-  policy.tick(
-    makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 })
-  );
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
   expect(policy.state).toBe('steady');
 
   for (let i = 1; i <= 4; i += 1) {
@@ -244,9 +239,7 @@ test('steady: does not arm steady-state recovery from stale packet inactivity al
   });
   const nowBase = performance.now();
 
-  policy.tick(
-    makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 })
-  );
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
   expect(policy.state).toBe('steady');
 
   for (let i = 1; i <= 5; i += 1) {
@@ -286,9 +279,7 @@ test('steady: arms steady-state recovery immediately on a fresh large arrival-ga
   });
   const nowBase = performance.now();
 
-  policy.tick(
-    makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 })
-  );
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
   expect(policy.state).toBe('steady');
 
   const out = policy.tick(
@@ -329,9 +320,7 @@ test('steady: arms steady-state recovery immediately on fresh concealment under 
   });
   const nowBase = performance.now();
 
-  policy.tick(
-    makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 })
-  );
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
   expect(policy.state).toBe('steady');
 
   const out = policy.tick(
@@ -360,9 +349,7 @@ test('backlogDrain: keeps a higher exit floor while steady-state recovery is act
   });
   const nowBase = performance.now();
 
-  policy.tick(
-    makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 })
-  );
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
   policy.tick(
     makeInput({
       nowMs: nowBase + 20,
@@ -428,13 +415,11 @@ test('backlogDrain: exits to steady when opus drained and pcm non-empty', () => 
   expect(policy.state).toBe('backlogDrain');
 
   // Drain: opus falls below exit ratio, PCM healthy.
-  const out = policy.tick(
-    makeInput({
-      jitterDepth: 2,
-      opusBufferedMs: 50, // < 120 * 0.45 = 54
-      pcmBufferedMs: 80, // >= max(20, 120 * 0.6)
-    })
-  );
+  const out = policy.tick(makeInput({
+    jitterDepth: 2,
+    opusBufferedMs: 50,  // < 120 * 0.45 = 54
+    pcmBufferedMs: 80,   // >= max(20, 120 * 0.6)
+  }));
   expect(policy.state).toBe('steady');
   expect(out.holdPlayout).toBe(false);
 });
@@ -450,12 +435,10 @@ test('backlogDrain: does NOT exit when opus drained but pcm still empty', () => 
 
   // Opus drained but PCM empty — NOT the call-63 scenario where we were stuck.
   // We can exit once PCM has at least some content.
-  const out = policy.tick(
-    makeInput({
-      opusBufferedMs: 40,
-      pcmBufferedMs: 0, // Still empty
-    })
-  );
+  const out = policy.tick(makeInput({
+    opusBufferedMs: 40,
+    pcmBufferedMs: 0,  // Still empty
+  }));
   // Should still be in backlogDrain, waiting for PCM.
   expect(policy.state).toBe('backlogDrain');
   expect(out.holdPlayout).toBe(false); // We DON'T hold playout in backlogDrain!
@@ -505,12 +488,8 @@ test('steady: delays backlogDrain re-entry briefly after a latency-cap exit', ()
   });
   const nowBase = performance.now();
 
-  policy.tick(
-    makeInput({ jitterDepth: 4, opusBufferedMs: 80, nowMs: nowBase })
-  );
-  policy.tick(
-    makeInput({ jitterDepth: 10, opusBufferedMs: 140, nowMs: nowBase + 20 })
-  );
+  policy.tick(makeInput({ jitterDepth: 4, opusBufferedMs: 80, nowMs: nowBase }));
+  policy.tick(makeInput({ jitterDepth: 10, opusBufferedMs: 140, nowMs: nowBase + 20 }));
   expect(policy.state).toBe('backlogDrain');
 
   policy.tick(
@@ -559,36 +538,29 @@ test('transportDegraded: exits via hard TTL even if evidence is continuously ren
 
   // Inject degraded health (no fresh media).
   const nowBase = performance.now();
-  policy.tick(
-    makeInput({
-      peerHealth: makePeerHealth('degraded', false),
-      nowMs: nowBase,
-    })
-  );
+  policy.tick(makeInput({
+    peerHealth: makePeerHealth('degraded', false),
+    nowMs: nowBase,
+  }));
   expect(policy.state).toBe('transportDegraded');
 
   // Keep renewing evidence BUT do NOT confirm fresh media — should still exit at hard TTL.
-  const outBefore = policy.tick(
-    makeInput({
-      peerHealth: makePeerHealth('degraded', false),
-      nowMs: nowBase + 50,
-    })
-  );
+  const outBefore = policy.tick(makeInput({
+    peerHealth: makePeerHealth('degraded', false),
+    nowMs: nowBase + 50,
+  }));
   expect(policy.state).toBe('transportDegraded');
 
   // Hard TTL expires.
-  const outAfter = policy.tick(
-    makeInput({
-      peerHealth: makePeerHealth('degraded', false),
-      nowMs: nowBase + 110, // > 100ms hard TTL
-      opusBufferedMs: 30, // No backlog, should go to steady
-      pcmBufferedMs: 60,
-    })
-  );
+  const outAfter = policy.tick(makeInput({
+    peerHealth: makePeerHealth('degraded', false),
+    nowMs: nowBase + 110,  // > 100ms hard TTL
+    opusBufferedMs: 30,    // No backlog, should go to steady
+    pcmBufferedMs: 60,
+  }));
   // Must have exited transportDegraded.
   expect(policy.state).not.toBe('transportDegraded');
-  void outBefore;
-  void outAfter;
+  void outBefore; void outAfter;
 });
 
 test('transportDegraded: exits immediately when freshLocalMediaConfirmed', () => {
@@ -599,23 +571,19 @@ test('transportDegraded: exits immediately when freshLocalMediaConfirmed', () =>
 
   policy.tick(makeInput({ jitterDepth: 4, opusBufferedMs: 80 }));
   const nowBase = performance.now();
-  policy.tick(
-    makeInput({
-      peerHealth: makePeerHealth('degraded', false),
-      nowMs: nowBase,
-    })
-  );
+  policy.tick(makeInput({
+    peerHealth: makePeerHealth('degraded', false),
+    nowMs: nowBase,
+  }));
   expect(policy.state).toBe('transportDegraded');
 
   // Fresh media confirmed — should exit immediately without waiting for TTL.
-  policy.tick(
-    makeInput({
-      peerHealth: makePeerHealth('healthy', true),
-      nowMs: nowBase + 500,
-      opusBufferedMs: 40,
-      pcmBufferedMs: 60,
-    })
-  );
+  policy.tick(makeInput({
+    peerHealth: makePeerHealth('healthy', true),
+    nowMs: nowBase + 500,
+    opusBufferedMs: 40,
+    pcmBufferedMs: 60,
+  }));
   expect(policy.state).toBe('steady');
 });
 

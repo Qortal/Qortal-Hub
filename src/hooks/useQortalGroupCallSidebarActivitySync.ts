@@ -50,17 +50,15 @@ export function useQortalGroupCallSidebarActivitySync(): void {
     if (!api?.onQortalGroupCallActivity || !api.setWatchedQortalGroupIds) {
       return;
     }
-    const unsub = api.onQortalGroupCallActivity(
-      ({
-        activeByGroupId,
-        participantCountByGroupId,
-        maxParticipantsByGroupId,
-      }) => {
-        setMeshCallActive(activeByGroupId);
-        setMeshCallParticipantCount(participantCountByGroupId ?? {});
-        setMeshCallMaxParticipants(maxParticipantsByGroupId ?? {});
-      }
-    );
+    const unsub = api.onQortalGroupCallActivity(({
+      activeByGroupId,
+      participantCountByGroupId,
+      maxParticipantsByGroupId,
+    }) => {
+      setMeshCallActive(activeByGroupId);
+      setMeshCallParticipantCount(participantCountByGroupId ?? {});
+      setMeshCallMaxParticipants(maxParticipantsByGroupId ?? {});
+    });
     return () => {
       unsub();
       // Do not clear watched ids here: it races with React Strict remounts and leaves main

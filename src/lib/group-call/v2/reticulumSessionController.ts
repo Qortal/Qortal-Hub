@@ -66,8 +66,7 @@ export class ReticulumSessionController implements IReticulumSessionController {
   private readonly _healthStream: PeerHealthStream;
   private readonly _streamEpochs = new Map<string, number>();
   private readonly _joinGenerations = new Map<string, number>();
-  private readonly _lifecycleListeners =
-    new Set<ParticipantLifecycleListener>();
+  private readonly _lifecycleListeners = new Set<ParticipantLifecycleListener>();
   private readonly _diag: IDiagnosticsRecorder;
   private readonly _clockMs: () => number;
 
@@ -182,11 +181,7 @@ export class ReticulumSessionController implements IReticulumSessionController {
         this._emitLifecycle({
           kind: 'left',
           sourceAddr: addr,
-          streamId: {
-            sourceAddr: addr,
-            streamEpoch: epoch,
-            joinGeneration: gen,
-          },
+          streamId: { sourceAddr: addr, streamEpoch: epoch, joinGeneration: gen },
           atMs: nowMs,
         });
         break;

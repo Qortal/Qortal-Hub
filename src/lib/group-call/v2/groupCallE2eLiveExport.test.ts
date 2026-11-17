@@ -12,29 +12,18 @@ const liveArtifactRoot = process.env.GCALL_E2E_ARTIFACT_DIR
   ? path.resolve(process.env.GCALL_E2E_ARTIFACT_DIR, 'live-export')
   : null;
 
-function createSyntheticExport(
-  role: string,
-  overrides: {
-    avgPcmBufferedMs?: number;
-    playoutUnderTargetFraction?: number;
-    playoutOutsideTargetFraction?: number;
-    tickBudgetBreachCount?: number;
-    packetsDroppedStaleTimestamp?: number;
-  } = {}
-): Record<string, unknown> {
+function createSyntheticExport(role: string, overrides: {
+  avgPcmBufferedMs?: number;
+  playoutUnderTargetFraction?: number;
+  playoutOutsideTargetFraction?: number;
+  tickBudgetBreachCount?: number;
+  packetsDroppedStaleTimestamp?: number;
+} = {}): Record<string, unknown> {
   return {
     liveMetricsSnapshot: {
       role,
-      adaptiveNetworkMode:
-        overrides.playoutUnderTargetFraction &&
-        overrides.playoutUnderTargetFraction > 0.4
-          ? 'recovery'
-          : 'steady',
-      playoutStarvationWorstSeverity:
-        overrides.playoutUnderTargetFraction &&
-        overrides.playoutUnderTargetFraction > 0.6
-          ? 'strong'
-          : 'mild',
+      adaptiveNetworkMode: overrides.playoutUnderTargetFraction && overrides.playoutUnderTargetFraction > 0.4 ? 'recovery' : 'steady',
+      playoutStarvationWorstSeverity: overrides.playoutUnderTargetFraction && overrides.playoutUnderTargetFraction > 0.6 ? 'strong' : 'mild',
       gcallAudioStage5BoostCumulativeMs: 0,
       reticulumAudioBridgeWaitingForDrain: false,
     },
@@ -42,8 +31,7 @@ function createSyntheticExport(
       avgPcmBufferedMs: overrides.avgPcmBufferedMs ?? 96,
       avgPlayoutDeltaMs: (overrides.avgPcmBufferedMs ?? 96) - 120,
       playoutUnderTargetFraction: overrides.playoutUnderTargetFraction ?? 0.12,
-      playoutOutsideTargetFraction:
-        overrides.playoutOutsideTargetFraction ?? 0.16,
+      playoutOutsideTargetFraction: overrides.playoutOutsideTargetFraction ?? 0.16,
       playoutRateFractionBelow1: 0,
       jitterUnderruns: 1,
       missingFrames: 0,
@@ -86,8 +74,7 @@ describe('group call E2E live export workflow', () => {
   test('builds a prompt-ready artifact bundle from paired export JSON', async () => {
     const bundle = buildLiveExportArtifactBundle({
       scenarioId: 'synthetic-live-export',
-      scenarioDescription:
-        'Synthetic paired export used to validate live export workflow.',
+      scenarioDescription: 'Synthetic paired export used to validate live export workflow.',
       peerAAddr: 'peer-A',
       peerBAddr: 'peer-B',
       peerAExport: createSyntheticExport('root-forwarder', {
@@ -104,9 +91,9 @@ describe('group call E2E live export workflow', () => {
     expect(bundle.report.mode).toBe('live-export');
     expect(bundle.report.pairedAnalysis.qualityScore).toBeGreaterThanOrEqual(0);
     expect(bundle.promptContextMarkdown).toContain('Cursor Prompt Context');
-    expect(
-      bundle.report.peerA.classification.diagnosticNotes.join('\n')
-    ).toContain('Stale timestamp drops:');
+    expect(bundle.report.peerA.classification.diagnosticNotes.join('\n')).toContain(
+      'Stale timestamp drops:'
+    );
   });
 
   test('classifies the phil-kenny captured pair as an offline regression', async () => {
@@ -118,15 +105,15 @@ describe('group call E2E live export workflow', () => {
     expect(bundle.report.pairedAnalysis.bothPassed).toBe(false);
     expect(bundle.report.pairedAnalysis.qualityScore).toBeLessThan(8);
     expect(bundle.report.peerA.classification.primaryClass).toBe('mixed');
-    expect(
-      bundle.report.peerA.classification.diagnosticNotes.join('\n')
-    ).toContain('Tick budget:');
-    expect(
-      bundle.report.peerA.classification.diagnosticNotes.join('\n')
-    ).toContain('Transport triad:');
-    expect(
-      bundle.report.peerB.classification.diagnosticNotes.join('\n')
-    ).toContain('Stale timestamp drops:');
+    expect(bundle.report.peerA.classification.diagnosticNotes.join('\n')).toContain(
+      'Tick budget:'
+    );
+    expect(bundle.report.peerA.classification.diagnosticNotes.join('\n')).toContain(
+      'Transport triad:'
+    );
+    expect(bundle.report.peerB.classification.diagnosticNotes.join('\n')).toContain(
+      'Stale timestamp drops:'
+    );
     expect(bundle.summaryMarkdown).toContain('needs-work');
   });
 
@@ -138,53 +125,43 @@ describe('group call E2E live export workflow', () => {
     expect(bundle.report.mode).toBe('live-export');
     expect(bundle.report.pairedAnalysis.qualityScore).toBeGreaterThanOrEqual(7);
     expect(bundle.report.pairedAnalysis.qualityScore).toBeLessThan(9);
-    expect(bundle.report.peerA.classification.primaryClass).toBe(
-      'stall-dominated'
+    expect(bundle.report.peerA.classification.primaryClass).toBe('stall-dominated');
+    expect(bundle.report.peerB.classification.diagnosticNotes.join('\n')).toContain(
+      'Stale timestamp drops:'
     );
-    expect(
-      bundle.report.peerB.classification.diagnosticNotes.join('\n')
-    ).toContain('Stale timestamp drops:');
   });
 
   test.runIf(
-    Boolean(process.env.GCALL_E2E_EXPORT_A) &&
-      Boolean(process.env.GCALL_E2E_EXPORT_B)
-  )(
-    'loads provided paired exports and writes the shared bundle format',
-    async () => {
-      const exportAPath = path.resolve(
-        process.env.GCALL_E2E_EXPORT_A as string
-      );
-      const exportBPath = path.resolve(
-        process.env.GCALL_E2E_EXPORT_B as string
-      );
-      const [exportAText, exportBText] = await Promise.all([
-        readFile(exportAPath, 'utf8'),
-        readFile(exportBPath, 'utf8'),
-      ]);
-      const bundle = buildLiveExportArtifactBundle({
-        scenarioId: process.env.GCALL_E2E_SCENARIO || 'live-export-pair',
-        scenarioDescription: 'User-supplied paired diagnostics exports.',
-        peerAAddr: 'peer-A',
-        peerBAddr: 'peer-B',
-        peerAExport: JSON.parse(exportAText) as Record<string, unknown>,
-        peerBExport: JSON.parse(exportBText) as Record<string, unknown>,
+    Boolean(process.env.GCALL_E2E_EXPORT_A) && Boolean(process.env.GCALL_E2E_EXPORT_B)
+  )('loads provided paired exports and writes the shared bundle format', async () => {
+    const exportAPath = path.resolve(process.env.GCALL_E2E_EXPORT_A as string);
+    const exportBPath = path.resolve(process.env.GCALL_E2E_EXPORT_B as string);
+    const [exportAText, exportBText] = await Promise.all([
+      readFile(exportAPath, 'utf8'),
+      readFile(exportBPath, 'utf8'),
+    ]);
+    const bundle = buildLiveExportArtifactBundle({
+      scenarioId: process.env.GCALL_E2E_SCENARIO || 'live-export-pair',
+      scenarioDescription: 'User-supplied paired diagnostics exports.',
+      peerAAddr: 'peer-A',
+      peerBAddr: 'peer-B',
+      peerAExport: JSON.parse(exportAText) as Record<string, unknown>,
+      peerBExport: JSON.parse(exportBText) as Record<string, unknown>,
+    });
+    console.info('LIVE EXPORT SUMMARY:', {
+      qualityScore: bundle.report.pairedAnalysis.qualityScore,
+      bothPassed: bundle.report.pairedAnalysis.bothPassed,
+      worseAddr: bundle.report.pairedAnalysis.worseAddr,
+      peerAClass: bundle.report.peerA.classification.primaryClass,
+      peerBClass: bundle.report.peerB.classification.primaryClass,
+    });
+    if (liveArtifactRoot) {
+      await writeGroupCallE2eArtifactBundle(liveArtifactRoot, bundle, {
+        'peer-a-export.json': exportAText,
+        'peer-b-export.json': exportBText,
       });
-      console.info('LIVE EXPORT SUMMARY:', {
-        qualityScore: bundle.report.pairedAnalysis.qualityScore,
-        bothPassed: bundle.report.pairedAnalysis.bothPassed,
-        worseAddr: bundle.report.pairedAnalysis.worseAddr,
-        peerAClass: bundle.report.peerA.classification.primaryClass,
-        peerBClass: bundle.report.peerB.classification.primaryClass,
-      });
-      if (liveArtifactRoot) {
-        await writeGroupCallE2eArtifactBundle(liveArtifactRoot, bundle, {
-          'peer-a-export.json': exportAText,
-          'peer-b-export.json': exportBText,
-        });
-      }
-      expect(bundle.report.peerA.metrics.durationMs).toBeGreaterThanOrEqual(0);
-      expect(bundle.report.peerB.metrics.durationMs).toBeGreaterThanOrEqual(0);
     }
-  );
+    expect(bundle.report.peerA.metrics.durationMs).toBeGreaterThanOrEqual(0);
+    expect(bundle.report.peerB.metrics.durationMs).toBeGreaterThanOrEqual(0);
+  });
 });

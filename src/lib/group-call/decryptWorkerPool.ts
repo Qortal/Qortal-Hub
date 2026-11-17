@@ -32,10 +32,7 @@
  *     watermark, avoiding the round-trip + main-thread apply for obviously stale work.
  */
 
-import type {
-  DecryptBatchResultEntry,
-  DecryptResult,
-} from '../../workers/audio-decrypt.worker';
+import type { DecryptBatchResultEntry, DecryptResult } from '../../workers/audio-decrypt.worker';
 import { traceGcallAudioSurface } from './gcallAudioSurfaceTrace';
 import { gcallSeqIsAfter } from './gcallSequence';
 
@@ -74,7 +71,11 @@ export interface DecryptPoolHandlers {
   /** One entry per decrypt submitted to the pool. `status` mirrors the worker-side classification. */
   onDecryptResult(entry: DecryptPoolDecryptBatchHandlerInput): void;
   /** Mirrors the legacy encrypt result. `packet` is the fully-encoded secretbox payload. */
-  onEncryptResult(id: number, packet: ArrayBuffer | null, error?: string): void;
+  onEncryptResult(
+    id: number,
+    packet: ArrayBuffer | null,
+    error?: string
+  ): void;
   /** All decrypt slots + the encrypt worker have applied `keyVersion`. */
   onAllRoomKeyApplied?(keyVersion: number): void;
   /** All decrypt slots + the encrypt worker have cleared the key. */
@@ -364,7 +365,9 @@ export class DecryptWorkerPool {
 
     // Shrink: pick routing-ring tail slots to drain.
     const toDrainCount = from - clamped;
-    const drainable = [...this.routingRing].reverse().slice(0, toDrainCount);
+    const drainable = [...this.routingRing]
+      .reverse()
+      .slice(0, toDrainCount);
     const drainPromises: Promise<void>[] = [];
     for (const idx of drainable) {
       const slot = this.slots[idx];
@@ -535,23 +538,9 @@ export class DecryptWorkerPool {
       | { type: 'workerInitFailed'; error: string }
       | { type: 'roomKeyApplied'; keyVersion: number }
       | { type: 'roomKeyCleared'; keyVersion: number }
-      | {
-          type: 'result';
-          id: number;
-          decoded?: DecryptResult | null;
-          decodedMulti?: DecryptResult[];
-        }
-      | {
-          type: 'resultBatch';
-          batchId: number;
-          results: DecryptBatchResultEntry[];
-        }
-      | {
-          type: 'encryptResult';
-          id: number;
-          packet: ArrayBuffer | null;
-          error?: string;
-        }
+      | { type: 'result'; id: number; decoded?: DecryptResult | null; decodedMulti?: DecryptResult[] }
+      | { type: 'resultBatch'; batchId: number; results: DecryptBatchResultEntry[] }
+      | { type: 'encryptResult'; id: number; packet: ArrayBuffer | null; error?: string }
       | { type: 'pong'; pingId: number };
 
     switch (data.type) {
@@ -657,12 +646,7 @@ export class DecryptWorkerPool {
       | { type: 'workerInitFailed'; error: string }
       | { type: 'roomKeyApplied'; keyVersion: number }
       | { type: 'roomKeyCleared'; keyVersion: number }
-      | {
-          type: 'encryptResult';
-          id: number;
-          packet: ArrayBuffer | null;
-          error?: string;
-        }
+      | { type: 'encryptResult'; id: number; packet: ArrayBuffer | null; error?: string }
       | { type: 'result' };
 
     if (data.type === 'encryptResult') {
@@ -681,10 +665,7 @@ export class DecryptWorkerPool {
     }
     if (data.type === 'roomKeyCleared') {
       const kv = data.keyVersion >>> 0;
-      this.encryptClearedKeyVersion = Math.max(
-        this.encryptClearedKeyVersion,
-        kv
-      );
+      this.encryptClearedKeyVersion = Math.max(this.encryptClearedKeyVersion, kv);
       this.encryptAppliedKeyVersion = null;
       traceGcallAudioSurface('decryptPool.roomKeyCleared: encrypt worker', {
         keyVersion: kv,
@@ -753,7 +734,10 @@ export class DecryptWorkerPool {
     }
     this.nudgeKeyApplyAndClearResolvers();
     this.handlers.onSlotError?.(-1, ev);
-    if (!this.terminated && this.encryptWorkerErrorRespawns < 3) {
+    if (
+      !this.terminated &&
+      this.encryptWorkerErrorRespawns < 3
+    ) {
       this.encryptWorkerErrorRespawns += 1;
       this.spawnEncryptWorker();
     }
@@ -788,50 +772,36 @@ export class DecryptWorkerPool {
         ok: s.status === 'terminated' || s.clearedKeyVersion >= needKeyVersion,
       })),
       encrypt: this.encryptWorker
-        ? {
-            cleared: this.encryptClearedKeyVersion,
-            ok: this.encryptClearedKeyVersion >= needKeyVersion,
-          }
+        ? { cleared: this.encryptClearedKeyVersion, ok: this.encryptClearedKeyVersion >= needKeyVersion }
         : { skipped: true as const },
     };
   }
 
-  private tryResolveKeyCleared(
-    keyVersion: number,
-    fromWorkerAck: boolean
-  ): void {
+  private tryResolveKeyCleared(keyVersion: number, fromWorkerAck: boolean): void {
     const resolver = this.pendingKeyClearResolvers.get(keyVersion);
     if (!resolver) return;
     for (const slot of this.slots) {
       if (slot.status === 'terminated') continue;
       if (slot.clearedKeyVersion < keyVersion) {
         if (fromWorkerAck) {
-          traceGcallAudioSurface(
-            'decryptPool.clearRoomKey: still waiting (decrypt slot)',
-            {
-              ...this.keyClearDebugSnapshot(keyVersion),
-              blockingSlotIndex: slot.index,
-            }
-          );
+          traceGcallAudioSurface('decryptPool.clearRoomKey: still waiting (decrypt slot)', {
+            ...this.keyClearDebugSnapshot(keyVersion),
+            blockingSlotIndex: slot.index,
+          });
         }
         return;
       }
     }
     if (this.encryptWorker && this.encryptClearedKeyVersion < keyVersion) {
       if (fromWorkerAck) {
-        traceGcallAudioSurface(
-          'decryptPool.clearRoomKey: still waiting (encrypt worker)',
-          {
-            ...this.keyClearDebugSnapshot(keyVersion),
-          }
-        );
+        traceGcallAudioSurface('decryptPool.clearRoomKey: still waiting (encrypt worker)', {
+          ...this.keyClearDebugSnapshot(keyVersion),
+        });
       }
       return;
     }
     this.pendingKeyClearResolvers.delete(keyVersion);
-    traceGcallAudioSurface('decryptPool.clearRoomKey: resolved', {
-      keyVersion,
-    });
+    traceGcallAudioSurface('decryptPool.clearRoomKey: resolved', { keyVersion });
     resolver();
     this.handlers.onAllRoomKeyCleared?.(keyVersion);
   }

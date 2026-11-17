@@ -69,5 +69,6 @@ export function createRefcountedFanout<T extends GcallFanoutWebContents>(
   };
 }
 
-export type GcallRendererSubscriptionFanout<T extends GcallFanoutWebContents> =
-  ReturnType<typeof createRefcountedFanout<T>>;
+export type GcallRendererSubscriptionFanout<T extends GcallFanoutWebContents> = ReturnType<
+  typeof createRefcountedFanout<T>
+>;

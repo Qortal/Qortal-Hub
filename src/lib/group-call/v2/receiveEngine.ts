@@ -108,10 +108,7 @@ class StreamJitterBuffer {
       receivedAtMs,
     });
     if (this._lastPacketReceivedAtMs >= 0) {
-      const arrivalGapMs = Math.max(
-        0,
-        receivedAtMs - this._lastPacketReceivedAtMs
-      );
+      const arrivalGapMs = Math.max(0, receivedAtMs - this._lastPacketReceivedAtMs);
       this._recentArrivalGapMs = arrivalGapMs;
       this._recentArrivalGapObservedAtMs = receivedAtMs;
     }
@@ -164,8 +161,7 @@ class StreamJitterBuffer {
 
   recentArrivalGapMs(windowMs = 4_000): number {
     if (this._recentArrivalGapObservedAtMs < 0) return 0;
-    if (this._clockMs() - this._recentArrivalGapObservedAtMs > windowMs)
-      return 0;
+    if (this._clockMs() - this._recentArrivalGapObservedAtMs > windowMs) return 0;
     return this._recentArrivalGapMs;
   }
 
@@ -253,8 +249,7 @@ export class ReceiveEngine {
     this.key = streamKey(opts.streamId);
     this._clockMs = opts.clockMs ?? (() => performance.now());
     this._decode = opts.decodeService;
-    this._pcmRing =
-      opts.pcmRing ?? new PerSourcePcmRing({ sampleRateHz: opts.sampleRateHz });
+    this._pcmRing = opts.pcmRing ?? new PerSourcePcmRing({ sampleRateHz: opts.sampleRateHz });
     this._diag = opts.diagnostics ?? new NullDiagnosticsRecorder();
     this._jitter = new StreamJitterBuffer(
       opts.jitterCapacity ?? 8,
@@ -428,11 +423,7 @@ export class ReceiveEngine {
       }
 
       // Opus decode.
-      const pcm = await this._decode.decode(
-        this.streamId,
-        entry.seq,
-        entry.opusFrame
-      );
+      const pcm = await this._decode.decode(this.streamId, entry.seq, entry.opusFrame);
       if (pcm) {
         this._pcmRing.write(pcm, { ingressAtMs: entry.receivedAtMs });
         decoded++;
@@ -448,10 +439,7 @@ export class ReceiveEngine {
       }
 
       // If we've reached the target buffer depth, stop decoding.
-      if (
-        !policy.aggressiveDrain &&
-        this._pcmRing.bufferedMs() >= policy.targetBufferMs
-      ) {
+      if (!policy.aggressiveDrain && this._pcmRing.bufferedMs() >= policy.targetBufferMs) {
         break;
       }
     }

@@ -156,7 +156,9 @@ export interface PairedAnalysisResult {
 export function scorePeerQuality(m: PeerExportMetrics): number {
   let score = 10;
   const concealmentFraction =
-    m.durationMs > 0 ? (m.concealmentTicks * 20) / m.durationMs : 0;
+    m.durationMs > 0
+      ? (m.concealmentTicks * 20) / m.durationMs
+      : 0;
   const transportImpactingPlayout =
     m.playoutUnderTargetFraction > 0.05 ||
     m.playoutOutsideTargetFraction > 0.08 ||
@@ -180,16 +182,13 @@ export function scorePeerQuality(m: PeerExportMetrics): number {
   if (m.avgPcmRingOldestFrameAgeMs > Math.max(m.avgTargetBufferMs * 1.5, 180)) {
     score -= Math.min(
       2.5,
-      (m.avgPcmRingOldestFrameAgeMs -
-        Math.max(m.avgTargetBufferMs * 1.5, 180)) /
-        80
+      (m.avgPcmRingOldestFrameAgeMs - Math.max(m.avgTargetBufferMs * 1.5, 180)) / 80
     );
   }
   if (m.maxPcmRingOldestFrameAgeMs > Math.max(m.avgTargetBufferMs * 2, 260)) {
     score -= Math.min(
       1.5,
-      (m.maxPcmRingOldestFrameAgeMs - Math.max(m.avgTargetBufferMs * 2, 260)) /
-        120
+      (m.maxPcmRingOldestFrameAgeMs - Math.max(m.avgTargetBufferMs * 2, 260)) / 120
     );
   }
   if (m.packetsDroppedPendingDecryptRatePerSec > 0.5) score -= 2;
@@ -199,11 +198,7 @@ export function scorePeerQuality(m: PeerExportMetrics): number {
     score -= staleTimestampImpactingPlayout ? 1 : 0.25;
   }
   if (m.reticulumAudioBridgeQueuedFramesHighWater > 16) {
-    score -= mildTransportQueuePressure
-      ? 0.25
-      : transportImpactingPlayout
-        ? 1
-        : 0.25;
+    score -= mildTransportQueuePressure ? 0.25 : transportImpactingPlayout ? 1 : 0.25;
   }
   if (m.tickBudgetBreachP95Ms > 15) {
     score -= stallImpactingPlayout ? 2 : 0.5;
@@ -240,12 +235,7 @@ export class PairedExportAnalyzer {
 
     const worseAddr = scoreA <= scoreB ? peerAAddr : peerBAddr;
 
-    const callSummary = this._buildSummary(
-      classA,
-      classB,
-      bothPassed,
-      qualityScore
-    );
+    const callSummary = this._buildSummary(classA, classB, bothPassed, qualityScore);
 
     return {
       peerA: classA,
@@ -257,10 +247,7 @@ export class PairedExportAnalyzer {
     };
   }
 
-  private _classifyPeer(
-    addr: string,
-    m: PeerExportMetrics
-  ): PeerClassification {
+  private _classifyPeer(addr: string, m: PeerExportMetrics): PeerClassification {
     const notes: string[] = [];
     const candidates: FailureClass[] = [];
 
@@ -271,7 +258,8 @@ export class PairedExportAnalyzer {
     }
     if (
       m.v2ManagedSourceCount > 0 &&
-      m.avgPcmRingBufferedMs > Math.max(m.avgTargetBufferMs * 2, 250)
+      m.avgPcmRingBufferedMs >
+        Math.max(m.avgTargetBufferMs * 2, 250)
     ) {
       notes.push(
         `Hidden decoded reserve: ring=${m.avgPcmRingBufferedMs.toFixed(1)}ms, target=${m.avgTargetBufferMs.toFixed(1)}ms`
@@ -279,16 +267,15 @@ export class PairedExportAnalyzer {
     }
     if (
       m.v2ManagedSourceCount > 0 &&
-      m.avgPcmRingOldestFrameAgeMs > Math.max(m.avgTargetBufferMs * 1.5, 180)
+      m.avgPcmRingOldestFrameAgeMs >
+        Math.max(m.avgTargetBufferMs * 1.5, 180)
     ) {
       notes.push(
         `Stale decoded PCM age: avg=${m.avgPcmRingOldestFrameAgeMs.toFixed(1)}ms, max=${m.maxPcmRingOldestFrameAgeMs.toFixed(1)}ms`
       );
     }
     if (m.stalePcmDrops > 0) {
-      notes.push(
-        `Freshness controller dropped ${m.stalePcmDrops} stale PCM frames`
-      );
+      notes.push(`Freshness controller dropped ${m.stalePcmDrops} stale PCM frames`);
     }
     if (
       m.packetsDroppedStaleTimestamp >= STALE_TIMESTAMP_NOTE_DROP_COUNT ||
@@ -315,16 +302,11 @@ export class PairedExportAnalyzer {
 
     // Decrypt-dominated check (only if triad is calm).
     const triadCalm =
-      m.reticulumAudioBridgeQueuedFramesHighWater <
-        TRANSPORT_DOMINATED_BRIDGE_HW &&
-      m.reticulumAudioBinaryOutQueueDepthHighWater <
-        TRANSPORT_DOMINATED_BINARY_HW &&
+      m.reticulumAudioBridgeQueuedFramesHighWater < TRANSPORT_DOMINATED_BRIDGE_HW &&
+      m.reticulumAudioBinaryOutQueueDepthHighWater < TRANSPORT_DOMINATED_BINARY_HW &&
       !m.reticulumAudioBridgeWaitingForDrain;
 
-    if (
-      m.packetsDroppedPendingDecryptRatePerSec >= DECRYPT_DOMINATED_DROP_RATE &&
-      triadCalm
-    ) {
+    if (m.packetsDroppedPendingDecryptRatePerSec >= DECRYPT_DOMINATED_DROP_RATE && triadCalm) {
       candidates.push('decrypt-dominated');
       notes.push(
         `Decrypt drops: ${m.packetsDroppedPendingDecryptRatePerSec.toFixed(2)}/s (triad calm)`
@@ -333,16 +315,14 @@ export class PairedExportAnalyzer {
 
     // Transport-dominated check.
     const triadHot =
-      m.reticulumAudioBridgeQueuedFramesHighWater >=
-        TRANSPORT_DOMINATED_BRIDGE_HW ||
-      m.reticulumAudioBinaryOutQueueDepthHighWater >=
-        TRANSPORT_DOMINATED_BINARY_HW ||
+      m.reticulumAudioBridgeQueuedFramesHighWater >= TRANSPORT_DOMINATED_BRIDGE_HW ||
+      m.reticulumAudioBinaryOutQueueDepthHighWater >= TRANSPORT_DOMINATED_BINARY_HW ||
       m.reticulumAudioBridgeWaitingForDrain;
     if (triadHot) {
       candidates.push('transport-dominated');
       notes.push(
         `Transport triad: bridgeHW=${m.reticulumAudioBridgeQueuedFramesHighWater}, ` +
-          `binaryHW=${m.reticulumAudioBinaryOutQueueDepthHighWater}`
+        `binaryHW=${m.reticulumAudioBinaryOutQueueDepthHighWater}`
       );
     }
 
@@ -350,80 +330,52 @@ export class PairedExportAnalyzer {
     const policyBad =
       m.playoutUnderTargetFraction > POLICY_BAD_UNDER_TARGET ||
       m.avgPcmBufferedMs < POLICY_BAD_PCM_MS;
-    if (
-      policyBad &&
-      !isStallDominated &&
-      triadCalm &&
-      m.packetsDroppedPendingDecryptRatePerSec < 1
-    ) {
+    if (policyBad && !isStallDominated && triadCalm && m.packetsDroppedPendingDecryptRatePerSec < 1) {
       candidates.push('policy-dominated');
       notes.push(
         `Policy: avgPcm=${m.avgPcmBufferedMs.toFixed(1)}ms, ` +
-          `underTarget=${(m.playoutUnderTargetFraction * 100).toFixed(0)}%, ` +
-          `mode=${m.adaptiveNetworkMode}`
+        `underTarget=${(m.playoutUnderTargetFraction * 100).toFixed(0)}%, ` +
+        `mode=${m.adaptiveNetworkMode}`
       );
     }
 
     const primaryClass: FailureClass =
       candidates.length === 0 ? 'policy-dominated' : candidates[0];
     const secondaryClass: FailureClass | undefined =
-      candidates.length >= 2
-        ? candidates.length === 2
-          ? candidates[1]
-          : 'mixed'
-        : undefined;
+      candidates.length >= 2 ? (candidates.length === 2 ? candidates[1] : 'mixed') : undefined;
 
     // Provisional pass bars.
-    const provisionalBars: ProvisionalPassBarResult[] = PROVISIONAL_BARS.map(
-      (bar) => {
-        const observed = m[bar.metric] as number;
-        let passed: boolean;
-        switch (bar.operator) {
-          case '<':
-            passed = observed < bar.threshold;
-            break;
-          case '<=':
-            passed = observed <= bar.threshold;
-            break;
-          case '>=':
-            passed = observed >= bar.threshold;
-            break;
-          case '===':
-            passed = observed === bar.threshold;
-            break;
-          default:
-            passed = false;
-        }
-        return {
-          metric: bar.metric,
-          observed,
-          threshold: bar.threshold,
-          operator: bar.operator,
-          passed,
-          description: bar.description,
-        };
+    const provisionalBars: ProvisionalPassBarResult[] = PROVISIONAL_BARS.map((bar) => {
+      const observed = m[bar.metric] as number;
+      let passed: boolean;
+      switch (bar.operator) {
+        case '<': passed = observed < bar.threshold; break;
+        case '<=': passed = observed <= bar.threshold; break;
+        case '>=': passed = observed >= bar.threshold; break;
+        case '===': passed = observed === bar.threshold; break;
+        default: passed = false;
       }
-    );
+      return {
+        metric: bar.metric,
+        observed,
+        threshold: bar.threshold,
+        operator: bar.operator,
+        passed,
+        description: bar.description,
+      };
+    });
 
     const passedAllBars = provisionalBars.every((b) => b.passed);
 
     // Stage 5 boost note.
     if (m.gcallAudioStage5BoostCumulativeMs > 5_000) {
-      notes.push(
-        `Stage5 boost: ${(m.gcallAudioStage5BoostCumulativeMs / 1000).toFixed(1)}s`
-      );
+      notes.push(`Stage5 boost: ${(m.gcallAudioStage5BoostCumulativeMs / 1000).toFixed(1)}s`);
     }
 
     // Severity.
     const score = this._qualityScore(m);
     const severity: PeerClassification['severity'] =
-      score >= 7
-        ? 'healthy'
-        : score >= 5
-          ? 'mild'
-          : score >= 3
-            ? 'moderate'
-            : 'severe';
+      score >= 7 ? 'healthy' : score >= 5 ? 'mild' : score >= 3 ? 'moderate' : 'severe';
 
     return {
       addr,
@@ -447,23 +399,11 @@ export class PairedExportAnalyzer {
     bothPassed: boolean,
     qualityScore: number
   ): string {
-    const grade =
-      qualityScore >= 8
-        ? 'Good'
-        : qualityScore >= 5
-          ? 'Acceptable'
-          : qualityScore >= 3
-            ? 'Poor'
-            : 'Broken';
+    const grade = qualityScore >= 8 ? 'Good' : qualityScore >= 5 ? 'Acceptable' : qualityScore >= 3 ? 'Poor' : 'Broken';
     const peerSummary = [a, b]
-      .map(
-        (p) =>
-          `${p.addr} (${p.role}): ${p.primaryClass}, severity=${p.severity}`
-      )
+      .map((p) => `${p.addr} (${p.role}): ${p.primaryClass}, severity=${p.severity}`)
       .join('; ');
-    const passStatus = bothPassed
-      ? 'BOTH PEERS PASS'
-      : 'ONE OR BOTH PEERS FAIL';
+    const passStatus = bothPassed ? 'BOTH PEERS PASS' : 'ONE OR BOTH PEERS FAIL';
     return `[${grade} ${qualityScore.toFixed(1)}/10] ${passStatus} — ${peerSummary}`;
   }
 }
@@ -475,16 +415,12 @@ export class PairedExportAnalyzer {
 /**
  * Parse a v1 diagnostic export JSON and extract the metrics needed for analysis.
  */
-export function extractMetricsFromV1Export(
-  json: Record<string, unknown>
-): PeerExportMetrics {
+export function extractMetricsFromV1Export(json: Record<string, unknown>): PeerExportMetrics {
   const live = (json.liveMetricsSnapshot ?? {}) as Record<string, unknown>;
   const win = (json.exportWindowMetrics ?? {}) as Record<string, unknown>;
   const v2 = (json.v2Diagnostics ?? {}) as Record<string, unknown>;
-  const perf = ((json.gcallPerfSnapshot as Record<string, unknown> | undefined)
-    ?.meta ?? {}) as Record<string, unknown>;
-  const lt = ((json.gcallPerfSnapshot as Record<string, unknown> | undefined)
-    ?.longTasks ?? {}) as Record<string, unknown>;
+  const perf = ((json.gcallPerfSnapshot as Record<string, unknown> | undefined)?.meta ?? {}) as Record<string, unknown>;
+  const lt = ((json.gcallPerfSnapshot as Record<string, unknown> | undefined)?.longTasks ?? {}) as Record<string, unknown>;
 
   const num = (obj: Record<string, unknown>, key: string): number =>
     typeof obj[key] === 'number' ? (obj[key] as number) : 0;
@@ -529,47 +465,28 @@ export function extractMetricsFromV1Export(
     staleTimestampDropsLive
   );
   const packetsDroppedStaleTimestampRatePerSec =
-    durationMs > 0 ? packetsDroppedStaleTimestamp / (durationMs / 1000) : 0;
+    durationMs > 0
+      ? packetsDroppedStaleTimestamp / (durationMs / 1000)
+      : 0;
 
   return {
     avgPcmBufferedMs: preferLiveWhenLegacyWindowMissing('avgPcmBufferedMs'),
     avgPlayoutDeltaMs: preferLiveWhenLegacyWindowMissing('avgPlayoutDeltaMs'),
-    playoutUnderTargetFraction: preferLiveWhenLegacyWindowMissing(
-      'playoutUnderTargetFraction'
-    ),
-    playoutOutsideTargetFraction: preferLiveWhenLegacyWindowMissing(
-      'playoutOutsideTargetFraction'
-    ),
-    playoutRateFractionBelow1: preferLiveWhenLegacyWindowMissing(
-      'playoutRateFractionBelow1'
-    ),
+    playoutUnderTargetFraction: preferLiveWhenLegacyWindowMissing('playoutUnderTargetFraction'),
+    playoutOutsideTargetFraction: preferLiveWhenLegacyWindowMissing('playoutOutsideTargetFraction'),
+    playoutRateFractionBelow1: preferLiveWhenLegacyWindowMissing('playoutRateFractionBelow1'),
     jitterUnderruns: maxWindowOrLive('jitterUnderruns'),
     missingFrames: maxWindowOrLive('missingFrames'),
     concealmentTicks: maxWindowOrLive('concealmentTicks'),
     packetsDroppedStaleTimestamp,
     packetsDroppedStaleTimestampRatePerSec,
-    packetsDroppedPendingDecrypt: maxWindowOrLive(
-      'packetsDroppedPendingDecrypt'
-    ),
-    packetsDroppedPendingDecryptRatePerSec: maxWindowOrLive(
-      'packetsDroppedPendingDecryptRatePerSec'
-    ),
-    pendingDecryptDepthHighWater: maxWindowOrLive(
-      'pendingDecryptDepthHighWater'
-    ),
-    reticulumAudioBridgeQueuedFramesHighWater: maxWindowOrLive(
-      'reticulumAudioBridgeQueuedFramesHighWater'
-    ),
-    reticulumAudioBinaryOutQueueDepthHighWater: maxWindowOrLive(
-      'reticulumAudioBinaryOutQueueDepthHighWater'
-    ),
-    reticulumAudioBridgeWaitingForDrain: bool(
-      live,
-      'reticulumAudioBridgeWaitingForDrain'
-    ),
-    reticulumAudioQueuePressureDrops: maxWindowOrLive(
-      'reticulumAudioQueuePressureDrops'
-    ),
+    packetsDroppedPendingDecrypt: maxWindowOrLive('packetsDroppedPendingDecrypt'),
+    packetsDroppedPendingDecryptRatePerSec: maxWindowOrLive('packetsDroppedPendingDecryptRatePerSec'),
+    pendingDecryptDepthHighWater: maxWindowOrLive('pendingDecryptDepthHighWater'),
+    reticulumAudioBridgeQueuedFramesHighWater: maxWindowOrLive('reticulumAudioBridgeQueuedFramesHighWater'),
+    reticulumAudioBinaryOutQueueDepthHighWater: maxWindowOrLive('reticulumAudioBinaryOutQueueDepthHighWater'),
+    reticulumAudioBridgeWaitingForDrain: bool(live, 'reticulumAudioBridgeWaitingForDrain'),
+    reticulumAudioQueuePressureDrops: maxWindowOrLive('reticulumAudioQueuePressureDrops'),
     reticulumAudioStaleDrops: maxWindowOrLive('reticulumAudioStaleDrops'),
     avgOpusBufferedMs,
     maxOpusBufferedMs: num(win, 'maxOpusBufferedMs'),
@@ -578,22 +495,10 @@ export function extractMetricsFromV1Export(
     durationMs,
     adaptiveNetworkMode: str(live, 'adaptiveNetworkMode'),
     playoutStarvationWorstSeverity: str(live, 'playoutStarvationWorstSeverity'),
-    gcallAudioStage5BoostCumulativeMs: num(
-      live,
-      'gcallAudioStage5BoostCumulativeMs'
-    ),
-    tickBudgetBreachCount: num(
-      perf as Record<string, unknown>,
-      'tickBudgetBreachCount'
-    ),
-    tickBudgetBreachP95Ms: num(
-      perf as Record<string, unknown>,
-      'tickBudgetBreachP95Ms'
-    ),
-    tickBudgetBreachMaxMs: num(
-      perf as Record<string, unknown>,
-      'tickBudgetBreachMaxMs'
-    ),
+    gcallAudioStage5BoostCumulativeMs: num(live, 'gcallAudioStage5BoostCumulativeMs'),
+    tickBudgetBreachCount: num(perf as Record<string, unknown>, 'tickBudgetBreachCount'),
+    tickBudgetBreachP95Ms: num(perf as Record<string, unknown>, 'tickBudgetBreachP95Ms'),
+    tickBudgetBreachMaxMs: num(perf as Record<string, unknown>, 'tickBudgetBreachMaxMs'),
     longTaskCount: num(lt as Record<string, unknown>, 'count'),
     role: str(live, 'role'),
     v2ManagedSourceCount,

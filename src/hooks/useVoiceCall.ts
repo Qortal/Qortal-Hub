@@ -72,7 +72,7 @@ import {
 } from '../lib/group-call/groupCallAudioSenderEngine';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import { createRouteBoundId } from '../lib/reticulum/routeBoundId';
-import { isCallReticulumOnly } from '../lib/call/callNetworkPreference';
+import { isReticulumCallEnabled } from '../lib/call/directVoiceCallTransport';
 import type { DirectVoiceRtcSignal } from '../lib/call/directVoiceWebRtcTransport';
 import {
   DirectScreenShareWebRtcTransport,
@@ -260,7 +260,7 @@ export interface IncomingCall {
 }
 
 export interface DirectVoiceCallStartupStatus {
-  stage: 'idle' | 'calling' | 'ringing' | 'starting-audio' | 'connected';
+  stage: 'idle' | 'calling' | 'starting-audio' | 'connected';
   headline: string;
   detail: string | null;
   tone: 'neutral' | 'info' | 'warning';
@@ -322,14 +322,7 @@ export type VoiceCallApi = {
     callId: string,
     signature: string,
     publicKey: string,
-    timestamp: number,
-    /**
-     * U-1: signature over CALL_ANSWERED_ELSEWHERE with the same timestamp.
-     * Main sends it to this account's other devices so they stop ringing even
-     * when the caller is offline. Optional: a caller that cannot sign simply
-     * omits it and the cross-version cancellation still applies.
-     */
-    answeredElsewhereSignature?: string
+    timestamp: number
   ) => Promise<{ success: boolean; error?: string }>;
   reject?: (
     callId: string,
@@ -417,49 +410,22 @@ async function createDirectCallId(): Promise<string | null> {
   }
 }
 
-/**
- * B-1: only a explicit `blocked` verdict stops a call.
- *
- * The gate used to require `status === 'good'`, which blocked every call for
- * the first ~15s after startup (the first snapshot is `unknown`) and whenever
- * the machine averaged over 65% CPU in the last window — including during a
- * Core sync or a compile. `warning` now surfaces a soft hint instead of
- * blocking, and a missing API (browser dev server) means "allowed".
- */
 async function isSystemReadyForCall(
-  showError: (message: string) => void,
-  showHint?: (message: string) => void
+  showError: (message: string) => void
 ): Promise<boolean> {
-  const api = window.electronAPI;
-  if (typeof api?.getSystemCallReadiness !== 'function') return true;
-
-  let readiness = await api.getSystemCallReadiness().catch(() => undefined);
-  if (readiness?.status === 'unknown') {
-    // B-1: force a fresh sample instead of waiting out the 15s timer.
-    readiness =
-      (await api.refreshSystemCallReadiness?.().catch(() => readiness)) ??
-      readiness;
-  }
-
-  if (readiness?.status === 'blocked') {
-    showError(i18n.t('core:voice_call.system_busy'));
+  const readiness = await window.electronAPI?.getSystemCallReadiness?.();
+  if (!readiness || readiness.status !== 'good') {
+    showError(
+      'Your system is too busy for calls right now. Close other apps and try again.'
+    );
     pushDirectVoiceUiLog('warn', 'system call readiness blocked call', {
-      status: readiness.status ?? 'unavailable',
-      reasons: readiness.reasons ?? [],
-      cpuLoad: readiness.cpuLoad ?? null,
-      memoryPressure: readiness.memoryPressure ?? null,
-      eventLoopLagMs: readiness.eventLoopLagMs ?? null,
+      status: readiness?.status ?? 'unavailable',
+      reasons: readiness?.reasons ?? [],
+      cpuLoad: readiness?.cpuLoad ?? null,
+      memoryPressure: readiness?.memoryPressure ?? null,
+      eventLoopLagMs: readiness?.eventLoopLagMs ?? null,
     });
     return false;
-  }
-  if (readiness?.status === 'warning') {
-    showHint?.(
-      'Your system is busy. The call may start slowly or sound choppy.'
-    );
-    pushDirectVoiceUiLog('info', 'system call readiness warning', {
-      cpuLoad: readiness.cpuLoad ?? null,
-      eventLoopLagMs: readiness.eventLoopLagMs ?? null,
-    });
   }
   return true;
 }
@@ -480,19 +446,12 @@ export function useVoiceCall(
     ((window as any).call as VoiceCallApi | undefined) ??
     null;
   const prefersDirectVoiceWebRtc =
-    !isCallReticulumOnly() &&
+    !isReticulumCallEnabled &&
     (options.callApiSignsSignals !== true ||
       options.enableDirectVoiceWebRtc === true) &&
     typeof window.groupCall?.sendRtcSignal === 'function';
 
   const [callState, setCallState] = useState<CallState>('idle');
-  /**
-   * X-3: the callee's ringer fired. Kept separate from `callState` on purpose:
-   * `CallState` already uses `'ringing'` for the *callee's* incoming state, and
-   * a dozen branches gate on `callState === 'calling'`. This flag only changes
-   * the caller's status text, never the state machine.
-   */
-  const [ringingAcknowledged, setRingingAcknowledged] = useState(false);
   const [audioMode, setAudioMode] = useState<AudioMode>(null);
   const [callMediaReady, setCallMediaReady] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -563,7 +522,6 @@ export function useVoiceCall(
 
   const isOutboundCallRef = useRef(false);
   const registeredCallLocalAddressRef = useRef<string | null>(null);
-  const ringingAcknowledgedRef = useRef(false);
   const dmRoomIdRef = useRef<string | null>(null);
   /** If `gcall:key` arrives before `dmRoomIdRef` is set (should be rare after room precompute). */
   const pendingDmVoiceGcallKeyRef = useRef<GcallKeyEventPayload | null>(null);
@@ -1037,7 +995,7 @@ export function useVoiceCall(
         !fromAddress ||
         !toAddress ||
         !api?.sendRtcSignal ||
-        isCallReticulumOnly()
+        isReticulumCallEnabled
       ) {
         return false;
       }
@@ -1281,13 +1239,6 @@ export function useVoiceCall(
           const servers = await window.hub?.getIceServers?.();
           return Array.isArray(servers) ? servers : [];
         },
-        getIceTransportPolicy: async () => {
-          try {
-            return (await window.hub?.getIceTransportPolicy?.()) ?? 'all';
-          } catch {
-            return 'all';
-          }
-        },
         onSignal: (signal) => sendDirectScreenShareSignal(signal),
         onRemoteStream: (stream) => {
           if (screenShareTransportRef.current !== transport) {
@@ -1324,7 +1275,7 @@ export function useVoiceCall(
           if (state === 'failed') {
             showGlobalCallSnack(
               'info',
-              i18n.t('core:voice_call.screen_share_connection_lost')
+              'Screen sharing stopped because the direct connection was lost.'
             );
             void resetScreenShare(true);
           }
@@ -1449,10 +1400,7 @@ export function useVoiceCall(
     }
     const listSources = window.electronAPI?.listScreenShareSources;
     if (!listSources) {
-      showGlobalCallSnack(
-        'error',
-        i18n.t('core:voice_call.screen_share_unavailable')
-      );
+      showGlobalCallSnack('error', 'Screen sharing is unavailable.');
       return;
     }
     updateScreenShareState('choosing');
@@ -1472,7 +1420,7 @@ export function useVoiceCall(
       await resetScreenShare(false);
       showGlobalCallSnack(
         'error',
-        result.error || i18n.t('core:voice_call.screen_share_no_sources')
+        result.error || 'No screens or windows are available to share.'
       );
       return;
     }
@@ -1521,8 +1469,8 @@ export function useVoiceCall(
         showGlobalCallSnack(
           'error',
           error instanceof DOMException && error.name === 'NotAllowedError'
-            ? i18n.t('core:voice_call.screen_share_permission_denied')
-            : i18n.t('core:voice_call.screen_share_start_failed')
+            ? 'Screen sharing permission was not granted.'
+            : 'Unable to start screen sharing.'
         );
         return;
       }
@@ -1543,10 +1491,7 @@ export function useVoiceCall(
       if (!track) {
         stream.getTracks().forEach((entry) => entry.stop());
         await resetScreenShare(false);
-        showGlobalCallSnack(
-          'error',
-          i18n.t('core:voice_call.screen_share_no_video')
-        );
+        showGlobalCallSnack('error', 'No screen video was captured.');
         return;
       }
       track.contentHint = 'detail';
@@ -1569,10 +1514,7 @@ export function useVoiceCall(
       } catch {
         if (screenShareTransportRef.current === transport) {
           await resetScreenShare(true);
-          showGlobalCallSnack(
-            'error',
-            i18n.t('core:voice_call.screen_share_establish_failed')
-          );
+          showGlobalCallSnack('error', 'Unable to establish screen sharing.');
         }
       }
     },
@@ -2188,10 +2130,6 @@ export function useVoiceCall(
         activeCallChatIdRef.current = null;
         setActiveCallChatId(null);
         updateCallState('ended');
-        // X-3: clear the ringing acknowledgement with the same lifecycle as
-        // the call itself, so the next call never starts pre-acknowledged.
-        ringingAcknowledgedRef.current = false;
-        setRingingAcknowledged(false);
         setCallMediaReady(false);
         setCallDuration(0);
         setIsMuted(false);
@@ -2489,7 +2427,11 @@ export function useVoiceCall(
         'key-applied'
       );
       if (!ready) {
-        showGlobalCallSnack('info', i18n.t('core:voice_call.route_not_ready'));
+        showGlobalCallSnack(
+          'info',
+          i18n.t('core:voice_call.failed') ??
+            'Voice call failed (Reticulum route not ready)'
+        );
         endCall(true);
         return;
       }
@@ -2497,7 +2439,8 @@ export function useVoiceCall(
       if (!mediaStarted) {
         showGlobalCallSnack(
           'info',
-          i18n.t('core:voice_call.audio_surface_unavailable')
+          i18n.t('core:voice_call.failed') ??
+            'Voice call failed (audio surface unavailable)'
         );
         endCall(true);
         return;
@@ -2776,7 +2719,8 @@ export function useVoiceCall(
       pushDirectVoiceUiLog('warn', 'Reticulum destination hash unavailable');
       showGlobalCallSnack(
         'info',
-        i18n.t('core:voice_call.reticulum_not_ready')
+        i18n.t('core:voice_call.failed') ??
+          'Voice call failed (Reticulum not ready)'
       );
       endCall(true);
       return;
@@ -2813,7 +2757,11 @@ export function useVoiceCall(
         error: joinRes.error ?? 'unknown',
         success: joinRes.success,
       });
-      showGlobalCallSnack('info', i18n.t('core:voice_call.join_room_failed'));
+      showGlobalCallSnack(
+        'info',
+        i18n.t('core:voice_call.failed') ??
+          'Voice call failed (could not join media room)'
+      );
       endCall(true);
       return;
     }
@@ -2870,7 +2818,11 @@ export function useVoiceCall(
         return;
       }
       if (!ready) {
-        showGlobalCallSnack('info', i18n.t('core:voice_call.route_not_ready'));
+        showGlobalCallSnack(
+          'info',
+          i18n.t('core:voice_call.failed') ??
+            'Voice call failed (Reticulum route not ready)'
+        );
         endCall(true);
         return;
       }
@@ -2878,7 +2830,8 @@ export function useVoiceCall(
       if (!mediaStarted) {
         showGlobalCallSnack(
           'info',
-          i18n.t('core:voice_call.audio_surface_unavailable')
+          i18n.t('core:voice_call.failed') ??
+            'Voice call failed (audio surface unavailable)'
         );
         endCall(true);
         return;
@@ -3256,7 +3209,7 @@ export function useVoiceCall(
     switch (event) {
       case 'call:rtc-signal': {
         if (
-          isCallReticulumOnly() ||
+          isReticulumCallEnabled ||
           p.callId !== callIdRef.current ||
           callStateRef.current !== 'connected' ||
           typeof p.payload !== 'string' ||
@@ -3288,7 +3241,7 @@ export function useVoiceCall(
               await resetScreenShare(true);
               showGlobalCallSnack(
                 'info',
-                i18n.t('core:voice_call.screen_share_connection_failed')
+                'Screen sharing stopped because the direct connection could not be established.'
               );
             }
             break;
@@ -3386,37 +3339,13 @@ export function useVoiceCall(
           }
         }
 
-        // B-6: tell the caller we are busy instead of silently swallowing the
-        // call and leaving them ringing until the 60s timeout.
-        if (callStateRef.current !== 'idle') {
-          await rejectIncoming('busy');
-          break;
-        }
+        if (callStateRef.current !== 'idle') break;
         updateIncomingCall({
           callId: incCallId,
           fromAddress: incFrom,
           chatId: incChatId,
         });
         updateCallState('ringing');
-        break;
-      }
-
-      case 'call:ringing': {
-        // X-3: the callee's ringer fired, so the call is delivered and
-        // ringing. Main already stopped its CALL_REQUEST re-flood; this only
-        // changes the caller's status text.
-        if (
-          callIdRef.current !== p.callId ||
-          callStateRef.current !== 'calling'
-        ) {
-          break;
-        }
-        if (ringingAcknowledgedRef.current) break;
-        ringingAcknowledgedRef.current = true;
-        setRingingAcknowledged(true);
-        pushDirectVoiceUiLog('log', 'call:ringing — callee is ringing', {
-          callId: String(p.callId).slice(0, 8),
-        });
         break;
       }
 
@@ -3484,9 +3413,7 @@ export function useVoiceCall(
               })
             : rejectReason === 'media unavailable'
               ? i18n.t('core:voice_call.rejected_media')
-              : rejectReason === 'busy'
-                ? i18n.t('core:voice_call.rejected_busy')
-                : i18n.t('core:voice_call.rejected_declined');
+              : i18n.t('core:voice_call.rejected_declined');
         showGlobalCallSnack('info', message);
         endCall(false);
         break;
@@ -3499,14 +3426,6 @@ export function useVoiceCall(
           callStateRef.current === 'ringing' &&
           incomingCallRef.current?.callId === hid;
         if (!matchesOutboundOrActive && !matchesRingingIncoming) break;
-        // X-4: a timeout against a lapsed-presence destination is "may be
-        // asleep", not a plain unanswered call.
-        if (p.reason === 'lapsed_presence' && matchesOutboundOrActive) {
-          showGlobalCallSnack(
-            'info',
-            i18n.t('core:voice_call.callee_may_be_asleep')
-          );
-        }
         endCall(false);
         break;
       }
@@ -3707,17 +3626,10 @@ export function useVoiceCall(
       activeCallChatIdRef.current = chatId;
       setActiveCallChatId(chatId);
       setCallMediaReady(false);
-      ringingAcknowledgedRef.current = false;
-      setRingingAcknowledged(false);
       updateCallState('calling');
 
       let result:
-        | {
-            success: boolean;
-            callId?: string;
-            error?: string;
-            reason?: 'no_route' | 'lapsed_presence';
-          }
+        | { success: boolean; callId?: string; error?: string }
         | undefined;
       try {
         result = await callApiRef.current?.initiate?.(
@@ -3748,11 +3660,8 @@ export function useVoiceCall(
         updateCallState('idle');
         showGlobalCallSnack(
           'error',
-          result?.reason === 'lapsed_presence'
-            ? i18n.t('core:voice_call.callee_may_be_asleep')
-            : result?.reason === 'no_route'
-              ? i18n.t('core:voice_call.no_route')
-              : result?.error || i18n.t('core:voice_call.failed')
+          result?.error ||
+            (i18n.t('core:voice_call.failed') ?? 'Voice call failed')
         );
       } else {
         pushDirectVoiceUiLog('log', 'call.initiate ok (waiting for peer)', {
@@ -3820,30 +3729,11 @@ export function useVoiceCall(
       callId: incoming.callId,
       timestamp: acceptTs,
     });
-    // U-1: tell this account's other devices that the call was answered here.
-    // Best-effort: a signer failure must never block answering, and older
-    // builds drop the unknown type. Signed with the same acceptTs, so no skew
-    // exemption is needed on the receiving side.
-    let answeredElsewhereSignature: string | undefined;
-    try {
-      answeredElsewhereSignature = (
-        await authorizeCallSignal({
-          type: 'CALL_ANSWERED_ELSEWHERE',
-          callId: incoming.callId,
-          timestamp: acceptTs,
-        })
-      ).signature;
-    } catch (error) {
-      pushDirectVoiceUiLog('warn', 'answered-elsewhere signing failed', {
-        error: String(error),
-      });
-    }
     const acceptResult = await callApiRef.current?.accept?.(
       incoming.callId,
       signature,
       publicKey,
-      acceptTs,
-      answeredElsewhereSignature
+      acceptTs
     );
     if (!acceptResult?.success) {
       pushDirectVoiceUiLog('warn', 'call.accept failed', {
@@ -4078,10 +3968,8 @@ export function useVoiceCall(
   }, [startupStageKey]);
 
   useEffect(() => {
-    // X-3: once the callee acknowledges ringing there is no `delayed` state to
-    // tick toward, so the clock only runs while a status is time-sensitive.
     if (
-      !(callState === 'calling' && !ringingAcknowledged) &&
+      callState !== 'calling' &&
       !(callState === 'connected' && !callMediaReady)
     ) {
       return;
@@ -4090,31 +3978,19 @@ export function useVoiceCall(
       setStartupClock((tick) => tick + 1);
     }, 1_000);
     return () => window.clearInterval(id);
-  }, [callMediaReady, callState, ringingAcknowledged]);
+  }, [callMediaReady, callState]);
 
   void startupClock;
 
   const startupStatus: DirectVoiceCallStartupStatus = (() => {
     const delayed = Date.now() - startupStageSinceRef.current >= 4_000;
-    if (callState === 'calling' && ringingAcknowledged) {
-      // X-3: the callee's ringer fired, so "Calling…" is no longer accurate.
-      // No `delayed` warning here — the call is delivered, not stuck.
-      return {
-        stage: 'ringing',
-        headline: i18n.t('core:voice_call.ringing'),
-        detail: null,
-        tone: 'info',
-        showProgress: true,
-        delayed: false,
-      };
-    }
     if (callState === 'calling') {
       return {
         stage: 'calling',
-        headline: i18n.t('core:voice_call.calling'),
+        headline: 'Calling...',
         detail: delayed
-          ? i18n.t('core:voice_call.calling_detail_delayed')
-          : i18n.t('core:voice_call.calling_detail'),
+          ? 'Still waiting for the other side to answer.'
+          : 'Waiting for the other side to answer.',
         tone: delayed ? 'warning' : 'info',
         showProgress: true,
         delayed,
@@ -4123,10 +3999,10 @@ export function useVoiceCall(
     if (callState === 'connected' && !callMediaReady) {
       return {
         stage: 'starting-audio',
-        headline: i18n.t('core:voice_call.connecting'),
+        headline: 'Connecting...',
         detail: delayed
-          ? i18n.t('core:voice_call.connecting_detail_delayed')
-          : i18n.t('core:voice_call.connecting_detail'),
+          ? 'Still establishing the secure audio link.'
+          : 'Establishing the secure audio link.',
         tone: delayed ? 'warning' : 'info',
         showProgress: true,
         delayed,
@@ -4135,7 +4011,7 @@ export function useVoiceCall(
     if (callState === 'connected') {
       return {
         stage: 'connected',
-        headline: i18n.t('core:voice_call.connected'),
+        headline: 'Connected',
         detail: null,
         tone: 'neutral',
         showProgress: false,

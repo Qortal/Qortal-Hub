@@ -24,7 +24,6 @@ import CallRoundedIcon from '@mui/icons-material/CallRounded';
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import { useVoiceCallContext } from '../context/VoiceCallContext';
 import { useGroupCallContext } from './GroupCallContext';
-import { useTranslation } from 'react-i18next';
 
 export type CallSwitchTarget =
   | { type: 'direct'; chatId: string }
@@ -85,8 +84,11 @@ function waitForCondition(
   });
 }
 
-export function CallSwitchGuardProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation(['core']);
+export function CallSwitchGuardProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
   const directCall = useVoiceCallContext();
   const groupCall = useGroupCallContext();
   const theme = useTheme();
@@ -126,28 +128,25 @@ export function CallSwitchGuardProvider({ children }: { children: ReactNode }) {
   const targetLabel =
     pendingTarget?.type === 'group' ? 'group call' : 'direct message call';
 
-  const dropCurrentCalls = useCallback(
-    async (target: CallSwitchTarget) => {
-      const { shouldDropDirect, shouldDropGroup } = getCallSwitchDropPlan({
-        target,
-        directState: directStateRef.current,
-        directIncomingChatId: directIncomingChatIdRef.current,
-        groupState: groupStateRef.current,
-      });
+  const dropCurrentCalls = useCallback(async (target: CallSwitchTarget) => {
+    const { shouldDropDirect, shouldDropGroup } = getCallSwitchDropPlan({
+      target,
+      directState: directStateRef.current,
+      directIncomingChatId: directIncomingChatIdRef.current,
+      groupState: groupStateRef.current,
+    });
 
-      const drops: Promise<unknown>[] = [];
-      if (shouldDropDirect) drops.push(directCall.hangUp());
-      if (shouldDropGroup) drops.push(groupCall.leaveGroupCall());
-      await Promise.allSettled(drops);
+    const drops: Promise<unknown>[] = [];
+    if (shouldDropDirect) drops.push(directCall.hangUp());
+    if (shouldDropGroup) drops.push(groupCall.leaveGroupCall());
+    await Promise.allSettled(drops);
 
-      await waitForCondition(
-        () =>
-          (!shouldDropDirect || directStateRef.current === 'idle') &&
-          (!shouldDropGroup || groupStateRef.current === 'idle')
-      );
-    },
-    [directCall, groupCall]
-  );
+    await waitForCondition(
+      () =>
+        (!shouldDropDirect || directStateRef.current === 'idle') &&
+        (!shouldDropGroup || groupStateRef.current === 'idle')
+    );
+  }, [directCall, groupCall]);
 
   const closePrompt = useCallback((confirmed: boolean) => {
     resolverRef.current?.(confirmed);
@@ -187,7 +186,10 @@ export function CallSwitchGuardProvider({ children }: { children: ReactNode }) {
     [closePrompt, dropCurrentCalls]
   );
 
-  const value = useMemo(() => ({ confirmCallSwitch }), [confirmCallSwitch]);
+  const value = useMemo(
+    () => ({ confirmCallSwitch }),
+    [confirmCallSwitch]
+  );
 
   return (
     <CallSwitchGuardContext.Provider value={value}>
@@ -276,9 +278,7 @@ export function CallSwitchGuardProvider({ children }: { children: ReactNode }) {
               '&:hover': { bgcolor: '#dc2626' },
             }}
           >
-            {switching
-              ? t('core:voice_call.dropping_call')
-              : t('core:voice_call.drop_and_continue')}
+            {switching ? 'Dropping call...' : 'Drop and continue'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -32,24 +32,31 @@ export interface PathQualityScoreV1Breakdown {
   gamma: number;
 }
 
-export function ratiosFromPathWindowFields(
-  w: Pick<
-    GroupCallWindowMetrics,
-    | 'reticulumAudioPacketPathResolutions'
-    | 'reticulumAudioPacketPathRequests'
-    | 'reticulumAudioPacketPathTimeouts'
-    | 'reticulumAudioPacketFreshSends'
-    | 'reticulumAudioPacketStaleSends'
-  >
-): { successRatio: number; timeoutRatio: number; staleRatio: number } {
+export function ratiosFromPathWindowFields(w: Pick<
+  GroupCallWindowMetrics,
+  | 'reticulumAudioPacketPathResolutions'
+  | 'reticulumAudioPacketPathRequests'
+  | 'reticulumAudioPacketPathTimeouts'
+  | 'reticulumAudioPacketFreshSends'
+  | 'reticulumAudioPacketStaleSends'
+>): { successRatio: number; timeoutRatio: number; staleRatio: number } {
   const req = Math.max(1, w.reticulumAudioPacketPathRequests);
-  const successRatio = Math.min(1, w.reticulumAudioPacketPathResolutions / req);
-  const timeoutRatio = Math.min(1, w.reticulumAudioPacketPathTimeouts / req);
+  const successRatio = Math.min(
+    1,
+    w.reticulumAudioPacketPathResolutions / req
+  );
+  const timeoutRatio = Math.min(
+    1,
+    w.reticulumAudioPacketPathTimeouts / req
+  );
   const sendDenom = Math.max(
     1,
     w.reticulumAudioPacketFreshSends + w.reticulumAudioPacketStaleSends
   );
-  const staleRatio = Math.min(1, w.reticulumAudioPacketStaleSends / sendDenom);
+  const staleRatio = Math.min(
+    1,
+    w.reticulumAudioPacketStaleSends / sendDenom
+  );
   return { successRatio, timeoutRatio, staleRatio };
 }
 
@@ -78,7 +85,10 @@ export function computePathQualityScoreV1(
   const { successRatio, timeoutRatio, staleRatio } =
     ratiosFromPathWindowFields(w);
   const raw =
-    successRatio - alpha * timeoutRatio - beta * staleRatio + gamma * 0;
+    successRatio -
+    alpha * timeoutRatio -
+    beta * staleRatio +
+    gamma * 0;
   const pathQualityScoreV1 = Math.max(0, Math.min(1, raw));
   const pathQualityScoreEmaV1 =
     emaPrev === null
@@ -110,7 +120,10 @@ export function computePerSourcePlayoutPathQualityV1(
   const juPerSec = source.jitterUnderruns / durSec;
   const ctPerSec = source.concealmentTicks / durSec;
   const raw =
-    1 - 0.025 * missingFramesPerSec - 0.05 * juPerSec - 0.01 * ctPerSec;
+    1 -
+    0.025 * missingFramesPerSec -
+    0.05 * juPerSec -
+    0.01 * ctPerSec;
   const playoutPathQualityScoreV1 = Math.max(0, Math.min(1, raw));
   return { playoutPathQualityScoreV1, missingFramesPerSec };
 }

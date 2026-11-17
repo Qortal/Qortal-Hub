@@ -25,22 +25,12 @@
 
 import type { StreamIdentity, ReceivePolicyOutput } from './spec';
 import { streamKey } from './spec';
-import {
-  ReticulumSessionController,
-  type TopologyEvent,
-} from './reticulumSessionController';
+import { ReticulumSessionController, type TopologyEvent } from './reticulumSessionController';
 import { ReceiveEngineRegistry } from './receiveEngine';
-import {
-  ReceivePolicyEngine,
-  DEFAULT_POLICY_CONFIG,
-  type ReceivePolicyConfig,
-} from './receivePolicyEngine';
+import { ReceivePolicyEngine, DEFAULT_POLICY_CONFIG, type ReceivePolicyConfig } from './receivePolicyEngine';
 import { SendPressureController } from './sendPressureController';
 import { createDecodeServiceFactory } from './decodeService';
-import {
-  BufferingDiagnosticsRecorder,
-  NullDiagnosticsRecorder,
-} from './diagnosticsContract';
+import { BufferingDiagnosticsRecorder, NullDiagnosticsRecorder } from './diagnosticsContract';
 import type { IDiagnosticsRecorder } from './spec';
 import { OPUS_FRAME_DURATION_MS } from '../gcallVoiceAudioConstants';
 
@@ -150,9 +140,7 @@ export class GcallV2Session {
   }): void {
     if (this._disposed) return;
 
-    const streamId = this._sessionController.getStreamIdentity(
-      packet.sourceAddr
-    );
+    const streamId = this._sessionController.getStreamIdentity(packet.sourceAddr);
     if (!streamId) {
       // Peer not yet in topology — drop.
       return;
@@ -173,26 +161,8 @@ export class GcallV2Session {
    * Execute a drain tick for all active streams. Called by the audio worklet
    * scheduler. Returns a map of sourceAddr → TickOutput for the playout layer.
    */
-  async tick(nowMs: number): Promise<
-    Map<
-      string,
-      {
-        pcmBufferedMs: number;
-        framesDecoded: number;
-        state: string;
-        targetBufferMs: number;
-      }
-    >
-  > {
-    const results = new Map<
-      string,
-      {
-        pcmBufferedMs: number;
-        framesDecoded: number;
-        state: string;
-        targetBufferMs: number;
-      }
-    >();
+  async tick(nowMs: number): Promise<Map<string, { pcmBufferedMs: number; framesDecoded: number; state: string; targetBufferMs: number }>> {
+    const results = new Map<string, { pcmBufferedMs: number; framesDecoded: number; state: string; targetBufferMs: number }>();
 
     for (const engine of this._engineRegistry.allEngines()) {
       const sourceAddr = engine.streamId.sourceAddr;
@@ -232,9 +202,7 @@ export class GcallV2Session {
   // -------------------------------------------------------------------------
 
   getPcmRing(sourceAddr: string) {
-    return (
-      this._engineRegistry.getBySourceAddr(sourceAddr)?.getPcmRing() ?? null
-    );
+    return this._engineRegistry.getBySourceAddr(sourceAddr)?.getPcmRing() ?? null;
   }
 
   getActiveSources(): string[] {
@@ -271,11 +239,7 @@ export class GcallV2Session {
     const key = streamKey(streamId);
     const existing = this._policyEngines.get(key);
     if (existing) return existing;
-    const engine = new ReceivePolicyEngine(
-      streamId,
-      this._policyConfig,
-      this._diag
-    );
+    const engine = new ReceivePolicyEngine(streamId, this._policyConfig, this._diag);
     this._policyEngines.set(key, engine);
     return engine;
   }

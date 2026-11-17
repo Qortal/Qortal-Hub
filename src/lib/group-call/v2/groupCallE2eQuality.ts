@@ -67,17 +67,18 @@ interface TimestampPathologyConfig {
   readonly regressionEveryPackets?: number;
 }
 
-export interface SenderImpairmentProfile extends Pick<
-  ReplayScenarioParams,
-  | 'packetPattern'
-  | 'avgInterPacketMs'
-  | 'jitterStdDevMs'
-  | 'burstFraction'
-  | 'lossRate'
-  | 'simulateRecoveryPathLatch'
-  | 'tickBreachFraction'
-  | 'tickBreachAvgMs'
-> {
+export interface SenderImpairmentProfile
+  extends Pick<
+    ReplayScenarioParams,
+    | 'packetPattern'
+    | 'avgInterPacketMs'
+    | 'jitterStdDevMs'
+    | 'burstFraction'
+    | 'lossRate'
+    | 'simulateRecoveryPathLatch'
+    | 'tickBreachFraction'
+    | 'tickBreachAvgMs'
+  > {
   readonly id: SenderProfileId;
   readonly label: string;
   readonly impairmentSummary: string;
@@ -91,9 +92,7 @@ export interface GroupCallE2eScenarioExpectation {
   readonly worseAddr?: 'peer-A' | 'peer-B';
   readonly worsePrimaryClass?: FailureClass;
   readonly qualityScoreAtLeast?: number;
-  readonly qualityScoreAtLeastByMode?: Partial<
-    Record<GroupCallE2eMode, number>
-  >;
+  readonly qualityScoreAtLeastByMode?: Partial<Record<GroupCallE2eMode, number>>;
   readonly qualityScoreAtMost?: number;
   readonly startupFailure?: {
     readonly modes?: GroupCallE2eMode[];
@@ -233,16 +232,11 @@ function xorshift32(seed: number): () => number {
 
 function stageOrder(stage: GroupCallE2eStage): number {
   switch (stage) {
-    case 'arrival':
-      return 0;
-    case 'jitter':
-      return 1;
-    case 'decode':
-      return 2;
-    case 'pcm-ring':
-      return 3;
-    case 'playout':
-      return 4;
+    case 'arrival': return 0;
+    case 'jitter': return 1;
+    case 'decode': return 2;
+    case 'pcm-ring': return 3;
+    case 'playout': return 4;
   }
 }
 
@@ -260,9 +254,7 @@ function firstIssue(issues: StageIssueTracker): {
   atMs: number | null;
   stage: GroupCallE2eStage | null;
 } {
-  const entries = (
-    Object.entries(issues) as Array<[GroupCallE2eStage, number | null]>
-  )
+  const entries = (Object.entries(issues) as Array<[GroupCallE2eStage, number | null]>)
     .filter(([, atMs]) => typeof atMs === 'number')
     .sort((a, b) => {
       const atA = a[1] ?? Number.POSITIVE_INFINITY;
@@ -276,12 +268,7 @@ function firstIssue(issues: StageIssueTracker): {
 }
 
 function cloneFaults(faults: readonly FaultSpec[] | undefined): FaultSpec[] {
-  return faults
-    ? faults.map((fault) => ({
-        ...fault,
-        params: fault.params ? { ...fault.params } : undefined,
-      }))
-    : [];
+  return faults ? faults.map((fault) => ({ ...fault, params: fault.params ? { ...fault.params } : undefined })) : [];
 }
 
 function average(values: readonly number[]): number {
@@ -405,9 +392,7 @@ function generatePackets(
       case 'bursty':
         transportDelay =
           rng() < profile.burstFraction
-            ? baseNetworkLatencyMs +
-              profile.avgInterPacketMs * 2 +
-              rng() * profile.jitterStdDevMs * 2.5
+            ? baseNetworkLatencyMs + profile.avgInterPacketMs * 2 + rng() * profile.jitterStdDevMs * 2.5
             : baseNetworkLatencyMs + rng() * profile.jitterStdDevMs * 0.8;
         break;
       case 'recovery-channel':
@@ -419,21 +404,14 @@ function generatePackets(
       case 'mixed':
         transportDelay =
           baseNetworkLatencyMs +
-          (rng() < 0.5
-            ? profile.jitterStdDevMs * 1.4
-            : profile.jitterStdDevMs * 0.5) *
-            rng();
+          (rng() < 0.5 ? profile.jitterStdDevMs * 1.4 : profile.jitterStdDevMs * 0.5) * rng();
         break;
       case 'steady':
       default: {
         const u1 = rng();
         const u2 = rng();
-        const z =
-          Math.sqrt(-2 * Math.log(u1 + 1e-10)) * Math.cos(2 * Math.PI * u2);
-        transportDelay = Math.max(
-          5,
-          baseNetworkLatencyMs + z * profile.jitterStdDevMs
-        );
+        const z = Math.sqrt(-2 * Math.log(u1 + 1e-10)) * Math.cos(2 * Math.PI * u2);
+        transportDelay = Math.max(5, baseNetworkLatencyMs + z * profile.jitterStdDevMs);
         break;
       }
     }
@@ -451,10 +429,7 @@ function generatePackets(
         pathology.regressionMs > 0 &&
         seq % everyPackets === 0
       ) {
-        senderTimestampMs = Math.max(
-          0,
-          senderTimestampMs - pathology.regressionMs
-        );
+        senderTimestampMs = Math.max(0, senderTimestampMs - pathology.regressionMs);
       }
     }
     packets.push({
@@ -481,11 +456,7 @@ function bridgePressureDepthAt(
       typeof fault.durationMs === 'number' && fault.durationMs > 0
         ? fault.atMs + fault.durationMs
         : fault.atMs;
-    if (
-      fault.kind === 'bridge-pressure' &&
-      nowMs >= fault.atMs &&
-      nowMs <= expiresAt
-    ) {
+    if (fault.kind === 'bridge-pressure' && nowMs >= fault.atMs && nowMs <= expiresAt) {
       depth = Math.max(depth, Number(fault.params?.depth ?? 0));
     }
   }
@@ -508,10 +479,7 @@ function startupBridgePressureDepthAt(
     : 0;
 }
 
-function starvationSeverity(
-  underTargetFraction: number,
-  avgPcmBufferedMs: number
-): string {
+function starvationSeverity(underTargetFraction: number, avgPcmBufferedMs: number): string {
   if (underTargetFraction >= 0.8 || avgPcmBufferedMs < 20) return 'strong';
   if (underTargetFraction >= 0.5 || avgPcmBufferedMs < 45) return 'moderate';
   if (underTargetFraction >= 0.2 || avgPcmBufferedMs < 70) return 'mild';
@@ -541,23 +509,19 @@ function buildLegacyPeerMetrics(
   const totalTicks = Math.max(1, path.targetSamples.length);
   const measuredUnderTargetFraction = path.underTargetTicks / totalTicks;
   const measuredOutsideTargetFraction = path.outsideTargetTicks / totalTicks;
-  const arrivalDropRate =
-    path.totalPackets > 0 ? path.droppedPackets / path.totalPackets : 0;
+  const arrivalDropRate = path.totalPackets > 0 ? path.droppedPackets / path.totalPackets : 0;
   const staleTimestampDropRate =
     path.totalPackets > 0 ? path.staleTimestampDrops / path.totalPackets : 0;
-  const transportFraction =
-    transportDurationMs /
-    Math.max(1, path.targetSamples.length * OPUS_FRAME_DURATION_MS);
+  const transportFraction = transportDurationMs / Math.max(1, path.targetSamples.length * OPUS_FRAME_DURATION_MS);
   const tickFraction = tick.count / totalTicks;
   const missingMediaFraction =
     (path.stateCounts.get('missingMedia') ?? 0) / totalTicks;
   const concealmentFraction = path.concealmentTicks / totalTicks;
   const healthyDecodedReserve =
     target.avg > 0 && pcmRing.avg >= target.avg * 1.1;
-  const pressureFromDrops =
-    staleTimestampDropRate > 0
-      ? Math.min(0.98, staleTimestampDropRate * 1.2)
-      : Math.min(0.5, missingMediaFraction * 1.5 + concealmentFraction * 0.5);
+  const pressureFromDrops = staleTimestampDropRate > 0
+    ? Math.min(0.98, staleTimestampDropRate * 1.2)
+    : Math.min(0.5, missingMediaFraction * 1.5 + concealmentFraction * 0.5);
   const stressPenalty =
     measuredUnderTargetFraction > 0.15 || !healthyDecodedReserve
       ? Math.min(0.5, transportFraction * 0.45 + tickFraction * 1.25)
@@ -571,9 +535,7 @@ function buildLegacyPeerMetrics(
     ) + stressPenalty
   );
   const reserveRelief =
-    healthyDecodedReserve &&
-    staleTimestampDropRate === 0 &&
-    missingMediaFraction < 0.05
+    healthyDecodedReserve && staleTimestampDropRate === 0 && missingMediaFraction < 0.05
       ? Math.min(0.35, (pcmRing.avg - target.avg) / Math.max(target.avg * 2, 1))
       : 0;
   const underTargetFraction = Math.max(
@@ -589,10 +551,7 @@ function buildLegacyPeerMetrics(
     pcm.avg,
     Math.max(20, targetAvg * (1 - underTargetFraction * 0.85))
   );
-  const effectivePlayoutDelta = Math.min(
-    playoutDelta.avg,
-    effectiveAvgPcm - targetAvg
-  );
+  const effectivePlayoutDelta = Math.min(playoutDelta.avg, effectiveAvgPcm - targetAvg);
 
   return {
     avgPcmBufferedMs: effectiveAvgPcm,
@@ -606,17 +565,13 @@ function buildLegacyPeerMetrics(
     packetsDroppedStaleTimestamp: path.staleTimestampDrops,
     packetsDroppedStaleTimestampRatePerSec:
       path.targetSamples.length > 0
-        ? path.staleTimestampDrops /
-          ((path.targetSamples.length * OPUS_FRAME_DURATION_MS) / 1000)
+        ? path.staleTimestampDrops / ((path.targetSamples.length * OPUS_FRAME_DURATION_MS) / 1000)
         : 0,
     packetsDroppedPendingDecrypt: 0,
     packetsDroppedPendingDecryptRatePerSec: 0,
     pendingDecryptDepthHighWater: 0,
     reticulumAudioBridgeQueuedFramesHighWater: path.maxBridgePressureDepth,
-    reticulumAudioBinaryOutQueueDepthHighWater:
-      path.maxBridgePressureDepth > 0
-        ? Math.max(0, path.maxBridgePressureDepth - 6)
-        : 0,
+    reticulumAudioBinaryOutQueueDepthHighWater: path.maxBridgePressureDepth > 0 ? Math.max(0, path.maxBridgePressureDepth - 6) : 0,
     reticulumAudioBridgeWaitingForDrain: path.bridgeWaitingForDrainObserved,
     reticulumAudioQueuePressureDrops: 0,
     reticulumAudioStaleDrops: 0,
@@ -625,14 +580,8 @@ function buildLegacyPeerMetrics(
     adaptiveTargetMedianMs: target.avg,
     wasmFecDeferredPcmTicks: 0,
     durationMs: path.targetSamples.length * OPUS_FRAME_DURATION_MS,
-    adaptiveNetworkMode: adaptiveNetworkMode(
-      transportDurationMs,
-      underTargetFraction
-    ),
-    playoutStarvationWorstSeverity: starvationSeverity(
-      underTargetFraction,
-      pcm.avg
-    ),
+    adaptiveNetworkMode: adaptiveNetworkMode(transportDurationMs, underTargetFraction),
+    playoutStarvationWorstSeverity: starvationSeverity(underTargetFraction, pcm.avg),
     gcallAudioStage5BoostCumulativeMs: 0,
     tickBudgetBreachCount: tick.count,
     tickBudgetBreachP95Ms: tick.p95Ms,
@@ -655,20 +604,14 @@ function buildTrackedPeerMetrics(
   durationMs: number
 ): PeerExportMetrics {
   const snapshot = path.tracker.getSnapshot();
-  const window = path.tracker.captureWindowMetrics(
-    path.receiverAddr,
-    durationMs
-  );
+  const window = path.tracker.captureWindowMetrics(path.receiverAddr, durationMs);
   const source =
-    window.sources.find(
-      (candidate) => candidate.sourceAddr === path.senderAddr
-    ) ??
+    window.sources.find((candidate) => candidate.sourceAddr === path.senderAddr) ??
     window.sources[0] ??
     null;
   const targetMedianMs =
     source?.adaptiveTargetMedianMs || window.adaptiveTargetMedianMs || 120;
-  const rawAvgPcmBufferedMs =
-    source?.avgPcmBufferedMs ?? window.avgPcmBufferedMs;
+  const rawAvgPcmBufferedMs = source?.avgPcmBufferedMs ?? window.avgPcmBufferedMs;
   const rawUnderTargetFraction =
     source?.playoutUnderTargetFraction ?? window.playoutUnderTargetFraction;
   const rawOutsideTargetFraction =
@@ -743,8 +686,7 @@ function buildTrackedPeerMetrics(
       calibratedAvgPcmBufferedMs,
       Math.max(
         40,
-        targetMedianMs *
-          (1 - Math.min(0.75, calibratedUnderTargetFraction * 1.15))
+        targetMedianMs * (1 - Math.min(0.75, calibratedUnderTargetFraction * 1.15))
       )
     );
   }
@@ -764,9 +706,7 @@ function buildTrackedPeerMetrics(
     concealmentTicks: source?.concealmentTicks ?? window.concealmentTicks,
     packetsDroppedStaleTimestamp: window.packetsDroppedStaleTimestamp,
     packetsDroppedStaleTimestampRatePerSec:
-      durationMs > 0
-        ? window.packetsDroppedStaleTimestamp / (durationMs / 1000)
-        : 0,
+      durationMs > 0 ? window.packetsDroppedStaleTimestamp / (durationMs / 1000) : 0,
     packetsDroppedPendingDecrypt: window.packetsDroppedPendingDecrypt,
     packetsDroppedPendingDecryptRatePerSec:
       window.packetsDroppedPendingDecryptRatePerSec,
@@ -830,8 +770,7 @@ function buildTimelineSummary(
       totalPackets: path.totalPackets,
       deliveredPackets: path.deliveredPackets,
       droppedPackets: path.droppedPackets,
-      dropRate:
-        path.totalPackets > 0 ? path.droppedPackets / path.totalPackets : 0,
+      dropRate: path.totalPackets > 0 ? path.droppedPackets / path.totalPackets : 0,
       staleTimestampDrops: path.staleTimestampDrops,
       maxExcessLatenessMs: path.maxExcessLatenessMs,
       maxTimestampRegressionMs: path.maxTimestampRegressionMs,
@@ -840,10 +779,7 @@ function buildTimelineSummary(
       firstIssueAtMs: path.stageIssues.jitter,
       avgBufferedMs: opus.avg,
       maxBufferedMs: opus.max,
-      maxDepthFrames:
-        path.jitterDepthSamples.length > 0
-          ? Math.max(...path.jitterDepthSamples)
-          : 0,
+      maxDepthFrames: path.jitterDepthSamples.length > 0 ? Math.max(...path.jitterDepthSamples) : 0,
     },
     decode: {
       firstIssueAtMs: path.stageIssues.decode,
@@ -1029,10 +965,7 @@ function buildAggregateTimelineSummary(
   const arrival = {
     firstIssueAtMs: stageMin((timeline) => timeline.arrival.firstIssueAtMs),
     totalPackets: paths.reduce((sum, path) => sum + path.totalPackets, 0),
-    deliveredPackets: paths.reduce(
-      (sum, path) => sum + path.deliveredPackets,
-      0
-    ),
+    deliveredPackets: paths.reduce((sum, path) => sum + path.deliveredPackets, 0),
     droppedPackets: paths.reduce((sum, path) => sum + path.droppedPackets, 0),
     dropRate: average(timelines.map((timeline) => timeline.arrival.dropRate)),
     staleTimestampDrops: paths.reduce(
@@ -1050,9 +983,7 @@ function buildAggregateTimelineSummary(
   };
   const jitter = {
     firstIssueAtMs: stageMin((timeline) => timeline.jitter.firstIssueAtMs),
-    avgBufferedMs: average(
-      timelines.map((timeline) => timeline.jitter.avgBufferedMs)
-    ),
+    avgBufferedMs: average(timelines.map((timeline) => timeline.jitter.avgBufferedMs)),
     maxBufferedMs: Math.max(
       0,
       ...timelines.map((timeline) => timeline.jitter.maxBufferedMs)
@@ -1069,16 +1000,11 @@ function buildAggregateTimelineSummary(
       (sum, path) => sum + path.engine.getConcealmentFrames(),
       0
     ),
-    concealmentTicks: paths.reduce(
-      (sum, path) => sum + path.concealmentTicks,
-      0
-    ),
+    concealmentTicks: paths.reduce((sum, path) => sum + path.concealmentTicks, 0),
   };
   const pcmRing = {
     firstIssueAtMs: stageMin((timeline) => timeline.pcmRing.firstIssueAtMs),
-    avgBufferedMs: average(
-      timelines.map((timeline) => timeline.pcmRing.avgBufferedMs)
-    ),
+    avgBufferedMs: average(timelines.map((timeline) => timeline.pcmRing.avgBufferedMs)),
     minBufferedMs: Math.min(
       ...timelines.map((timeline) => timeline.pcmRing.minBufferedMs)
     ),
@@ -1097,14 +1023,10 @@ function buildAggregateTimelineSummary(
   };
   const playout = {
     firstIssueAtMs: stageMin((timeline) => timeline.playout.firstIssueAtMs),
-    avgDeltaMs: average(
-      timelines.map((timeline) => timeline.playout.avgDeltaMs)
-    ),
+    avgDeltaMs: average(timelines.map((timeline) => timeline.playout.avgDeltaMs)),
     underTargetFraction: metrics.playoutUnderTargetFraction,
     outsideTargetFraction: metrics.playoutOutsideTargetFraction,
-    targetBufferMs: average(
-      timelines.map((timeline) => timeline.playout.targetBufferMs)
-    ),
+    targetBufferMs: average(timelines.map((timeline) => timeline.playout.targetBufferMs)),
   };
   const allFirstIssues = timelines
     .filter((timeline) => typeof timeline.firstIssueAtMs === 'number')
@@ -1135,8 +1057,7 @@ function buildAggregateTimelineSummary(
         ...timelines.map((timeline) => timeline.perf.tickBudgetBreachMaxMs)
       ),
       longTaskCount: paths.reduce(
-        (sum, path) =>
-          sum + path.tickStallsMs.filter((value) => value > 50).length,
+        (sum, path) => sum + path.tickStallsMs.filter((value) => value > 50).length,
         0
       ),
     },
@@ -1148,12 +1069,11 @@ function isInScoredStartupWindow(
   nowMs: number
 ): boolean {
   if (nowMs > STARTUP_QUALITY_WINDOW_MS) return false;
-  const authoritativeKeyReadyAtMs =
-    path.receiverModel?.authoritativeKeyReadyAtMs;
+  const authoritativeKeyReadyAtMs = path.receiverModel?.authoritativeKeyReadyAtMs;
   if (typeof authoritativeKeyReadyAtMs !== 'number') return true;
   const audibleStartupBeginsAtMs = Math.min(
     STARTUP_QUALITY_WINDOW_MS,
-    authoritativeKeyReadyAtMs + OPUS_FRAME_DURATION_MS * 4
+    authoritativeKeyReadyAtMs + (OPUS_FRAME_DURATION_MS * 4)
   );
   return nowMs >= audibleStartupBeginsAtMs;
 }
@@ -1171,10 +1091,7 @@ function createPath(
   let simulatedMs = 0;
   const clockMs = () => simulatedMs;
   const diag = new BufferingDiagnosticsRecorder();
-  const sessionController = new ReticulumSessionController({
-    diagnostics: diag,
-    clockMs,
-  });
+  const sessionController = new ReticulumSessionController({ diagnostics: diag, clockMs });
   sessionController.ingestTopologyEvent({
     kind: 'peer-joined',
     sourceAddr: senderAddr,
@@ -1183,9 +1100,7 @@ function createPath(
   if (senderProfile.simulateRecoveryPathLatch) {
     sessionController.ingestTopologyEvent({ kind: 'global-recovery-started' });
   }
-  const streamId: StreamIdentity = sessionController.getStreamIdentity(
-    senderAddr
-  ) ?? {
+  const streamId: StreamIdentity = sessionController.getStreamIdentity(senderAddr) ?? {
     sourceAddr: senderAddr,
     streamEpoch: 0,
     joinGeneration: 1,
@@ -1200,8 +1115,8 @@ function createPath(
     streamId,
     {
       targetBufferMs:
-        receiverModel?.policyTargetBufferMs ??
-        (receiverSourceCount >= 2 ? 160 : 120),
+        receiverModel?.policyTargetBufferMs
+        ?? (receiverSourceCount >= 2 ? 160 : 120),
       backlogDrainTriggerRatio: 1.0,
       transportDegradedHardTtlMs: 8_000,
     },
@@ -1209,9 +1124,7 @@ function createPath(
   );
   const sendPressure = new SendPressureController(sessionController, {}, diag);
   const tracker = new GroupCallPerformanceTracker();
-  tracker.setRole(
-    receiverRole as Parameters<GroupCallPerformanceTracker['setRole']>[0]
-  );
+  tracker.setRole(receiverRole as Parameters<GroupCallPerformanceTracker['setRole']>[0]);
   tracker.setResourceCounts({
     decoders: receiverSourceCount,
     playbackNodes: receiverSourceCount,
@@ -1220,10 +1133,7 @@ function createPath(
   const packetSeed = seed ^ stableStringSeed(`${receiverAddr}:${senderAddr}`);
   const packets = generatePackets(senderProfile, durationMs, packetSeed);
   const packetRng = xorshift32(seed ^ 0x9e3779b9);
-  const faultInjector = new FaultInjector(
-    sessionController,
-    cloneFaults(senderProfile.faults)
-  );
+  const faultInjector = new FaultInjector(sessionController, cloneFaults(senderProfile.faults));
   const path: SimulatedPeerPath = {
     receiverAddr,
     receiverRole,
@@ -1278,9 +1188,7 @@ function createPath(
       playout: null,
     },
   };
-  Object.defineProperty(path, 'sessionController', {
-    value: sessionController,
-  });
+  Object.defineProperty(path, 'sessionController', { value: sessionController });
   Object.defineProperty(path, 'engine', { value: engine });
   Object.defineProperty(path, 'policy', { value: policy });
   Object.defineProperty(path, 'sendPressure', { value: sendPressure });
@@ -1296,11 +1204,7 @@ function createPath(
 }
 
 function setPathClock(path: SimulatedPeerPath, nowMs: number): void {
-  (
-    path as SimulatedPeerPath & {
-      readonly setSimulatedMs: (value: number) => void;
-    }
-  ).setSimulatedMs(nowMs);
+  (path as SimulatedPeerPath & { readonly setSimulatedMs: (value: number) => void }).setSimulatedMs(nowMs);
 }
 
 function activeTransportDuration(path: SimulatedPeerPath): number {
@@ -1308,16 +1212,10 @@ function activeTransportDuration(path: SimulatedPeerPath): number {
   return degraded * OPUS_FRAME_DURATION_MS;
 }
 
-async function drainTick(
-  path: SimulatedPeerPath,
-  nowMs: number
-): Promise<void> {
-  const stallRng = xorshift32(
-    (nowMs + 1) * (path.receiverAddr === 'peer-A' ? 17 : 31)
-  );
+async function drainTick(path: SimulatedPeerPath, nowMs: number): Promise<void> {
+  const stallRng = xorshift32((nowMs + 1) * (path.receiverAddr === 'peer-A' ? 17 : 31));
   const sampledStall =
-    path.senderProfile.tickBreachFraction > 0 &&
-    stallRng() < path.senderProfile.tickBreachFraction
+    path.senderProfile.tickBreachFraction > 0 && stallRng() < path.senderProfile.tickBreachFraction
       ? path.senderProfile.tickBreachAvgMs
       : 0;
   const injectedStall = path.faultInjector.getTickStallMs(nowMs);
@@ -1349,10 +1247,7 @@ async function drainTick(
   if (tickResult.framesDecoded > 0) {
     path.tracker.recordPacketDecoded(tickResult.framesDecoded);
   }
-  path.stateCounts.set(
-    path.policy.state,
-    (path.stateCounts.get(path.policy.state) ?? 0) + 1
-  );
+  path.stateCounts.set(path.policy.state, (path.stateCounts.get(path.policy.state) ?? 0) + 1);
   path.pcmSamples.push(tickResult.pcmBufferedMs);
   const startupTargetBoostMs =
     path.receiverModel &&
@@ -1361,8 +1256,7 @@ async function drainTick(
     nowMs <= path.receiverModel.startupTargetBoostUntilMs
       ? Math.max(0, path.receiverModel.startupTargetBoostMs)
       : 0;
-  const effectiveTargetBufferMs =
-    policyOutput.targetBufferMs + startupTargetBoostMs;
+  const effectiveTargetBufferMs = policyOutput.targetBufferMs + startupTargetBoostMs;
   const effectivePlayoutBufferedMs = Math.min(
     tickResult.pcmBufferedMs,
     tickResult.opusBufferedMs + 40,
@@ -1372,9 +1266,7 @@ async function drainTick(
   path.opusSamples.push(tickResult.opusBufferedMs);
   path.jitterDepthSamples.push(path.engine.getJitterDepth());
   path.targetSamples.push(effectiveTargetBufferMs);
-  path.playoutDeltaSamples.push(
-    effectivePlayoutBufferedMs - effectiveTargetBufferMs
-  );
+  path.playoutDeltaSamples.push(effectivePlayoutBufferedMs - effectiveTargetBufferMs);
   const inStartupWindow = isInScoredStartupWindow(path, nowMs);
   if (inStartupWindow) {
     path.startupTickCount += 1;
@@ -1387,30 +1279,21 @@ async function drainTick(
     }
     markStageIssue(path.stageIssues, 'playout', nowMs);
   }
-  const outsideUnder =
-    effectivePlayoutBufferedMs < effectiveTargetBufferMs * 0.65;
-  const outsideOver =
-    effectivePlayoutBufferedMs > effectiveTargetBufferMs * 1.35;
+  const outsideUnder = effectivePlayoutBufferedMs < effectiveTargetBufferMs * 0.65;
+  const outsideOver = effectivePlayoutBufferedMs > effectiveTargetBufferMs * 1.35;
   if (outsideUnder || outsideOver) {
     path.outsideTargetTicks += 1;
     if (inStartupWindow) {
       path.startupOutsideTargetTicks += 1;
     }
   }
-  path.tracker.recordAdaptiveTargetSample(
-    path.senderAddr,
-    effectiveTargetBufferMs
-  );
-  path.tracker.recordOpusBufferedMetric(
-    path.senderAddr,
-    tickResult.opusBufferedMs
-  );
+  path.tracker.recordAdaptiveTargetSample(path.senderAddr, effectiveTargetBufferMs);
+  path.tracker.recordOpusBufferedMetric(path.senderAddr, tickResult.opusBufferedMs);
   path.tracker.recordJitterDrainTelemetry({
     sourceCount: path.receiverSourceCount,
     depthSum: path.engine.getJitterDepth(),
     worstDepth: path.engine.getJitterDepth(),
-    notReadyCount:
-      effectivePlayoutBufferedMs < effectiveTargetBufferMs * 0.85 ? 1 : 0,
+    notReadyCount: effectivePlayoutBufferedMs < effectiveTargetBufferMs * 0.85 ? 1 : 0,
     rawEmptyCount: tickResult.opusBufferedMs <= 0 ? 1 : 0,
   });
   path.tracker.recordPlayoutMetricTick(
@@ -1440,10 +1323,7 @@ async function drainTick(
       effectivePlayoutBufferedMs
     )
   );
-  if (
-    tickResult.opusBufferedMs > policyOutput.targetBufferMs * 1.5 ||
-    tickResult.opusBufferedMs === 0
-  ) {
+  if (tickResult.opusBufferedMs > policyOutput.targetBufferMs * 1.5 || tickResult.opusBufferedMs === 0) {
     markStageIssue(path.stageIssues, 'jitter', nowMs);
   }
   const pcmRingUnderruns = path.engine.getPcmRing().underruns;
@@ -1472,25 +1352,16 @@ function deliverPackets(path: SimulatedPeerPath, nowMs: number): void {
     bridgePressureDepthAt(path.senderProfile.faults, nowMs),
     startupBridgePressureDepthAt(path.receiverModel, nowMs)
   );
-  path.maxBridgePressureDepth = Math.max(
-    path.maxBridgePressureDepth,
-    bridgePressureDepth
-  );
+  path.maxBridgePressureDepth = Math.max(path.maxBridgePressureDepth, bridgePressureDepth);
   if (bridgePressureDepth > 0) {
     path.bridgeWaitingForDrainObserved = true;
   }
-  path.tracker.recordTransportMode(
-    bridgePressureDepth > 0 ? 'relay' : 'reticulum',
-    nowMs
-  );
+  path.tracker.recordTransportMode(bridgePressureDepth > 0 ? 'relay' : 'reticulum', nowMs);
   path.tracker.setReticulumAudioQueueDepths({
     bridgeQueuedFrames: bridgePressureDepth,
-    bridgeQueuedOldestAgeMs:
-      bridgePressureDepth > 0 ? bridgePressureDepth * 8 : 0,
-    binaryOutQueueDepth:
-      bridgePressureDepth > 0 ? Math.max(0, bridgePressureDepth - 6) : 0,
-    binaryOutQueueOldestAgeMs:
-      bridgePressureDepth > 0 ? bridgePressureDepth * 5 : 0,
+    bridgeQueuedOldestAgeMs: bridgePressureDepth > 0 ? bridgePressureDepth * 8 : 0,
+    binaryOutQueueDepth: bridgePressureDepth > 0 ? Math.max(0, bridgePressureDepth - 6) : 0,
+    binaryOutQueueOldestAgeMs: bridgePressureDepth > 0 ? bridgePressureDepth * 5 : 0,
     queuePressureDropsLast5s: 0,
     staleDropsLast5s: 0,
   });
@@ -1510,10 +1381,7 @@ function deliverPackets(path: SimulatedPeerPath, nowMs: number): void {
     if (effectiveArrivalMs > nowMs) break;
     path.packetIdx += 1;
     path.totalPackets += 1;
-    const droppedByFault = path.faultInjector.shouldDropPacket(
-      nowMs,
-      path.packetRng
-    );
+    const droppedByFault = path.faultInjector.shouldDropPacket(nowMs, path.packetRng);
     if (packet.dropped || droppedByFault) {
       path.droppedPackets += 1;
       markStageIssue(path.stageIssues, 'arrival', nowMs);
@@ -1624,10 +1492,7 @@ function fixtureProfile(
   };
 }
 
-export const SENDER_PROFILE_PRESETS: Record<
-  SenderProfileId,
-  SenderImpairmentProfile
-> = {
+export const SENDER_PROFILE_PRESETS: Record<SenderProfileId, SenderImpairmentProfile> = {
   cleanSender: defaultProfile(
     'cleanSender',
     'Clean sender',
@@ -1637,12 +1502,7 @@ export const SENDER_PROFILE_PRESETS: Record<
     'lossySender',
     'Lossy sender',
     'Sustained packet loss with otherwise steady cadence.',
-    {
-      packetPattern: 'mixed',
-      lossRate: 0.35,
-      jitterStdDevMs: 16,
-      burstFraction: 0.18,
-    }
+    { packetPattern: 'mixed', lossRate: 0.35, jitterStdDevMs: 16, burstFraction: 0.18 }
   ),
   burstySender: defaultProfile(
     'burstySender',
@@ -1653,18 +1513,8 @@ export const SENDER_PROFILE_PRESETS: Record<
       jitterStdDevMs: 55,
       burstFraction: 0.72,
       faults: [
-        {
-          kind: 'bridge-pressure',
-          atMs: 4_000,
-          durationMs: 10_000,
-          params: { depth: 24 },
-        },
-        {
-          kind: 'latency-spike',
-          atMs: 8_000,
-          durationMs: 5_000,
-          params: { addMs: 90 },
-        },
+        { kind: 'bridge-pressure', atMs: 4_000, durationMs: 10_000, params: { depth: 24 } },
+        { kind: 'latency-spike', atMs: 8_000, durationMs: 5_000, params: { addMs: 90 } },
       ],
     }
   ),
@@ -1677,18 +1527,8 @@ export const SENDER_PROFILE_PRESETS: Record<
       jitterStdDevMs: 26,
       burstFraction: 0.22,
       faults: [
-        {
-          kind: 'latency-spike',
-          atMs: 6_000,
-          durationMs: 5_000,
-          params: { addMs: 110 },
-        },
-        {
-          kind: 'latency-spike',
-          atMs: 14_000,
-          durationMs: 4_500,
-          params: { addMs: 130 },
-        },
+        { kind: 'latency-spike', atMs: 6_000, durationMs: 5_000, params: { addMs: 110 } },
+        { kind: 'latency-spike', atMs: 14_000, durationMs: 4_500, params: { addMs: 130 } },
       ],
     }
   ),
@@ -1702,24 +1542,9 @@ export const SENDER_PROFILE_PRESETS: Record<
       burstFraction: 0.65,
       lossRate: 0.08,
       faults: [
-        {
-          kind: 'latency-spike',
-          atMs: 3_000,
-          durationMs: 4_000,
-          params: { addMs: 140 },
-        },
-        {
-          kind: 'latency-spike',
-          atMs: 11_000,
-          durationMs: 4_000,
-          params: { addMs: 120 },
-        },
-        {
-          kind: 'bridge-pressure',
-          atMs: 7_000,
-          durationMs: 8_000,
-          params: { depth: 20 },
-        },
+        { kind: 'latency-spike', atMs: 3_000, durationMs: 4_000, params: { addMs: 140 } },
+        { kind: 'latency-spike', atMs: 11_000, durationMs: 4_000, params: { addMs: 120 } },
+        { kind: 'bridge-pressure', atMs: 7_000, durationMs: 8_000, params: { depth: 20 } },
       ],
     }
   ),
@@ -1732,24 +1557,9 @@ export const SENDER_PROFILE_PRESETS: Record<
       jitterStdDevMs: 65,
       burstFraction: 0.55,
       faults: [
-        {
-          kind: 'packet-loss-burst',
-          atMs: 5_000,
-          durationMs: 8_000,
-          params: { rate: 0.95 },
-        },
-        {
-          kind: 'latency-spike',
-          atMs: 12_000,
-          durationMs: 4_000,
-          params: { addMs: 200 },
-        },
-        {
-          kind: 'bridge-pressure',
-          atMs: 5_000,
-          durationMs: 8_000,
-          params: { depth: 28 },
-        },
+        { kind: 'packet-loss-burst', atMs: 5_000, durationMs: 8_000, params: { rate: 0.95 } },
+        { kind: 'latency-spike', atMs: 12_000, durationMs: 4_000, params: { addMs: 200 } },
+        { kind: 'bridge-pressure', atMs: 5_000, durationMs: 8_000, params: { depth: 28 } },
       ],
     }
   ),
@@ -1763,14 +1573,7 @@ export const SENDER_PROFILE_PRESETS: Record<
       burstFraction: 0.4,
       tickBreachFraction: 0.16,
       tickBreachAvgMs: 36,
-      faults: [
-        {
-          kind: 'tick-stall',
-          atMs: 6_000,
-          durationMs: 12_000,
-          params: { stallMs: 34 },
-        },
-      ],
+      faults: [{ kind: 'tick-stall', atMs: 6_000, durationMs: 12_000, params: { stallMs: 34 } }],
     }
   ),
   staleTimestampSender: defaultProfile(
@@ -1796,24 +1599,9 @@ export const SENDER_PROFILE_PRESETS: Record<
       packetPattern: 'steady',
       jitterStdDevMs: 10,
       faults: [
-        {
-          kind: 'latency-spike',
-          atMs: 1_000,
-          durationMs: 4_500,
-          params: { addMs: 230 },
-        },
-        {
-          kind: 'bridge-pressure',
-          atMs: 1_250,
-          durationMs: 4_500,
-          params: { depth: 18 },
-        },
-        {
-          kind: 'packet-loss-burst',
-          atMs: 2_000,
-          durationMs: 1_800,
-          params: { rate: 0.22 },
-        },
+        { kind: 'latency-spike', atMs: 1_000, durationMs: 4_500, params: { addMs: 230 } },
+        { kind: 'bridge-pressure', atMs: 1_250, durationMs: 4_500, params: { depth: 18 } },
+        { kind: 'packet-loss-burst', atMs: 2_000, durationMs: 1_800, params: { rate: 0.22 } },
       ],
     }
   ),
@@ -1827,18 +1615,8 @@ export const SENDER_PROFILE_PRESETS: Record<
       burstFraction: 0.8,
       lossRate: 0.04,
       faults: [
-        {
-          kind: 'latency-spike',
-          atMs: 800,
-          durationMs: 5_500,
-          params: { addMs: 120 },
-        },
-        {
-          kind: 'bridge-pressure',
-          atMs: 1_000,
-          durationMs: 5_500,
-          params: { depth: 16 },
-        },
+        { kind: 'latency-spike', atMs: 800, durationMs: 5_500, params: { addMs: 120 } },
+        { kind: 'bridge-pressure', atMs: 1_000, durationMs: 5_500, params: { depth: 16 } },
       ],
     }
   ),
@@ -1851,8 +1629,7 @@ export const SENDER_PROFILE_PRESETS: Record<
       jitterStdDevMs: PHIL_KENNY_REPLAY_SCRIPT.jitterStdDevMs,
       burstFraction: PHIL_KENNY_REPLAY_SCRIPT.burstFraction,
       lossRate: PHIL_KENNY_REPLAY_SCRIPT.lossRate,
-      simulateRecoveryPathLatch:
-        PHIL_KENNY_REPLAY_SCRIPT.simulateRecoveryPathLatch,
+      simulateRecoveryPathLatch: PHIL_KENNY_REPLAY_SCRIPT.simulateRecoveryPathLatch,
       tickBreachFraction: PHIL_KENNY_REPLAY_SCRIPT.tickBreachFraction,
       tickBreachAvgMs: PHIL_KENNY_REPLAY_SCRIPT.tickBreachAvgMs,
       faults: PHIL_KENNY_REPLAY_SCRIPT.faults,
@@ -1883,37 +1660,15 @@ export const SENDER_PROFILE_PRESETS: Record<
     'Bursty transport-flap arrival shape from call-60 rebuild oscillation.',
     {
       ...FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams,
-      burstFraction: Math.max(
-        0.62,
-        FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.burstFraction
-      ),
-      lossRate: Math.max(
-        0.08,
-        FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.lossRate
-      ),
-      tickBreachFraction: Math.max(
-        0.06,
-        FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.tickBreachFraction
-      ),
-      tickBreachAvgMs: Math.max(
-        26,
-        FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.tickBreachAvgMs
-      ),
+      burstFraction: Math.max(0.62, FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.burstFraction),
+      lossRate: Math.max(0.08, FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.lossRate),
+      tickBreachFraction: Math.max(0.06, FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.tickBreachFraction),
+      tickBreachAvgMs: Math.max(26, FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.tickBreachAvgMs),
     },
     [
       ...FAULT_CALL60_PATTERN,
-      {
-        kind: 'bridge-pressure',
-        atMs: 12_000,
-        durationMs: 16_000,
-        params: { depth: 22 },
-      },
-      {
-        kind: 'packet-loss-burst',
-        atMs: 32_000,
-        durationMs: 8_000,
-        params: { rate: 0.55 },
-      },
+      { kind: 'bridge-pressure', atMs: 12_000, durationMs: 16_000, params: { depth: 22 } },
+      { kind: 'packet-loss-burst', atMs: 32_000, durationMs: 8_000, params: { rate: 0.55 } },
     ]
   ),
 };
@@ -1921,20 +1676,11 @@ export const SENDER_PROFILE_PRESETS: Record<
 export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   {
     id: 'steady-clean-symmetric',
-    description:
-      'Both participants send clean steady audio and should remain healthy.',
+    description: 'Both participants send clean steady audio and should remain healthy.',
     durationMs: 24_000,
     seed: 101,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
     expectations: {
       bothPassed: true,
       // Deterministic baseline remains slightly more pessimistic than the
@@ -1944,20 +1690,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'good-vs-lossy',
-    description:
-      'Peer B sends lossy audio, but the paired call should still remain healthy.',
+    description: 'Peer B sends lossy audio, but the paired call should still remain healthy.',
     durationMs: 24_000,
     seed: 202,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.lossySender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.lossySender },
     expectations: {
       bothPassed: true,
       // Replay-derived deterministic baseline remains slightly below 8.0 on
@@ -1967,20 +1704,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'good-vs-bursty',
-    description:
-      'Peer B sends bursty audio with bridge pressure, but the paired call should still remain healthy.',
+    description: 'Peer B sends bursty audio with bridge pressure, but the paired call should still remain healthy.',
     durationMs: 24_000,
     seed: 303,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.burstySender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.burstySender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 7.85,
@@ -1988,20 +1716,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'good-vs-high-jitter',
-    description:
-      'Peer B sends high-jitter audio, but the paired call should still remain healthy.',
+    description: 'Peer B sends high-jitter audio, but the paired call should still remain healthy.',
     durationMs: 24_000,
     seed: 404,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.highJitterSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.highJitterSender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 8,
@@ -2009,20 +1728,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'good-vs-stalled',
-    description:
-      'Peer B intermittently stalls, but the paired call should still remain healthy.',
+    description: 'Peer B intermittently stalls, but the paired call should still remain healthy.',
     durationMs: 24_000,
     seed: 505,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.stalledSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.stalledSender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 8,
@@ -2030,20 +1740,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'good-vs-cpu-stressed',
-    description:
-      'Peer B is CPU stressed, but the paired call should still remain healthy.',
+    description: 'Peer B is CPU stressed, but the paired call should still remain healthy.',
     durationMs: 24_000,
     seed: 606,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cpuStressedSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cpuStressedSender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 8,
@@ -2051,20 +1752,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'good-vs-stale-timestamp',
-    description:
-      'Peer B emits stale/regressing sender timestamps, but the paired call should still recover to healthy.',
+    description: 'Peer B emits stale/regressing sender timestamps, but the paired call should still recover to healthy.',
     durationMs: 24_000,
     seed: 909,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.staleTimestampSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.staleTimestampSender },
     expectations: {
       bothPassed: true,
       // Policy-dominated scoring can sit just under 8.0 on boundary seeds; 7.85 keeps the lab stable.
@@ -2073,20 +1765,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'phil-kenny-derived-regression',
-    description:
-      'Offline deterministic regression derived from the real phil-kenny pair: one side sees mixed transport/stall pressure while the other sees severe stale timestamp dropping.',
+    description: 'Offline deterministic regression derived from the real phil-kenny pair: one side sees mixed transport/stall pressure while the other sees severe stale timestamp dropping.',
     durationMs: PHIL_KENNY_REPLAY_SCRIPT.durationMs,
     seed: 1001,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.philKennyStaleSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.philKennyTransportSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.philKennyStaleSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.philKennyTransportSender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 7.85,
@@ -2094,21 +1777,12 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'call63-two-party-regression',
-    description:
-      'Recreates the call-63 asymmetric failure shape, but the paired call should still recover to healthy.',
+    description: 'Recreates the call-63 asymmetric failure shape, but the paired call should still recover to healthy.',
     durationMs: FIXTURE_CALL63_ONE_REMOTE_PLAYOUT_TRAP.replayParams.durationMs,
     seed: 707,
     fixtureId: FIXTURE_CALL63_ONE_REMOTE_PLAYOUT_TRAP.id,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.call63FixtureSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.call63FixtureSender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 8,
@@ -2116,21 +1790,12 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
   },
   {
     id: 'call60-two-party-regression',
-    description:
-      'Recreates the call-60 rebuild oscillation, but the paired call should still recover to healthy.',
+    description: 'Recreates the call-60 rebuild oscillation, but the paired call should still recover to healthy.',
     durationMs: FIXTURE_CALL60_REBUILD_OSCILLATION.replayParams.durationMs,
     seed: 808,
     fixtureId: FIXTURE_CALL60_REBUILD_OSCILLATION.id,
-    peerA: {
-      addr: 'peer-A',
-      role: 'root-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-    },
-    peerB: {
-      addr: 'peer-B',
-      role: 'standby-forwarder',
-      senderProfile: SENDER_PROFILE_PRESETS.call60FixtureSender,
-    },
+    peerA: { addr: 'peer-A', role: 'root-forwarder', senderProfile: SENDER_PROFILE_PRESETS.cleanSender },
+    peerB: { addr: 'peer-B', role: 'standby-forwarder', senderProfile: SENDER_PROFILE_PRESETS.call60FixtureSender },
     expectations: {
       bothPassed: true,
       qualityScoreAtLeast: 8,
@@ -2304,18 +1969,8 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         burstFraction: 0.1,
         lossRate: 0.005,
         faults: [
-          {
-            kind: 'latency-spike',
-            atMs: 7_000,
-            durationMs: 2_000,
-            params: { addMs: 32 },
-          },
-          {
-            kind: 'latency-spike',
-            atMs: 15_000,
-            durationMs: 2_200,
-            params: { addMs: 36 },
-          },
+          { kind: 'latency-spike', atMs: 7_000, durationMs: 2_000, params: { addMs: 32 } },
+          { kind: 'latency-spike', atMs: 15_000, durationMs: 2_200, params: { addMs: 36 } },
         ],
       },
     },
@@ -2331,18 +1986,8 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         burstFraction: 0.08,
         lossRate: 0.004,
         faults: [
-          {
-            kind: 'latency-spike',
-            atMs: 9_500,
-            durationMs: 1_800,
-            params: { addMs: 30 },
-          },
-          {
-            kind: 'latency-spike',
-            atMs: 18_000,
-            durationMs: 1_900,
-            params: { addMs: 34 },
-          },
+          { kind: 'latency-spike', atMs: 9_500, durationMs: 1_800, params: { addMs: 30 } },
+          { kind: 'latency-spike', atMs: 18_000, durationMs: 1_900, params: { addMs: 34 } },
         ],
       },
     },
@@ -2405,30 +2050,10 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         burstFraction: 0.16,
         lossRate: 0.01,
         faults: [
-          {
-            kind: 'latency-spike',
-            atMs: 3_500,
-            durationMs: 3_500,
-            params: { addMs: 60 },
-          },
-          {
-            kind: 'latency-spike',
-            atMs: 13_500,
-            durationMs: 3_000,
-            params: { addMs: 70 },
-          },
-          {
-            kind: 'bridge-pressure',
-            atMs: 4_000,
-            durationMs: 4_000,
-            params: { depth: 6 },
-          },
-          {
-            kind: 'packet-loss-burst',
-            atMs: 7_500,
-            durationMs: 1_500,
-            params: { rate: 0.04 },
-          },
+          { kind: 'latency-spike', atMs: 3_500, durationMs: 3_500, params: { addMs: 60 } },
+          { kind: 'latency-spike', atMs: 13_500, durationMs: 3_000, params: { addMs: 70 } },
+          { kind: 'bridge-pressure', atMs: 4_000, durationMs: 4_000, params: { depth: 6 } },
+          { kind: 'packet-loss-burst', atMs: 7_500, durationMs: 1_500, params: { rate: 0.04 } },
         ],
       },
     },
@@ -2483,30 +2108,10 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         burstFraction: 0.16,
         lossRate: 0.01,
         faults: [
-          {
-            kind: 'latency-spike',
-            atMs: 3_500,
-            durationMs: 3_500,
-            params: { addMs: 60 },
-          },
-          {
-            kind: 'latency-spike',
-            atMs: 13_500,
-            durationMs: 3_000,
-            params: { addMs: 70 },
-          },
-          {
-            kind: 'bridge-pressure',
-            atMs: 4_000,
-            durationMs: 4_000,
-            params: { depth: 6 },
-          },
-          {
-            kind: 'packet-loss-burst',
-            atMs: 7_500,
-            durationMs: 1_500,
-            params: { rate: 0.04 },
-          },
+          { kind: 'latency-spike', atMs: 3_500, durationMs: 3_500, params: { addMs: 60 } },
+          { kind: 'latency-spike', atMs: 13_500, durationMs: 3_000, params: { addMs: 70 } },
+          { kind: 'bridge-pressure', atMs: 4_000, durationMs: 4_000, params: { depth: 6 } },
+          { kind: 'packet-loss-burst', atMs: 7_500, durationMs: 1_500, params: { rate: 0.04 } },
         ],
       },
     },
@@ -2626,36 +2231,11 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         burstFraction: 0.82,
         lossRate: 0.18,
         faults: [
-          {
-            kind: 'latency-spike',
-            atMs: 2_000,
-            durationMs: 7_000,
-            params: { addMs: 260 },
-          },
-          {
-            kind: 'latency-spike',
-            atMs: 11_000,
-            durationMs: 7_500,
-            params: { addMs: 320 },
-          },
-          {
-            kind: 'bridge-pressure',
-            atMs: 3_500,
-            durationMs: 14_000,
-            params: { depth: 36 },
-          },
-          {
-            kind: 'packet-loss-burst',
-            atMs: 6_500,
-            durationMs: 4_500,
-            params: { rate: 0.42 },
-          },
-          {
-            kind: 'packet-loss-burst',
-            atMs: 14_000,
-            durationMs: 3_500,
-            params: { rate: 0.36 },
-          },
+          { kind: 'latency-spike', atMs: 2_000, durationMs: 7_000, params: { addMs: 260 } },
+          { kind: 'latency-spike', atMs: 11_000, durationMs: 7_500, params: { addMs: 320 } },
+          { kind: 'bridge-pressure', atMs: 3_500, durationMs: 14_000, params: { depth: 36 } },
+          { kind: 'packet-loss-burst', atMs: 6_500, durationMs: 4_500, params: { rate: 0.42 } },
+          { kind: 'packet-loss-burst', atMs: 14_000, durationMs: 3_500, params: { rate: 0.36 } },
         ],
       },
     },
@@ -2804,18 +2384,14 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
 ];
 
 export function getGroupCallE2eScenario(id: string): GroupCallE2eScenario {
-  const scenario = GROUP_CALL_E2E_SCENARIOS.find(
-    (candidate) => candidate.id === id
-  );
+  const scenario = GROUP_CALL_E2E_SCENARIOS.find((candidate) => candidate.id === id);
   if (!scenario) {
     throw new Error(`Unknown group-call E2E scenario: "${id}"`);
   }
   return scenario;
 }
 
-export function selectGroupCallE2eScenarios(
-  filter?: string | null
-): GroupCallE2eScenario[] {
+export function selectGroupCallE2eScenarios(filter?: string | null): GroupCallE2eScenario[] {
   const normalized = (filter ?? '').trim();
   if (normalized.length === 0) return [...GROUP_CALL_E2E_SCENARIOS];
   return normalized
@@ -2836,10 +2412,7 @@ function assertExpectations(
     `peerA(avgPcm=${report.peerA.metrics.avgPcmBufferedMs.toFixed(2)}, under=${report.peerA.metrics.playoutUnderTargetFraction.toFixed(2)}, outside=${report.peerA.metrics.playoutOutsideTargetFraction.toFixed(2)}, class=${report.peerA.classification.primaryClass})`,
     `peerB(avgPcm=${report.peerB.metrics.avgPcmBufferedMs.toFixed(2)}, under=${report.peerB.metrics.playoutUnderTargetFraction.toFixed(2)}, outside=${report.peerB.metrics.playoutOutsideTargetFraction.toFixed(2)}, class=${report.peerB.classification.primaryClass})`,
   ].join(' | ');
-  if (
-    typeof expectations.bothPassed === 'boolean' &&
-    report.pairedAnalysis.bothPassed !== expectations.bothPassed
-  ) {
+  if (typeof expectations.bothPassed === 'boolean' && report.pairedAnalysis.bothPassed !== expectations.bothPassed) {
     throw new Error(
       `Scenario ${scenario.id}: expected bothPassed=${expectations.bothPassed}, got ${report.pairedAnalysis.bothPassed}; ${debugSummary}`
     );
@@ -2847,32 +2420,24 @@ function assertExpectations(
   if (
     expectations.bothPassedByMode &&
     typeof expectations.bothPassedByMode[report.mode] === 'boolean' &&
-    report.pairedAnalysis.bothPassed !==
-      expectations.bothPassedByMode[report.mode]
+    report.pairedAnalysis.bothPassed !== expectations.bothPassedByMode[report.mode]
   ) {
     throw new Error(
       `Scenario ${scenario.id}: expected bothPassed=${expectations.bothPassedByMode[report.mode]} for mode ${report.mode}, got ${report.pairedAnalysis.bothPassed}; ${debugSummary}`
     );
   }
-  if (
-    expectations.worseAddr &&
-    report.pairedAnalysis.worseAddr !== expectations.worseAddr
-  ) {
+  if (expectations.worseAddr && report.pairedAnalysis.worseAddr !== expectations.worseAddr) {
     throw new Error(
       `Scenario ${scenario.id}: expected worseAddr=${expectations.worseAddr}, got ${report.pairedAnalysis.worseAddr}; ${debugSummary}`
     );
   }
   if (expectations.worsePrimaryClass) {
     const worsePeer =
-      report.pairedAnalysis.worseAddr === report.peerA.addr
-        ? report.peerA
-        : report.peerB;
-    if (
-      worsePeer.classification.primaryClass !== expectations.worsePrimaryClass
-    ) {
+      report.pairedAnalysis.worseAddr === report.peerA.addr ? report.peerA : report.peerB;
+    if (worsePeer.classification.primaryClass !== expectations.worsePrimaryClass) {
       throw new Error(
-        `Scenario ${scenario.id}: expected worse peer class=${expectations.worsePrimaryClass}, got ${worsePeer.classification.primaryClass}` +
-          `; ${debugSummary}`
+        `Scenario ${scenario.id}: expected worse peer class=${expectations.worsePrimaryClass}, got ${worsePeer.classification.primaryClass}`
+      + `; ${debugSummary}`
       );
     }
   }
@@ -2881,8 +2446,8 @@ function assertExpectations(
     report.pairedAnalysis.qualityScore < expectations.qualityScoreAtLeast
   ) {
     throw new Error(
-      `Scenario ${scenario.id}: expected qualityScore >= ${expectations.qualityScoreAtLeast}, got ${report.pairedAnalysis.qualityScore.toFixed(2)}` +
-        `; ${debugSummary}`
+      `Scenario ${scenario.id}: expected qualityScore >= ${expectations.qualityScoreAtLeast}, got ${report.pairedAnalysis.qualityScore.toFixed(2)}`
+      + `; ${debugSummary}`
     );
   }
   if (
@@ -2892,8 +2457,8 @@ function assertExpectations(
       (expectations.qualityScoreAtLeastByMode[report.mode] as number)
   ) {
     throw new Error(
-      `Scenario ${scenario.id}: expected qualityScore >= ${expectations.qualityScoreAtLeastByMode[report.mode]} for mode ${report.mode}, got ${report.pairedAnalysis.qualityScore.toFixed(2)}` +
-        `; ${debugSummary}`
+      `Scenario ${scenario.id}: expected qualityScore >= ${expectations.qualityScoreAtLeastByMode[report.mode]} for mode ${report.mode}, got ${report.pairedAnalysis.qualityScore.toFixed(2)}`
+      + `; ${debugSummary}`
     );
   }
   if (
@@ -2901,8 +2466,8 @@ function assertExpectations(
     report.pairedAnalysis.qualityScore > expectations.qualityScoreAtMost
   ) {
     throw new Error(
-      `Scenario ${scenario.id}: expected qualityScore <= ${expectations.qualityScoreAtMost}, got ${report.pairedAnalysis.qualityScore.toFixed(2)}` +
-        `; ${debugSummary}`
+      `Scenario ${scenario.id}: expected qualityScore <= ${expectations.qualityScoreAtMost}, got ${report.pairedAnalysis.qualityScore.toFixed(2)}`
+      + `; ${debugSummary}`
     );
   }
   if (expectations.startupFailure) {
@@ -2933,7 +2498,8 @@ function assertExpectations(
     }
     if (
       typeof expectations.startupFailure.maxAvgPcmBufferedMs === 'number' &&
-      startup.avgPcmBufferedMs > expectations.startupFailure.maxAvgPcmBufferedMs
+      startup.avgPcmBufferedMs >
+        expectations.startupFailure.maxAvgPcmBufferedMs
     ) {
       throw new Error(
         `Scenario ${scenario.id}: expected startup avgPcm <= ${expectations.startupFailure.maxAvgPcmBufferedMs}, got ${startup.avgPcmBufferedMs.toFixed(3)}`
@@ -2988,11 +2554,7 @@ export async function runGroupCallE2eScenario(
   );
 
   try {
-    for (
-      let simulatedMs = 0;
-      simulatedMs < scenario.durationMs;
-      simulatedMs += 1
-    ) {
+    for (let simulatedMs = 0; simulatedMs < scenario.durationMs; simulatedMs += 1) {
       simulatedNowMs = simulatedMs;
       for (const path of peerAPaths) {
         setPathClock(path, simulatedMs);
@@ -3037,14 +2599,8 @@ export async function runGroupCallE2eScenario(
       scenario.peerB.role,
       scenario.durationMs
     );
-    const peerATimeline = buildAggregateTimelineSummary(
-      peerAPaths,
-      peerAMetrics
-    );
-    const peerBTimeline = buildAggregateTimelineSummary(
-      peerBPaths,
-      peerBMetrics
-    );
+    const peerATimeline = buildAggregateTimelineSummary(peerAPaths, peerAMetrics);
+    const peerBTimeline = buildAggregateTimelineSummary(peerBPaths, peerBMetrics);
 
     const bundle = buildGroupCallE2eArtifactBundle({
       mode,

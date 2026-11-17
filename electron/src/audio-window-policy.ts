@@ -52,21 +52,19 @@ export function withAudioSurfaceIsolationHeaders(
     typeof details?.origin === 'string' && details.origin.trim()
       ? details.origin
       : typeof details?.referrer === 'string' && details.referrer.trim()
-        ? (safeUrl(details.referrer)?.origin ?? '')
+        ? safeUrl(details.referrer)?.origin ?? ''
         : '';
   const requestUrlOrigin = url?.origin ?? '';
   const isTopLevelAudioSurfaceDocument =
     url?.pathname === AUDIO_SURFACE_ENTRY_PATH &&
-    (details?.resourceType === 'mainFrame' ||
-      details?.resourceType === 'subFrame');
+    (details?.resourceType === 'mainFrame' || details?.resourceType === 'subFrame');
   const isSameOriginSubresource =
     !isTopLevelAudioSurfaceDocument &&
     !!requestOrigin &&
     !!requestUrlOrigin &&
     requestOrigin === requestUrlOrigin;
   const isAudioSurfaceLocalAssetSubresource =
-    !isTopLevelAudioSurfaceDocument &&
-    isLikelyAudioSurfaceLocalAsset(details, url);
+    !isTopLevelAudioSurfaceDocument && isLikelyAudioSurfaceLocalAsset(details, url);
 
   if (isTopLevelAudioSurfaceDocument) {
     next['Cross-Origin-Opener-Policy'] = ['same-origin'];
@@ -96,9 +94,13 @@ function isLikelyAudioSurfaceLocalAsset(
   url: URL | null
 ): boolean {
   if (!url) return false;
-  const resourceType =
-    typeof details?.resourceType === 'string' ? details.resourceType : '';
-  if (resourceType === 'worker' || resourceType === 'script') {
+  const resourceType = typeof details?.resourceType === 'string'
+    ? details.resourceType
+    : '';
+  if (
+    resourceType === 'worker' ||
+    resourceType === 'script'
+  ) {
     return isLocalAssetUrl(url);
   }
   return isLocalAssetUrl(url) && /\.wasm$/i.test(url.pathname);

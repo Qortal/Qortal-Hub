@@ -52,7 +52,7 @@ class MockPeerConnection {
             type: 'host',
             protocol: 'udp',
             toJSON: () => ({
-              candidate: 'candidate:1 1 UDP 1 203.0.114.9 5000 typ srflx',
+              candidate: 'candidate:1 1 UDP 1 127.0.0.1 9 typ host',
             }),
           } as RTCIceCandidate,
         } as RTCPeerConnectionIceEvent);
@@ -129,7 +129,7 @@ describe('DirectVoiceWebRtcTransport', () => {
     await transport.start();
 
     const candidate = {
-      candidate: 'candidate:1 1 UDP 1 203.0.114.9 5000 typ srflx',
+      candidate: 'candidate:1 1 UDP 1 127.0.0.1 9 typ host',
     };
     await transport.handleSignal({
       kind: 'ice',
@@ -566,7 +566,7 @@ describe('DirectVoiceWebRtcTransport', () => {
     ]);
     expect(emitted[1]).toMatchObject({
       kind: 'ice-candidates',
-      candidates: [{ candidate: 'candidate:1 1 UDP 1 203.0.114.9 5000 typ srflx' }],
+      candidates: [{ candidate: 'candidate:1 1 UDP 1 127.0.0.1 9 typ host' }],
     });
     transport.close();
   });
@@ -596,7 +596,7 @@ describe('DirectVoiceWebRtcTransport', () => {
         type: 'srflx',
         protocol: 'udp',
         toJSON: () => ({
-          candidate: 'candidate:1 1 UDP 1 203.0.114.1 5000 typ srflx',
+          candidate: 'candidate:1 1 UDP 1 203.0.113.1 5000 typ srflx',
         }),
       } as RTCIceCandidate,
     } as RTCPeerConnectionIceEvent);
@@ -615,7 +615,7 @@ describe('DirectVoiceWebRtcTransport', () => {
         type: 'relay',
         protocol: 'udp',
         toJSON: () => ({
-          candidate: 'candidate:2 1 UDP 1 203.0.114.2 5001 typ relay',
+          candidate: 'candidate:2 1 UDP 1 203.0.113.2 5001 typ relay',
         }),
       } as RTCIceCandidate,
     } as RTCPeerConnectionIceEvent);
@@ -657,7 +657,7 @@ describe('DirectVoiceWebRtcTransport', () => {
         type: 'host',
         protocol: 'udp',
         toJSON: () => ({
-          candidate: 'candidate:3 1 UDP 1 203.0.114.10 5002 typ srflx',
+          candidate: 'candidate:3 1 UDP 1 192.0.2.1 5002 typ host',
         }),
       } as RTCIceCandidate,
     } as RTCPeerConnectionIceEvent);

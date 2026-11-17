@@ -29,12 +29,7 @@ describe('buildSingleClusterTopologyWithStickyRoot', () => {
 
   it('keeps previous root when still in roster though not hash-min', () => {
     const sorted = ['a', 'b', 'c'];
-    const topo = buildSingleClusterTopologyWithStickyRoot(
-      sorted,
-      2,
-      'b',
-      CLUSTER
-    );
+    const topo = buildSingleClusterTopologyWithStickyRoot(sorted, 2, 'b', CLUSTER);
     expect(topo).not.toBeNull();
     expect(topo!.rootForwarder).toBe('b');
     expect(topo!.standbyForwarder).toBe('a');
@@ -48,35 +43,20 @@ describe('buildSingleClusterTopologyWithStickyRoot', () => {
 
   it('falls back to hash-min when previous root left', () => {
     const sorted = ['a', 'b'];
-    const topo = buildSingleClusterTopologyWithStickyRoot(
-      sorted,
-      1,
-      'gone',
-      CLUSTER
-    );
+    const topo = buildSingleClusterTopologyWithStickyRoot(sorted, 1, 'gone', CLUSTER);
     expect(topo!.rootForwarder).toBe('a');
     expect(topo!.standbyForwarder).toBe('b');
   });
 
   it('uses hash-min when no previous root', () => {
     const sorted = ['x', 'y'];
-    const topo = buildSingleClusterTopologyWithStickyRoot(
-      sorted,
-      1,
-      undefined,
-      CLUSTER
-    );
+    const topo = buildSingleClusterTopologyWithStickyRoot(sorted, 1, undefined, CLUSTER);
     expect(topo!.rootForwarder).toBe('x');
     expect(topo!.standbyForwarder).toBe('y');
   });
 
   it('solo room: standby is empty string', () => {
-    const topo = buildSingleClusterTopologyWithStickyRoot(
-      ['alice'],
-      1,
-      null,
-      CLUSTER
-    );
+    const topo = buildSingleClusterTopologyWithStickyRoot(['alice'], 1, null, CLUSTER);
     expect(topo!.rootForwarder).toBe('alice');
     expect(topo!.standbyForwarder).toBe('');
     expect(topo!.clusters[0].standby).toBe('');
@@ -84,9 +64,7 @@ describe('buildSingleClusterTopologyWithStickyRoot', () => {
 
   it('returns null when over cluster size', () => {
     const sorted = Array.from({ length: 11 }, (_, i) => `p${i}`);
-    expect(
-      buildSingleClusterTopologyWithStickyRoot(sorted, 1, 'p0', CLUSTER)
-    ).toBeNull();
+    expect(buildSingleClusterTopologyWithStickyRoot(sorted, 1, 'p0', CLUSTER)).toBeNull();
   });
 
   it('empty sorted matches flat topology shape', () => {
@@ -255,20 +233,16 @@ describe('chooseRouterTopologyAuthority', () => {
       ['beta', 'cdc71363'],
     ]);
     expect(
-      chooseRouterTopologyAuthority(
-        current,
-        {
-          ...current,
-          rootForwarder: 'beta',
-          lastSeen: 2_000,
-        },
-        {
-          compareRoots: (incomingRoot, currentRoot) =>
-            electionDigests
-              .get(incomingRoot)!
-              .localeCompare(electionDigests.get(currentRoot)!),
-        }
-      )
+      chooseRouterTopologyAuthority(current, {
+        ...current,
+        rootForwarder: 'beta',
+        lastSeen: 2_000,
+      }, {
+        compareRoots: (incomingRoot, currentRoot) =>
+          electionDigests.get(incomingRoot)!.localeCompare(
+            electionDigests.get(currentRoot)!
+          ),
+      })
     ).toEqual({
       acceptIncoming: true,
       reason: 'rootForwarder-lexical',
@@ -287,9 +261,9 @@ describe('chooseRouterTopologyAuthority', () => {
         },
         {
           compareRoots: (incomingRoot, currentRoot) =>
-            electionDigests
-              .get(incomingRoot)!
-              .localeCompare(electionDigests.get(currentRoot)!),
+            electionDigests.get(incomingRoot)!.localeCompare(
+              electionDigests.get(currentRoot)!
+            ),
         }
       )
     ).toEqual({
@@ -349,9 +323,9 @@ describe('chooseRouterTopologyAuthority', () => {
         { ...current, rootForwarder: 'beta' },
         {
           compareRoots: (incomingRoot, currentRoot) =>
-            electionDigests
-              .get(incomingRoot)!
-              .localeCompare(electionDigests.get(currentRoot)!),
+            electionDigests.get(incomingRoot)!.localeCompare(
+              electionDigests.get(currentRoot)!
+            ),
         }
       )
     ).toEqual({
@@ -419,18 +393,8 @@ describe('group-call router helpers', () => {
 
   it('reconciles participant speaking state without rebuilding unchanged rows', () => {
     const prev = [
-      {
-        address: 'a',
-        publicKey: '1',
-        speaking: false,
-        role: 'participant' as const,
-      },
-      {
-        address: 'b',
-        publicKey: '2',
-        speaking: true,
-        role: 'participant' as const,
-      },
+      { address: 'a', publicKey: '1', speaking: false, role: 'participant' as const },
+      { address: 'b', publicKey: '2', speaking: true, role: 'participant' as const },
     ];
 
     const unchanged = reconcileParticipantSpeaking(prev, ['b']);
@@ -530,10 +494,7 @@ describe('group-call router helpers', () => {
   });
 
   it('disposes participant audio resources safely', () => {
-    const decoder = {
-      state: 'configured',
-      close: vi.fn(),
-    } as unknown as AudioDecoder;
+    const decoder = { state: 'configured', close: vi.fn() } as unknown as AudioDecoder;
     const node = { disconnect: vi.fn() } as unknown as AudioWorkletNode;
     const gainNode = { disconnect: vi.fn() } as unknown as GainNode;
     const jitter = { clear: vi.fn() };
@@ -555,18 +516,10 @@ describe('group-call router helpers', () => {
       speakers
     );
 
-    expect(
-      decoder.close as unknown as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalledTimes(1);
-    expect(
-      node.disconnect as unknown as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalledTimes(1);
-    expect(
-      gainNode.disconnect as unknown as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalledTimes(1);
-    expect(
-      jitter.clear as unknown as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalledTimes(1);
+    expect((decoder.close as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect((node.disconnect as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect((gainNode.disconnect as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect((jitter.clear as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
     expect(decoders.size).toBe(0);
     expect(playbackNodes.size).toBe(0);
     expect(playbackGainNodes.size).toBe(0);
@@ -635,11 +588,7 @@ describe('group-call router helpers', () => {
     tracker.recordPlayoutMetricTick(100, false, undefined, { deltaMs: 2 });
     tracker.recordMixerState(4, 0.55);
     tracker.recordMixerReductionSample(-3.2);
-    tracker.setResourceCounts({
-      decoders: 2,
-      playbackNodes: 1,
-      jitterBuffers: 3,
-    });
+    tracker.setResourceCounts({ decoders: 2, playbackNodes: 1, jitterBuffers: 3 });
 
     expect(tracker.getSnapshot()).toMatchObject({
       role: 'root-forwarder',
@@ -1212,12 +1161,7 @@ describe('group-call router helpers', () => {
       rootForwarder: 'r',
       standbyForwarder: 's',
       clusters: [
-        {
-          members: ['b', 'a', 'r'],
-          forwarder: 'r',
-          standby: 's',
-          standby2: '',
-        },
+        { members: ['b', 'a', 'r'], forwarder: 'r', standby: 's', standby2: '' },
       ],
     };
     const b = {
@@ -1225,22 +1169,13 @@ describe('group-call router helpers', () => {
       rootForwarder: 'r',
       standbyForwarder: 's',
       clusters: [
-        {
-          members: ['r', 'a', 'b'],
-          forwarder: 'r',
-          standby: 's',
-          standby2: '',
-        },
+        { members: ['r', 'a', 'b'], forwarder: 'r', standby: 's', standby2: '' },
       ],
     };
-    expect(groupCallTopologyStructureFingerprint(a)).toBe(
-      groupCallTopologyStructureFingerprint(b)
-    );
+    expect(groupCallTopologyStructureFingerprint(a)).toBe(groupCallTopologyStructureFingerprint(b));
     expect(isGroupCallTopologyDuplicateHeartbeat(a, b, 3)).toBe(true);
     expect(isGroupCallTopologyDuplicateHeartbeat(null, b, 3)).toBe(false);
-    expect(
-      isGroupCallTopologyDuplicateHeartbeat(a, { ...b, topologyEpoch: 4 }, 3)
-    ).toBe(false);
+    expect(isGroupCallTopologyDuplicateHeartbeat(a, { ...b, topologyEpoch: 4 }, 3)).toBe(false);
   });
 
   it('promoteClusterOfficersRow rotates forwarder within a cluster', () => {
@@ -1262,18 +1197,8 @@ describe('group-call router helpers', () => {
       rootForwarder: 'c1',
       standbyForwarder: 'c2',
       clusters: [
-        {
-          members: ['c1', 'a', 'b'],
-          forwarder: 'c1',
-          standby: 'a',
-          standby2: 'b',
-        },
-        {
-          members: ['c2', 'x', 'y'],
-          forwarder: 'c2',
-          standby: 'x',
-          standby2: 'y',
-        },
+        { members: ['c1', 'a', 'b'], forwarder: 'c1', standby: 'a', standby2: 'b' },
+        { members: ['c2', 'x', 'y'], forwarder: 'c2', standby: 'x', standby2: 'y' },
       ],
     };
     const next = buildTopologyAfterClusterPromotion(base, 1, 6);

@@ -35,7 +35,10 @@ import {
   peerAddressFromDirectVoiceChatId,
 } from '../../lib/call/directVoiceCallChatId';
 import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
-import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import {
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
 import { DIRECT_VOICE_CALL_NAV_SLOT_ID } from '../Desktop/GlobalQortalNavBar';
 import { useLivePortalTarget } from '../../hooks/useLivePortalTarget';
 import { CallAudioSettingsButton } from '../Chat/CallAudioDeviceSelectors';
@@ -96,8 +99,7 @@ export function DirectVoiceCallNavWidget() {
         .detail;
       const targetAddress = detail?.address?.trim() ?? '';
       const targetDisplayName = detail?.name?.trim() || '';
-      const targetLabel =
-        targetDisplayName || t('core:voice_call.caller_this_user');
+      const targetLabel = targetDisplayName || 'This user';
       if (!targetAddress || !myAddress || targetAddress === myAddress) return;
 
       if (!dmFriendsByAddress[targetAddress]) {
@@ -109,7 +111,7 @@ export function DirectVoiceCallNavWidget() {
         return;
       }
       if (p2pHealth !== 'good') {
-        showCallError(t('core:voice_call.calls_unavailable_p2p'));
+        showCallError('Voice calls are unavailable until P2P connectivity recovers.');
         return;
       }
 
@@ -340,14 +342,14 @@ export function DirectVoiceCallNavWidget() {
         <Tooltip
           title={
             audioMode !== 'webrtc'
-              ? t('core:voice_call.screen_share_requires_webrtc')
+              ? 'Screen sharing requires a direct WebRTC call'
               : !screenShareSupported
-                ? t('core:voice_call.screen_share_peer_unsupported')
+                ? 'The other person does not support screen sharing'
                 : screenShareState === 'viewing'
-                  ? t('core:voice_call.screen_share_view_remote')
+                  ? 'View shared screen'
                   : screenShareState === 'sharing'
-                    ? t('core:voice_call.screen_share_view_local')
-                    : t('core:voice_call.screen_share_share_action')
+                    ? 'View your screen share'
+                    : 'Share your screen'
           }
           arrow
         >
@@ -453,7 +455,7 @@ export function DirectVoiceCallNavWidget() {
           </span>
         </Tooltip>
 
-        <Tooltip title={t('core:voice_call.hang_up')} arrow>
+        <Tooltip title="Hang up" arrow>
           <IconButton
             size="small"
             onClick={hangUp}

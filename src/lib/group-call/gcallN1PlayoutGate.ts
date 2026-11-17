@@ -144,9 +144,7 @@ export function computeN1RecoveryEarlyReleaseMinBufferMs(
 }
 
 export function computeN1MinStartMs(smoothedTargetMs: number): number {
-  const t = Number.isFinite(smoothedTargetMs)
-    ? smoothedTargetMs
-    : GCALL_N1_MIN_TARGET_MS_FLOOR;
+  const t = Number.isFinite(smoothedTargetMs) ? smoothedTargetMs : GCALL_N1_MIN_TARGET_MS_FLOOR;
   return Math.max(
     GCALL_N1_MIN_START_MS_FLOOR,
     Math.min(t, GCALL_N1_MIN_START_MS_CEIL)
@@ -253,9 +251,7 @@ export function computeN1BufferRatio(
   smoothedTargetMs: number
 ): { ratio: number; denomMs: number } {
   const denomMs = Math.max(
-    Number.isFinite(smoothedTargetMs)
-      ? smoothedTargetMs
-      : GCALL_N1_MIN_TARGET_MS_FLOOR,
+    Number.isFinite(smoothedTargetMs) ? smoothedTargetMs : GCALL_N1_MIN_TARGET_MS_FLOOR,
     GCALL_N1_MIN_TARGET_MS_FLOOR
   );
   const ratio =
@@ -343,7 +339,10 @@ export function computeN1LiveRecoveryBurstCap(input: {
   const baseCap = computeN1TierBurstCap(input.tier, input.scaledBurstCap, {
     recoverySingleRemote: true,
   });
-  if (!input.sourceRecentlyPushed || input.opusBufferedMs >= input.minStartMs) {
+  if (
+    !input.sourceRecentlyPushed ||
+    input.opusBufferedMs >= input.minStartMs
+  ) {
     return baseCap;
   }
   if (input.tier === 'deep') return Math.min(2, baseCap);
@@ -419,7 +418,10 @@ export function shouldKeepN1SevereForcedReleaseRebuild(input: {
   // window flags chaotic variance (not just steady under-target starvation).
   const opusOverflowExitMs =
     targetMs * GCALL_N1_SEVERE_RELEASE_OPUS_OVERFLOW_EXIT_RATIO;
-  if (!input.severeInstability && input.opusBufferedMs >= opusOverflowExitMs) {
+  if (
+    !input.severeInstability &&
+    input.opusBufferedMs >= opusOverflowExitMs
+  ) {
     return false;
   }
 

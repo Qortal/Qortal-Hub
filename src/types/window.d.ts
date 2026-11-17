@@ -201,14 +201,6 @@ declare global {
       setDisableDevLogs?: (value: boolean) => Promise<boolean>;
       getAppSettings?: () => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
-        callReticulumOnly?: boolean;
-        callDontForward?: boolean;
-        callIceRelayOnly?: boolean;
-        callCustomIceServers?: Array<{
-          urls: string | string[];
-          username?: string;
-          credential?: string;
-        }>;
         disableStartupSound?: boolean;
         autoLockTimeoutMinutes?: 0 | 10 | 30 | 60 | 180;
         disableAutoLockOnIdle?: boolean;
@@ -236,13 +228,6 @@ declare global {
         reticulumEnabled?: boolean;
         reticulumChatEnabled?: boolean;
         reticulumResourceLimitBytes?: number;
-        callReticulumOnly?: boolean;
-        callIceRelayOnly?: boolean;
-        callCustomIceServers?: Array<{
-          urls: string | string[];
-          username?: string;
-          credential?: string;
-        }>;
       }) => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
         disableStartupSound?: boolean;
@@ -257,13 +242,6 @@ declare global {
         reticulumEnabled?: boolean;
         reticulumChatEnabled?: boolean;
         reticulumResourceLimitBytes?: number;
-        callReticulumOnly?: boolean;
-        callIceRelayOnly?: boolean;
-        callCustomIceServers?: Array<{
-          urls: string | string[];
-          username?: string;
-          credential?: string;
-        }>;
       }>;
       onAppSettingsChanged?: (
         callback: (settings: {
@@ -742,13 +720,6 @@ declare global {
       getBootstrapIceServers: () => { urls: string }[];
       /** Full `RTCIceServer` objects — TURN credentials must survive the IPC hop. */
       getIceServers: () => Promise<RTCIceServer[]>;
-      /** P-5: `'relay'` when the user forces all media through TURN. */
-      getIceTransportPolicy: () => Promise<RTCIceTransportPolicy>;
-      /** X-5: full audio queue diagnostics, on explicit request only. */
-      getFullAudioQueueDiagnostics: () => Promise<Record<
-        string,
-        unknown
-      > | null>;
       reportStunCallOutcome: (
         stunUrls: string[],
         success: boolean

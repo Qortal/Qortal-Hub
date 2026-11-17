@@ -1,5 +1,3 @@
-import { CALL_PROTOCOL_VERSION } from './callProtocolVersion';
-
 type ElectronGcallProxy = {
   gcallProxySignPresenceMessage?: (
     payload: Record<string, unknown>
@@ -166,17 +164,7 @@ export async function signReticulumJoinSplit(params: {
   takeover?: boolean;
   reticulumDestinationHash: string;
   reticulumIdentityPublicKeyBase64: string | null;
-  /**
-   * X-2: ask the election to skip this peer as forwarder when another eligible
-   * peer exists. Deliberately NOT part of the signed field set — peers on the
-   * previous protocol rebuild that set and would fail verification.
-   */
-  noForwarderHint?: boolean;
-}): Promise<{
-  joinSig: string;
-  joinRkSig?: string;
-  noForwarderHint?: boolean;
-} | null> {
+}): Promise<{ joinSig: string; joinRkSig?: string } | null> {
   const signedJoinGeneration = params.takeover
     ? encodeGroupCallTakeoverGeneration(params.joinGeneration)
     : params.joinGeneration;
@@ -189,12 +177,10 @@ export async function signReticulumJoinSplit(params: {
     timestamp: params.timestamp,
     joinGeneration: signedJoinGeneration,
     reticulumDestinationHash: params.reticulumDestinationHash,
-    protocolVersion: CALL_PROTOCOL_VERSION,
   }).catch(() => '');
   if (!joinSig) return null;
-  const hint = params.noForwarderHint === true ? { noForwarderHint: true } : {};
   if (!params.reticulumIdentityPublicKeyBase64) {
-    return { joinSig, ...hint };
+    return { joinSig };
   }
   const joinRkSig = await signGroupCallFields({
     type: 'GC_JOIN_RK',
@@ -205,11 +191,10 @@ export async function signReticulumJoinSplit(params: {
     timestamp: params.timestamp,
     joinGeneration: signedJoinGeneration,
     reticulumDestinationHash: params.reticulumDestinationHash,
-    protocolVersion: CALL_PROTOCOL_VERSION,
     reticulumIdentityPublicKeyBase64: normalizeRkBase64ForGcJoinRkSign(
       params.reticulumIdentityPublicKeyBase64
     ),
   }).catch(() => '');
   if (!joinRkSig) return null;
-  return { joinSig, joinRkSig, ...hint };
+  return { joinSig, joinRkSig };
 }

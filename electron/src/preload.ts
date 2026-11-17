@@ -583,14 +583,6 @@ try {
       reticulumEnabled?: boolean;
       reticulumChatEnabled?: boolean;
       reticulumResourceLimitBytes?: number;
-      callReticulumOnly?: boolean;
-      callDontForward?: boolean;
-      callIceRelayOnly?: boolean;
-      callCustomIceServers?: Array<{
-        urls: string | string[];
-        username?: string;
-        credential?: string;
-      }>;
     }) => ipcRenderer.invoke('appSettings:set', settings),
     onAppSettingsChanged: (
       callback: (settings: {
@@ -2910,16 +2902,6 @@ try {
     getIceServers: () =>
       ipcRenderer.invoke('hub:getIceServers') as Promise<RTCIceServer[]>,
     /** P-5: `'relay'` when the user forces all media through TURN. */
-    getIceTransportPolicy: () =>
-      ipcRenderer.invoke(
-        'hub:getIceTransportPolicy'
-      ) as Promise<RTCIceTransportPolicy>,
-    /** X-5: full audio queue diagnostics, on explicit request only. */
-    getFullAudioQueueDiagnostics: () =>
-      ipcRenderer.invoke('hub:getFullAudioQueueDiagnostics') as Promise<Record<
-        string,
-        unknown
-      > | null>,
     reportStunCallOutcome: (stunUrls: string[], success: boolean) =>
       ipcRenderer.invoke('hub:reportStunCallOutcome', stunUrls, success),
     reportObservedStunSources: (stunUrls: string[]) =>
@@ -4070,27 +4052,10 @@ try {
       callId: string,
       signature: string,
       publicKey: string,
-      timestamp: number,
-      answeredElsewhereSignature?: string
-    ) =>
-      ipcRenderer.invoke(
-        'call:accept',
-        callId,
-        signature,
-        publicKey,
-        timestamp,
-        answeredElsewhereSignature
-      ),
-
-    /** X-3: tell the caller our ringer fired. Best-effort. */
-    ringing: async (
-      callId: string,
-      signature: string,
-      publicKey: string,
       timestamp: number
     ) =>
       ipcRenderer.invoke(
-        'call:ringing',
+        'call:accept',
         callId,
         signature,
         publicKey,

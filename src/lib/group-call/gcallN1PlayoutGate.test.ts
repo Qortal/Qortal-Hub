@@ -191,11 +191,9 @@ describe('gcallN1PlayoutGate', () => {
 
   it('computeN1BufferEnforceTier matches bands', () => {
     expect(computeN1BufferEnforceTier(GCALL_N1_RATIO_DEEP - 0.01)).toBe('deep');
-    expect(
-      computeN1BufferEnforceTier(
-        (GCALL_N1_RATIO_DEEP + GCALL_N1_RATIO_MODERATE) / 2
-      )
-    ).toBe('moderate');
+    expect(computeN1BufferEnforceTier((GCALL_N1_RATIO_DEEP + GCALL_N1_RATIO_MODERATE) / 2)).toBe(
+      'moderate'
+    );
     expect(computeN1BufferEnforceTier(0.6)).toBe('normal');
   });
 

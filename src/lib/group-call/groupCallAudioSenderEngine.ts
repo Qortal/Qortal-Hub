@@ -706,8 +706,6 @@ export class GroupCallAudioSenderEngine {
       sampleRate: OPUS_SAMPLE_RATE,
       numberOfChannels: OPUS_CHANNELS,
       bitrate,
-      // P-8: constant bitrate so packet size does not track speech activity.
-      bitrateMode: 'constant',
       opus: {
         application: 'voip',
         signal: 'voice',

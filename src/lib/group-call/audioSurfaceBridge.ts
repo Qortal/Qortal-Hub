@@ -54,11 +54,6 @@ export type AudioSurfaceCommand =
     }
   | { type: 'logout-cleanup' }
   | { type: 'leave-group-call' }
-  /**
-   * B-3: a group membership chain event arrived in the main window. Refresh the
-   * member gate now instead of waiting for the 60 s timer.
-   */
-  | { type: 'refresh-member-gate'; groupId: number }
   | { type: 'set-muted'; muted: boolean }
   | { type: 'set-hear-call'; hearCall: boolean }
   | {
@@ -188,21 +183,6 @@ export type AudioSurfaceEvent =
   | {
       type: 'engine-error';
       message: string;
-    }
-  | {
-      // B-14 type drift: the runtime emits this per group RTC edge, and
-      // electron/src/audio-surface-ipc.ts already declares it.
-      type: 'group-call-rtc-state';
-      roomId: string;
-      peerAddress: string;
-      state:
-        | 'new'
-        | 'connecting'
-        | 'connected'
-        | 'disconnected'
-        | 'failed'
-        | 'closed'
-        | 'open';
     }
   | {
       type: 'direct-voice-media-ready';

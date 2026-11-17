@@ -8485,9 +8485,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     expect(aliceState?.lastAppliedTargetMs).toBeLessThanOrEqual(185);
     expect(aliceState?.lastAppliedFloorMs).toBeLessThanOrEqual(185);
     expect(aliceState?.lastAppliedExtraHoldFrames).toBe(0);
-    expect(
-      targetSpy.mock.calls[targetSpy.mock.calls.length - 1]?.[0]
-    ).toBeLessThanOrEqual(185);
+    expect(targetSpy.mock.calls[targetSpy.mock.calls.length - 1]?.[0]).toBeLessThanOrEqual(
+      185
+    );
     expect(holdSpy.mock.calls[holdSpy.mock.calls.length - 1]?.[0]).toBe(0);
     vi.useRealTimers();
   });

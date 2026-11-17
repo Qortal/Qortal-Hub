@@ -12,7 +12,10 @@ export type AudioEngineRole =
 
 export type AudioEngineTopologyLabel = 'Reticulum' | 'WebRTC';
 
-export type AudioEngineSelectableStatus = 'online' | 'busy' | 'offline';
+export type AudioEngineSelectableStatus =
+  | 'online'
+  | 'busy'
+  | 'offline';
 
 export interface AudioEngineParticipant {
   address: string;

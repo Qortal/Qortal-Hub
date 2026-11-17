@@ -24,7 +24,12 @@ import { GCALL_INGRESS_PACING_MAX_MS } from './pendingDecryptLimits';
 export const OPUS_SEND_PRESSURE_MIN_BITRATE = 10_000;
 
 /** Fractions of nominal bitrate for pressure tiers (nominal → pressure_1 → … → floor). */
-export const OPUS_SEND_PRESSURE_TIER_RATIOS = [1, 0.75, 0.58, 0.42] as const;
+export const OPUS_SEND_PRESSURE_TIER_RATIOS = [
+  1,
+  0.75,
+  0.58,
+  0.42,
+] as const;
 
 /** Must match `GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES` in group-call.ts */
 export const RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES = 8;
@@ -83,12 +88,10 @@ export function isReticulumSendPressureSignal(
   if (s.bridgeWaitingForDrain === true) return true;
   if (s.bridgeQueuedFrames >= RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES)
     return true;
-  if (s.decodedQueueDepth >= RETICULUM_SEND_PRESSURE_DECODED_QUEUE_DEPTH)
-    return true;
+  if (s.decodedQueueDepth >= RETICULUM_SEND_PRESSURE_DECODED_QUEUE_DEPTH) return true;
   if (s.queuePressureDropsLast5s >= RETICULUM_SEND_PRESSURE_QUEUE_DROPS_LAST5S)
     return true;
-  if ((s.pendingFrames ?? 0) >= RETICULUM_SEND_PRESSURE_PENDING_FRAMES)
-    return true;
+  if ((s.pendingFrames ?? 0) >= RETICULUM_SEND_PRESSURE_PENDING_FRAMES) return true;
   return false;
 }
 
@@ -98,8 +101,7 @@ export function isReticulumSendPressureSignalForwarder(
 ): boolean {
   if (s.bridgeWaitingForDrain === true) return true;
   if (
-    s.bridgeQueuedFrames >=
-    RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER
+    s.bridgeQueuedFrames >= RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER
   )
     return true;
   if (
@@ -123,7 +125,10 @@ export function buildOpusSendPressureTiers(nominalBitrate: number): number[] {
   const n = Math.max(1, Math.round(nominalBitrate));
   const set = new Set<number>();
   for (const r of OPUS_SEND_PRESSURE_TIER_RATIOS) {
-    const bps = Math.max(OPUS_SEND_PRESSURE_MIN_BITRATE, Math.round(n * r));
+    const bps = Math.max(
+      OPUS_SEND_PRESSURE_MIN_BITRATE,
+      Math.round(n * r)
+    );
     set.add(bps);
   }
   return [...set].sort((a, b) => b - a);

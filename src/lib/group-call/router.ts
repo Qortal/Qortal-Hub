@@ -2268,11 +2268,10 @@ export class GroupCallPerformanceTracker {
       );
     }
     if (typeof depths.executorCommandWhileQueuedMsMax === 'number') {
-      this.snapshot.reticulumAudioExecutorCommandWhileQueuedMsMax =
-        maxFiniteMetric(
-          this.snapshot.reticulumAudioExecutorCommandWhileQueuedMsMax,
-          depths.executorCommandWhileQueuedMsMax
-        );
+      this.snapshot.reticulumAudioExecutorCommandWhileQueuedMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioExecutorCommandWhileQueuedMsMax,
+        depths.executorCommandWhileQueuedMsMax
+      );
     }
     if (typeof depths.executorCommandSlowCount === 'number') {
       this.snapshot.reticulumAudioExecutorCommandSlowCount = Math.max(
@@ -2281,27 +2280,34 @@ export class GroupCallPerformanceTracker {
       );
     }
     if (typeof depths.rnsCallbackSchedulerGapMsMax === 'number') {
-      this.snapshot.reticulumAudioRnsCallbackSchedulerGapMsMax =
-        maxFiniteMetric(
-          this.snapshot.reticulumAudioRnsCallbackSchedulerGapMsMax,
-          depths.rnsCallbackSchedulerGapMsMax
-        );
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapMsMax = maxFiniteMetric(
+        this.snapshot.reticulumAudioRnsCallbackSchedulerGapMsMax,
+        depths.rnsCallbackSchedulerGapMsMax
+      );
     }
     if (typeof depths.rnsCallbackSchedulerGapOver100Count === 'number') {
-      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver100Count =
-        Math.max(0, Math.trunc(depths.rnsCallbackSchedulerGapOver100Count));
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver100Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver100Count)
+      );
     }
     if (typeof depths.rnsCallbackSchedulerGapOver250Count === 'number') {
-      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver250Count =
-        Math.max(0, Math.trunc(depths.rnsCallbackSchedulerGapOver250Count));
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver250Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver250Count)
+      );
     }
     if (typeof depths.rnsCallbackSchedulerGapOver500Count === 'number') {
-      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver500Count =
-        Math.max(0, Math.trunc(depths.rnsCallbackSchedulerGapOver500Count));
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver500Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver500Count)
+      );
     }
     if (typeof depths.rnsCallbackSchedulerGapOver1000Count === 'number') {
-      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver1000Count =
-        Math.max(0, Math.trunc(depths.rnsCallbackSchedulerGapOver1000Count));
+      this.snapshot.reticulumAudioRnsCallbackSchedulerGapOver1000Count = Math.max(
+        0,
+        Math.trunc(depths.rnsCallbackSchedulerGapOver1000Count)
+      );
     }
     this.snapshot.lastUpdatedAt = Date.now();
   }

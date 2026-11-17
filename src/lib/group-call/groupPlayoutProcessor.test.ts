@@ -45,11 +45,9 @@ async function loadProcessorCtor(): Promise<GroupPlayoutProcessorCtor> {
 
   const g = globalThis as Record<string, unknown>;
   g.AudioWorkletProcessor = MockAudioWorkletProcessor;
-  g.registerProcessor = vi.fn(
-    (_name: string, ctor: GroupPlayoutProcessorCtor) => {
-      capturedCtor = ctor;
-    }
-  );
+  g.registerProcessor = vi.fn((_name: string, ctor: GroupPlayoutProcessorCtor) => {
+    capturedCtor = ctor;
+  });
   g.sampleRate = 48_000;
 
   await import('../../../public/worklets/group-playout-processor.js');
@@ -73,9 +71,7 @@ function hasAudibleSample(block: Float32Array): boolean {
 describe('group playout processor concealment', () => {
   it('fades repeated starvation to silence instead of restarting every render quantum', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    });
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
 
     processor._playoutStarted = true;
     processor._available = 0;
@@ -97,9 +93,7 @@ describe('group playout processor concealment', () => {
 
   it('uses the most recent tail samples for concealment instead of a frozen bootstrap tail', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    });
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
 
     processor._playoutStarted = true;
     processor._available = 0;
@@ -117,9 +111,7 @@ describe('group playout processor concealment', () => {
 
   it('accepts batched pcm messages without requiring per-frame posts', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    }) as any;
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } }) as any;
     const batch = new Float32Array(960 * 3);
     batch.fill(0.25);
 
@@ -141,9 +133,7 @@ describe('group playout processor concealment', () => {
       capacitySamples * Float32Array.BYTES_PER_ELEMENT
     );
     const stateBuffer = new SharedArrayBuffer(6 * Int32Array.BYTES_PER_ELEMENT);
-    const ingressTimestampBuffer = new SharedArrayBuffer(
-      4 * Int32Array.BYTES_PER_ELEMENT
-    );
+    const ingressTimestampBuffer = new SharedArrayBuffer(4 * Int32Array.BYTES_PER_ELEMENT);
     const samples = new Float32Array(sampleBuffer);
     const state = new Int32Array(stateBuffer);
     const ingress = new Int32Array(ingressTimestampBuffer);
@@ -174,9 +164,7 @@ describe('group playout processor concealment', () => {
 
   it('reports absolute panic entry separately from the later playout band', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    }) as any;
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } }) as any;
 
     processor._playoutStarted = true;
     processor._targetPlayoutMs = 40;
@@ -191,18 +179,14 @@ describe('group playout processor concealment', () => {
     expect(payload?.panicEntryBufferedMs).toBeCloseTo(50, 0);
     expect(payload?.preProcessBufferedMs).toBeCloseTo(50, 0);
     expect(payload?.playoutBand).toBe('in-band');
-    expect(payload?.bufferedMs).toBeLessThan(
-      payload?.preProcessBufferedMs ?? 0
-    );
+    expect(payload?.bufferedMs).toBeLessThan(payload?.preProcessBufferedMs ?? 0);
   });
 });
 
 describe('group playout processor rate control', () => {
   it('uses gentler over-target rates for healthy overshoot', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    });
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
 
     expect(
       processor._computeRawTargetRate(130, 30, 128, 48_000).targetRate
@@ -220,9 +204,7 @@ describe('group playout processor rate control', () => {
 
   it('avoids fast-alpha speedup on modest over-target blocks', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    });
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
 
     processor._playoutStarted = true;
     processor._targetPlayoutMs = 100;
@@ -236,9 +218,7 @@ describe('group playout processor rate control', () => {
 
   it('uses gentler under-target slowdown once the PCM buffer is already usable', async () => {
     const Processor = await loadProcessorCtor();
-    const processor = new Processor({
-      processorOptions: { sourceAddr: 'peer' },
-    });
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
 
     processor._playoutStarted = true;
     processor._targetPlayoutMs = 160;

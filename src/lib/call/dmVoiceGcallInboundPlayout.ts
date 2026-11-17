@@ -181,11 +181,7 @@ export interface GcallAudioGapAttributionRecord {
   outsideBandUnder: boolean;
   concealmentUsed: boolean;
   adaptiveMode: 'low-latency' | 'recovery' | null;
-  likelyCause:
-    | 'arrival-gap'
-    | 'late-stale'
-    | 'trimmed-backlog'
-    | 'playout-skip';
+  likelyCause: 'arrival-gap' | 'late-stale' | 'trimmed-backlog' | 'playout-skip';
 }
 
 export function shouldStartBurstGapRecoveryWatch(opts: {
@@ -220,8 +216,7 @@ export function shouldCommitBurstGapRecovery(opts: {
     ? GCALL_BURST_GAP_RECOVERY_LONG_GAP_MIN_EXCESS_MS
     : GCALL_BURST_GAP_RECOVERY_MIN_EXCESS_MS;
   const burstAudioMs = opts.burstFrameCount * OPUS_FRAME_DURATION_MS;
-  const fasterThanRealtime =
-    burstAudioMs >= opts.burstWindowAgeMs + minExcessMs;
+  const fasterThanRealtime = burstAudioMs >= opts.burstWindowAgeMs + minExcessMs;
   const nearJitterCap =
     opts.jitterMaxEntries > 0 &&
     opts.jitterBufferedFrames >= Math.floor(opts.jitterMaxEntries * 0.8);
@@ -372,10 +367,7 @@ export function computeStarvedBacklogDrainBudget(opts: {
   if (!opts.outsideBandUnder && !opts.concealmentUsed && pcmBufferedMs > 0) {
     return 1;
   }
-  const overThresholdFrames = Math.max(
-    1,
-    opts.bufferedFrames - nearCapThreshold
-  );
+  const overThresholdFrames = Math.max(1, opts.bufferedFrames - nearCapThreshold);
   return Math.min(
     GCALL_STARVED_BACKLOG_DRAIN_MAX_FRAMES_PER_TICK,
     Math.max(2, Math.ceil(overThresholdFrames / 4) + 1)
@@ -1064,7 +1056,7 @@ export class DmVoiceGcallInboundPlayout {
       Math.max(
         computeStaticPlayoutTargetMsForTuning(tuning),
         typeof options?.minimumTargetPlayoutMs === 'number' &&
-          Number.isFinite(options.minimumTargetPlayoutMs)
+        Number.isFinite(options.minimumTargetPlayoutMs)
           ? options.minimumTargetPlayoutMs
           : 40
       )
@@ -1203,8 +1195,7 @@ export class DmVoiceGcallInboundPlayout {
           ? Number.POSITIVE_INFINITY
           : Math.max(0, tickStartedAt - this.lastPushAtPerfMs);
       const bufferedFrames = jb.getBufferedFrames();
-      const metricsSnapshot =
-        this.callbacks?.metricsRef?.current?.getSnapshot();
+      const metricsSnapshot = this.callbacks?.metricsRef?.current?.getSnapshot();
       const postBurstLatencyLockoutActive = metricsSnapshot
         ? shouldApplyPostBurstLatencyLockout({
             nowMs: Date.now(),
@@ -1527,7 +1518,8 @@ export class DmVoiceGcallInboundPlayout {
       this.resetDecodedPlayoutStateForBurstGap();
     } else {
       this.jitterBurstHeadroomState = createGcallJitterBurstHeadroomState();
-      this.jitterTrimmedFramesAtLastHeadroomStep = this.jitterPushTrimmedFrames;
+      this.jitterTrimmedFramesAtLastHeadroomStep =
+        this.jitterPushTrimmedFrames;
       this.jitterPushDepthHighWaterSinceLastHeadroomStep =
         jb.getBufferedFrames();
       this.lastJitterAdaptiveMode = null;
@@ -1616,9 +1608,8 @@ export class DmVoiceGcallInboundPlayout {
       base,
       this.jitterBurstHeadroomState.level,
       {
-        boostStartThreshold: !(
-          activeSourceCount === 1 && this.hasObservedPlayoutStart
-        ),
+        boostStartThreshold:
+          !(activeSourceCount === 1 && this.hasObservedPlayoutStart),
       }
     );
     jb.applyJitterTuning(eff);
@@ -1707,7 +1698,9 @@ export class DmVoiceGcallInboundPlayout {
     );
   }
 
-  private applyLiveLatencyGovernor(opts: { bufferedFrames: number }): number {
+  private applyLiveLatencyGovernor(opts: {
+    bufferedFrames: number;
+  }): number {
     const jb = this.jitter;
     if (!jb) return 0;
     const action = computeLiveLatencyGovernorAction({

@@ -24,11 +24,7 @@
  *    use a shared injected clock (`clockMs`) so time is deterministic.
  */
 
-import type {
-  ReplayScenarioParams,
-  RegressionFixture,
-  RegressionPassBar,
-} from './regressionFixtures';
+import type { ReplayScenarioParams, RegressionFixture, RegressionPassBar } from './regressionFixtures';
 import type { StreamIdentity } from './spec';
 import { streamKey } from './spec';
 import { ReticulumSessionController } from './reticulumSessionController';
@@ -92,18 +88,12 @@ function generatePackets(
     let transportDelay: number;
     if (rng() < params.burstFraction) {
       transportDelay =
-        baseNetworkLatencyMs +
-        params.avgInterPacketMs * 2 +
-        rng() * params.jitterStdDevMs * 2.5;
+        baseNetworkLatencyMs + params.avgInterPacketMs * 2 + rng() * params.jitterStdDevMs * 2.5;
     } else {
       const u1 = rng();
       const u2 = rng();
-      const z =
-        Math.sqrt(-2 * Math.log(u1 + 1e-10)) * Math.cos(2 * Math.PI * u2);
-      transportDelay = Math.max(
-        5,
-        baseNetworkLatencyMs + z * params.jitterStdDevMs
-      );
+      const z = Math.sqrt(-2 * Math.log(u1 + 1e-10)) * Math.cos(2 * Math.PI * u2);
+      transportDelay = Math.max(5, baseNetworkLatencyMs + z * params.jitterStdDevMs);
     }
     if (params.simulateRecoveryPathLatch) {
       transportDelay += rng() * params.avgInterPacketMs * 3;
@@ -118,10 +108,7 @@ function generatePackets(
         pathology.regressionMs > 0 &&
         seq % everyPackets === 0
       ) {
-        senderTimestampMs = Math.max(
-          0,
-          senderTimestampMs - pathology.regressionMs
-        );
+        senderTimestampMs = Math.max(0, senderTimestampMs - pathology.regressionMs);
       }
     }
 
@@ -186,9 +173,7 @@ function bridgePressureDepthAt(
     const durationMs = Math.max(0, fault.durationMs ?? 0);
     const active =
       nowMs >= fault.atMs &&
-      (durationMs === 0
-        ? nowMs <= fault.atMs
-        : nowMs <= fault.atMs + durationMs);
+      (durationMs === 0 ? nowMs <= fault.atMs : nowMs <= fault.atMs + durationMs);
     if (!active) continue;
     depth = Math.max(depth, Number(fault.params?.depth ?? 0));
   }
@@ -217,8 +202,7 @@ function buildReplayPeerMetrics(
 ): PeerExportMetrics {
   const durationMs = Math.max(1, params.durationMs);
   const staleTimestampDrops = metrics.staleTimestampDrops ?? 0;
-  const bridgeQueuedFramesHighWater =
-    metrics.reticulumAudioBridgeQueuedFramesHighWater ?? 0;
+  const bridgeQueuedFramesHighWater = metrics.reticulumAudioBridgeQueuedFramesHighWater ?? 0;
   const avgTargetBufferMs = metrics.avgTargetBufferMs ?? 120;
   return {
     avgPcmBufferedMs: metrics.avgPcmBufferedMs ?? 0,
@@ -227,14 +211,10 @@ function buildReplayPeerMetrics(
     playoutOutsideTargetFraction: metrics.playoutOutsideTargetFraction ?? 0,
     playoutRateFractionBelow1: 0,
     jitterUnderruns: 0,
-    missingFrames: Math.max(
-      0,
-      (metrics.droppedPackets ?? 0) - staleTimestampDrops
-    ),
+    missingFrames: Math.max(0, (metrics.droppedPackets ?? 0) - staleTimestampDrops),
     concealmentTicks: metrics.concealmentTicks ?? 0,
     packetsDroppedStaleTimestamp: staleTimestampDrops,
-    packetsDroppedStaleTimestampRatePerSec:
-      staleTimestampDrops / (durationMs / 1000),
+    packetsDroppedStaleTimestampRatePerSec: staleTimestampDrops / (durationMs / 1000),
     packetsDroppedPendingDecrypt: 0,
     packetsDroppedPendingDecryptRatePerSec: 0,
     pendingDecryptDepthHighWater: 0,
@@ -271,8 +251,7 @@ function buildReplayPeerMetrics(
     role: fixture.failingRole,
     v2ManagedSourceCount: 1,
     legacyWindowOpusMetricsMeaningful: false,
-    avgPcmRingBufferedMs:
-      metrics.avgRawPcmBufferedMs ?? metrics.avgPcmBufferedMs ?? 0,
+    avgPcmRingBufferedMs: metrics.avgRawPcmBufferedMs ?? metrics.avgPcmBufferedMs ?? 0,
     avgPcmRingOldestFrameAgeMs: metrics.avgPcmRingOldestFrameAgeMs ?? 0,
     maxPcmRingOldestFrameAgeMs: metrics.maxPcmRingOldestFrameAgeMs ?? 0,
     stalePcmDrops: metrics.stalePcmDrops ?? 0,
@@ -312,14 +291,10 @@ export class ReplayHarness {
       joinGeneration: 1,
     });
     if (params.simulateRecoveryPathLatch) {
-      sessionController.ingestTopologyEvent({
-        kind: 'global-recovery-started',
-      });
+      sessionController.ingestTopologyEvent({ kind: 'global-recovery-started' });
     }
 
-    const streamId: StreamIdentity = sessionController.getStreamIdentity(
-      sourceAddr
-    ) ?? {
+    const streamId: StreamIdentity = sessionController.getStreamIdentity(sourceAddr) ?? {
       sourceAddr,
       streamEpoch: 0,
       joinGeneration: 1,
@@ -343,14 +318,8 @@ export class ReplayHarness {
       diag
     );
 
-    const sendPressure = new SendPressureController(
-      sessionController,
-      {},
-      diag
-    );
-    const faultInjector = new FaultInjector(sessionController, [
-      ...(params.faults ?? []),
-    ]);
+    const sendPressure = new SendPressureController(sessionController, {}, diag);
+    const faultInjector = new FaultInjector(sessionController, [...(params.faults ?? [])]);
 
     // Metrics accumulators.
     let framesDecoded = 0;
@@ -386,33 +355,19 @@ export class ReplayHarness {
 
     while (simulatedMs < params.durationMs) {
       faultInjector.tick(simulatedMs, sourceAddr);
-      const bridgePressureDepth = bridgePressureDepthAt(
-        params.faults,
-        simulatedMs
-      );
-      maxBridgePressureDepth = Math.max(
-        maxBridgePressureDepth,
-        bridgePressureDepth
-      );
+      const bridgePressureDepth = bridgePressureDepthAt(params.faults, simulatedMs);
+      maxBridgePressureDepth = Math.max(maxBridgePressureDepth, bridgePressureDepth);
       if (bridgePressureDepth > 0) {
         bridgeWaitingForDrainObserved = true;
       }
       // Deliver packets that arrived by now.
       while (
         packetIdx < packets.length &&
-        packets[packetIdx].arrivalMs +
-          faultInjector.getLatencyAddMs(simulatedMs) <=
-          simulatedMs
+        packets[packetIdx].arrivalMs + faultInjector.getLatencyAddMs(simulatedMs) <= simulatedMs
       ) {
         const pkt = packets[packetIdx++];
         totalPackets++;
-        if (
-          !pkt.dropped &&
-          !faultInjector.shouldDropPacket(
-            simulatedMs,
-            xorshift32(totalPackets + 1)
-          )
-        ) {
+        if (!pkt.dropped && !faultInjector.shouldDropPacket(simulatedMs, xorshift32(totalPackets + 1))) {
           const latenessAssessment = assessSourceTimestampLateness(
             latenessState,
             pkt.senderTimestampMs,
@@ -490,16 +445,11 @@ export class ReplayHarness {
           prevStateWasDegraded = false;
         }
 
-        const tickResult = await engine.tick({
-          policy: policyOutput,
-          nowMs: simulatedMs,
-        });
+        const tickResult = await engine.tick({ policy: policyOutput, nowMs: simulatedMs });
         framesDecoded += tickResult.framesDecoded;
         concealmentFrames = engine.getConcealmentFrames();
         pcmSamples.push(tickResult.pcmBufferedMs);
-        pcmOldestAgeSamples.push(
-          engine.getPcmRing().oldestFrameAgeMs(simulatedMs)
-        );
+        pcmOldestAgeSamples.push(engine.getPcmRing().oldestFrameAgeMs(simulatedMs));
         opusSamples.push(tickResult.opusBufferedMs);
         const effectivePlayoutBufferedMs = Math.min(
           tickResult.pcmBufferedMs,
@@ -508,9 +458,7 @@ export class ReplayHarness {
         );
         playoutPcmSamples.push(effectivePlayoutBufferedMs);
         targetSamples.push(policyOutput.targetBufferMs);
-        playoutDeltaSamples.push(
-          effectivePlayoutBufferedMs - policyOutput.targetBufferMs
-        );
+        playoutDeltaSamples.push(effectivePlayoutBufferedMs - policyOutput.targetBufferMs);
         if (effectivePlayoutBufferedMs < policyOutput.targetBufferMs * 0.85) {
           underTargetTicks++;
         }
@@ -536,18 +484,14 @@ export class ReplayHarness {
     // Compute final metrics.
     const avgPcmBufferedMs =
       playoutPcmSamples.length > 0
-        ? playoutPcmSamples.reduce((a, b) => a + b, 0) /
-          playoutPcmSamples.length
+        ? playoutPcmSamples.reduce((a, b) => a + b, 0) / playoutPcmSamples.length
         : 0;
     const avgPlayoutDeltaMs =
       playoutDeltaSamples.length > 0
-        ? playoutDeltaSamples.reduce((a, b) => a + b, 0) /
-          playoutDeltaSamples.length
+        ? playoutDeltaSamples.reduce((a, b) => a + b, 0) / playoutDeltaSamples.length
         : 0;
-    const minPcmBufferedMs =
-      pcmSamples.length > 0 ? Math.min(...pcmSamples) : 0;
-    const maxPcmBufferedMs =
-      pcmSamples.length > 0 ? Math.max(...pcmSamples) : 0;
+    const minPcmBufferedMs = pcmSamples.length > 0 ? Math.min(...pcmSamples) : 0;
+    const maxPcmBufferedMs = pcmSamples.length > 0 ? Math.max(...pcmSamples) : 0;
     const totalTicks = Math.max(1, targetSamples.length);
     const tickBudgetBreachCount = tickStallDurations.length;
 
@@ -576,24 +520,17 @@ export class ReplayHarness {
       starvationDeadzoneResets: stateDeadzoneResets,
       backlogDrainActivations,
       reticulumAudioBridgeQueuedFramesHighWater: maxBridgePressureDepth,
-      reticulumAudioBridgeWaitingForDrain: bridgeWaitingForDrainObserved
-        ? 1
-        : 0,
+      reticulumAudioBridgeWaitingForDrain: bridgeWaitingForDrainObserved ? 1 : 0,
       tickBudgetBreachCount,
       tickBudgetBreachP95Ms: percentile(tickStallDurations, 0.95),
-      tickBudgetBreachMaxMs:
-        tickStallDurations.length > 0 ? Math.max(...tickStallDurations) : 0,
+      tickBudgetBreachMaxMs: tickStallDurations.length > 0 ? Math.max(...tickStallDurations) : 0,
       longTaskCount: tickStallDurations.filter((value) => value >= 30).length,
       // Actual time the policy engine spent in transportDegraded state (ms).
       // The call-63 bar tests that this is <= 3000ms (v2 TTL exits quickly).
       acceptOnlyRecoveryPathDurationMs: transportDegradedMs,
       packetsDroppedOnSeqWrap: 0, // ReceiveEngine uses modulo-safe seq math; no drops on wrap
     };
-    const replayPeerMetrics = buildReplayPeerMetrics(
-      this._fixture,
-      params,
-      metrics
-    );
+    const replayPeerMetrics = buildReplayPeerMetrics(this._fixture, params, metrics);
     metrics.qualityScore = scorePeerQuality(replayPeerMetrics);
 
     // Evaluate pass bars.
@@ -601,30 +538,19 @@ export class ReplayHarness {
       const observed = metrics[bar.metric] ?? 0;
       let passed: boolean;
       switch (bar.operator) {
-        case '<':
-          passed = observed < bar.threshold;
-          break;
-        case '<=':
-          passed = observed <= bar.threshold;
-          break;
-        case '>':
-          passed = observed > bar.threshold;
-          break;
-        case '>=':
-          passed = observed >= bar.threshold;
-          break;
-        case '===':
-          passed = observed === bar.threshold;
-          break;
-        default:
-          passed = false;
+        case '<': passed = observed < bar.threshold; break;
+        case '<=': passed = observed <= bar.threshold; break;
+        case '>': passed = observed > bar.threshold; break;
+        case '>=': passed = observed >= bar.threshold; break;
+        case '===': passed = observed === bar.threshold; break;
+        default: passed = false;
       }
       return { bar, observedValue: observed, passed };
     });
 
-    const stateTransitions: { state: string; count: number }[] = [
-      ...stateCounts.entries(),
-    ].map(([state, count]) => ({ state, count }));
+    const stateTransitions: { state: string; count: number }[] = [...stateCounts.entries()].map(
+      ([state, count]) => ({ state, count })
+    );
 
     sessionController.dispose();
     engine.dispose();

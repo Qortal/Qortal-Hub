@@ -28,11 +28,11 @@ import { reducePairedLiveExportToReplayScript } from './eventReplayReducer';
 // ---------------------------------------------------------------------------
 
 export type FailureClass =
-  | 'policy-dominated' // bad jitter metrics with calm transport / decrypt
+  | 'policy-dominated'    // bad jitter metrics with calm transport / decrypt
   | 'transport-dominated' // transport triad hot
-  | 'decrypt-dominated' // pending-decrypt drops with calm triad
-  | 'stall-dominated' // main-thread long tasks / tick budget breaches
-  | 'mixed'; // multiple contributing factors
+  | 'decrypt-dominated'   // pending-decrypt drops with calm triad
+  | 'stall-dominated'     // main-thread long tasks / tick budget breaches
+  | 'mixed';              // multiple contributing factors
 
 export interface RegressionFixture {
   /** Unique ID used in test names and replay CLI. */
@@ -86,8 +86,8 @@ export interface ReplayScenarioParams {
   durationMs: number;
   /** Packet arrival pattern. */
   packetPattern:
-    | 'steady' // constant 50pps
-    | 'bursty' // periodic bursts matching the call shape
+    | 'steady'           // constant 50pps
+    | 'bursty'           // periodic bursts matching the call shape
     | 'recovery-channel' // extra latency / jitter matching acceptOnlyRecoveryPath
     | 'mixed';
   /** Average inter-packet delay in ms. */
@@ -179,15 +179,13 @@ export const FIXTURE_CALL63_ONE_REMOTE_PLAYOUT_TRAP: RegressionFixture = {
       metric: 'avgPcmBufferedMs',
       operator: '>=',
       threshold: 60,
-      description:
-        'PCM buffer must stay above 60ms (at least 0.32× of a 185ms target)',
+      description: 'PCM buffer must stay above 60ms (at least 0.32× of a 185ms target)',
     },
     {
       metric: 'playoutUnderTargetFraction',
       operator: '<=',
       threshold: 0.35,
-      description:
-        'Must spend ≤35% of time below target (provisional pass bar)',
+      description: 'Must spend ≤35% of time below target (provisional pass bar)',
     },
     {
       metric: 'avgPlayoutDeltaMs',
@@ -205,8 +203,7 @@ export const FIXTURE_CALL63_ONE_REMOTE_PLAYOUT_TRAP: RegressionFixture = {
       metric: 'acceptOnlyRecoveryPathDurationMs',
       operator: '<=',
       threshold: 3000,
-      description:
-        'Recovery path latch must expire within 3s when fresh media is arriving',
+      description: 'Recovery path latch must expire within 3s when fresh media is arriving',
     },
   ],
   replayParams: {
@@ -293,7 +290,7 @@ export const FIXTURE_CALL60_REBUILD_OSCILLATION: RegressionFixture = {
     packetPattern: 'bursty',
     avgInterPacketMs: 20,
     jitterStdDevMs: 60,
-    burstFraction: 0.4,
+    burstFraction: 0.40,
     lossRate: 0.01,
     simulateRecoveryPathLatch: false,
     tickBreachFraction: 0.004,
@@ -340,8 +337,7 @@ export const FIXTURE_SEQ_WRAP_MUTING: RegressionFixture = {
       metric: 'packetsDroppedOnSeqWrap',
       operator: '===',
       threshold: 0,
-      description:
-        'No packets dropped due to seq wrap — modulo-safe math required',
+      description: 'No packets dropped due to seq wrap — modulo-safe math required',
     },
     {
       metric: 'avgPcmBufferedMsPostWrap',
@@ -407,15 +403,13 @@ export const FIXTURE_PHIL_KENNY_MIXED_OFFLINE_REPLAY: RegressionFixture = {
       metric: 'qualityScore',
       operator: '>=',
       threshold: 8,
-      description:
-        'The phil-kenny replay family should score as a good call after runtime fixes.',
+      description: 'The phil-kenny replay family should score as a good call after runtime fixes.',
     },
     {
       metric: 'maxPcmRingOldestFrameAgeMs',
       operator: '<=',
       threshold: 260,
-      description:
-        'Decoded PCM age must stay bounded instead of growing into conversationally-late audio.',
+      description: 'Decoded PCM age must stay bounded instead of growing into conversationally-late audio.',
     },
   ],
   replayParams: {
@@ -426,8 +420,7 @@ export const FIXTURE_PHIL_KENNY_MIXED_OFFLINE_REPLAY: RegressionFixture = {
     jitterStdDevMs: PHIL_KENNY_REPLAY_SCRIPT.jitterStdDevMs,
     burstFraction: PHIL_KENNY_REPLAY_SCRIPT.burstFraction,
     lossRate: PHIL_KENNY_REPLAY_SCRIPT.lossRate,
-    simulateRecoveryPathLatch:
-      PHIL_KENNY_REPLAY_SCRIPT.simulateRecoveryPathLatch,
+    simulateRecoveryPathLatch: PHIL_KENNY_REPLAY_SCRIPT.simulateRecoveryPathLatch,
     tickBreachFraction: PHIL_KENNY_REPLAY_SCRIPT.tickBreachFraction,
     tickBreachAvgMs: PHIL_KENNY_REPLAY_SCRIPT.tickBreachAvgMs,
     faults: PHIL_KENNY_REPLAY_SCRIPT.faults,
@@ -465,15 +458,13 @@ export const FIXTURE_PHIL_KENNY_77_OFFLINE_REPLAY: RegressionFixture = {
       metric: 'qualityScore',
       operator: '>=',
       threshold: 9,
-      description:
-        'The improved phil-kenny replay family should score as a great call after follow-up fixes.',
+      description: 'The improved phil-kenny replay family should score as a great call after follow-up fixes.',
     },
     {
       metric: 'maxPcmRingOldestFrameAgeMs',
       operator: '<=',
       threshold: 260,
-      description:
-        'Decoded PCM age must stay bounded instead of growing into conversationally-late audio.',
+      description: 'Decoded PCM age must stay bounded instead of growing into conversationally-late audio.',
     },
   ],
   replayParams: {
@@ -528,7 +519,9 @@ export function classifyCallAgainstFixtures(metrics: {
 }): RegressionFixture[] {
   const matches: RegressionFixture[] = [];
 
-  if (metrics.seqWrapDetected === true) {
+  if (
+    metrics.seqWrapDetected === true
+  ) {
     matches.push(FIXTURE_SEQ_WRAP_MUTING);
   }
 

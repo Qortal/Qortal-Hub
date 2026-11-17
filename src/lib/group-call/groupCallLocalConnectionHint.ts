@@ -46,7 +46,8 @@ export function groupCallLocalConnectionHintFromLevel(
     return {
       level: 'severe',
       headline: 'Voice connection is unstable',
-      detail: 'Audio may be delayed or choppy while the app catches up. ' + TIP,
+      detail:
+        'Audio may be delayed or choppy while the app catches up. ' + TIP,
     };
   }
   return {

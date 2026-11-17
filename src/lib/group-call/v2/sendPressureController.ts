@@ -145,14 +145,10 @@ export class SendPressureController {
 
     // Only emit a new request if something changed.
     const newBitrate = this._config.bitrateSteps[this._currentStepIdx];
-    const prevBitrate =
-      this._lastSentRequest?.bitrateCapBps ?? this._config.normalBitrateCapBps;
+    const prevBitrate = this._lastSentRequest?.bitrateCapBps ?? this._config.normalBitrateCapBps;
     const ingressPacing = nowMs < this._ingressPacingUntilMs;
 
-    if (
-      newBitrate !== prevBitrate ||
-      ingressPacing !== (this._lastSentRequest?.ingressPacing ?? false)
-    ) {
+    if (newBitrate !== prevBitrate || ingressPacing !== (this._lastSentRequest?.ingressPacing ?? false)) {
       const request: SendPressureRequest = {
         bitrateCapBps: newBitrate,
         ingressPacing,

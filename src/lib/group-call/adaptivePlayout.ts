@@ -44,7 +44,11 @@ export function computeAdaptiveIdealTargetMs(
     playoutBoostMs +
     input.jitterMultiplier * input.jitterMs +
     lossPenaltyMs;
-  return clampAdaptiveTargetMs(unclamped, input.minTargetMs, input.maxTargetMs);
+  return clampAdaptiveTargetMs(
+    unclamped,
+    input.minTargetMs,
+    input.maxTargetMs
+  );
 }
 
 export function stepSmoothedAdaptiveTargetMs(
@@ -57,15 +61,12 @@ export function stepSmoothedAdaptiveTargetMs(
       : valueMs;
   if (input.idealTargetMs > previousTargetMs) {
     return clampMax(
-      previousTargetMs +
-        input.alphaUp * (input.idealTargetMs - previousTargetMs)
+      previousTargetMs + input.alphaUp * (input.idealTargetMs - previousTargetMs)
     );
   }
   const fallingDeltaMs = previousTargetMs - input.idealTargetMs;
   const alphaDown =
-    fallingDeltaMs > 40
-      ? Math.min(0.5, input.alphaDown * 1.5)
-      : input.alphaDown;
+    fallingDeltaMs > 40 ? Math.min(0.5, input.alphaDown * 1.5) : input.alphaDown;
   return clampMax(
     previousTargetMs + alphaDown * (input.idealTargetMs - previousTargetMs)
   );

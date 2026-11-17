@@ -1373,8 +1373,7 @@ export class GroupCallAudioReceiveEngine {
     for (const output of this.outputNodeBySource.values()) {
       disconnectNodeSafe(output);
     }
-    for (const panner of this.pannerNodeBySource.values())
-      disconnectNodeSafe(panner);
+    for (const panner of this.pannerNodeBySource.values()) disconnectNodeSafe(panner);
     this.playouts.clear();
     this.pendingPlayouts.clear();
     this.outputNodeBySource.clear();
@@ -1498,18 +1497,11 @@ export class GroupCallAudioReceiveEngine {
   }
 
   setMasterVolume(volume: number): void {
-    const value = Math.max(
-      0,
-      Math.min(2, Number.isFinite(volume) ? volume : 1)
-    );
+    const value = Math.max(0, Math.min(2, Number.isFinite(volume) ? volume : 1));
     if (!this.masterGain || !this.audioContext) return;
     const now = this.audioContext.currentTime;
     this.masterGain.gain.cancelScheduledValues(now);
-    this.masterGain.gain.setTargetAtTime(
-      this.config.hearCall ? value : 0,
-      now,
-      0.05
-    );
+    this.masterGain.gain.setTargetAtTime(this.config.hearCall ? value : 0, now, 0.05);
   }
 
   async dispose(): Promise<void> {
@@ -2883,8 +2875,7 @@ export class GroupCallAudioReceiveEngine {
             dmMarkPeerUnstable(
               this.peerRecoveryState,
               sourceAddr,
-              shouldHoldWeakLeanRecoveryMode ||
-                shouldHoldRepairHeavyRecoveryMode
+              shouldHoldWeakLeanRecoveryMode || shouldHoldRepairHeavyRecoveryMode
                 ? 2
                 : 3,
               nowMs
@@ -2971,12 +2962,12 @@ export class GroupCallAudioReceiveEngine {
           : postBurstLatencyPolicyCap
             ? GCALL_SINGLE_SOURCE_POST_BURST_POLICY_CAP_MAX_EXTRA_HOLD_FRAMES
             : profile === 'collapse-recovery' || profile === 'repair-collapse'
-              ? GCALL_SINGLE_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES
-              : profile === 'repair-heavy-connected'
-                ? GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MAX_EXTRA_HOLD_FRAMES
-                : profile === 'persistent-lean'
-                  ? GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_MAX_EXTRA_HOLD_FRAMES
-                  : GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES;
+            ? GCALL_SINGLE_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES
+            : profile === 'repair-heavy-connected'
+              ? GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MAX_EXTRA_HOLD_FRAMES
+              : profile === 'persistent-lean'
+                ? GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_MAX_EXTRA_HOLD_FRAMES
+                : GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES;
         const requestedExtraHoldFrames = Math.max(
           0,
           Math.min(

@@ -3,7 +3,12 @@
  * Discord-inspired layout; wired to GroupCallContext (no video / screen share in v1).
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   Avatar,
@@ -370,7 +375,9 @@ export function QortalGroupVoiceCallStage() {
             placement="bottom"
           >
             <Chip
-              icon={<Groups2RoundedIcon sx={{ fontSize: '14px !important' }} />}
+              icon={
+                <Groups2RoundedIcon sx={{ fontSize: '14px !important' }} />
+              }
               label={`${callOccupancy}/${MAX_QORTAL_GROUP_CALL_PARTICIPANTS}`}
               size="small"
               sx={{
@@ -869,9 +876,7 @@ export function QortalGroupVoiceCallStage() {
                 bgcolor: hearCall ? SURFACE_SOFT : DANGER,
                 color: '#fff',
                 '&:hover': {
-                  bgcolor: hearCall
-                    ? alpha('#ffffff', 0.12)
-                    : alpha(DANGER, 0.85),
+                  bgcolor: hearCall ? alpha('#ffffff', 0.12) : alpha(DANGER, 0.85),
                 },
               }}
             >

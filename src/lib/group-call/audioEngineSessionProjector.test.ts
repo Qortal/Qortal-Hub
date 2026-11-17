@@ -46,9 +46,10 @@ describe('audioEngineSessionProjector', () => {
       event: 'gcall:participant-joined',
       payload: { roomId: 'room-1', address: 'Qpeer', publicKey: 'pub-peer' },
     });
-    expect(
-      joined?.participants.map((participant) => participant.address)
-    ).toEqual(['Qlocal', 'Qpeer']);
+    expect(joined?.participants.map((participant) => participant.address)).toEqual([
+      'Qlocal',
+      'Qpeer',
+    ]);
 
     const connected = projectGroupCallEvent({
       snapshot: joined!,
@@ -62,9 +63,9 @@ describe('audioEngineSessionProjector', () => {
       event: 'gcall:participant-left',
       payload: { roomId: 'room-1', address: 'Qpeer' },
     });
-    expect(
-      afterLeave?.participants.map((participant) => participant.address)
-    ).toEqual(['Qlocal']);
+    expect(afterLeave?.participants.map((participant) => participant.address)).toEqual([
+      'Qlocal',
+    ]);
   });
 
   it('preserves local toggles through leave/reset helpers', () => {
@@ -78,9 +79,9 @@ describe('audioEngineSessionProjector', () => {
     };
 
     expect(buildConnectedSnapshot(current, 'room-2').roomId).toBe('room-2');
-    expect(
-      buildJoinFailureSnapshot(current, 'join_failed').gcallJoinError
-    ).toBe('join_failed');
+    expect(buildJoinFailureSnapshot(current, 'join_failed').gcallJoinError).toBe(
+      'join_failed'
+    );
 
     const next = buildPostLeaveSnapshot(current);
     expect(next.roomState).toBe('idle');

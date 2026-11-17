@@ -28,9 +28,7 @@ export const GCALL_WASM_FEC_EMPTY_STATS = Object.freeze({
 
 export const GCALL_EMPTY_PCM = new Float32Array(0);
 
-export type GetPlayoutNode = (
-  sourceAddr: string
-) => AudioWorkletNode | undefined;
+export type GetPlayoutNode = (sourceAddr: string) => AudioWorkletNode | undefined;
 export type PostPcmBatch = (
   sourceAddr: string,
   pcm: Float32Array,
@@ -145,7 +143,9 @@ export class GcallOpusFecPlayoutPipeline {
     recordStats: boolean,
     ingressAtMs: number | null = null
   ): void {
-    const playNode = this.postPcmBatch ? null : this.getPlayoutNode(sourceAddr);
+    const playNode = this.postPcmBatch
+      ? null
+      : this.getPlayoutNode(sourceAddr);
     const queue = this.deferredPcm.get(sourceAddr) ?? [];
     this.deferredPcm.delete(sourceAddr);
 

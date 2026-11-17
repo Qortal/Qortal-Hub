@@ -77,9 +77,7 @@ export class PeerHealthStream {
   private readonly _listeners = new Set<PeerHealthChangeListener>();
   private _gcTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(
-    private readonly clockMs: () => number = () => performance.now()
-  ) {
+  constructor(private readonly clockMs: () => number = () => performance.now()) {
     this._gcTimer = setInterval(() => this._pruneExpired(), 2_000);
   }
 
@@ -137,7 +135,10 @@ export class PeerHealthStream {
     if (map) {
       // Retire all degradation evidence when packets are actively arriving.
       for (const [kind, entry] of map) {
-        if (kind !== 'transport-healthy' && kind !== 'path-warming') {
+        if (
+          kind !== 'transport-healthy' &&
+          kind !== 'path-warming'
+        ) {
           // Expire it immediately so the next snapshot sees "healthy".
           entry.expiresAtMs = nowMs - 1;
         }
@@ -219,7 +220,9 @@ export class PeerHealthStream {
     const active = [...map.values()].filter((e) => e.expiresAtMs > nowMs);
     const level = computeHealthLevel(active.map((e) => e.evidence));
     const latestExpiry =
-      active.length > 0 ? Math.max(...active.map((e) => e.expiresAtMs)) : nowMs;
+      active.length > 0
+        ? Math.max(...active.map((e) => e.expiresAtMs))
+        : nowMs;
 
     const lastFresh = this._lastFreshConfirmed.get(sourceAddr) ?? 0;
     const freshLocalMediaConfirmed =
@@ -296,10 +299,7 @@ function computeHealthLevel(active: TransportEvidence[]): PeerHealthLevel {
   );
 
   const degraded = active.filter(
-    (e) =>
-      e.kind === 'path-timeout' ||
-      e.kind === 'bridge-pressure' ||
-      e.kind === 'packet-loss'
+    (e) => e.kind === 'path-timeout' || e.kind === 'bridge-pressure' || e.kind === 'packet-loss'
   );
 
   if (hasPositive && degraded.length === 0) return 'healthy';

@@ -108,9 +108,7 @@ class FakeWorker {
     this.onmessage?.({ data });
   }
 
-  respondToLastDecryptBatch(
-    build: (msg: DecryptBatchMessage) => DecryptBatchResultEntry[]
-  ): void {
+  respondToLastDecryptBatch(build: (msg: DecryptBatchMessage) => DecryptBatchResultEntry[]): void {
     const last = this.decryptBatches[this.decryptBatches.length - 1];
     if (!last) throw new Error('no decryptBatch was sent');
     this.emit({
@@ -141,18 +139,14 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('stableHashString', () => {
   it('is deterministic and well-distributed across bucket counts', () => {
-    const addrs = Array.from(
-      { length: 500 },
-      (_, i) => `peer-${i.toString(36)}`
-    );
+    const addrs = Array.from({ length: 500 }, (_, i) => `peer-${i.toString(36)}`);
     for (const a of addrs) {
       expect(stableHashString(a)).toBe(stableHashString(a));
     }
     const buckets = [0, 0, 0, 0] as number[];
     for (const a of addrs) buckets[stableHashString(a) % 4]! += 1;
     // No bucket should be starved; any <1% is a distribution bug.
-    for (const count of buckets)
-      expect(count).toBeGreaterThan(addrs.length / 20);
+    for (const count of buckets) expect(count).toBeGreaterThan(addrs.length / 20);
   });
 });
 
@@ -235,18 +229,18 @@ describe('DecryptWorkerPool', () => {
     let tries = 0;
     while (stableHashString(aAddr) % 2 === stableHashString(bAddr) % 2) {
       tries += 1;
-      if (tries > 50)
-        throw new Error('could not find addresses hashing to different slots');
+      if (tries > 50) throw new Error('could not find addresses hashing to different slots');
       bAddr = `peerB-${tries}`;
     }
 
     for (let i = 0; i < 5; i++) pool.postDecrypt(aAddr, i, new ArrayBuffer(4));
-    for (let i = 100; i < 103; i++)
-      pool.postDecrypt(bAddr, i, new ArrayBuffer(4));
+    for (let i = 100; i < 103; i++) pool.postDecrypt(bAddr, i, new ArrayBuffer(4));
     await flushMicrotasks();
 
-    const slotForA = stableHashString(aAddr) % 2 === 0 ? slotA! : slotB!;
-    const slotForB = stableHashString(bAddr) % 2 === 0 ? slotA! : slotB!;
+    const slotForA =
+      stableHashString(aAddr) % 2 === 0 ? slotA! : slotB!;
+    const slotForB =
+      stableHashString(bAddr) % 2 === 0 ? slotA! : slotB!;
     expect(slotForA.decryptBatches).toHaveLength(1);
     expect(slotForA.decryptBatches[0]!.ids).toEqual([0, 1, 2, 3, 4]);
     expect(slotForB.decryptBatches).toHaveLength(1);
@@ -314,8 +308,7 @@ describe('DecryptWorkerPool', () => {
   it('forwards resultBatch entries and fires onBatchCompleted telemetry', async () => {
     const { factory, workers } = makeFactory({ autoAckKey: true });
     const decrypted: number[] = [];
-    const batchCompletions: Array<{ batchSize: number; staleSkipped: number }> =
-      [];
+    const batchCompletions: Array<{ batchSize: number; staleSkipped: number }> = [];
     const pool = new DecryptWorkerPool({
       initialSize: 1,
       maxSize: 4,
@@ -346,16 +339,12 @@ describe('DecryptWorkerPool', () => {
     );
     expect(decrypted).toEqual([10, 11, 12]);
     expect(batchCompletions).toHaveLength(1);
-    expect(batchCompletions[0]).toMatchObject({
-      batchSize: 3,
-      staleSkipped: 1,
-    });
+    expect(batchCompletions[0]).toMatchObject({ batchSize: 3, staleSkipped: 1 });
   });
 
   it('grows on resize, auto-propagates the active room key, and enters routing ring immediately', async () => {
     const { factory, workers } = makeFactory({ autoAckKey: true });
-    const resizedEvents: Array<{ from: number; to: number; reason: string }> =
-      [];
+    const resizedEvents: Array<{ from: number; to: number; reason: string }> = [];
     const pool = new DecryptWorkerPool({
       initialSize: 2,
       maxSize: 4,
@@ -363,8 +352,7 @@ describe('DecryptWorkerPool', () => {
       handlers: {
         onDecryptResult: () => {},
         onEncryptResult: () => {},
-        onResized: (from, to, reason) =>
-          resizedEvents.push({ from, to, reason }),
+        onResized: (from, to, reason) => resizedEvents.push({ from, to, reason }),
       },
     });
     await pool.setRoomKey(dummyKey, 1);
@@ -390,8 +378,7 @@ describe('DecryptWorkerPool', () => {
 
   it('is idempotent on resize when rawSize already covers target (no onResized spam)', async () => {
     const { factory, workers } = makeFactory({ autoAckKey: false });
-    const resizedEvents: Array<{ from: number; to: number; reason: string }> =
-      [];
+    const resizedEvents: Array<{ from: number; to: number; reason: string }> = [];
     const pool = new DecryptWorkerPool({
       initialSize: 2,
       maxSize: 4,
@@ -399,8 +386,7 @@ describe('DecryptWorkerPool', () => {
       handlers: {
         onDecryptResult: () => {},
         onEncryptResult: () => {},
-        onResized: (from, to, reason) =>
-          resizedEvents.push({ from, to, reason }),
+        onResized: (from, to, reason) => resizedEvents.push({ from, to, reason }),
       },
     });
     // Do not ack key — the spawned slot stays in `init`, pool.size stays at 0.
@@ -438,9 +424,7 @@ describe('DecryptWorkerPool', () => {
     await terminatedPromise;
 
     // One of the first 3 workers (the encrypt worker is appended last) should be terminated.
-    const terminatedCount = workers
-      .slice(0, 3)
-      .filter((w) => w.terminated).length;
+    const terminatedCount = workers.slice(0, 3).filter((w) => w.terminated).length;
     expect(terminatedCount).toBe(1);
     expect(pool.size).toBe(2);
   });
@@ -464,9 +448,7 @@ describe('DecryptWorkerPool', () => {
 
     // Main-thread order: the decryptBatch must appear *before* the second setRoomKey.
     const setRoomKeyMsgs = slot.sent.filter((m) => m.type === 'setRoomKey');
-    const decryptBatchIdx = slot.sent.findIndex(
-      (m) => m.type === 'decryptBatch'
-    );
+    const decryptBatchIdx = slot.sent.findIndex((m) => m.type === 'decryptBatch');
     const secondSetRoomKeyIdx = slot.sent.lastIndexOf(
       setRoomKeyMsgs[setRoomKeyMsgs.length - 1]!
     );

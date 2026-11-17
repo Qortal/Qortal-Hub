@@ -139,10 +139,7 @@ describe('rawConnectionStressLevel', () => {
   it('returns 2 for high relay dwell', () => {
     expect(
       rawConnectionStressLevel(
-        baseSnapshot({
-          relayDwellFraction: 0.25,
-          adaptiveNetworkMode: 'low-latency',
-        })
+        baseSnapshot({ relayDwellFraction: 0.25, adaptiveNetworkMode: 'low-latency' })
       )
     ).toBe(2);
   });
@@ -150,10 +147,7 @@ describe('rawConnectionStressLevel', () => {
   it('returns 2 for recovery with moderate relay', () => {
     expect(
       rawConnectionStressLevel(
-        baseSnapshot({
-          adaptiveNetworkMode: 'recovery',
-          relayDwellFraction: 0.15,
-        })
+        baseSnapshot({ adaptiveNetworkMode: 'recovery', relayDwellFraction: 0.15 })
       )
     ).toBe(2);
   });
@@ -167,9 +161,7 @@ describe('rawConnectionStressLevel', () => {
   });
 
   it('returns 1 when transport is not ready', () => {
-    expect(
-      rawConnectionStressLevel(baseSnapshot({ transportReady: false }))
-    ).toBe(1);
+    expect(rawConnectionStressLevel(baseSnapshot({ transportReady: false }))).toBe(1);
   });
 });
 

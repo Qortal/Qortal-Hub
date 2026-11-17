@@ -30,9 +30,9 @@ import {
 describe('computePendingDecryptLimits', () => {
   it('uses steady-state limits when no recovery or burst window', () => {
     const now = 10_000;
-    expect(
-      computePendingDecryptLimits(now, 0, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE)
-    ).toEqual({ max: PENDING_DECRYPT_MAX, ttlMs: PENDING_DECRYPT_TTL_MS });
+    expect(computePendingDecryptLimits(now, 0, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE)).toEqual(
+      { max: PENDING_DECRYPT_MAX, ttlMs: PENDING_DECRYPT_TTL_MS }
+    );
   });
 
   it('prefers burst limits over global recovery when both are active', () => {
@@ -40,12 +40,7 @@ describe('computePendingDecryptLimits', () => {
     const globalUntil = 20_000;
     const burstUntil = 8_000;
     expect(
-      computePendingDecryptLimits(
-        now,
-        globalUntil,
-        burstUntil,
-        PENDING_DECRYPT_BURST_NOMINAL_BASE
-      )
+      computePendingDecryptLimits(now, globalUntil, burstUntil, PENDING_DECRYPT_BURST_NOMINAL_BASE)
     ).toEqual({
       max: PENDING_DECRYPT_BURST_NOMINAL_BASE,
       ttlMs: PENDING_DECRYPT_BURST_TTL_MS,
@@ -57,12 +52,7 @@ describe('computePendingDecryptLimits', () => {
     const globalUntil = 20_000;
     const burstUntil = 5_000;
     expect(
-      computePendingDecryptLimits(
-        now,
-        globalUntil,
-        burstUntil,
-        PENDING_DECRYPT_BURST_NOMINAL_BASE
-      )
+      computePendingDecryptLimits(now, globalUntil, burstUntil, PENDING_DECRYPT_BURST_NOMINAL_BASE)
     ).toEqual({
       max: PENDING_DECRYPT_RECOVERY_MAX,
       ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
@@ -72,14 +62,7 @@ describe('computePendingDecryptLimits', () => {
   it('uses recovery limits when global recovery active and no burst', () => {
     const now = 10_000;
     const globalUntil = 20_000;
-    expect(
-      computePendingDecryptLimits(
-        now,
-        globalUntil,
-        0,
-        PENDING_DECRYPT_BURST_NOMINAL_BASE
-      )
-    ).toEqual({
+    expect(computePendingDecryptLimits(now, globalUntil, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE)).toEqual({
       max: PENDING_DECRYPT_RECOVERY_MAX,
       ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
     });
@@ -87,9 +70,7 @@ describe('computePendingDecryptLimits', () => {
 
   it('treats boundary at exactly globalRecoveryUntilMs as steady state', () => {
     const t = 10_000;
-    expect(
-      computePendingDecryptLimits(t, t, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE)
-    ).toEqual({
+    expect(computePendingDecryptLimits(t, t, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE)).toEqual({
       max: PENDING_DECRYPT_MAX,
       ttlMs: PENDING_DECRYPT_TTL_MS,
     });
@@ -97,9 +78,7 @@ describe('computePendingDecryptLimits', () => {
 
   it('treats boundary at exactly decryptBurstUntilMs as recovery or steady', () => {
     const t = 10_000;
-    expect(
-      computePendingDecryptLimits(t, 0, t, PENDING_DECRYPT_BURST_NOMINAL_BASE)
-    ).toEqual({
+    expect(computePendingDecryptLimits(t, 0, t, PENDING_DECRYPT_BURST_NOMINAL_BASE)).toEqual({
       max: PENDING_DECRYPT_MAX,
       ttlMs: PENDING_DECRYPT_TTL_MS,
     });
@@ -118,13 +97,7 @@ describe('computePendingDecryptLimits', () => {
   it('uses dynamic burst limits while decrypt overload is active', () => {
     const now = 10_000;
     expect(
-      computePendingDecryptLimits(
-        now,
-        0,
-        0,
-        PENDING_DECRYPT_BURST_NOMINAL_BASE,
-        true
-      )
+      computePendingDecryptLimits(now, 0, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE, true)
     ).toEqual({
       max: PENDING_DECRYPT_OVERLOAD_MAX,
       ttlMs: PENDING_DECRYPT_OVERLOAD_TTL_MS,

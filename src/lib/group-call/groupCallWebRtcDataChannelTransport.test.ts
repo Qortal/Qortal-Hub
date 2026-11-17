@@ -75,14 +75,7 @@ class FakePeerConnection {
     if (FakePeerConnection.emitCandidateDuringSetLocal) {
       this.onicecandidate?.({
         candidate: {
-          type: 'srflx',
-          address: '203.0.114.5',
-          toJSON: () => ({
-            candidate:
-              'candidate:1 1 udp 1677729535 203.0.114.5 54321 typ srflx',
-            type: 'srflx',
-            address: '203.0.114.5',
-          }),
+          toJSON: () => ({ candidate: 'candidate-during-local-description' }),
         },
       } as unknown as RTCPeerConnectionIceEvent);
       this.onicecandidate?.({
@@ -156,68 +149,9 @@ describe('GroupCallWebRtcDataChannelTransport', () => {
 
     const channel = FakePeerConnection.latest!.channel;
     channel.readyState = 'open';
-    // B-4: `open` alone is no longer enough to report a successful send; the
-    // underlying PeerConnection must be connected.
-    FakePeerConnection.latest!.connectionState = 'connected';
     channel.onopen?.();
     expect(transport.send(new Uint8Array([2]))).toBe(true);
     expect(channel.sent).toHaveLength(1);
-  });
-
-  it('reports send failure while ICE is disconnected (B-4)', async () => {
-    globalThis.RTCPeerConnection =
-      FakePeerConnection as unknown as typeof RTCPeerConnection;
-    const transport = new GroupCallWebRtcDataChannelTransport({
-      peerAddress: 'peer',
-      offerer: true,
-      iceServers: [],
-      onSignal: vi.fn(),
-      onPacket: vi.fn(),
-      onState: vi.fn(),
-    });
-
-    await transport.start(false);
-    await transport.enableNegotiation();
-
-    const pc = FakePeerConnection.latest!;
-    pc.channel.readyState = 'open';
-    pc.channel.onopen?.();
-
-    pc.connectionState = 'connected';
-    expect(transport.send(new Uint8Array([1]))).toBe(true);
-
-    pc.connectionState = 'disconnected';
-    expect(transport.send(new Uint8Array([2]))).toBe(false);
-
-    pc.connectionState = 'failed';
-    expect(transport.send(new Uint8Array([3]))).toBe(false);
-  });
-
-  it('reports send failure once the local buffer exceeds the audio window (B-4)', async () => {
-    globalThis.RTCPeerConnection =
-      FakePeerConnection as unknown as typeof RTCPeerConnection;
-    const transport = new GroupCallWebRtcDataChannelTransport({
-      peerAddress: 'peer',
-      offerer: true,
-      iceServers: [],
-      onSignal: vi.fn(),
-      onPacket: vi.fn(),
-      onState: vi.fn(),
-    });
-
-    await transport.start(false);
-    await transport.enableNegotiation();
-
-    const pc = FakePeerConnection.latest!;
-    pc.channel.readyState = 'open';
-    pc.connectionState = 'connected';
-    pc.channel.onopen?.();
-
-    pc.channel.bufferedAmount = 16 * 1024;
-    expect(transport.send(new Uint8Array([1]))).toBe(true);
-
-    pc.channel.bufferedAmount = 64 * 1024;
-    expect(transport.send(new Uint8Array([2]))).toBe(false);
   });
 
   it('asks the offerer to reconnect when the answering edge needs recovery', async () => {

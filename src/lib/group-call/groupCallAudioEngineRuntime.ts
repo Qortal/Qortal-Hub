@@ -106,23 +106,8 @@ import AudioDecryptWorker from '../../workers/audio-decrypt.worker?worker';
 import nacl from '../../encryption/nacl-fast';
 import ed2curve from '../../encryption/ed2curve';
 import Base58 from '../../encryption/Base58.js';
-import {
-  isCallDontForward,
-  isCallReticulumOnly,
-} from '../call/callNetworkPreference';
-import { getGroupMembers } from '../../components/Group/groupApi';
-
-/**
- * P-4: "Private calls (Reticulum only)" is a runtime setting, not a build-time
- * constant. These read it on every call site so a toggle takes effect without
- * a rebuild.
- */
-function isReticulumCallEnabled(): boolean {
-  return isCallReticulumOnly();
-}
-function isReticulumGroupCallEnabled(): boolean {
-  return isCallReticulumOnly();
-}
+import { isReticulumCallEnabled } from '../call/directVoiceCallTransport';
+import { isReticulumGroupCallEnabled } from './groupCallTransport';
 import {
   GroupCallWebRtcDataChannelTransport,
   type GroupCallRtcSignal,
@@ -842,8 +827,6 @@ const OCCUPIED_JOIN_ROOT_DISCOVERY_WAIT_MS = ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
 const GROUP_CALL_SENDER_SYNC_RETRY_MS = 1_500;
 const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 10 * 60_000;
 const PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS = TOPOLOGY_HEARTBEAT_MS;
-/** B-3: how often the Qortal group member allowlist is re-fetched mid-call. */
-const MEMBER_GATE_REFRESH_INTERVAL_MS = 60_000;
 const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
 const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS =
   PARTICIPANT_ROSTER_MISSING_EVICT_MS;
@@ -904,17 +887,6 @@ const ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS = 3_000;
 // RNS Channel retries accepted capability messages itself. A short periodic
 // resend only creates head-of-line blocking for SDP and ICE on slower links.
 const GROUP_RTC_CAPABILITY_RETRY_MS = 12_000;
-/**
- * X-1: exponential backoff for unanswered WebRTC capabilities.
- *
- * A peer that does not support WebRTC, or that chose "Private calls", never
- * answers. Re-signing and re-sending a capability every 12s for the whole call
- * wastes Reticulum bandwidth for as long as the call lasts.
- */
-const GROUP_RTC_CAPABILITY_BACKOFF_MS = [
-  12_000, 24_000, 48_000, 60_000,
-] as const;
-const GROUP_RTC_CAPABILITY_MAX_UNANSWERED = 10;
 const GROUP_RTC_EMPTY_ICE_RETRY_MS = 3_000;
 const GROUP_RTC_ICE_REFRESH_MS = 4 * 60_000;
 const LOW_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES = 300;
@@ -1107,15 +1079,9 @@ export class GroupCallAudioEngineRuntime {
     string,
     GroupCallWebRtcDataChannelTransport
   >();
-  /** X-2: addresses that asked not to be elected forwarder (phones). */
-  private readonly noForwarderHintAddresses = new Set<string>();
   private readonly groupRtcCapabilities = new Set<string>();
   private readonly groupRtcCapabilityLastSentAt = new Map<string, number>();
-  /** X-1: capabilities sent to a peer that has not answered yet. */
-  private readonly groupRtcCapabilityRetryCount = new Map<string, number>();
   private groupRtcIceServers: RTCIceServer[] = [];
-  /** P-5: relay-only ICE policy, resolved alongside the server list. */
-  private groupRtcIceTransportPolicy: RTCIceTransportPolicy = 'all';
   private groupRtcIceServersLoaded = false;
   private groupRtcIceServersLookupGeneration: number | null = null;
   private groupRtcIceServersLastLookupAt = 0;
@@ -1511,17 +1477,6 @@ export class GroupCallAudioEngineRuntime {
           return await this.cleanupForLogout();
         case 'leave-group-call':
           return await this.leaveGroupCall();
-        case 'refresh-member-gate': {
-          // B-3: a membership chain event arrived. Refresh now rather than
-          // waiting for the 60 s timer, so a kick is pruned promptly.
-          if (this.memberGateGroupId !== command.groupId) {
-            return { ok: true };
-          }
-          if (this.snapshot.roomId) {
-            this.startMemberGateRefresh(this.snapshot.roomId);
-          }
-          return { ok: true };
-        }
         case 'set-muted':
           this.snapshot = { ...this.snapshot, muted: command.muted === true };
           this.senderEngine.setMuted(command.muted === true);
@@ -1777,15 +1732,6 @@ export class GroupCallAudioEngineRuntime {
             // The initial snapshot still permits host-only negotiation.
           }
           return initialIceServers.map((server) => ({ ...server }));
-        },
-        // P-5: relay-only must reach the constructor; Chromium cannot change
-        // the ICE transport policy on a live PeerConnection.
-        getIceTransportPolicy: async () => {
-          try {
-            return (await window.hub?.getIceTransportPolicy?.()) ?? 'all';
-          } catch {
-            return 'all';
-          }
         },
         localStream,
         onSignal: (signal) => {
@@ -5480,8 +5426,6 @@ export class GroupCallAudioEngineRuntime {
       takeover: true,
       reticulumDestinationHash,
       reticulumIdentityPublicKeyBase64,
-      // X-2: propagate the user's "don't make me forwarder" preference.
-      noForwarderHint: isCallDontForward(),
     });
     traceGcallAudioSurface(
       'engine.joinGroupCall: step after signReticulumJoinSplit',
@@ -5523,10 +5467,7 @@ export class GroupCallAudioEngineRuntime {
       reticulumIdentityPublicKeyBase64 ?? undefined,
       signed.joinRkSig,
       undefined,
-      true,
-      undefined,
-      undefined,
-      signed.noForwarderHint === true
+      true
     );
     const GCALL_JOIN_IPC_TIMEOUT_MS = 25_000;
     traceGcallAudioSurface(
@@ -5575,12 +5516,7 @@ export class GroupCallAudioEngineRuntime {
     this.recordDiagEvent('join-success', { roomId, joinSuccessAtMs });
     this.snapshot = buildConnectedSnapshot(this.snapshot, roomId);
     this.emitSnapshot();
-    const nextCallSessionId = result.callSessionId ?? '';
-    if (nextCallSessionId !== this.callSessionId) {
-      // P-7: the election salt is the call session id — cached digests are stale.
-      this.electionDigestCache.clear();
-    }
-    this.callSessionId = nextCallSessionId;
+    this.callSessionId = result.callSessionId ?? '';
     this.mediaSessionGeneration = (result.mediaSessionGeneration ?? 1) >>> 0;
     if (typeof window.groupCall?.requestRetainedKeyReplay === 'function') {
       window.groupCall.requestRetainedKeyReplay();
@@ -5948,13 +5884,6 @@ export class GroupCallAudioEngineRuntime {
               this.clearConflictingRemoteRootIfMatches(leavingAddress);
             }
           }
-          // S-5: rotate room key when a participant leaves
-          if (this.ownsRoomKey && this.roomKey) {
-            this.roomKey = randomRoomKey();
-            this.mediaSessionGeneration++;
-            this.selfMintedRoomKey = true;
-            // Key will be distributed to remaining participants via next topology sync
-          }
           this.removeParticipantFromRuntimeEvent(leavingAddress);
         } else {
           const joining = payload as
@@ -5973,15 +5902,6 @@ export class GroupCallAudioEngineRuntime {
             joining?.joinGeneration,
             joining?.timestamp
           );
-          // X-2: honour a joiner's "don't elect me as forwarder" hint.
-          const joiningHint = (
-            payload as { noForwarderHint?: boolean } | null | undefined
-          )?.noForwarderHint;
-          if (joiningHint === true && joiningAddress) {
-            this.noForwarderHintAddresses.add(joiningAddress);
-          } else if (joiningAddress) {
-            this.noForwarderHintAddresses.delete(joiningAddress);
-          }
           this.upsertParticipantFromRuntimeEvent(
             joiningAddress,
             joining?.publicKey
@@ -6115,14 +6035,7 @@ export class GroupCallAudioEngineRuntime {
         mediaSessionGeneration:
           (p.mediaSessionGeneration ?? this.mediaSessionGeneration ?? 1) >>> 0,
       });
-      {
-        const nextCallSessionId = p.callSessionId ?? this.callSessionId;
-        if (nextCallSessionId !== this.callSessionId) {
-          // P-7: election salt changed — drop cached digests.
-          this.electionDigestCache.clear();
-        }
-        this.callSessionId = nextCallSessionId;
-      }
+      this.callSessionId = p.callSessionId ?? this.callSessionId;
       this.mediaSessionGeneration =
         (p.mediaSessionGeneration ?? this.mediaSessionGeneration ?? 1) >>> 0;
       this.closeAllGroupRtcTransports('media-session-updated');
@@ -6296,7 +6209,6 @@ export class GroupCallAudioEngineRuntime {
       // forwarder; cluster forwarders dial the root; forwarders answer.
       offerer,
       iceServers: this.groupRtcIceServers,
-      iceTransportPolicy: this.groupRtcIceTransportPolicy,
       onSignal: (signal) => this.sendGroupRtcSignal(peerAddress, signal),
       onPacket: (packet) => {
         void this.handleGroupRtcPacket(peerAddress, packet).catch((error) => {
@@ -6374,24 +6286,11 @@ export class GroupCallAudioEngineRuntime {
       const transport = this.createGroupRtcTransport(peerAddress);
       const lastCapabilityAt =
         this.groupRtcCapabilityLastSentAt.get(peerAddress) ?? 0;
-      // X-1: back off exponentially and stop retrying a peer that never
-      // answers. `groupRtcCapabilities` holds peers that did answer, so the
-      // retry count is simply how many capabilities we have sent minus that.
-      const unanswered = this.groupRtcCapabilities.has(peerAddress)
-        ? 0
-        : (this.groupRtcCapabilityRetryCount.get(peerAddress) ?? 0);
-      const backoffIndex = Math.min(
-        unanswered,
-        GROUP_RTC_CAPABILITY_BACKOFF_MS.length - 1
-      );
-      const retryDelay = GROUP_RTC_CAPABILITY_BACKOFF_MS[backoffIndex]!;
       if (
         !transport.isOpen() &&
-        unanswered < GROUP_RTC_CAPABILITY_MAX_UNANSWERED &&
-        now - lastCapabilityAt >= retryDelay
+        now - lastCapabilityAt >= GROUP_RTC_CAPABILITY_RETRY_MS
       ) {
         this.groupRtcCapabilityLastSentAt.set(peerAddress, now);
-        this.groupRtcCapabilityRetryCount.set(peerAddress, unanswered + 1);
         void this.sendGroupRtcSignal(peerAddress, {
           type: 'capability',
           version: 1,
@@ -6432,10 +6331,7 @@ export class GroupCallAudioEngineRuntime {
     const roomId = this.snapshot.roomId;
     const callSessionId = this.callSessionId;
     try {
-      const [servers, policy] = await Promise.all([
-        window.hub?.getIceServers?.(),
-        window.hub?.getIceTransportPolicy?.().catch(() => 'all' as const),
-      ]);
+      const servers = await window.hub?.getIceServers?.();
       if (
         generation !== this.groupRtcIceServersGeneration ||
         roomId !== this.snapshot.roomId ||
@@ -6443,24 +6339,10 @@ export class GroupCallAudioEngineRuntime {
       ) {
         return;
       }
-      if (policy === 'relay' || policy === 'all') {
-        this.groupRtcIceTransportPolicy = policy;
-      }
-      // P-5: keep credentials. Rebuilding each entry as `{ urls }` silently
-      // dropped TURN `username`/`credential`, so an authenticated relay could
-      // never be used even when the user configured one.
-      const next: RTCIceServer[] = Array.isArray(servers)
+      const next = Array.isArray(servers)
         ? servers
-            .filter(
-              (server) =>
-                typeof server?.urls === 'string' ||
-                (Array.isArray(server?.urls) && server.urls.length > 0)
-            )
-            .map((server) => ({
-              urls: server.urls,
-              ...(server.username ? { username: server.username } : {}),
-              ...(server.credential ? { credential: server.credential } : {}),
-            }))
+            .filter((server) => typeof server?.urls === 'string')
+            .map((server) => ({ urls: server.urls }))
         : [];
       if (next.length === 0) {
         // Do not feed expired URLs into a newly-created PeerConnection. An
@@ -6590,8 +6472,6 @@ export class GroupCallAudioEngineRuntime {
       if (signal.version !== 1) return;
       const firstCapability = !this.groupRtcCapabilities.has(peerAddress);
       this.groupRtcCapabilities.add(peerAddress);
-      // X-1: the peer answered — stop backing off.
-      this.groupRtcCapabilityRetryCount.delete(peerAddress);
       const transport = this.createGroupRtcTransport(peerAddress);
       if (firstCapability) {
         await this.sendGroupRtcSignal(peerAddress, {
@@ -6617,8 +6497,6 @@ export class GroupCallAudioEngineRuntime {
     // proof that the peer supports this transport; accepting it avoids an
     // unnecessary negotiation retry while old clients remain unaffected.
     this.groupRtcCapabilities.add(peerAddress);
-    // X-1: a signed RTC signal also proves the peer answered.
-    this.groupRtcCapabilityRetryCount.delete(peerAddress);
     await this.createGroupRtcTransport(peerAddress)
       .handleSignal(signal)
       .catch((error) => {
@@ -6680,7 +6558,6 @@ export class GroupCallAudioEngineRuntime {
     if (transport) transport.close();
     this.groupRtcCapabilities.delete(peerAddress);
     this.groupRtcCapabilityLastSentAt.delete(peerAddress);
-    this.groupRtcCapabilityRetryCount.delete(peerAddress);
     this.refreshGroupRtcTransportIndicator();
     this.recordDiagEvent('group-rtc-closed', {
       peerAddress: truncateGcallDiagAddress(peerAddress),
@@ -7920,15 +7797,7 @@ export class GroupCallAudioEngineRuntime {
       this.scheduleTopologyElection('authority-conflict');
       return;
     }
-    // X-2: skip peers that asked not to forward, but only while another
-    // eligible peer remains — never leave the room without a root.
-    const eligible = addresses.filter(
-      (address) => !this.noForwarderHintAddresses.has(address.trim())
-    );
-    const sorted = await this.computeElectionOrder(
-      eligible.length > 0 ? eligible : addresses,
-      roomId
-    );
+    const sorted = await this.computeElectionOrder(addresses, roomId);
     if (
       generation !== this.topologyAsyncGeneration ||
       roomId !== this.snapshot.roomId
@@ -8295,20 +8164,12 @@ export class GroupCallAudioEngineRuntime {
     addresses: string[],
     roomId: string
   ): Promise<string[]> {
-    // P-7: salt the election digest with this call's session id so a stranger
-    // cannot grind an address offline to win the fixed `address:roomId` hash.
-    // The session id is agreed by every participant at join time, so the salt
-    // is identical across the room. A missing session id keeps the legacy
-    // digest (pre-CALL_PROTOCOL_VERSION-2 peers).
-    const salt = this.callSessionId?.trim() ?? '';
     const scores = await Promise.all(
       addresses.map(async (address) => ({
         address,
         digest:
           this.electionDigestCache.get(address) ??
-          (await sha256Hex(
-            salt ? `${address}:${roomId}:${salt}` : `${address}:${roomId}`
-          )),
+          (await sha256Hex(`${address}:${roomId}`)),
       }))
     );
     scores.sort((left, right) => left.digest.localeCompare(right.digest));
@@ -9649,8 +9510,6 @@ export class GroupCallAudioEngineRuntime {
       if (localAddress && !addresses.includes(localAddress)) {
         throw new Error('qortal_group_membership_required');
       }
-      // B-3: keep the allowlist fresh for the rest of the call.
-      this.startMemberGateRefresh(roomId);
     } catch (error) {
       traceGcallAudioSurface(
         'pipeline: failed to sync qortal reticulum targets',
@@ -9669,60 +9528,6 @@ export class GroupCallAudioEngineRuntime {
       clearInterval(this.memberGateRefreshTimer);
       this.memberGateRefreshTimer = null;
     }
-  }
-
-  /**
-   * B-3: refresh the Qortal group member allowlist while the call runs.
-   *
-   * The allowlist used to be fetched once, when the user clicked Join. Anyone
-   * who joined the group afterwards was ignored by this Hub (no key, no
-   * topology), and a member kicked or banned mid-call was never pruned.
-   */
-  private startMemberGateRefresh(roomId: string): void {
-    this.clearMemberGateRefreshTimer();
-    const groupId = this.memberGateGroupId;
-    if (groupId == null) return;
-    const refresh = async () => {
-      if (this.snapshot.roomId !== roomId) return;
-      if (typeof window.groupCall?.setQortalGroupReticulumTargets !== 'function') {
-        return;
-      }
-      try {
-        const data = await getGroupMembers(groupId);
-        const addresses = Array.isArray(data?.members)
-          ? [
-              ...new Set(
-                data.members
-                  .map((member) =>
-                    typeof member?.member === 'string'
-                      ? member.member.trim()
-                      : ''
-                  )
-                  .filter((address) => address.length > 0)
-              ),
-            ]
-          : [];
-        if (addresses.length === 0) return;
-        await window.groupCall.setQortalGroupReticulumTargets(roomId, addresses);
-        traceGcallAudioSurface('pipeline: refreshed qortal member allowlist', {
-          roomId,
-          groupId,
-          targetCount: addresses.length,
-        });
-      } catch (error) {
-        traceGcallAudioSurface(
-          'pipeline: failed to refresh qortal member allowlist',
-          {
-            roomId,
-            groupId,
-            message: error instanceof Error ? error.message : 'unknown',
-          }
-        );
-      }
-    };
-    this.memberGateRefreshTimer = setInterval(() => {
-      void refresh();
-    }, MEMBER_GATE_REFRESH_INTERVAL_MS);
   }
 
   private startParticipantRosterRefresh(roomId: string): void {
@@ -9874,17 +9679,9 @@ export class GroupCallAudioEngineRuntime {
   ): void {
     let sawVad = false;
     const now = Date.now();
-    const knownParticipants = new Set(
-      this.snapshot.participants.map((p) => p.address)
-    );
     for (const packet of packets) {
       if (packet.sourceAddr) {
-        // S-6: only note activity for verified participants from GJ/link-auth
-        if (!knownParticipants.has(packet.sourceAddr)) {
-          // Drop decoded packets from unverified sourceAddr
-          continue;
-        }
-        // Note activity without upserting — the participant is already in the roster
+        this.upsertParticipantFromRuntimeEvent(packet.sourceAddr);
         this.noteParticipantDecodedMedia(packet.sourceAddr, now);
         this.noteRootDecodedMedia(packet.sourceAddr, now);
         this.noteRemoteAudioActivity(packet.sourceAddr, packet.vad, now);

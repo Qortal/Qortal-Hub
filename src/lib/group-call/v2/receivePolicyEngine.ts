@@ -344,14 +344,7 @@ export class ReceivePolicyEngine {
   // -------------------------------------------------------------------------
 
   private _evaluateTransitions(input: PolicyTickInput): void {
-    const {
-      nowMs,
-      opusBufferedMs,
-      pcmBufferedMs,
-      lastPushAgeMs,
-      jitterDepth,
-      lastGapFrames,
-    } = input;
+    const { nowMs, opusBufferedMs, pcmBufferedMs, lastPushAgeMs, jitterDepth, lastGapFrames } = input;
     const cfg = this._config;
     this._observeSteadyStateRecovery(input);
     const effectiveTargetBufferMs = this._effectiveTargetBufferMs(nowMs);
@@ -365,16 +358,9 @@ export class ReceivePolicyEngine {
     );
     const backlogDrainReentryBlocked =
       nowMs < this._backlogDrainReentryBlockedUntilMs;
-    const pcmDeficitDrainThreshold = this._effectivePcmDeficitDrainThreshold(
-      nowMs,
-      input
-    );
-    const pcmDeficitOpusMinRatio = this._effectivePcmDeficitOpusMinRatio(
-      nowMs,
-      input
-    );
-    const backlogDrainTriggerRatio =
-      this._effectiveBacklogDrainTriggerRatio(input);
+    const pcmDeficitDrainThreshold = this._effectivePcmDeficitDrainThreshold(nowMs, input);
+    const pcmDeficitOpusMinRatio = this._effectivePcmDeficitOpusMinRatio(nowMs, input);
+    const backlogDrainTriggerRatio = this._effectiveBacklogDrainTriggerRatio(input);
 
     // Missing media check applies from any state.
     const sourceGone = lastPushAgeMs > cfg.missingMediaThresholdMs;
@@ -382,11 +368,7 @@ export class ReceivePolicyEngine {
     switch (this._state) {
       case 'coldStart': {
         if (sourceGone) {
-          this._transition(
-            'missingMedia',
-            nowMs,
-            'no-packets-during-coldstart'
-          );
+          this._transition('missingMedia', nowMs, 'no-packets-during-coldstart');
           break;
         }
         if (jitterDepth >= cfg.startThresholdFrames) {
@@ -405,15 +387,10 @@ export class ReceivePolicyEngine {
         // correctly instead of being masked as a local backlog drain.
         if (
           input.peerHealth &&
-          (input.peerHealth.level === 'degraded' ||
-            input.peerHealth.level === 'recovering') &&
+          (input.peerHealth.level === 'degraded' || input.peerHealth.level === 'recovering') &&
           !input.peerHealth.freshLocalMediaConfirmed
         ) {
-          this._transition(
-            'transportDegraded',
-            nowMs,
-            `peer-health:${input.peerHealth.level}`
-          );
+          this._transition('transportDegraded', nowMs, `peer-health:${input.peerHealth.level}`);
           break;
         }
         if (
@@ -460,17 +437,11 @@ export class ReceivePolicyEngine {
 
       case 'transportDegraded': {
         if (sourceGone) {
-          this._transition(
-            'missingMedia',
-            nowMs,
-            'no-packets-transport-degraded'
-          );
+          this._transition('missingMedia', nowMs, 'no-packets-transport-degraded');
           break;
         }
         const enteredMs = this._stateData.enteredAtMs;
-        const hardExpiry =
-          this._stateData.hardExpiryMs ??
-          enteredMs + cfg.transportDegradedHardTtlMs;
+        const hardExpiry = this._stateData.hardExpiryMs ?? (enteredMs + cfg.transportDegradedHardTtlMs);
 
         // Hard TTL: even if evidence keeps being renewed, force exit.
         const hardTtlExpired = nowMs >= hardExpiry;
@@ -487,21 +458,11 @@ export class ReceivePolicyEngine {
             pcmBufferedMs < backlogDrainResumePcmCeiling &&
             opusBufferedMs >= effectiveTargetBufferMs * 0.5
           ) {
-            this._transition(
-              'backlogDrain',
-              nowMs,
-              hardTtlExpired
-                ? 'transport-degraded-hard-ttl'
-                : 'transport-evidence-expired-backlog'
-            );
+            this._transition('backlogDrain', nowMs,
+              hardTtlExpired ? 'transport-degraded-hard-ttl' : 'transport-evidence-expired-backlog');
           } else {
-            this._transition(
-              'steady',
-              nowMs,
-              hardTtlExpired
-                ? 'transport-degraded-hard-ttl'
-                : 'transport-evidence-expired'
-            );
+            this._transition('steady', nowMs,
+              hardTtlExpired ? 'transport-degraded-hard-ttl' : 'transport-evidence-expired');
           }
         }
         break;
@@ -518,11 +479,7 @@ export class ReceivePolicyEngine {
           input.peerHealth.level === 'degraded' &&
           !input.peerHealth.freshLocalMediaConfirmed
         ) {
-          this._transition(
-            'transportDegraded',
-            nowMs,
-            `peer-health-renewed:${input.peerHealth.level}`
-          );
+          this._transition('transportDegraded', nowMs, `peer-health-renewed:${input.peerHealth.level}`);
           break;
         }
         if (pcmBufferedMs >= backlogDrainExitPcmCeiling) {
@@ -542,11 +499,8 @@ export class ReceivePolicyEngine {
           opusBufferedMs < cfg.targetBufferMs * cfg.backlogDrainExitRatio &&
           pcmBufferedMs >= exitPcmFloor
         ) {
-          this._transition(
-            'steady',
-            nowMs,
-            `backlog-drained:opus=${opusBufferedMs.toFixed(0)}ms,pcm=${pcmBufferedMs.toFixed(0)}ms`
-          );
+          this._transition('steady', nowMs,
+            `backlog-drained:opus=${opusBufferedMs.toFixed(0)}ms,pcm=${pcmBufferedMs.toFixed(0)}ms`);
         }
         break;
       }
@@ -566,13 +520,8 @@ export class ReceivePolicyEngine {
           ) {
             this._transition('backlogDrain', nowMs, 'loss-recovered-backlog');
           } else {
-            this._transition(
-              'steady',
-              nowMs,
-              elapsed >= cfg.lossRecoveryTimeoutMs
-                ? 'loss-recovery-timeout'
-                : 'loss-recovered'
-            );
+            this._transition('steady', nowMs, elapsed >= cfg.lossRecoveryTimeoutMs
+              ? 'loss-recovery-timeout' : 'loss-recovered');
           }
         }
         break;
@@ -603,10 +552,9 @@ export class ReceivePolicyEngine {
     if (fromState === 'missingMedia' && to === 'coldStart') {
       this._armStartupWarmup(nowMs);
     }
-    const hardExpiry =
-      to === 'transportDegraded'
-        ? nowMs + this._config.transportDegradedHardTtlMs
-        : undefined;
+    const hardExpiry = to === 'transportDegraded'
+      ? nowMs + this._config.transportDegradedHardTtlMs
+      : undefined;
     this._state = to;
     this._stateData = { enteredAtMs: nowMs, hardExpiryMs: hardExpiry };
     this._lastTransition = {
@@ -641,13 +589,12 @@ export class ReceivePolicyEngine {
       case 'coldStart':
         return {
           state: 'coldStart',
-          maxDecodePerTick:
-            startupWarmup || steadyStateRecovery
-              ? Math.max(
-                  cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
-                  cfg.startupMaxDecodePerTick + startupDecodeBoost
-                )
-              : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: true,
           aggressiveDrain: false,
@@ -657,13 +604,12 @@ export class ReceivePolicyEngine {
       case 'steady':
         return {
           state: 'steady',
-          maxDecodePerTick:
-            startupWarmup || steadyStateRecovery
-              ? Math.max(
-                  cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
-                  cfg.startupMaxDecodePerTick + startupDecodeBoost
-                )
-              : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
@@ -673,15 +619,13 @@ export class ReceivePolicyEngine {
       case 'transportDegraded':
         return {
           state: 'transportDegraded',
-          maxDecodePerTick:
-            startupWarmup || steadyStateRecovery
-              ? Math.max(
-                  cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
-                  cfg.startupMaxDecodePerTick + startupDecodeBoost
-                )
-              : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
-          targetBufferMs:
-            effectiveTargetBufferMs + cfg.transportDegradedExtraBufferMs,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+          targetBufferMs: effectiveTargetBufferMs + cfg.transportDegradedExtraBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
           enableConcealment: true,
@@ -700,13 +644,12 @@ export class ReceivePolicyEngine {
       case 'lossRecovery':
         return {
           state: 'lossRecovery',
-          maxDecodePerTick:
-            startupWarmup || steadyStateRecovery
-              ? Math.max(
-                  cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
-                  cfg.startupMaxDecodePerTick + startupDecodeBoost
-                )
-              : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
@@ -800,7 +743,10 @@ export class ReceivePolicyEngine {
       );
     }
     return this._isStartupWarmupActive(nowMs)
-      ? Math.max(baseThreshold, this._config.startupPcmDeficitDrainThreshold)
+      ? Math.max(
+          baseThreshold,
+          this._config.startupPcmDeficitDrainThreshold
+        )
       : baseThreshold;
   }
 
@@ -815,7 +761,10 @@ export class ReceivePolicyEngine {
         )
       : this._config.pcmDeficitOpusMinRatio;
     return this._isStartupWarmupActive(nowMs)
-      ? Math.min(baseRatio, this._config.startupPcmDeficitOpusMinRatio)
+      ? Math.min(
+          baseRatio,
+          this._config.startupPcmDeficitOpusMinRatio
+        )
       : baseRatio;
   }
 
@@ -825,8 +774,7 @@ export class ReceivePolicyEngine {
   ): number {
     const baseFloor = Math.max(
       this._config.backlogDrainExitMinPcmMs,
-      this._config.targetBufferMs *
-        this._config.backlogDrainExitTargetFloorRatio
+      this._config.targetBufferMs * this._config.backlogDrainExitTargetFloorRatio
     );
     if (this._isSteadyStateRecoveryActive(nowMs)) {
       return Math.max(
@@ -843,14 +791,11 @@ export class ReceivePolicyEngine {
   }
 
   private _observeSteadyStateRecovery(input: PolicyTickInput): void {
-    const {
-      nowMs,
-      pcmBufferedMs,
-      lastPushAgeMs,
-      totalConcealmentFrames,
-      recentArrivalGapMs,
-    } = input;
-    if (this._state !== 'steady' || this._isStartupWarmupActive(nowMs)) {
+    const { nowMs, pcmBufferedMs, lastPushAgeMs, totalConcealmentFrames, recentArrivalGapMs } = input;
+    if (
+      this._state !== 'steady' ||
+      this._isStartupWarmupActive(nowMs)
+    ) {
       this._consecutiveThinPcmTicks = 0;
       this._lastObservedConcealmentFrames = totalConcealmentFrames;
       return;
@@ -865,8 +810,7 @@ export class ReceivePolicyEngine {
     );
     this._lastObservedConcealmentFrames = totalConcealmentFrames;
     const thinPcm =
-      pcmBufferedMs <=
-      Math.max(
+      pcmBufferedMs <= Math.max(
         multiSourceListener
           ? Math.max(
               this._config.steadyStateRecoveryLowPcmMs,
@@ -917,7 +861,9 @@ export class ReceivePolicyEngine {
       const lowPcmTicks = multiSourceListener
         ? this._config.multiSourceSteadyStateRecoveryLowPcmTicks
         : this._config.steadyStateRecoveryLowPcmTicks;
-      if (this._consecutiveThinPcmTicks >= lowPcmTicks) {
+      if (
+        this._consecutiveThinPcmTicks >= lowPcmTicks
+      ) {
         this._armSteadyStateRecovery(
           nowMs,
           this._effectiveSteadyStateRecoveryHoldMs(input)

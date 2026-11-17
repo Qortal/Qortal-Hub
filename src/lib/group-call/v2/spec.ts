@@ -293,10 +293,7 @@ export interface SendPressureRequest {
 export interface IDiagnosticsRecorder {
   recordStateTransition(
     transition: ReceiveStateTransition,
-    policyOutput?: Pick<
-      ReceivePolicyOutput,
-      'maxDecodePerTick' | 'targetBufferMs'
-    >
+    policyOutput?: Pick<ReceivePolicyOutput, 'maxDecodePerTick' | 'targetBufferMs'>
   ): void;
   recordTransportEvidence(evidence: TransportEvidence): void;
   recordPeerHealth(

@@ -5,8 +5,7 @@ import { GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES } from './groupCallAudioPr
  * Upper envelope for `effectivePlayoutMaxTargetMs` (ms). Must be >= max profile
  * `adaptiveSevereMaxTargetMs` so high-stability / severe ceilings are reachable.
  */
-export const GCALL_GLOBAL_PLAYOUT_CAP_MS =
-  GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES;
+export const GCALL_GLOBAL_PLAYOUT_CAP_MS = GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES;
 
 /** Temporary ceiling lift when micro-widen v1 detects rising inter-arrival variance (ms). */
 export const MICRO_WIDEN_CEILING_LIFT_MS = 50;
@@ -179,8 +178,7 @@ export function computeFeasibleSingleRemoteRecoveryTargetMaxMs(input: {
   }
   if (
     !Number.isFinite(input.currentAdaptiveMaxTargetMs) ||
-    input.currentAdaptiveMaxTargetMs <=
-      GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS
+    input.currentAdaptiveMaxTargetMs <= GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS
   ) {
     return null;
   }
@@ -223,8 +221,7 @@ export function computeFeasibleSingleRemoteRecoveryTargetMaxMs(input: {
       GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_UNDERTARGET_MIN &&
     input.avgPlayoutDeltaMs <=
       GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_DELTA_MAX_MS &&
-    reserveRatio <
-      GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_RESERVE_RATIO_MAX;
+    reserveRatio < GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_RESERVE_RATIO_MAX;
   if (!acuteMismatch && !strongCandidate && !heldCandidate) {
     return null;
   }
@@ -332,16 +329,14 @@ export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
     input.starvationSeverity === 'strong' &&
     input.playoutUnderTargetFraction >=
       GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_UNDERTARGET_MIN &&
-    input.avgPlayoutDeltaMs <=
-      GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_DELTA_MAX_MS &&
+    input.avgPlayoutDeltaMs <= GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_DELTA_MAX_MS &&
     reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_RESERVE_RATIO_MAX;
   const mildHeldCandidate =
     input.starvationSeverity === 'mild' &&
     (input.previousStarvationSeverity ?? 'none') !== 'none' &&
     input.playoutUnderTargetFraction >=
       GCALL_MULTI_SOURCE_FEASIBILITY_MILD_UNDERTARGET_MIN &&
-    input.avgPlayoutDeltaMs <=
-      GCALL_MULTI_SOURCE_FEASIBILITY_MILD_DELTA_MAX_MS &&
+    input.avgPlayoutDeltaMs <= GCALL_MULTI_SOURCE_FEASIBILITY_MILD_DELTA_MAX_MS &&
     reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_RESERVE_RATIO_MAX;
   const pressureMismatchCandidate =
     input.shouldTightenRecovery === true &&
@@ -361,18 +356,18 @@ export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
       ? GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_HEADROOM_MS
       : pressureMismatchCandidate
         ? GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_HEADROOM_MS
-        : GCALL_MULTI_SOURCE_FEASIBILITY_MILD_HEADROOM_MS;
-  const observedTargetCap = isolatedCandidate
-    ? Math.round(
-        observedTarget *
-          GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX
-      )
-    : pressureMismatchCandidate
+      : GCALL_MULTI_SOURCE_FEASIBILITY_MILD_HEADROOM_MS;
+  const observedTargetCap =
+    isolatedCandidate
       ? Math.round(
-          observedTarget *
-            GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_TARGET_RATIO_MAX
+          observedTarget * GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX
         )
-      : input.currentAdaptiveMaxTargetMs;
+      : pressureMismatchCandidate
+        ? Math.round(
+            observedTarget *
+              GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_TARGET_RATIO_MAX
+          )
+    : input.currentAdaptiveMaxTargetMs;
   const feasibleMaxMs = Math.max(
     GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS,
     Math.min(
@@ -402,8 +397,7 @@ export function computeUsableRecoveryTargetMaxMs(input: {
 }): number | null {
   if (
     input.adaptiveNetworkMode !== 'recovery' ||
-    input.currentAdaptiveMaxTargetMs <=
-      GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS ||
+    input.currentAdaptiveMaxTargetMs <= GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS ||
     input.recentSampleCount < 2 ||
     !Number.isFinite(input.recentAvgPcmBufferedMs) ||
     !Number.isFinite(input.recentPlayoutUnderTargetFraction) ||
@@ -413,9 +407,7 @@ export function computeUsableRecoveryTargetMaxMs(input: {
   }
 
   if (Math.max(1, input.activeSourceCount) === 1) {
-    if (
-      input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_SINGLE_PCM_MIN_MS
-    ) {
+    if (input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_SINGLE_PCM_MIN_MS) {
       return null;
     }
     if (
@@ -453,7 +445,8 @@ export function computeUsableRecoveryTargetMaxMs(input: {
 
   if (
     input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_PCM_MIN_MS ||
-    (input.starvationSeverity === 'none' && input.isolatedSource !== true)
+    input.starvationSeverity === 'none' &&
+    input.isolatedSource !== true
   ) {
     return null;
   }
@@ -515,7 +508,8 @@ export function effectivePlayoutMaxTargetMs(input: {
   const base = input.useSevereCeiling
     ? input.isolationCeilingSoftened
       ? input.profileAdaptiveMaxMs +
-        0.5 * (input.profileAdaptiveSevereMaxMs - input.profileAdaptiveMaxMs)
+        0.5 *
+          (input.profileAdaptiveSevereMaxMs - input.profileAdaptiveMaxMs)
       : input.profileAdaptiveSevereMaxMs
     : input.profileAdaptiveMaxMs;
   const extra = diminishingPlayoutExtraMs(input.activeSourceCount);
@@ -574,14 +568,8 @@ export function pickSecondIsolationCandidate(
 ): string | null {
   if (!primary || sources.length < 2) return null;
   const sorted = [...sources].sort((a, b) => {
-    const aObservedTarget = Math.max(
-      1,
-      a.adaptiveTargetMedianMs || a.adaptiveTargetMaxMs || 1
-    );
-    const bObservedTarget = Math.max(
-      1,
-      b.adaptiveTargetMedianMs || b.adaptiveTargetMaxMs || 1
-    );
+    const aObservedTarget = Math.max(1, a.adaptiveTargetMedianMs || a.adaptiveTargetMaxMs || 1);
+    const bObservedTarget = Math.max(1, b.adaptiveTargetMedianMs || b.adaptiveTargetMaxMs || 1);
     const aReserveRatio = a.avgOpusBufferedMs / aObservedTarget;
     const bReserveRatio = b.avgOpusBufferedMs / bObservedTarget;
     const aBadness =

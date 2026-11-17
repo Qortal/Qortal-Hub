@@ -62,14 +62,7 @@ describe('audioPacketCodec', () => {
   it('v1 encode decodes via decodeAudioPacket', () => {
     const key = randomKey();
     const opus = new Uint8Array([9, 8, 7]);
-    const pkt = encodeAudioPacketV1(
-      'Qlegacy',
-      true,
-      0x00ff,
-      0xdeadbeef,
-      opus,
-      key
-    );
+    const pkt = encodeAudioPacketV1('Qlegacy', true, 0x00ff, 0xdeadbeef, opus, key);
     const dec = decodeAudioPacket(pkt, key);
     expect(dec).not.toBeNull();
     expect(dec!.sourceAddr).toBe('Qlegacy');
@@ -80,14 +73,7 @@ describe('audioPacketCodec', () => {
 
   it('v1 packet is decoded when v2 attempt fails', () => {
     const key = randomKey();
-    const pkt = encodeAudioPacketV1(
-      'Qonlyv1',
-      false,
-      3,
-      4,
-      new Uint8Array([5]),
-      key
-    );
+    const pkt = encodeAudioPacketV1('Qonlyv1', false, 3, 4, new Uint8Array([5]), key);
     expect(decodeAudioPacket(pkt, key)?.sourceAddr).toBe('Qonlyv1');
   });
 
@@ -104,14 +90,7 @@ describe('audioPacketCodec', () => {
     const addr = 'QtestAddress123456789012345678901';
     const f0 = new Uint8Array([0x80, 1]);
     const f1 = new Uint8Array([0x81, 2, 3]);
-    const pkt = encodeAudioPacketV3(
-      addr,
-      true,
-      0xff00,
-      0x11223344,
-      [f0, f1],
-      key
-    );
+    const pkt = encodeAudioPacketV3(addr, true, 0xff00, 0x11223344, [f0, f1], key);
     const list = decodeAudioPackets(pkt, key);
     expect(list).toHaveLength(2);
     expect(list[0]!.sourceAddr).toBe(addr);

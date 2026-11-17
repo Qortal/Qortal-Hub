@@ -23,7 +23,9 @@ export const getSharedEarbumpTrackSnapshot = () => sharedEarbumpTrackSnapshot;
 
 export const getSharedEarbumpActivity = () => sharedEarbumpActivityActive;
 
-export const setSharedEarbumpTrackSnapshot = (track: EarbumpTrack | null) => {
+export const setSharedEarbumpTrackSnapshot = (
+  track: EarbumpTrack | null
+) => {
   sharedEarbumpTrackSnapshot = track ? { ...track } : null;
 };
 

@@ -213,7 +213,10 @@ export function shouldOfferGroupRtcTransport(
     : role !== 'root-forwarder' && role !== 'cluster-forwarder';
 }
 
-export type GroupRtcTopologyEdgeTransition = 'preserve' | 'remove' | 'restart';
+export type GroupRtcTopologyEdgeTransition =
+  | 'preserve'
+  | 'remove'
+  | 'restart';
 
 /**
  * Reconcile one existing WebRTC edge across a topology update. Open channels

@@ -1,14 +1,15 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { infoSnackGlobalAtom, openSnackGlobalAtom } from '../atoms/global';
+import {
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+} from '../atoms/global';
 import type { GroupCallControllerApi } from '../lib/group-call/audioEngineTypes';
 
 export type GroupCallContextValue = GroupCallControllerApi;
 
-export const GroupCallContext = createContext<GroupCallContextValue | null>(
-  null
-);
+export const GroupCallContext = createContext<GroupCallContextValue | null>(null);
 
 export function useGroupCallContext(): GroupCallContextValue {
   const ctx = useContext(GroupCallContext);
@@ -32,12 +33,13 @@ export function GroupCallJoinErrorNotifier() {
   useEffect(() => {
     if (!gcallJoinError) return;
     const groupCallFullMatch = /^group_call_full:(\d+)$/.exec(gcallJoinError);
-    const message = groupCallFullMatch
-      ? t('core:group_call_full', {
-          max: groupCallFullMatch[1],
-          postProcess: 'capitalizeFirstChar',
-        })
-      : gcallJoinError === 'members_fetch_failed'
+    const message =
+      groupCallFullMatch
+        ? t('core:group_call_full', {
+            max: groupCallFullMatch[1],
+            postProcess: 'capitalizeFirstChar',
+          })
+        : gcallJoinError === 'members_fetch_failed'
         ? t('core:group_call_members_fetch_failed', {
             postProcess: 'capitalizeFirstChar',
           })
@@ -63,16 +65,16 @@ export function GroupCallJoinErrorNotifier() {
                   ? t('core:group_call_members_fetch_failed', {
                       postProcess: 'capitalizeFirstChar',
                     })
-                  : gcallJoinError === 'join_sign_failed' ||
-                      gcallJoinError === 'groupcall_api_missing' ||
-                      gcallJoinError === 'missing-user'
-                    ? t('core:group_call_join_sign_or_setup_failed', {
-                        postProcess: 'capitalizeFirstChar',
-                      })
-                    : t('core:group_call_join_failed_generic', {
-                        code: gcallJoinError,
-                        postProcess: 'capitalizeFirstChar',
-                      });
+                : gcallJoinError === 'join_sign_failed' ||
+                    gcallJoinError === 'groupcall_api_missing' ||
+                    gcallJoinError === 'missing-user'
+                  ? t('core:group_call_join_sign_or_setup_failed', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('core:group_call_join_failed_generic', {
+                      code: gcallJoinError,
+                      postProcess: 'capitalizeFirstChar',
+                    });
     setInfoSnack({ type: 'error', message });
     setOpenSnack(true);
     clearGcallJoinError();

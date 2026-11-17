@@ -187,7 +187,7 @@ import {
   type ReticulumChatHistoryReadOptions,
 } from './reticulum-chat';
 import { startCallManager, stopCallManager, getCallManager } from './call';
-import type { CallInitiateFailure, DmCallLinkControlPayload } from './call';
+import type { DmCallLinkControlPayload } from './call';
 import {
   startGroupCallManager,
   stopGroupCallManager,
@@ -2047,29 +2047,6 @@ export interface AppSettings {
   /** Contribute this device as an anonymously advertised community STUN server. */
   communityStunContributionEnabled?: boolean;
   /**
-   * P-5: user-defined ICE servers, tried ahead of the community STUN pool.
-   * Each entry needs at least one `stun:`/`turns:` URL; credentials are
-   * optional and only used for TURN.
-   */
-  callCustomIceServers?: Array<{
-    urls: string | string[];
-    username?: string;
-    credential?: string;
-  }>;
-  /** P-5: force `iceTransportPolicy: 'relay'` (all media through TURN). */
-  callIceRelayOnly?: boolean;
-  /**
-   * X-2: ask the election not to make this device a forwarder when another
-   * eligible peer exists. Default false. Carried as an unsigned `fwd: 0` hint
-   * on the join wire so peers on the previous protocol still verify it.
-   */
-  callDontForward?: boolean;
-  /**
-   * P-4: "Private calls (Reticulum only)". When true, no WebRTC capability is
-   * advertised or acknowledged and no RTC signal is sent, so a call shares no
-   * IP address with the peer. Default false.
-   */
-  callReticulumOnly?: boolean;
   /** When false, skip UPnP for Reticulum hub mesh TCP listen port (default true). */
   reticulumMeshUpnpEnabled?: boolean;
   /** When false, do not write/regenerate Qortal Hub's managed Reticulum config. */
@@ -2094,10 +2071,6 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   // through UPnP and publishes the router's public IP to the mesh, so a fresh
   // install must not do that without consent.
   communityStunContributionEnabled: false,
-  callReticulumOnly: false,
-  callDontForward: false,
-  callCustomIceServers: [],
-  callIceRelayOnly: false,
   reticulumMeshUpnpEnabled: true,
   reticulumManagedConfigEnabled: true,
   reticulumTransportEnabled: false,
@@ -2140,16 +2113,6 @@ export async function readAppSettings(): Promise<AppSettings> {
       // anyone who never touched the setting stay off.
       communityStunContributionEnabled:
         parsed.communityStunContributionEnabled === true,
-      callReticulumOnly: parsed.callReticulumOnly === true,
-      callDontForward: parsed.callDontForward === true,
-      callCustomIceServers: Array.isArray(parsed.callCustomIceServers)
-        ? parsed.callCustomIceServers.filter(
-            (server) =>
-              server &&
-              (typeof server.urls === 'string' || Array.isArray(server.urls))
-          )
-        : [],
-      callIceRelayOnly: parsed.callIceRelayOnly === true,
       reticulumMeshUpnpEnabled:
         parsed.reticulumMeshUpnpEnabled === false ? false : true,
       reticulumManagedConfigEnabled:
@@ -2201,11 +2164,6 @@ async function notifyAppSettingsChanged(settings: AppSettings): Promise<void> {
   stunCoordinator?.setContributionEnabled(
     settings.communityStunContributionEnabled === true
   );
-  // P-5: user-defined ICE servers and relay-only policy.
-  stunCoordinator?.setCustomIceConfiguration({
-    servers: settings.callCustomIceServers ?? [],
-    relayOnly: settings.callIceRelayOnly === true,
-  });
   lastObservedAppSettingsJson = JSON.stringify(settings);
   for (const window of BrowserWindow.getAllWindows()) {
     sendToRenderer(window.webContents, 'appSettings:changed', settings);
@@ -2362,27 +2320,6 @@ ipcMain.handle('hub:getIceServers', async () => {
       }
     });
   });
-});
-
-/**
- * P-5: the ICE transport policy the renderer must apply to every
- * `RTCPeerConnection`. Without this the relay-only toggle in settings is
- * persisted and read but never reaches a peer connection, so it does nothing.
- */
-ipcMain.handle('hub:getIceTransportPolicy', async () => {
-  const c = getStunCoordinator();
-  if (!c) return 'all';
-  return c.getIceTransportPolicy();
-});
-
-/**
- * X-5: the periodic `group_audio_queue_state` payload is slim. This fetches the
- * complete diagnostics block on explicit request, for a support report.
- */
-ipcMain.handle('hub:getFullAudioQueueDiagnostics', async () => {
-  const bridge = getReticulumBridge();
-  if (!bridge) return null;
-  return await bridge.getFullAudioQueueDiagnostics();
 });
 
 ipcMain.handle(
@@ -7551,8 +7488,6 @@ export function attachCallListeners(
     broadcastToSet(callSubscribers, channel, payload);
 
   manager.on('call:incoming', forward('call:incoming'));
-  // X-3: optional ringing acknowledgement from the callee.
-  manager.on('call:ringing', forward('call:ringing'));
   manager.on('call:accepted', forward('call:accepted'));
   manager.on('call:rejected', forward('call:rejected'));
   manager.on('call:hangup', forward('call:hangup'));
@@ -7581,9 +7516,6 @@ ipcMain.handle(
   ) => {
     const mgr = getCallManager();
     if (!mgr) return { success: false, error: 'Call manager not running' };
-    // X-4: carry why the call could not start, so the renderer can say
-    // "may be asleep" instead of showing a raw English reason code.
-    const failure: CallInitiateFailure = {};
     const resultCallId = await mgr.initiateCall(
       targetAddress,
       chatId,
@@ -7594,15 +7526,11 @@ ipcMain.handle(
       timestamp,
       cancellationSignature,
       cancellationPublicKey,
-      cancellationTimestamp,
-      failure
+      cancellationTimestamp
     );
-    if (resultCallId) return { success: true, callId: resultCallId };
-    return {
-      success: false,
-      error: 'Target offline',
-      reason: failure.reason === 'no_route' ? 'no_route' : 'lapsed_presence',
-    };
+    return resultCallId
+      ? { success: true, callId: resultCallId }
+      : { success: false, error: 'Target offline' };
   }
 );
 
@@ -7613,18 +7541,11 @@ ipcMain.handle(
     callId: string,
     signature: string,
     publicKey: string,
-    timestamp: number,
-    answeredElsewhereSignature?: string
+    timestamp: number
   ) => {
     const mgr = getCallManager();
     if (!mgr) return { success: false, error: 'Call manager not running' };
-    return mgr.acceptCall(
-      callId,
-      signature,
-      publicKey,
-      timestamp,
-      answeredElsewhereSignature
-    )
+    return mgr.acceptCall(callId, signature, publicKey, timestamp)
       ? { success: true }
       : { success: false, error: 'Call is no longer ringing' };
   }
@@ -7673,25 +7594,6 @@ ipcMain.handle(
 
 // B-14: the outbound `call:rtc-signal` IPC handler is removed. Nothing in the
 // renderer invoked it; DM WebRTC signalling uses `gcall:sendRtcSignal`.
-
-// X-3: optional ringing acknowledgement. Best-effort; the renderer ignores
-// failures so a lost frame never affects the call.
-ipcMain.handle(
-  'call:ringing',
-  async (
-    _event,
-    callId: string,
-    signature: string,
-    publicKey: string,
-    timestamp: number
-  ) => {
-    const mgr = getCallManager();
-    if (!mgr) return { success: false, error: 'Call manager not running' };
-    return {
-      success: mgr.sendCallRinging(callId, signature, publicKey, timestamp),
-    };
-  }
-);
 
 ipcMain.handle(
   'call:setLocalAddresses',
@@ -7879,7 +7781,6 @@ ipcMain.handle(
       takeover,
       dmVoicePeerDestinationHash,
       dmVoiceCallId,
-      noForwarderHint,
     ] = args;
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
@@ -7931,8 +7832,7 @@ ipcMain.handle(
         takeover,
         selectedDmVoicePeerDestinationHash,
         Boolean(authenticatedMediaDestination),
-        authenticatedMediaDestination ? dmVoiceCallId : undefined,
-        noForwarderHint === true
+        authenticatedMediaDestination ? dmVoiceCallId : undefined
       );
       return {
         success: true,

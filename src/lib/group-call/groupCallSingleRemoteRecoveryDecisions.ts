@@ -322,8 +322,7 @@ function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
     Number.isFinite(opts.lastRecvAgeMs) &&
     opts.lastRecvAgeMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS;
   const noHardRemoteFailure =
-    opts.missingFrames <=
-      GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
+    opts.missingFrames <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
     opts.packetsDroppedPendingDecrypt <= 0 &&
     opts.reticulumAudioStaleDrops <= 0 &&
     opts.reticulumAudioPacketSendFailures <= 0 &&
@@ -422,8 +421,7 @@ function shouldKeepSingleRemoteSevereRebuildDeadzoneLocal(opts: {
     opts.activeSourceCount === 1 &&
     freshLive &&
     !hardRemoteFailure &&
-    opts.missingFrames <=
-      GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
+    opts.missingFrames <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
     thinJitter &&
     opts.avgPcmBufferedMs <= GCALL_N1_SEVERE_REBUILD_DEADZONE_PCM_MAX_MS &&
     opts.playoutUnderTargetFraction >=

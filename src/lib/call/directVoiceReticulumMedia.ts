@@ -13,16 +13,13 @@ import {
   DM_VOICE_ROOM_PREFIX,
 } from './dmVoiceWire';
 import { buildMediaKeyCommitmentHex } from '../group-call/mediaKeyCommitment';
-import { CALL_PROTOCOL_VERSION } from '../group-call/callProtocolVersion';
 
 export { DM_VOICE_ROOM_PREFIX };
 
 /** Hex chars from SHA-256 kept in `buildDmVoiceRoomId` (wire-size bound; full hash is 64 hex). */
 export const DM_VOICE_ROOM_ID_DIGEST_HEX_LEN = 18;
 
-export async function buildDmVoiceRoomId(
-  directChatId: string
-): Promise<string> {
+export async function buildDmVoiceRoomId(directChatId: string): Promise<string> {
   const digest = await sha256Hex(directChatId);
   return `${DM_VOICE_ROOM_PREFIX}${digest.slice(0, DM_VOICE_ROOM_ID_DIGEST_HEX_LEN)}`;
 }
@@ -53,9 +50,7 @@ export async function buildGcKeyDigest(
 }
 
 /** Local hub Reticulum destination hash (32 hex) from bridge; required for GC_JOIN. */
-export async function fetchLocalReticulumDestinationHash(): Promise<
-  string | null
-> {
+export async function fetchLocalReticulumDestinationHash(): Promise<string | null> {
   const fn = (
     window as Window & {
       electronAPI?: {
@@ -201,10 +196,7 @@ export async function signGcJoin(params: {
     fromPublicKey: params.fromPublicKey,
     timestamp: params.timestamp,
     reticulumDestinationHash: params.reticulumDestinationHash,
-    protocolVersion: CALL_PROTOCOL_VERSION,
-    ...(typeof jg === 'number' && Number.isFinite(jg)
-      ? { joinGeneration: jg }
-      : {}),
+    ...(typeof jg === 'number' && Number.isFinite(jg) ? { joinGeneration: jg } : {}),
   }).catch(() => '');
   if (!joinSig) return null;
   if (!params.reticulumIdentityPublicKeyBase64) {
@@ -221,11 +213,8 @@ export async function signGcJoin(params: {
     fromPublicKey: params.fromPublicKey,
     timestamp: params.timestamp,
     reticulumDestinationHash: params.reticulumDestinationHash,
-    protocolVersion: CALL_PROTOCOL_VERSION,
     reticulumIdentityPublicKeyBase64: rkForSign,
-    ...(typeof jg === 'number' && Number.isFinite(jg)
-      ? { joinGeneration: jg }
-      : {}),
+    ...(typeof jg === 'number' && Number.isFinite(jg) ? { joinGeneration: jg } : {}),
   }).catch(() => '');
   if (!joinRkSig) return null;
   return { joinSig, joinRkSig };

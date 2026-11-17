@@ -151,11 +151,6 @@ import {
   resolveAutoLockTimeoutMinutes,
   type AutoLockTimeoutMinutes,
 } from './lib/autoLock';
-import {
-  setCallDontForward,
-  setCallReticulumOnly,
-} from './lib/call/callNetworkPreference';
-
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
 
@@ -304,14 +299,8 @@ function App() {
       disableAutoLockOnIdle?: boolean;
       reticulumEnabled?: boolean;
       reticulumChatEnabled?: boolean;
-      callReticulumOnly?: boolean;
-      callDontForward?: boolean;
     }) => {
       if (cancelled) return;
-      // P-4: keep the runtime call-network preference in sync with settings.
-      setCallReticulumOnly(settings?.callReticulumOnly === true);
-      // X-2: mirror the forwarder preference for the audio-surface runtime.
-      setCallDontForward(settings?.callDontForward === true);
       setReticulumEnabled(settings?.reticulumEnabled !== false);
       setReticulumChatEnabled(settings?.reticulumChatEnabled !== false);
       setAutoLockTimeoutMinutes(

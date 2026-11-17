@@ -82,9 +82,7 @@ export function getDirectVoiceUiLogsSnapshot(): readonly DirectVoiceUiLogEntry[]
   return entries;
 }
 
-export function subscribeDirectVoiceUiLogs(
-  onStoreChange: () => void
-): () => void {
+export function subscribeDirectVoiceUiLogs(onStoreChange: () => void): () => void {
   listeners.add(onStoreChange);
   return () => {
     listeners.delete(onStoreChange);

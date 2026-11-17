@@ -202,9 +202,14 @@ describe('tickOpusSendPressureController', () => {
     const state = createOpusSendPressureControllerState();
     let now = 1000;
     for (let i = 0; i < 24; i++) {
-      tickOpusSendPressureController(state, tiers, tick, (now += tick), true, {
-        maxTierIndex: 2,
-      });
+      tickOpusSendPressureController(
+        state,
+        tiers,
+        tick,
+        (now += tick),
+        true,
+        { maxTierIndex: 2 }
+      );
     }
     expect(state.tierIndex).toBe(2);
   });

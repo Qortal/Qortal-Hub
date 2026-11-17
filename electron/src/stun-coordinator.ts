@@ -38,6 +38,7 @@ const PROBE_TICK_MS = 2_000;
 // call setup a cache hit in the normal case while retaining an on-demand
 // refresh when the app starts before any contributor has answered.
 const DISCOVERY_REFRESH_INTERVAL_MS = 4 * 60_000;
+const DISCOVERY_REQUEST_MIN_INTERVAL_MS = 5_000;
 // A discovery announce is intentionally best-effort. Keep previously verified
 // endpoints warm independently so one missed announce after restart cannot
 // leave calls with an empty ICE pool.
@@ -46,16 +47,8 @@ const CACHED_REPROBE_REQUEST_MIN_INTERVAL_MS = 60_000;
 const CACHED_REPROBE_MAX_SUCCESS_AGE_MS = 24 * 60 * 60_000;
 const CACHED_REPROBE_QUEUE_TTL_MS = 30_000;
 const CACHED_REPROBE_CAP = ICE_STUN_SERVER_CAP;
-// B-15: RNS transport nodes rate-limit announces per destination (default
-// `announce_rate_target = 3600`s), so a 2-minute advertise cadence gets six
-// announces through and then nothing for the rest of the hour. Advertise once
-// an hour with a lease comfortably under the 1-hour ceiling receivers enforce
-// (they drop adverts whose expiry is more than 1h ahead of their clock).
-const ADVERTISE_INTERVAL_MS = 60 * 60_000;
-const ADVERTISE_TTL_MS = 48 * 60_000;
-// B-15: discovery query announces share the same per-destination budget, so
-// they are throttled well below the transport-node target.
-const DISCOVERY_REQUEST_MIN_INTERVAL_MS = 10 * 60_000;
+const ADVERTISE_INTERVAL_MS = 2 * 60_000;
+const ADVERTISE_TTL_MS = 10 * 60_000;
 const MAPPING_MAINTENANCE_INTERVAL_MS = 60_000;
 const MAPPING_REFRESH_FAILURE_THRESHOLD = 2;
 const CONTRIBUTION_RETRY_BASE_MS = 30_000;
@@ -132,12 +125,8 @@ export class StunCoordinator {
   private activeProbes = 0;
   private probeGeneration = 0;
   private running = false;
-  private lastServedIceServers: RTCIceServer[] = [];
+  private lastServedIceServers: { urls: string }[] = [];
   private lastLoggedIceUrlsKey: string | null = null;
-  /** P-5: user-defined STUN/TURN servers from app settings. */
-  private customIceServers: RTCIceServer[] = [];
-  /** P-5: force relay-only ICE (`iceTransportPolicy: 'relay'`). */
-  private relayOnly = false;
   private lastDiscoveryRequestAt = 0;
   private lastCachedReprobeAt = 0;
   private readonly onDiscoveredEndpoint = (payload: CommunityStunEndpoint) => {
@@ -251,51 +240,11 @@ export class StunCoordinator {
     if (this.publicHost) void this.advertiseContribution();
   }
 
-  /**
-   * P-5: user-defined STUN/TURN servers, and an optional relay-only policy.
-   * Set from app settings; user servers are merged ahead of the community pool
-   * because the user picked them deliberately.
-   */
-  setCustomIceConfiguration(config: {
-    servers?: Array<{
-      urls?: string | string[];
-      username?: string;
-      credential?: string;
-    }>;
-    relayOnly?: boolean;
-  }): void {
-    this.customIceServers = (config.servers ?? [])
-      .filter((server) => {
-        const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-        return urls.some(
-          (url) =>
-            typeof url === 'string' &&
-            /^(stun|stuns|turn|turns):/i.test(url.trim())
-        );
-      })
-      .map((server) => ({
-        urls: server.urls as string | string[],
-        ...(server.username ? { username: server.username } : {}),
-        ...(server.credential ? { credential: server.credential } : {}),
-      }));
-    this.relayOnly = config.relayOnly === true;
-  }
-
-  /** P-5: the ICE transport policy the renderer should apply. */
-  getIceTransportPolicy(): RTCIceTransportPolicy {
-    return this.relayOnly ? 'relay' : 'all';
-  }
-
-  /**
-   * P-5: `RTCIceServer`, not `{ urls: string }`. TURN auth needs `username`
-   * and `credential` to survive this call — a narrowed type here would let a
-   * future consumer drop them silently and TURN would fail at runtime.
-   */
-  getIceServersForRenderer(): RTCIceServer[] {
+  getIceServersForRenderer(): { urls: string }[] {
     if (!this.running) return [];
-    let out: RTCIceServer[] = [];
+    let out: { urls: string }[] = [];
     try {
-      out = this.cache.selectTopIceServers(ICE_STUN_SERVER_CAP) as RTCIceServer[];
+      out = this.cache.selectTopIceServers(ICE_STUN_SERVER_CAP);
     } catch {
       out = [];
     }
@@ -308,8 +257,6 @@ export class StunCoordinator {
     if (out.length === 0) {
       this.queueCachedReprobes(CACHED_REPROBE_REQUEST_MIN_INTERVAL_MS);
     }
-    // P-5: user servers come first — the user chose them deliberately.
-    out = [...this.customIceServers, ...out];
     this.lastServedIceServers = out.map((server) => ({ ...server }));
     const urlsKey = out.map((server) => server.urls).join('|');
     if (urlsKey !== this.lastLoggedIceUrlsKey) {
@@ -322,7 +269,7 @@ export class StunCoordinator {
     return out;
   }
 
-  peekLastServedIceServers(): RTCIceServer[] {
+  peekLastServedIceServers(): { urls: string }[] {
     if (!this.running) return [];
     return this.lastServedIceServers.map((server) => ({ ...server }));
   }

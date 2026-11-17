@@ -42,7 +42,10 @@ export function createGcallJitterBufferForIngress(opts: {
       : getEffectiveJitterTuning(opts.tuning, 'low-latency');
   const jb = new JitterBuffer(opts.extraHoldFrames, effective);
   jb.setSoftUnprimeMs(
-    computeSoftUnprimeMsForTier2(opts.activeSourceCount, mode === 'recovery')
+    computeSoftUnprimeMsForTier2(
+      opts.activeSourceCount,
+      mode === 'recovery'
+    )
   );
   if (opts.applySteadyPrimedHoldNow) {
     const n = Math.max(0, Math.floor(opts.activeSourceCount));

@@ -12,25 +12,15 @@ export function compareGroupCallElectionDigests(
 }
 
 /**
- * Deterministic SHA-256 hex of `address:roomId[:callSessionId]` (UTF-8).
- * Matches `crypto.createHash('sha256').update(s, 'utf8').digest('hex')` in the
- * main process (`group-call` chooseMainTopologyAuthority) so renderer and
- * Electron agree.
- *
- * P-7: when `callSessionId` is supplied it acts as an unpredictable per-call
- * salt, so an attacker can no longer grind an address offline to win the fixed
- * `sha256(address + ':' + roomId)` election. Callers on CALL_PROTOCOL_VERSION
- * >= 2 must always pass it; omitting it keeps the legacy digest for old peers.
+ * Deterministic SHA-256 hex of `address:roomId` (UTF-8). Matches
+ * `crypto.createHash('sha256').update(s, 'utf8').digest('hex')` in the main process
+ * (`group-call` chooseMainTopologyAuthority) so renderer and Electron agree.
  */
 export function syncRootElectionDigestHex(
   rootAddress: string,
-  roomId: string,
-  callSessionId?: string
+  roomId: string
 ): string {
-  const salt = callSessionId?.trim() ?? '';
-  const input = salt
-    ? `${rootAddress.trim()}:${roomId.trim()}:${salt}`
-    : `${rootAddress.trim()}:${roomId.trim()}`;
+  const input = `${rootAddress.trim()}:${roomId.trim()}`;
   const shaObj = new jsSHA('SHA-256', 'TEXT', { encoding: 'UTF8' });
   shaObj.update(input);
   return shaObj.getHash('HEX');

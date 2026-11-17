@@ -54,8 +54,7 @@ export function initLibsodiumSecretBoxProvider(): Promise<SecretBoxProvider> {
   if (cachedProvider) return Promise.resolve(cachedProvider);
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const sodium =
-      (sodiumImport as unknown as { default?: LibsodiumModule }).default ??
+    const sodium = (sodiumImport as unknown as { default?: LibsodiumModule }).default ??
       (sodiumImport as unknown as LibsodiumModule);
     await sodium.ready;
     cachedProvider = buildProvider(sodium);

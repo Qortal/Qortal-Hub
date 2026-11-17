@@ -439,10 +439,7 @@ describe('gcallPlayoutPolicy', () => {
   });
 
   it('micro-widen v1 eligible when variance rises vs baseline segment', () => {
-    const baselineSeg = Array.from(
-      { length: 15 },
-      (_, i) => 20 + (i % 3) * 0.2
-    );
+    const baselineSeg = Array.from({ length: 15 }, (_, i) => 20 + (i % 3) * 0.2);
     const currentSeg = Array.from({ length: 15 }, (_, i) => 20 + i * 1.5);
     const ring = [...baselineSeg, ...currentSeg];
     const r = computeMicroWidenExtraMsV1({

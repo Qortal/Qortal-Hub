@@ -125,14 +125,10 @@ export function applyGcallJitterBurstHeadroom(
 ): { jitterBufferSize: number; jitterStartBufferSize: number } {
   if (level <= 0) return tuning;
   const boostStartThreshold = opts?.boostStartThreshold ?? true;
-  const bufferBoost = level >= 3 ? 28 : level >= 2 ? 8 : 4;
-  const startBoost = boostStartThreshold
-    ? level >= 3
-      ? 8
-      : level >= 2
-        ? 4
-        : 2
-    : 0;
+  const bufferBoost =
+    level >= 3 ? 28 : level >= 2 ? 8 : 4;
+  const startBoost =
+    boostStartThreshold ? (level >= 3 ? 8 : level >= 2 ? 4 : 2) : 0;
   return {
     jitterBufferSize: tuning.jitterBufferSize + bufferBoost,
     jitterStartBufferSize: tuning.jitterStartBufferSize + startBoost,
@@ -188,9 +184,12 @@ export function stepGcallJitterBurstHeadroom(input: {
   const playoutStressed =
     underTarget >= GCALL_JITTER_BURST_HEADROOM_UNDERTARGET_MIN ||
     avgPlayoutRate < GCALL_JITTER_BURST_HEADROOM_PLAYOUT_RATE_MIN;
-  const nearCap = depthHighWater >= Math.max(1, maxDepthFrames - 1);
+  const nearCap =
+    depthHighWater >= Math.max(1, maxDepthFrames - 1);
   const nearCapPressureCount =
-    nearCap && playoutStressed ? safeState.nearCapPressureCount + 1 : 0;
+    nearCap && playoutStressed
+      ? safeState.nearCapPressureCount + 1
+      : 0;
   const directTrimPressure =
     trimCount >= GCALL_JITTER_BURST_HEADROOM_TRIM_TRIGGER ||
     (trimCount > 0 && nearCap);
@@ -203,7 +202,8 @@ export function stepGcallJitterBurstHeadroom(input: {
     const strongPressure =
       emergencyPressure ||
       trimCount >= GCALL_JITTER_BURST_HEADROOM_STRONG_TRIM_TRIGGER ||
-      nearCapPressureCount > GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
+      nearCapPressureCount >
+        GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
     const requestedLevel: GcallJitterBurstHeadroomLevel = strongPressure
       ? emergencyPressure
         ? 3
@@ -260,15 +260,11 @@ export function stepGcallJitterBurstHeadroom(input: {
       reason: null,
     };
   }
-  const nextLevel = Math.max(
-    0,
-    safeState.level - 1
-  ) as GcallJitterBurstHeadroomLevel;
+  const nextLevel = Math.max(0, safeState.level - 1) as GcallJitterBurstHeadroomLevel;
   return {
     state: {
       level: nextLevel,
-      holdUntilMs:
-        nextLevel > 0 ? nowMs + GCALL_JITTER_BURST_HEADROOM_HOLD_MS : 0,
+      holdUntilMs: nextLevel > 0 ? nowMs + GCALL_JITTER_BURST_HEADROOM_HOLD_MS : 0,
       calmSinceMs: nextLevel > 0 ? nowMs : null,
       nearCapPressureCount,
     },

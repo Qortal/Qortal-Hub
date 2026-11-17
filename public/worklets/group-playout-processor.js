@@ -86,10 +86,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._minimumPlayoutRate =
       typeof options.processorOptions?.minimumPlayoutRate === 'number' &&
       Number.isFinite(options.processorOptions.minimumPlayoutRate)
-        ? Math.max(
-            0.9,
-            Math.min(1, options.processorOptions.minimumPlayoutRate)
-          )
+        ? Math.max(0.9, Math.min(1, options.processorOptions.minimumPlayoutRate))
         : RATE_MIN;
 
     this._ring = new Float32Array(RING_CAPACITY);
@@ -136,8 +133,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
           ? new Int32Array(sharedRing.ingressTimestampBuffer)
           : null;
       this._sharedFrameSamples =
-        typeof sharedRing.frameSamples === 'number' &&
-        sharedRing.frameSamples > 0
+        typeof sharedRing.frameSamples === 'number' && sharedRing.frameSamples > 0
           ? sharedRing.frameSamples
           : 0;
       this._sharedIngressCapacityFrames =
@@ -146,8 +142,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
           ? sharedRing.ingressCapacityFrames
           : 0;
       this._sharedSampleCapacity =
-        typeof sharedRing.capacitySamples === 'number' &&
-        sharedRing.capacitySamples > 0
+        typeof sharedRing.capacitySamples === 'number' && sharedRing.capacitySamples > 0
           ? sharedRing.capacitySamples
           : this._sharedRing.length;
     }
@@ -245,9 +240,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
 
   _sampleAtRead() {
     if (this._getAvailableSamples() < 2) return 0;
-    const capacity = this._sharedRing
-      ? this._sharedSampleCapacity
-      : RING_CAPACITY;
+    const capacity = this._sharedRing ? this._sharedSampleCapacity : RING_CAPACITY;
     const ring = this._sharedRing ?? this._ring;
     const readPos = this._sharedState
       ? Atomics.load(this._sharedState, STATE_READ_HEAD)
@@ -261,8 +254,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
 
   _rememberTailSample(sample) {
     this._lastTail[this._lastTailWritePos] = sample;
-    this._lastTailWritePos =
-      (this._lastTailWritePos + 1) % this._lastTail.length;
+    this._lastTailWritePos = (this._lastTailWritePos + 1) % this._lastTail.length;
     if (this._lastTailLen < this._lastTail.length) {
       this._lastTailLen++;
     }
@@ -333,9 +325,8 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     }
     const readPos = Atomics.load(this._sharedState, STATE_READ_HEAD);
     const frameSlot =
-      Math.floor(
-        (readPos % this._sharedSampleCapacity) / this._sharedFrameSamples
-      ) % this._sharedIngressCapacityFrames;
+      Math.floor((readPos % this._sharedSampleCapacity) / this._sharedFrameSamples) %
+      this._sharedIngressCapacityFrames;
     const ingressAtMs = Atomics.load(this._sharedIngressTimestamps, frameSlot);
     if (ingressAtMs <= 0) return 0;
     const nowMs = Date.now();
@@ -354,10 +345,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       this._playoutStarted &&
       deltaMs >= UNDER_USABLE_DELTA_MIN_MS &&
       bufferedMs >=
-        Math.max(
-          UNDER_USABLE_BUFFER_MIN_MS,
-          this._targetPlayoutMs * UNDER_USABLE_TARGET_RATIO
-        );
+        Math.max(UNDER_USABLE_BUFFER_MIN_MS, this._targetPlayoutMs * UNDER_USABLE_TARGET_RATIO);
     if (deltaMs < UNDER_TIER_DEEP_MS) {
       return usableBufferRelaxed ? UNDER_RATE_DEEP_USABLE : UNDER_RATE_DEEP;
     }
@@ -365,9 +353,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       return usableBufferRelaxed ? UNDER_RATE_MID_USABLE : UNDER_RATE_MID;
     }
     if (deltaMs < UNDER_TIER_SHALLOW_MS) {
-      return usableBufferRelaxed
-        ? UNDER_RATE_SHALLOW_USABLE
-        : UNDER_RATE_SHALLOW;
+      return usableBufferRelaxed ? UNDER_RATE_SHALLOW_USABLE : UNDER_RATE_SHALLOW;
     }
     return 1;
   }
@@ -391,16 +377,14 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     }
 
     const panicMs =
-      sampleRateHz > 0 ? (this._panicSamplesInPanic / sampleRateHz) * 1000 : 0;
+      sampleRateHz > 0
+        ? (this._panicSamplesInPanic / sampleRateHz) * 1000
+        : 0;
     const tierUnder = this._underTierRate(deltaMs, bufferedMs);
 
     if (this._inPanic && this._playoutStarted) {
       if (panicMs < PANIC_DWELL_MS) {
-        return {
-          targetRate: PANIC_RATE,
-          inPanic: true,
-          panicZoneEntered: false,
-        };
+        return { targetRate: PANIC_RATE, inPanic: true, panicZoneEntered: false };
       }
       const t = Math.min(
         1,
@@ -411,25 +395,13 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     }
 
     if (deltaMs < UNDER_TIER_DEEP_MS) {
-      return {
-        targetRate: UNDER_RATE_DEEP,
-        inPanic: false,
-        panicZoneEntered: false,
-      };
+      return { targetRate: UNDER_RATE_DEEP, inPanic: false, panicZoneEntered: false };
     }
     if (deltaMs < UNDER_TIER_MID_MS) {
-      return {
-        targetRate: UNDER_RATE_MID,
-        inPanic: false,
-        panicZoneEntered: false,
-      };
+      return { targetRate: UNDER_RATE_MID, inPanic: false, panicZoneEntered: false };
     }
     if (deltaMs < UNDER_TIER_SHALLOW_MS) {
-      return {
-        targetRate: UNDER_RATE_SHALLOW,
-        inPanic: false,
-        panicZoneEntered: false,
-      };
+      return { targetRate: UNDER_RATE_SHALLOW, inPanic: false, panicZoneEntered: false };
     }
     if (deltaMs < UNDER_TIER_RECOVERING_MS) {
       return {
@@ -455,7 +427,10 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
         panicZoneEntered: false,
       };
     }
-    let errorMs = Math.max(-ERROR_CLAMP_MS, Math.min(ERROR_CLAMP_MS, deltaMs));
+    let errorMs = Math.max(
+      -ERROR_CLAMP_MS,
+      Math.min(ERROR_CLAMP_MS, deltaMs)
+    );
     if (Math.abs(errorMs) < DEADZONE_MS) errorMs = 0;
     const k = errorMs > 0 ? RATE_K_OVER : RATE_K_UNDER;
     const tr = 1 + Math.max(-0.01, Math.min(0.01, errorMs * k));
@@ -578,13 +553,13 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     if (this._metricsQuantumCount < METRICS_QUANTA) return;
     this._metricsQuantumCount = 0;
     const deltaMs = bufferedMs - this._targetPlayoutMs;
-    const outsideBandUnder = this._playoutStarted && deltaMs < -OUTSIDE_BAND_MS;
-    const outsideBandOver = this._playoutStarted && deltaMs > OUTSIDE_BAND_MS;
+    const outsideBandUnder =
+      this._playoutStarted && deltaMs < -OUTSIDE_BAND_MS;
+    const outsideBandOver =
+      this._playoutStarted && deltaMs > OUTSIDE_BAND_MS;
     const outside = outsideBandUnder || outsideBandOver;
     const panicZoneEntered = this._panicZoneEnteredPending;
-    const panicEntryBufferedMs = panicZoneEntered
-      ? this._panicEntryBufferedMs
-      : null;
+    const panicEntryBufferedMs = panicZoneEntered ? this._panicEntryBufferedMs : null;
     const oldestFrameAgeMs =
       typeof preProcessOldestFrameAgeMs === 'number' &&
       Number.isFinite(preProcessOldestFrameAgeMs) &&

@@ -59,11 +59,7 @@ describe('stepDecryptOverloadState', () => {
     );
     expect(s.active).toBe(true);
     expect(s.exitBelowSinceMs).toBe(1000);
-    s = stepDecryptOverloadState(
-      s,
-      PENDING_DECRYPT_OVERLOAD_EXIT - 1,
-      1000 + PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS
-    );
+    s = stepDecryptOverloadState(s, PENDING_DECRYPT_OVERLOAD_EXIT - 1, 1000 + PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS);
     expect(s.active).toBe(false);
   });
 });

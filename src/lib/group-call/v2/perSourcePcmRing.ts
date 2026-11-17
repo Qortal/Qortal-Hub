@@ -61,21 +61,17 @@ export class PerSourcePcmRing implements IPcmRing {
   private readonly _channels: number;
   private readonly _frameSamples: number;
 
-  constructor(
-    opts: {
-      sampleRateHz?: number;
-      channels?: number;
-      capacityMs?: number;
-    } = {}
-  ) {
+  constructor(opts: {
+    sampleRateHz?: number;
+    channels?: number;
+    capacityMs?: number;
+  } = {}) {
     this._sampleRate = opts.sampleRateHz ?? DEFAULT_SAMPLE_RATE;
     this._channels = opts.channels ?? 1;
     const capMs = opts.capacityMs ?? DEFAULT_CAPACITY_MS;
-    this._capacitySamples =
-      Math.ceil((capMs / 1000) * this._sampleRate) * this._channels;
+    this._capacitySamples = Math.ceil((capMs / 1000) * this._sampleRate) * this._channels;
     this._frameSamples =
-      Math.ceil((OPUS_FRAME_DURATION_MS / 1000) * this._sampleRate) *
-      this._channels;
+      Math.ceil((OPUS_FRAME_DURATION_MS / 1000) * this._sampleRate) * this._channels;
     this._ingressCapacityFrames = Math.max(
       1,
       Math.ceil(this._capacitySamples / this._frameSamples)
@@ -155,9 +151,8 @@ export class PerSourcePcmRing implements IPcmRing {
     for (let i = 0; i < frameCount; i++) {
       const sampleOffset = writeHeadBefore + i * this._frameSamples;
       const frameSlot =
-        Math.floor(
-          (sampleOffset % this._capacitySamples) / this._frameSamples
-        ) % this._ingressCapacityFrames;
+        Math.floor((sampleOffset % this._capacitySamples) / this._frameSamples) %
+        this._ingressCapacityFrames;
       Atomics.store(this._ingressTimestamps, frameSlot, ingressAtMs);
     }
   }
@@ -207,9 +202,8 @@ export class PerSourcePcmRing implements IPcmRing {
     for (let i = 0; i < frameCount; i++) {
       const sampleOffset = readHead + i * this._frameSamples;
       const frameSlot =
-        Math.floor(
-          (sampleOffset % this._capacitySamples) / this._frameSamples
-        ) % this._ingressCapacityFrames;
+        Math.floor((sampleOffset % this._capacitySamples) / this._frameSamples) %
+        this._ingressCapacityFrames;
       const ts = Atomics.load(this._ingressTimestamps, frameSlot);
       frameIngressAtMs.push(ts > 0 ? ts : null);
     }
@@ -226,9 +220,7 @@ export class PerSourcePcmRing implements IPcmRing {
 
   hasData(): boolean {
     // Must have at least one full 20ms Opus frame worth of samples.
-    const minSamples = Math.ceil(
-      (OPUS_FRAME_DURATION_MS / 1000) * this._sampleRate * this._channels
-    );
+    const minSamples = Math.ceil((OPUS_FRAME_DURATION_MS / 1000) * this._sampleRate * this._channels);
     return Atomics.load(this._state, STATE_FILLED_SAMPLES) >= minSamples;
   }
 
@@ -287,11 +279,7 @@ export class PerSourcePcmRing implements IPcmRing {
   }
 
   dropFramesOlderThan(maxAgeMs: number, nowMs: number): number {
-    if (
-      !Number.isFinite(maxAgeMs) ||
-      maxAgeMs <= 0 ||
-      !Number.isFinite(nowMs)
-    ) {
+    if (!Number.isFinite(maxAgeMs) || maxAgeMs <= 0 || !Number.isFinite(nowMs)) {
       return 0;
     }
     let dropped = 0;

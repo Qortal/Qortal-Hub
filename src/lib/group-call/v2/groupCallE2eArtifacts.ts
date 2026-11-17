@@ -132,10 +132,7 @@ function average(values: readonly number[]): number {
 function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.floor((sorted.length - 1) * p))
-  );
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * p)));
   return sorted[idx] ?? 0;
 }
 
@@ -174,10 +171,7 @@ function firstDegraded(
       firstDegradedStage: null,
     };
   }
-  candidates.sort(
-    (a, b) =>
-      a.firstIssueAtMs - b.firstIssueAtMs || a.addr.localeCompare(b.addr)
-  );
+  candidates.sort((a, b) => a.firstIssueAtMs - b.firstIssueAtMs || a.addr.localeCompare(b.addr));
   return {
     firstDegradedPeer: candidates[0]?.addr ?? fallbackAddr,
     firstDegradedStage: candidates[0]?.firstIssueStage ?? null,
@@ -260,9 +254,7 @@ export function buildGroupCallE2eArtifactBundle(
     `First degraded stage: \`${report.firstDegradedStage ?? 'unknown'}\``,
     ``,
     `## Likely Fix Surfaces`,
-    ...report.likelyFixSurfaces.map(
-      (surface) => `- \`${surface}\`: ${fixSurfaceHint(surface)}`
-    ),
+    ...report.likelyFixSurfaces.map((surface) => `- \`${surface}\`: ${fixSurfaceHint(surface)}`),
     ``,
     `## Peer Notes`,
     ...[report.peerA, report.peerB].flatMap((peer) => [
@@ -317,9 +309,7 @@ export function buildGroupCallE2eArtifactBundle(
   };
 }
 
-export function buildMinimalTimelineSummary(
-  metrics: PeerExportMetrics
-): GroupCallE2ePeerTimelineSummary {
+export function buildMinimalTimelineSummary(metrics: PeerExportMetrics): GroupCallE2ePeerTimelineSummary {
   const firstIssueStage: GroupCallE2eStage | null =
     metrics.tickBudgetBreachCount > 0
       ? 'playout'
@@ -366,8 +356,7 @@ export function buildMinimalTimelineSummary(
       avgDeltaMs: metrics.avgPlayoutDeltaMs,
       underTargetFraction: metrics.playoutUnderTargetFraction,
       outsideTargetFraction: metrics.playoutOutsideTargetFraction,
-      targetBufferMs:
-        metrics.avgTargetBufferMs || metrics.adaptiveTargetMedianMs,
+      targetBufferMs: metrics.avgTargetBufferMs || metrics.adaptiveTargetMedianMs,
     },
     perf: {
       tickBudgetBreachCount: metrics.tickBudgetBreachCount,

@@ -49,12 +49,8 @@ describe('getEffectiveJitterTuning', () => {
   it('uses single-remote intermediate floors when recovery and N===1', () => {
     const t = getGroupCallAudioTuning('low-latency');
     const e = getEffectiveJitterTuning(t, 'recovery', { activeSourceCount: 1 });
-    expect(e.jitterBufferSize).toBe(
-      GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE
-    );
-    expect(e.jitterStartBufferSize).toBe(
-      GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE
-    );
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE);
+    expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE);
   });
 });
 
@@ -73,9 +69,7 @@ describe('getEffectiveJitterTuning tier-2 (Phase D)', () => {
       tier2MultiSource: true,
       activeSourceCount: 2,
     });
-    expect(e.jitterBufferSize).toBe(
-      GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2
-    );
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2);
     expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN_TIER2);
   });
 

@@ -95,8 +95,6 @@ describe('pathQualityScore', () => {
       { lambdaEma: 0.25 }
     );
     expect(second.pathQualityScoreEmaV1).toBeGreaterThan(0);
-    expect(second.pathQualityScoreEmaV1).toBeLessThan(
-      first.pathQualityScoreEmaV1
-    );
+    expect(second.pathQualityScoreEmaV1).toBeLessThan(first.pathQualityScoreEmaV1);
   });
 });

@@ -14,8 +14,6 @@ export type GroupCallJoinIpcArguments = [
   takeover?: boolean,
   dmVoicePeerDestinationHash?: string,
   dmVoiceCallId?: string,
-  /** X-2: unsigned forwarder hint, appended last so no existing position moves. */
-  noForwarderHint?: boolean,
 ];
 
 type IpcInvoke = (channel: string, ...args: unknown[]) => Promise<unknown>;

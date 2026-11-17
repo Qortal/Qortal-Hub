@@ -18,10 +18,7 @@ export async function listAudioDevices(): Promise<CallAudioDeviceLists> {
 /** Ensure mic permission so enumerateDevices returns non-empty labels (best effort). */
 export async function ensureMicPermissionForLabels(): Promise<void> {
   try {
-    const s = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: false,
-    });
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     s.getTracks().forEach((t) => t.stop());
   } catch {
     /* user denied or no device — still enumerate without labels */
@@ -55,20 +52,14 @@ export async function getUserAudioStreamForCall(
 
   if (!useExactId) {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       return {
         stream,
         clearedStaleInputDevice: preferredDeviceId != null,
       };
     } catch (e) {
       console.error('[callAudio] getUserMedia (default) failed:', e);
-      return {
-        stream: null,
-        clearedStaleInputDevice: preferredDeviceId != null,
-      };
+      return { stream: null, clearedStaleInputDevice: preferredDeviceId != null };
     }
   }
 
@@ -79,20 +70,13 @@ export async function getUserAudioStreamForCall(
     });
     return { stream, clearedStaleInputDevice: false };
   } catch (e) {
-    const name =
-      e && typeof e === 'object' && 'name' in e ? (e as Error).name : '';
+    const name = e && typeof e === 'object' && 'name' in e ? (e as Error).name : '';
     if (name === 'OverconstrainedError' || name === 'NotFoundError') {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: false,
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         return { stream, clearedStaleInputDevice: true };
       } catch (e2) {
-        console.error(
-          '[callAudio] getUserMedia fallback after constraint error failed:',
-          e2
-        );
+        console.error('[callAudio] getUserMedia fallback after constraint error failed:', e2);
         return { stream: null, clearedStaleInputDevice: true };
       }
     }
@@ -133,8 +117,7 @@ export async function applyCallAudioOutput(
     audioContext?: AudioContext | null;
   }
 ): Promise<ApplyCallAudioOutputResult> {
-  const { sinkId, clearPersisted: staleId } =
-    await resolveOutputSinkId(outputDeviceId);
+  const { sinkId, clearPersisted: staleId } = await resolveOutputSinkId(outputDeviceId);
   let clearPersistedOutput = staleId;
 
   const ctxWithSink = (ctx: AudioContext) =>

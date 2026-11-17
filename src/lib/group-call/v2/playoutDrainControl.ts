@@ -75,7 +75,8 @@ export function decideFramesToPost(input: FramesToPostInput): number {
     input.staleReportGraceMs ?? DEFAULT_STALE_REPORT_GRACE_MS;
   const maxEmergencyFrames =
     input.maxEmergencyFrames ?? DEFAULT_MAX_EMERGENCY_FRAMES;
-  const maxDeficitFrames = input.maxDeficitFrames ?? DEFAULT_MAX_DEFICIT_FRAMES;
+  const maxDeficitFrames =
+    input.maxDeficitFrames ?? DEFAULT_MAX_DEFICIT_FRAMES;
   const reserveFloorRatio =
     input.reserveFloorRatio ?? DEFAULT_RESERVE_FLOOR_RATIO;
   const latencyDrainTriggerMs =
@@ -106,9 +107,7 @@ export function decideFramesToPost(input: FramesToPostInput): number {
       return lastReportedLow ? Math.min(2, maxDeficitFrames) : 1;
     }
     if ((staleOrMissingEstimate || input.ringJustRefilled) && upstreamHealthy) {
-      return (input.ringJustRefilled &&
-        upstreamAboveTarget &&
-        lastReportedLow) ||
+      return (input.ringJustRefilled && upstreamAboveTarget && lastReportedLow) ||
         (!input.ringJustRefilled && lastReportedLow)
         ? Math.min(2, maxDeficitFrames)
         : 1;
@@ -118,23 +117,16 @@ export function decideFramesToPost(input: FramesToPostInput): number {
       panicEnterMs - (estimatedMs ?? 0)
     );
     return clampFrames(
-      Math.ceil(
-        Math.max(OPUS_FRAME_DURATION_MS, deficitMs) / OPUS_FRAME_DURATION_MS
-      ),
+      Math.ceil(Math.max(OPUS_FRAME_DURATION_MS, deficitMs) / OPUS_FRAME_DURATION_MS),
       2,
       maxEmergencyFrames
     );
   }
 
   if (estimatedMs < panicExitMs) {
-    const deficitMs = Math.max(
-      targetMs - estimatedMs,
-      panicExitMs - estimatedMs
-    );
+    const deficitMs = Math.max(targetMs - estimatedMs, panicExitMs - estimatedMs);
     return clampFrames(
-      Math.ceil(
-        Math.max(OPUS_FRAME_DURATION_MS, deficitMs) / OPUS_FRAME_DURATION_MS
-      ),
+      Math.ceil(Math.max(OPUS_FRAME_DURATION_MS, deficitMs) / OPUS_FRAME_DURATION_MS),
       1,
       Math.min(2, maxDeficitFrames)
     );

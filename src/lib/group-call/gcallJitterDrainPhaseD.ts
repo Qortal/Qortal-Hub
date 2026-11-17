@@ -185,7 +185,10 @@ export function computeMultiSourceFairBurstCap(input: {
   const penalty = input.strictWeakLegProtection
     ? GCALL_MULTI_SOURCE_STRONG_SOURCE_STRICT_BURST_CAP_PENALTY
     : GCALL_MULTI_SOURCE_STRONG_SOURCE_BURST_CAP_PENALTY;
-  return Math.max(1, baseCap - penalty);
+  return Math.max(
+    1,
+    baseCap - penalty
+  );
 }
 
 export function starvationRecoveryBarSatisfied(input: {
@@ -219,8 +222,7 @@ export function isCollapsedForStarvation(input: {
   return (
     input.bufferedFrames < GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN ||
     input.opusBufferedMs <
-      input.adaptiveTargetMedianMs *
-        GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET
+      input.adaptiveTargetMedianMs * GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET
   );
 }
 
@@ -291,7 +293,10 @@ export function computePhaseDSourceBurstBonus(input: {
 
 export function computePerSourceCap(scaledBurstCap: number, n: number): number {
   const N = Math.max(1, n);
-  return Math.min(scaledBurstCap, Math.max(2, Math.ceil(scaledBurstCap / N)));
+  return Math.min(
+    scaledBurstCap,
+    Math.max(2, Math.ceil(scaledBurstCap / N))
+  );
 }
 
 export function computeGlobalDecodeBudget(

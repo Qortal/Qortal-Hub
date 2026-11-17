@@ -19,22 +19,14 @@ export async function writeGroupCallE2eArtifactBundle(
       `${JSON.stringify(bundle.report, null, 2)}\n`,
       'utf8'
     ),
-    writeFile(
-      path.join(dir, 'summary.md'),
-      `${bundle.summaryMarkdown}\n`,
-      'utf8'
-    ),
+    writeFile(path.join(dir, 'summary.md'), `${bundle.summaryMarkdown}\n`, 'utf8'),
     writeFile(
       path.join(dir, 'prompt-context.md'),
       `${bundle.promptContextMarkdown}\n`,
       'utf8'
     ),
     ...Object.entries(extraFiles ?? {}).map(([name, contents]) =>
-      writeFile(
-        path.join(dir, name),
-        contents.endsWith('\n') ? contents : `${contents}\n`,
-        'utf8'
-      )
+      writeFile(path.join(dir, name), contents.endsWith('\n') ? contents : `${contents}\n`, 'utf8')
     ),
   ]);
   return dir;

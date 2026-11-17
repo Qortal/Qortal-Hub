@@ -89,8 +89,7 @@ export function deriveGroupCallStartupStatus(params: {
   return {
     stage: 'connected',
     headline: 'Connected',
-    detail:
-      remoteCount > 1 ? `${remoteCount} other participants in the call.` : null,
+    detail: remoteCount > 1 ? `${remoteCount} other participants in the call.` : null,
     tone: 'neutral',
     showProgress: false,
     delayed: false,

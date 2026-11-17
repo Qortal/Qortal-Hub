@@ -1384,9 +1384,6 @@
   "video_fetching": "fetching video from the Qortal Network...",
   "voice_call": {
     "audio_surface_unavailable": "Voice call failed — the audio engine is unavailable.",
-    "call_dont_forward": "Don't make me a call forwarder",
-    "call_dont_forward_desc": "Ask group calls to route other people's audio through someone else first. Use this on phones and metered connections.",
-    "call_dont_forward_update_error": "We could not update the forwarder preference right now.",
     "callee_may_be_asleep": "The other person's device may be asleep. Try again later.",
     "caller_this_user": "This user",
     "calling": "Calling...",

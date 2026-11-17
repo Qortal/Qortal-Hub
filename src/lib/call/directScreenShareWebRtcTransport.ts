@@ -1,8 +1,3 @@
-import {
-  blankPrivateDefaultAddress,
-  filterIceCandidate,
-} from './candidateFilter';
-
 export type DirectScreenShareRtcSignal =
   | {
       kind: 'screen-description';
@@ -30,8 +25,6 @@ type DirectScreenShareWebRtcTransportOptions = {
   sender: boolean;
   localStream?: MediaStream;
   getIceServers: () => Promise<RTCIceServer[]>;
-  /** P-5: `'relay'` when the user forces all media through TURN. */
-  getIceTransportPolicy?: () => Promise<RTCIceTransportPolicy>;
   onSignal: (
     signal: DirectScreenShareRtcSignal
   ) => boolean | void | Promise<boolean | void>;
@@ -93,8 +86,7 @@ export class DirectScreenShareWebRtcTransport {
     const sent = await this.options.onSignal({
       kind: 'screen-description',
       generation: this.options.generation,
-      // P-1: scrub private default addresses before signing.
-      description: blankPrivateDefaultAddress(pc.localDescription.toJSON())!,
+      description: pc.localDescription.toJSON(),
     });
     if (sent === false) throw new Error('screen-share-offer-send-failed');
   }
@@ -119,8 +111,7 @@ export class DirectScreenShareWebRtcTransport {
         const sent = await this.options.onSignal({
           kind: 'screen-description',
           generation: this.options.generation,
-          // P-1: scrub private default addresses before signing.
-          description: blankPrivateDefaultAddress(pc.localDescription.toJSON())!,
+          description: pc.localDescription.toJSON(),
         });
         if (sent === false && !this.closed) {
           throw new Error('screen-share-answer-send-failed');
@@ -188,31 +179,18 @@ export class DirectScreenShareWebRtcTransport {
 
   private async initializePeerConnection(): Promise<RTCPeerConnection> {
     const iceServers = await this.lookupIceServers();
-    // P-5: resolve the policy before construction — it cannot be changed on a
-    // live peer connection, and a screen share must not leak host candidates
-    // when the user asked for relay-only.
-    let iceTransportPolicy: RTCIceTransportPolicy = 'all';
-    try {
-      iceTransportPolicy =
-        (await this.options.getIceTransportPolicy?.()) ?? 'all';
-    } catch {
-      iceTransportPolicy = 'all';
-    }
     if (this.closed) throw new Error('screen-share-transport-closed');
-    const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy });
+    const pc = new RTCPeerConnection({ iceServers });
     this.pc = pc;
     this.options.onState('connecting');
     this.armNegotiationTimer(SCREEN_NEGOTIATION_TIMEOUT_MS);
     pc.onicecandidate = (event) => {
       if (!event.candidate || this.closed) return;
-      // P-1: drop host candidates and scrub raddr/rport before signalling.
-      const candidate = filterIceCandidate(event.candidate);
-      if (!candidate) return;
       void Promise.resolve(
         this.options.onSignal({
           kind: 'screen-ice',
           generation: this.options.generation,
-          candidate,
+          candidate: event.candidate.toJSON(),
         })
       ).catch(() => {
         // A later candidate or the negotiated route may still succeed.
@@ -243,9 +221,7 @@ export class DirectScreenShareWebRtcTransport {
     }
     if (state !== 'failed' && state !== 'disconnected') return;
     this.scheduleRecovery(
-      state === 'failed'
-        ? SCREEN_ICE_RESTART_DELAY_MS
-        : SCREEN_DISCONNECT_GRACE_MS
+      state === 'failed' ? SCREEN_ICE_RESTART_DELAY_MS : SCREEN_DISCONNECT_GRACE_MS
     );
   }
 
@@ -313,8 +289,7 @@ export class DirectScreenShareWebRtcTransport {
       const sent = await this.options.onSignal({
         kind: 'screen-description',
         generation: this.options.generation,
-        // P-1: scrub private default addresses before signing.
-        description: blankPrivateDefaultAddress(pc.localDescription.toJSON())!,
+        description: pc.localDescription.toJSON(),
       });
       if (sent === false) throw new Error('screen-share-restart-send-failed');
       this.armNegotiationTimer(SCREEN_ICE_RESTART_TIMEOUT_MS);

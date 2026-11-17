@@ -48,8 +48,7 @@ export function DirectVoiceDebugPanel() {
         borderRadius: 1,
         boxShadow: 4,
         color: '#c9ccd1',
-        fontFamily:
-          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         fontSize: 10,
         lineHeight: 1.35,
       }}
@@ -74,16 +73,10 @@ export function DirectVoiceDebugPanel() {
             <BugReportOutlinedIcon sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
-        <Typography
-          component="span"
-          sx={{ fontSize: 10, fontWeight: 700, color: '#949ba4' }}
-        >
+        <Typography component="span" sx={{ fontSize: 10, fontWeight: 700, color: '#949ba4' }}>
           DM voice debug
         </Typography>
-        <Typography
-          component="span"
-          sx={{ fontSize: 9, color: '#6d7278', ml: 'auto' }}
-        >
+        <Typography component="span" sx={{ fontSize: 9, color: '#6d7278', ml: 'auto' }}>
           qortal:dmvoice-debug
         </Typography>
       </Box>
@@ -102,9 +95,7 @@ export function DirectVoiceDebugPanel() {
           }}
         >
           {lines.length === 0 ? (
-            <Typography
-              sx={{ fontSize: 10, color: '#6d7278', fontStyle: 'italic' }}
-            >
+            <Typography sx={{ fontSize: 10, color: '#6d7278', fontStyle: 'italic' }}>
               Waiting for events…
             </Typography>
           ) : (

@@ -83,14 +83,12 @@ export function getPostJoinHydratedParticipants(opts: {
   return hydrated;
 }
 
-export function mergeHydratedParticipantsIntoUiList<
-  T extends { address: string },
->(opts: {
-  previousParticipants: T[];
-  hydratedParticipants: Array<{ address: string; publicKey: string }>;
-}): Array<
-  T | (T & { publicKey: string; speaking: false; role: 'participant' })
-> {
+export function mergeHydratedParticipantsIntoUiList<T extends { address: string }>(
+  opts: {
+    previousParticipants: T[];
+    hydratedParticipants: Array<{ address: string; publicKey: string }>;
+  }
+): Array<T | (T & { publicKey: string; speaking: false; role: 'participant' })> {
   const existing = new Set(opts.previousParticipants.map((p) => p.address));
   const next = opts.hydratedParticipants
     .filter((p) => !existing.has(p.address))

@@ -122,7 +122,7 @@ export class WebCodecsDecodeService implements IDecodeService {
     //    Correct pipeline: submit current → drain previous (or current if sync).
     const chunk = new EncodedAudioChunk({
       type: 'key',
-      timestamp: seq * 20_000, // microseconds
+      timestamp: seq * 20_000,   // microseconds
       duration: 20_000,
       data: opusFrame.buffer.slice(
         opusFrame.byteOffset,
@@ -178,9 +178,7 @@ export class WebCodecsDecodeService implements IDecodeService {
     const GAIN_SCHEDULE = [0.9, 0.75, 0.55, 0.35, 0.15, 0.0];
     state.concealmentDepth++;
     const gain =
-      GAIN_SCHEDULE[
-        Math.min(state.concealmentDepth - 1, GAIN_SCHEDULE.length - 1)
-      ];
+      GAIN_SCHEDULE[Math.min(state.concealmentDepth - 1, GAIN_SCHEDULE.length - 1)];
 
     if (gain === 0) {
       return new Float32Array(samplesPerFrame);
@@ -198,11 +196,7 @@ export class WebCodecsDecodeService implements IDecodeService {
     const key = streamKey(streamId);
     const state = this._streams.get(key);
     if (state?.decoder) {
-      try {
-        state.decoder.close();
-      } catch {
-        /* ignore */
-      }
+      try { state.decoder.close(); } catch { /* ignore */ }
     }
     this._streams.delete(key);
     // Re-create a fresh decoder on next decode call.
@@ -216,11 +210,7 @@ export class WebCodecsDecodeService implements IDecodeService {
     for (const key of this._streams.keys()) {
       const state = this._streams.get(key)!;
       if (state.decoder) {
-        try {
-          state.decoder.close();
-        } catch {
-          /* ignore */
-        }
+        try { state.decoder.close(); } catch { /* ignore */ }
       }
     }
     this._streams.clear();
@@ -245,8 +235,7 @@ export class WebCodecsDecodeService implements IDecodeService {
       const decoder = new AudioDecoder({
         output: (audioData) => {
           // Copy AudioData to Float32Array and push to output queue.
-          const nSamples =
-            audioData.numberOfFrames * audioData.numberOfChannels;
+          const nSamples = audioData.numberOfFrames * audioData.numberOfChannels;
           const pcm = new Float32Array(nSamples);
           audioData.copyTo(pcm, { planeIndex: 0 });
           audioData.close();
@@ -292,19 +281,13 @@ export class NullDecodeService implements IDecodeService {
     this._channels = opts.channels ?? 1;
   }
 
-  async decode(
-    _streamId: StreamIdentity,
-    _seq: number,
-    _opusFrame: Uint8Array
-  ): Promise<Float32Array | null> {
-    const samplesPerFrame =
-      Math.round((this._sampleRateHz * 20) / 1000) * this._channels;
+  async decode(_streamId: StreamIdentity, _seq: number, _opusFrame: Uint8Array): Promise<Float32Array | null> {
+    const samplesPerFrame = Math.round((this._sampleRateHz * 20) / 1000) * this._channels;
     return new Float32Array(samplesPerFrame);
   }
 
   async conceal(_streamId: StreamIdentity): Promise<Float32Array | null> {
-    const samplesPerFrame =
-      Math.round((this._sampleRateHz * 20) / 1000) * this._channels;
+    const samplesPerFrame = Math.round((this._sampleRateHz * 20) / 1000) * this._channels;
     return new Float32Array(samplesPerFrame);
   }
 

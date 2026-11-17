@@ -5,7 +5,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Avatar, Box, Button, Dialog, Typography } from '@mui/material';
-import { useTranslation } from 'react-i18next';
 import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import CallRoundedIcon from '@mui/icons-material/CallRounded';
 import { useCallSwitchGuard } from '../../contexts/CallSwitchGuardContext';
@@ -27,7 +26,6 @@ type DirectVoiceCallGlobalOverlayProps = {
 export function DirectVoiceCallGlobalOverlay({
   isAppLocked = false,
 }: DirectVoiceCallGlobalOverlayProps) {
-  const { t } = useTranslation(['core']);
   const { callState, incomingCall, acceptCall, rejectCall } =
     useVoiceCallContext();
   const { confirmCallSwitch } = useCallSwitchGuard();
@@ -145,7 +143,7 @@ export function DirectVoiceCallGlobalOverlay({
           variant="overline"
           sx={{ letterSpacing: 1.2, opacity: 0.75 }}
         >
-          {t('core:voice_call.incoming', { defaultValue: 'Incoming voice call' })}
+          Incoming voice call
         </Typography>
         <Avatar
           alt={displayLabel}
@@ -170,7 +168,7 @@ export function DirectVoiceCallGlobalOverlay({
           {displayLabel}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
-          {t('core:voice_call.direct_message', { defaultValue: 'Direct message' })}
+          Direct message
         </Typography>
         <Box
           sx={{

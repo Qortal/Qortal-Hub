@@ -1,8 +1,3 @@
-import {
-  blankPrivateDefaultAddress,
-  filterIceCandidate,
-} from './candidateFilter';
-
 export type DirectVoiceRtcSignal =
   | {
       kind: 'description';
@@ -34,12 +29,6 @@ export type DirectVoiceRtcState =
 type DirectVoiceWebRtcTransportOptions = {
   offerer: boolean;
   getIceServers: () => Promise<RTCIceServer[]>;
-  /**
-   * P-5: `'relay'` when the user forces all media through TURN. Omitted or
-   * `'all'` keeps today's behaviour. Resolved once per peer connection —
-   * Chromium cannot change the policy on a live `RTCPeerConnection`.
-   */
-  getIceTransportPolicy?: () => Promise<RTCIceTransportPolicy>;
   localStream: MediaStream;
   onSignal: (signal: DirectVoiceRtcSignal) => void;
   onRemoteStream: (stream: MediaStream) => void;
@@ -296,14 +285,6 @@ export class DirectVoiceWebRtcTransport {
     } catch {
       iceServers = [];
     }
-    // P-5: relay-only must reach the constructor; it cannot be applied later.
-    let iceTransportPolicy: RTCIceTransportPolicy = 'all';
-    try {
-      iceTransportPolicy =
-        (await this.options.getIceTransportPolicy?.()) ?? 'all';
-    } catch {
-      iceTransportPolicy = 'all';
-    }
     if (this.closed) return;
     this.configuredIceServerCount = iceServers.length;
     this.configuredIceServerUrls = iceServers.flatMap((server) =>
@@ -311,12 +292,11 @@ export class DirectVoiceWebRtcTransport {
     );
     this.localCandidateCounts.clear();
     this.remoteCandidateCounts.clear();
-    const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy });
+    const pc = new RTCPeerConnection({ iceServers });
     this.pc = pc;
     this.emitDiagnostic('peer-connection-created', {
       role: this.options.offerer ? 'offerer' : 'answerer',
       iceServerCount: iceServers.length,
-      iceTransportPolicy,
     });
     if (iceServers.length === 0) this.scheduleIceServerRefresh();
     this.setState('connecting');
@@ -346,15 +326,7 @@ export class DirectVoiceWebRtcTransport {
         event.candidate.protocol
       );
       if (!this.generation || this.closed) return;
-      // P-1: drop host candidates and scrub raddr/rport before signalling.
-      const candidate = filterIceCandidate(event.candidate);
-      if (!candidate) {
-        this.emitDiagnostic('local-candidate-filtered', {
-          type: event.candidate.type,
-          protocol: event.candidate.protocol,
-        });
-        return;
-      }
+      const candidate = event.candidate.toJSON();
       if (this.localDescriptionSignalPending) {
         if (this.bufferedLocalCandidates.length < MAX_PENDING_ICE_CANDIDATES) {
           this.bufferedLocalCandidates.push({
@@ -528,15 +500,10 @@ export class DirectVoiceWebRtcTransport {
       // SDP must enter the reliable signaling channel before the candidates
       // it describes. Some browsers emit candidates synchronously while
       // setLocalDescription() is pending.
-      // P-1: scrub private default addresses (c=, a=rtcp:) and any candidate
-      // lines we would never signal, before the SDP is signed.
-      const filtered = blankPrivateDefaultAddress(
-        pc.localDescription.toJSON()
-      );
       this.options.onSignal({
         kind: 'description',
         generation,
-        description: filtered!,
+        description: pc.localDescription.toJSON(),
       });
       descriptionSignaled = true;
       this.emitDiagnostic('local-description-signaled', {

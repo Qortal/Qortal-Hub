@@ -154,11 +154,7 @@ export class FaultInjector {
     }
   }
 
-  private _deactivate(
-    fault: FaultSpec,
-    sourceAddr: string,
-    _nowMs: number
-  ): void {
+  private _deactivate(fault: FaultSpec, sourceAddr: string, _nowMs: number): void {
     switch (fault.kind) {
       case 'bridge-pressure':
         this._sessionController.ingestTopologyEvent({
@@ -190,24 +186,9 @@ export class FaultInjector {
  *  - Tick stalls matching Phil's 28 budget breaches
  */
 export const FAULT_CALL63_PATTERN: FaultSpec[] = [
-  {
-    kind: 'bridge-pressure',
-    atMs: 0,
-    durationMs: 60_000,
-    params: { depth: 20 },
-  },
-  {
-    kind: 'latency-spike',
-    atMs: 3_000,
-    durationMs: 5_000,
-    params: { addMs: 60 },
-  },
-  {
-    kind: 'tick-stall',
-    atMs: 3_000,
-    durationMs: 20_000,
-    params: { stallMs: 17 },
-  },
+  { kind: 'bridge-pressure', atMs: 0, durationMs: 60_000, params: { depth: 20 } },
+  { kind: 'latency-spike', atMs: 3_000, durationMs: 5_000, params: { addMs: 60 } },
+  { kind: 'tick-stall', atMs: 3_000, durationMs: 20_000, params: { stallMs: 17 } },
 ];
 
 /**
@@ -216,28 +197,8 @@ export const FAULT_CALL63_PATTERN: FaultSpec[] = [
  *  - Bursty arrivals after each flap
  */
 export const FAULT_CALL60_PATTERN: FaultSpec[] = [
-  {
-    kind: 'latency-spike',
-    atMs: 15_000,
-    durationMs: 3_000,
-    params: { addMs: 80 },
-  },
-  {
-    kind: 'latency-spike',
-    atMs: 30_000,
-    durationMs: 3_000,
-    params: { addMs: 80 },
-  },
-  {
-    kind: 'latency-spike',
-    atMs: 50_000,
-    durationMs: 3_000,
-    params: { addMs: 80 },
-  },
-  {
-    kind: 'latency-spike',
-    atMs: 68_000,
-    durationMs: 3_000,
-    params: { addMs: 80 },
-  },
+  { kind: 'latency-spike', atMs: 15_000, durationMs: 3_000, params: { addMs: 80 } },
+  { kind: 'latency-spike', atMs: 30_000, durationMs: 3_000, params: { addMs: 80 } },
+  { kind: 'latency-spike', atMs: 50_000, durationMs: 3_000, params: { addMs: 80 } },
+  { kind: 'latency-spike', atMs: 68_000, durationMs: 3_000, params: { addMs: 80 } },
 ];
