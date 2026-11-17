@@ -28,22 +28,32 @@ const cache = new Map<string, { at: number; widgets: HomeWidgetListing[] }>();
 /**
  * Widgets published from this Hub that the node may not list yet: until an
  * answer has them, the picker asks the node each time instead of using what
- * it kept (for a while at most, in case the publish never makes it).
+ * it kept (for a while at most, in case the publish never makes it). An
+ * update counts as listed only in a version from when it was published on:
+ * the version it replaced is listed already.
  */
 const PUBLISHED_WAIT_MS = 15 * 60_000;
-const published = new Map<string, number>();
+type Waiting = { key: string; since: number };
+const published = new Map<string, { at: number; since: number }>();
 
-const waitingFor = (now: number): string[] => {
-  for (const [key, at] of published) {
+const waitingFor = (now: number): Waiting[] => {
+  for (const [key, { at }] of published) {
     if (now - at > PUBLISHED_WAIT_MS) published.delete(key);
   }
-  return [...published.keys()];
+  return [...published].map(([key, { since }]) => ({ key, since }));
 };
 
-const listsAll = (widgets: HomeWidgetListing[], keys: string[]) => {
-  const listed = new Set(widgets.map(homeWidgetKey));
-  return keys.every((key) => listed.has(key));
+/** Whether `widgets` has a waiting widget in its new version (or newer). */
+const listsVersion = (widgets: HomeWidgetListing[]) => {
+  const updated = new Map(
+    widgets.map((widget) => [homeWidgetKey(widget), widget.updated])
+  );
+  return ({ key, since }: Waiting) =>
+    updated.has(key) && updated.get(key) >= since;
 };
+
+const listsAll = (widgets: HomeWidgetListing[], waiting: Waiting[]) =>
+  waiting.every(listsVersion(widgets));
 
 export const widgetSearchUrls = (baseUrl: string) => {
   const common =
@@ -124,9 +134,9 @@ export async function fetchHomeWidgets(
     byIdentifier.status === 'fulfilled' ? byIdentifier.value : [],
     byTag.status === 'fulfilled' ? byTag.value : []
   );
-  const listed = new Set(widgets.map(homeWidgetKey));
-  waiting.forEach((key) => {
-    if (listed.has(key)) published.delete(key);
+  const listed = listsVersion(widgets);
+  waiting.forEach((entry) => {
+    if (listed(entry)) published.delete(entry.key);
   });
   // Only a full answer with widgets in it is kept: a half one, or none yet
   // (a widget published a minute ago), is asked again next time.
@@ -142,13 +152,15 @@ export async function fetchHomeWidgets(
 
 /**
  * A widget was just published from this Hub: the picker asks the node again
- * each time until the node lists it.
+ * each time until the node lists it in a version published `since` (when
+ * the publish started) or later.
  */
 export const rememberPublishedWidget = (
   widget: { name: string; identifier: string | null },
-  now = Date.now()
+  now = Date.now(),
+  since = now
 ) => {
-  published.set(homeWidgetKey(widget), now);
+  published.set(homeWidgetKey(widget), { at: now, since });
 };
 
 export const clearHomeWidgetCacheForTests = () => {

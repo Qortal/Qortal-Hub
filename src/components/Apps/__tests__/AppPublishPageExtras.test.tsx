@@ -98,7 +98,7 @@ const globalSnack = () =>
 
 /** The library shows the form until a tab opens, as AppsDesktop does. */
 let closeForm: (() => void) | null = null;
-const Library = () => {
+const Library = (props: Partial<React.ComponentProps<typeof AppPublish>>) => {
   const [publishing, setPublishing] = useState(true);
   closeForm = () => setPublishing(false);
   return publishing ? (
@@ -108,11 +108,14 @@ const Library = () => {
       initialName="TestApp"
       myAddress="QOwner"
       myName="TestApp"
+      {...props}
     />
   ) : null;
 };
 
-const renderForm = () => {
+const renderForm = (
+  props: Partial<React.ComponentProps<typeof AppPublish>> = {}
+) => {
   global.fetch = vi.fn((url: string) =>
     Promise.resolve({
       ok: true,
@@ -139,7 +142,7 @@ const renderForm = () => {
     <Provider store={store}>
       <ThemeProvider theme={createTheme()}>
         <I18nextProvider i18n={i18n}>
-          <Library />
+          <Library {...props} />
         </I18nextProvider>
       </ThemeProvider>
     </Provider>
@@ -245,5 +248,33 @@ describe('publishing the app with its page', () => {
     await waitFor(() =>
       expect(globalSnack()?.message).toBe('Page not updated: an error occurred')
     );
+  });
+
+  describe('when the form closes while the page parts go out', () => {
+    it('does not open the app, and still says it was published', async () => {
+      let pageDone: () => void = () => {};
+      mocks.publishExtras.mockReturnValue(
+        new Promise<void>((resolve) => (pageDone = resolve))
+      );
+      const onUnsavedChange = vi.fn();
+      renderForm({ onUnsavedChange });
+      await publish();
+
+      // The app is out and its page is still being published: the tab asks
+      // before it closes, and the user closes it anyway.
+      await waitFor(() => expect(mocks.publishExtras).toHaveBeenCalledTimes(1));
+      expect(onUnsavedChange).toHaveBeenLastCalledWith(true);
+      act(() => closeForm?.());
+      await act(async () => {
+        pageDone();
+      });
+
+      // Nothing opens in a new tab and takes the selection.
+      expect(executeEvent).not.toHaveBeenCalledWith(
+        'addTab',
+        expect.anything()
+      );
+      expect(globalSnack()).toEqual({ type: 'success', message: 'Published' });
+    });
   });
 });

@@ -86,12 +86,13 @@ describe('fetchHomeWidgets', () => {
   });
 
   it('asks again until the node lists a widget published from this Hub', async () => {
+    // Published at 1,500, as remembered below.
     const fresh = {
       name: 'Tester',
       service: 'APP',
       identifier: 'go-widget-clock',
       metadata: { tags: ['go-widget'] },
-      updated: 50,
+      updated: 1500,
     };
     let listed = false;
     const fetcher = vi.fn((url: string) =>
@@ -155,5 +156,55 @@ describe('fetchHomeWidgets', () => {
 
   it('ignores empty answers', () => {
     expect(mergeWidgetResults([], [])).toEqual([]);
+  });
+});
+
+const clock = (title: string, updated: number) => ({
+  name: 'Tester',
+  service: 'APP',
+  identifier: 'go-widget-clock',
+  metadata: { title, tags: ['go-widget'] },
+  updated,
+});
+
+describe('fetchHomeWidgets – an update published from this Hub', () => {
+  beforeEach(() => clearHomeWidgetCacheForTests());
+
+  it('shows the new version once the node lists it, not the one kept from before', async () => {
+    // The node lists "Clock" until the update to "Clock 2" (published at
+    // 5,000) is in.
+    let version = clock('Clock', 1000);
+    const fetcher = vi.fn((url: string) =>
+      ok(url.includes('identifier=go-widget') ? [version] : [])
+    );
+    // The picker was opened before the update.
+    await fetchHomeWidgets(BASE, { fetcher, now: 2000 });
+
+    rememberPublishedWidget(
+      { name: 'Tester', identifier: 'go-widget-clock' },
+      5000
+    );
+    // A minute later the node lists the update.
+    version = clock('Clock 2', 5000);
+    const widgets = await fetchHomeWidgets(BASE, { fetcher, now: 65_000 });
+
+    expect(widgets.map((widget) => widget.title)).toEqual(['Clock 2']);
+  });
+
+  it('keeps asking while the node still lists the version the update replaced', async () => {
+    let version = clock('Clock', 1000);
+    const fetcher = vi.fn((url: string) =>
+      ok(url.includes('identifier=go-widget') ? [version] : [])
+    );
+    rememberPublishedWidget(
+      { name: 'Tester', identifier: 'go-widget-clock' },
+      5000
+    );
+    // Opened right after the publish: the node has the old version yet.
+    await fetchHomeWidgets(BASE, { fetcher, now: 6000 });
+    version = clock('Clock 2', 5000);
+    const widgets = await fetchHomeWidgets(BASE, { fetcher, now: 65_000 });
+
+    expect(widgets.map((widget) => widget.title)).toEqual(['Clock 2']);
   });
 });

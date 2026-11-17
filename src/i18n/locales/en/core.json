@@ -260,6 +260,7 @@
       "page_unreadable": "your node couldn't read the app's current page, so its version, What's new and screenshots aren't published with this update. You can change them on the app's page later.",
       "shots_change": "change the screenshots",
       "shots_change_hint": "Start from the current ones: remove, reorder or caption them, and add new ones.",
+      "shots_failed": "the app and its page text were published, but its screenshots could not be updated: {{error}}",
       "shots_keep_one": "keep the current screenshot",
       "shots_keep_other": "keep the current {{count}} screenshots",
       "shots_none": "no screenshots",

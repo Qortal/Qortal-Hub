@@ -139,16 +139,27 @@ describe("the name's widgets", () => {
     ]);
   });
 
-  it('gives none when the node fails, and passes an abort on', async () => {
+  it("says it couldn't tell when the node fails, and passes an abort on", async () => {
     const failing = vi.fn(async () => {
       throw new Error('offline');
     });
+    // Null, not an empty list: the name may have widgets.
     await expect(
       loadNameWidgets(NODE, 'A', { fetchFn: failing })
-    ).resolves.toEqual([]);
+    ).resolves.toBeNull();
     await expect(
       loadNameWidgets(NODE, 'A', {
         fetchFn: async () => ({ ok: false, json: async () => [] }),
+      })
+    ).resolves.toBeNull();
+    await expect(
+      loadNameWidgets(NODE, 'A', {
+        fetchFn: async () => ({ ok: true, json: async () => ({ error: 1 }) }),
+      })
+    ).resolves.toBeNull();
+    await expect(
+      loadNameWidgets(NODE, 'A', {
+        fetchFn: async () => ({ ok: true, json: async () => [] }),
       })
     ).resolves.toEqual([]);
 

@@ -260,6 +260,7 @@
       "page_unreadable": "你的节点无法读取应用当前的页面，因此其版本、新功能和截图不会随这次更新发布。你可以稍后在应用页面上更改它们。",
       "shots_change": "更改截图",
       "shots_change_hint": "从当前截图开始：可以删除、重新排序或添加说明文字，也可以添加新的截图。",
+      "shots_failed": "应用和它的页面文字已发布，但无法更新它的截图：{{error}}",
       "shots_keep_one": "保留当前截图",
       "shots_keep_other": "保留当前的 {{count}} 张截图",
       "shots_none": "不使用截图",

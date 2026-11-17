@@ -260,6 +260,7 @@
       "page_unreadable": "tu nodo no pudo leer la página actual de la app, así que su versión, novedades y capturas no se publican con esta actualización. Puedes cambiarlas más tarde en la página de la app.",
       "shots_change": "cambiar las capturas",
       "shots_change_hint": "Parte de las actuales: quítalas, cambia su orden o ponles una leyenda, y añade otras nuevas.",
+      "shots_failed": "la app y el texto de su página se publicaron, pero no se pudieron actualizar sus capturas de pantalla: {{error}}",
       "shots_keep_one": "mantener la captura actual",
       "shots_keep_other": "mantener las {{count}} capturas actuales",
       "shots_none": "sin capturas",
