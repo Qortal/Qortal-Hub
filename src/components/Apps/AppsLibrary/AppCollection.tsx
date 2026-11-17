@@ -25,6 +25,8 @@ interface AppCollectionProps {
   isFromCategory?: boolean;
   /** Draws an app another way (the account's own apps get Update). */
   renderItem?: (app: any, view: LibraryView, index: number) => ReactNode;
+  /** Tells the items apart; by default an app's service and name. */
+  getKey?: (app: any) => string;
 }
 
 const getAppKey = (app: any) => `${app?.service}-${app?.name}`;
@@ -62,6 +64,7 @@ export const AppCollection = ({
   virtualize = true,
   isFromCategory = false,
   renderItem,
+  getKey = getAppKey,
 }: AppCollectionProps) => {
   const view = useAtomValue(libraryViewAtom);
   const metrics = useMemo(() => appCollectionMetrics(view), [view]);
@@ -107,7 +110,7 @@ export const AppCollection = ({
         active={active}
         columns={metrics.columns}
         gap={metrics.gap}
-        getKey={getAppKey}
+        getKey={getKey}
         items={apps}
         maxColumns={metrics.maxColumns}
         minColumnWidth={metrics.minColumnWidth}

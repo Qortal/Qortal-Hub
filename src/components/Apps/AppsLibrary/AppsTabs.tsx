@@ -15,6 +15,7 @@ export type AppsLibraryTabValue =
   | 'official'
   | 'community'
   | 'categories'
+  | 'widgets'
   | 'my-apps'
   | 'private';
 
@@ -158,6 +159,14 @@ export const AppsTabs = ({
         {...linkProps('categories')}
         value="categories"
         label={t('core:tabs.categories', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      />
+      <StyledTab
+        disableRipple
+        {...linkProps('widgets')}
+        value="widgets"
+        label={t('core:tabs.widgets', {
           postProcess: 'capitalizeFirstChar',
         })}
       />

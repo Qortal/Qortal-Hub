@@ -70,6 +70,7 @@ import {
 } from './qortal-request-errors.ts';
 import { getPublishesFromAdminsAdminSpace } from '../components/Chat/AdminSpaceInner.tsx';
 import { extractComponents } from '../components/Chat/MessageDisplay.tsx';
+import { openAppPageLink } from '../components/Apps/AppPage/appPageLink';
 import {
   decryptResource,
   getGroupAdmins,
@@ -6310,6 +6311,9 @@ export const openNewTab = async (data, isFromExtension) => {
     });
     throw new Error(errorMsg);
   }
+
+  // An app's or website's page, not the app (qortal://use-app-page/…).
+  if (openAppPageLink(data.qortalLink)) return true;
 
   const res = extractComponents(data.qortalLink);
   if (res) {

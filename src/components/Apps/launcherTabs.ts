@@ -187,6 +187,23 @@ export const LauncherTabContext = createContext<string | null>(null);
 export const useLauncherTabId = () => useContext(LauncherTabContext);
 
 /**
+ * False inside a launcher tab while it is hidden. The tab stays mounted, so a
+ * dialog opened in it would still show over the other tabs: it steps aside
+ * (useLauncherTabDialog) and comes back as it was.
+ */
+export const LauncherTabShownContext = createContext(true);
+
+/**
+ * A dialog's `open` and `keepMounted` inside a launcher tab: while the tab is
+ * hidden it is put away, with what it holds kept mounted, and it shows again
+ * with the tab. Outside a launcher tab it is just `open`.
+ */
+export const useLauncherTabDialog = (open: boolean) => {
+  const isTabShown = useContext(LauncherTabShownContext);
+  return { open: open && isTabShown, keepMounted: open && !isTabShown };
+};
+
+/**
  * `addTab`'s data for a Q-App or website opened from inside a launcher tab:
  * it opens in that tab. Outside one the data is left as it is.
  */

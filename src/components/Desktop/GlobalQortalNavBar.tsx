@@ -48,6 +48,11 @@ import {
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
+import {
+  buildAppPageLink,
+  openAppPageLink,
+  parseAppPageLink,
+} from '../Apps/AppPage/appPageLink';
 import type { PinnedApp } from '../../utils/pinnedAppsSettings';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
@@ -69,7 +74,7 @@ import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
-import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
 import {
   AppSearchSuggestions,
   type SuggestionGroup,
@@ -943,6 +948,14 @@ export function GlobalQortalNavBar({
   const currentLink = useMemo(() => {
     return currentNavigation?.currentLink || '';
   }, [currentNavigation]);
+  // A Q-App's or website's page has a link of its own: the bar shows it, and
+  // copies it, while the page is on screen. Bookmarks and pins stay with tabs.
+  const shownAppPage = useAtomValue(shownAppPageAtom);
+  const shownLink =
+    currentLink ||
+    (desktopViewMode === 'apps' && shownAppPage
+      ? buildAppPageLink(shownAppPage.service, shownAppPage.name)
+      : '');
   const bookmarkSelectedTab = useMemo(() => {
     const parsedLink = currentLink
       ? extractComponents(normalizeQortalInput(currentLink))
@@ -1006,18 +1019,18 @@ export function GlobalQortalNavBar({
     if (isInputFocusedRef.current) return;
     if (
       (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
-      currentLink
+      shownLink
     ) {
-      setInputValue(currentLink);
+      setInputValue(shownLink);
       return;
     }
     setInputValue('');
-  }, [currentLink, desktopViewMode]);
+  }, [shownLink, desktopViewMode]);
 
   // What the bar shows while nobody types in it: the page on screen.
   const restingInputValue =
-    (desktopViewMode === 'apps' || desktopViewMode === 'dev') && currentLink
-      ? currentLink
+    (desktopViewMode === 'apps' || desktopViewMode === 'dev') && shownLink
+      ? shownLink
       : '';
 
   // After a choice the bar stops suggesting and shows the address of what
@@ -1092,6 +1105,13 @@ export function GlobalQortalNavBar({
       const trimmed = value.trim();
       if (!trimmed) return;
 
+      // qortal://use-app-page/<SERVICE>/<name>: the app's page, not the app.
+      if (parseAppPageLink(trimmed)) {
+        finishChoice(trimmed);
+        openAppPageLink(trimmed);
+        return;
+      }
+
       const link = parseOmniboxLink(trimmed);
       if (link) {
         openLink(link, choice);
@@ -1105,7 +1125,7 @@ export function GlobalQortalNavBar({
       });
       executeEvent('open-apps-mode', {});
     },
-    [openLink]
+    [finishChoice, openLink]
   );
 
   const openSearchApp = useCallback(
@@ -1333,11 +1353,11 @@ export function GlobalQortalNavBar({
     value: null,
   });
 
-  const canCopyCurrentLink = Boolean(currentLink);
+  const canCopyCurrentLink = Boolean(shownLink);
   const canPinCurrentApp =
     desktopViewMode === 'apps' && Boolean(pinnedCandidate);
   const handleCopyCurrentLink = useCallback(() => {
-    if (!currentLink) return;
+    if (!shownLink) return;
     if (!navigator.clipboard?.writeText) {
       setInfoSnackGlobal({
         compact: true,
@@ -1352,7 +1372,7 @@ export function GlobalQortalNavBar({
       return;
     }
     navigator.clipboard
-      .writeText(currentLink)
+      .writeText(shownLink)
       .then(() => {
         setInfoSnackGlobal({
           compact: true,
@@ -1375,7 +1395,7 @@ export function GlobalQortalNavBar({
         });
         setOpenSnackGlobal(true);
       });
-  }, [currentLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
+  }, [shownLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
   const handleTogglePinnedApp = useCallback(() => {
     if (!pinnedCandidate) return;
 

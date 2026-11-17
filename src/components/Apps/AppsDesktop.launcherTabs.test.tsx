@@ -128,7 +128,11 @@ vi.mock('./AppPublish', async () => {
 vi.mock('./AppInfo', () => ({
   AppInfo: ({ app }: any) => <p>{`details: ${app?.name}`}</p>,
 }));
-vi.mock('./AppsCategoryDesktop', () => ({ AppsCategoryDesktop: () => null }));
+vi.mock('./AppsCategoryDesktop', () => ({
+  AppsCategoryDesktop: ({ category, isShow }: any) => (
+    <p hidden={!isShow}>{`category: ${category?.name}`}</p>
+  ),
+}));
 vi.mock('./AppsDevModeHome', () => ({ AppsDevModeHome: () => null }));
 vi.mock('./AppViewerContainer', () => ({
   default: forwardRef<HTMLDivElement, any>(({ app, hide, isSelected }, ref) => (
@@ -674,6 +678,133 @@ describe('AppsDesktop launcher tabs: apps mode with no tab on screen', () => {
     expect(shownLauncherId()).toBe(newestTabId());
     // The restored tab still waits until it is chosen.
     expect(shownAppName()).toBeNull();
+  });
+});
+
+describe("AppsDesktop launcher tabs: an app's page from a link", () => {
+  // What a qortal://use-app-page link sends (appPageLink.ts), from chat, say,
+  // while any tab may be on screen.
+  const openPageLink = (name: string) =>
+    act(() => {
+      executeEvent('selectedAppInfo', { data: { name, service: 'APP' } });
+    });
+
+  it("shows it in a new launcher tab while an app's tab is on screen", () => {
+    renderApps();
+    openApp('Q-Tube');
+
+    openPageLink('Q-Blog');
+
+    expect(stripNames()).toEqual(['Q-Tube', NEW_TAB]);
+    const launcher = newestTabId();
+    expect(shownLauncherId()).toBe(launcher);
+    expect(shownAppName()).toBeNull();
+    expect(inLauncher(launcher).getByText('details: Q-Blog')).toBeVisible();
+    expect(store.get(appsSubPageCanGoBackAtom)).toBe(true);
+  });
+
+  it('shows it in the launcher tab viewed last, and Back returns to its launcher', async () => {
+    const user = userEvent.setup();
+    renderApps();
+    await pressPlus(user);
+    const launcher = newestTabId();
+    await user.type(inLauncher(launcher).getByLabelText('search'), 'blog');
+    openApp('Q-Tube');
+
+    openPageLink('Q-Blog');
+
+    expect(stripNames()).toEqual([NEW_TAB, 'Q-Tube']);
+    expect(shownLauncherId()).toBe(launcher);
+    expect(inLauncher(launcher).getByText('details: Q-Blog')).toBeVisible();
+
+    act(() => {
+      executeEvent('navigateBack', {});
+    });
+    expect(inLauncher(launcher).getByTestId('launcher')).toBeVisible();
+    expect(inLauncher(launcher).getByLabelText('search')).toHaveValue('blog');
+  });
+
+  it("leaves another app's page as it was: the link gets a new launcher tab", async () => {
+    const user = userEvent.setup();
+    renderApps();
+    await pressPlus(user);
+    const launcher = newestTabId();
+    await user.click(inLauncher(launcher).getByText('details of Q-Mail'));
+    openApp('Q-Tube');
+
+    openPageLink('Q-Blog');
+
+    expect(stripNames()).toEqual([NEW_TAB, 'Q-Tube', NEW_TAB]);
+    const page = newestTabId();
+    expect(shownLauncherId()).toBe(page);
+    expect(inLauncher(page).getByText('details: Q-Blog')).toBeVisible();
+    // The page the other launcher tab was on is still there, Back and all.
+    selectTab(launcher);
+    expect(inLauncher(launcher).getByText('details: Q-Mail')).toBeVisible();
+    expect(inLauncher(launcher).queryByText('details: Q-Blog')).toBeNull();
+    expect(store.get(appsSubPageCanGoBackAtom)).toBe(true);
+  });
+
+  it('leaves a category as it was, even in the launcher tab selected', () => {
+    renderApps();
+    act(() => {
+      executeEvent('showLauncherTab', {});
+    });
+    const launcher = newestTabId();
+    act(() => {
+      executeEvent('selectedCategory', { data: { id: 3, name: 'Games' } });
+    });
+    expect(inLauncher(launcher).getByText('category: Games')).toBeVisible();
+
+    // From chat, say, while this launcher tab is still the selected one.
+    openPageLink('Q-Blog');
+
+    expect(stripNames()).toEqual([NEW_TAB, NEW_TAB]);
+    const page = newestTabId();
+    expect(inLauncher(page).getByText('details: Q-Blog')).toBeVisible();
+    selectTab(launcher);
+    expect(inLauncher(launcher).getByText('category: Games')).toBeVisible();
+    expect(inLauncher(launcher).queryByText('details: Q-Blog')).toBeNull();
+  });
+
+  it('takes the place of the page whose text the link is in', async () => {
+    const user = userEvent.setup();
+    renderApps();
+    await pressPlus(user);
+    const launcher = newestTabId();
+    await user.click(inLauncher(launcher).getByText('details of Q-Mail'));
+
+    act(() => {
+      executeEvent('selectedAppInfo', {
+        data: { name: 'Q-Blog', service: 'APP', fromLauncherTabId: launcher },
+      });
+    });
+
+    expect(stripIds()).toEqual([launcher]);
+    expect(inLauncher(launcher).getByText('details: Q-Blog')).toBeVisible();
+    expect(inLauncher(launcher).queryByText('details: Q-Mail')).toBeNull();
+  });
+
+  it('never shows it over a publish form holding input', async () => {
+    const user = userEvent.setup();
+    renderApps();
+    await pressPlus(user);
+    const publishing = newestTabId();
+    await user.click(inLauncher(publishing).getByText('publish an app'));
+    await user.type(
+      inLauncher(publishing).getByLabelText('publish title'),
+      'My app'
+    );
+
+    openPageLink('Q-Blog');
+
+    expect(stripNames()).toEqual([NEW_TAB, NEW_TAB]);
+    const page = newestTabId();
+    expect(shownLauncherId()).toBe(page);
+    expect(inLauncher(page).getByText('details: Q-Blog')).toBeVisible();
+    expect(inLauncher(publishing).getByLabelText('publish title')).toHaveValue(
+      'My app'
+    );
   });
 });
 

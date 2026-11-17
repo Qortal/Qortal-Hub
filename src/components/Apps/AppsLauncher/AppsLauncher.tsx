@@ -18,6 +18,7 @@ import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import type { AppRatingData } from '../../../types/ratings';
 import { executeEvent } from '../../../utils/events';
 import { openQortalUseGroupLink } from '../../../utils/openQortalUseGroupLink';
+import { openAppPage } from '../AppPage/appPageLink';
 import {
   getPinnedAppKey,
   type PinnedApp,
@@ -352,7 +353,9 @@ const AppsLauncherPage = ({
 
   const openLink = useCallback(
     (target: LauncherLink) => {
-      if (target.kind === 'group') {
+      if (target.kind === 'page') {
+        openAppPage(target, launcherTabId);
+      } else if (target.kind === 'group') {
         void openQortalUseGroupLink(target.link);
       } else {
         executeEvent('addTab', {
