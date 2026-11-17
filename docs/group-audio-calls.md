@@ -6,75 +6,9 @@ This document explains how group audio calls currently work in Qortal Desktop, w
 
 Group calls are decentralized and role-based.
 
-- Up to 15 participants: one `root-forwarder`. The current Qortal group call
-  cap is 15 (`MAX_QORTAL_GROUP_CALL_PARTICIPANTS`), and the cluster size is
-  also 15, so in practice every call uses a single forwarder — clustering
-  exists in the topology machinery but is never exercised today.
+- Up to 10 participants: one `root-forwarder`.
+- 11 to 50 participants: one `root-forwarder` plus per-cluster forwarders.
 - A `standby-forwarder` exists for failover.
-
-### DM voice room id
-
-DM voice rooms use `dmv:` + the first 18 hex characters of a SHA-256 digest.
-The input is currently the direct chat id, which is a function of the two
-wallet addresses, so a relay can test candidate address pairs offline and
-recover the callee.
-
-A v2 derivation — X25519 shared secret plus `callId`, gated on
-`CALL_PROTOCOL_VERSION >= 2` — is designed but **not implemented**. See
-`openspec/changes/call-followups/design.md`. Do not add `callId` alone as the
-salt: relays read it from the call request.
-
-### Custom ICE servers and relay-only
-
-`electron/src/stun-coordinator.ts` merges user-supplied servers ahead of the
-community pool, and `getIceTransportPolicy()` returns `'relay'` when the user
-forced relay-only. Both reach the renderer over IPC:
-
-- `hub:getIceServers` returns complete `RTCIceServer` objects — TURN
-  `username`/`credential` must survive, or relay authentication silently fails.
-- `hub:getIceTransportPolicy` returns `'all'` or `'relay'`.
-
-All three peer-connection sites apply the policy at construction
-(`directVoiceWebRtcTransport.ts`, `directScreenShareWebRtcTransport.ts`,
-`groupCallWebRtcDataChannelTransport.ts`); Chromium cannot change it on a live
-connection. The settings panel lives in `HomeProfileCard.tsx` beside the
-Reticulum-only switch.
-
-### Community STUN discovery
-
-Discovery still works by announce, but announces alone cannot keep an endpoint
-visible: transport nodes apply a per-destination announce target (3600 s
-by default), and query announces, query answers and endpoint adverts all share
-one budget per destination hash.
-
-`presence_bridge.py` therefore:
-
-- serves the endpoint list from a request handler on a **separate query
-  destination** (`community-stun-query` aspect, its own rotating identity);
-- answers a query with a packet instead of re-announcing the endpoint
-  destination;
-- throttles query announces to one per 10 minutes;
-- falls back to the announce answer for receivers that only understand
-  announces.
-
-Endpoint adverts continue on the original aspect, less often, for compatibility.
-An endpoint learned from a list answer passes the same admission rules (public
-IPv4, required port, unexpired, within one hour) as one heard in an announce.
-
-### Call protocol version
-
-Calls carry a `CALL_PROTOCOL_VERSION` (`src/lib/group-call/callProtocolVersion.ts`,
-mirrored in `electron/src/group-call.ts`). Peers on different versions refuse to
-share a room, so everyone in a room computes identical topology and election
-results. Version 2 introduced:
-
-- signed `protocolVersion` on `GC_JOIN` (wire `pv`),
-- signed `clustersHash` on `GC_TOPOLOGY` (wire `ch`), so a relay cannot rewrite
-  the cluster layout without breaking the signature,
-- signed `joinGeneration` on `GC_LEAVE`, so a relay cannot make a valid leave be
-  ignored,
-- a per-call `callSessionId` salt in the root-election digest, so an attacker
-  cannot grind an address offline to win the fixed `address:roomId` hash.
 
 The renderer decides topology and captures/plays audio. The Electron main process owns Reticulum transport state. A Python bridge process handles Reticulum link I/O.
 
@@ -92,10 +26,8 @@ Mic -> capture worklet -> Opus encoder -> encrypted group-audio packet
 
 Renderer:
 
-- `src/lib/group-call/groupCallAudioEngineRuntime.ts` (audio-surface runtime)
-- `src/hooks/useAudioSurfaceGroupCallController.ts`
+- `src/hooks/useGroupVoiceCall.ts`
 - `src/lib/group-call/audioPacketCodec.ts`
-- `src/lib/group-call/callProtocolVersion.ts`
 - `public/worklets/capture-processor.js`
 - `public/worklets/group-playout-processor.js`
 

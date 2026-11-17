@@ -855,19 +855,32 @@ describe('Reticulum wallet signing policy', () => {
     ).toThrow('unsupported value');
   });
 
-  // B-14: CALL_RTC_SIGNAL was removed from the signing policy along with the
-  // dead legacy inbound RTC path it belonged to.
-  it('rejects the removed CALL_RTC_SIGNAL signing envelope', () => {
+  it('allows only the bounded WebRTC signal digest envelope', () => {
+    const signal = {
+      type: 'CALL_RTC_SIGNAL',
+      callId: 'call-route-bound-id',
+      generation: 'generation_1234',
+      signalId: 'signal_1234',
+      signalType: 'offer',
+      payloadHash: 'a'.repeat(64),
+      timestamp: Date.now(),
+    };
+
+    expectAllowed(assertAllowedPresenceSigningPayload, signal);
+    expect(() =>
+      assertAllowedPresenceSigningPayload({ ...signal, payload: 'sdp' })
+    ).toThrow();
     expect(() =>
       assertAllowedPresenceSigningPayload({
-        type: 'CALL_RTC_SIGNAL',
-        callId: 'call-route-bound-id',
-        generation: 'generation_1234',
-        signalId: 'signal_1234',
-        signalType: 'offer',
-        payloadHash: 'a'.repeat(64),
-        timestamp: Date.now(),
+        ...signal,
+        type: 'CALL_RTC_SIGNAL_UNKNOWN',
       })
     ).toThrow();
+    expect(() =>
+      assertAllowedPresenceSigningPayload({
+        ...signal,
+        signalType: 'arbitrary',
+      })
+    ).toThrow('WebRTC signal signing envelope is invalid');
   });
 });

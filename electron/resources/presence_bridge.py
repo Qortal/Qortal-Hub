@@ -60,15 +60,6 @@ COMMUNITY_STUN_IDENTITY_FILENAME = (
 )
 COMMUNITY_STUN_IDENTITY_MAX_AGE_SECONDS = 24 * 60 * 60
 COMMUNITY_STUN_PORT = 47321
-# B-15: transport nodes default to a 3600 s announce target per destination
-# hash, so every announce of the community-STUN destination competes for one
-# budget. A query announce reuses that destination on 3.0.x, which is why the
-# coordinator's own rate limit was not enough: the bridge re-announced on every
-# request. Floor it here too, and keep queries on a separate rotating
-# destination so a contributor's queries never spend its endpoint budget.
-COMMUNITY_STUN_QUERY_ANNOUNCE_MIN_INTERVAL_SECONDS = 10 * 60
-COMMUNITY_STUN_QUERY_ASPECT = "community-stun-query"
-COMMUNITY_STUN_QUERY_REQUEST_PATH = "community-stun-endpoints"
 COMMUNITY_MASQUE_ASPECT = "community-masque-relay"
 COMMUNITY_MASQUE_VERSION = "v1"
 disable_bootstrap = False
@@ -113,14 +104,6 @@ _community_stun_event_times: "deque[float]" = deque()
 _community_stun_local_hashes: "deque[bytes]" = deque(maxlen=8)
 _community_stun_local_endpoint: Optional[Dict[str, Any]] = None
 _community_stun_last_query_response_at = 0.0
-# B-15: when this installation last announced a query, and the dedicated
-# query destination that keeps queries off the endpoint announce budget.
-_community_stun_last_query_announce_at = 0.0
-_community_stun_query_identity = None
-_community_stun_query_destination = None
-# B-15 #34: contributors heard recently, kept bridge-side only.
-_community_stun_contributor_hashes: Dict[bytes, float] = {}
-_community_stun_last_targeted_request_at = 0.0
 _community_masque_identity = None
 _community_masque_destination = None
 _community_masque_announce_handler = None
@@ -871,13 +854,7 @@ _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS = 2
 _AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS = 16
 _AUDIO_BACKLOG_BATCH_STEP = 2
 _AUDIO_BACKLOG_CMD_TIMEOUT_SECONDS = 0.005
-# X-5: the full scheduler diagnostics payload was emitted up to twice a second
-# for as long as any audio link was busy. Emit at most every 2s; callers that
-# need a full snapshot can still pass `force=True`.
-_AUDIO_QUEUE_STATE_MIN_INTERVAL_SECONDS = 2.0
-# X-5: full scheduler/interface diagnostics are opt-in. The periodic emit is
-# slim; this flag is set by the explicit-request command and consumed once.
-_audio_full_diagnostics_requested = False
+_AUDIO_QUEUE_STATE_MIN_INTERVAL_SECONDS = 0.5
 _BRIDGE_PRESSURE_LOG_INTERVAL_SECONDS = 5.0
 _BRIDGE_PRESSURE_RNS_GAP_THRESHOLD_MS = 1000.0
 _PRESENCE_PRESSURE_LOG_INTERVAL_SECONDS = 10.0
@@ -916,8 +893,6 @@ _SCHEDULER_RNS_CLASSIFY_CALLBACK_SHARDS = 2
 _SCHEDULER_SLOW_TASK_LOG_THRESHOLD_MS = 80.0
 _SCHEDULER_QUEUE_MAX_BY_LANE: Dict[str, int] = {
     "control-send": 256,
-    # X-5: dedicated lane for call signalling.
-    "call-send": 64,
     "link-management": 128,
     "overlay-control": 64,
     "overlay-io-0": 32,
@@ -4318,9 +4293,7 @@ def _binary_out_queue_oldest_age_ms(now: float) -> float:
     return max(0.0, (now - queued_at) * 1000.0)
 
 
-def _emit_audio_queue_state(
-    force: bool = False, include_full_diagnostics: bool = False
-) -> None:
+def _emit_audio_queue_state(force: bool = False) -> None:
     global _audio_queue_state_dirty, _audio_queue_state_last_emit
     now = time.monotonic()
     if not force and not _audio_queue_state_dirty:
@@ -4329,7 +4302,9 @@ def _emit_audio_queue_state(
         return
     _audio_queue_state_last_emit = now
     _audio_queue_state_dirty = False
-    payload = {
+    emit_event(
+        "group_audio_queue_state",
+        {
             "decodedQueueDepth": _audio_decoded_queue.qsize(),
             "decodedQueueOldestAgeMs": _decoded_queue_oldest_age_ms(now),
             "decodedQueueMax": _AUDIO_DECODED_QUEUE_MAX,
@@ -4404,26 +4379,8 @@ def _emit_audio_queue_state(
             "rnsSharedFrameInterfaceWorst": _audio_rns_shared_frame_interface_worst,
             "schedulerDiagnostics": _scheduler_diagnostics(),
             "mediaRouteDiagnostics": _audio_media_route_diagnostics(),
-    }
-    # X-5: strip the heavy, investigation-only fields unless explicitly asked.
-    if not include_full_diagnostics:
-        payload = {
-            key: value
-            for key, value in payload.items()
-            if not key.endswith("Diagnostics")
-            and not key.startswith(("rns", "executor", "processBatch"))
-        }
-    emit_event("group_audio_queue_state", payload)
-
-
-def handle_get_full_audio_queue_diagnostics(req_id: str) -> None:
-    """X-5: respond with the complete payload the periodic emit omits."""
-    try:
-        payload = _audio_queue_state_payload(time.monotonic(), True)
-        emit_event("group_audio_queue_state", payload)
-        emit_resp(req_id, True, payload=payload)
-    except Exception as exc:
-        emit_resp(req_id, False, error=str(exc))
+        },
+    )
     _maybe_log_bridge_pressure(now)
 
 
@@ -4602,16 +4559,6 @@ def _filter_outbound_audio_deadline(
             received_at_wall_ms = int(frame[4])
         except Exception:
             received_at_wall_ms = 0
-        # B-10: link control (QGCCTL1) is reliable signalling, not live media.
-        # Applying the 320 ms media deadline to it silently discarded RTC
-        # offers/answers/candidates under main-process load.
-        try:
-            payload = frame[5]
-        except Exception:
-            payload = None
-        if _inspect_gcall_audio_payload(payload)[0] == "control":
-            fresh.append(frame)
-            continue
         if received_at_wall_ms > 0 and now_ms - received_at_wall_ms > deadline_ms:
             dropped += 1
             continue
@@ -5867,16 +5814,6 @@ def _scheduler_lane_for_command(
         return "audio-control"
     if action_name in {"warm_group_audio_path"}:
         return "path-management"
-    # X-5: call signalling gets its own lane. It previously shared
-    # `control-send` with every Reticulum chat send, so a chat burst could
-    # delay a CALL_* frame past its 20-30s signature window.
-    if action_name in {
-        "send_call",
-        "fanout_call",
-        "send_group_call",
-        "fanout_group_call",
-    }:
-        return "call-send"
     if action_name in {
         "prepare_reticulum_resource_session",
         "accept_qchat_file_resource",
@@ -9173,13 +9110,9 @@ class CommunityStunAnnounceHandler:
     """
 
     def __init__(self, local_hash: Optional[bytes] = None):
-        # B-15: queries moved to their own aspect so they never spend the
-        # endpoint destination's announce budget. Listen on both, so 3.0.x
-        # contributors that still query the endpoint aspect keep working.
-        self.aspect_filter = [
-            f"{APP_NAMESPACE}.{COMMUNITY_STUN_ASPECT}.{COMMUNITY_STUN_VERSION}",
-            f"{APP_NAMESPACE}.{COMMUNITY_STUN_QUERY_ASPECT}.{COMMUNITY_STUN_VERSION}",
-        ]
+        self.aspect_filter = (
+            f"{APP_NAMESPACE}.{COMMUNITY_STUN_ASPECT}.{COMMUNITY_STUN_VERSION}"
+        )
         self.local_hash = local_hash
 
     def received_announce(self, destination_hash, announced_identity, app_data):
@@ -9204,20 +9137,14 @@ class CommunityStunAnnounceHandler:
                     ):
                         return
                     _community_stun_last_query_response_at = received_at
-                # B-15: answer with a packet on the query destination rather
-                # than re-announcing the *endpoint* destination. A re-announce
-                # spent the same per-destination budget the endpoint advert
-                # needs, which is why an hourly endpoint announce could still
-                # be starved by query answers. Fall back to the announce only
-                # when the packet path is unavailable, so 3.0.x receivers that
-                # only listen for announces keep working.
-                if not _send_community_stun_query_answer(destination_hash):
-                    timer = threading.Timer(
-                        secrets.randbelow(2000) / 1000.0,
-                        _announce_community_stun_endpoint,
-                    )
-                    timer.daemon = True
-                    timer.start()
+                # Spread simultaneous contributor responses without making a
+                # new consumer wait for the periodic two-minute refresh.
+                timer = threading.Timer(
+                    secrets.randbelow(2000) / 1000.0,
+                    _announce_community_stun_endpoint,
+                )
+                timer.daemon = True
+                timer.start()
                 return
             host = str(value.get("h") or "").strip()
             port = int(value.get("p") or 0)
@@ -9254,20 +9181,6 @@ class CommunityStunAnnounceHandler:
                     "port": port,
                     "expiresAt": expires_at * 1000,
                 }
-                # B-15 #34: remember *where* endpoints came from so a
-                # cache-less client can ask a known contributor for its list.
-                # The hash stays inside the bridge — it is never emitted to
-                # Electron, preserving the anonymous-discovery invariant.
-                if destination_hash:
-                    _community_stun_contributor_hashes[destination_hash] = (
-                        received_at
-                    )
-                    while len(_community_stun_contributor_hashes) > 64:
-                        oldest = min(
-                            _community_stun_contributor_hashes.items(),
-                            key=lambda item: item[1],
-                        )
-                        _community_stun_contributor_hashes.pop(oldest[0], None)
                 _community_stun_event_times.append(received_at)
                 if len(_community_stun_seen_endpoints) > 256:
                     oldest = sorted(
@@ -9285,103 +9198,6 @@ class CommunityStunAnnounceHandler:
             # Untrusted announces are expected on a public aspect. Ignore
             # malformed advertisements without creating noisy error logs.
             return
-
-
-def _load_rotating_community_stun_query_identity(config_dir: str):
-    """B-15: identity for the dedicated query destination.
-
-    Queries must not spend the endpoint destination's announce budget, and a
-    fresh return destination per query window is exactly what the MASQUE relay
-    discovery does for the same reason. Rotates on the same 24 h schedule.
-
-    The file name is derived from the aspect, so it never collides with the
-    endpoint identity.
-    """
-    identity_path = os.path.join(
-        config_dir,
-        "community-stun-query."
-        + hashlib.sha256(COMMUNITY_STUN_QUERY_ASPECT.encode("utf-8")).hexdigest()[:12]
-        + ".identity",
-    )
-    now = time.time()
-    try:
-        age = now - os.path.getmtime(identity_path)
-        if 0 <= age < COMMUNITY_STUN_IDENTITY_MAX_AGE_SECONDS:
-            loaded = RNS.Identity.from_file(identity_path)
-            if loaded is not None:
-                return loaded
-    except Exception:
-        pass
-    identity = RNS.Identity()
-    identity.to_file(identity_path)
-    try:
-        os.chmod(identity_path, 0o600)
-    except Exception:
-        pass
-    return identity
-
-
-def _ensure_community_stun_query_destination(config_dir: str):
-    """B-15: build (or reuse) the query destination and its request handler."""
-    global _community_stun_query_identity, _community_stun_query_destination
-    with _state_lock:
-        if _community_stun_query_destination is not None:
-            return _community_stun_query_destination
-    identity = _load_rotating_community_stun_query_identity(config_dir)
-    destination = RNS.Destination(
-        identity,
-        RNS.Destination.IN,
-        RNS.Destination.SINGLE,
-        APP_NAMESPACE,
-        COMMUNITY_STUN_QUERY_ASPECT,
-        COMMUNITY_STUN_VERSION,
-    )
-    destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
-    try:
-        destination.register_request_handler(
-            COMMUNITY_STUN_QUERY_REQUEST_PATH,
-            response_generator=_community_stun_endpoint_list_response,
-            allow=RNS.Destination.ALLOW_ALL,
-            auto_compress=False,
-        )
-    except Exception:
-        # An older RNS without request handlers is not fatal: announces still
-        # work, and the endpoint announcement path is untouched.
-        pass
-    with _state_lock:
-        _community_stun_query_identity = identity
-        _community_stun_query_destination = destination
-    return destination
-
-
-def _community_stun_endpoint_list_response(path, request_data=None, request_id=None, link_id=None, **kwargs):
-    """B-15: answer a discovery query with this installation's endpoint list.
-
-    Answering over the query destination's link rather than re-announcing the
-    endpoint destination is the whole point of #33/#35: one announce per day
-    from a new client is enough to fetch a full list, and the answer spends no
-    announce budget.
-    """
-    try:
-        now_ms = int(time.time() * 1000)
-        with _state_lock:
-            endpoints = [
-                {
-                    "host": value.get("host"),
-                    "port": value.get("port"),
-                    "expiresAt": value.get("expiresAt"),
-                }
-                for value in list(_community_stun_recent_endpoints.values())[:128]
-                if int(value.get("expiresAt") or 0) > now_ms
-            ]
-        payload = json.dumps(
-            {"v": 1, "endpoints": endpoints}, separators=(",", ":")
-        ).encode("utf-8")
-        if len(payload) > 4096:
-            payload = payload[:4096]
-        return payload
-    except Exception:
-        return None
 
 
 def _load_rotating_community_stun_identity(config_dir: str):
@@ -9430,207 +9246,6 @@ def _ensure_community_stun_discovery(config_dir: str) -> None:
     )
     _community_stun_local_hashes.append(_community_stun_destination.hash)
     _community_stun_announce_handler.local_hash = _community_stun_destination.hash
-
-
-def _community_stun_endpoint_snapshot() -> List[Dict[str, Any]]:
-    """B-15: unexpired endpoints this installation knows about."""
-    now_ms = int(time.time() * 1000)
-    with _state_lock:
-        return [
-            {
-                "host": value.get("host"),
-                "port": value.get("port"),
-                "expiresAt": value.get("expiresAt"),
-            }
-            for value in list(_community_stun_recent_endpoints.values())[:128]
-            if int(value.get("expiresAt") or 0) > now_ms
-        ]
-
-
-def _community_stun_answer_payload() -> bytes:
-    """B-15: the packet body for a query answer."""
-    return json.dumps(
-        {"v": 1, "endpoints": _community_stun_endpoint_snapshot()},
-        separators=(",", ":"),
-    ).encode("utf-8")
-
-
-def _accept_community_stun_endpoint(endpoint: Dict[str, Any]) -> bool:
-    """B-15: validate and store one endpoint from a trusted list answer.
-
-    Applies exactly the admission rules the announce path uses, so a targeted
-    answer can never widen what an announce could already have introduced.
-    """
-    try:
-        host = str(endpoint.get("host") or "").strip()
-        port = int(endpoint.get("port") or 0)
-        expires_at_ms = int(endpoint.get("expiresAt") or 0)
-        now = time.time()
-        address = ipaddress.ip_address(host)
-        if (
-            not isinstance(address, ipaddress.IPv4Address)
-            or not address.is_global
-            or port != COMMUNITY_STUN_PORT
-        ):
-            return False
-        if (
-            expires_at_ms <= int(now * 1000)
-            or expires_at_ms > int((now + 60 * 60) * 1000)
-        ):
-            return False
-        endpoint_key = f"{host}:{port}"
-        with _state_lock:
-            _community_stun_recent_endpoints[endpoint_key] = {
-                "host": host,
-                "port": port,
-                "expiresAt": expires_at_ms,
-            }
-            _community_stun_seen_endpoints[endpoint_key] = now
-        emit_event(
-            "community_stun_endpoint",
-            {"host": host, "port": port, "expiresAt": expires_at_ms},
-        )
-        return True
-    except Exception:
-        return False
-
-
-def _request_community_stun_endpoints_from_contributor() -> bool:
-    """B-15 #34: ask the most recently heard contributor for its full list.
-
-    Announce-driven discovery yields one endpoint per announce, so a cache-less
-    client can be left with an empty pool even though contributors are nearby.
-    This opens a link to a recently-heard contributor's query destination and
-    reads the endpoint list from its request handler, which costs one announce
-    per day instead of collecting announces one at a time.
-
-    Never raises and never blocks a call: the coordinator retries its normal
-    discovery loop if this returns False.
-    """
-    global _community_stun_last_targeted_request_at
-    now = time.time()
-    with _state_lock:
-        if (
-            now - _community_stun_last_targeted_request_at
-            < COMMUNITY_STUN_QUERY_ANNOUNCE_MIN_INTERVAL_SECONDS
-        ):
-            return False
-        candidates = [
-            key
-            for key, seen_at in _community_stun_contributor_hashes.items()
-            if now - seen_at < 2 * 60 * 60
-        ]
-        if not candidates:
-            return False
-        _community_stun_last_targeted_request_at = now
-    for destination_hash in sorted(
-        candidates,
-        key=lambda key: _community_stun_contributor_hashes.get(key, 0.0),
-        reverse=True,
-    )[:4]:
-        try:
-            requester = RNS.Destination(
-                destination_hash,
-                RNS.Destination.OUT,
-                RNS.Destination.SINGLE,
-                APP_NAMESPACE,
-                COMMUNITY_STUN_QUERY_ASPECT,
-                COMMUNITY_STUN_VERSION,
-            )
-            link = RNS.Link(requester)
-            if not link or not link.status == RNS.Link.ACTIVE:
-                continue
-            try:
-                raw = link.request(
-                    COMMUNITY_STUN_QUERY_REQUEST_PATH,
-                    data=b"{}",
-                    timeout=8.0,
-                )
-            finally:
-                try:
-                    link.teardown()
-                except Exception:
-                    pass
-            if not raw:
-                continue
-            value = json.loads(bytes(raw).decode("utf-8"))
-            endpoints = value.get("endpoints")
-            if not isinstance(endpoints, list):
-                continue
-            accepted = 0
-            for endpoint in endpoints[:128]:
-                if not isinstance(endpoint, dict):
-                    continue
-                if _accept_community_stun_endpoint(endpoint):
-                    accepted += 1
-            if accepted:
-                log(
-                    f"[presence_bridge] community_stun targeted request "
-                    f"accepted={accepted}"
-                )
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _send_community_stun_query_answer(requester_destination_hash) -> bool:
-    """B-15: answer a query with a packet on the query destination.
-
-    Returns False when the packet path is unavailable so the caller can fall
-    back to announcing, which is what 3.0.x receivers still listen for.
-    """
-    try:
-        destination = _ensure_community_stun_query_destination(
-            _reticulum_config_dir
-        )
-        if destination is None:
-            return False
-        payload = _community_stun_answer_payload()
-        if len(payload) > 4096:
-            return False
-        packet = RNS.Packet(
-            destination, payload, create_receipt=False
-        )
-        packet.send()
-        log("[presence_bridge] community_stun query answered by packet")
-        return True
-    except Exception:
-        return False
-
-
-def _announce_community_stun_query() -> bool:
-    """B-15: announce a discovery query, throttled and off-budget.
-
-    Returns False when the floor suppresses the announce. The coordinator sends
-    a query at start, on every bridge `ready`, every 4 min, and whenever the
-    ICE pool is empty — and the shared transport retries an empty list every
-    750 ms for 12 s. The coordinator's own 10 min floor was therefore not
-    sufficient on its own; throttling here is what protects the transport
-    nodes' per-destination announce budget.
-    """
-    global _community_stun_last_query_announce_at
-    now = time.time()
-    with _state_lock:
-        if (
-            now - _community_stun_last_query_announce_at
-            < COMMUNITY_STUN_QUERY_ANNOUNCE_MIN_INTERVAL_SECONDS
-        ):
-            return False
-        _community_stun_last_query_announce_at = now
-    try:
-        destination = _ensure_community_stun_query_destination(
-            _reticulum_config_dir
-        )
-    except Exception:
-        return False
-    if destination is None:
-        return False
-    query_data = json.dumps({"v": 1, "q": True}, separators=(",", ":")).encode(
-        "utf-8"
-    )
-    destination.announce(app_data=query_data)
-    return True
 
 
 def _announce_community_stun_endpoint() -> bool:
@@ -9711,21 +9326,12 @@ def handle_get_community_stun_endpoints(req_id: str) -> None:
             _community_stun_recent_endpoints.pop(key, None)
             _community_stun_seen_endpoints.pop(key, None)
         endpoints = list(_community_stun_recent_endpoints.values())[:128]
-    # B-15 #34: when announces have produced nothing, ask a contributor we have
-    # already heard from for its whole list before spending another announce.
-    if not endpoints:
-        try:
-            _request_community_stun_endpoints_from_contributor()
-        except Exception:
-            pass
-        with _state_lock:
-            endpoints = [
-                value
-                for value in _community_stun_recent_endpoints.values()
-                if int(value.get("expiresAt") or 0) > now_ms
-            ][:128]
     try:
-        _announce_community_stun_query()
+        _ensure_community_stun_discovery(_reticulum_config_dir)
+        query_data = json.dumps(
+            {"v": 1, "q": True}, separators=(",", ":")
+        ).encode("utf-8")
+        _community_stun_destination.announce(app_data=query_data)
     except Exception:
         # Cached endpoints remain useful if an on-demand discovery announce
         # cannot be sent during a transient bridge/transport transition.
@@ -19114,45 +18720,25 @@ def _audio_link_pick_keep(
     link_id_b: str,
     state_b: Dict[str, Any],
 ) -> tuple[str, str]:
-    """Pick the canonical link for a peer, deterministically, from both ends.
-
-    B-9: the previous rule preferred whichever link had more local activity.
-    Each end measures its own activity, so both ends could prefer their own
-    link and disagree — control frames then arrived on the "wrong" one and were
-    dropped. The rule is now ordered by facts both ends can compute:
-
-    1. A link RNS has established outranks one that has not.
-    2. Presence hash + direction decides which side opens and which waits.
-       Both ends derive the same answer because it compares the same two hashes.
-    3. Activity is a tie-break only, for the case where both links are
-       established and same-direction (a rare race).
-    4. Creation order and finally the link id break any remaining tie, so the
-       result is total and identical on both ends.
-    """
     est_a = state_a.get("established") is True
     est_b = state_b.get("established") is True
     if est_a and not est_b:
         return link_id_a, link_id_b
     if est_b and not est_a:
         return link_id_b, link_id_a
-
+    activity_a = _audio_link_activity_ts(state_a)
+    activity_b = _audio_link_activity_ts(state_b)
+    if abs(activity_a - activity_b) > 0.001:
+        return (link_id_a, link_id_b) if activity_a > activity_b else (link_id_b, link_id_a)
     incoming_a = state_a.get("incoming") is True
     incoming_b = state_b.get("incoming") is True
     if incoming_a != incoming_b:
         local_hex = _local_presence_hash_hex()
         if local_hex and _valid_presence_destination_hash_hex(peer_key):
-            # The lower hash opens; the higher hash waits. Both sides compute
-            # the same comparison, so they agree on which link survives.
             prefer_incoming = local_hex > peer_key
             if incoming_a == prefer_incoming:
                 return link_id_a, link_id_b
             return link_id_b, link_id_a
-
-    activity_a = _audio_link_activity_ts(state_a)
-    activity_b = _audio_link_activity_ts(state_b)
-    if abs(activity_a - activity_b) > 0.001:
-        return (link_id_a, link_id_b) if activity_a > activity_b else (link_id_b, link_id_a)
-
     created_a = float(state_a.get("created_at") or 0.0)
     created_b = float(state_b.get("created_at") or 0.0)
     if created_a != created_b:
@@ -20497,13 +20083,6 @@ def emit_audio_link_established(link_id: str) -> None:
             "linkId": link_id,
             "peerPresenceHash": state.get("peerPresenceHash") or "",
             "peerDestinationHash": state.get("peerDestinationHash") or "",
-            # S-4: the identity RNS proved on the link. Once set, wire-claimed
-            # sender hashes can no longer rebind this link to another peer.
-            "authenticatedPeerHash": (
-                (state.get("peerDestinationHash") or "")
-                if state.get("link_identity_confirmed")
-                else ""
-            ),
             "incoming": state.get("incoming") is True,
             "managerState": str(state.get("manager_state") or ""),
             "generation": int(state.get("generation") or 0),
@@ -20601,8 +20180,6 @@ def on_audio_link_remote_identified(link, identity) -> None:
         with _state_lock:
             state["peerPresenceHash"] = peer_hash
             state["peerDestinationHash"] = peer_hash
-            # S-4: mark link identity as confirmed — never overwrite from wire after this
-            state["link_identity_confirmed"] = True
         _register_active_audio_for_peer(peer_hash, link_id)
     emit_audio_link_established(link_id)
 
@@ -20728,19 +20305,11 @@ def _handle_audio_link_packet(message, packet) -> None:
                 f"packet={_short_route(packet_hash_hex)}"
             )
         if sender_call_hash:
-            # S-4: once link identity is confirmed, never overwrite peer from wire
-            if state.get("link_identity_confirmed"):
-                authenticated_dest = state.get("peerDestinationHash", "")
-                if sender_call_hash != authenticated_dest:
-                    # Packet claims a different sender than the link identity — drop it
-                    return None
-                # Skip the overwrite — peer is already set correctly
-            else:
-                peer_presence_hash = _resolve_sender_peer_destination_hash(sender_call_hash)
-                with _state_lock:
-                    state["peerDestinationHash"] = sender_call_hash
-                    if peer_presence_hash:
-                        state["peerPresenceHash"] = peer_presence_hash
+            peer_presence_hash = _resolve_sender_peer_destination_hash(sender_call_hash)
+            with _state_lock:
+                state["peerDestinationHash"] = sender_call_hash
+                if peer_presence_hash:
+                    state["peerPresenceHash"] = peer_presence_hash
                 state["last_rx_at"] = time.time()
                 state["last_activity_at"] = state["last_rx_at"]
                 state["consecutive_send_timeouts"] = 0
@@ -20748,19 +20317,7 @@ def _handle_audio_link_packet(message, packet) -> None:
                 _register_active_audio_for_peer(peer_presence_hash, link_id)
                 canonical_id = _canonical_audio_link_id_for_peer(peer_presence_hash)
                 if canonical_id and canonical_id != link_id:
-                    # B-9: control frames are reliable signalling, not media.
-                    # Both ends pick the canonical link from their own local
-                    # activity timestamps, so the two sides can disagree and
-                    # silently throw away RTC offers/answers/candidates that
-                    # RNS already acknowledged. Never drop control here — the
-                    # signature and account checks in GroupCallManager still
-                    # apply.
-                    if _inspect_gcall_audio_payload(raw_audio)[0] == "control":
-                        with _state_lock:
-                            state["last_rx_at"] = time.time()
-                            state["last_activity_at"] = state["last_rx_at"]
-                    else:
-                        return
+                    return
         try:
             chunk = _encode_audio_batch_binary(
                 [
@@ -28313,11 +27870,6 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_configure_community_stun(req_id, payload)
     elif action == "get_community_stun_endpoints":
         handle_get_community_stun_endpoints(req_id)
-    elif action == "get_full_audio_queue_diagnostics":
-        # X-5: explicit request for the complete diagnostics block, which the
-        # periodic emit deliberately omits. Answers with the full payload and
-        # also emits it so an open diagnostics view updates.
-        handle_get_full_audio_queue_diagnostics(req_id)
     elif action == "get_community_masque_relays":
         handle_get_community_masque_relays(req_id, payload)
     elif action == "configure_developer_log_filter":

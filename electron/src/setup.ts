@@ -993,18 +993,6 @@ export class ElectronCapacitorApp {
         additionalArguments: [`--window-role=${AUDIO_SURFACE_WINDOW_ROLE}`],
       },
     });
-    // P-1: keep ICE on the public interface so Chromium does not gather or
-    // prefer LAN/VPN candidates. Best-effort: older Electron builds may not
-    // expose this, and the renderer-side candidate filter is the real guard.
-    try {
-      (
-        window.webContents as unknown as {
-          setWebRTCIPHandlingPolicy?: (policy: string) => void;
-        }
-      ).setWebRTCIPHandlingPolicy?.('default_public_interface_only');
-    } catch (err) {
-      loggerWarn('[GCall:audio-surface] setWebRTCIPHandlingPolicy failed', err);
-    }
     this.AudioSurfaceWindow = window;
     const webContentsId = window.webContents.id;
     isolatedAudioSurfaceContents.add(webContentsId);
@@ -2067,10 +2055,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   autoLockTimeoutMinutes: DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES,
   disableAutoLockOnIdle: false,
   p2pEnabled: !isDisabledLegacy,
-  // P-6: community STUN contribution is opt-in. It binds a UDP port, maps it
-  // through UPnP and publishes the router's public IP to the mesh, so a fresh
-  // install must not do that without consent.
-  communityStunContributionEnabled: false,
+  communityStunContributionEnabled: true,
   reticulumMeshUpnpEnabled: true,
   reticulumManagedConfigEnabled: true,
   reticulumTransportEnabled: false,
@@ -2108,11 +2093,8 @@ export async function readAppSettings(): Promise<AppSettings> {
       legacyPublicStunFallback: isDisabledLegacy
         ? false
         : parsed.legacyPublicStunFallback === true,
-      // P-6: only an explicit `true` opts in. Users who already contributed
-      // keep working because their stored value is `true`; new installs and
-      // anyone who never touched the setting stay off.
       communityStunContributionEnabled:
-        parsed.communityStunContributionEnabled === true,
+        parsed.communityStunContributionEnabled === false ? false : true,
       reticulumMeshUpnpEnabled:
         parsed.reticulumMeshUpnpEnabled === false ? false : true,
       reticulumManagedConfigEnabled:
@@ -2159,10 +2141,8 @@ let lastObservedAppSettingsJson = '';
 
 async function notifyAppSettingsChanged(settings: AppSettings): Promise<void> {
   setReticulumRuntimeEnabled(settings.reticulumEnabled !== false);
-  const stunCoordinator = getStunCoordinator();
-  // P-6: contribution is opt-in; only an explicit `true` enables it.
-  stunCoordinator?.setContributionEnabled(
-    settings.communityStunContributionEnabled === true
+  getStunCoordinator()?.setContributionEnabled(
+    settings.communityStunContributionEnabled !== false
   );
   lastObservedAppSettingsJson = JSON.stringify(settings);
   for (const window of BrowserWindow.getAllWindows()) {
@@ -7491,9 +7471,13 @@ export function attachCallListeners(
   manager.on('call:accepted', forward('call:accepted'));
   manager.on('call:rejected', forward('call:rejected'));
   manager.on('call:hangup', forward('call:hangup'));
-  // B-14: `call:rtc-signal` is no longer forwarded. The only producer was the
-  // removed legacy `handleRtcWire` inbound path; DM WebRTC signalling travels
-  // as a signed GC_RTC_SIGNAL instead.
+  manager.on('call:rtc-signal', (payload: unknown) => {
+    for (const webContents of callSubscribers) {
+      if (!webContents.isDestroyed() && isMainShellSender(webContents)) {
+        webContents.send('call:rtc-signal', payload);
+      }
+    }
+  });
   manager.on('call:history', (payload: unknown) => {
     void getReticulumChatManager()?.recordDirectCallHistory(payload as any);
   });
@@ -7592,8 +7576,30 @@ ipcMain.handle(
   }
 );
 
-// B-14: the outbound `call:rtc-signal` IPC handler is removed. Nothing in the
-// renderer invoked it; DM WebRTC signalling uses `gcall:sendRtcSignal`.
+ipcMain.handle(
+  'call:rtc-signal',
+  async (
+    _event,
+    input: {
+      callId: string;
+      generation: string;
+      signalId: string;
+      signalType: 'capability' | 'offer' | 'answer' | 'candidate';
+      payload: string;
+      payloadHash: string;
+      timestamp: number;
+      signature: string;
+      publicKey: string;
+    }
+  ) => {
+    if (!isMainShellSender(_event.sender)) {
+      return { success: false, error: 'Main shell required' };
+    }
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    return mgr.sendRtcSignal(input);
+  }
+);
 
 ipcMain.handle(
   'call:setLocalAddresses',

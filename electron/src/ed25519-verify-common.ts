@@ -9,27 +9,6 @@ import {
   base58Decode,
 } from './presence';
 
-/**
- * B-11: a single clock-skew window shared by every call message type
- * (CALL_*, GC_RTC_SIGNAL, GC_JOIN, GA, DM link control).
- */
-export const MAX_CALL_CLOCK_SKEW_MS = 60_000;
-
-const callClockSkewWarnAt = new Map<string, number>();
-
-/**
- * B-11: throttled "check your clock" warning. Repeats at most once a minute
- * per message type so a badly-skewed peer cannot flood the log.
- */
-function warnCallClockSkew(wireType: string, skewMs: number): void {
-  const now = Date.now();
-  const last = callClockSkewWarnAt.get(wireType) ?? 0;
-  if (now - last < 60_000) return;
-  callClockSkewWarnAt.set(wireType, now);
-  console.warn(
-    `[Call] Dropped ${wireType}: clock skew ${Math.round(skewMs / 1000)}s exceeds ${Math.round(MAX_CALL_CLOCK_SKEW_MS / 1000)}s — check the system clock on this device or the peer's`
-  );
-}
 export const ED25519_PUBLIC_KEY_BYTES = 32;
 export const ED25519_SIGNATURE_BYTES = 64;
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -47,9 +26,7 @@ export function generateNativeEd25519KeyPair(): NativeEd25519KeyPair {
   if (
     publicKeyDer.byteLength !==
       ED25519_SPKI_PREFIX.byteLength + ED25519_PUBLIC_KEY_BYTES ||
-    !publicKeyDer
-      .subarray(0, ED25519_SPKI_PREFIX.byteLength)
-      .equals(ED25519_SPKI_PREFIX)
+    !publicKeyDer.subarray(0, ED25519_SPKI_PREFIX.byteLength).equals(ED25519_SPKI_PREFIX)
   ) {
     throw new Error('Unexpected native Ed25519 public key format');
   }
@@ -158,19 +135,6 @@ export type Ed25519VerifyPayload =
       signature: string;
       fromPublicKey: string;
       expectedAddress: string;
-      /**
-       * Skip the clock-skew window for this frame.
-       *
-       * Only safe for a frame that cannot act on anything but the call it
-       * already names — a CALL_HANGUP for a call that is still ringing on the
-       * receiving device. A call id is an unguessable per-call binding, so a
-       * captured frame cannot be replayed into a different call. Address
-       * derivation and the signature check still run.
-       *
-       * A pre-signed cancellation carries the *request* timestamp, so it can
-       * otherwise expire while the call it cancels is still pending.
-       */
-      allowStaleTimestamp?: boolean;
     };
 
 export function verifyGcDetached(
@@ -241,34 +205,14 @@ export function verifyCallSignedDetached(
   timestamp: number,
   signature: string,
   fromPublicKey: string,
-  expectedAddress: string,
-  allowStaleTimestamp = false
+  expectedAddress: string
 ): boolean {
   try {
-    // B-11: one shared window for every call message type. The old
-    // "10s future / 30s old" pair silently broke calls for any device whose
-    // clock was more than 10s fast, with no user-visible reason.
-    //
-    // `allowStaleTimestamp` skips only this window. It is set for a
-    // CALL_HANGUP naming a call that is still ringing here, whose signature
-    // was minted at request time and can legitimately outlive the window.
-    // Address derivation and the signature check below always run.
-    if (!allowStaleTimestamp) {
-      const skew = Date.now() - timestamp;
-      if (Math.abs(skew) > MAX_CALL_CLOCK_SKEW_MS) {
-        // B-11: make an otherwise-silent skew rejection diagnosable — the user
-        // sees only "no answer" when their clock is off.
-        warnCallClockSkew(wireType, skew);
-        return false;
-      }
-    }
+    const skew = Date.now() - timestamp;
+    if (skew > 30_000 || skew < -10_000) return false;
     const derived = deriveAddressFromPublicKey(fromPublicKey);
     if (derived !== expectedAddress) return false;
-    const msgBytes = canonicalizeForSigning({
-      callId,
-      timestamp,
-      type: wireType,
-    });
+    const msgBytes = canonicalizeForSigning({ callId, timestamp, type: wireType });
     const sigBytes = base58Decode(signature) as Uint8Array;
     const keyBytes = base58Decode(fromPublicKey) as Uint8Array;
     return verifyEd25519Detached(msgBytes, sigBytes, keyBytes);
@@ -312,8 +256,7 @@ export function runEd25519VerifySync(payload: Ed25519VerifyPayload): boolean {
         payload.timestamp,
         payload.signature,
         payload.fromPublicKey,
-        payload.expectedAddress,
-        payload.allowStaleTimestamp === true
+        payload.expectedAddress
       );
     default:
       return false;

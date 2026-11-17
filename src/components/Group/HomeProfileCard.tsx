@@ -731,11 +731,9 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
       setReticulumChatEnabled(
         settings?.reticulumChatEnabled === false ? false : true
       );
-      // P-6: contribution is opt-in; only an explicit `true` turns it on.
       setCommunityStunContributionEnabled(
-        settings?.communityStunContributionEnabled === true
+        settings?.communityStunContributionEnabled === false ? false : true
       );
-      // P-4: private-calls setting.
       setReticulumResourceLimitBytes(
         Number(settings?.reticulumResourceLimitBytes) ||
           10 * RETICULUM_RESOURCE_GIB
@@ -778,9 +776,8 @@ export const HomeProfileCard = ({ onOpenReceive }: HomeProfileCardProps) => {
         settings?.reticulumTransportEnabled === true
       );
       setReticulumChatEnabled(settings?.reticulumChatEnabled !== false);
-      // P-6: contribution is opt-in; only an explicit `true` turns it on.
       setCommunityStunContributionEnabled(
-        settings?.communityStunContributionEnabled === true
+        settings?.communityStunContributionEnabled !== false
       );
     });
   }, []);
