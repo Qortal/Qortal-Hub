@@ -22,7 +22,10 @@ i18n.use(capitalizeFirstChar as never).init({
   resources: {
     en: {
       core: {
-        app_page: { publish: enCore.app_page.publish },
+        app_page: {
+          edit: enCore.app_page.edit,
+          publish: enCore.app_page.publish,
+        },
         message: { error: { missing_fields: 'missing: {{fields}}' } },
       },
     },
@@ -92,10 +95,15 @@ const node = {
   pageStatus: 'READY',
   shots: null as NodeShots | null,
   shotsStatus: 'READY',
+  /** The search for the page's parts fails. */
+  partsSearchDown: false,
 };
 /** Holds the next search for the page's parts until it is released. */
 let holdNextPartsSearch = false;
 let releasePartsSearch: (() => void) | null = null;
+/** Holds the app's own upload until it is released. */
+let holdAppUpload = false;
+let releaseAppUpload: (() => void) | null = null;
 
 const mockNode = () => {
   const json = (value: unknown) => new Response(JSON.stringify(value));
@@ -103,6 +111,7 @@ const mockNode = () => {
     const url = String(input);
     if (url.includes('/names/address/')) return json([{ name: 'TestApp' }]);
     if (url.includes('identifier=qhub_app_')) {
+      if (node.partsSearchDown) return new Response('', { status: 500 });
       if (holdNextPartsSearch) {
         holdNextPartsSearch = false;
         await new Promise<void>((resolve) => {
@@ -171,7 +180,9 @@ const globalSnack = () =>
 /** What the form last told its launcher tab about unsaved input. */
 let unsaved = false;
 
-const renderForm = () => {
+const renderForm = (
+  props: Partial<React.ComponentProps<typeof AppPublish>> = {}
+) => {
   store = createStore();
   return render(
     <Provider store={store}>
@@ -188,6 +199,7 @@ const renderForm = () => {
             onUnsavedChange={(value) => {
               unsaved = value;
             }}
+            {...props}
           />
         </I18nextProvider>
       </ThemeProvider>
@@ -197,6 +209,7 @@ const renderForm = () => {
 
 const title = () => screen.getByRole('textbox', { name: 'Title' });
 const version = () => screen.getByLabelText(/app_page\.details\.version/i);
+const whatsNew = () => screen.getByLabelText(/app_page\.whats_new\.title/i);
 
 /** The form is filled in from the node and the app's page has been read. */
 const formReady = async () => {
@@ -267,14 +280,24 @@ describe('the publish form, against the node', () => {
     node.pageStatus = 'READY';
     node.shots = null;
     node.shotsStatus = 'READY';
+    node.partsSearchDown = false;
     holdNextPartsSearch = false;
     releasePartsSearch = null;
+    holdAppUpload = false;
+    releaseAppUpload = null;
     unsaved = false;
     window.electronAPI = undefined as any;
     URL.createObjectURL = vi.fn(() => 'blob:picture');
     URL.revokeObjectURL = vi.fn();
     mockNode();
-    sendMessage = vi.fn(async () => ({ signature: SIGNATURE }));
+    sendMessage = vi.fn(async (_action: string, payload: any) => {
+      if (holdAppUpload && payload?.service === 'APP') {
+        await new Promise<void>((resolve) => {
+          releaseAppUpload = resolve;
+        });
+      }
+      return { signature: SIGNATURE };
+    });
     window.sendMessage = sendMessage as unknown as typeof window.sendMessage;
   });
 
@@ -358,12 +381,41 @@ describe('the publish form, against the node', () => {
         expect(globalSnack()).toEqual({
           type: 'warning',
           message:
-            'The app was published, but its page could not be updated: ' +
-            enCore.app_page.publish.page_unreadable,
+            "The app was published, but its page text wasn't: " +
+            enCore.app_page.edit.error_page_unverified,
         })
       );
       expect(published('APP')).toHaveLength(1);
       expect(published('JSON')).toHaveLength(0);
+    });
+
+    it("publishes no page text when the node can't say what the page has by then", async () => {
+      node.page = pageWith('Story');
+      renderForm();
+      await formReady();
+      chooseZip();
+      fireEvent.change(version(), { target: { value: '2.0' } });
+
+      // The page could have been edited meanwhile, and the node's search for
+      // it fails now.
+      node.partsSearchDown = true;
+      await pressPublish();
+      await waitFor(() => expect(globalSnack()?.type).toBe('warning'));
+
+      // The form's copy of About and links isn't published over it.
+      expect(published('APP')).toHaveLength(1);
+      expect(published('JSON')).toHaveLength(0);
+      expect(globalSnack()!.message).toBe(
+        "The app was published, but its page text wasn't: " +
+          enCore.app_page.edit.error_page_unverified
+      );
+      // The form says so where its Publish is, and keeps the version typed.
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        enCore.app_page.edit.error_page_unverified
+      );
+      expect(version()).toHaveValue('2.0');
+      expect(unsaved).toBe(true);
+      expect(addTabCalls()).toHaveLength(0);
     });
   });
 
@@ -393,6 +445,57 @@ describe('the publish form, against the node', () => {
     });
   });
 
+  describe('while the app uploads', () => {
+    beforeEach(() => {
+      holdAppUpload = true;
+    });
+
+    it('keeps input typed meanwhile, instead of opening the app without it', async () => {
+      node.page = pageWith('Story');
+      renderForm();
+      await formReady();
+      chooseZip();
+      fireEvent.change(version(), { target: { value: '2.0' } });
+      await pressPublish();
+      await waitFor(() => expect(releaseAppUpload).not.toBeNull());
+
+      fireEvent.change(whatsNew(), { target: { value: 'Faster start' } });
+      await act(async () => {
+        releaseAppUpload!();
+      });
+      await waitFor(() => expect(globalSnack()?.type).toBe('success'));
+
+      // The page went out as it was when Publish was pressed: the line typed
+      // meanwhile stays with the form, unsaved.
+      expect(JSON.parse(atob(published('JSON')[0].data)).whatsNew).toBe('');
+      expect(whatsNew()).toHaveValue('Faster start');
+      expect(unsaved).toBe(true);
+      expect(addTabCalls()).toHaveLength(0);
+    });
+
+    it('keeps the name and type of the app being published', async () => {
+      renderForm({ isAppTypeLocked: false, isUpdate: false });
+      await formReady();
+      const name = screen.getByRole('combobox', { name: /name_app/i });
+      const type = screen.getByRole('button', { name: /website/i });
+      chooseZip();
+      await pressPublish();
+      await waitFor(() => expect(releaseAppUpload).not.toBeNull());
+
+      // Another name or type would put another app's page in the form while
+      // this one's page parts are still to go out.
+      expect(name).toHaveAttribute('aria-disabled', 'true');
+      expect(type).toBeDisabled();
+
+      await act(async () => {
+        releaseAppUpload!();
+      });
+      await waitFor(() => expect(addTabCalls()).toHaveLength(1));
+      expect(name).not.toHaveAttribute('aria-disabled');
+      expect(type).toBeEnabled();
+    });
+  });
+
   describe('what it says when a page part fails', () => {
     /** An update with a new version and a changed screenshot caption. */
     const publishVersionAndCaption = async () => {
@@ -418,13 +521,31 @@ describe('the publish form, against the node', () => {
       await waitFor(() => expect(globalSnack()).not.toBeNull());
     };
 
-    it('says only the screenshots failed when the page text went out', async () => {
-      // The third publish of the confirmed three fails at the node.
+    /** The node turns down publishes of one service until told otherwise. */
+    const failing = (service: string) => {
+      let down = true;
       sendMessage.mockImplementation(async (_action, payload) =>
-        payload?.service === 'IMAGE'
+        down && payload?.service === service
           ? { error: 'Insufficient balance' }
           : { signature: SIGNATURE }
       );
+      return () => {
+        down = false;
+      };
+    };
+    const captions = () =>
+      screen
+        .getAllByRole('textbox', { name: /app_page\.screenshots\.caption/i })
+        .map((field) => (field as HTMLInputElement).value);
+    const pressRetry = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      });
+    };
+
+    it('says only the screenshots failed when the page text went out', async () => {
+      // The third publish of the confirmed three fails at the node.
+      failing('IMAGE');
       await publishVersionAndCaption();
 
       expect(publishedVersions()).toEqual(['2.0']);
@@ -432,27 +553,145 @@ describe('the publish form, against the node', () => {
       expect(globalSnack()).toEqual({
         type: 'warning',
         message:
-          'The app and its page text were published, but its screenshots ' +
-          'could not be updated: Insufficient balance',
+          "The app was published, but its screenshots weren't: " +
+          'Insufficient balance',
       });
     });
 
-    it('says the page could not be updated when its text failed', async () => {
-      sendMessage.mockImplementation(async (_action, payload) =>
-        payload?.service === 'JSON'
-          ? { error: 'Insufficient balance' }
-          : { signature: SIGNATURE }
-      );
+    it('still publishes the screenshots when the page text failed', async () => {
+      failing('JSON');
       await publishVersionAndCaption();
 
-      // The screenshots are not tried after the page text failed.
-      expect(published('IMAGE')).toHaveLength(0);
+      expect(published('IMAGE')).toHaveLength(1);
       expect(globalSnack()).toEqual({
         type: 'warning',
         message:
-          'The app was published, but its page could not be updated: ' +
+          "The app was published, but its page text wasn't: " +
           'Insufficient balance',
       });
+    });
+
+    it('keeps what failed in the form, unsaved, instead of opening the app', async () => {
+      failing('IMAGE');
+      await publishVersionAndCaption();
+
+      // The caption that didn't go out is still there to publish.
+      expect(captions()).toEqual(['Start', 'Editor']);
+      expect(unsaved).toBe(true);
+      expect(addTabCalls()).toHaveLength(0);
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        enCore.app_page.publish.left_hint
+      );
+    });
+
+    it('publishes only what failed on Retry, then opens the app', async () => {
+      const recover = failing('IMAGE');
+      await publishVersionAndCaption();
+      recover();
+      mocks.show.mockClear();
+
+      await pressRetry();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(2));
+
+      // One more publish to confirm: the screenshots, not the app again.
+      expect(mocks.show).toHaveBeenCalledTimes(1);
+      expect(mocks.show).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: "Publish what's left of the app's page, without the app?",
+          publishFee: '0.01 QORT',
+        })
+      );
+      expect(published('APP')).toHaveLength(1);
+      expect(published('JSON')).toHaveLength(1);
+      await waitFor(() => expect(addTabCalls()).toHaveLength(1));
+      expect(unsaved).toBe(false);
+      expect(globalSnack()?.type).toBe('success');
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it("publishes a fix made to the part that failed, with the first app's signature", async () => {
+      const recover = failing('JSON');
+      await publishVersionAndCaption();
+      recover();
+      sendMessage.mockImplementation(async () => ({ signature: 'OTHER' }));
+
+      fireEvent.change(version(), { target: { value: '2.1' } });
+      await pressRetry();
+      await waitFor(() => expect(published('JSON')).toHaveLength(2));
+
+      const page = JSON.parse(atob(published('JSON')[1].data));
+      // Its version describes the upload already published.
+      expect(page).toMatchObject({ version: '2.1', appSignature: SIGNATURE });
+      expect(published('APP')).toHaveLength(1);
+      expect(published('IMAGE')).toHaveLength(1);
+      // The fix went out with it: nothing is left unsaved.
+      await waitFor(() => expect(addTabCalls()).toHaveLength(1));
+      expect(unsaved).toBe(false);
+    });
+
+    it('stays open with input that Retry did not publish', async () => {
+      const recover = failing('IMAGE');
+      await publishVersionAndCaption();
+      recover();
+
+      fireEvent.change(title(), { target: { value: 'My App 2' } });
+      await pressRetry();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(2));
+
+      // The new title isn't published: the form keeps it, and still asks
+      // before its tab closes.
+      expect(title()).toHaveValue('My App 2');
+      expect(unsaved).toBe(true);
+      expect(addTabCalls()).toHaveLength(0);
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('takes a declined Retry as no error, and keeps what is left', async () => {
+      const recover = failing('IMAGE');
+      await publishVersionAndCaption();
+      recover();
+      mocks.show.mockRejectedValueOnce({ isCanceled: true });
+
+      await pressRetry();
+
+      expect(published('IMAGE')).toHaveLength(1);
+      // The app is published: no "unable to publish the app".
+      expect(errorsShown()).toHaveLength(0);
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        enCore.app_page.publish.left_hint
+      );
+      expect(unsaved).toBe(true);
+    });
+
+    it('keeps the name and type that the parts left belong to', async () => {
+      failing('IMAGE');
+      node.page = pageWith('Story');
+      node.shots = twoShots();
+      renderForm({ isAppTypeLocked: false, isUpdate: false });
+      await formReady();
+      const name = screen.getByRole('combobox', { name: /name_app/i });
+      const type = screen.getByRole('button', { name: /website/i });
+      expect(name).not.toHaveAttribute('aria-disabled');
+      expect(type).toBeEnabled();
+      await screen.findByRole('radio', {
+        name: /keep the current 2 screenshots/i,
+      });
+      fireEvent.click(
+        screen.getByRole('radio', { name: /change the screenshots/i })
+      );
+      fireEvent.change(
+        screen.getAllByRole('textbox', {
+          name: /app_page\.screenshots\.caption/i,
+        })[0],
+        { target: { value: 'Start' } }
+      );
+      chooseZip();
+      await pressPublish();
+      await waitFor(() => expect(globalSnack()?.type).toBe('warning'));
+
+      // Another name or type would read another page over the parts kept.
+      expect(name).toHaveAttribute('aria-disabled', 'true');
+      expect(type).toBeDisabled();
     });
   });
 });

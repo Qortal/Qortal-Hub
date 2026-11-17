@@ -7,7 +7,9 @@ import {
   useState,
 } from 'react';
 import {
+  Alert,
   Box,
+  Button,
   MenuItem,
   TextField,
   ToggleButton,
@@ -51,6 +53,9 @@ import { PublishSourcePicker, formatPublishDate } from './PublishSourcePicker';
 import {
   ExtrasSummary,
   extrasPartCount,
+  PagePart,
+  PartsLeft,
+  PublishExtras,
   PublishExtrasHandle,
   PublishPageExtras,
   publishPageExtras,
@@ -107,6 +112,30 @@ const useElementWidth = () => {
   }, [element]);
   return { width, ref: setElement };
 };
+
+/** How much input each part of the form has had. */
+interface InputCounts {
+  /** Everything but the page parts: name, files and listing. */
+  app: number;
+  page: number;
+  shots: number;
+}
+
+/**
+ * Page parts that failed after their app went out. The form keeps them, to
+ * publish them again without the app.
+ */
+interface LeftParts {
+  app: { service: string; name: string };
+  /** The app's signature, which the page's version describes. */
+  signature: string;
+  page: boolean;
+  shots: boolean;
+  /** What failed and why, in words. */
+  message: string;
+  /** Each part's input when it was last taken for a publish. */
+  published: InputCounts;
+}
 
 interface AppPublishProps {
   categories: any;
@@ -169,11 +198,42 @@ export const AppPublish = ({
   // Anything the user chose or typed since the form opened or last published.
   // What a prefill fills in is not counted.
   const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
-  const noteInput = () => setHasUnsavedInput(true);
+  // Counts the input, so a publish that ends later sees what came after it.
+  const inputCountRef = useRef(0);
+  const noteInput = () => {
+    inputCountRef.current += 1;
+    setHasUnsavedInput(true);
+  };
   const markEdited = (field: string) => {
     editedFieldsRef.current.add(field);
     noteInput();
   };
+  // The page parts' share of it, so a retry of some parts knows what it
+  // publishes.
+  const partInputRef = useRef<Record<PagePart, number>>({ page: 0, shots: 0 });
+  const notePartInput = (part: PagePart) => {
+    partInputRef.current[part] += 1;
+    noteInput();
+  };
+  const inputCounts = (): InputCounts => {
+    const { page, shots } = partInputRef.current;
+    return { app: inputCountRef.current - page - shots, page, shots };
+  };
+  /** Whether the form has input that the publish taken at `published` left out. */
+  const hasInputSince = (published: InputCounts) => {
+    const now = inputCounts();
+    return (
+      now.app > published.app ||
+      now.page > published.page ||
+      now.shots > published.shots
+    );
+  };
+  // Page parts that failed after the app went out, kept to publish again.
+  const [leftParts, setLeftParts] = useState<LeftParts | null>(null);
+  const retryingRef = useRef(false);
+  // An app being published keeps its name and type until its page parts are
+  // out: the page section would otherwise show another app's page.
+  const [appPublishing, setAppPublishing] = useState(false);
   const onUnsavedChangeRef = useRef(onUnsavedChange);
   onUnsavedChangeRef.current = onUnsavedChange;
   useEffect(() => {
@@ -339,9 +399,61 @@ export const AppPublish = ({
     tag5.length,
   ]);
 
+  /** What failed after the app went out, and why, in words. */
+  const partsLeftText = (left: PartsLeft) =>
+    t(
+      left.extras.page
+        ? left.extras.shots
+          ? 'core:app_page.publish.left_both'
+          : 'core:app_page.publish.left_page'
+        : 'core:app_page.publish.left_shots',
+      {
+        // Never empty, and never an internal code such as SHOT_UNAVAILABLE.
+        error: appPageErrorText(t, left.error, { inSentence: true }),
+        postProcess: 'capitalizeFirstChar',
+      }
+    );
+
+  /** Tells Hub's own snackbar what went out, which stays if the form closes. */
+  const tellPublished = (leftText: string) => {
+    setInfoSnackGlobal(
+      leftText
+        ? { type: 'warning', message: leftText }
+        : {
+            type: 'success',
+            message: t('core:message.success.published', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+          }
+    );
+    setOpenSnackGlobal(true);
+  };
+
+  /** The app and its page are out: the app opens in the form's place. */
+  const openPublishedApp = (app: { service: string; name: string }) => {
+    setHasUnsavedInput(false);
+    onUnsavedChangeRef.current?.(false);
+    const dataObj = {
+      name: app.name,
+      service: app.service,
+      metadata: {
+        title: title,
+        description: description,
+        category: category,
+      },
+      created: Date.now(),
+    };
+    executeEvent('addTab', {
+      data: inLauncherTab(dataObj, launcherTabId),
+    });
+  };
+
   const publishApp = async () => {
     // Publishing before the form is filled in would replace the app's details.
     if (prefillPending) return;
+    // What the form holds now is what this publish takes.
+    const taken = inputCounts();
+    setAppPublishing(true);
     try {
       const file = source?.file;
       const data = {
@@ -442,47 +554,14 @@ export const AppPublish = ({
           });
       });
       const signature = publishSignature(response);
-      let extrasFailed = '';
-      // The page text went out and only the screenshots failed.
-      let onlyShotsFailed = false;
-      if (extraParts) {
-        try {
-          await publishPageExtras(
-            { service: appType, name },
-            extras,
-            signature || ''
-          );
-        } catch (error) {
-          // Never empty, and never an internal code such as SHOT_UNAVAILABLE.
-          extrasFailed =
-            error?.code === 'PAGE_UNREADABLE'
-              ? t('core:app_page.publish.page_unreadable')
-              : appPageErrorText(t, error, { inSentence: true });
-          onlyShotsFailed = error?.part === 'screenshots';
-        }
-      }
-      setInfoSnackGlobal(
-        extrasFailed
-          ? {
-              type: 'warning',
-              message: t(
-                onlyShotsFailed
-                  ? 'core:app_page.publish.shots_failed'
-                  : 'core:app_page.publish.extras_failed',
-                {
-                  error: extrasFailed,
-                  postProcess: 'capitalizeFirstChar',
-                }
-              ),
-            }
-          : {
-              type: 'success',
-              message: t('core:message.success.published', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-            }
+      // The page parts go after the app; the ones that fail are given back.
+      const left = await publishPageExtras(
+        { service: appType, name },
+        extras,
+        signature || ''
       );
-      setOpenSnackGlobal(true);
+      const leftText = left ? partsLeftText(left) : '';
+      tellPublished(leftText);
       const published: PublishProfile = {
         publishedAt: Date.now(),
         metadata: {
@@ -509,22 +588,25 @@ export const AppPublish = ({
       );
       // The form closed while its page parts went out: no tab opens.
       if (!isMountedRef.current) return;
+      // Some of the page didn't go out: the form keeps it, still unsaved, to
+      // publish it again without the app.
+      if (left) {
+        setLeftParts({
+          app: { service: appType, name },
+          signature: signature || '',
+          page: !!left.extras.page,
+          shots: !!left.extras.shots,
+          message: leftText,
+          published: taken,
+        });
+        return;
+      }
+      setLeftParts(null);
+      // Input given while it was publishing isn't published: the form stays
+      // with it, unsaved.
+      if (hasInputSince(taken)) return;
       // What was typed is published now, before the app opens in the tab.
-      setHasUnsavedInput(false);
-      onUnsavedChangeRef.current?.(false);
-      const dataObj = {
-        name: name,
-        service: appType,
-        metadata: {
-          title: title,
-          description: description,
-          category: category,
-        },
-        created: Date.now(),
-      };
-      executeEvent('addTab', {
-        data: inLauncherTab(dataObj, launcherTabId),
-      });
+      openPublishedApp({ service: appType, name });
     } catch (error) {
       setInfoSnack({
         type: 'error',
@@ -536,6 +618,84 @@ export const AppPublish = ({
       });
       setOpenSnack(true);
     } finally {
+      setAppPublishing(false);
+      setIsLoading('');
+    }
+  };
+
+  /**
+   * Publishes the page parts that failed after the app, as the form holds
+   * them now, without the app. The app opens once nothing is left unpublished.
+   */
+  const retryLeftParts = async () => {
+    const pending = leftParts;
+    if (!pending || retryingRef.current) return;
+    retryingRef.current = true;
+    const taken = inputCounts();
+    try {
+      const prepared = pageExtrasRef.current?.prepare() ?? null;
+      const extras: PublishExtras = {
+        page: pending.page ? (prepared?.page ?? null) : null,
+        shots: pending.shots ? (prepared?.shots ?? null) : null,
+        pageWasRead: prepared?.pageWasRead,
+      };
+      // A part emptied since has nothing to publish: it is done.
+      const parts = extrasPartCount(extras);
+      if (parts) {
+        const fee = await getFee('ARBITRARY');
+        await show({
+          message: t('core:app_page.publish.confirm_retry', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: `${(Number(fee.fee) * parts).toFixed(2)} QORT`,
+        });
+        setIsLoading(
+          t('core:message.generic.publishing', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      const left = parts
+        ? await publishPageExtras(pending.app, extras, pending.signature)
+        : null;
+      const leftText = left ? partsLeftText(left) : '';
+      if (parts) tellPublished(leftText);
+      // The parts that went out now are published as the form held them.
+      const published: InputCounts = {
+        ...pending.published,
+        ...(pending.page && !left?.extras.page ? { page: taken.page } : {}),
+        ...(pending.shots && !left?.extras.shots ? { shots: taken.shots } : {}),
+      };
+      if (!isMountedRef.current) return;
+      if (left) {
+        setLeftParts({
+          ...pending,
+          page: !!left.extras.page,
+          shots: !!left.extras.shots,
+          message: leftText,
+          published,
+        });
+        return;
+      }
+      setLeftParts(null);
+      // Input given since, that none of this published, stays unsaved here.
+      if (hasInputSince(published)) return;
+      openPublishedApp(pending.app);
+    } catch (error) {
+      // Declined: the parts stay to try again, and nothing failed.
+      if (error?.isCanceled) return;
+      // The fee couldn't be read: the parts stay to try again.
+      setInfoSnack({
+        type: 'error',
+        message:
+          error?.message ||
+          t('core:message.error.publish_app', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
+    } finally {
+      retryingRef.current = false;
       setIsLoading('');
     }
   };
@@ -613,6 +773,28 @@ export const AppPublish = ({
       version={extrasSummary?.version || ''}
     />
   );
+  const leftNotice = leftParts && (
+    <Alert
+      action={
+        <Button
+          color="inherit"
+          disabled={!!isLoading}
+          onClick={retryLeftParts}
+          size="small"
+          sx={{ textTransform: 'none' }}
+        >
+          {t('core:retry', capital)}
+        </Button>
+      }
+      severity="warning"
+      sx={{ mb: 2 }}
+    >
+      {leftParts.message}
+      <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
+        {t('core:app_page.publish.left_hint', capital)}
+      </Box>
+    </Alert>
+  );
   const summary = (
     <PublishSummaryCard
       busy={!!isLoading}
@@ -641,7 +823,8 @@ export const AppPublish = ({
           }}
         >
           <TextField
-            disabled={isUpdate}
+            // Page parts still to publish belong to the app published here.
+            disabled={isUpdate || !!leftParts || appPublishing}
             label={t('core:name_app', capital)}
             onChange={(event) => {
               noteInput();
@@ -672,7 +855,7 @@ export const AppPublish = ({
           </TextField>
           <ToggleButtonGroup
             aria-label={t('core:app_service_type', capital)}
-            disabled={isAppTypeLocked}
+            disabled={isAppTypeLocked || !!leftParts || appPublishing}
             exclusive
             onChange={(_, value) => {
               if (!value) return;
@@ -839,7 +1022,7 @@ export const AppPublish = ({
           bare
           file={source?.file ?? null}
           name={name}
-          onInput={noteInput}
+          onInput={notePartInput}
           onSummaryChange={setExtrasSummary}
           ref={pageExtrasRef}
           service={appType}
@@ -912,6 +1095,7 @@ export const AppPublish = ({
           {sections}
           <Box sx={wide ? { position: 'sticky', top: 16 } : undefined}>
             {preview}
+            {leftNotice}
             {summary}
           </Box>
         </Box>

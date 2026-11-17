@@ -22,7 +22,11 @@ i18n.use(capitalizeFirstChar as never).init({
       core: {
         app_page: {
           edit: { error_shot_unavailable: 'a screenshot could not be read' },
-          publish: { extras_failed: 'page not updated: {{error}}' },
+          publish: {
+            confirm_retry: 'publish the rest of the page?',
+            left_page: 'page text not published: {{error}}',
+            left_shots: 'screenshots not published: {{error}}',
+          },
         },
         message: {
           error: { generic: 'an error occurred' },
@@ -78,6 +82,13 @@ import {
   infoSnackGlobalAtom,
   openSnackGlobalAtom,
 } from '../../../atoms/global';
+
+const SHOT = {
+  id: 'a',
+  url: 'blob:a',
+  caption: 'One',
+  blob: new Blob([new Uint8Array([1, 2])]),
+};
 
 const PAGE_PART = {
   page: {
@@ -175,7 +186,7 @@ describe('publishing the app with its page', () => {
     vi.clearAllMocks();
     mocks.show.mockResolvedValue(undefined);
     mocks.prepare.mockReturnValue(PAGE_PART);
-    mocks.publishExtras.mockResolvedValue(undefined);
+    mocks.publishExtras.mockResolvedValue(null);
     vi.mocked(executeEvent).mockImplementation((name: string) => {
       if (name === 'addTab') closeForm?.();
     });
@@ -209,25 +220,62 @@ describe('publishing the app with its page', () => {
     );
   });
 
-  it("warns in words when the page fails, and still counts the app's publish", async () => {
-    mocks.publishExtras.mockRejectedValue(new AppPageError('SHOT_UNAVAILABLE'));
+  it('warns in words when a page part fails, and keeps the form open', async () => {
+    mocks.publishExtras.mockResolvedValue({
+      extras: { page: null, shots: [SHOT] },
+      error: new AppPageError('SHOT_UNAVAILABLE'),
+    });
     renderForm();
     await publish();
 
     await waitFor(() =>
       expect(globalSnack()).toEqual({
         type: 'warning',
-        message: 'Page not updated: a screenshot could not be read',
+        message: 'Screenshots not published: a screenshot could not be read',
       })
     );
-    expect(executeEvent).toHaveBeenCalledWith(
-      'addTab',
-      expect.objectContaining({
-        data: expect.objectContaining({ name: 'TestApp', service: 'APP' }),
-      })
+    // The app is out; what didn't go out stays in the form to publish again.
+    expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
+    expect(screen.getByRole('textbox', { name: 'Title' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+  });
+
+  it("publishes only the parts left on Retry, with the app's signature", async () => {
+    mocks.prepare.mockReturnValue({
+      ...PAGE_PART,
+      shots: [SHOT],
+      pageWasRead: true,
+    });
+    mocks.publishExtras.mockResolvedValueOnce({
+      extras: { page: PAGE_PART.page, shots: null, pageWasRead: true },
+      error: new Error('Insufficient balance'),
+    });
+    renderForm();
+    await publish();
+    await waitFor(() =>
+      expect(globalSnack()?.message).toBe(
+        'Page text not published: Insufficient balance'
+      )
     );
-    // The form closed as the app opened: Hub's own snackbar shows it.
-    expect(screen.queryByRole('textbox', { name: 'Title' })).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    });
+    await waitFor(() => expect(mocks.publishExtras).toHaveBeenCalledTimes(2));
+    expect(mocks.show).toHaveBeenLastCalledWith({
+      message: 'Publish the rest of the page?',
+      publishFee: '0.01 QORT',
+    });
+    expect(mocks.publishExtras).toHaveBeenLastCalledWith(
+      { service: 'APP', name: 'TestApp' },
+      { page: PAGE_PART.page, shots: null, pageWasRead: true },
+      'APP-SIG'
+    );
+    // The app itself went out once.
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(executeEvent).toHaveBeenCalledWith('addTab', expect.anything())
+    );
   });
 
   it('says the app was published once the form has closed', async () => {
@@ -241,12 +289,17 @@ describe('publishing the app with its page', () => {
   });
 
   it('says something even when the failure has no message', async () => {
-    mocks.publishExtras.mockRejectedValue(new Error(''));
+    mocks.publishExtras.mockResolvedValue({
+      extras: PAGE_PART,
+      error: new Error(''),
+    });
     renderForm();
     await publish();
 
     await waitFor(() =>
-      expect(globalSnack()?.message).toBe('Page not updated: an error occurred')
+      expect(globalSnack()?.message).toBe(
+        'Page text not published: an error occurred'
+      )
     );
   });
 
@@ -254,7 +307,7 @@ describe('publishing the app with its page', () => {
     it('does not open the app, and still says it was published', async () => {
       let pageDone: () => void = () => {};
       mocks.publishExtras.mockReturnValue(
-        new Promise<void>((resolve) => (pageDone = resolve))
+        new Promise<null>((resolve) => (pageDone = () => resolve(null)))
       );
       const onUnsavedChange = vi.fn();
       renderForm({ onUnsavedChange });
