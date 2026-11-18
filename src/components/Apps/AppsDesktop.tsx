@@ -70,6 +70,12 @@ import {
   userInfoAtom,
 } from '../../atoms/global';
 import { allQappsAtom, availableQappsAtom } from '../../atoms/appsAtoms';
+import {
+  isPinnedApp,
+  pinnedAppOfTab,
+  usePinnedAppsList,
+  useTogglePinnedApp,
+} from '../../hooks/usePinnedApps';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
@@ -1876,6 +1882,19 @@ export const AppsDesktop = ({
     [pinnedTabIds]
   );
 
+  // Pin to bookmarks, in a tab's menu: for a Q-App's or website's tab, not
+  // Hub's own (a launcher tab, a local dev preview).
+  const pinnedApps = usePinnedAppsList();
+  const togglePinnedApp = useTogglePinnedApp();
+  const pinToBookmarksOf = (tab) => {
+    const app = isLocalDevTab(tab) ? null : pinnedAppOfTab(tab);
+    if (!app) return {};
+    return {
+      isPinnedToBookmarks: isPinnedApp(pinnedApps, app),
+      onTogglePinToBookmarks: () => togglePinnedApp(app),
+    };
+  };
+
   // Close other tabs and Close tabs to the right, in a tab's menu: greyed
   // out (undefined) when they would close nothing. The menu's tab shows if
   // the tab on screen closes.
@@ -1904,6 +1923,7 @@ export const AppsDesktop = ({
       onTogglePin={
         isLauncherTab(tab) ? undefined : () => toggleTabPinned(tab?.tabId)
       }
+      {...pinToBookmarksOf(tab)}
       onClose={(request) =>
         closeTabs([tab?.tabId], {
           direct: true,

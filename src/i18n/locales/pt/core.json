@@ -422,9 +422,11 @@
     "locked_kept_open": "as abas bloqueadas continuam abertas. Feche-as uma a uma para confirmar.",
     "new_tab": "nova aba",
     "pin": "fixar aba",
+    "pin_to_bookmarks": "fixar nos marcadores",
     "pinned_and_locked_kept_open": "as abas fixadas e bloqueadas continuam abertas. Desafixe uma aba fixada antes de a fechar e feche as bloqueadas uma a uma para confirmar.",
     "pinned_kept_open": "as abas fixadas continuam abertas. Desafixe uma aba para a fechar.",
     "unpin": "desafixar aba",
+    "unpin_from_bookmarks": "desafixar dos marcadores",
     "unsaved_publish": "os dados do formulário de publicação ainda não foram publicados, e fechar a aba os descarta."
   },
   "apps_bar": {

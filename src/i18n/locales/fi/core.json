@@ -422,9 +422,11 @@
     "locked_kept_open": "lukitut välilehdet jäävät auki. Sulje ne yksitellen vahvistaaksesi.",
     "new_tab": "uusi välilehti",
     "pin": "kiinnitä välilehti",
+    "pin_to_bookmarks": "kiinnitä kirjanmerkkeihin",
     "pinned_and_locked_kept_open": "kiinnitetyt ja lukitut välilehdet jäävät auki. Irrota kiinnitetty välilehti ennen sen sulkemista ja sulje lukitut yksitellen vahvistaaksesi.",
     "pinned_kept_open": "kiinnitetyt välilehdet jäävät auki. Irrota välilehti sulkeaksesi sen.",
     "unpin": "irrota välilehti",
+    "unpin_from_bookmarks": "irrota kirjanmerkeistä",
     "unsaved_publish": "julkaisulomakkeen tietoja ei ole vielä julkaistu, ja välilehden sulkeminen hylkää ne."
   },
   "apps_bar": {

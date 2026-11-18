@@ -422,9 +422,11 @@
     "locked_kept_open": "locked tabs stay open. Close each one on its own to confirm.",
     "new_tab": "new tab",
     "pin": "pin tab",
+    "pin_to_bookmarks": "pin to bookmarks",
     "pinned_and_locked_kept_open": "pinned and locked tabs stay open. Unpin a pinned tab before closing it, and close each locked tab on its own to confirm.",
     "pinned_kept_open": "pinned tabs stay open. Unpin a tab to close it.",
     "unpin": "unpin tab",
+    "unpin_from_bookmarks": "unpin from bookmarks",
     "unsaved_publish": "the details in its publish form are not published yet, and closing the tab discards them."
   },
   "apps_bar": {

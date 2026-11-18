@@ -18,6 +18,8 @@ import LockIcon from '@mui/icons-material/Lock';
 import TabUnselectedRoundedIcon from '@mui/icons-material/TabUnselectedRounded';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
+import BookmarkRemoveOutlinedIcon from '@mui/icons-material/BookmarkRemoveOutlined';
 import { useRef, useState, type MutableRefObject } from 'react';
 import { alpha } from '@mui/material/styles';
 import { CSS } from '@dnd-kit/utilities';
@@ -75,6 +77,13 @@ type TabComponentProps = {
    */
   isPinned?: boolean;
   onTogglePin?: () => void;
+  /**
+   * Its Q-App or website is in the pinned apps and bookmarks (the launcher's
+   * and the title bar's), which isn't the same as a pinned tab.
+   */
+  isPinnedToBookmarks?: boolean;
+  /** Pins its app to the bookmarks, or unpins it; none for Hub's own tabs. */
+  onTogglePinToBookmarks?: () => void;
   /** The tab's width, worked out for the whole strip in AppsDesktop. */
   widthPx?: number;
   /** Mutable drag-lock shared from AppsDesktop to avoid rerenders during drag. */
@@ -95,6 +104,8 @@ const TabComponent = ({
   isDevApp = false,
   isPinned = false,
   onTogglePin,
+  isPinnedToBookmarks = false,
+  onTogglePinToBookmarks,
   widthPx = TAB_IDEAL_WIDTH_PX,
   tabInteractionLockedRef,
 }: TabComponentProps) => {
@@ -515,6 +526,35 @@ const TabComponent = ({
             />
           </MenuItem>
         )}
+        {onTogglePinToBookmarks && (
+          <MenuItem
+            onClick={() => {
+              onTogglePinToBookmarks();
+              setMenuPosition(null);
+            }}
+          >
+            <ListItemIcon sx={menuItemIconSx}>
+              {isPinnedToBookmarks ? (
+                <BookmarkRemoveOutlinedIcon
+                  sx={{ color: theme.palette.text.primary, fontSize: 18 }}
+                />
+              ) : (
+                <BookmarkAddOutlinedIcon
+                  sx={{ color: theme.palette.text.primary, fontSize: 18 }}
+                />
+              )}
+            </ListItemIcon>
+            <ListItemText
+              sx={menuItemTextSx}
+              primary={t(
+                isPinnedToBookmarks
+                  ? 'core:app_tab.unpin_from_bookmarks'
+                  : 'core:app_tab.pin_to_bookmarks',
+                { postProcess: 'capitalizeFirstChar' }
+              )}
+            />
+          </MenuItem>
+        )}
         {canDuplicate && (
           <MenuItem
             onClick={() => {
@@ -539,7 +579,7 @@ const TabComponent = ({
             />
           </MenuItem>
         )}
-        {(onTogglePin || canDuplicate) && (
+        {(onTogglePin || onTogglePinToBookmarks || canDuplicate) && (
           <Divider sx={{ borderColor: theme.palette.border.subtle }} />
         )}
         <MenuItem

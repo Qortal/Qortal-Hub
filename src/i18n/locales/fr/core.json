@@ -422,9 +422,11 @@
     "locked_kept_open": "les onglets verrouillés restent ouverts. Fermez-les un par un pour confirmer.",
     "new_tab": "nouvel onglet",
     "pin": "épingler l'onglet",
+    "pin_to_bookmarks": "épingler aux favoris",
     "pinned_and_locked_kept_open": "les onglets épinglés et verrouillés restent ouverts. Désépinglez un onglet épinglé avant de le fermer, et fermez les onglets verrouillés un par un pour confirmer.",
     "pinned_kept_open": "les onglets épinglés restent ouverts. Désépinglez un onglet pour le fermer.",
     "unpin": "désépingler l'onglet",
+    "unpin_from_bookmarks": "désépingler des favoris",
     "unsaved_publish": "les informations de son formulaire de publication ne sont pas encore publiées, et fermer l'onglet les efface."
   },
   "apps_bar": {
