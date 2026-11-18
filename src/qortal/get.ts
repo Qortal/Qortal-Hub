@@ -69,8 +69,7 @@ import {
   USER_DECLINED_REQUEST_CODE,
 } from './qortal-request-errors.ts';
 import { getPublishesFromAdminsAdminSpace } from '../components/Chat/AdminSpaceInner.tsx';
-import { extractComponents } from '../components/Chat/MessageDisplay.tsx';
-import { openAppPageLink } from '../components/Apps/AppPage/appPageLink';
+import { openQortalLink } from '../utils/qortalLink/openQortalLink';
 import {
   decryptResource,
   getGroupAdmins,
@@ -6312,36 +6311,24 @@ export const openNewTab = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
-  // An app's or website's page, not the app (qortal://use-app-page/…).
-  if (openAppPageLink(data.qortalLink)) return true;
-
-  const res = extractComponents(data.qortalLink);
-  if (res) {
-    const { service, name, identifier, path } = res;
-    if (!service && !name)
-      throw new Error(
-        i18n.t('auth:message.error.invalid_qortal_link', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    executeEvent('addTab', {
-      data: {
-        service,
-        name,
-        identifier,
-        path,
-        ...(data.navigateIfAlreadyOpen && { navigateIfAlreadyOpen: true }),
-      },
-    });
-    executeEvent('open-apps-mode', {});
+  // Every kind of qortal:// link: a Q-App or website, an app's page, or a
+  // group's link. Nothing it opens acts without asking (openQortalLink.ts).
+  // The link is text: anything else a Q-App sends is no link. A Q-App's or
+  // widget's group link only opens the join window, if none is open.
+  if (
+    typeof data.qortalLink === 'string' &&
+    (await openQortalLink(data.qortalLink, {
+      navigateIfAlreadyOpen: !!data.navigateIfAlreadyOpen,
+      fromApp: true,
+    }))
+  ) {
     return true;
-  } else {
-    throw new Error(
-      i18n.t('auth:message.error.invalid_qortal_link', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
   }
+  throw new Error(
+    i18n.t('auth:message.error.invalid_qortal_link', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 };
 
 export const openUserLookup = async (data) => {

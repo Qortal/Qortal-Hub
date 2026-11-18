@@ -1,8 +1,7 @@
 import { QORTAL_PROTOCOL } from '../../../constants/constants';
 import { executeEvent } from '../../../utils/events';
 import { inLauncherTab } from '../launcherTabs';
-import { openHttpUrlExternally } from '../../../utils/openExternalHttp';
-import { openQortalUseGroupLink } from '../../../utils/openQortalUseGroupLink';
+import type { OpenQortalLinkOptions } from '../../../utils/qortalLink/openQortalLink';
 import { normalizeAppService } from './appPageIds';
 
 /**
@@ -73,50 +72,21 @@ export const openAppPageLink = (
   return true;
 };
 
-/** A plain qortal://SERVICE/name/path link as a tab to open. */
-export const parseQortalResourceLink = (input: string) => {
-  const trimmed = input.trim();
-  if (!/^qortal:\/\//i.test(trimmed)) return null;
-  const rest = trimmed.replace(/^qortal:\/\//i, '');
-  if (!rest || /^use-/i.test(rest)) return null;
-  const [basePart, query = ''] = rest.split('?');
-  const parts = basePart.split('/');
-  if (parts.length < 2 || !parts[0] || !parts[1]) return null;
-  const service = parts[0].toUpperCase();
-  const name = decodeName(parts[1]);
-  if (!name || !/^[A-Z_]{2,32}$/.test(service)) return null;
-  const params = new URLSearchParams(query);
-  const identifier = params.get('identifier') || undefined;
-  params.delete('identifier');
-  const remaining = params.toString();
-  const path = `${parts.slice(2).join('/')}${remaining ? `?${remaining}` : ''}`;
-  return { service, name, identifier, path };
-};
-
 /**
- * Opens a link from a page's text or the publisher's links: page links and
- * group links inside Hub, other qortal:// links in a tab, web links outside.
+ * How links open from inside a launcher tab: a Q-App, website or app's page
+ * takes the tab's place, as the page's Open does (openQortalLink's options).
  */
-export const openPageTextLink = async (
-  href: string,
-  launcherTabId: string | null = null
-) => {
-  if (openAppPageLink(href, launcherTabId)) return;
-  if (/^qortal:\/\//i.test(href)) {
-    try {
-      if (await openQortalUseGroupLink(href)) return;
-    } catch {
-      // Not a group link Hub can open; try it as a resource.
-    }
-    const resource = parseQortalResourceLink(href);
-    if (resource) {
-      executeEvent('addTab', { data: inLauncherTab(resource, launcherTabId) });
-      executeEvent('open-apps-mode', {});
-    }
-    return;
-  }
-  if (/^https?:\/\//i.test(href)) openHttpUrlExternally(href);
-};
+export const launcherTabLinkOptions = (
+  launcherTabId: string | null
+): OpenQortalLinkOptions => ({
+  openResource: ({ service, name, identifier, path }) => {
+    executeEvent('addTab', {
+      data: inLauncherTab({ service, name, identifier, path }, launcherTabId),
+    });
+    executeEvent('open-apps-mode', {});
+  },
+  openPage: (page) => openAppPage(page, launcherTabId),
+});
 
 const LINK_PATTERN = /\b(?:https?:\/\/|qortal:\/\/)[^\s<>"'`]+/gi;
 
