@@ -58,11 +58,18 @@ vi.mock('../../../background/background.ts', () => ({
   getFee: vi.fn().mockResolvedValue({ fee: '0.01' }),
 }));
 
-// The library page section: a widget never uses it.
+// The library page section: a widget never uses it. A test types into it
+// through the input callback the form hands it.
 const prepareExtras = vi.fn(() => null);
+let pageSection: { onInput?: (part: 'page' | 'shots') => void } = {};
+let pageDrafts = { page: false, shots: false };
 vi.mock('../AppPage/PublishPageExtras', () => ({
-  PublishPageExtras: React.forwardRef((_props, ref) => {
-    useImperativeHandle(ref, () => ({ prepare: prepareExtras }));
+  PublishPageExtras: React.forwardRef((props: any, ref) => {
+    pageSection = props;
+    useImperativeHandle(ref, () => ({
+      prepare: prepareExtras,
+      hasDrafts: () => pageDrafts,
+    }));
     return null;
   }),
   extrasPartCount: () => 0,
@@ -233,6 +240,7 @@ describe('AppPublish – publishing a widget', { timeout: 20_000 }, () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    pageDrafts = { page: false, shots: false };
     bridges = installPublishBridges();
     bridges.electron.selectAndZipDirectory.mockResolvedValue({
       buffer: new Uint8Array([80, 75, 3, 4]),
@@ -536,6 +544,132 @@ describe('AppPublish – publishing a widget', { timeout: 20_000 }, () => {
     expect(payload).not.toHaveProperty('identifier');
     expect(payload).toMatchObject({ tag1: 'node', tag2: '' });
     expect(prepareExtras).toHaveBeenCalled();
+  });
+
+  describe('what one kind leaves for the other', { timeout: 30_000 }, () => {
+    const publishWidget = async (user: ReturnType<typeof userEvent.setup>) => {
+      await pickWidgetType(user);
+      await user.type(widgetId(), 'clock');
+      await chooseFolder(user);
+      await waitFor(() => expect(publishButton()).toBeEnabled());
+      await user.click(publishButton());
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      await settle();
+    };
+
+    it("keeps the Q-App's page drafts unsaved when a widget is published", async () => {
+      const user = userEvent.setup();
+      mockNode();
+      const onUnsavedChange = vi.fn();
+      renderForm({ onUnsavedChange });
+      await waitFor(() => expect(title()).toHaveValue('Node title'));
+      // Release notes typed for the Q-App's page.
+      pageDrafts = { page: true, shots: false };
+      act(() => pageSection.onInput?.('page'));
+
+      await publishWidget(user);
+
+      // A widget doesn't publish them: closing the tab still asks.
+      expect(sendMessage.mock.calls[0][1]).toMatchObject({
+        identifier: 'go-widget-clock',
+      });
+      expect(onUnsavedChange).toHaveBeenLastCalledWith(true);
+    });
+
+    it('marks the form saved after a widget publish when nothing else is left', async () => {
+      const user = userEvent.setup();
+      mockNode();
+      const onUnsavedChange = vi.fn();
+      renderForm({ onUnsavedChange });
+      await waitFor(() => expect(title()).toHaveValue('Node title'));
+
+      await publishWidget(user);
+
+      expect(onUnsavedChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it('keeps a typed widget ID unsaved when the Q-App is published instead', async () => {
+      const user = userEvent.setup();
+      mockNode();
+      const onUnsavedChange = vi.fn();
+      renderForm({ onUnsavedChange });
+      await waitFor(() => expect(title()).toHaveValue('Node title'));
+      await pickWidgetType(user);
+      await user.type(widgetId(), 'clock');
+      await user.click(
+        screen.getByRole('button', { name: 'app_page.hero.type_app' })
+      );
+      await chooseFolder(user);
+      await waitFor(() => expect(publishButton()).toBeEnabled());
+      await user.click(publishButton());
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      await settle();
+
+      // The Q-App went out without the widget: the form stays with its ID
+      // instead of opening the app in its place.
+      expect(sendMessage.mock.calls[0][1]).not.toHaveProperty('identifier');
+      expect(executeEvent).not.toHaveBeenCalledWith(
+        'addTab',
+        expect.anything()
+      );
+      expect(onUnsavedChange).toHaveBeenLastCalledWith(true);
+    });
+
+    it('opens the published Q-App when a widget ID was typed and then cleared', async () => {
+      const user = userEvent.setup();
+      mockNode();
+      const onUnsavedChange = vi.fn();
+      renderForm({ onUnsavedChange });
+      await waitFor(() => expect(title()).toHaveValue('Node title'));
+      // Widget picked, an ID typed and taken back out: no widget ID is left.
+      await pickWidgetType(user);
+      await user.type(widgetId(), 'clock');
+      await user.clear(widgetId());
+      expect(widgetId()).toHaveValue('');
+      await user.click(
+        screen.getByRole('button', { name: 'app_page.hero.type_app' })
+      );
+      await chooseFolder(user);
+      await waitFor(() => expect(publishButton()).toBeEnabled());
+      await user.click(publishButton());
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      await settle();
+
+      // Everything the form holds went out: the app takes the form's place.
+      expect(sendMessage.mock.calls[0][1]).not.toHaveProperty('identifier');
+      expect(onUnsavedChange).toHaveBeenLastCalledWith(false);
+      expect(executeEvent).toHaveBeenCalledWith('addTab', expect.anything());
+    });
+
+    it("opens the published Q-App when a typed widget ID was swapped for one of the name's widgets", async () => {
+      const user = userEvent.setup();
+      mockNode({ widgets: [NOW_WIDGET] });
+      const onUnsavedChange = vi.fn();
+      renderForm({ onUnsavedChange });
+      await waitFor(() => expect(title()).toHaveValue('Node title'));
+      await pickWidgetType(user);
+      await screen.findByRole('combobox', { name: 'Widget to publish' });
+      // The typed ID is taken: "Update instead" swaps it for that widget.
+      await user.type(widgetId(), 'now');
+      await user.click(
+        screen.getByRole('button', { name: 'Update it instead' })
+      );
+      await waitFor(() => expect(title()).toHaveValue('Now'));
+      // Then the Q-App is published instead, the widget left as it is.
+      await user.click(
+        screen.getByRole('button', { name: 'app_page.hero.type_app' })
+      );
+      await waitFor(() => expect(title()).toHaveValue('Node title'));
+      await chooseFolder(user);
+      await waitFor(() => expect(publishButton()).toBeEnabled());
+      await user.click(publishButton());
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      await settle();
+
+      expect(sendMessage.mock.calls[0][1]).not.toHaveProperty('identifier');
+      expect(onUnsavedChange).toHaveBeenLastCalledWith(false);
+      expect(executeEvent).toHaveBeenCalledWith('addTab', expect.anything());
+    });
   });
 
   describe("before the name's widgets are known", { timeout: 30_000 }, () => {
