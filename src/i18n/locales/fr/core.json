@@ -247,6 +247,7 @@
     "hide": {
       "action": "masquer",
       "action_replace": "masquer et remplacer",
+      "busy_elsewhere": "Un autre onglet publie cette modification en ce moment. Attendez qu’il ait terminé.",
       "button_hide": "masquer de la bibliothèque",
       "button_show": "afficher dans la bibliothèque",
       "cant_delete_app": "Une Q-App ne peut pas être supprimée : tout ce qui est publié sur Qortal reste sur sa blockchain et sur QDN.",

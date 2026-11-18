@@ -247,6 +247,7 @@
     "hide": {
       "action": "非表示にする",
       "action_replace": "非表示にして置き換える",
+      "busy_elsewhere": "別のタブがこの変更を公開しています。完了するまでお待ちください。",
       "button_hide": "ライブラリから非表示にする",
       "button_show": "ライブラリに表示する",
       "cant_delete_app": "Q-Appは削除できません。Qortalに公開されたものはすべて、そのブロックチェーンとQDNに残ります。",

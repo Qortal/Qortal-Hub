@@ -247,6 +247,7 @@
     "hide": {
       "action": "ocultar",
       "action_replace": "ocultar e substituir",
+      "busy_elsewhere": "Outra aba está publicando esta alteração agora. Aguarde até terminar.",
       "button_hide": "ocultar da biblioteca",
       "button_show": "mostrar na biblioteca",
       "cant_delete_app": "Uma Q-App não pode ser excluída: tudo o que é publicado no Qortal fica na sua blockchain e na QDN.",

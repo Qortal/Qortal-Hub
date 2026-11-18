@@ -143,6 +143,69 @@ const subscribeSavedHidden = (listener: () => void) => {
   };
 };
 
+const notifySavedHidden = () =>
+  savedHiddenListeners.forEach((listener) => listener());
+
+// How many times the app was hidden or shown from here: a hide window opened
+// before the last change was opened for a state that is gone.
+const hiddenStateChanges = new Map<string, number>();
+
+/** Hiding or showing that is being published now, from any page or tab. */
+export type HiddenStateRun = 'hide' | 'show';
+
+// One at a time for each app, whichever page or launcher tab started it: the
+// others wait, so nothing is published twice, for a second fee.
+const hiddenStateRuns = new Map<string, { kind: HiddenStateRun }>();
+
+/** How many times the app was hidden or shown from here so far. */
+export const hiddenStateChangeCount = (app: {
+  service?: string;
+  name?: string;
+}): number => hiddenStateChanges.get(savedHiddenKey(app)) ?? 0;
+
+export const useHiddenStateChanges = (app: {
+  service?: string;
+  name?: string;
+}): number => {
+  const key = savedHiddenKey(app);
+  return useSyncExternalStore(
+    subscribeSavedHidden,
+    () => hiddenStateChanges.get(key) ?? 0
+  );
+};
+
+/**
+ * Starts hiding or showing the app, unless that is being published already.
+ * Gives what ends it, or null while another one goes on.
+ */
+export const claimHiddenStateRun = (
+  app: { service?: string; name?: string },
+  kind: HiddenStateRun
+): (() => void) | null => {
+  const key = savedHiddenKey(app);
+  if (hiddenStateRuns.has(key)) return null;
+  const run = { kind };
+  hiddenStateRuns.set(key, run);
+  notifySavedHidden();
+  return () => {
+    if (hiddenStateRuns.get(key) !== run) return;
+    hiddenStateRuns.delete(key);
+    notifySavedHidden();
+  };
+};
+
+/** What is being published for the app now, from here or elsewhere. */
+export const useHiddenStateRun = (app: {
+  service?: string;
+  name?: string;
+}): HiddenStateRun | null => {
+  const key = savedHiddenKey(app);
+  return useSyncExternalStore(
+    subscribeSavedHidden,
+    () => hiddenStateRuns.get(key)?.kind ?? null
+  );
+};
+
 /** What was hidden or shown from here for the app, in the last ten minutes. */
 export const useSavedHiddenState = (app: {
   service?: string;
@@ -160,8 +223,10 @@ export const rememberHiddenState = (
   app: { service?: string; name?: string },
   state: SavedHiddenState
 ) => {
-  savedHiddenStates.set(savedHiddenKey(app), state);
-  savedHiddenListeners.forEach((listener) => listener());
+  const key = savedHiddenKey(app);
+  savedHiddenStates.set(key, state);
+  hiddenStateChanges.set(key, (hiddenStateChanges.get(key) ?? 0) + 1);
+  notifySavedHidden();
 };
 
 /** A hide and replace that stopped after publishing part of it. */
@@ -178,16 +243,16 @@ export interface UnfinishedHide {
 const unfinishedHides = new Map<string, UnfinishedHide>();
 
 /**
- * Given the app's latest signature as the node lists it now, a version that
- * is neither the one before the run nor its replacement means the app was
- * published again since: the run is over.
+ * Given the app's latest signature as the page lists it, a version that is
+ * neither the one before the run nor its replacement means the app was
+ * published again since: the run is over for that page. It stays remembered,
+ * as another page of the app may list an older version than the run's.
  */
 export const unfinishedHideOf = (
   app: { service?: string; name?: string },
   latestSignature?: string
 ): UnfinishedHide | null => {
-  const key = savedHiddenKey(app);
-  const run = unfinishedHides.get(key);
+  const run = unfinishedHides.get(savedHiddenKey(app));
   if (!run) return null;
   if (
     latestSignature &&
@@ -195,7 +260,6 @@ export const unfinishedHideOf = (
     latestSignature !== run.versions.before &&
     latestSignature !== run.versions.replacement
   ) {
-    unfinishedHides.delete(key);
     return null;
   }
   return run;
@@ -208,6 +272,22 @@ export const rememberUnfinishedHide = (
 ) => {
   if (run) unfinishedHides.set(savedHiddenKey(app), run);
   else unfinishedHides.delete(savedHiddenKey(app));
+  notifySavedHidden();
+};
+
+/**
+ * The stopped hide as remembered, without unfinishedHideOf's check against
+ * the app's version: a hide window open in another tab follows it.
+ */
+export const useUnfinishedHide = (app: {
+  service?: string;
+  name?: string;
+}): UnfinishedHide | null => {
+  const key = savedHiddenKey(app);
+  return useSyncExternalStore(
+    subscribeSavedHidden,
+    () => unfinishedHides.get(key) ?? null
+  );
 };
 
 /** Forgets loaded pages (tests start each case clean). */
@@ -215,6 +295,8 @@ export const clearAppPageCache = () => {
   pageCache.clear();
   savedHiddenStates.clear();
   unfinishedHides.clear();
+  hiddenStateChanges.clear();
+  hiddenStateRuns.clear();
 };
 
 /** The publisher's page (About, What's new, links) and screenshots. */

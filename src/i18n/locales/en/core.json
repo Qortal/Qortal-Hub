@@ -247,6 +247,7 @@
     "hide": {
       "action": "hide",
       "action_replace": "hide and replace",
+      "busy_elsewhere": "Another tab is publishing this change right now. Wait for it to finish.",
       "button_hide": "hide from the library",
       "button_show": "show in the library",
       "cant_delete_app": "A Q-App can't be deleted: everything published on Qortal stays on its blockchain and QDN.",

@@ -247,6 +247,7 @@
     "hide": {
       "action": "piilota",
       "action_replace": "piilota ja korvaa",
+      "busy_elsewhere": "Toinen välilehti julkaisee tätä muutosta parhaillaan. Odota, kunnes se on valmis.",
       "button_hide": "piilota kirjastosta",
       "button_show": "näytä kirjastossa",
       "cant_delete_app": "Q-Appia ei voi poistaa: kaikki Qortaliin julkaistu pysyy sen lohkoketjussa ja QDN:ssä.",

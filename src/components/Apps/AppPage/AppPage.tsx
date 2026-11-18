@@ -473,6 +473,7 @@ export const AppPage = ({
           app={listingApp}
           hasPage={hasPage}
           hasShots={hasShots}
+          hidden={!!hiddenState?.hidden}
           onClose={() => setHideOpen(false)}
           onHidden={onHidden}
           open={hideOpen}

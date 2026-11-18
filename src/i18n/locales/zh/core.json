@@ -247,6 +247,7 @@
     "hide": {
       "action": "隐藏",
       "action_replace": "隐藏并替换",
+      "busy_elsewhere": "另一个标签页正在发布此更改，请等待它完成。",
       "button_hide": "从库中隐藏",
       "button_show": "在库中显示",
       "cant_delete_app": "Q-App 无法删除：在 Qortal 上发布的一切都会保留在其区块链和 QDN 上。",

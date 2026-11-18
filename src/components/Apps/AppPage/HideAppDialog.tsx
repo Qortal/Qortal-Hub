@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   alpha,
@@ -38,7 +38,16 @@ import { appPageErrorText } from './appPageErrors';
 import { useLauncherTabDialog } from '../launcherTabs';
 import { publishSignature } from '../publishProfiles';
 import { buildRemovedAppPage, removedAppMessages } from './removedAppPage';
-import { rememberUnfinishedHide, unfinishedHideOf } from './useAppPage';
+import {
+  claimHiddenStateRun,
+  hiddenStateChangeCount,
+  rememberUnfinishedHide,
+  UnfinishedHide,
+  unfinishedHideOf,
+  useHiddenStateChanges,
+  useHiddenStateRun,
+  useUnfinishedHide,
+} from './useAppPage';
 
 /** What hiding publishes, in this order: the hidden record comes last. */
 type Part = 'app' | 'page' | 'screenshots' | 'record';
@@ -56,6 +65,11 @@ interface HideAppDialogProps {
    * screenshots): until then nothing is published.
    */
   ready?: boolean;
+  /**
+   * Hidden already, as the page says now: from another page or launcher tab
+   * of the same app, or as the node lists it.
+   */
+  hidden?: boolean;
   onClose: () => void;
   onHidden: (state: { replaced: boolean }) => void;
 }
@@ -71,6 +85,7 @@ export const HideAppDialog = ({
   hasPage,
   hasShots,
   ready = true,
+  hidden = false,
   onClose,
   onHidden,
 }: HideAppDialogProps) => {
@@ -100,12 +115,25 @@ export const HideAppDialog = ({
   // Put away, with what was chosen kept, while its launcher tab is hidden.
   const dialogShown = useLauncherTabDialog(open);
 
-  // Each opening starts afresh. Only a try that failed after publishing part
-  // of it is kept: what it published can't be taken back, so the window goes
-  // on from there, also on a page opened again.
-  useEffect(() => {
-    if (!open) return;
-    const unfinished = unfinishedHideOf(ref, app?.latestSignature);
+  // The same app's page can be open in several launcher tabs, each with this
+  // window. A hide or show being published from one of them holds the others
+  // back; once it is hidden, the others close.
+  const runningElsewhere = !!useHiddenStateRun(ref) && !working;
+  const changes = useHiddenStateChanges(ref);
+  const openedAt = useRef(0);
+  const hiddenNow = useRef(hidden);
+  hiddenNow.current = hidden;
+  // The stopped hide as last remembered by any tab, the one this window last
+  // saw, and the one its progress goes on from (or null when it starts
+  // afresh), so one stopped from another tab is taken up when it comes.
+  const stoppedRun = useUnfinishedHide(ref);
+  const seenRun = useRef<UnfinishedHide | null>(null);
+  const goingOnFrom = useRef<UnfinishedHide | null>(null);
+
+  // Goes on from a hide that stopped after publishing part of it: what it
+  // published can't be taken back, nor what it chose.
+  const goOnFrom = (unfinished: UnfinishedHide | null) => {
+    goingOnFrom.current = unfinished;
     const kept: Partial<Record<Part, PartState>> = {};
     unfinished?.done.forEach((part) => {
       kept[part as Part] = 'done';
@@ -113,8 +141,36 @@ export const HideAppDialog = ({
     setReplace(!!unfinished?.replace);
     setProgress(kept);
     setError('');
+  };
+
+  // Each opening starts afresh. Only a try that failed after publishing part
+  // of it is kept: the window goes on from there, also on a page opened
+  // again.
+  useEffect(() => {
+    if (!open) return;
+    openedAt.current = hiddenStateChangeCount(ref);
+    seenRun.current = stoppedRun;
+    goOnFrom(unfinishedHideOf(ref, app?.latestSignature));
     setWorking(false);
   }, [open]);
+
+  // A hide that stopped halfway in another tab while this window was open:
+  // this one goes on from it, rather than publish its parts again or leave
+  // the record saying the app wasn't replaced. It stopped just now, so it is
+  // taken as it is, also by a page that lists an older version of the app.
+  useEffect(() => {
+    if (!open || working || stoppedRun === seenRun.current) return;
+    seenRun.current = stoppedRun;
+    if (stoppedRun) goOnFrom(stoppedRun);
+  }, [open, working, stoppedRun]);
+
+  // Hidden or shown again since it opened, from another tab or as the node
+  // now says: what it was opened for is gone.
+  const outdated = () =>
+    hiddenNow.current || hiddenStateChangeCount(ref) !== openedAt.current;
+  useEffect(() => {
+    if (open && !working && outdated()) onClose();
+  }, [open, working, hidden, changes]);
 
   // The fee as the node says now, at each opening and on Retry.
   useEffect(() => {
@@ -181,42 +237,61 @@ export const HideAppDialog = ({
   // A retry after a failure publishes only what isn't done yet.
   const hide = async () => {
     if (working || !ref.name || !ready || fee === null) return;
+    // Hidden meanwhile: nothing left to publish, and no second fee.
+    if (outdated()) {
+      onClose();
+      return;
+    }
+    // Another tab is publishing it now.
+    const release = claimHiddenStateRun(ref, 'hide');
+    if (!release) return;
     setError('');
     setWorking(true);
     const todo = parts.filter((part) => progress[part] !== 'done');
     const done = parts.filter((part) => progress[part] === 'done');
     // The app's version before the run and the replacement's, so the run is
     // dropped once the app is published again (unfinishedHideOf).
-    let versions = unfinishedHideOf(ref)?.versions;
+    let versions = goingOnFrom.current?.versions;
     setProgress((value) => ({
       ...value,
       ...Object.fromEntries(todo.map((part) => [part, 'waiting'])),
     }));
-    for (const part of todo) {
-      setProgress((value) => ({ ...value, [part]: 'working' }));
-      try {
-        const response = await publishPart(part);
-        if (part === 'app') {
-          const replacement = publishSignature(response);
-          versions =
-            app?.latestSignature && replacement
-              ? { before: app.latestSignature, replacement }
-              : undefined;
+    try {
+      for (const part of todo) {
+        setProgress((value) => ({ ...value, [part]: 'working' }));
+        try {
+          const response = await publishPart(part);
+          if (part === 'app') {
+            const replacement = publishSignature(response);
+            versions =
+              app?.latestSignature && replacement
+                ? { before: app.latestSignature, replacement }
+                : undefined;
+          }
+          done.push(part);
+          setProgress((value) => ({ ...value, [part]: 'done' }));
+        } catch (cause) {
+          if (done.length > 0) {
+            const stopped = { replace, done, versions };
+            seenRun.current = stopped;
+            goingOnFrom.current = stopped;
+            rememberUnfinishedHide(ref, stopped);
+          }
+          setProgress((value) => ({ ...value, [part]: 'failed' }));
+          setError(appPageErrorText(t, cause));
+          setWorking(false);
+          return;
         }
-        done.push(part);
-        setProgress((value) => ({ ...value, [part]: 'done' }));
-      } catch (cause) {
-        if (done.length > 0)
-          rememberUnfinishedHide(ref, { replace, done, versions });
-        setProgress((value) => ({ ...value, [part]: 'failed' }));
-        setError(appPageErrorText(t, cause));
-        setWorking(false);
-        return;
       }
+      seenRun.current = null;
+      goingOnFrom.current = null;
+      rememberUnfinishedHide(ref, null);
+      setWorking(false);
+      // Says it is hidden before another tab may start: that one finds it so.
+      onHidden({ replaced: replace });
+    } finally {
+      release();
     }
-    rememberUnfinishedHide(ref, null);
-    setWorking(false);
-    onHidden({ replaced: replace });
   };
 
   const feeTotal =
@@ -323,6 +398,11 @@ export const HideAppDialog = ({
             {error}
           </Alert>
         )}
+        {runningElsewhere && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            {t('core:app_page.hide.busy_elsewhere')}
+          </Alert>
+        )}
       </DialogContent>
       <DialogActions
         sx={{
@@ -384,7 +464,9 @@ export const HideAppDialog = ({
           <Button
             color={replace ? 'error' : 'primary'}
             disableElevation
-            disabled={working || !ref.name || !ready || fee === null}
+            disabled={
+              working || runningElsewhere || !ref.name || !ready || fee === null
+            }
             onClick={() => void hide()}
             startIcon={
               working ? (

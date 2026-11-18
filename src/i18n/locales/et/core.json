@@ -247,6 +247,7 @@
     "hide": {
       "action": "peida",
       "action_replace": "peida ja asenda",
+      "busy_elsewhere": "Teine vaheleht avaldab seda muudatust praegu. Oota, kuni see on valmis.",
       "button_hide": "peida teegist",
       "button_show": "näita teegis",
       "cant_delete_app": "Q-Appi ei saa kustutada: kõik Qortalis avaldatu jääb selle plokiahelasse ja QDN-i.",

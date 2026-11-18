@@ -128,6 +128,14 @@ with that line in every language Hub has, and it follows Hub's `?lang=` and
 `?theme=`. The page text and screenshots are then published empty too. Each of
 these is a publish of its own, with its own fee, and the record comes last.
 
+The same app's page can be open in several launcher tabs at once. Hub publishes
+one hide or show of an app at a time: while one goes on, the hide button and
+"Show in the library" wait on every page of that app, and a hide window left
+open elsewhere says another tab is publishing it. Once the app is hidden, hide
+windows still open for it close without publishing. If a hide and replace
+stops halfway, a window open in another tab goes on from where it stopped,
+with the replacement kept, rather than publish those parts again.
+
 ### Reviews and replies
 
 ```json
