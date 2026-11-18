@@ -103,6 +103,15 @@ describe('parseOmniboxLink', () => {
     );
   });
 
+  it("reads an app's page link", () => {
+    expect(parseOmniboxLink('qortal://use-app-page/APP/Q-Shop')).toEqual({
+      kind: 'page',
+      link: 'qortal://use-app-page/APP/Q-Shop',
+      name: 'Q-Shop',
+      service: 'APP',
+    });
+  });
+
   it('keeps a group link whole, for the group handlers', () => {
     expect(
       parseOmniboxLink('QORTAL://use-group/action-join/groupid-5')
@@ -198,6 +207,17 @@ describe('buildOmniboxOptions', () => {
           ],
         })
       ).toEqual(['tabs:t1', 'library:chat']);
+    });
+
+    it('skip launcher tabs, whatever they are called', () => {
+      expect(
+        build('new', {
+          tabs: [
+            tab('t1', 'New tab', { internal: 'launcher', service: 'INTERNAL' }),
+            tab('t2', 'Newsroom'),
+          ],
+        })
+      ).toEqual(['tabs:t2', 'library:new']);
     });
   });
 

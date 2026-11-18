@@ -45,6 +45,13 @@ vi.mock('../../../background/background.ts', () => ({
     .mockResolvedValue({ success: true, nonce: 0, hash: '00' }),
 }));
 
+// The page section (screenshots, version) has its own tests and requests.
+vi.mock('../AppPage/PublishPageExtras', () => ({
+  PublishPageExtras: React.forwardRef(() => null),
+  extrasPartCount: () => 0,
+  publishPageExtras: vi.fn(),
+}));
+
 import { AppPublish } from '../AppPublish';
 import { executeEvent } from '../../../utils/events';
 
@@ -444,5 +451,70 @@ describe('AppPublish – tag labels', () => {
     expect(
       screen.queryByRole('textbox', { name: 'Tag 3' })
     ).not.toBeInTheDocument();
+  });
+});
+
+// ── Names and what Publish says is missing ────────────────────────────────
+
+describe('AppPublish – names and missing points', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads each name once in the name list', async () => {
+    mockFetch({ title: 'My App', description: 'A great app' });
+    renderForm();
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(
+        'My App'
+      )
+    );
+    const nameSelect = screen
+      .getAllByRole('combobox')
+      .find((element) => element.textContent === 'TestApp')!;
+    fireEvent.mouseDown(nameSelect);
+    // The picture beside the name is hidden from screen readers.
+    expect(
+      await screen.findByRole('option', { name: 'TestApp' })
+    ).toBeInTheDocument();
+  });
+
+  it('names the missing points in the words of the checklist', async () => {
+    i18n.addResources('en', 'core', {
+      'message.error.missing_fields': 'please fill in: {{fields}}',
+      'publish_form.check_name': 'choose a name',
+      'publish_form.check_files': 'choose the files',
+      'publish_form.check_title': 'add a title',
+    });
+    // The account has no names: nothing to fill in, nothing to wait for.
+    global.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve([]) })
+    ) as unknown as typeof fetch;
+    renderForm({ initialName: '' });
+
+    const publish = screen.getByRole('button', { name: /action\.publish/i });
+    await waitFor(() => expect(publish).toBeEnabled());
+    fireEvent.click(publish);
+
+    await waitFor(() =>
+      expect(executeEvent).toHaveBeenCalledWith(
+        'openGlobalSnackBar',
+        expect.objectContaining({ type: 'error' })
+      )
+    );
+    const { message } = vi
+      .mocked(executeEvent)
+      .mock.calls.find(
+        ([name, payload]) =>
+          name === 'openGlobalSnackBar' && (payload as any)?.type === 'error'
+      )![1] as {
+      message: string;
+    };
+    // The checklist's words, not the form's field ids (name, title, file…).
+    expect(message).toBe(
+      'Please fill in: Choose a name, Add a title, ' +
+        'Publish_form.check_description, Publish_form.check_category, ' +
+        'Choose the files'
+    );
   });
 });

@@ -9,6 +9,10 @@ import {
   registerMainWindowFileIpc,
 } from './main-window-files';
 import {
+  PUBLISH_PROFILES_FILE,
+  registerPublishProfileIpc,
+} from './publish-profiles';
+import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
   foreignWalletPublicKey,
@@ -237,6 +241,7 @@ import {
   noteMainLoopStallForProfiling,
   runMainPressureTask,
 } from './main-pressure';
+import { encodeCapturedShot, parseShotRequest } from './qapp-screenshot';
 
 const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
   'qortal.gcallAudioRendererSendAtMs'
@@ -1643,6 +1648,13 @@ const mainWindowFiles = registerMainWindowFileIpc({
   ipcMain,
   dialog,
   checkSender: requireMainShellEvent,
+});
+
+registerPublishProfileIpc({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  getFilePath: () => path.join(app.getPath('userData'), PUBLISH_PROFILES_FILE),
+  onError: (error) => loggerError('Publish profiles', error),
 });
 
 // Helper to get or create the shared settings directory
@@ -3187,6 +3199,31 @@ ipcMain.handle('qappGuest:release', (event, owner: QAppGuestOwner) => {
   void cleanupQAppOwner(owner);
   return true;
 });
+// Screenshots for an app's page: a capture of a guest Hub prepared for this
+// owner, taken when the publisher asks. Nothing runs inside the app.
+ipcMain.handle(
+  'qappGuest:shot',
+  async (event, owner: QAppGuestOwner, request) => {
+    validateQAppReticulumIpcSender(event);
+    if (event.senderFrame !== event.sender.mainFrame)
+      throw new Error('QAPP_PERMISSION_DENIED');
+    if (!parseShotRequest(request)) throw new Error('QAPP_INVALID_REQUEST');
+    const key = qappGuestOwnerKey(owner);
+    let contents: WebContents | null = null;
+    for (const attached of attachedQAppGuests.values()) {
+      if (
+        attached.prepared &&
+        qappGuestOwnerKey(attached.prepared.owner) === key
+      ) {
+        contents = attached.contents;
+        break;
+      }
+    }
+    if (!contents || contents.isDestroyed())
+      throw new Error('QAPP_GUEST_NOT_FOUND');
+    return encodeCapturedShot(await contents.capturePage());
+  }
+);
 ipcMain.handle(
   'qappReticulum:request',
   async (event, owner: QAppReticulumOwner, options) => {

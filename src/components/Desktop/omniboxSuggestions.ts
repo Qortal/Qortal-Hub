@@ -3,11 +3,14 @@ import {
   type PinnedApp,
   removeBrokenPinnedApps,
 } from '../../utils/pinnedAppsSettings';
-import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
+import {
+  parseQortalLink,
+  type QortalLink,
+} from '../../utils/qortalLink/parseQortalLink';
 import type { AppBookmark } from '../Apps/AppBookmarks/bookmarkTypes';
 import { isAppStartBookmark } from '../Apps/AppsLauncher/launcherItems';
+import { isLauncherTab } from '../Apps/launcherTabs';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
-import { extractComponents } from '../Chat/MessageDisplay';
 import { appOpenCountKey, type AppOpenCounts } from './appOpenCounts';
 import {
   type AppSearchOption,
@@ -58,16 +61,8 @@ export type OmniboxTab = {
 };
 
 /** A qortal:// link typed in the bar. */
-export type OmniboxLink =
-  | { kind: 'group'; link: string }
-  | {
-      identifier?: string;
-      kind: 'resource';
-      link: string;
-      name: string;
-      path: string;
-      service: string;
-    };
+/** A qortal:// link typed in the bar: Hub's one reading of links. */
+export type OmniboxLink = QortalLink;
 
 export type OmniboxOption =
   | AppSearchOption
@@ -91,6 +86,8 @@ export type OmniboxGroup =
   | 'tabs';
 
 export type OmniboxSources = {
+  /** Every Q-App and website, hidden ones too: a pin's title. Else apps. */
+  allApps?: readonly SearchableApp[];
   /** The Q-Apps and websites the library has loaded. */
   apps: readonly SearchableApp[];
   bookmarks?: readonly AppBookmark[] | null;
@@ -109,25 +106,11 @@ const asText = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
 /**
- * The text as a qortal:// link, with the protocol in any case, or null. A
- * group link is kept whole, as Hub's group handlers read it.
+ * The text as a qortal:// link of any kind (a Q-App or website, an app's
+ * page, a group's link), with the protocol in any case, or null.
  */
-export const parseOmniboxLink = (input: string): OmniboxLink | null => {
-  const text = (input ?? '').trim();
-  if (!PROTOCOL_PATTERN.test(text)) return null;
-  const link = QORTAL_PROTOCOL + text.replace(PROTOCOL_PATTERN, '');
-  if (parseQortalUseGroupLink(link)) return { kind: 'group', link };
-  const parts = extractComponents(link);
-  if (!parts?.service || !parts?.name) return null;
-  return {
-    identifier: parts.identifier,
-    kind: 'resource',
-    link,
-    name: parts.name,
-    path: parts.path,
-    service: parts.service,
-  };
-};
+export const parseOmniboxLink = (input: string): OmniboxLink | null =>
+  parseQortalLink(input);
 
 /** What a tab is called in the strip. */
 export const omniboxTabTitle = (tab: OmniboxTab): string =>
@@ -234,6 +217,7 @@ const byScore = <T extends { order: number; score: number }>(
 export const buildOmniboxOptions = (
   input: string,
   {
+    allApps,
     apps,
     bookmarks,
     names,
@@ -254,7 +238,9 @@ export const buildOmniboxOptions = (
   const shown = new Set<string>();
   const options: OmniboxOption[] = [];
 
+  // A launcher tab is a page on the way to an app: nothing to switch to.
   const tabRows = (tabs ?? [])
+    .filter((tab) => !isLauncherTab(tab))
     .map((tab, order) => ({
       order,
       score:
@@ -284,6 +270,12 @@ export const buildOmniboxOptions = (
     const key = appOpenCountKey(app?.service, app?.name);
     if (key && !catalog.has(key)) catalog.set(key, app);
   }
+  // A pin keeps its title when its publisher hid it from the library.
+  const pinCatalog = new Map(catalog);
+  for (const app of allApps ?? []) {
+    const key = appOpenCountKey(app?.service, app?.name);
+    if (key && !pinCatalog.has(key)) pinCatalog.set(key, app);
+  }
 
   // Pins first among equal matches, then the bookmarks.
   const pins = removeBrokenPinnedApps(pinnedApps as PinnedApp[]);
@@ -291,7 +283,7 @@ export const buildOmniboxOptions = (
     ...pins.map((app, order) => {
       const catalogApp = app.isPrivate
         ? null
-        : catalog.get(appOpenCountKey(app.service, app.name) ?? '');
+        : pinCatalog.get(appOpenCountKey(app.service, app.name) ?? '');
       const title = app.isPrivate
         ? asText(app.privateAppProperties?.appName)
         : catalogApp

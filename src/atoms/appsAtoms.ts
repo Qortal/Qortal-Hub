@@ -2,6 +2,10 @@ import { atom } from 'jotai';
 import { atomWithReset } from 'jotai/utils';
 import type { AppRatingData } from '../types/ratings';
 import { compareByWeightedRating } from '../utils/appRatingScore';
+import {
+  type HiddenApps,
+  withoutHiddenApps,
+} from '../components/Apps/AppPage/appHidden';
 
 // Types
 export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' | 'most_rated' | 'recently_updated';
@@ -15,11 +19,88 @@ export const appCategoryFilterAtom = atomWithReset<string>('all');
 export const appStatusFilterAtom = atomWithReset<StatusFilterOption>('all');
 export const appSearchQueryAtom = atomWithReset<string>('');
 
+/** Every published Q-App and website (default resources), as listed. */
+const libraryQappsAtom = atom<any[]>([]);
+
+/**
+ * The apps their publishers hid from the library (appHidden.ts), and the
+ * names the user publishes under, whose own apps stay listed for them.
+ */
+export const hiddenAppsAtom = atom<HiddenApps>({
+  hidden: new Set<string>(),
+  ownNames: [],
+});
+
+export const HIDE_HIDDEN_APPS_STORAGE_KEY = 'launcher-hide-hidden-apps-v1';
+
+/** The stored choice: hidden apps stay out unless the user chose them. */
+export const readHideHiddenApps = (): boolean => {
+  try {
+    return localStorage.getItem(HIDE_HIDDEN_APPS_STORAGE_KEY) !== 'show';
+  } catch {
+    return true;
+  }
+};
+
+// 'unset' rather than null: without strictNullChecks, atom(null) would match
+// atom's read-only overload.
+const chosenHideHiddenAppsAtom = atom<boolean | 'unset'>('unset');
+
+/**
+ * Whether the library leaves out the apps their publishers hid: yes unless the
+ * user turned it off (the library's eye button), one choice per device.
+ */
+export const hideHiddenAppsAtom = atom(
+  (get) => {
+    const chosen = get(chosenHideHiddenAppsAtom);
+    return chosen === 'unset' ? readHideHiddenApps() : chosen;
+  },
+  (_get, set, next: boolean) => {
+    set(chosenHideHiddenAppsAtom, next);
+    try {
+      localStorage.setItem(
+        HIDE_HIDDEN_APPS_STORAGE_KEY,
+        next ? 'hide' : 'show'
+      );
+    } catch {
+      // Without storage the choice lasts this session.
+    }
+  }
+);
+
 /**
  * Every published Q-App and website (default resources), as the Q-Apps
- * library loads them. The top bar suggests from it too.
+ * library loads them, without the ones their publishers hid while the user
+ * leaves those out. The top bar suggests from it too.
  */
-export const availableQappsAtom = atom<any[]>([]);
+export const availableQappsAtom = atom(
+  (get) => {
+    const apps = get(libraryQappsAtom);
+    if (!get(hideHiddenAppsAtom)) return apps;
+    const { hidden, ownNames } = get(hiddenAppsAtom);
+    return withoutHiddenApps(apps, hidden, ownNames);
+  },
+  (_get, set, apps: any[]) => {
+    set(libraryQappsAtom, apps);
+  }
+);
+
+/**
+ * Every published Q-App and website, hidden ones too: for finding a named app
+ * (an exact name typed in the top bar, a widget's app, a pin's details). The
+ * lists people browse read availableQappsAtom.
+ */
+export const allQappsAtom = atom((get) => get(libraryQappsAtom));
+
+type ShownAppPage = { service: string; name: string } | null;
+
+/**
+ * The Q-App or website whose page is on screen, if any. While it shows, the
+ * top bar shows the page's own link (qortal://use-app-page/…). The `null as`
+ * keeps it writable for TypeScript: without strictNullChecks, a plain null
+ * would match atom's read-only overload.
+ */
+export const shownAppPageAtom = atom<ShownAppPage>(null as ShownAppPage);
 
 
 // Current tab atom
@@ -29,14 +110,6 @@ export type AppsLibraryTab =
   | 'my-apps'
   | 'official';
 export const currentAppsTabAtom = atomWithReset<AppsLibraryTab>('official');
-
-// When opening AppPublish from "Update" on a published app card, pass name + service
-export type PublishEditTarget = {
-  name: string;
-  service: 'APP' | 'WEBSITE';
-};
-export const publishEditTargetAtom =
-  atomWithReset<PublishEditTarget | null>(null);
 
 // Helper function to filter and sort apps
 export const filterAndSortApps = (
