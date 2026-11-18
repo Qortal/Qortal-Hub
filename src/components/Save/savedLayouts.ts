@@ -13,9 +13,11 @@ import {
   type HomeLayout,
   homeLayoutStorageKey,
   normalizeHomeLayout,
+  readHeldHomeWorkspaceCopies,
   readHomeLayout,
   sameHomeLayout,
   saveHomeLayout,
+  withHeldHomeWorkspaceCopies,
 } from '../Group/HomeDesktop/homeLayout';
 
 /**
@@ -276,7 +278,26 @@ export const savedLayoutsAtom = atom<SavedLayoutsState>({
   offer: [],
 });
 
-/** Puts a saved layout in this device's place, keeping its time. */
+/**
+ * Home's layout saved on QDN as this device takes it in: the Workspace's
+ * copies that hold something here stay, with what they hold
+ * (withHeldHomeWorkspaceCopies).
+ */
+export const homeLayoutAsTakenIn = (
+  address: string,
+  saved: HomeLayout
+): HomeLayout =>
+  withHeldHomeWorkspaceCopies(
+    saved,
+    readHomeLayout(address),
+    readHeldHomeWorkspaceCopies(address)
+  );
+
+/**
+ * Puts a saved layout in this device's place, keeping its time. Home's
+ * keeps the Workspace's copies that hold something here: then it isn't the
+ * saved one any more, and has a time of its own, later than that one's.
+ */
 const applySavedPart = <P extends SavedLayoutPart>(
   address: string,
   part: P,
@@ -284,9 +305,13 @@ const applySavedPart = <P extends SavedLayoutPart>(
 ) => {
   // A layout saved before it was ever changed has no time: it gets one, so
   // this device can tell it apart from the next.
-  const changedAt = saved.changedAt || 1;
+  let changedAt = saved.changedAt || 1;
   if (part === 'homeLayout') {
-    saveHomeLayout(address, saved.value as HomeLayout, { changedAt });
+    const layout = homeLayoutAsTakenIn(address, saved.value as HomeLayout);
+    if (!sameHomeLayout(layout, saved.value as HomeLayout)) {
+      changedAt = Math.max(Date.now(), changedAt + 1);
+    }
+    saveHomeLayout(address, layout, { changedAt });
   } else {
     saveSidePanel(address, saved.value as SidePanelSettings, { changedAt });
   }
