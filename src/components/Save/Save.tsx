@@ -10,6 +10,7 @@ import { useHasUnsavedLauncher } from '../Apps/AppsLauncher/launcherQdnSync';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { useRevertSettings } from './useRevertSettings';
 import { useSaveSettingsToQdn } from './useSaveSettingsToQdn';
+import { useHasUnsavedLayouts } from './useSavedLayouts';
 import {
   Box,
   Button,
@@ -97,7 +98,10 @@ export const Save = ({
   // The bookmarks and folders are saved with the pins: a change to them is
   // a change to save too.
   const { data: bookmarks } = useLauncherBookmarks(myAddress, true);
-  const hasChanged = useHasUnsavedLauncher(myAddress, bookmarks);
+  const hasLauncherChanged = useHasUnsavedLauncher(myAddress, bookmarks);
+  // Home's layout and the side panel are saved with them too.
+  const hasLayoutsChanged = useHasUnsavedLayouts(myAddress);
+  const hasChanged = hasLauncherChanged || hasLayoutsChanged;
   const saveSettings = useSaveSettingsToQdn(myAddress, myName);
   const revertSettings = useRevertSettings(myAddress);
 
