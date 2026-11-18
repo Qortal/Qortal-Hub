@@ -130,6 +130,15 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/src/**/*.test.ts'],
     environmentMatchGlobs: [['electron/**', 'node']],
+    // Vitest's 5s default is too tight for the heaviest jsdom suites on a
+    // shared or memory-pressured CI runner. The full run is ~5400 tests over a
+    // gigabyte of resident memory, so a test that takes ~2.5s on an idle
+    // machine can exceed 5s under that pressure and time out. The failures move
+    // between runs (AppPage, AppPublish, the masque and quic transports) and
+    // every one of them passes when its file runs alone, which is the signature
+    // of a contention timeout rather than a hang. A test that really hangs
+    // still fails here, just after 20s instead of 5s.
+    testTimeout: 20_000,
   } as any,
   assetsInclude: ['**/*.wasm'],
   plugins: [
