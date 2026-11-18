@@ -599,13 +599,16 @@
   "developer": {
     "no_apps_yet": "você ainda não publicou nenhum app",
     "no_sites_yet": "você ainda não publicou nenhum site",
+    "no_widgets_yet": "você ainda não publicou nenhum widget",
     "publish_app": "publicar app",
     "publish_new": "publicar novo",
     "publish_site": "publicar site",
+    "publish_widget": "publicar widget",
     "update": "atualizar",
     "view_stats": "ver estatísticas",
     "your_published_apps": "seus apps publicados",
-    "your_published_websites": "seus sites publicados"
+    "your_published_websites": "seus sites publicados",
+    "your_published_widgets": "seus widgets publicados"
   },
   "devmode_apps": "Apps Modo desenvolvedor",
   "directory": "diretório",
@@ -699,6 +702,7 @@
       "featured_previous": "mostrar os apps em destaque anteriores",
       "filter_categories": "filtrar categorias",
       "my_apps_hint": "publicados com os nomes desta conta",
+      "my_widgets_hint": "pequenas Q-Apps para o Início, publicadas com os nomes desta conta",
       "no_category_matches": "nenhuma categoria corresponde a “{{query}}”",
       "no_filter_matches": "nenhum Q-App ou site corresponde a esses filtros",
       "no_name_text": "registre um nome Qortal para publicar Q-Apps e sites. Eles aparecerão aqui.",
@@ -1134,6 +1138,31 @@
     "not_admin": "você não é mais administrador de {{group}}, então este aplicativo não pode ser atualizado a partir desta conta.",
     "title": "atualizar {{name}}"
   },
+  "publish_widget": {
+    "check_id": "escolha um ID para o widget",
+    "choose_label": "widget a publicar",
+    "confirm_new": "publicar o novo widget {{resource}}?",
+    "confirm_update": "atualizar o widget {{resource}}?",
+    "heading": "publicar um widget",
+    "id_hint": "letras minúsculas, números e hifens. Publique de novo com o mesmo ID para atualizar o widget.",
+    "id_invalid": "use letras minúsculas e números, com um único hífen entre eles",
+    "id_label": "ID do widget",
+    "id_taken": "seu widget “{{title}}” tem este ID: publicar o substitui.",
+    "intro": "uma pequena Q-App para o Início do Qortal Hub e a tela de widgets do Qortal GO.",
+    "listing_hint": "como aparece na lista de widgets.",
+    "new_widget": "um novo widget",
+    "not_listed": "fora da lista",
+    "note": "publica `{{resource}}` com a tag `go-widget`. Ele aparece em Adicionar widget no Qortal Hub e no Qortal GO, e na aba Widgets da biblioteca.",
+    "part_widget": "o widget",
+    "preview_title": "na lista de widgets",
+    "published": "widget publicado. Adicione-o em Início → Widgets → Adicionar widget; o nó pode levar um minuto para listá-lo.",
+    "relist_note": "fora da lista agora: publicar o coloca na lista de novo.",
+    "section_hint": "um nome pode publicar vários widgets além do próprio app.",
+    "tag_locked": "tag {{number}}: go-widget, adicionada para widgets",
+    "title_long": "as listas de widgets mostram cerca de {{number}} caracteres",
+    "type_widget": "widget",
+    "update_instead": "atualizá-lo em vez disso"
+  },
   "q_apps": {
     "about": "sobre este Q-App",
     "q_mail": "Q-Mail",
@@ -1472,6 +1501,81 @@
     "loading": "A carregar",
     "loading_message": "A obter os dados públicos mais recentes do nó Qortal predefinido.",
     "retry": "Tentar novamente"
+  },
+  "widget_guide": {
+    "contents": "sumário",
+    "copy_failed": "não foi possível copiar",
+    "copy_hint": "o guia inteiro, para suas anotações ou um assistente de IA",
+    "copy_markdown": "copiar como Markdown",
+    "lead": "Um widget é uma pequena Q-App no Início do Qortal Hub e na tela de widgets do Qortal GO. Uma única publicação funciona nos dois. Ele mostra uma coisa só, de relance, e abre seu app para todo o resto.",
+    "learn_more": "saiba mais",
+    "look": {
+      "background": "Mantenha o fundo da página transparente: o host desenha o cartão. Siga os temas escuro e claro.",
+      "fast": "Mostre algo em cerca de 300 ms: desenhe os dados que você guardou da última vez e depois atualize. Tenha um estado vazio e um estado de erro, nunca um quadro em branco ou um indicador de carregamento que não para.",
+      "fit": "Ele preenche qualquer quadro que receber, de cerca de 80 × 92 px até um cartão largo no Hub. Mostre menos itens ou tire as imagens quando ele for pequeno; use duas colunas quando for largo. Nada transborda; só uma lista vertical pode rolar.",
+      "input": "Use botões e listas verticais, com áreas de toque de pelo menos 40 px de altura. Nada de deslizar para os lados, carrosséis ou toques longos: o GO os usa para trocar de tela e organizar widgets.",
+      "one_job": "Uma única função: um número, uma lista curta ou o próximo item. Sem barra de app, menus, abas, login nem tela de abertura.",
+      "open": "Um toque abre seu app completo no lugar certo, com `OPEN_NEW_TAB`.",
+      "title": "Como é um widget"
+    },
+    "messages": {
+      "poll": "Consulte no máximo a cada 30 s; para a maioria dos dados, a cada poucos minutos é melhor.",
+      "theme": "`THEME_CHANGED` (`theme`) e `LANGUAGE_CHANGED` (`language`): redesenhe no novo tema ou idioma.",
+      "title": "Mensagens do host",
+      "visibility": "`GO_WIDGET_VISIBILITY` (`payload.visible`): pause temporizadores, animações e consultas enquanto ele for `false` e enquanto `document.visibilityState` for `hidden`."
+    },
+    "publish": {
+      "bundle": "Compacte a pasta em .zip com o `index.html` na raiz. Um único arquivo HTML com CSS e JavaScript embutidos inicia mais rápido; fique abaixo de uns 200 KB.",
+      "ids": "Serviço `APP`, identificador `go-widget-<slug>`, tag `go-widget`. A opção Widget deste formulário define os três.",
+      "listing": "A lista de widgets mostra o título, a descrição e o avatar do seu nome. Limite o título a 24 caracteres e a descrição a uma frase.",
+      "name": "Publique-o com o nome do seu app: o Hub mantém um `localStorage` por nome, então o widget pode ler o que o seu app salvou.",
+      "own_app": "Se o seu app já é pequeno e rápido, ele pode ser o próprio widget: desenhe uma visualização compacta quando o endereço tiver `goWidget=1` e adicione ao app a tag `go-widget`.",
+      "title": "Publicação",
+      "update": "Para atualizá-lo, publique de novo com o mesmo nome e ID. Para aposentá-lo, publique-o de novo sem a tag `go-widget`: ele sai da lista, mas quem já o adicionou continua carregando-o, então deixe nele um aviso curto."
+    },
+    "requests": {
+      "always": "Sempre: `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY`.",
+      "never": "Nunca: pagamentos, publicação, assinatura, criptografia, mensagens de chat, arquivos, notificações, tela cheia, pop-ups, nem `alert`, `confirm` ou `prompt`. Uma solicitação recusada é rejeitada: trate o erro e continue funcionando.",
+      "open": "Para tudo o que um widget não pode fazer, abra seu app completo na página certa. Use `OPEN_NEW_TAB` com um link `qortal://APP/<name>/<path>`, e não `LINK_TO_QDN_RESOURCE`, que pode carregar o outro app dentro do widget:",
+      "read": "Solicitações somente de leitura que o próprio Core responde, como em qualquer Q-App: `SEARCH_QDN_RESOURCES`, `FETCH_QDN_RESOURCE`, `GET_BALANCE`, `GET_NAME_DATA`, `SEARCH_CHAT_MESSAGES`, `FETCH_BLOCK` e semelhantes. Feeds precisam de `mode: 'ALL'`.",
+      "screen": "Só enquanto o Início (no GO, a tela de widgets) estiver visível: `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT` e `GET_WALLET_BALANCE`. Os dois últimos perguntam ao usuário, então use-os só depois de um toque.",
+      "title": "O que um widget pode pedir",
+      "web": "Código e dados vêm só do seu pacote, do nó e da QDN. Nada de serviços web externos: eles podem estar bloqueados e revelam o endereço IP e a atividade do usuário."
+    },
+    "size": {
+      "ask": "Peça uma vez o tamanho de que precisa. Ele vale até o usuário redimensionar o widget.",
+      "grid": "As linhas têm 40 px, com espaços de 12 px, e um widget tem de 2 a 14 linhas de altura. O GO tem 4 colunas, de cerca de 79 px cada em um celular; o Hub encaixa quantas colunas de pelo menos 84 px couberem, então um widget pode ser bem mais largo que um celular. Widgets novos têm 4 × 5 células, cerca de 351 a 406 × 248 px.",
+      "only_widget": "`GO_WIDGET_SET_SIZE` e `GO_WIDGET_INFO` só respondem dentro de um quadro de widget. Envie-os só quando `goWidget=1` estiver no endereço, com um limite de tempo, e nunca espere por eles antes de desenhar.",
+      "title": "Tamanho",
+      "values": "`width` é `'small'` (1 coluna), `'half'` (2) ou `'full'` (4); `height` é em px CSS, arredondado para cima até linhas inteiras."
+    },
+    "start": {
+      "param": "`goWidget=1` está sempre presente: desenhe a visualização de widget desde o primeiro quadro.",
+      "request": "Chame o `qortalRequest` do Core pelo nome simples; `window.qortalRequest` não está definido. No Hub o widget é a página de nível superior (`window.parent === window`), no GO é um iframe; a mesma chamada funciona nos dois.",
+      "storage": "`localStorage`: o Hub mantém um por nome de app, o GO um só para todas as Q-Apps do nó. Comece cada chave com o seu nome.",
+      "theme": "Leia `theme` e `lang` do endereço ao iniciar. As mensagens do host trazem as mudanças depois disso.",
+      "title": "Como ele inicia"
+    },
+    "starter": {
+      "intro": "Um widget completo, pequeno de propósito: a Q-App mais recente, no tema certo, pausado enquanto oculto, atualizado a cada poucos minutos e abrindo o app com um toque. Substitua `yourname`, a busca e `draw` pelos seus.",
+      "title": "Um ponto de partida"
+    },
+    "test": {
+      "tab": "Abra-o como app com `?goWidget=1&theme=dark`, depois `light`, e redimensione a janela de cerca de 80 × 92 px até 830 × 248 px. Em uma aba nada responde a `GO_WIDGET_*`: ele precisa desenhar mesmo assim.",
+      "title": "Testes",
+      "update": "O Hub mostra uma nova versão na próxima vez que o widget carregar (Organizar → Recarregar widget); o GO em cerca de uma hora.",
+      "widget": "Depois de publicar, adicione-o no Hub (Início → Widgets → Adicionar widget) e no GO (tela de widgets → +). Confira a troca de tema e de idioma, o menor e o maior tamanho, se ele pausa fora da vista e se um toque abre a página certa."
+    },
+    "tip": {
+      "about": "como criar um widget",
+      "any_size": "Faça caber em qualquer tamanho, de um único bloco pequeno a um cartão largo. Nada transborda.",
+      "first_frame": "Desenhe a visualização de widget desde o primeiro quadro quando o endereço tiver `goWidget=1`, sobre um fundo transparente.",
+      "read_only": "Somente leitura: sem pagamentos, publicação ou pop-ups. Um toque abre seu app completo com `OPEN_NEW_TAB`.",
+      "request": "Chame o `qortalRequest` do Core pelo nome simples: funciona no GO (um iframe) e no Hub (uma página de nível superior).",
+      "theme": "Siga `theme` e `lang` do endereço e pause temporizadores e consultas enquanto o widget estiver oculto.",
+      "title": "Como criá-lo como widget"
+    },
+    "title": "Criar um widget"
   },
   "widgets": {
     "add_to_home": "adicionar ao Início",

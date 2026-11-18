@@ -12,6 +12,7 @@ import {
   removeSavedWidget,
   savedHomeWidgetsAtom,
   toWidgetListing,
+  widgetListingOf,
 } from './homeWidgets';
 
 describe('toWidgetListing', () => {
@@ -131,6 +132,33 @@ describe('toWidgetListing', () => {
         metadata: { tags: ['go-widget'] },
       })?.identifier
     ).toBeNull();
+  });
+});
+
+describe('widgetListingOf', () => {
+  it('gives a retired widget, without the tag, the listing it had', () => {
+    const retired = {
+      name: 'Clock',
+      service: 'APP',
+      identifier: 'go-widget-old',
+      metadata: { title: 'Old clock', description: 'Moved', tags: ['time'] },
+      updated: 7,
+    };
+    expect(toWidgetListing(retired)).toBeNull();
+    expect(widgetListingOf(retired)).toEqual({
+      name: 'Clock',
+      identifier: 'go-widget-old',
+      title: 'Old clock',
+      description: 'Moved',
+      tags: ['time'],
+      updated: 7,
+    });
+  });
+
+  it('is null for what is never a widget', () => {
+    expect(widgetListingOf({ name: 'Site', service: 'WEBSITE' })).toBeNull();
+    expect(widgetListingOf({ name: ' ', service: 'APP' })).toBeNull();
+    expect(widgetListingOf(null)).toBeNull();
   });
 });
 

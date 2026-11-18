@@ -71,7 +71,10 @@ vi.mock('../../Snackbar/Snackbar', () => ({
 // The page part itself has its own tests: here it hands over one page part.
 vi.mock('../AppPage/PublishPageExtras', () => ({
   PublishPageExtras: React.forwardRef((_props, ref) => {
-    useImperativeHandle(ref, () => ({ prepare: mocks.prepare }));
+    useImperativeHandle(ref, () => ({
+      prepare: mocks.prepare,
+      hasDrafts: () => ({ page: false, shots: false }),
+    }));
     return null;
   }),
   extrasPartCount: (extras: any) =>

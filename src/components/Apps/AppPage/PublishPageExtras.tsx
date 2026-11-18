@@ -99,6 +99,11 @@ export interface PublishExtrasHandle {
   prepare: () => PublishExtras;
   /** Tells the form what became of the screenshots it gave. */
   noteShots: (outcome: ShotsOutcome) => void;
+  /**
+   * Whether each part holds something of its own to publish, read or not:
+   * a version or What's new typed, screenshots chosen or changed.
+   */
+  hasDrafts: () => Record<PagePart, boolean>;
 }
 
 /** What the form will publish with the app, for its summary and preview. */
@@ -415,6 +420,10 @@ export const PublishPageExtras = forwardRef<
       }
       setShotsReplaced(false);
     },
+    hasDrafts: () => ({
+      page: !!(version.trim() || whatsNew.trim()),
+      shots: screenshotsToPublish(shots, existingShots, mode) !== null,
+    }),
   }));
 
   // Reads the screenshots again, after they were replaced on the node: the

@@ -94,6 +94,7 @@ export const FormSection = ({
 export const PublishPreviewCard = ({
   name,
   isWebsite,
+  isWidget = false,
   title,
   description,
   categoryName,
@@ -103,6 +104,8 @@ export const PublishPreviewCard = ({
 }: {
   name: string;
   isWebsite: boolean;
+  /** A widget: shown as the widget list shows it. */
+  isWidget?: boolean;
   title: string;
   description: string;
   categoryName: string;
@@ -137,7 +140,9 @@ export const PublishPreviewCard = ({
           textTransform: 'uppercase',
         }}
       >
-        {t('core:publish_form.preview_title')}
+        {isWidget
+          ? t('core:publish_widget.preview_title')
+          : t('core:publish_form.preview_title')}
       </Typography>
       <Box sx={{ alignItems: 'center', display: 'flex', gap: 1.5 }}>
         <Box
@@ -199,11 +204,15 @@ export const PublishPreviewCard = ({
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
             <Chip
               label={
-                isWebsite
-                  ? t('core:app_page.hero.type_website', {
+                isWidget
+                  ? t('core:publish_widget.type_widget', {
                       postProcess: 'capitalizeFirstChar',
                     })
-                  : t('core:app_page.hero.type_app')
+                  : isWebsite
+                    ? t('core:app_page.hero.type_website', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('core:app_page.hero.type_app')
               }
               size="small"
               sx={{ height: 20 }}

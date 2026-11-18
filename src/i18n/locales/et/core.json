@@ -599,13 +599,16 @@
   "developer": {
     "no_apps_yet": "te pole veel ühtegi rakendust avaldanud",
     "no_sites_yet": "te pole veel ühtegi veebilehte avaldanud",
+    "no_widgets_yet": "te pole veel ühtegi vidinat avaldanud",
     "publish_app": "avalda rakendus",
     "publish_new": "avalda uus",
     "publish_site": "avalda veebileht",
+    "publish_widget": "avalda vidin",
     "update": "uuenda",
     "view_stats": "vaata statistikat",
     "your_published_apps": "teie avaldatud rakendused",
-    "your_published_websites": "teie avaldatud veebilehed"
+    "your_published_websites": "teie avaldatud veebilehed",
+    "your_published_widgets": "teie avaldatud vidinad"
   },
   "devmode_apps": "arendusrežiimi rakendused",
   "directory": "kataloog",
@@ -699,6 +702,7 @@
       "featured_previous": "näita eelmisi esiletõstetud rakendusi",
       "filter_categories": "filtreeri kategooriaid",
       "my_apps_hint": "avaldatud selle konto nimede all",
+      "my_widgets_hint": "väikesed Q-Appid avalehe jaoks, avaldatud selle konto nimede all",
       "no_category_matches": "ükski kategooria ei vasta otsingule „{{query}}“",
       "no_filter_matches": "ükski Q-App ega veebileht ei vasta nendele filtritele",
       "no_name_text": "registreeri Qortali nimi, et Q-Appe ja veebilehti avaldada. Need ilmuvad siia.",
@@ -1134,6 +1138,31 @@
     "not_admin": "sa ei ole enam rühma {{group}} administraator, seega ei saa seda rakendust sellelt kontolt uuendada.",
     "title": "uuenda: {{name}}"
   },
+  "publish_widget": {
+    "check_id": "vali vidina ID",
+    "choose_label": "avaldatav vidin",
+    "confirm_new": "kas avaldada uus vidin {{resource}}?",
+    "confirm_update": "kas uuendada vidinat {{resource}}?",
+    "heading": "avalda vidin",
+    "id_hint": "väiketähed, numbrid ja sidekriipsud. Vidina uuendamiseks avalda see uuesti sama ID-ga.",
+    "id_invalid": "kasuta väiketähti ja numbreid, nende vahel üksikuid sidekriipse",
+    "id_label": "vidina ID",
+    "id_taken": "sinu vidinal „{{title}}“ on see ID: avaldamine asendab selle.",
+    "intro": "väike Q-App Qortal Hubi avalehe ja Qortal GO vidinate ekraani jaoks.",
+    "listing_hint": "kuidas see vidinate loendis paistab.",
+    "new_widget": "uus vidin",
+    "not_listed": "pole loendis",
+    "note": "avaldab `{{resource}}` sildiga `go-widget`. See on Qortal Hubis ja Qortal GO-s jaotises „Lisa vidin“ ning teegi vahekaardil „Vidinad“.",
+    "part_widget": "vidin",
+    "preview_title": "vidinate loendis",
+    "published": "vidin avaldatud. Lisa see: Avaleht → Vidinad → Lisa vidin; sõlmel võib selle loendisse lisamiseks kuluda minut.",
+    "relist_note": "praegu pole loendis: avaldamine lisab selle uuesti loendisse.",
+    "section_hint": "üks nimi võib oma rakenduse kõrval avaldada mitu vidinat.",
+    "tag_locked": "silt {{number}}: go-widget, lisatud vidinate jaoks",
+    "title_long": "vidinate loendid näitavad umbes {{number}} tähemärki",
+    "type_widget": "vidin",
+    "update_instead": "uuenda hoopis seda"
+  },
   "q_apps": {
     "about": "rakenduse kohta",
     "q_mail": "Q-Mail",
@@ -1472,6 +1501,81 @@
     "loading": "Laadimine",
     "loading_message": "Värskete avalike andmete toomine vaikimisi Qortali sõlmest.",
     "retry": "Proovi uuesti"
+  },
+  "widget_guide": {
+    "contents": "sisukord",
+    "copy_failed": "kopeerimine ebaõnnestus",
+    "copy_hint": "kogu juhend sinu märkmete või tehisintellekti assistendi jaoks",
+    "copy_markdown": "kopeeri Markdownina",
+    "lead": "Vidin on väike Q-App Qortal Hubi avalehel ja Qortal GO vidinate ekraanil. Üks avaldamine töötab mõlemas. See näitab ühte asja ühe pilguga ja avab kõige muu jaoks sinu rakenduse.",
+    "learn_more": "loe lähemalt",
+    "look": {
+      "background": "Jäta lehe taust läbipaistvaks: kaardi joonistab hostrakendus. Järgi tumedat ja heledat teemat.",
+      "fast": "Näita midagi umbes 300 ms jooksul: joonista eelmisel korral talletatud andmed, siis värskenda. Loo tühi olek ja veaolek; ära kunagi jäta tühja kaadrit ega lõputult keerlevat laadimisikooni.",
+      "fit": "Vidin täidab iga raami, mille ta saab, umbes 80 × 92 px suurusest kuni laia kaardini Hubis. Kui see on väike, näita vähem üksusi või jäta pildid ära; kui lai, kasuta kahte veergu. Miski ei lähe üle ääre; kerida võib ainult vertikaalne loend.",
+      "input": "Kasuta nuppe ja vertikaalseid loendeid, puudutusalad vähemalt 40 px kõrged. Ei mingeid külgsuunalisi pühkimisi, karusselle ega pikki vajutusi: GO kasutab neid ekraanide vahetamiseks ja vidinate korraldamiseks.",
+      "one_job": "Üks ülesanne: arv, lühike loend või järgmine üksus. Ei mingit rakenduseriba, menüüsid, vahelehti, sisselogimist ega avakuva.",
+      "open": "Puudutus avab sinu täisrakenduse õiges kohas, `OPEN_NEW_TAB` abil.",
+      "title": "Milline vidin välja näeb"
+    },
+    "messages": {
+      "poll": "Päri andmeid mitte sagedamini kui iga 30 s järel; enamiku andmete puhul on parem iga paari minuti järel.",
+      "theme": "`THEME_CHANGED` (`theme`) ja `LANGUAGE_CHANGED` (`language`): joonista vidin uuesti uue teema või keelega.",
+      "title": "Hostrakenduse sõnumid",
+      "visibility": "`GO_WIDGET_VISIBILITY` (`payload.visible`): peata taimerid, animatsioonid ja pärimine, kuni see on `false`, ning kuni `document.visibilityState` on `hidden`."
+    },
+    "publish": {
+      "bundle": "Paki kaust zip-failiks nii, et `index.html` oleks selle juurkaustas. Kõige kiiremini käivitub üks HTML-fail koos sisseehitatud CSS-i ja JavaScriptiga; jää alla umbes 200 KB.",
+      "ids": "Teenus `APP`, identifikaator `go-widget-<slug>`, silt `go-widget`. Selle vormi valik „Vidin“ määrab kõik kolm.",
+      "listing": "Vidinate loendis on näha pealkiri, kirjeldus ja sinu nime avatar. Hoia pealkiri kuni 24 tähemärgi pikkune ja kirjeldus ühe lause pikkune.",
+      "name": "Avalda see oma rakenduse nime all: Hub hoiab salvestusruumi `localStorage` iga nime jaoks eraldi, nii et vidin saab lugeda, mida sinu rakendus salvestas.",
+      "own_app": "Kui sinu rakendus on juba väike ja kiire, võib see ise olla oma vidin: joonista kompaktne vaade, kui aadressis on `goWidget=1`, ja lisa rakendusele silt `go-widget`.",
+      "title": "Avaldamine",
+      "update": "Uuendamiseks avalda see uuesti sama nime ja ID-ga. Kasutuselt kõrvaldamiseks avalda see uuesti ilma sildita `go-widget`: see kaob loendist, kuid kes on selle juba lisanud, laadib seda edasi, seega jäta sinna lühike teade."
+    },
+    "requests": {
+      "always": "Alati: `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY`.",
+      "never": "Mitte kunagi: maksed, avaldamine, allkirjastamine, krüpteerimine, vestlussõnumid, failid, teavitused, täisekraan, hüpikaknad ning `alert`, `confirm` või `prompt`. Keelatud päring lükatakse tagasi: püüa viga kinni ja jätka tööd.",
+      "open": "Kõige jaoks, mida vidin teha ei saa, ava oma täisrakendus õigel lehel. Kasuta `OPEN_NEW_TAB` koos lingiga `qortal://APP/<name>/<path>`, mitte `LINK_TO_QDN_RESOURCE`, mis võib laadida teise rakenduse vidina sisse:",
+      "read": "Ainult lugemiseks mõeldud päringud, millele Core ise vastab, nagu igas Q-Appis: `SEARCH_QDN_RESOURCES`, `FETCH_QDN_RESOURCE`, `GET_BALANCE`, `GET_NAME_DATA`, `SEARCH_CHAT_MESSAGES`, `FETCH_BLOCK` ja muud sarnased. Voogude jaoks on vaja `mode: 'ALL'`.",
+      "screen": "Ainult siis, kui avaleht (GO-s vidinate ekraan) on nähtaval: `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT` ja `GET_WALLET_BALANCE`. Kaks viimast küsivad kasutajalt, seega kasuta neid alles pärast puudutust.",
+      "title": "Mida vidin võib küsida",
+      "web": "Kood ja andmed tulevad ainult sinu paketist, sõlmest ja QDN-ist. Ei mingeid väliseid veebiteenuseid: need võivad olla blokeeritud ning paljastavad kasutaja IP-aadressi ja tegevuse."
+    },
+    "size": {
+      "ask": "Küsi vajalikku suurust üks kord. See kehtib, kuni kasutaja vidina suurust muudab.",
+      "grid": "Read on 40 px kõrged 12 px vahedega, vidin on 2 kuni 14 rida kõrge. GO-l on 4 veergu, telefonis igaüks umbes 79 px; Hub mahutab nii palju vähemalt 84 px laiuseid veerge kui võimalik, seega võib vidin olla telefonist palju laiem. Uued vidinad on 4 × 5 lahtrit, umbes 351 kuni 406 × 248 px.",
+      "only_widget": "`GO_WIDGET_SET_SIZE` ja `GO_WIDGET_INFO` vastavad ainult vidina raamis. Saada neid ainult siis, kui aadressis on `goWidget=1`, koos ajapiiranguga, ja ära kunagi oota neid enne joonistamist.",
+      "title": "Suurus",
+      "values": "`width` on `'small'` (1 veerg), `'half'` (2) või `'full'` (4); `height` on CSS px väärtus, mis ümardatakse üles täisridadeni."
+    },
+    "start": {
+      "param": "`goWidget=1` on alati olemas: joonista vidinavaade esimesest kaadrist alates.",
+      "request": "Kutsu Core'i `qortalRequest` välja lihtsalt nime järgi; `window.qortalRequest` on määramata. Hubis on vidin ülataseme leht (`window.parent === window`), GO-s iframe; sama väljakutse töötab mõlemas.",
+      "storage": "`localStorage`: Hub hoiab igal rakenduse nimel oma, GO ühe kõigi sõlme Q-Appide jaoks. Alusta iga võtit oma nimega.",
+      "theme": "Loe käivitumisel aadressist `theme` ja `lang`. Hostrakenduse sõnumid on hilisemad muudatused.",
+      "title": "Kuidas see käivitub"
+    },
+    "starter": {
+      "intro": "Terve vidin, meelega väike: uusim Q-App, õiges teemas, peatub peidus olles, värskendub iga paari minuti järel ja avab puudutusel rakenduse. Asenda `yourname`, otsing ja `draw` enda omadega.",
+      "title": "Lähtepunkt"
+    },
+    "test": {
+      "tab": "Ava see rakendusena parameetritega `?goWidget=1&theme=dark`, siis `light`, ja muuda akna suurust umbes 80 × 92 px kuni 830 × 248 px. Vahelehel ei vasta `GO_WIDGET_*` päringutele miski: vidin peab ikkagi joonistuma.",
+      "title": "Testimine",
+      "update": "Hub näitab uut versiooni vidina järgmisel laadimisel (Korralda → Laadi vidin uuesti); GO umbes tunni jooksul.",
+      "widget": "Pärast avaldamist lisa see Hubis (Avaleht → Vidinad → Lisa vidin) ja GO-s (vidinate ekraan → +). Kontrolli teema ja keele vahetamist, väikseimat ja suurimat suurust, et see peatub, kui pole nähtaval, ja et puudutus avab õige lehe."
+    },
+    "tip": {
+      "about": "kuidas vidinat teha",
+      "any_size": "Sobita vidin iga suurusega, ühest väikesest ruudust laia kaardini. Miski ei lähe üle ääre.",
+      "first_frame": "Joonista vidinavaade esimesest kaadrist alates läbipaistval taustal, kui aadressis on `goWidget=1`.",
+      "read_only": "Ainult lugemiseks: ei makseid, avaldamist ega hüpikaknaid. Puudutus avab sinu täisrakenduse `OPEN_NEW_TAB` abil.",
+      "request": "Kutsu Core'i `qortalRequest` välja lihtsalt nime järgi: see töötab GO-s (iframe) ja Hubis (ülataseme leht).",
+      "theme": "Järgi aadressi väärtusi `theme` ja `lang` ning peata taimerid ja pärimine, kuni vidin on peidus.",
+      "title": "Vidinana tegemine"
+    },
+    "title": "Vidina tegemine"
   },
   "widgets": {
     "add_to_home": "lisa avalehele",

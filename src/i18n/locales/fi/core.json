@@ -599,13 +599,16 @@
   "developer": {
     "no_apps_yet": "et ole vielä julkaissut sovelluksia",
     "no_sites_yet": "et ole vielä julkaissut verkkosivustoja",
+    "no_widgets_yet": "et ole vielä julkaissut widgetejä",
     "publish_app": "julkaise sovellus",
     "publish_new": "julkaise uusi",
     "publish_site": "julkaise verkkosivusto",
+    "publish_widget": "julkaise widget",
     "update": "päivitä",
     "view_stats": "näytä tilastot",
     "your_published_apps": "julkaistut sovelluksesi",
-    "your_published_websites": "julkaistut verkkosivustosi"
+    "your_published_websites": "julkaistut verkkosivustosi",
+    "your_published_widgets": "julkaistut widgetisi"
   },
   "devmode_apps": "kehittäjätilan sovellukset",
   "directory": "hakemisto",
@@ -699,6 +702,7 @@
       "featured_previous": "näytä edelliset suositellut sovellukset",
       "filter_categories": "suodata kategorioita",
       "my_apps_hint": "julkaistu tämän tilin nimillä",
+      "my_widgets_hint": "pieniä Q-Appeja etusivulle, julkaistu tämän tilin nimillä",
       "no_category_matches": "mikään kategoria ei vastaa hakua ”{{query}}”",
       "no_filter_matches": "mikään Q-App tai verkkosivusto ei vastaa näitä suodattimia",
       "no_name_text": "rekisteröi Qortal-nimi julkaistaksesi Q-Appeja ja verkkosivustoja. Ne näkyvät täällä.",
@@ -1134,6 +1138,31 @@
     "not_admin": "et ole enää ryhmän {{group}} ylläpitäjä, joten tätä sovellusta ei voi päivittää tältä tililtä.",
     "title": "päivitä {{name}}"
   },
+  "publish_widget": {
+    "check_id": "valitse widgetin ID",
+    "choose_label": "julkaistava widget",
+    "confirm_new": "julkaistaanko uusi widget {{resource}}?",
+    "confirm_update": "päivitetäänkö widget {{resource}}?",
+    "heading": "julkaise widget",
+    "id_hint": "pienet kirjaimet, numerot ja yhdysmerkit. Päivitä widget julkaisemalla se uudelleen samalla ID:llä.",
+    "id_invalid": "käytä pieniä kirjaimia ja numeroita, niiden välissä yksittäisiä yhdysmerkkejä",
+    "id_label": "widgetin ID",
+    "id_taken": "widgetilläsi ”{{title}}” on tämä ID: julkaisu korvaa sen.",
+    "intro": "pieni Q-App Qortal Hubin etusivulle ja Qortal GO:n widgetien näkymään.",
+    "listing_hint": "miltä se näyttää widgetien luettelossa.",
+    "new_widget": "uusi widget",
+    "not_listed": "ei luettelossa",
+    "note": "julkaisee kohteen `{{resource}}` tagilla `go-widget`. Se näkyy Qortal Hubissa ja Qortal GO:ssa kohdassa Lisää widget sekä kirjaston Widgetit-välilehdellä.",
+    "part_widget": "widget",
+    "preview_title": "widgetien luettelossa",
+    "published": "widget julkaistu. Lisää se kohdasta Etusivu → Widgetit → Lisää widget; voi kestää minuutin, ennen kuin solmu listaa sen.",
+    "relist_note": "ei nyt luettelossa: julkaisu lisää sen takaisin luetteloon.",
+    "section_hint": "yksi nimi voi julkaista sovelluksensa rinnalla useita widgettejä.",
+    "tag_locked": "tunniste {{number}}: go-widget, lisätty widgetejä varten",
+    "title_long": "widgetien luettelot näyttävät noin {{number}} merkkiä",
+    "type_widget": "widget",
+    "update_instead": "päivitä se sen sijaan"
+  },
   "q_apps": {
     "about": "tietoa tästä Q-sovelluksesta",
     "q_mail": "Q-Mail",
@@ -1472,6 +1501,81 @@
     "loading": "Ladataan",
     "loading_message": "Haetaan uusimpia julkisia tietoja oletus-Qortal-solmusta.",
     "retry": "Yritä uudelleen"
+  },
+  "widget_guide": {
+    "contents": "sisällys",
+    "copy_failed": "kopiointi epäonnistui",
+    "copy_hint": "koko opas muistiinpanoihisi tai tekoälyavustajalle",
+    "copy_markdown": "kopioi Markdownina",
+    "lead": "Widget on pieni Q-App Qortal Hubin etusivulla ja Qortal GO:n widgetien näkymässä. Yksi julkaisu toimii molemmissa. Se näyttää yhden asian yhdellä silmäyksellä ja avaa sovelluksesi kaikkeen muuhun.",
+    "learn_more": "lue lisää",
+    "look": {
+      "background": "Pidä sivun tausta läpinäkyvänä: isäntäsovellus piirtää kortin. Seuraa tummaa ja vaaleaa teemaa.",
+      "fast": "Näytä jotain noin 300 ms:ssa: piirrä viimeksi tallentamasi tiedot ja päivitä sitten. Tee tyhjä tila ja virhetila, älä koskaan tyhjää kehystä tai latauskuvaketta, joka pyörii loputtomiin.",
+      "fit": "Widget täyttää minkä tahansa kehyksen, jonka se saa, noin 80 × 92 px:stä leveään korttiin Hubissa. Näytä vähemmän kohteita tai jätä kuvat pois, kun se on pieni, ja käytä kahta saraketta, kun se on leveä. Mikään ei valu yli; vain pystysuuntainen luettelo saa vierittyä.",
+      "input": "Käytä painikkeita ja pystysuuntaisia luetteloita, ja tee kosketusalueista vähintään 40 px korkeita. Ei sivuttaispyyhkäisyjä, karuselleja eikä pitkiä painalluksia: GO käyttää niitä näkymien vaihtamiseen ja widgetien järjestämiseen.",
+      "one_job": "Yksi tehtävä: luku, lyhyt luettelo tai seuraava kohde. Ei sovelluspalkkia, valikoita, välilehtiä, kirjautumista eikä aloitusnäyttöä.",
+      "open": "Napautus avaa koko sovelluksesi oikeasta kohdasta pyynnöllä `OPEN_NEW_TAB`.",
+      "title": "Miltä widget näyttää"
+    },
+    "messages": {
+      "poll": "Kysele enintään 30 s:n välein; useimmille tiedoille muutaman minuutin väli on parempi.",
+      "theme": "`THEME_CHANGED` (`theme`) ja `LANGUAGE_CHANGED` (`language`): piirrä uudelleen uudella teemalla tai kielellä.",
+      "title": "Isäntäsovelluksen viestit",
+      "visibility": "`GO_WIDGET_VISIBILITY` (`payload.visible`): keskeytä ajastimet, animaatiot ja kysely, kun se on `false` ja kun `document.visibilityState` on `hidden`."
+    },
+    "publish": {
+      "bundle": "Pakkaa kansio zip-tiedostoksi niin, että `index.html` on sen juuressa. Yksi HTML-tiedosto, jossa CSS ja JavaScript ovat mukana, käynnistyy nopeimmin; pysy alle noin 200 kt:n.",
+      "ids": "Palvelu `APP`, tunniste `go-widget-<slug>`, tagi `go-widget`. Tämän lomakkeen Widget-vaihtoehto asettaa kaikki kolme.",
+      "listing": "Widgetien luettelossa näkyvät otsikko, kuvaus ja nimesi profiilikuva. Pidä otsikko enintään 24 merkissä ja kuvaus yhdessä virkkeessä.",
+      "name": "Julkaise se sovelluksesi nimellä: Hubissa jokaisella nimellä on oma `localStorage`, joten widget voi lukea, mitä sovelluksesi on tallentanut.",
+      "own_app": "Jos sovelluksesi on jo pieni ja nopea, se voi olla itse oma widgetinsä: piirrä tiivis näkymä, kun osoitteessa on `goWidget=1`, ja lisää sovellukselle tagi `go-widget`.",
+      "title": "Julkaiseminen",
+      "update": "Päivitä se julkaisemalla se uudelleen samalla nimellä ja ID:llä. Poista se käytöstä julkaisemalla se uudelleen ilman tagia `go-widget`: se katoaa luettelosta, mutta jokainen, joka on jo lisännyt sen, lataa sitä edelleen, joten jätä siihen lyhyt ilmoitus."
+    },
+    "requests": {
+      "always": "Aina: `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY`.",
+      "never": "Ei koskaan: maksut, julkaiseminen, allekirjoittaminen, salaus, chat-viestit, tiedostot, ilmoitukset, koko näyttö, ponnahdusikkunat eikä `alert`, `confirm` tai `prompt`. Evätty pyyntö hylätään: käsittele virhe ja jatka toimintaa.",
+      "open": "Kaikkeen, mitä widget ei voi tehdä, avaa koko sovelluksesi oikealla sivulla. Käytä pyyntöä `OPEN_NEW_TAB` linkillä `qortal://APP/<name>/<path>`, älä pyyntöä `LINK_TO_QDN_RESOURCE`, joka voi ladata toisen sovelluksen widgetin sisään:",
+      "read": "Vain luku -pyynnöt, joihin Core vastaa itse, kuten missä tahansa Q-Appissa: `SEARCH_QDN_RESOURCES`, `FETCH_QDN_RESOURCE`, `GET_BALANCE`, `GET_NAME_DATA`, `SEARCH_CHAT_MESSAGES`, `FETCH_BLOCK` ja vastaavat. Syötteet tarvitsevat asetuksen `mode: 'ALL'`.",
+      "screen": "Vain kun etusivu (GO:ssa widgetien näkymä) on näkyvissä: `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT` ja `GET_WALLET_BALANCE`. Kaksi viimeistä kysyvät käyttäjältä, joten käytä niitä vasta napautuksen jälkeen.",
+      "title": "Mitä widget saa pyytää",
+      "web": "Koodi ja tiedot tulevat vain paketistasi, solmusta ja QDN:stä. Ei ulkoisia verkkopalveluja: ne voivat olla estettyjä, ja ne paljastavat käyttäjän IP-osoitteen ja toiminnan."
+    },
+    "size": {
+      "ask": "Pyydä tarvitsemaasi kokoa kerran. Se pysyy, kunnes käyttäjä muuttaa widgetin kokoa.",
+      "grid": "Rivit ovat 40 px korkeita, niiden välissä on 12 px, ja widget on 2–14 riviä korkea. GO:ssa on 4 saraketta, puhelimessa kukin noin 79 px; Hub sovittaa niin monta vähintään 84 px leveää saraketta kuin mahtuu, joten widget voi olla paljon puhelinta leveämpi. Uudet widgetit ovat 4 × 5 solua, noin 351–406 × 248 px.",
+      "only_widget": "`GO_WIDGET_SET_SIZE` ja `GO_WIDGET_INFO` vastaavat vain widget-kehyksen sisällä. Lähetä ne vain, kun osoitteessa on `goWidget=1`, aikarajan kanssa, äläkä koskaan odota niitä ennen piirtämistä.",
+      "title": "Koko",
+      "values": "`width` on `'small'` (1 sarake), `'half'` (2) tai `'full'` (4); `height` annetaan CSS-pikseleinä (px), ja se pyöristetään ylöspäin kokonaisiin riveihin."
+    },
+    "start": {
+      "param": "`goWidget=1` on aina mukana: piirrä widgetin näkymä ensimmäisestä kehyksestä alkaen.",
+      "request": "Kutsu Coren funktiota `qortalRequest` pelkällä nimellä; `window.qortalRequest` on määrittelemätön. Hubissa widget on ylimmän tason sivu (`window.parent === window`), GO:ssa iframe; sama kutsu toimii molemmissa.",
+      "storage": "`localStorage`: Hubissa jokaisella sovelluksen nimellä on omansa, GO:ssa yksi yhteinen kaikille solmun Q-Appeille. Aloita jokainen avain nimelläsi.",
+      "theme": "Lue `theme` ja `lang` osoitteesta käynnistyessäsi. Isäntäsovelluksen viestit kertovat sen jälkeiset muutokset.",
+      "title": "Miten se käynnistyy"
+    },
+    "starter": {
+      "intro": "Kokonainen widget, tarkoituksella pieni: uusin Q-App oikeassa teemassa, tauolla piilossa ollessaan, päivittyy muutaman minuutin välein ja avaa sovelluksen napautuksella. Korvaa `yourname`, haku ja `draw` omillasi.",
+      "title": "Lähtökohta"
+    },
+    "test": {
+      "tab": "Avaa se sovelluksena parametreilla `?goWidget=1&theme=dark`, sitten `light`, ja muuta ikkunan kokoa noin 80 × 92 px:stä 830 × 248 px:iin. Välilehdellä mikään ei vastaa pyyntöihin `GO_WIDGET_*`: sen on silti piirryttävä.",
+      "title": "Testaus",
+      "update": "Hub näyttää uuden version, kun widget latautuu seuraavan kerran (Järjestä → Lataa widget uudelleen); GO noin tunnin kuluessa.",
+      "widget": "Lisää se julkaisun jälkeen Hubissa (Etusivu → Widgetit → Lisää widget) ja GO:ssa (widgetien näkymä → +). Tarkista teeman ja kielen vaihto, pienin ja suurin koko, että se pysähtyy poissa näkyvistä ja että napautus avaa oikean sivun."
+    },
+    "tip": {
+      "about": "miten widget tehdään",
+      "any_size": "Sovita mihin tahansa kokoon yhdestä pienestä ruudusta leveään korttiin. Mikään ei valu yli.",
+      "first_frame": "Piirrä widgetin näkymä läpinäkyvälle taustalle ensimmäisestä kehyksestä alkaen, kun osoitteessa on `goWidget=1`.",
+      "read_only": "Vain luku: ei maksuja, julkaisemista eikä ponnahdusikkunoita. Napautus avaa koko sovelluksesi pyynnöllä `OPEN_NEW_TAB`.",
+      "request": "Kutsu Coren funktiota `qortalRequest` pelkällä nimellä: se toimii GO:ssa (iframe) ja Hubissa (ylimmän tason sivu).",
+      "theme": "Noudata osoitteen arvoja `theme` ja `lang`, ja keskeytä ajastimet ja kysely, kun widget on piilossa.",
+      "title": "Näin teet siitä widgetin"
+    },
+    "title": "Widgetin tekeminen"
   },
   "widgets": {
     "add_to_home": "lisää etusivulle",

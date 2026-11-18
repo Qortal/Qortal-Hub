@@ -599,13 +599,16 @@
   "developer": {
     "no_apps_yet": "まだアプリを公開していません",
     "no_sites_yet": "まだサイトを公開していません",
+    "no_widgets_yet": "まだウィジェットを公開していません",
     "publish_app": "アプリを公開",
     "publish_new": "新規公開",
     "publish_site": "サイトを公開",
+    "publish_widget": "ウィジェットを公開",
     "update": "更新",
     "view_stats": "統計を見る",
     "your_published_apps": "公開済みアプリ",
-    "your_published_websites": "公開済みサイト"
+    "your_published_websites": "公開済みサイト",
+    "your_published_widgets": "公開済みウィジェット"
   },
   "devmode_apps": "開発モードアプリ",
   "directory": "ディレクトリ",
@@ -699,6 +702,7 @@
       "featured_previous": "前のおすすめアプリを表示",
       "filter_categories": "カテゴリを絞り込む",
       "my_apps_hint": "このアカウントの名前で公開されたもの",
+      "my_widgets_hint": "このアカウントの名前で公開した、ホーム用の小さなQ-App",
       "no_category_matches": "「{{query}}」に一致するカテゴリはありません",
       "no_filter_matches": "これらのフィルターに一致するQ-AppやWebサイトはありません",
       "no_name_text": "Q-AppやWebサイトを公開するには、Qortal名を登録してください。公開したものはここに表示されます。",
@@ -1134,6 +1138,31 @@
     "not_admin": "あなたは{{group}}の管理者ではなくなったため、このアカウントからこのアプリを更新できません。",
     "title": "{{name}}を更新"
   },
+  "publish_widget": {
+    "check_id": "ウィジェットIDを決める",
+    "choose_label": "公開するウィジェット",
+    "confirm_new": "新しいウィジェット{{resource}}を公開しますか？",
+    "confirm_update": "ウィジェット{{resource}}を更新しますか？",
+    "heading": "ウィジェットを公開",
+    "id_hint": "英小文字、数字、ハイフンが使えます。同じIDでもう一度公開すると、ウィジェットが更新されます。",
+    "id_invalid": "英小文字と数字を使い、その間はハイフン1つで区切ってください",
+    "id_label": "ウィジェットID",
+    "id_taken": "あなたのウィジェット「{{title}}」がこのIDを使っています。公開すると置き換わります。",
+    "intro": "Qortal HubのホームとQortal GOのウィジェット画面に置く小さなQ-Appです。",
+    "listing_hint": "ウィジェット一覧での表示です。",
+    "new_widget": "新しいウィジェット",
+    "not_listed": "一覧に非表示",
+    "note": "`{{resource}}`をタグ`go-widget`付きで公開します。Qortal HubとQortal GOの「ウィジェットを追加」と、ライブラリの「ウィジェット」タブに表示されます。",
+    "part_widget": "ウィジェット",
+    "preview_title": "ウィジェット一覧での表示",
+    "published": "ウィジェットを公開しました。「ホーム → ウィジェット → ウィジェットを追加」から追加できます。ノードの一覧に載るまで1分ほどかかることがあります。",
+    "relist_note": "現在は一覧に非表示です。公開すると再び一覧に表示されます。",
+    "section_hint": "1つの名前で、アプリとは別に複数のウィジェットを公開できます。",
+    "tag_locked": "タグ{{number}}：go-widget（ウィジェット用に追加）",
+    "title_long": "ウィジェット一覧に表示されるのは約{{number}}文字までです",
+    "type_widget": "ウィジェット",
+    "update_instead": "代わりにこれを更新"
+  },
   "q_apps": {
     "about": "このq-appについて",
     "q_mail": "Q-Mail",
@@ -1472,6 +1501,81 @@
     "loading": "読み込み中",
     "loading_message": "既定の Qortal ノードから最新の公開データを取得しています。",
     "retry": "再試行"
+  },
+  "widget_guide": {
+    "contents": "目次",
+    "copy_failed": "コピーできませんでした",
+    "copy_hint": "メモやAIアシスタントに渡せるよう、ガイド全体をコピーします",
+    "copy_markdown": "Markdownとしてコピー",
+    "lead": "ウィジェットは、Qortal HubのホームとQortal GOのウィジェット画面で動く小さなQ-Appです。1回公開すれば両方で動きます。1つのことをひと目で見せ、それ以外はすべてアプリ本体を開いて行います。",
+    "learn_more": "詳しく見る",
+    "look": {
+      "background": "ページの背景は透明のままにします。カードはホスト側が描画します。ダークテーマとライトテーマに対応してください。",
+      "fast": "約300 ms以内に何かを表示します。前回保存したデータを先に描画してから更新してください。空のときとエラーのときの表示を用意し、空白の枠や止まらないスピナーは決して出さないでください。",
+      "fit": "与えられた枠をどんな大きさでも埋めます。枠は約80 × 92 pxから、Hubでは横長のカードまでさまざまです。小さいときは項目を減らすか画像を省き、広いときは2列にします。何もはみ出さないようにし、スクロールしてよいのは縦方向のリストだけです。",
+      "input": "ボタンと縦方向のリストを使い、タップできる領域は高さ40 px以上にします。横スワイプ、カルーセル、長押しは使わないでください。GOではこれらを画面の切り替えとウィジェットの並べ替えに使います。",
+      "one_job": "役割は1つだけ：数値、短いリスト、次の項目のいずれか。アプリバー、メニュー、タブ、サインイン、スプラッシュ画面は置きません。",
+      "open": "タップすると、`OPEN_NEW_TAB`でアプリ本体の該当する場所を開きます。",
+      "title": "ウィジェットの見た目"
+    },
+    "messages": {
+      "poll": "ポーリングは30秒より短い間隔で行わないでください。ほとんどのデータには数分ごとのほうが適しています。",
+      "theme": "`THEME_CHANGED`（`theme`）と`LANGUAGE_CHANGED`（`language`）：新しいテーマや言語で描画し直します。",
+      "title": "ホストからのメッセージ",
+      "visibility": "`GO_WIDGET_VISIBILITY`（`payload.visible`）：これが`false`の間と、`document.visibilityState`が`hidden`の間は、タイマー、アニメーション、ポーリングを一時停止します。"
+    },
+    "publish": {
+      "bundle": "ルートに`index.html`があるフォルダーをzipにします。CSSとJavaScriptをインラインで含む1つのHTMLファイルが最も速く起動します。サイズは約200 KB未満に抑えてください。",
+      "ids": "サービス`APP`、識別子`go-widget-<slug>`、タグ`go-widget`。このフォームで「ウィジェット」を選ぶと、3つとも設定されます。",
+      "listing": "ウィジェット一覧には、タイトル、説明、名前のアバターが表示されます。タイトルは24文字以内、説明は1文にしてください。",
+      "name": "アプリと同じ名前で公開してください。Hubは`localStorage`を名前ごとに保持するため、ウィジェットはアプリが保存した内容を読み取れます。",
+      "own_app": "アプリがもともと小さく速いなら、アプリ自体をウィジェットにできます。アドレスに`goWidget=1`があるときはコンパクトな表示を描画し、アプリにタグ`go-widget`を付けてください。",
+      "title": "公開",
+      "update": "更新するには、同じ名前とIDでもう一度公開します。提供を終えるには、タグ`go-widget`を外してもう一度公開します。一覧からは消えますが、すでに追加した人のところでは読み込まれ続けるため、短いお知らせを残しておいてください。"
+    },
+    "requests": {
+      "always": "常に可能：`GO_WIDGET_SET_SIZE`、`GO_WIDGET_INFO`、`GET_NODE_INFO`、`GET_NODE_STATUS`、`IS_USING_PUBLIC_NODE`、`WHICH_UI`、`GET_PRIMARY_NAME`、`GET_DAY_SUMMARY`、`GET_TX_ACTIVITY_SUMMARY`、`QDN_RESOURCE_DISPLAYED`、`NAVIGATION_HISTORY`。",
+      "never": "常に不可：支払い、公開、署名、暗号化、チャットメッセージ、ファイル、通知、全画面表示、ポップアップ、および`alert`、`confirm`、`prompt`。拒否されたリクエストはrejectされるので、catchして動作を続けてください。",
+      "open": "ウィジェットでできないことは、アプリ本体を該当するページで開いて行います。`qortal://APP/<name>/<path>`のリンクを付けて`OPEN_NEW_TAB`を使ってください。`LINK_TO_QDN_RESOURCE`は、開く先のアプリをウィジェットの中に読み込んでしまうことがあるため使わないでください。例：",
+      "read": "どのQ-Appとも同じく、Coreが自ら応答する読み取り専用のリクエスト：`SEARCH_QDN_RESOURCES`、`FETCH_QDN_RESOURCE`、`GET_BALANCE`、`GET_NAME_DATA`、`SEARCH_CHAT_MESSAGES`、`FETCH_BLOCK`など。フィードには`mode: 'ALL'`が必要です。",
+      "screen": "ホーム（GOではウィジェット画面）が表示されている間だけ：`OPEN_NEW_TAB`、`SET_TAB`、`OPEN_USER_LOOKUP`、`GET_USER_ACCOUNT`、`GET_WALLET_BALANCE`。最後の2つはユーザーに確認を求めるため、タップの後にだけ要求してください。",
+      "title": "ウィジェットが要求できること",
+      "web": "コードとデータは、自分のバンドル、ノード、QDNからだけ取得します。外部のWebサービスは使いません。ブロックされることがあるうえ、ユーザーのIPアドレスや行動が知られてしまいます。"
+    },
+    "size": {
+      "ask": "必要なサイズを1回だけ要求します。ユーザーがウィジェットのサイズを変えるまで、そのサイズのままです。",
+      "grid": "行は高さ40 px、間隔12 pxで、高さは2〜14行です。GOは4列で、スマートフォンでは1列あたり約79 pxです。Hubは幅84 px以上の列をできるだけ多く並べるため、ウィジェットはスマートフォンよりずっと広くなることがあります。新しいウィジェットは4 × 5セルで、約351〜406 × 248 pxです。",
+      "only_widget": "`GO_WIDGET_SET_SIZE`と`GO_WIDGET_INFO`は、ウィジェットの枠の中でしか応答しません。アドレスに`goWidget=1`があるときだけ、タイムアウトを付けて送ってください。描画の前にその応答を待ってはいけません。",
+      "title": "サイズ",
+      "values": "`width`は`'small'`（1列）、`'half'`（2列）、`'full'`（4列）のいずれかです。`height`はCSS pxで指定し、行単位に切り上げられます。"
+    },
+    "start": {
+      "param": "`goWidget=1`は必ず付いています。最初のフレームからウィジェット用の表示を描画してください。",
+      "request": "Coreの`qortalRequest`は名前だけで呼び出します。`window.qortalRequest`は未定義です。Hubではウィジェットはトップレベルのページ（`window.parent === window`）、GOではiframeですが、同じ呼び出しがどちらでも動作します。",
+      "storage": "`localStorage`：Hubはアプリの名前ごとに1つ、GOはノード上のすべてのQ-Appで1つを使います。キーはすべて自分の名前で始めてください。",
+      "theme": "起動時にアドレスから`theme`と`lang`を読み取ります。それ以降の変更は、ホストからのメッセージで届きます。",
+      "title": "起動のしかた"
+    },
+    "starter": {
+      "intro": "あえて小さく作った、完成したウィジェットです。最新のQ-Appを正しいテーマで表示し、非表示の間は一時停止し、数分ごとに更新し、タップでそのアプリを開きます。`yourname`、検索、`draw`を自分のものに置き換えてください。",
+      "title": "ひな形"
+    },
+    "test": {
+      "tab": "`?goWidget=1&theme=dark`を付けてアプリとして開き、次に`light`でも開いて、ウィンドウのサイズを約80 × 92 pxから830 × 248 pxまで変えます。タブでは`GO_WIDGET_*`に何も応答しませんが、それでも描画できなければなりません。",
+      "title": "テスト",
+      "update": "Hubでは次にウィジェットを読み込んだとき（並べ替え → ウィジェットを再読み込み）に新しいバージョンが表示され、GOでは1時間ほどで反映されます。",
+      "widget": "公開したら、Hub（ホーム → ウィジェット → ウィジェットを追加）とGO（ウィジェット画面 → +）に追加します。テーマと言語の切り替え、最小と最大のサイズ、見えないときに一時停止すること、タップで正しいページが開くことを確認してください。"
+    },
+    "tip": {
+      "about": "ウィジェットの作り方",
+      "any_size": "小さなタイル1つから横長のカードまで、どのサイズにも合わせます。何もはみ出さないようにします。",
+      "first_frame": "アドレスに`goWidget=1`があるときは、最初のフレームから透明な背景にウィジェット用の表示を描画します。",
+      "read_only": "読み取り専用：支払い、公開、ポップアップは不可。タップすると`OPEN_NEW_TAB`でアプリ本体を開きます。",
+      "request": "Coreの`qortalRequest`は名前だけで呼び出します。GO（iframe）でもHub（トップレベルのページ）でも動作します。",
+      "theme": "アドレスの`theme`と`lang`に従い、ウィジェットが非表示の間はタイマーとポーリングを一時停止します。",
+      "title": "ウィジェットとして作るには"
+    },
+    "title": "ウィジェットを作る"
   },
   "widgets": {
     "add_to_home": "ホームに追加",

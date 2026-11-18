@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -27,6 +28,7 @@ i18n.use(capitalizeFirstChar as never).init({
           publish: enCore.app_page.publish,
         },
         message: { error: { missing_fields: 'missing: {{fields}}' } },
+        publish_widget: enCore.publish_widget,
       },
     },
   },
@@ -161,7 +163,8 @@ const mockNode = () => {
       return json([
         {
           name: 'TestApp',
-          service: 'APP',
+          // The app and the website have the same details.
+          service: new URL(url).searchParams.get('service') || 'APP',
           metadata: {
             title: 'My App',
             description: 'A great app',
@@ -479,6 +482,7 @@ describe('the publish form, against the node', () => {
       await formReady();
       const name = screen.getByRole('combobox', { name: /name_app/i });
       const type = screen.getByRole('button', { name: /website/i });
+      const widget = screen.getByRole('button', { name: 'Widget' });
       chooseZip();
       await pressPublish();
       await waitFor(() => expect(releaseAppUpload).not.toBeNull());
@@ -487,6 +491,7 @@ describe('the publish form, against the node', () => {
       // this one's page parts are still to go out.
       expect(name).toHaveAttribute('aria-disabled', 'true');
       expect(type).toBeDisabled();
+      expect(widget).toBeDisabled();
 
       await act(async () => {
         releaseAppUpload!();
@@ -494,6 +499,7 @@ describe('the publish form, against the node', () => {
       await waitFor(() => expect(addTabCalls()).toHaveLength(1));
       expect(name).not.toHaveAttribute('aria-disabled');
       expect(type).toBeEnabled();
+      expect(widget).toBeEnabled();
     });
   });
 
@@ -1056,6 +1062,40 @@ describe('the publish form, against the node', () => {
       await waitFor(() => expect(published('APP')).toHaveLength(2));
       expect(published('IMAGE')).toHaveLength(1);
       expect(errorsShown()).toHaveLength(0);
+    });
+  });
+
+  describe('the page parts and a widget', () => {
+    it('marks the form saved after a widget publish once the page drafts were dropped by a type change', async () => {
+      const user = userEvent.setup();
+      renderForm({ isUpdate: false, isAppTypeLocked: false });
+      await formReady();
+      fireEvent.change(whatsNew(), { target: { value: 'Release notes' } });
+      // Website and then Widget: the page section reads the page again and
+      // drops what was typed for the Q-App's page.
+      await user.click(screen.getByRole('button', { name: /^website$/i }));
+      await user.click(screen.getByRole('button', { name: 'Widget' }));
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(whatsNew()).toHaveValue(''));
+      await user.type(
+        screen.getByRole('textbox', { name: 'Widget ID' }),
+        'clock'
+      );
+      chooseZip();
+      await pressPublish();
+      await waitFor(() =>
+        expect(published('APP')[0]).toMatchObject({
+          identifier: 'go-widget-clock',
+        })
+      );
+      await waitFor(() => expect(globalSnack()?.type).toBe('success'));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // Nothing typed is left anywhere in the form.
+      expect(whatsNew()).toHaveValue('');
+      expect(unsaved).toBe(false);
     });
   });
 });
