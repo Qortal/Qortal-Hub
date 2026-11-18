@@ -51,6 +51,27 @@ const FeeDialog = ({ children }: { children: ReactNode }) => {
 };
 
 /**
+ * App's own fee confirmation, with another action in Hub that asks for a fee
+ * of its own, as a payment does.
+ */
+let askAnotherFee: () => Promise<unknown>;
+const AppFeeDialog = ({ children }: { children: ReactNode }) => {
+  const { show, onOk, onCancel, isShow, message } = useModal();
+  askAnotherFee = () => show({ message: 'PAYMENT', paymentFee: '1 QORT' });
+  return (
+    <QORTAL_APP_CONTEXT.Provider value={{ show } as never}>
+      {children}
+      <PaymentPublishDialog
+        open={isShow}
+        message={message}
+        onAccept={() => onOk(undefined)}
+        onCancel={() => onCancel()}
+      />
+    </QORTAL_APP_CONTEXT.Provider>
+  );
+};
+
+/**
  * A join started elsewhere in Hub (a promoted group, an invite), asking for
  * the fee in App's own dialog.
  */
@@ -79,7 +100,11 @@ const JoinElsewhere = () => {
 
 const renderJoinGroup = (
   memberGroups: { groupId: number }[],
-  { withFeeDialog = false, beside = null as ReactNode } = {}
+  {
+    withFeeDialog = false,
+    withAppFeeDialog = false,
+    beside = null as ReactNode,
+  } = {}
 ) => {
   const store = createStore();
   store.set(memberGroupsAtom, memberGroups as never);
@@ -87,7 +112,11 @@ const renderJoinGroup = (
     <Provider store={store}>
       <ThemeProvider theme={lightTheme}>
         <I18nextProvider i18n={i18n}>
-          {withFeeDialog ? (
+          {withAppFeeDialog ? (
+            <AppFeeDialog>
+              <JoinGroup />
+            </AppFeeDialog>
+          ) : withFeeDialog ? (
             <FeeDialog>
               <JoinGroup />
             </FeeDialog>
@@ -334,6 +363,66 @@ describe("a group's join link", () => {
       );
       expect(await appOpens(9)).toBe(true);
       expect(await screen.findByText(/Nine/)).toBeInTheDocument();
+    });
+
+    describe('when another fee confirmation takes its place', () => {
+      /**
+       * The user's join of Seven asks its fee, then another action's fee
+       * confirmation takes its place. `otherAnswer` is how that one is
+       * answered.
+       */
+      const joinReplacedByAnotherFee = async () => {
+        renderJoinGroup([{ groupId: 5 }], { withAppFeeDialog: true });
+        await userJoinsSeven();
+        expect(
+          await screen.findByText('message.question.perform_transaction')
+        ).toBeInTheDocument();
+        expect(await appOpens(9)).toBe(false);
+
+        let otherAnswer: Promise<unknown>;
+        await act(async () => {
+          otherAnswer = askAnotherFee().then(
+            () => 'accepted',
+            (reason) => reason
+          );
+        });
+        expect(await screen.findByText('PAYMENT')).toBeInTheDocument();
+        expect(
+          screen.queryByText('message.question.perform_transaction')
+        ).not.toBeInTheDocument();
+        // That one is on screen now: still no join window over it.
+        expect(await appOpens(9)).toBe(false);
+        expect(global.fetch).not.toHaveBeenCalledWith('http://node/groups/9');
+        return { otherAnswer };
+      };
+
+      it("opens a Q-App's join window again once that one is declined, and joins nothing", async () => {
+        const { otherAnswer } = await joinReplacedByAnotherFee();
+
+        fireEvent.click(screen.getByText('action.decline'));
+        expect(await otherAnswer).toEqual({ isCanceled: true });
+        await waitFor(() =>
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        );
+
+        expect(await appOpens(9)).toBe(true);
+        expect(await screen.findByText(/Nine/)).toBeInTheDocument();
+        expect(window.sendMessage).not.toHaveBeenCalled();
+      });
+
+      it("opens a Q-App's join window again once that one is accepted, and joins nothing", async () => {
+        const { otherAnswer } = await joinReplacedByAnotherFee();
+
+        fireEvent.click(screen.getByText('action.accept'));
+        expect(await otherAnswer).toBe('accepted');
+        await waitFor(() =>
+          expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        );
+
+        expect(await appOpens(9)).toBe(true);
+        expect(await screen.findByText(/Nine/)).toBeInTheDocument();
+        expect(window.sendMessage).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -152,13 +152,18 @@ export const JoinGroup = () => {
       confirmingRef.current = confirming;
       const fee = await getFee('JOIN_GROUP');
 
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'JOIN_GROUP',
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
+      // Another fee confirmation taking this one's place answers it as
+      // declined, so this join stops holding Q-Apps' group links.
+      await show(
+        {
+          message: t('core:message.question.perform_transaction', {
+            action: 'JOIN_GROUP',
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: fee.fee + ' QORT',
+        },
+        { cancelIfReplaced: true }
+      );
       confirmed();
 
       setIsLoadingJoinGroup(true);
