@@ -6,6 +6,7 @@ import { getDefaultStore, useAtomValue } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n/i18n';
 import { appLockedAtom } from '../../atoms/presence';
+import { APPROVAL_ACCEPT_DELAY_MS } from '../../hooks/useAcceptDelay';
 import { useAppMessageHandler } from '../../hooks/useAppMessageHandler';
 import { useModal } from '../../hooks/useModal';
 import { darkTheme } from '../../styles/theme-dark';
@@ -134,6 +135,13 @@ const renderHub = () =>
   );
 
 const passwordField = () => document.querySelector('input[type="password"]');
+// Accept turns on a moment after a request appears.
+const acceptOnceReady = async (user: ReturnType<typeof userEvent.setup>) => {
+  await new Promise((resolve) =>
+    setTimeout(resolve, APPROVAL_ACCEPT_DELAY_MS + 100)
+  );
+  await user.click(screen.getByText('Accept'));
+};
 // The dialog shows the request's text twice: as its summary and its text.
 const requestOnScreen = () => screen.queryAllByText(REQUEST_TEXT).length > 0;
 const waitForRequest = () =>
@@ -174,7 +182,7 @@ describe("a Q-App's approval request and the lock screen", () => {
 
     const requestId = askApproval();
     await waitForRequest();
-    await user.click(screen.getByText('Accept'));
+    await acceptOnceReady(user);
 
     await waitFor(() =>
       expect(answers).toEqual([{ requestId, accepted: true }])
@@ -241,7 +249,7 @@ describe("a Q-App's approval request and the lock screen", () => {
 
     const afterUnlock = askApproval();
     await waitForRequest();
-    await user.click(screen.getByText('Accept'));
+    await acceptOnceReady(user);
     await waitFor(() =>
       expect(answers).toEqual([
         { requestId: whileLocked, accepted: false },

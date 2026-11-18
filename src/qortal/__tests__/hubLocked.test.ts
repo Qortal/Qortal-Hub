@@ -290,6 +290,17 @@ describe('approval requests waiting their turn when Hub locks', () => {
     vi.restoreAllMocks();
   });
 
+  it('reach the dialog one after another while Hub is unlocked', async () => {
+    const first = ask(1);
+    const second = ask(2);
+    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(1));
+    answer(reachedTheDialog[0], true);
+    await expect(first).resolves.toBe(true);
+    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(2));
+    answer(reachedTheDialog[1], true);
+    await expect(second).resolves.toBe(true);
+  });
+
   it('are all declined, and none reaches the dialog after the lock', async () => {
     const asked = [ask(1), ask(2), ask(3)].map((request) =>
       request.then(
@@ -309,16 +320,5 @@ describe('approval requests waiting their turn when Hub locks', () => {
       'declined',
     ]);
     expect(reachedTheDialog).toHaveLength(1);
-  });
-
-  it('reach the dialog one after another while Hub is unlocked', async () => {
-    const first = ask(1);
-    const second = ask(2);
-    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(1));
-    answer(reachedTheDialog[0], true);
-    await expect(first).resolves.toBe(true);
-    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(2));
-    answer(reachedTheDialog[1], true);
-    await expect(second).resolves.toBe(true);
   });
 });
