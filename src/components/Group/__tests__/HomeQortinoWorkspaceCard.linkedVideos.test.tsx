@@ -299,6 +299,41 @@ describe('the Workspace player with linked videos and files', () => {
     ).toBeInTheDocument();
   });
 
+  it('plays a video again when its link is played again after it failed', async () => {
+    const card = renderCard();
+    act(() => {
+      card.store.set(resourceDownloadControllerAtom, {
+        [VIDEO_KEY]: { status: { status: 'READY' } },
+      });
+    });
+    const failure = /could not|can.t be played|couldn.t/i;
+    // The player's Play.
+    const playButton = () => screen.getByRole('button', { name: 'Play' });
+    // The link window closes once the link is read.
+    const linkWindowClosed = () =>
+      waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await playLink(QTUBE_LINK);
+    await linkWindowClosed();
+    await waitFor(() => {
+      expect(document.querySelector('video')).not.toBeNull();
+    });
+    // A passing trouble: this time the browser couldn't play it.
+    fireEvent.error(document.querySelector('video') as HTMLVideoElement);
+    expect(await card.workspace().findByText(failure)).toBeInTheDocument();
+    expect(playButton()).toBeDisabled();
+
+    // The same link, played again: it's tried afresh.
+    await playLink(QTUBE_LINK);
+    await linkWindowClosed();
+
+    await waitFor(() => {
+      expect(card.workspace().queryByText(failure)).toBeNull();
+    });
+    expect(document.querySelector('video')).not.toBeNull();
+    expect(playButton()).toBeEnabled();
+  });
+
   it('still shows a video’s big picture after Home was left', async () => {
     const card = renderCard();
     await playLink(QTUBE_LINK);

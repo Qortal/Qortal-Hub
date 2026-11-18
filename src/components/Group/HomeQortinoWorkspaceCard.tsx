@@ -2381,6 +2381,9 @@ export const HomeQortinoWorkspaceCard = ({
   );
   // A video starts by itself only right after its link was played.
   const [videoAutoPlay, setVideoAutoPlay] = useState(false);
+  // Counts each time a video link is played: a new count gives the video a
+  // new player, so one that failed is tried afresh.
+  const [videoPlayCount, setVideoPlayCount] = useState(0);
   const [openModulePickerDialog, setOpenModulePickerDialog] = useState(false);
   const [openHotkeyPickerDialog, setOpenHotkeyPickerDialog] = useState(false);
   const [availableHotkeyApps, setAvailableHotkeyApps] = useState<
@@ -4788,7 +4791,7 @@ export const HomeQortinoWorkspaceCard = ({
   const videoNode = videoLink ? (
     <QortinoVideoPlayer
       autoPlay={videoAutoPlay}
-      key={videoLink.link}
+      key={`${videoLink.link}#${videoPlayCount}`}
       labels={{
         back: qw('player_video_back', 'Back 10 seconds'),
         exitFullScreen: qw('player_video_exit_full_screen', 'Exit full screen'),
@@ -4889,6 +4892,7 @@ export const HomeQortinoWorkspaceCard = ({
       }
       setMusicStreamError(null);
       setVideoAutoPlay(item.kind === 'video');
+      if (item.kind === 'video') setVideoPlayCount((count) => count + 1);
       applyWorkspaceState((current) => ({
         ...current,
         mediaLink: item,
