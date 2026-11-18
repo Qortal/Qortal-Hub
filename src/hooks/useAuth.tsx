@@ -213,7 +213,7 @@ export const useAuth = () => {
                 setIsUrlInvalid(true);
               }
             }
-            return { isValid: false, validatedNodeInfo };
+            return { isValid: false, validatedNodeInfo, nodeAnswered: false };
           }
 
           if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
@@ -227,9 +227,14 @@ export const useAuth = () => {
         let nodeAnsweredKeyCheck = true;
 
         const url = `${baseUrl}/admin/settings/localAuthBypassEnabled`;
-        const response = await fetch(url);
-
-        const bypass = await readNodeYesNoAnswer(response);
+        let bypass: NodeYesNoAnswer = 'no-answer';
+        try {
+          bypass = await readNodeYesNoAnswer(await fetch(url));
+        } catch (error) {
+          // No answer at all. A node on this computer stops here, as before;
+          // any other node is still asked about the key.
+          if (isLocal) throw error;
+        }
         // Core skips the key only for requests from its own machine, so the
         // bypass counts only for a loopback node URL, not a node on the LAN.
         if (bypass === 'yes' && isLoopbackNodeUrl(baseUrl)) {
@@ -281,7 +286,12 @@ export const useAuth = () => {
           }
         }
 
-        return { isValid, validatedNodeInfo };
+        // nodeAnswered false: the key wasn't judged, so it isn't a wrong key.
+        return {
+          isValid,
+          validatedNodeInfo,
+          nodeAnswered: nodeAnsweredKeyCheck,
+        };
       } catch (error) {
         return { isValid: false, validatedNodeInfo };
       }
