@@ -223,7 +223,7 @@ const TabComponent = ({
           return;
         }
         event.preventDefault();
-        onSelect();
+        // The menu opens for this tab without switching to it.
         setMenuPosition({
           left: event.clientX,
           top: event.clientY,
@@ -453,6 +453,15 @@ const TabComponent = ({
         open={!!menuPosition}
         onClose={() => setMenuPosition(null)}
         onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
+        // The menu's clicks stay in the menu: reaching the tab it belongs to,
+        // they would switch to that tab, or close it on a middle click.
+        onClick={(event) => event.stopPropagation()}
+        onAuxClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => {
+          event.preventDefault();
           event.stopPropagation();
         }}
         anchorReference="anchorPosition"

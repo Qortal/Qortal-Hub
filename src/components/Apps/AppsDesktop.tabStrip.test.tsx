@@ -329,14 +329,106 @@ describe('AppsDesktop tab strip: closing from a tab’s menu', () => {
 
     expect(tabsIn('pinned')).toEqual(['Q-Tube']);
     expect(tabsIn('unpinned')).toEqual(['Q-Blog']);
-    // The last word the top bar hears (selecting Q-Tube for its menu earlier
-    // told it too, 100 ms later).
+    // Q-Share was on screen and closed: the tab whose menu closed it shows.
     await waitFor(() => expect(shownTab).toBe('Q-Blog'), SLOW);
     // Pinned tabs aren't among the other tabs: no note about them.
     expect(notes).toEqual([]);
     expect(
       clearSessionPermissionsByTabId.mock.calls.map(([tabId]) => tabId)
     ).toEqual(closedIds);
+  });
+
+  it('opens a tab’s menu without switching to the tab', async () => {
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    await waitFor(() => expect(shownTab).toBe('Q-Mail'), SLOW);
+
+    fireEvent.contextMenu(tabNamed('Q-Tube'));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    // Long enough for the top bar to hear of a change, if there were one.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(shownTab).toBe('Q-Mail');
+
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull(), SLOW);
+    expect(shownTab).toBe('Q-Mail');
+  });
+
+  it('stays on the tab on screen when an item is chosen from another tab’s menu', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    await waitFor(() => expect(shownTab).toBe('Q-Mail'), SLOW);
+
+    await chooseFromMenu(user, 'Q-Tube', 'Pin tab');
+
+    expect(tabsIn('pinned')).toEqual(['Q-Tube']);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(shownTab).toBe('Q-Mail');
+  });
+
+  it('keeps a tab open when its menu gets a middle click', async () => {
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+
+    fireEvent.contextMenu(tabNamed('Q-Tube'));
+    act(() => {
+      fireEvent(
+        menuItem('Duplicate tab'),
+        new MouseEvent('auxclick', {
+          bubbles: true,
+          button: 1,
+          cancelable: true,
+        })
+      );
+    });
+
+    expect(tabsIn('unpinned')).toEqual(['Q-Tube', 'Q-Mail']);
+  });
+
+  it('shows the tab whose menu closed the other tabs, also when a pinned tab was viewed more recently', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    await chooseFromMenu(user, 'Q-Tube', 'Pin tab');
+    // Q-Tube (pinned) is viewed, then Q-Mail: Q-Blog was viewed least lately.
+    fireEvent.click(tabNamed('Q-Tube'));
+    fireEvent.click(tabNamed('Q-Mail'));
+    await waitFor(() => expect(shownTab).toBe('Q-Mail'), SLOW);
+
+    await chooseFromMenu(user, 'Q-Blog', 'Close other tabs');
+
+    expect(tabsIn('pinned')).toEqual(['Q-Tube']);
+    expect(tabsIn('unpinned')).toEqual(['Q-Blog']);
+    await waitFor(() => expect(shownTab).toBe('Q-Blog'), SLOW);
+  });
+
+  it('shows the tab whose menu closed the tabs to its right, the one on screen among them', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    openTab('Q-Share');
+    await chooseFromMenu(user, 'Q-Share', 'Pin tab');
+    fireEvent.click(tabNamed('Q-Share'));
+    fireEvent.click(tabNamed('Q-Blog'));
+    await waitFor(() => expect(shownTab).toBe('Q-Blog'), SLOW);
+
+    await chooseFromMenu(user, 'Q-Tube', 'Close tabs to the right');
+
+    expect(tabsIn('pinned')).toEqual(['Q-Share']);
+    expect(tabsIn('unpinned')).toEqual(['Q-Tube']);
+    await waitFor(() => expect(shownTab).toBe('Q-Tube'), SLOW);
   });
 
   it('closes the tabs to the right, but not the pinned ones', async () => {

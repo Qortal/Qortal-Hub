@@ -172,6 +172,11 @@ type CloseTabsOptions = {
    * pointer leaves it, so the next tab's × comes where the last one was.
    */
   holdWidths?: boolean;
+  /**
+   * The tab whose menu closed them: it shows if the tab on screen closes,
+   * as in a browser.
+   */
+  showTabId?: string;
 };
 
 const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
@@ -1445,6 +1450,7 @@ export const AppsDesktop = ({
       confirmed = false,
       direct = false,
       holdWidths = false,
+      showTabId,
     }: CloseTabsOptions = {}
   ) => {
     const named = tabs.filter(
@@ -1517,12 +1523,14 @@ export const AppsDesktop = ({
     // When the tab on screen closed, the next one shows in its place.
     let shownTab = selectedTab;
     if (selectedTab?.tabId && closingIds.has(selectedTab.tabId)) {
-      shownTab = tabToShowAfterClose(
-        tabs,
-        remainingTabs,
-        selectedTab.tabId,
-        recentTabIdsRef.current
-      );
+      shownTab =
+        remainingTabs.find((tab) => tab.tabId === showTabId) ??
+        tabToShowAfterClose(
+          tabs,
+          remainingTabs,
+          selectedTab.tabId,
+          recentTabIdsRef.current
+        );
       setSelectedTab(shownTab);
       if (isLocalDevTab(shownTab)) {
         setDesktopViewMode('dev');
@@ -1869,9 +1877,12 @@ export const AppsDesktop = ({
   );
 
   // Close other tabs and Close tabs to the right, in a tab's menu: greyed
-  // out (undefined) when they would close nothing.
-  const closingOf = (tabIds: string[]) =>
-    tabIds.length > 0 ? () => closeTabs(tabIds) : undefined;
+  // out (undefined) when they would close nothing. The menu's tab shows if
+  // the tab on screen closes.
+  const closingOf = (tabIds: string[], menuTabId: string) =>
+    tabIds.length > 0
+      ? () => closeTabs(tabIds, { showTabId: menuTabId })
+      : undefined;
 
   const renderTab = (tab) => (
     <TabComponent
@@ -1884,8 +1895,11 @@ export const AppsDesktop = ({
       widthPx={isPinnedTab(tab) ? PINNED_TAB_WIDTH_PX : shownTabWidthPx}
       isEntering={enteringTabIds.includes(tab?.tabId)}
       onCloseAll={closeAllTabs}
-      onCloseOthers={closingOf(otherTabIds(tabs, tab?.tabId))}
-      onCloseToTheRight={closingOf(tabIdsToTheRight(tabs, tab?.tabId))}
+      onCloseOthers={closingOf(otherTabIds(tabs, tab?.tabId), tab?.tabId)}
+      onCloseToTheRight={closingOf(
+        tabIdsToTheRight(tabs, tab?.tabId),
+        tab?.tabId
+      )}
       onDuplicate={() => duplicateTab(tab)}
       onTogglePin={
         isLauncherTab(tab) ? undefined : () => toggleTabPinned(tab?.tabId)
