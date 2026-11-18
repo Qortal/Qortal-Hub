@@ -79,6 +79,11 @@ export interface PartsLeft {
 export interface PublishExtrasHandle {
   /** What to publish with the app, from what the form holds now. */
   prepare: () => PublishExtras;
+  /**
+   * Whether each part holds something of its own to publish, read or not:
+   * a version or What's new typed, screenshots chosen or changed.
+   */
+  hasDrafts: () => Record<PagePart, boolean>;
 }
 
 /** What the form will publish with the app, for its summary and preview. */
@@ -322,6 +327,10 @@ export const PublishPageExtras = forwardRef<
         : null,
       page: pageExtras(),
       pageWasRead: pageLoad === 'loaded',
+    }),
+    hasDrafts: () => ({
+      page: !!(version.trim() || whatsNew.trim()),
+      shots: screenshotsToPublish(shots, existingShots, mode) !== null,
     }),
   }));
 

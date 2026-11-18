@@ -1132,6 +1132,31 @@
     "not_admin": "Sie sind nicht mehr Admin von {{group}}, daher kann diese App von diesem Konto aus nicht aktualisiert werden.",
     "title": "{{name}} aktualisieren"
   },
+  "publish_widget": {
+    "check_id": "Widget-ID wählen",
+    "choose_label": "zu veröffentlichendes Widget",
+    "confirm_new": "das neue Widget {{resource}} veröffentlichen?",
+    "confirm_update": "das Widget {{resource}} aktualisieren?",
+    "heading": "Widget veröffentlichen",
+    "id_hint": "Kleinbuchstaben, Ziffern und Bindestriche. Veröffentlichen Sie erneut unter derselben ID, um das Widget zu aktualisieren.",
+    "id_invalid": "verwenden Sie Kleinbuchstaben und Ziffern, mit jeweils nur einem Bindestrich dazwischen",
+    "id_label": "Widget-ID",
+    "id_taken": "Ihr Widget „{{title}}“ hat diese ID: Veröffentlichen ersetzt es.",
+    "intro": "eine kleine Q-App für die Startseite in Qortal Hub und den Widget-Bildschirm in Qortal GO.",
+    "listing_hint": "So erscheint es in der Widget-Liste.",
+    "new_widget": "ein neues Widget",
+    "not_listed": "nicht gelistet",
+    "note": "veröffentlicht `{{resource}}` mit dem Tag `go-widget`. Es erscheint in Qortal Hub und Qortal GO unter „Widget hinzufügen“ und in der Bibliothek im Tab „Widgets“.",
+    "part_widget": "das Widget",
+    "preview_title": "in der Widget-Liste",
+    "published": "Widget veröffentlicht. Sie finden es unter Startseite → Widgets → Widget hinzufügen; es kann eine Minute dauern, bis der Node es auflistet.",
+    "relist_note": "derzeit nicht gelistet: Veröffentlichen listet es wieder.",
+    "section_hint": "ein Name kann neben seiner App mehrere Widgets veröffentlichen.",
+    "tag_locked": "Tag {{number}}: go-widget, für Widgets hinzugefügt",
+    "title_long": "Widget-Listen zeigen etwa {{number}} Zeichen",
+    "type_widget": "Widget",
+    "update_instead": "stattdessen dieses aktualisieren"
+  },
   "q_apps": {
     "about": "über diese Q-App",
     "q_mail": "Q-Mail",
@@ -1470,6 +1495,81 @@
     "loading": "Wird geladen",
     "loading_message": "Die neuesten öffentlichen Daten werden vom Standard-Qortal-Knoten geladen.",
     "retry": "Erneut versuchen"
+  },
+  "widget_guide": {
+    "contents": "Inhalt",
+    "copy_failed": "Kopieren fehlgeschlagen",
+    "copy_hint": "die ganze Anleitung, für Ihre Notizen oder einen KI-Assistenten",
+    "copy_markdown": "als Markdown kopieren",
+    "lead": "Ein Widget ist eine kleine Q-App auf der Startseite von Qortal Hub und auf dem Widget-Bildschirm von Qortal GO. Eine Veröffentlichung läuft in beiden. Es zeigt eine Sache auf einen Blick und öffnet für alles andere Ihre App.",
+    "learn_more": "mehr erfahren",
+    "look": {
+      "background": "Lassen Sie den Seitenhintergrund transparent: Die Karte zeichnet der Host. Unterstützen Sie das dunkle und das helle Design.",
+      "fast": "Zeigen Sie innerhalb von etwa 300 ms etwas an: Zeichnen Sie die Daten, die Sie beim letzten Mal gespeichert haben, und aktualisieren Sie dann. Sehen Sie einen Leer- und einen Fehlerzustand vor, nie einen leeren Rahmen oder eine Ladeanzeige, die nicht aufhört.",
+      "fit": "Es füllt jeden Rahmen, den es bekommt, von etwa 80 × 92 px bis zu einer breiten Karte in Hub. Zeigen Sie weniger Einträge oder lassen Sie Bilder weg, wenn es klein ist, und nutzen Sie zwei Spalten, wenn es breit ist. Nichts läuft über; nur eine senkrechte Liste darf scrollen.",
+      "input": "Verwenden Sie Schaltflächen und senkrechte Listen, mit Tippflächen von mindestens 40 px Höhe. Kein seitliches Wischen, keine Karussells, kein langes Drücken: GO nutzt sie, um Bildschirme zu wechseln und Widgets anzuordnen.",
+      "one_job": "Eine Aufgabe: eine Zahl, eine kurze Liste oder der nächste Eintrag. Ohne App-Leiste, Menüs, Tabs, Anmeldung oder Startbildschirm.",
+      "open": "Ein Tippen öffnet Ihre vollständige App an der richtigen Stelle, mit `OPEN_NEW_TAB`.",
+      "title": "So sieht ein Widget aus"
+    },
+    "messages": {
+      "poll": "Fragen Sie höchstens alle 30 s ab; für die meisten Daten sind ein paar Minuten besser.",
+      "theme": "`THEME_CHANGED` (`theme`) und `LANGUAGE_CHANGED` (`language`): Zeichnen Sie im neuen Design bzw. in der neuen Sprache neu.",
+      "title": "Nachrichten vom Host",
+      "visibility": "`GO_WIDGET_VISIBILITY` (`payload.visible`): Pausieren Sie Timer, Animationen und regelmäßige Abfragen, solange der Wert `false` ist und solange `document.visibilityState` `hidden` ist."
+    },
+    "publish": {
+      "bundle": "Packen Sie den Ordner als .zip, mit `index.html` auf oberster Ebene. Eine einzige HTML-Datei mit eingebettetem CSS und JavaScript startet am schnellsten; bleiben Sie unter etwa 200 KB.",
+      "ids": "Dienst `APP`, Kennung `go-widget-<slug>`, Tag `go-widget`. Die Option Widget in diesem Formular setzt alle drei.",
+      "listing": "Die Widget-Liste zeigt den Titel, die Beschreibung und den Avatar Ihres Namens. Beschränken Sie den Titel auf 24 Zeichen und die Beschreibung auf einen Satz.",
+      "name": "Veröffentlichen Sie es unter dem Namen Ihrer App: Hub führt `localStorage` pro Name, sodass das Widget lesen kann, was Ihre App gespeichert hat.",
+      "own_app": "Wenn Ihre App schon klein und schnell ist, kann sie ihr eigenes Widget sein: Zeichnen Sie eine kompakte Ansicht, wenn die Adresse `goWidget=1` enthält, und versehen Sie die App mit dem Tag `go-widget`.",
+      "title": "Veröffentlichen",
+      "update": "Zum Aktualisieren veröffentlichen Sie es erneut unter demselben Namen und derselben ID. Um es zurückzuziehen, veröffentlichen Sie es erneut ohne das Tag `go-widget`: Es verschwindet aus der Liste, aber wer es hinzugefügt hat, lädt es weiterhin. Hinterlassen Sie darin also einen kurzen Hinweis."
+    },
+    "requests": {
+      "always": "Immer: `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY`.",
+      "never": "Nie: Zahlungen, Veröffentlichen, Signieren, Verschlüsselung, Chat-Nachrichten, Dateien, Benachrichtigungen, Vollbild, Pop-ups sowie `alert`, `confirm` oder `prompt`. Eine abgelehnte Anfrage wird mit einem Fehler zurückgewiesen: Fangen Sie ihn ab und arbeiten Sie weiter.",
+      "open": "Für alles, was ein Widget nicht kann, öffnen Sie Ihre vollständige App auf der richtigen Seite. Verwenden Sie `OPEN_NEW_TAB` mit einem Link `qortal://APP/<name>/<path>`, nicht `LINK_TO_QDN_RESOURCE`, das die andere App im Widget laden kann:",
+      "read": "Reine Leseanfragen, die Core selbst beantwortet, wie in jeder Q-App: `SEARCH_QDN_RESOURCES`, `FETCH_QDN_RESOURCE`, `GET_BALANCE`, `GET_NAME_DATA`, `SEARCH_CHAT_MESSAGES`, `FETCH_BLOCK` und ähnliche. Feeds brauchen `mode: 'ALL'`.",
+      "screen": "Nur solange die Startseite (in GO der Widget-Bildschirm) angezeigt wird: `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT` und `GET_WALLET_BALANCE`. Die letzten beiden fragen den Nutzer, senden Sie sie also erst nach einem Tippen.",
+      "title": "Was ein Widget anfragen darf",
+      "web": "Code und Daten kommen nur aus Ihrem Paket, vom Node und aus QDN. Keine externen Webdienste: Sie können blockiert sein und verraten die IP-Adresse und die Aktivität des Nutzers."
+    },
+    "size": {
+      "ask": "Fragen Sie einmal die Größe an, die Sie brauchen. Sie gilt, bis der Nutzer die Größe des Widgets ändert.",
+      "grid": "Zeilen sind 40 px hoch, mit 12 px Abstand, und ein Widget ist 2 bis 14 Zeilen hoch. GO hat 4 Spalten, auf einem Smartphone je etwa 79 px; Hub zeigt so viele Spalten von mindestens 84 px, wie hineinpassen, ein Widget kann also viel breiter sein als auf einem Smartphone. Neue Widgets sind 4 × 5 Zellen groß, etwa 351 bis 406 × 248 px.",
+      "only_widget": "`GO_WIDGET_SET_SIZE` und `GO_WIDGET_INFO` antworten nur in einem Widget-Rahmen. Senden Sie sie nur, wenn `goWidget=1` in der Adresse steht, mit einem Zeitlimit, und warten Sie vor dem Zeichnen nie auf sie.",
+      "title": "Größe",
+      "values": "`width` ist `'small'` (1 Spalte), `'half'` (2) oder `'full'` (4); `height` ist in CSS-px und wird auf ganze Zeilen aufgerundet."
+    },
+    "start": {
+      "param": "`goWidget=1` ist immer vorhanden: Zeichnen Sie die Widget-Ansicht ab dem ersten Bild.",
+      "request": "Rufen Sie `qortalRequest` von Core mit seinem bloßen Namen auf; `window.qortalRequest` ist nicht definiert. In Hub ist das Widget die Seite der obersten Ebene (`window.parent === window`), in GO ein iframe; derselbe Aufruf funktioniert in beiden.",
+      "storage": "`localStorage`: Hub führt einen pro App-Name, GO einen gemeinsamen für alle Q-Apps auf dem Node. Beginnen Sie jeden Schlüssel mit Ihrem Namen.",
+      "theme": "Lesen Sie beim Start `theme` und `lang` aus der Adresse. Die Nachrichten des Hosts melden danach Änderungen.",
+      "title": "So startet es"
+    },
+    "starter": {
+      "intro": "Ein vollständiges Widget, absichtlich klein: die neueste Q-App, im passenden Design, pausiert, solange es verborgen ist, alle paar Minuten aktualisiert, und ein Tippen öffnet die App. Ersetzen Sie `yourname`, die Suche und `draw` durch Ihre eigenen.",
+      "title": "Ein Ausgangspunkt"
+    },
+    "test": {
+      "tab": "Öffnen Sie es als App mit `?goWidget=1&theme=dark`, dann mit `light`, und ändern Sie die Fenstergröße von etwa 80 × 92 px bis 830 × 248 px. In einem Tab antwortet nichts auf `GO_WIDGET_*`: Es muss trotzdem zeichnen.",
+      "title": "Testen",
+      "update": "Hub zeigt eine neue Version, wenn das Widget das nächste Mal lädt (Anordnen → Widget neu laden); GO innerhalb von etwa einer Stunde.",
+      "widget": "Fügen Sie es nach dem Veröffentlichen in Hub (Startseite → Widgets → Widget hinzufügen) und in GO (Widget-Bildschirm → +) hinzu. Prüfen Sie den Wechsel von Design und Sprache, die kleinste und die größte Größe, dass es außer Sicht pausiert und dass ein Tippen die richtige Seite öffnet."
+    },
+    "tip": {
+      "about": "so bauen Sie ein Widget",
+      "any_size": "Passen Sie es an jede Größe an, von einer kleinen Kachel bis zu einer breiten Karte. Nichts läuft über.",
+      "first_frame": "Zeichnen Sie die Widget-Ansicht ab dem ersten Bild, wenn die Adresse `goWidget=1` enthält, auf transparentem Hintergrund.",
+      "read_only": "Nur lesen: keine Zahlungen, kein Veröffentlichen, keine Pop-ups. Ein Tippen öffnet Ihre vollständige App mit `OPEN_NEW_TAB`.",
+      "request": "Rufen Sie `qortalRequest` von Core mit seinem bloßen Namen auf: So funktioniert es in GO (ein iframe) und in Hub (eine Seite der obersten Ebene).",
+      "theme": "Folgen Sie `theme` und `lang` aus der Adresse, und pausieren Sie Timer und regelmäßige Abfragen, solange das Widget verborgen ist.",
+      "title": "Als Widget bauen"
+    },
+    "title": "Ein Widget bauen"
   },
   "widgets": {
     "add_to_home": "zur Startseite hinzufügen",

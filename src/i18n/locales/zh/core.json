@@ -1132,6 +1132,31 @@
     "not_admin": "您已不再是{{group}}的管理员，因此无法从此帐户更新此应用。",
     "title": "更新{{name}}"
   },
+  "publish_widget": {
+    "check_id": "设置小组件 ID",
+    "choose_label": "要发布的小组件",
+    "confirm_new": "要发布新小组件 {{resource}} 吗？",
+    "confirm_update": "要更新小组件 {{resource}} 吗？",
+    "heading": "发布小组件",
+    "id_hint": "使用小写字母、数字和连字符。用相同的 ID 再次发布即可更新小组件。",
+    "id_invalid": "请使用小写字母和数字，中间用单个连字符分隔",
+    "id_label": "小组件 ID",
+    "id_taken": "你的小组件“{{title}}”使用此 ID：发布会替换它。",
+    "intro": "用于 Qortal Hub 首页和 Qortal GO 小组件页面的小型 Q-App。",
+    "listing_hint": "它在小组件列表中的显示方式。",
+    "new_widget": "新小组件",
+    "not_listed": "未列出",
+    "note": "以标签 `go-widget` 发布 `{{resource}}`。它会列在 Qortal Hub 和 Qortal GO 的“添加小组件”中，以及应用库的“小组件”标签页中。",
+    "part_widget": "小组件",
+    "preview_title": "在小组件列表中",
+    "published": "小组件已发布。可在“首页 → 小组件 → 添加小组件”中添加它；节点可能需要一分钟左右才会列出它。",
+    "relist_note": "当前未列出：发布后会重新列出。",
+    "section_hint": "一个名称可以在其应用之外再发布多个小组件。",
+    "tag_locked": "标签{{number}}：go-widget，已为小组件添加",
+    "title_long": "小组件列表大约显示 {{number}} 个字符",
+    "type_widget": "小组件",
+    "update_instead": "改为更新它"
+  },
   "q_apps": {
     "about": "关于这个Q-App",
     "q_mail": "Q-Mail",
@@ -1470,6 +1495,81 @@
     "loading": "加载中",
     "loading_message": "正在从默认 Qortal 节点获取最新公开数据。",
     "retry": "重试"
+  },
+  "widget_guide": {
+    "contents": "目录",
+    "copy_failed": "无法复制",
+    "copy_hint": "复制整份指南，用于你的笔记或 AI 助手",
+    "copy_markdown": "复制为 Markdown",
+    "lead": "小组件是在 Qortal Hub 首页和 Qortal GO 小组件页面上运行的小型 Q-App。发布一次，两边都能运行。它让人一眼看到一项内容，其他一切都通过打开你的应用来完成。",
+    "learn_more": "了解更多",
+    "look": {
+      "background": "保持页面背景透明：卡片由宿主绘制。跟随深色和浅色主题。",
+      "fast": "在约 300 ms 内显示内容：先绘制上次保存的数据，再刷新。准备好空状态和错误状态，绝不要显示空白框或转个不停的加载图标。",
+      "fit": "它会填满分配给它的任何框，从约 80 × 92 px 到 Hub 中的宽卡片。尺寸小时少显示几项或去掉图片，尺寸宽时使用两列。任何内容都不能溢出；只有竖向列表可以滚动。",
+      "input": "使用按钮和竖向列表，点击区域至少 40 px 高。不要用横向滑动、轮播或长按：GO 用它们来切换页面和排列小组件。",
+      "one_job": "只做一件事：一个数字、一个简短列表或下一项内容。不要应用栏、菜单、标签页、登录或启动画面。",
+      "open": "点击时用 `OPEN_NEW_TAB` 在正确的位置打开你的完整应用。",
+      "title": "小组件应该是什么样"
+    },
+    "messages": {
+      "poll": "轮询间隔不要短于 30 秒；对大多数数据来说，每隔几分钟更合适。",
+      "theme": "`THEME_CHANGED`（`theme`）和 `LANGUAGE_CHANGED`（`language`）：以新的主题或语言重新绘制。",
+      "title": "来自宿主的消息",
+      "visibility": "`GO_WIDGET_VISIBILITY`（`payload.visible`）：当它为 `false` 时，以及 `document.visibilityState` 为 `hidden` 时，暂停计时器、动画和轮询。"
+    },
+    "publish": {
+      "bundle": "将根目录下有 `index.html` 的文件夹打包成 zip。内联 CSS 和 JavaScript 的单个 HTML 文件启动最快；大小请控制在约 200 KB 以内。",
+      "ids": "服务 `APP`，标识符 `go-widget-<slug>`，标签 `go-widget`。此表单的“小组件”选项会同时设置这三项。",
+      "listing": "小组件列表会显示标题、描述和你名称的头像。标题请控制在 24 个字符以内，描述只写一句话。",
+      "name": "用你应用的名称发布：Hub 按名称分别保存 `localStorage`，因此小组件可以读取你的应用保存的内容。",
+      "own_app": "如果你的应用本身就小而快，它可以直接作为自己的小组件：当地址中有 `goWidget=1` 时绘制紧凑视图，并为应用添加标签 `go-widget`。",
+      "title": "发布",
+      "update": "要更新它，用相同的名称和 ID 再次发布。要停用它，去掉 `go-widget` 标签再次发布：它会从列表中消失，但已添加它的人仍会继续加载它，所以请在其中留下一条简短的说明。"
+    },
+    "requests": {
+      "always": "始终可用：`GO_WIDGET_SET_SIZE`、`GO_WIDGET_INFO`、`GET_NODE_INFO`、`GET_NODE_STATUS`、`IS_USING_PUBLIC_NODE`、`WHICH_UI`、`GET_PRIMARY_NAME`、`GET_DAY_SUMMARY`、`GET_TX_ACTIVITY_SUMMARY`、`QDN_RESOURCE_DISPLAYED`、`NAVIGATION_HISTORY`。",
+      "never": "一律不可：付款、发布、签名、加密、聊天消息、文件、通知、全屏、弹窗，以及 `alert`、`confirm` 或 `prompt`。被拒绝的请求会 reject：请捕获它并继续运行。",
+      "open": "小组件做不到的事，就在正确的页面打开你的完整应用。使用带 `qortal://APP/<name>/<path>` 链接的 `OPEN_NEW_TAB`，而不是 `LINK_TO_QDN_RESOURCE`，后者可能会把另一个应用加载到小组件内部：",
+      "read": "与任何 Q-App 一样，由 Core 自己应答的只读请求：`SEARCH_QDN_RESOURCES`、`FETCH_QDN_RESOURCE`、`GET_BALANCE`、`GET_NAME_DATA`、`SEARCH_CHAT_MESSAGES`、`FETCH_BLOCK` 等。动态需要 `mode: 'ALL'`。",
+      "screen": "仅在首页（在 GO 中为小组件页面）显示时可用：`OPEN_NEW_TAB`、`SET_TAB`、`OPEN_USER_LOOKUP`、`GET_USER_ACCOUNT` 和 `GET_WALLET_BALANCE`。后两项会询问用户，所以只在用户点击后再请求。",
+      "title": "小组件可以请求什么",
+      "web": "代码和数据只能来自你的程序包、节点和 QDN。不要使用外部网络服务：它们可能被屏蔽，而且会暴露用户的 IP 地址和活动。"
+    },
+    "size": {
+      "ask": "只请求一次你需要的尺寸。在用户调整小组件大小之前，它会一直保持。",
+      "grid": "每行高 40 px，间距 12 px，高度为 2 到 14 行。GO 有 4 列，在手机上每列约 79 px；Hub 会尽可能多地放置宽度至少 84 px 的列，所以小组件可能比手机宽得多。新小组件为 4 × 5 个单元格，约 351 到 406 × 248 px。",
+      "only_widget": "`GO_WIDGET_SET_SIZE` 和 `GO_WIDGET_INFO` 只在小组件框架内应答。只在地址中有 `goWidget=1` 时发送它们，并设置超时；绘制前绝不要等待它们。",
+      "title": "尺寸",
+      "values": "`width` 为 `'small'`（1 列）、`'half'`（2 列）或 `'full'`（4 列）；`height` 以 CSS px 为单位，向上取整为整行。"
+    },
+    "start": {
+      "param": "`goWidget=1` 始终存在：从第一帧起就绘制小组件视图。",
+      "request": "直接用名称调用 Core 的 `qortalRequest`；`window.qortalRequest` 未定义。在 Hub 中小组件是顶层页面（`window.parent === window`），在 GO 中是 iframe；同样的调用在两者中都能用。",
+      "storage": "`localStorage`：Hub 为每个应用名称各保留一份，GO 为节点上的所有 Q-App 共用一份。每个键都以你的名称开头。",
+      "theme": "启动时从地址中读取 `theme` 和 `lang`。之后的变化通过宿主的消息传来。",
+      "title": "启动方式"
+    },
+    "starter": {
+      "intro": "一个完整的小组件，有意做得很小：显示最新的 Q-App，使用正确的主题，隐藏时暂停，每隔几分钟刷新一次，点击时打开该应用。把 `yourname`、搜索和 `draw` 换成你自己的。",
+      "title": "起步模板"
+    },
+    "test": {
+      "tab": "用 `?goWidget=1&theme=dark` 将它作为应用打开，再换成 `light`，并把窗口大小从约 80 × 92 px 调整到 830 × 248 px。在标签页中没有任何东西会应答 `GO_WIDGET_*`：它仍必须能绘制出来。",
+      "title": "测试",
+      "update": "Hub 会在小组件下次加载时（排列 → 重新加载小组件）显示新版本；GO 大约在一小时内显示。",
+      "widget": "发布后，在 Hub（首页 → 小组件 → 添加小组件）和 GO（小组件页面 → +）中添加它。检查主题和语言切换、最小和最大尺寸、移出视野时是否暂停，以及点击是否打开正确的页面。"
+    },
+    "tip": {
+      "about": "如何制作小组件",
+      "any_size": "适应任何尺寸，从一个小方块到一张宽卡片。任何内容都不能溢出。",
+      "first_frame": "当地址中有 `goWidget=1` 时，从第一帧起就在透明背景上绘制小组件视图。",
+      "read_only": "只读：不能付款、发布或弹窗。点击时用 `OPEN_NEW_TAB` 打开你的完整应用。",
+      "request": "直接用名称调用 Core 的 `qortalRequest`：它在 GO（iframe）和 Hub（顶层页面）中都能用。",
+      "theme": "跟随地址中的 `theme` 和 `lang`，并在小组件隐藏时暂停计时器和轮询。",
+      "title": "作为小组件来制作"
+    },
+    "title": "制作小组件"
   },
   "widgets": {
     "add_to_home": "添加到首页",

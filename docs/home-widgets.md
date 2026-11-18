@@ -40,6 +40,12 @@ reviews are kept per widget (name and identifier), see `docs/app-pages.md`.
 `WEBSITE` resources are never widgets; publish the widget page as an `APP`.
 Blocked names are left out by the node.
 
+The Hub's own publish form does this too: pick **Widget** beside Q-App and
+Website, give it an ID (published as `go-widget-<ID>`), and it adds the tag.
+It lists the name's widgets to update one, and its (i) has the short version
+of the rules below, with **Learn more** for a full page that can be copied as
+Markdown (`src/components/Apps/WidgetPublish/`).
+
 **Retiring a widget:** republish it under the same name and identifier
 without the `go-widget` tag, for example as a "moved" notice. It leaves the
 list, but everyone who already added it keeps loading it, since saved widgets
