@@ -91,7 +91,7 @@ proxy response is a separate failure from wallet permission. Keep the actual
 error and desktop logs for diagnosis. Stop the test server with Ctrl-C when
 finished.
 
-XMR scanning, balance/history, payments and trades are not implemented yet.
+The earlier account-only AppImage did not implement scanning, balance/history or payments. Use the matching later [native stagenet wallet build and Q-Wallets-TESTING](monero-stagenet-wallet.md) for those operations; trades remain unimplemented.
 Keep account acceptance unfunded. See [the permanent recovery contract and
 automated checks](monero-accounts.md).
 

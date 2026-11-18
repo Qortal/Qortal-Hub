@@ -15,6 +15,7 @@ function beginSigningContextChange(keys: string[]): () => void {
     return () => {};
   signingContextRevision++;
   signingContextChanges++;
+  void window.moneroWallet?.clear().catch(() => undefined);
   return () => {
     signingContextChanges--;
     signingContextRevision++;

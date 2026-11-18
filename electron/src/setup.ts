@@ -1,3 +1,4 @@
+import { MoneroWalletService } from './monero-wallet-service';
 import { registerMainWindowWalletStorage } from './main-window-storage';
 import {
   installMainWindowNavigationPolicy,
@@ -1829,6 +1830,82 @@ app.on('web-contents-created', (_event, contents) => {
   contents.on('did-navigate', clearIfHost);
   contents.on('render-process-gone', clearIfHost);
   contents.on('destroyed', clearIfHost);
+});
+
+let moneroService: MoneroWalletService;
+function getMoneroService(event: Electron.IpcMainInvokeEvent) {
+  requireForeignWalletHost(event);
+  return (moneroService ??= new MoneroWalletService(
+    path.join(app.getPath('appData'), 'qortal-hub', 'monero'),
+  ));
+}
+async function moneroReply(operation: () => Promise<unknown> | unknown) {
+  try {
+    return { result: await operation() };
+  } catch (error) {
+    const code = (error as { code?: string })?.code;
+    return {
+      error: [
+        'invalid',
+        'changed',
+        'busy',
+        'syncing',
+        'insufficient',
+        'pending',
+        'expired',
+        'network',
+        'daemon',
+      ].includes(code)
+        ? code
+        : 'engine',
+    };
+  }
+}
+ipcMain.handle('moneroWallet:status', (event, address: string) =>
+  moneroReply(async () => {
+    const service = getMoneroService(event);
+    return (
+      service.status(event.sender.id, address) || {
+        ...(await service.probe()),
+        address,
+        initialized: false,
+        syncing: false,
+        synced: false,
+        walletHeight: 0,
+        progress: 0,
+        balanceAtomic: '0',
+        unlockedBalanceAtomic: '0',
+        transactions: [],
+        pending: null,
+        error: null,
+      }
+    );
+  }),
+);
+ipcMain.handle('moneroWallet:open', (event, input) =>
+  moneroReply(() => getMoneroService(event).open(event.sender.id, input)),
+);
+for (const kind of ['prepare', 'relay', 'cancel', 'retry']) {
+  ipcMain.handle(`moneroWallet:${kind}`, (event, address, data) =>
+    moneroReply(() =>
+      getMoneroService(event).run(event.sender.id, address, kind, data),
+    ),
+  );
+}
+ipcMain.handle('moneroWallet:clear', async (event) => {
+  requireForeignWalletHost(event);
+  await moneroService?.clear(event.sender.id);
+});
+app.on('before-quit', () => {
+  void moneroService?.clear();
+});
+app.on('web-contents-created', (_event, contents) => {
+  const clear = () => {
+    void moneroService?.clear(contents.id);
+  };
+  contents.on('did-navigate', clear);
+  contents.on('render-process-gone', clear);
+  contents.on('destroyed', clear);
 });
 
 let foreignWalletJournal: ReturnType<typeof createForeignWalletJournal>;

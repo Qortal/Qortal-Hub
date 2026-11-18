@@ -1,4 +1,10 @@
 import type {
+  MoneroOpenRequest,
+  MoneroResult,
+  MoneroWalletStatus,
+  MoneroPreparedPayment,
+} from '../../electron/src/monero-wallet-protocol';
+import type {
   AudioSurfaceCommand,
   AudioSurfaceCommandEnvelope,
   AudioSurfaceCommandResultEnvelope,
@@ -84,6 +90,20 @@ declare global {
       isExtension?: unknown,
       appInfo?: unknown
     ) => Promise<unknown>;
+    moneroWallet?: {
+      status: (address: string) => Promise<MoneroResult<MoneroWalletStatus>>;
+      open: (
+        input: MoneroOpenRequest
+      ) => Promise<MoneroResult<MoneroWalletStatus>>;
+      prepare: (
+        address: string,
+        input: { recipient: string; amountAtomic: string; maxFeeAtomic: string }
+      ) => Promise<MoneroResult<MoneroPreparedPayment>>;
+      relay: (address: string, id: string) => Promise<MoneroResult<string>>;
+      retry: (address: string) => Promise<MoneroResult<MoneroPreparedPayment>>;
+      cancel: (address: string) => Promise<unknown>;
+      clear: () => Promise<void>;
+    };
     foreignWalletSigner?: {
       importKeys: (
         keys: Record<string, unknown>

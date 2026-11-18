@@ -7,10 +7,16 @@ import {
 
 export function qappRequestTimeout(message: {
   action?: string;
-  payload?: { resources?: unknown[] };
+  payload?: { resources?: unknown[]; coin?: string };
 }): number {
   // Approval, shielded proofs and broadcast can outlive a normal read request.
   // Keep the original request pending; a timer does not cancel a Core send.
+  if (
+    message?.payload?.coin === 'XMR' &&
+    ['GET_USER_WALLET', 'GET_USER_WALLET_INFO'].includes(message.action)
+  ) {
+    return TIME_MINUTES_10_IN_MILLISECONDS;
+  }
   if (message?.action === 'SEND_COIN') {
     return TIME_MINUTES_10_IN_MILLISECONDS;
   }

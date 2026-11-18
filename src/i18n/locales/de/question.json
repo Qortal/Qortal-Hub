@@ -247,5 +247,24 @@
   "to_recipient": "an: {{ recipient }}",
   "total_locking_fee": "Gesamte Sperrgebühr:",
   "total_unlocking_fee": "Gesamte Entsperrgebühr:",
-  "value": "Wert: {{ value }}"
+  "value": "Wert: {{ value }}",
+  "xmr": {
+    "busy": "Ein anderer XMR-Vorgang oder eine Hub-Instanz verwendet diese Wallet.",
+    "changed": "Konto oder Core-Netzwerk wurde geändert. Verbinden Sie Ihre XMR-Wallet erneut.",
+    "daemon": "Der Stagenet-Daemon ist nicht verfügbar. Versuchen Sie es später erneut.",
+    "declined": "XMR-Anfrage abgelehnt.",
+    "desktop": "XMR-Scans und Zahlungen erfordern Qortal Hub für den Desktop.",
+    "engine": "Die lokale XMR-Wallet konnte die Anfrage nicht abschließen. Öffnen Sie die Wallet erneut und versuchen Sie es noch einmal.",
+    "expired": "Die genehmigte XMR-Zahlung ist abgelaufen. Prüfen Sie sie erneut.",
+    "initialize": "Diese lokale Stagenet-Wallet öffnen und mit dem öffentlichen Daemon scannen? Ihre Schlüssel bleiben auf diesem Gerät.",
+    "insufficient": "Nicht genug verfügbare XMR-Mittel, oder die Netzwerkgebühr überschreitet das genehmigte Limit.",
+    "invalid": "Ungültige XMR-Adresse, Betrag, Gebührenlimit oder Wiederherstellungshöhe.",
+    "network": "Der Daemon verwendet nicht das erwartete Monero-Stagenet-Netzwerk.",
+    "not_ready": "Öffnen Sie zuerst die XMR-Wallet und starten Sie den Scan.",
+    "pending": "Eine Zahlung wartet auf Abgleich. Neue Zahlungen sind gesperrt; nur dieselbe Transaktion darf erneut übertragen werden.",
+    "restore_height": "Ab Höhe {{height}} scannen. Frühere Zahlungen werden übersprungen. Zur Kontowiederherstellung Höhe 0 verwenden.",
+    "retry": "Dieselbe ausstehende Stagenet-Zahlung erneut übertragen? Dadurch wird keine neue Transaktion erstellt.",
+    "stagenet": "Diese Testversion scannt und sendet nur in Monero-Stagenet. Wählen Sie STAGENET in den Einstellungen Ihres XMR-fähigen Core.",
+    "syncing": "Warten Sie, bis die XMR-Wallet synchronisiert ist."
+  }
 }

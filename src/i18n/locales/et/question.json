@@ -247,5 +247,24 @@
   "to_recipient": "vastuvõtja: {{ recipient }}",
   "total_locking_fee": "lukustustasu kokku:",
   "total_unlocking_fee": "avamistasu kokku:",
-  "value": "väärtus: {{ value }}"
+  "value": "väärtus: {{ value }}",
+  "xmr": {
+    "busy": "Seda rahakotti kasutab teine XMR-toiming või Hubi eksemplar.",
+    "changed": "Konto või Core’i võrk muutus. Ühenda XMR-rahakott uuesti.",
+    "daemon": "Stagenet-daemon pole saadaval. Proovi hiljem uuesti.",
+    "declined": "XMR-päringust keelduti.",
+    "desktop": "XMR-i skannimine ja maksed vajavad töölaua Qortal Hubi.",
+    "engine": "Kohalik XMR-rahakott ei saanud päringut lõpetada. Ava rahakott uuesti ja proovi veel kord.",
+    "expired": "Kinnitatud XMR-makse aegus. Vaata see uuesti üle.",
+    "initialize": "Kas avada see kohalik stagenet-rahakott ja skannida avaliku kaugdaemoniga? Sinu võtmed jäävad sellesse seadmesse.",
+    "insufficient": "Kasutatavaid XMR-vahendeid pole piisavalt või võrgutasu ületab kinnitatud piiri.",
+    "invalid": "Vigane XMR-aadress, summa, tasupiir või taastamiskõrgus.",
+    "network": "Daemon ei ole oodatud Monero stagenet-võrgus.",
+    "not_ready": "Ava esmalt XMR-rahakott ja alusta skannimist.",
+    "pending": "Makse ootab kooskõlastamist. Uued maksed on blokeeritud; uuesti saab edastada ainult sama tehingu.",
+    "restore_height": "Skanni alates kõrguselt {{height}}. Varasemad maksed jäetakse vahele. Konto taastamiseks kasuta kõrgust 0.",
+    "retry": "Kas edastada sama ootel stagenet-makse uuesti? See ei loo uut tehingut.",
+    "stagenet": "See testversioon skannib ja saadab ainult Monero stagenet-võrgus. Vali oma XMR-toega Core’i seadetes STAGENET.",
+    "syncing": "Oota, kuni XMR-rahakott on sünkroonitud."
+  }
 }

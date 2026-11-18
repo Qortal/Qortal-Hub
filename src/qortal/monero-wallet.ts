@@ -10,7 +10,7 @@ import {
 
 /** XMR must not enter the legacy eight-decimal/Core wallet-RPC paths. */
 export function rejectUnimplementedMoneroOperation(coin: unknown): void {
-  if (coin === 'XMR' || coin === 'MONERO') {
+  if (coin === 'MONERO') {
     throw new Error(
       i18n.t('question:message.error.token_not_supported', {
         token: 'XMR',
@@ -22,6 +22,13 @@ export function rejectUnimplementedMoneroOperation(coin: unknown): void {
 
 /** Called only after GET_USER_WALLET permission is granted by the host. */
 export async function getMoneroPublicWallet(
+  getNodeInfo: () => Promise<unknown>,
+  revision: number | null = getSigningContextRevision()
+) {
+  return (await getMoneroWalletContext(getNodeInfo, revision)).publicWallet;
+}
+
+export async function getMoneroWalletContext(
   getNodeInfo: () => Promise<unknown>,
   revision: number | null = getSigningContextRevision()
 ) {
@@ -46,7 +53,13 @@ export async function getMoneroPublicWallet(
       })
     );
   }
-  return moneroPublicWallet(keys.xmrWallet, moneroNetworkForNodeInfo(node));
+  const network = moneroNetworkForNodeInfo(node);
+  return {
+    publicWallet: moneroPublicWallet(keys.xmrWallet, network),
+    privateSpendKey: keys.xmrWallet[network].privateSpendKey as string,
+    qortalAddress: accountAddress,
+    revision,
+  };
 }
 
 function changed(): never {

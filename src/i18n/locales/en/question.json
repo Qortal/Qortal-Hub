@@ -247,5 +247,24 @@
   "to_recipient": "to: {{ recipient }}",
   "total_locking_fee": "total Locking Fee:",
   "total_unlocking_fee": "total Unlocking Fee:",
-  "value": "value: {{ value }}"
+  "value": "value: {{ value }}",
+  "xmr": {
+    "busy": "Another XMR operation or Hub instance is using this wallet.",
+    "changed": "The account or Core network changed. Reconnect your XMR wallet.",
+    "daemon": "The stagenet daemon is unavailable. Try again later.",
+    "declined": "XMR request declined.",
+    "desktop": "XMR scanning and payments require desktop Qortal Hub.",
+    "engine": "The local XMR wallet could not complete the request. Reopen the wallet and try again.",
+    "expired": "The approved XMR payment expired. Review it again.",
+    "initialize": "Open this local stagenet wallet and scan with the public remote daemon? Your keys remain on this device.",
+    "insufficient": "Insufficient unlocked XMR funds, or the network fee exceeds the approved limit.",
+    "invalid": "Invalid XMR address, amount, fee limit or restore height.",
+    "network": "The daemon is not on the expected Monero stagenet network.",
+    "not_ready": "Open the XMR wallet and start scanning first.",
+    "pending": "A payment is awaiting reconciliation. New payments are blocked; only the same transaction may be rebroadcast.",
+    "restore_height": "Scan from height {{height}}. Earlier payments will be skipped. For account recovery use height 0.",
+    "retry": "Rebroadcast the same pending stagenet payment? This does not create a new transaction.",
+    "stagenet": "This testing release scans and sends Monero stagenet only. Select STAGENET in your XMR-enabled Core settings.",
+    "syncing": "Wait for the XMR wallet to finish synchronizing."
+  }
 }

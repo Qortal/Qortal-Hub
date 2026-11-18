@@ -247,5 +247,24 @@
   "to_recipient": "发送至：{{ recipient }}",
   "total_locking_fee": "总锁仓费用：",
   "total_unlocking_fee": "总解锁费用：",
-  "value": "数值：{{ value }}"
+  "value": "数值：{{ value }}",
+  "xmr": {
+    "busy": "另一项XMR操作或Hub实例正在使用此钱包。",
+    "changed": "账户或Core网络已更改。请重新连接XMR钱包。",
+    "daemon": "stagenet守护进程不可用。请稍后重试。",
+    "declined": "XMR请求已被拒绝。",
+    "desktop": "XMR扫描和付款需要桌面版Qortal Hub。",
+    "engine": "本地XMR钱包无法完成请求。请重新打开钱包后重试。",
+    "expired": "已批准的XMR付款已过期。请重新确认。",
+    "initialize": "打开此本地stagenet钱包并通过公共远程守护进程扫描？您的密钥将保留在此设备上。",
+    "insufficient": "可用XMR余额不足，或网络手续费超过了批准的上限。",
+    "invalid": "XMR地址、金额、手续费上限或恢复高度无效。",
+    "network": "守护进程不在预期的Monero stagenet网络上。",
+    "not_ready": "请先打开XMR钱包并开始扫描。",
+    "pending": "付款正在等待核对。新付款已暂停；只能重新广播同一笔交易。",
+    "restore_height": "从高度{{height}}开始扫描。此前的付款将被跳过。恢复账户时请使用高度0。",
+    "retry": "重新广播同一笔待处理stagenet付款？此操作不会创建新交易。",
+    "stagenet": "此测试版仅在Monero stagenet上扫描和发送。请在支持XMR的Core设置中选择STAGENET。",
+    "syncing": "请等待XMR钱包完成同步。"
+  }
 }

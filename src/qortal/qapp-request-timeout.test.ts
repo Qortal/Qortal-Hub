@@ -84,3 +84,14 @@ describe('Q-App send request lifetime', () => {
     ).toBe(30_000);
   });
 });
+
+it('allows time for XMR read and initialization approvals without extending other wallet reads', () => {
+  for (const action of ['GET_USER_WALLET', 'GET_USER_WALLET_INFO']) {
+    expect(qappRequestTimeout({ action, payload: { coin: 'XMR' } })).toBe(
+      600000
+    );
+    expect(qappRequestTimeout({ action, payload: { coin: 'BTC' } })).toBe(
+      30000
+    );
+  }
+});

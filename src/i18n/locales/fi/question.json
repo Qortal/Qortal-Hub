@@ -247,5 +247,24 @@
   "to_recipient": "vastaanottaja: {{ recipient }}",
   "total_locking_fee": "lukitusmaksu yhteensä:",
   "total_unlocking_fee": "lukituksen avausmaksu yhteensä:",
-  "value": "arvo: {{ value }}"
+  "value": "arvo: {{ value }}",
+  "xmr": {
+    "busy": "Toinen XMR-toiminto tai Hub-instanssi käyttää tätä lompakkoa.",
+    "changed": "Tili tai Coren verkko muuttui. Yhdistä XMR-lompakko uudelleen.",
+    "daemon": "Stagenet-taustapalvelu ei ole käytettävissä. Yritä myöhemmin uudelleen.",
+    "declined": "XMR-pyyntö hylätty.",
+    "desktop": "XMR-skannaus ja maksut vaativat Qortal Hubin työpöytäversion.",
+    "engine": "Paikallinen XMR-lompakko ei voinut suorittaa pyyntöä. Avaa lompakko uudelleen ja yritä uudestaan.",
+    "expired": "Hyväksytty XMR-maksu vanheni. Tarkista se uudelleen.",
+    "initialize": "Avataanko tämä paikallinen stagenet-lompakko ja skannataanko julkisella etäpalvelulla? Avaimesi pysyvät tässä laitteessa.",
+    "insufficient": "Vapaita XMR-varoja ei ole riittävästi tai verkkokulu ylittää hyväksytyn rajan.",
+    "invalid": "Virheellinen XMR-osoite, summa, kuluraja tai palautuskorkeus.",
+    "network": "Taustapalvelu ei ole odotetussa Monero stagenet -verkossa.",
+    "not_ready": "Avaa ensin XMR-lompakko ja aloita skannaus.",
+    "pending": "Maksu odottaa täsmäytystä. Uudet maksut on estetty; vain saman tapahtuman voi lähettää uudelleen.",
+    "restore_height": "Skannaa korkeudesta {{height}}. Aiemmat maksut ohitetaan. Käytä tilin palautukseen korkeutta 0.",
+    "retry": "Lähetetäänkö sama odottava stagenet-maksu uudelleen? Tämä ei luo uutta tapahtumaa.",
+    "stagenet": "Tämä testiversio skannaa ja lähettää vain Monero stagenetissä. Valitse XMR-yhteensopivan Coren asetuksista STAGENET.",
+    "syncing": "Odota, kunnes XMR-lompakon synkronointi päättyy."
+  }
 }

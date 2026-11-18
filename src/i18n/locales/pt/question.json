@@ -247,5 +247,24 @@
   "to_recipient": "para: {{ recipient }}",
   "total_locking_fee": "taxa de bloqueio total:",
   "total_unlocking_fee": "taxa de desbloqueo total:",
-  "value": "valor: {{ value }}"
+  "value": "valor: {{ value }}",
+  "xmr": {
+    "busy": "Outra operação XMR ou instância do Hub está usando esta carteira.",
+    "changed": "A conta ou rede Core mudou. Reconecte sua carteira XMR.",
+    "daemon": "O daemon stagenet está indisponível. Tente novamente mais tarde.",
+    "declined": "Solicitação XMR recusada.",
+    "desktop": "A análise e os pagamentos XMR exigem Qortal Hub para computador.",
+    "engine": "A carteira XMR local não pôde concluir a solicitação. Reabra a carteira e tente novamente.",
+    "expired": "O pagamento XMR aprovado expirou. Revise novamente.",
+    "initialize": "Abrir esta carteira stagenet local e analisar com o daemon remoto público? Suas chaves ficam neste dispositivo.",
+    "insufficient": "Saldo XMR disponível insuficiente ou taxa de rede acima do limite aprovado.",
+    "invalid": "Endereço XMR, valor, limite de taxa ou altura de restauração inválidos.",
+    "network": "O daemon não está na rede Monero stagenet esperada.",
+    "not_ready": "Abra a carteira XMR e inicie a análise primeiro.",
+    "pending": "Um pagamento aguarda conciliação. Novos pagamentos estão bloqueados; apenas a mesma transação pode ser retransmitida.",
+    "restore_height": "Analisar a partir da altura {{height}}. Pagamentos anteriores serão ignorados. Para recuperar a conta use a altura 0.",
+    "retry": "Retransmitir o mesmo pagamento stagenet pendente? Isso não cria uma nova transação.",
+    "stagenet": "Esta versão de teste analisa e envia apenas na Monero stagenet. Selecione STAGENET nas configurações do Core compatível com XMR.",
+    "syncing": "Aguarde a sincronização da carteira XMR terminar."
+  }
 }

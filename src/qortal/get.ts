@@ -2,6 +2,12 @@ import {
   ForeignFeeSigningError,
   signValidatedForeignFees,
 } from './foreign-fee-signing';
+import {
+  getMoneroWalletInfo,
+  readMoneroWallet,
+  sendMoneroPayment,
+} from './monero-operations';
+import { moneroDecimalAmount } from '../lib/monero/amount';
 import { getSigningContextRevision } from '../utils/chromeStorage';
 import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
 import { sendLocalForeignCoin } from './foreign-coin-send';
@@ -3752,6 +3758,7 @@ export const getWalletBalance = async (
   isFromExtension?: boolean,
   appInfo?: any
 ) => {
+  const xmrRevision = data?.coin === 'XMR' ? getSigningContextRevision() : null;
   rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -3825,6 +3832,10 @@ export const getWalletBalance = async (
     );
   }
   if (accepted || bypassPermission || skip) {
+    if (data.coin === 'XMR')
+      return moneroDecimalAmount(
+        (await readMoneroWallet(getNodeInfo, xmrRevision)).balanceAtomic,
+      );
     let coin = data.coin;
     const wallet = await getSaveWallet();
     const address = wallet.address0;
@@ -4013,6 +4024,7 @@ export const getUserWalletFunc = async (coin) => {
 };
 
 export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
+  const xmrRevision = data?.coin === 'XMR' ? getSigningContextRevision() : null;
   rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -4081,6 +4093,13 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   }
 
   if (accepted || skip) {
+    if (data.coin === 'XMR')
+      return getMoneroWalletInfo(
+        data,
+        getNodeInfo,
+        (prompt) => getUserPermission(prompt, isFromExtension),
+        xmrRevision,
+      );
     let coin = data.coin;
     let walletKeys = await getUserWalletFunc(coin);
 
@@ -4136,6 +4155,7 @@ export const getUserWalletTransactions = async (
   isFromExtension,
   appInfo
 ) => {
+  const xmrRevision = data?.coin === 'XMR' ? getSigningContextRevision() : null;
   rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -4205,6 +4225,8 @@ export const getUserWalletTransactions = async (
   }
 
   if (accepted || skip) {
+    if (data.coin === 'XMR')
+      return (await readMoneroWallet(getNodeInfo, xmrRevision)).transactions;
     const coin = data.coin;
     const walletKeys = await getUserWalletFunc(coin);
     let publicKey;
@@ -5606,6 +5628,10 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
 };
 
 export const sendCoin = async (data, isFromExtension) => {
+  if (data?.coin === 'XMR')
+    return sendMoneroPayment(data, getNodeInfo, (prompt) =>
+      getUserPermission(prompt, isFromExtension)
+    );
   rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields =
     data.sendMax === true &&

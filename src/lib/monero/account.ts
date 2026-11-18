@@ -153,6 +153,14 @@ export function moneroNetworkForNodeInfo(nodeInfo: unknown): MoneroNetwork {
       })
     );
   }
+  if ('moneroNetwork' in nodeInfo) {
+    if (
+      nodeInfo.moneroNetwork !== 'mainnet' &&
+      nodeInfo.moneroNetwork !== 'stagenet'
+    )
+      invalidAccount();
+    return nodeInfo.moneroNetwork;
+  }
   return nodeInfo.isTestNet ? 'stagenet' : 'mainnet';
 }
 

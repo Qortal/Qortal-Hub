@@ -67,6 +67,7 @@
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
   "asarUnpack": [
     "**/*.node",
+    "build/src/monero-wallet.worker.js",
     "node_modules/@img/sharp-*/**/*",
     "node_modules/bindings/**/*",
     "node_modules/file-uri-to-path/**/*",

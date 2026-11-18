@@ -1,6 +1,6 @@
 # Hub XMR accounts and Qortal backup recovery
 
-Status: account-key and public-address foundation on `xmr-support`, based on owner `main` (`b6c87277`). No Monero scan, balance/history service, payment signing/broadcast or direct swap is enabled by this increment. No daemon hosts or production rollout are configured.
+Status: deterministic account foundation on `xmr-support`, retaining owner `main` (`b6c87277`) and upstream master history. The later [native stagenet wallet](monero-stagenet-wallet.md) adds desktop scanning, balances/history and approved payments using `monero-ts` 0.11.22. Direct swaps and mainnet spending remain disabled. No production rollout is performed.
 
 ## Account ownership
 
@@ -36,13 +36,13 @@ spendBytes = littleEndian32(spend)
 view = littleEndianInteger(Keccak256(spendBytes)) mod l
 ```
 
-Retry only if either scalar is zero; exhausting the counter fails closed. Public keys are direct Edwards base-point multiplication by those scalars, serialized as compressed 32-byte points. Do not call EdDSA's seed-expanding `getPublicKey()`. Standard address payloads are prefix `18` (mainnet) or `24` (stagenet), public spend key, then public view key. Append the first four Keccak-256 checksum bytes and use Monero block-Base58. Runtime primitives use the existing pinned Noble/scure dependencies; no new production dependency is added.
+Retry only if either scalar is zero; exhausting the counter fails closed. Public keys are direct Edwards base-point multiplication by those scalars, serialized as compressed 32-byte points. Do not call EdDSA's seed-expanding `getPublicKey()`. Standard address payloads are prefix `18` (mainnet) or `24` (stagenet), public spend key, then public view key. Append the first four Keccak-256 checksum bytes and use Monero block-Base58. Account derivation uses the existing pinned Noble/scure dependencies; the separate Electron wallet engine bundles `monero-ts` 0.11.22.
 
 The [Monero key implementation](https://github.com/monero-project/monero/blob/v0.18.5.4/src/crypto/crypto.cpp), [account view-key derivation](https://github.com/monero-project/monero/blob/v0.18.5.4/src/cryptonote_basic/account.cpp) and [block-Base58 implementation](https://github.com/monero-project/monero/blob/v0.18.5.4/src/common/base58.cpp) are interoperability references. The HMAC domain and account-input scheme above are specific to Hub.
 
 Backups retain their existing fields: `address0`, `encryptedSeed`, `salt`, `iv`, `version`, `mac`, and `kdfThreads`. The encrypted root seed reconstructs the address seed and hence both XMR wallets. There is no extra plaintext private key, independent random seed, or second backup file. `XMR_DERIVATION_VERSION = 1` is the fixed default for these existing backups; a future scheme must preserve this recovery path, not silently replace that constant or domain.
 
-Future scan caches, wallet birthdays and subaddress allocation state are separate from spending authority. Losing them must trigger a safe rescan/recovery policy. This account increment has no scan cache and returns only the primary address at nonce zero through the app API.
+Scan caches and restore heights are separate from spending authority. Losing them requires a safe rescan/recovery policy. The public account API returns the primary address at nonce zero; the desktop engine keeps its encrypted scan cache separately. Use restore height 0 for recovery.
 
 ## Public Q-App interface
 
@@ -62,9 +62,9 @@ Hub chooses the network from its selected Qortal Core's `/admin/info` response:
 | `isTestNet: true`           | stagenet      |
 | Missing or non-boolean flag | request fails |
 
-An app-supplied network is not used. The separate Monero testnet is not selected. The existing wallet permission must be granted before reading XMR keys or node mode. The request binds the account/Core revision before approval and rechecks it after asynchronous reads; switching accounts or Core invalidates the result. The stored Qortal public key must also resolve to the active backup's `address0`.
+A valid Core `moneroNetwork` hint (`mainnet` or `stagenet`) explicitly overrides the table for wallet selection. This permits Qortal mainnet with Monero stagenet during testing without changing Qortal consensus. An invalid hint fails closed. An app-supplied network is not used. The separate Monero testnet is not selected. The existing wallet permission must be granted before reading XMR keys or node mode. The request binds the account/Core revision before approval and rechecks it after asynchronous reads; switching accounts or Core invalidates the result. The stored Qortal public key must also resolve to the active backup's `address0`.
 
-This public-address API does not advertise a spend, scan or balance capability. XMR balance, wallet-info, transaction-history and send calls explicitly fail with the existing translated unsupported-operation error before accessing keys, prompting or making network calls. They cannot fall through to legacy eight-decimal/Core wallet-RPC paths. Those operations still need a trusted, locally bundled Hub Monero worker, daemon transport, restart-safe scanning and Hub-owned transaction confirmation. The selected feasibility candidate is `monero-ts` 0.11.22; it is used externally for verification here and is not yet bundled as a Hub runtime dependency.
+`GET_USER_WALLET` remains a public-only projection. The separate native desktop engine handles XMR balance, wallet-info, history and send calls before legacy eight-decimal/Core RPC paths; see [stagenet wallet testing](monero-stagenet-wallet.md). Read permission does not authorize wallet initialization or a payment. Those require explicit Hub approvals. Unsupported platforms/mainnet functional operations fail closed. The `MONERO` alias remains unsupported; use coin `XMR`.
 
 ## Verification
 
@@ -117,6 +117,6 @@ npx cap sync @capacitor-community/electron
 
 For a separately authorized regular Linux x64 test artifact, use the repository's Docker wrapper `./build-appimage.sh`, verify its completion receipt, and preserve the previous artifact. Do not substitute a local AppImage build or publish/update feeds from this task branch. Windows/macOS packages use the existing documented test-release tooling.
 
-Before an authorized wallet rollout, restore a development backup in a clean Hub profile and confirm public XMR addresses on both modes, denied permissions, account switching and re-unlock. Scan/send acceptance requires the later engine and daemon work. No service restart or server rollout is needed for this source-only delivery.
+Before an authorized wallet rollout, restore a development backup in a clean Hub profile and confirm public XMR addresses on both modes, denied permissions, account switching and re-unlock. Scan/send acceptance now uses the matching native desktop engine and testing guide linked above. No service restart or server rollout is needed for this source-only delivery.
 
 Recovery: retain the original Qortal backup and this derivation version. Reverting the focused commit removes XMR account/API availability while leaving the backup format and previous coin derivations unchanged. It does not destroy XMR recovery authority in that backup. If a test wallet is ever funded in later acceptance, retain a compatible recovery build and its derivation specification before downgrading; do not replace it with a newly generated XMR key.

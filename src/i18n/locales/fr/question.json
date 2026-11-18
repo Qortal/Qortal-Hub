@@ -247,5 +247,24 @@
   "to_recipient": "à : {{ recipient }}",
   "total_locking_fee": "frais de verrouillage totaux :",
   "total_unlocking_fee": "frais de déverrouillage totaux :",
-  "value": "valeur : {{ value }}"
+  "value": "valeur : {{ value }}",
+  "xmr": {
+    "busy": "Une autre opération XMR ou instance de Hub utilise ce portefeuille.",
+    "changed": "Le compte ou le réseau Core a changé. Reconnectez votre portefeuille XMR.",
+    "daemon": "Le daemon stagenet est indisponible. Réessayez plus tard.",
+    "declined": "Requête XMR refusée.",
+    "desktop": "L’analyse et les paiements XMR nécessitent Qortal Hub pour ordinateur.",
+    "engine": "Le portefeuille XMR local n’a pas pu terminer la requête. Rouvrez le portefeuille et réessayez.",
+    "expired": "Le paiement XMR approuvé a expiré. Vérifiez-le à nouveau.",
+    "initialize": "Ouvrir ce portefeuille stagenet local et l’analyser avec le daemon public distant ? Vos clés restent sur cet appareil.",
+    "insufficient": "Fonds XMR disponibles insuffisants, ou frais réseau supérieurs à la limite approuvée.",
+    "invalid": "Adresse XMR, montant, limite de frais ou hauteur de restauration invalide.",
+    "network": "Le daemon n’est pas sur le réseau Monero stagenet attendu.",
+    "not_ready": "Ouvrez d’abord le portefeuille XMR et lancez l’analyse.",
+    "pending": "Un paiement attend une vérification. Les nouveaux paiements sont bloqués ; seule la même transaction peut être rediffusée.",
+    "restore_height": "Analyser depuis la hauteur {{height}}. Les paiements antérieurs seront ignorés. Pour restaurer un compte, utilisez la hauteur 0.",
+    "retry": "Rediffuser le même paiement stagenet en attente ? Cela ne crée pas de nouvelle transaction.",
+    "stagenet": "Cette version de test analyse et envoie uniquement sur Monero stagenet. Sélectionnez STAGENET dans les paramètres de votre Core compatible XMR.",
+    "syncing": "Attendez la fin de la synchronisation du portefeuille XMR."
+  }
 }

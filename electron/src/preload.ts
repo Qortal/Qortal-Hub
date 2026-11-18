@@ -1034,7 +1034,20 @@ try {
       ipcRenderer.invoke('file:deleteFile', filePath),
   });
 
-  // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
+  // Native Monero engine; available to the trusted main shell only.
+  contextBridge.exposeInMainWorld('moneroWallet', {
+    status: (address: string) => ipcRenderer.invoke('moneroWallet:status', address),
+    open: (input: unknown) => ipcRenderer.invoke('moneroWallet:open', input),
+    prepare: (address: string, data: unknown) =>
+      ipcRenderer.invoke('moneroWallet:prepare', address, data),
+    relay: (address: string, id: string) =>
+      ipcRenderer.invoke('moneroWallet:relay', address, { id }),
+    retry: (address: string) =>
+      ipcRenderer.invoke('moneroWallet:retry', address, {}),
+    cancel: (address: string) =>
+      ipcRenderer.invoke('moneroWallet:cancel', address, {}),
+    clear: () => ipcRenderer.invoke('moneroWallet:clear'),
+  });
   contextBridge.exposeInMainWorld('foreignWalletSigner', {
     importKeys: (keys: Record<string, unknown>) =>
       ipcRenderer.invoke('foreignWalletSigner:import', keys),

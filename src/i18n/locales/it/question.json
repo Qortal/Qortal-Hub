@@ -247,5 +247,24 @@
   "to_recipient": "a: {{ recipient }}",
   "total_locking_fee": "commissione totale di blocco:",
   "total_unlocking_fee": "commissione totale di sblocco:",
-  "value": "valore: {{ value }}"
+  "value": "valore: {{ value }}",
+  "xmr": {
+    "busy": "Un’altra operazione XMR o istanza di Hub sta usando questo portafoglio.",
+    "changed": "L’account o la rete Core è cambiata. Ricollega il portafoglio XMR.",
+    "daemon": "Il daemon stagenet non è disponibile. Riprova più tardi.",
+    "declined": "Richiesta XMR rifiutata.",
+    "desktop": "Scansione e pagamenti XMR richiedono Qortal Hub desktop.",
+    "engine": "Il portafoglio XMR locale non ha completato la richiesta. Riaprilo e riprova.",
+    "expired": "Il pagamento XMR approvato è scaduto. Controllalo di nuovo.",
+    "initialize": "Aprire questo portafoglio stagenet locale e analizzare con il daemon pubblico remoto? Le chiavi restano su questo dispositivo.",
+    "insufficient": "Fondi XMR disponibili insufficienti o commissione di rete oltre il limite approvato.",
+    "invalid": "Indirizzo XMR, importo, limite di commissione o altezza di ripristino non validi.",
+    "network": "Il daemon non è sulla rete Monero stagenet prevista.",
+    "not_ready": "Apri prima il portafoglio XMR e avvia la scansione.",
+    "pending": "Un pagamento attende la riconciliazione. I nuovi pagamenti sono bloccati; è possibile ritrasmettere solo la stessa transazione.",
+    "restore_height": "Analizza dall’altezza {{height}}. I pagamenti precedenti saranno ignorati. Per recuperare l’account usa l’altezza 0.",
+    "retry": "Ritrasmettere lo stesso pagamento stagenet in sospeso? Non viene creata una nuova transazione.",
+    "stagenet": "Questa versione di prova analizza e invia solo su Monero stagenet. Seleziona STAGENET nelle impostazioni del Core compatibile con XMR.",
+    "syncing": "Attendi il completamento della sincronizzazione del portafoglio XMR."
+  }
 }

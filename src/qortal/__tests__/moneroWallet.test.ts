@@ -89,6 +89,16 @@ vi.mock('../monero-wallet', async (original) => ({
   ...(await original<any>()),
   getMoneroPublicWallet: vi.fn(),
 }));
+vi.mock('../monero-operations', () => ({
+  getMoneroWalletInfo: vi.fn(),
+  readMoneroWallet: vi.fn(),
+  sendMoneroPayment: vi.fn(),
+}));
+import {
+  getMoneroWalletInfo,
+  readMoneroWallet,
+  sendMoneroPayment,
+} from '../monero-operations';
 import {
   getUserWallet,
   getWalletBalance,
@@ -126,13 +136,13 @@ it.each([
   ['transactions', getUserWalletTransactions],
   ['send', sendCoin],
 ])(
-  'rejects XMR %s before legacy wallet access or network calls',
+  'rejects unsupported MONERO alias for %s before legacy access',
   async (_name, operation) => {
     const fetch = vi.fn();
     vi.stubGlobal('fetch', fetch);
     await expect(
       (operation as any)(
-        { coin: 'XMR', amount: '1', recipient: 'fixture' },
+        { coin: 'MONERO', amount: '1', recipient: 'fixture' },
         false,
         appInfo
       )
@@ -187,4 +197,35 @@ it('does not read XMR keys or node mode while user permission is pending or deni
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('routes XMR balance, info, history and send to the local engine after read permission', async () => {
+  vi.mocked(getPermission).mockResolvedValue(true);
+  const transactions = [{ txId: 'a'.repeat(64), amountAtomic: '1' }];
+  vi.mocked(readMoneroWallet).mockResolvedValue({
+    balanceAtomic: '1000000000001',
+    transactions,
+  } as any);
+  vi.mocked(getMoneroWalletInfo).mockResolvedValue({
+    initialized: true,
+  } as any);
+  vi.mocked(sendMoneroPayment).mockResolvedValue('a'.repeat(64));
+  expect(await getWalletBalance({ coin: 'XMR' }, false, false, appInfo)).toBe(
+    '1.000000000001'
+  );
+  expect(await getUserWalletInfo({ coin: 'XMR' }, false, appInfo)).toEqual({
+    initialized: true,
+  });
+  expect(
+    await getUserWalletTransactions({ coin: 'XMR' }, false, appInfo)
+  ).toEqual(transactions);
+  expect(
+    await sendCoin(
+      { coin: 'XMR', amount: '0.000000000001', recipient: 'fixture' },
+      false,
+      appInfo
+    )
+  ).toBe('a'.repeat(64));
+  expect(getKeyPair).not.toHaveBeenCalled();
+  expect(getSaveWallet).not.toHaveBeenCalled();
 });

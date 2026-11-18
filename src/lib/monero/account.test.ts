@@ -109,3 +109,16 @@ it('rejects absent, mismatched or corrupt wallet records', () => {
     ).toThrow();
   }
 });
+
+it('honors the explicit temporary Core network override without changing Qortal mode', () => {
+  expect(
+    moneroNetworkForNodeInfo({ isTestNet: false, moneroNetwork: 'stagenet' })
+  ).toBe('stagenet');
+  expect(
+    moneroNetworkForNodeInfo({ isTestNet: true, moneroNetwork: 'mainnet' })
+  ).toBe('mainnet');
+  for (const moneroNetwork of ['testnet', '', null, '__proto__'])
+    expect(() =>
+      moneroNetworkForNodeInfo({ isTestNet: false, moneroNetwork })
+    ).toThrow();
+});
