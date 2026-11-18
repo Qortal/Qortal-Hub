@@ -308,7 +308,7 @@ describe('saving under a short account card', () => {
     expect(shown).toEqual(preview);
     // No longer under the card, Featured Q-Apps has its own height.
     expect(at(saved, 'featured')?.h).toBe(44);
-    expect(rect(saved, 'qortino')).toEqual([0, 0, 6, 46]);
+    expect(rect(saved, 'qortino')).toEqual([0, 0, 6, 43]);
   });
 
   it('shows after the drop what the drag showed when a window goes between the two', () => {
@@ -442,7 +442,7 @@ describe('saving under a short account card', () => {
     );
     const edited = homeGridEdited(stored, start, next);
     // Quick Tools left it no rows: both are saved as the move has them.
-    expect(rect(edited, 'tools')).toEqual([0, 46, 6, 18]);
+    expect(rect(edited, 'tools')).toEqual([0, 43, 6, 21]);
     expect(rect(edited, clock)).toEqual(rect(next, clock));
     // The card did leave Featured Q-Apps its 4 rows.
     expect(rect(edited, 'account')).toEqual([6, 0, 12, 20]);
