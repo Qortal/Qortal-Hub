@@ -1,9 +1,20 @@
 import {
   APP_PAGE_IDENTIFIER_PREFIX,
+  appHiddenIdentifier,
   appPageIdentifier,
   appShotsIdentifier,
   normalizeAppService,
 } from './appPageIds';
+import {
+  AppHiddenState,
+  HIDDEN_TITLE,
+  hiddenAppsSearchPath,
+  parseHiddenApps,
+  parseHiddenState,
+  serializeHiddenState,
+  SHOWN_TITLE,
+} from './appHidden';
+import { REMOVED_PAGE_FILE } from './removedAppPage';
 import {
   AppPageData,
   appPageFitsQdn,
@@ -37,6 +48,8 @@ export interface PageResource {
 export interface AppPageResources {
   page: PageResource | null;
   shots: PageResource | null;
+  /** Its hidden-from-the-library record (appHidden.ts), if it has one. */
+  hidden: (PageResource & { isHidden: boolean }) | null;
 }
 
 export class AppPageError extends Error {
@@ -69,20 +82,26 @@ export const findAppPageResources = async (
   const url =
     `${base}/arbitrary/resources/search?name=${enc(app.name)}` +
     `&exactmatchnames=true&identifier=${enc(APP_PAGE_IDENTIFIER_PREFIX)}` +
-    `&prefix=true&mode=ALL&limit=20`;
+    `&prefix=true&mode=ALL&limit=20&includemetadata=true`;
   const response = await fetch(url, { signal });
   if (!response.ok) throw new AppPageError('SEARCH_FAILED');
   const list = await response.json();
-  const result: AppPageResources = { page: null, shots: null };
+  const result: AppPageResources = { page: null, shots: null, hidden: null };
   if (!Array.isArray(list)) return result;
   const pageId = appPageIdentifier(app.service);
   const shotsId = appShotsIdentifier(app.service);
+  const hiddenId = appHiddenIdentifier(app.service);
   list.forEach((item) => {
     if (!item || !sameName(item.name, app.name)) return;
     if (item.service === 'JSON' && item.identifier === pageId) {
       result.page = asResource(item);
     } else if (item.service === 'IMAGE' && item.identifier === shotsId) {
       result.shots = asResource(item);
+    } else if (item.service === 'JSON' && item.identifier === hiddenId) {
+      result.hidden = {
+        ...asResource(item),
+        isHidden: item.metadata?.title === HIDDEN_TITLE,
+      };
     }
   });
   return result;
@@ -180,6 +199,35 @@ export const fetchShotsManifest = async (
   const single = await fetch(root, { signal });
   if (!single.ok) return null;
   return parseShotsManifest(await single.text());
+};
+
+/** The publisher's hidden-from-the-library record, as published. */
+export const fetchHiddenState = async (
+  base: string,
+  app: AppRef,
+  signal?: AbortSignal
+): Promise<AppHiddenState | null> => {
+  const identifier = appHiddenIdentifier(app.service);
+  const ready = await waitForResource(base, 'JSON', app.name, identifier, {
+    signal,
+  });
+  if (!ready) return null;
+  const response = await fetch(
+    `${base}/arbitrary/JSON/${enc(app.name)}/${enc(identifier)}`,
+    { signal }
+  );
+  if (!response.ok) return null;
+  return parseHiddenState(await response.text());
+};
+
+/** Every app its publisher hid from the library, by appKey. */
+export const fetchHiddenApps = async (
+  base: string,
+  signal?: AbortSignal
+): Promise<Set<string>> => {
+  const response = await fetch(`${base}${hiddenAppsSearchPath()}`, { signal });
+  if (!response.ok) throw new AppPageError('SEARCH_FAILED');
+  return parseHiddenApps(await response.json());
 };
 
 export const shotImageUrl = (
@@ -296,6 +344,54 @@ export const publishAppIcon = async (app: AppRef, image: Blob) => {
     name: app.name,
     service: 'THUMBNAIL',
     uploadType: 'base64',
+  });
+};
+
+/**
+ * Hides the app from the library, or shows it again: one small record under
+ * the app's name, titled so the library can read it without downloading it.
+ */
+export const publishHiddenState = async (
+  app: AppRef,
+  state: { hidden: boolean; replaced: boolean },
+  now = Date.now()
+) => {
+  await publishOnQdn({
+    data: utf8ToBase64(serializeHiddenState(app, { ...state, updated: now })),
+    identifier: appHiddenIdentifier(app.service),
+    name: app.name,
+    service: 'JSON',
+    title: state.hidden ? HIDDEN_TITLE : SHOWN_TITLE,
+    uploadType: 'base64',
+  });
+};
+
+/**
+ * Publishes the small page that says its publisher removed the app
+ * (removedAppPage.ts) as the app itself, with the listing given.
+ */
+export const publishRemovedApp = async (
+  app: AppRef,
+  html: string,
+  listing: { title: string; description: string; category?: string }
+) => {
+  const zip = new File(
+    [
+      createZip([
+        { path: REMOVED_PAGE_FILE, data: new TextEncoder().encode(html) },
+      ]),
+    ],
+    'app.zip',
+    { type: 'application/zip' }
+  );
+  return publishOnQdn({
+    ...(listing.category ? { category: listing.category } : {}),
+    data: zip,
+    description: listing.description,
+    name: app.name,
+    service: normalizeAppService(app.service),
+    title: listing.title,
+    uploadType: 'zip',
   });
 };
 

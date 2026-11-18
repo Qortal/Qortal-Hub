@@ -43,6 +43,7 @@ import {
   StatusFilter,
   type StatusFilterOption,
 } from '../Filters';
+import { HiddenAppsToggle } from '../AppsLibrary/HiddenAppsToggle';
 import type { PublishEditTarget } from '../launcherTabs';
 
 const LIBRARY_TABS: AppsLibraryTabValue[] = [
@@ -300,6 +301,8 @@ export const LauncherLibrary = ({
               gap: 1,
             }}
           >
+            {/* Apps their publishers hid: left out or shown (appHidden.ts). */}
+            <HiddenAppsToggle />
             <LibraryViewToggle />
             {getQapps ? (
               <>

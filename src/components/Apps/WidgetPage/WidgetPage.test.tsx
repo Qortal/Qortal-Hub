@@ -60,7 +60,8 @@ vi.mock('../../Snackbar/Snackbar', () => ({
 }));
 
 import { AppInfo } from '../AppInfo';
-import { availableQappsAtom } from '../../../atoms/appsAtoms';
+import { availableQappsAtom, hiddenAppsAtom } from '../../../atoms/appsAtoms';
+import { appKey } from '../AppPage/appHidden';
 import { userInfoAtom } from '../../../atoms/global';
 import { executeEvent } from '../../../utils/events';
 import { savedHomeWidgetsAtom } from '../../HomeWidgets/homeWidgets';
@@ -263,6 +264,22 @@ describe('a widget’s page', () => {
     routes();
     const app = { name: 'Q-Weather', service: 'APP' };
     renderPage(WIDGET, [app, { name: 'Q-Weather', service: 'WEBSITE' }]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'home_widgets.open_app' })
+    );
+    expect(executeEvent).toHaveBeenCalledWith('addTab', { data: app });
+  });
+
+  it('offers the app the widget comes with when its publisher hid it from the library', async () => {
+    routes();
+    const app = { name: 'Q-Weather', service: 'APP' };
+    const { store } = renderPage(WIDGET, [app]);
+    act(() => {
+      store.set(hiddenAppsAtom, {
+        hidden: new Set([appKey('APP', 'Q-Weather')]),
+        ownNames: [],
+      });
+    });
     fireEvent.click(
       screen.getByRole('button', { name: 'home_widgets.open_app' })
     );

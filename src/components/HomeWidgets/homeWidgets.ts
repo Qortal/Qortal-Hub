@@ -97,7 +97,8 @@ export const normalizeIdentifier = (identifier: unknown): string | null =>
     ? identifier
     : null;
 
-const hasWidgetTag = (tags: unknown): boolean =>
+/** Whether the tags list it as a widget: `go-widget`, in any letter case. */
+export const hasWidgetTag = (tags: unknown): boolean =>
   Array.isArray(tags) &&
   tags.some(
     (tag) => typeof tag === 'string' && tag.trim().toLowerCase() === WIDGET_TAG
@@ -117,14 +118,17 @@ const textOf = (value: unknown): string =>
 const positive = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 
-/** The listing for `resource` when it is a widget, else null. */
-export const toWidgetListing = (
+/**
+ * The listing an APP resource would have as a widget, tagged or not: My apps
+ * also shows its publisher a widget they retired (see above). Null for what
+ * can't be a widget.
+ */
+export const widgetListingOf = (
   resource: QdnAppResource | null | undefined
 ): HomeWidgetListing | null => {
   if (!resource || resource.service !== 'APP') return null;
   const name = typeof resource.name === 'string' ? resource.name.trim() : '';
   if (!name) return null;
-  if (!hasWidgetTag(resource.metadata?.tags)) return null;
   const identifier = normalizeIdentifier(resource.identifier);
   const title =
     typeof resource.metadata?.title === 'string' &&
@@ -153,6 +157,12 @@ export const toWidgetListing = (
     ...(size ? { size } : {}),
   };
 };
+
+/** The listing for `resource` when it is a widget, else null. */
+export const toWidgetListing = (
+  resource: QdnAppResource | null | undefined
+): HomeWidgetListing | null =>
+  hasWidgetTag(resource?.metadata?.tags) ? widgetListingOf(resource) : null;
 
 /** One key per widget: a name may publish several (by identifier). */
 export const homeWidgetKey = (widget: {

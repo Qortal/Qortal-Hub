@@ -1079,3 +1079,247 @@ describe('across page widths', () => {
     expect(ratingsAfterReviews()).toBe(true);
   });
 });
+
+describe('hiding from the library', () => {
+  // The fee shows as text only with its string there.
+  i18n.addResource(
+    'en',
+    'core',
+    'message.generic.fee_qort',
+    'fee: {{fee}} QORT'
+  );
+
+  const hiddenRoutes = (
+    title: 'hidden' | 'shown',
+    { replaced = false, readable = true } = {}
+  ) => ({
+    'identifier=qhub_app_': [
+      {
+        name: 'Q-Blog',
+        service: 'JSON',
+        identifier: 'qhub_app_page_v1_APP',
+        latestSignature: 'P1',
+      },
+      {
+        name: 'Q-Blog',
+        service: 'JSON',
+        identifier: 'qhub_app_hidden_v1_APP',
+        latestSignature: 'H1',
+        updated: 1_700_000_100_000,
+        metadata: { title },
+      },
+    ],
+    '/arbitrary/JSON/Q-Blog/qhub_app_hidden_v1_APP': readable
+      ? {
+          v: 1,
+          app: { service: 'APP', name: 'Q-Blog' },
+          hidden: title === 'hidden',
+          replaced,
+          updated: 1_700_000_100_000,
+        }
+      : new Response('', { status: 404 }),
+  });
+
+  const publishes = () =>
+    (vi.mocked(window.sendMessage).mock.calls as any[])
+      .filter((call) => call[0] === 'publishOnQDN')
+      .map((call) => call[1]);
+
+  const openHide = async () => {
+    const button = await screen.findByRole('button', {
+      name: 'app_page.hide.button_hide',
+    });
+    // Off until the node has said what the page has.
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    return screen.findByRole('dialog');
+  };
+
+  it('lets the publisher hide it, after saying it cannot be deleted', async () => {
+    publisher();
+    const dialog = await openHide();
+    expect(
+      within(dialog).getByText('app_page.hide.cant_delete_app')
+    ).toBeInTheDocument();
+    expect(
+      await within(dialog).findByText('fee: 0.01 QORT')
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'app_page.hide.action' })
+    );
+    await waitFor(() => expect(publishes()).toHaveLength(1));
+    // Only the small record: the app itself is left as it is.
+    expect(publishes()[0]).toMatchObject({
+      service: 'JSON',
+      identifier: 'qhub_app_hidden_v1_APP',
+      name: 'Q-Blog',
+      title: 'hidden',
+    });
+    expect(JSON.parse(atob(publishes()[0].data))).toMatchObject({
+      hidden: true,
+      replaced: false,
+    });
+    expect(
+      await screen.findByText('app_page.hide.note_publisher_hidden')
+    ).toBeInTheDocument();
+    // Once the window has closed, the page's button shows it again.
+    expect(
+      await screen.findByRole('button', { name: 'app_page.hide.button_show' })
+    ).toBeInTheDocument();
+  });
+
+  it('replaces the app, its page text and screenshots too, when asked', async () => {
+    publisher();
+    const dialog = await openHide();
+    await within(dialog).findByText('fee: 0.01 QORT');
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    // Four publishes now: the app, its page text, its screenshots, the record.
+    expect(
+      await within(dialog).findByText('fee: 0.04 QORT')
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole('button', {
+        name: 'app_page.hide.action_replace',
+      })
+    );
+    await waitFor(() => expect(publishes()).toHaveLength(4));
+    const [appPublish, pagePublish, shotsPublish, record] = publishes();
+    expect(appPublish).toMatchObject({
+      service: 'APP',
+      name: 'Q-Blog',
+      title: 'Q-Blog',
+      uploadType: 'zip',
+    });
+    expect(pagePublish.identifier).toBe('qhub_app_page_v1_APP');
+    expect(JSON.parse(atob(pagePublish.data))).toMatchObject({
+      about: '',
+      whatsNew: '',
+    });
+    expect(shotsPublish).toMatchObject({
+      service: 'IMAGE',
+      identifier: 'qhub_app_shots_v1_APP',
+    });
+    // Hidden last, so the library stops listing it only once it's replaced.
+    expect(record.title).toBe('hidden');
+    expect(JSON.parse(atob(record.data))).toMatchObject({
+      hidden: true,
+      replaced: true,
+    });
+    expect(
+      await screen.findByText('app_page.hide.note_publisher_replaced')
+    ).toBeInTheDocument();
+    // The emptied page text shows at once.
+    expect(screen.queryByText('A longer story about Q-Blog.')).toBeNull();
+  });
+
+  it('publishes only what is left when it is tried again', async () => {
+    publisher();
+    window.sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce({ signature: 'APP' })
+      .mockResolvedValueOnce({ error: 'The node is busy.' })
+      .mockResolvedValue({ signature: 'TX' });
+    const dialog = await openHide();
+    await within(dialog).findByText('fee: 0.01 QORT');
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    const hide = within(dialog).getByRole('button', {
+      name: 'app_page.hide.action_replace',
+    });
+    fireEvent.click(hide);
+    expect(await within(dialog).findByText('The node is busy.')).toBeVisible();
+    // What it does can't change halfway.
+    expect(within(dialog).getByRole('checkbox')).toBeDisabled();
+
+    fireEvent.click(hide);
+    await waitFor(() => expect(publishes()).toHaveLength(5));
+    const services = publishes().map((call) => call.service);
+    // The app went once; the page text again, then the rest.
+    expect(services).toEqual(['APP', 'JSON', 'JSON', 'IMAGE', 'JSON']);
+  });
+
+  it('tells everyone else its publisher hid it, with no button for it', async () => {
+    routes(hiddenRoutes('hidden'));
+    renderPage();
+    expect(
+      await screen.findByText('app_page.hide.note_hidden')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'app_page.hide.button_show' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'app_page.hide.button_hide' })
+    ).toBeNull();
+  });
+
+  it('says it was removed when it was replaced too', async () => {
+    routes(hiddenRoutes('hidden', { replaced: true }));
+    renderPage();
+    expect(
+      await screen.findByText('app_page.hide.note_replaced')
+    ).toBeInTheDocument();
+  });
+
+  it('goes by the record’s title while the record itself is not readable', async () => {
+    routes(hiddenRoutes('hidden', { readable: false }));
+    renderPage();
+    expect(
+      await screen.findByText('app_page.hide.note_hidden')
+    ).toBeInTheDocument();
+  });
+
+  it('shows nothing once it is shown again', async () => {
+    routes(hiddenRoutes('shown'));
+    renderPage();
+    expect(await screen.findByText('Your blog on Qortal')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.querySelector('.MuiSkeleton-root')).toBeNull()
+    );
+    expect(screen.queryByText('app_page.hide.note_hidden')).toBeNull();
+  });
+
+  it('lets the publisher show it in the library again', async () => {
+    routes({
+      ...hiddenRoutes('hidden'),
+      '/names/address/': [{ name: 'q-blog' }],
+    });
+    renderPage({ name: 'q-blog', address: 'QPub' });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'app_page.hide.button_show' })
+    );
+    await waitFor(() => expect(publishes()).toHaveLength(1));
+    expect(show).toHaveBeenCalledWith({
+      message: 'app_page.hide.confirm_show',
+      publishFee: '0.01 QORT',
+    });
+    expect(publishes()[0]).toMatchObject({
+      identifier: 'qhub_app_hidden_v1_APP',
+      title: 'shown',
+    });
+    expect(JSON.parse(atob(publishes()[0].data))).toMatchObject({
+      hidden: false,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText('app_page.hide.note_publisher_hidden')
+      ).toBeNull()
+    );
+    expect(
+      screen.getByRole('button', { name: 'app_page.hide.button_hide' })
+    ).toBeInTheDocument();
+  });
+
+  it("doesn't show it again when the fee is declined", async () => {
+    routes({
+      ...hiddenRoutes('hidden'),
+      '/names/address/': [{ name: 'q-blog' }],
+    });
+    show.mockRejectedValueOnce(new Error('declined'));
+    renderPage({ name: 'q-blog', address: 'QPub' });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'app_page.hide.button_show' })
+    );
+    await waitFor(() => expect(show).toHaveBeenCalled());
+    expect(publishes()).toHaveLength(0);
+  });
+});

@@ -69,7 +69,7 @@ import {
   isNewTabWindowAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { allQappsAtom, availableQappsAtom } from '../../atoms/appsAtoms';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
@@ -95,6 +95,7 @@ import {
   pickNextTabFromMru,
   tabsLeftByCloseAll,
 } from './tabSelection';
+import { useHiddenAppsLoader } from './AppPage/useHiddenApps';
 import { namesOwnResources } from './libraryResources';
 import {
   isPinnedTab,
@@ -253,7 +254,11 @@ export const AppsDesktop = ({
   const userInfo = useAtomValue(userInfoAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
+  // Apps their publishers hid stay out of the library (appHidden.ts).
+  useHiddenAppsLoader(myAddress, myName);
   const [availableQapps, setAvailableQapps] = useAtom(availableQappsAtom);
+  // Hidden from the library too: pins keep their details.
+  const allQapps = useAtomValue(allQappsAtom);
   const availableQappsCountRef = useRef(0);
   const [tabs, setTabs] = useState([]);
   const [viewerTabOrder, setViewerTabOrder] = useState<string[]>([]);
@@ -2070,6 +2075,7 @@ export const AppsDesktop = ({
             if (isLauncherTab(tab)) {
               return (
                 <LauncherTabView
+                  allQapps={allQapps}
                   availableQapps={availableQapps}
                   categories={categories}
                   contentHeight={appsContentHeight}
