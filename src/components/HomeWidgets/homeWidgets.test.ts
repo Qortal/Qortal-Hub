@@ -12,6 +12,7 @@ import {
   removeSavedWidget,
   savedHomeWidgetsAtom,
   toWidgetListing,
+  widgetListingOf,
 } from './homeWidgets';
 
 describe('toWidgetListing', () => {
@@ -33,6 +34,37 @@ describe('toWidgetListing', () => {
       title: 'Clock',
       description: 'The time',
       updated: 5,
+      tags: ['time'],
+    });
+  });
+
+  it('keeps what the library shows: category, other tags, size, first publish', () => {
+    expect(
+      toWidgetListing({
+        name: 'Q-Weather',
+        service: 'APP',
+        identifier: 'go-widget-now',
+        metadata: {
+          title: 'Weather Now',
+          tags: ['go-widget', ' weather ', '', 7],
+          category: 'WEATHER',
+          categoryName: 'Weather',
+        },
+        created: 100,
+        updated: 200,
+        size: 23616,
+      })
+    ).toEqual({
+      name: 'Q-Weather',
+      identifier: 'go-widget-now',
+      title: 'Weather Now',
+      description: '',
+      updated: 200,
+      created: 100,
+      category: 'WEATHER',
+      categoryName: 'Weather',
+      tags: ['weather'],
+      size: 23616,
     });
   });
 
@@ -100,6 +132,33 @@ describe('toWidgetListing', () => {
         metadata: { tags: ['go-widget'] },
       })?.identifier
     ).toBeNull();
+  });
+});
+
+describe('widgetListingOf', () => {
+  it('gives a retired widget, without the tag, the listing it had', () => {
+    const retired = {
+      name: 'Clock',
+      service: 'APP',
+      identifier: 'go-widget-old',
+      metadata: { title: 'Old clock', description: 'Moved', tags: ['time'] },
+      updated: 7,
+    };
+    expect(toWidgetListing(retired)).toBeNull();
+    expect(widgetListingOf(retired)).toEqual({
+      name: 'Clock',
+      identifier: 'go-widget-old',
+      title: 'Old clock',
+      description: 'Moved',
+      tags: ['time'],
+      updated: 7,
+    });
+  });
+
+  it('is null for what is never a widget', () => {
+    expect(widgetListingOf({ name: 'Site', service: 'WEBSITE' })).toBeNull();
+    expect(widgetListingOf({ name: ' ', service: 'APP' })).toBeNull();
+    expect(widgetListingOf(null)).toBeNull();
   });
 });
 

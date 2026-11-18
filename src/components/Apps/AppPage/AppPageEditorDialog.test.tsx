@@ -234,6 +234,31 @@ describe('the page editor, before and after the page loads', () => {
     );
   });
 
+  it('waits for a part that is still loading before it can be edited or published', () => {
+    const { view } = renderEditor(vi.fn(), vi.fn(), {
+      page: null,
+      pageLoading: true,
+      shotsLoading: true,
+    });
+    expect(screen.getByText('message.generic.loading')).toBeInTheDocument();
+    expect(screen.queryByLabelText('app_page.edit.about')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('tab', { name: 'app_page.edit.tab_screenshots' })
+    );
+    expect(screen.getByText('message.generic.loading')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'app_page.edit.publish' })
+    ).toBeDisabled();
+
+    // Loaded: the page tab starts from the node's copy, not from blanks.
+    view.rerender(editor({ page, pageLoading: false, shotsLoading: false }));
+    fireEvent.click(
+      screen.getByRole('tab', { name: 'app_page.edit.tab_page' })
+    );
+    expect(screen.getByLabelText('app_page.edit.about')).toHaveValue('Story');
+    expect(screen.queryByText('message.generic.loading')).toBeNull();
+  });
+
   it("won't publish a page or screenshots the node couldn't read", () => {
     renderEditor(vi.fn(), vi.fn(), {
       page: null,

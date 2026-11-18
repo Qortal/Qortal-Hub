@@ -4,7 +4,12 @@ import { createStore, Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
-import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
+import {
+  availableQappsAtom,
+  hiddenAppsAtom,
+  shownAppPageAtom,
+} from '../../atoms/appsAtoms';
+import { appKey } from '../Apps/AppPage/appHidden';
 import {
   sortablePinnedAppsAtom,
   userInfoAtom,
@@ -86,12 +91,15 @@ const fetchMock = vi.fn(
 
 const renderBar = ({
   apps = catalog,
+  hidden = [],
   mode = 'home',
   navigation = {},
   pins = [],
   page = null,
 }: {
   apps?: unknown[];
+  /** The apps their publishers hid from the library, by appKey. */
+  hidden?: string[];
   mode?: string;
   /** The Q-App's or website's page on screen. */
   page?: { service: string; name: string } | null;
@@ -104,6 +112,7 @@ const renderBar = ({
   store.set(navigationControllerAtom, navigation as never);
   store.set(shownAppPageAtom, page);
   store.set(availableQappsAtom, apps as never);
+  store.set(hiddenAppsAtom, { hidden: new Set(hidden), ownNames: [] });
   store.set(sortablePinnedAppsAtom, pins as never);
   render(
     <Provider store={store}>
@@ -250,6 +259,36 @@ describe('GlobalQortalNavBar search suggestions', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(librarySearches()).toEqual(['garage']);
     expect(opened()).toHaveLength(1);
+  });
+
+  it('opens an app its publisher hid when its exact name is typed', () => {
+    const input = renderBar({ hidden: [appKey('APP', 'Torq')] });
+
+    type(input, 'torq');
+    // Left out of the suggestions, as in the library.
+    expect(suggestions()).toEqual([
+      'Torque GarageTorque · Website',
+      'Search Q-Apps for “torq”',
+    ]);
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(opened()).toEqual([
+      { name: 'Torq', navigateIfAlreadyOpen: true, service: 'APP' },
+    ]);
+    expect(librarySearches()).toEqual([]);
+  });
+
+  it('keeps the title of a pinned app its publisher hid', () => {
+    const input = renderBar({
+      hidden: [appKey('WEBSITE', 'Torque')],
+      pins: [{ name: 'Torque', service: 'WEBSITE' }],
+    });
+
+    type(input, 'garage');
+
+    expect(rowsOf('Pinned apps and bookmarks')).toEqual([
+      'Torque GarageTorque · Website',
+    ]);
   });
 
   it('searches the library from its row', () => {

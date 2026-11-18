@@ -2,7 +2,14 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { Box, IconButton, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS } from '../Group/qortinoLookDebug';
 import {
   DEFAULT_QORTINO_INLET_DEBUG_SETTINGS,
@@ -367,7 +374,9 @@ export const QortinoNotificationHost = ({
   const inletDebugSettings: QortinoInletDebugSettings =
     DEFAULT_QORTINO_INLET_DEBUG_SETTINGS;
 
-  useEffect(() => {
+  // Updated before the passive effects of the same commit run: a loading
+  // snackbar that closes as a new message opens must not close that message.
+  useLayoutEffect(() => {
     infoRef.current = info;
   }, [info]);
 

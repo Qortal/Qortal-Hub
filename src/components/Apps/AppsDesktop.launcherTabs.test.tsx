@@ -23,6 +23,7 @@ import {
 import type { TabShortcutAction } from '../../../electron/src/tab-shortcuts';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
+import { availableQappsAtom, hiddenAppsAtom } from '../../atoms/appsAtoms';
 import { appsSubPageCanGoBackAtom, userInfoAtom } from '../../atoms/global';
 import { lightTheme } from '../../styles/theme-light';
 import {
@@ -42,7 +43,7 @@ vi.mock('./AppsLauncher', async () => {
   const routing = await vi.importActual<
     typeof import('./AppsLauncher/launcherRouting')
   >('./AppsLauncher/launcherRouting');
-  const AppsLauncher = ({ isShow, request, setMode }: any) => {
+  const AppsLauncher = ({ allQapps, isShow, request, setMode }: any) => {
     const launcherTabId = useLauncherTabId();
     const [query, setQuery] = React.useState('');
     const handledNonce = React.useRef<number | null>(null);
@@ -53,7 +54,11 @@ vi.mock('./AppsLauncher', async () => {
       setQuery(request?.query ?? '');
     }, [isShow, request?.nonce]);
     return (
-      <div data-testid="launcher" hidden={!isShow}>
+      <div
+        data-pin-apps={(allQapps ?? []).map((app: any) => app.name).join()}
+        data-testid="launcher"
+        hidden={!isShow}
+      >
         <input
           aria-label="search"
           onChange={(event) => setQuery(event.target.value)}
@@ -156,6 +161,7 @@ vi.mock('../Desktop/CustomTitleBar', () => ({ appChromeOffsetPx: '0px' }));
 vi.mock('../Chat/MessageDisplay', () => ({ extractComponents: () => null }));
 
 import { AppsDesktop } from './AppsDesktop';
+import { appKey } from './AppPage/appHidden';
 
 const Harness = () => {
   const [mode, setMode] = useState('home');
@@ -296,6 +302,24 @@ describe('AppsDesktop launcher tabs: opening', () => {
     expect(shownLauncherId()).toBe(second);
     // The first one is kept, out of sight.
     expect(launcherView(first)).toBeInTheDocument();
+  });
+
+  it('gives its pins every app, hidden from the library or not', async () => {
+    const user = userEvent.setup();
+    renderApps();
+    act(() => {
+      store.set(availableQappsAtom, [{ name: 'Q-Blog', service: 'APP' }]);
+      store.set(hiddenAppsAtom, {
+        hidden: new Set([appKey('APP', 'Q-Blog')]),
+        ownNames: [],
+      });
+    });
+
+    await pressPlus(user);
+
+    expect(
+      inLauncher(newestTabId()).getByTestId('launcher').dataset.pinApps
+    ).toBe('Q-Blog');
   });
 
   it('opens one for the newTabWindow event too, after the open tabs', () => {

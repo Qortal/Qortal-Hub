@@ -70,7 +70,11 @@ import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
-import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
+import {
+  allQappsAtom,
+  availableQappsAtom,
+  shownAppPageAtom,
+} from '../../atoms/appsAtoms';
 import {
   AppSearchSuggestions,
   type SuggestionGroup,
@@ -827,6 +831,8 @@ export function GlobalQortalNavBar({
   const inputElementRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const availableQapps = useAtomValue(availableQappsAtom);
+  // Hidden from the library too: a name typed in full and pins still open them.
+  const allQapps = useAtomValue(allQappsAtom);
   // Suggestions are for what the user types, not for the current link.
   const [isEditingInput, setIsEditingInput] = useState(false);
   const [appOpenCounts, setAppOpenCounts] = useState<AppOpenCounts>({});
@@ -1131,14 +1137,14 @@ export function GlobalQortalNavBar({
   // it. Anything else works as before: links open, text searches the library.
   const submitSearchInput = useCallback(
     (value: string, choice?: OpenChoice) => {
-      const exactApp = exactAppNameMatch(value, availableQapps, appOpenCounts);
+      const exactApp = exactAppNameMatch(value, allQapps, appOpenCounts);
       if (exactApp) {
         openSearchApp(exactApp, choice);
         return;
       }
       handleOpenInput(value, choice);
     },
-    [appOpenCounts, availableQapps, handleOpenInput, openSearchApp]
+    [allQapps, appOpenCounts, handleOpenInput, openSearchApp]
   );
 
   const openTabSuggestion = useCallback(
@@ -1282,6 +1288,7 @@ export function GlobalQortalNavBar({
     () =>
       isEditingInput
         ? buildOmniboxOptions(inputValue, {
+            allApps: allQapps,
             apps: availableQapps,
             bookmarks: bookmarkStore?.bookmarks,
             names: foundNames,
@@ -1292,6 +1299,7 @@ export function GlobalQortalNavBar({
           })
         : [],
     [
+      allQapps,
       appOpenCounts,
       availableQapps,
       bookmarkStore,

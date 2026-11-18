@@ -49,6 +49,7 @@ import {
   RatingsCacheInitializer,
   useAppRatings,
 } from '../../hooks/useAppRatings';
+import { PendingVotesWatcher } from './AppPage/PendingVotesWatcher';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
@@ -68,7 +69,7 @@ import {
   isNewTabWindowAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { availableQappsAtom } from '../../atoms/appsAtoms';
+import { allQappsAtom, availableQappsAtom } from '../../atoms/appsAtoms';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
@@ -94,6 +95,8 @@ import {
   pickNextTabFromMru,
   tabsLeftByCloseAll,
 } from './tabSelection';
+import { useHiddenAppsLoader } from './AppPage/useHiddenApps';
+import { namesOwnResources } from './libraryResources';
 import {
   isPinnedTab,
   moveTabWithinGroup,
@@ -251,7 +254,11 @@ export const AppsDesktop = ({
   const userInfo = useAtomValue(userInfoAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
+  // Apps their publishers hid stay out of the library (appHidden.ts).
+  useHiddenAppsLoader(myAddress, myName);
   const [availableQapps, setAvailableQapps] = useAtom(availableQappsAtom);
+  // Hidden from the library too: pins keep their details.
+  const allQapps = useAtomValue(allQappsAtom);
   const availableQappsCountRef = useRef(0);
   const [tabs, setTabs] = useState([]);
   const [viewerTabOrder, setViewerTabOrder] = useState<string[]>([]);
@@ -780,7 +787,7 @@ export const AppsDesktop = ({
       apps = responseData;
       websites = responseDataWebsites;
       const combine = [...apps, ...websites];
-      const nextAvailableQapps = combine?.filter((res) => !res?.identifier);
+      const nextAvailableQapps = namesOwnResources(combine);
       availableQappsCountRef.current = nextAvailableQapps.length;
       setAvailableQapps(nextAvailableQapps);
     } catch (error) {
@@ -1924,6 +1931,8 @@ export const AppsDesktop = ({
       }}
     >
       <RatingsCacheInitializer />
+      {/* A vote whose app page closed before the node had it. */}
+      <PendingVotesWatcher />
       <Box
         sx={{
           display: 'flex',
@@ -2066,6 +2075,7 @@ export const AppsDesktop = ({
             if (isLauncherTab(tab)) {
               return (
                 <LauncherTabView
+                  allQapps={allQapps}
                   availableQapps={availableQapps}
                   categories={categories}
                   contentHeight={appsContentHeight}

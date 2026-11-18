@@ -3,10 +3,13 @@ import {
   AppPageError,
   buildShotsZip,
   fetchAppFiles,
+  fetchHiddenApps,
   fetchShotsManifest,
   findAppPageResources,
   publishAppPage,
   publishAppShots,
+  publishHiddenState,
+  publishRemovedApp,
   republishAppDetails,
   shotImageUrl,
 } from './appPageQdn';
@@ -100,7 +103,119 @@ describe('finding the page resources', () => {
         signature: 'S2',
         updated: 3,
       },
+      hidden: null,
     });
+  });
+
+  it('finds its hidden-from-the-library record, and reads its title', async () => {
+    const fetch = routeFetch({
+      '/arbitrary/resources/search': [
+        {
+          name: 'Q-Blog',
+          service: 'JSON',
+          identifier: 'qhub_app_hidden_v1_APP',
+          latestSignature: 'H1',
+          updated: 9,
+          metadata: { title: 'hidden' },
+        },
+        // A website's record of the same name is another app's.
+        {
+          name: 'Q-Blog',
+          service: 'JSON',
+          identifier: 'qhub_app_hidden_v1_WEBSITE',
+          metadata: { title: 'shown' },
+        },
+      ],
+    });
+    const found = await findAppPageResources(BASE, APP);
+    expect(found.hidden).toEqual({
+      identifier: 'qhub_app_hidden_v1_APP',
+      signature: 'H1',
+      updated: 9,
+      isHidden: true,
+    });
+    // The title comes with the search only when metadata is asked for.
+    expect(String(fetch.mock.calls[0][0])).toContain('includemetadata=true');
+  });
+});
+
+describe('hiding from the library', () => {
+  it('lists the apps hidden now, from one search', async () => {
+    const fetch = routeFetch({
+      '/arbitrary/resources/search': [
+        {
+          name: 'Q-Blog',
+          service: 'JSON',
+          identifier: 'qhub_app_hidden_v1_APP',
+          metadata: { title: 'hidden' },
+        },
+        {
+          name: 'Shown Again',
+          service: 'JSON',
+          identifier: 'qhub_app_hidden_v1_WEBSITE',
+          metadata: { title: 'shown' },
+        },
+      ],
+    });
+    expect([...(await fetchHiddenApps(BASE))]).toEqual(['APP/q-blog']);
+    const url = String(fetch.mock.calls[0][0]);
+    expect(url).toContain('service=JSON');
+    expect(url).toContain('identifier=qhub_app_hidden_v1_&prefix=true');
+    expect(url).toContain('mode=ALL');
+  });
+
+  it('publishes the record under the app name, titled with its state', async () => {
+    const send = vi.fn().mockResolvedValue({ signature: 'x' });
+    window.sendMessage = send;
+    await publishHiddenState(APP, { hidden: true, replaced: true }, 77);
+    await publishHiddenState(
+      { service: 'website', name: 'Site' },
+      { hidden: false, replaced: false },
+      78
+    );
+    const [hide, show] = send.mock.calls.map((call) => call[1]);
+    expect(hide).toMatchObject({
+      service: 'JSON',
+      identifier: 'qhub_app_hidden_v1_APP',
+      name: 'Q-Blog',
+      title: 'hidden',
+      uploadType: 'base64',
+    });
+    expect(JSON.parse(atob(hide.data))).toEqual({
+      v: 1,
+      app: { service: 'APP', name: 'Q-Blog' },
+      hidden: true,
+      replaced: true,
+      updated: 77,
+    });
+    expect(show).toMatchObject({
+      identifier: 'qhub_app_hidden_v1_WEBSITE',
+      name: 'Site',
+      title: 'shown',
+    });
+    expect(JSON.parse(atob(show.data))).toMatchObject({ hidden: false });
+  });
+
+  it('publishes the replacement page as the app itself', async () => {
+    const send = vi.fn().mockResolvedValue({ signature: 'x' });
+    window.sendMessage = send;
+    await publishRemovedApp(APP, '<!doctype html><p>gone</p>', {
+      title: 'Q-Blog',
+      description: 'Its publisher removed this Q-App.',
+      category: 'SOCIAL',
+    });
+    const payload = send.mock.calls[0][1];
+    expect(payload).toMatchObject({
+      service: 'APP',
+      name: 'Q-Blog',
+      title: 'Q-Blog',
+      description: 'Its publisher removed this Q-App.',
+      category: 'SOCIAL',
+      uploadType: 'zip',
+    });
+    // Published at the app's own address (no identifier), as one file.
+    expect(payload.identifier).toBeUndefined();
+    expect(await zipNames(payload.data)).toEqual(['index.html']);
   });
 });
 
