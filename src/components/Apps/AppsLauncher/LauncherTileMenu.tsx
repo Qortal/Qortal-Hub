@@ -16,6 +16,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { AppBookmarkFolder } from '../AppBookmarks/bookmarkTypes';
 import { libraryMenuPaperSx } from '../AppsLibrary/libraryStyles';
+import { useLauncherTabDialog } from '../launcherTabs';
 import type { LauncherAppItem, LauncherBookmarkItem } from './launcherItems';
 
 /** A tile that is not a folder: a pinned app or a bookmark. */
@@ -62,6 +63,8 @@ export const LauncherTileMenu = ({
   onDeleteFolder,
 }: LauncherTileMenuProps) => {
   const { t } = useTranslation(['core']);
+  // In a hidden launcher tab the menu steps aside, and comes back with it.
+  const menuShown = useLauncherTabDialog(!!target, onClose);
   const run = (action: () => void) => () => {
     onClose();
     action();
@@ -178,7 +181,7 @@ export const LauncherTileMenu = ({
       }
       anchorReference="anchorPosition"
       onClose={onClose}
-      open={!!target}
+      {...menuShown}
       slotProps={{
         paper: {
           // A context menu opens at the pointer, without the gap that the

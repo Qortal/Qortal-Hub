@@ -11,7 +11,7 @@
  * kept beside the list, by tab id (LauncherTabState). It can't be pinned, and
  * it isn't kept for a restart (tabSession.ts).
  */
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import type { AppsLauncherRequest } from './AppsLauncher';
 import { isLauncherSubPage } from './AppsLauncher/launcherRouting';
 import { pickNextTabFromMru } from './tabSelection';
@@ -36,10 +36,15 @@ export const newLauncherTab = (tabId: string): LauncherTab => ({
   service: 'INTERNAL',
 });
 
-/** The published app or website a publish page updates. */
+/** The published app, website or widget a publish page updates. */
 export type PublishEditTarget = {
   name: string;
   service: 'APP' | 'WEBSITE';
+  /**
+   * One of the name's widgets: the APP under this identifier. Without it,
+   * the name's own app or website.
+   */
+  identifier?: string;
 };
 
 /** A launcher tab's page: the launcher itself, or a page opened from it. */
@@ -50,7 +55,8 @@ export type LauncherPage =
   | 'category'
   | 'publish'
   | 'publish-app'
-  | 'publish-website';
+  | 'publish-website'
+  | 'publish-widget';
 
 /** Which page a launcher tab is on, and what that page shows. */
 export type LauncherTabState = {
@@ -75,7 +81,10 @@ export const newLauncherTabState = (query = ''): LauncherTabState => ({
 });
 
 export const isPublishPage = (page: string): boolean =>
-  page === 'publish' || page === 'publish-app' || page === 'publish-website';
+  page === 'publish' ||
+  page === 'publish-app' ||
+  page === 'publish-website' ||
+  page === 'publish-widget';
 
 export const isAppInfoPage = (page: string): boolean =>
   page === 'appInfo' || page === 'appInfo-from-category';
@@ -97,8 +106,8 @@ export const showCategory = (
 ): LauncherTabState => ({ ...state, page: 'category', category });
 
 /**
- * A publish page, as My apps opens it: to update a published app or website,
- * or for a new one. Any other page is left alone.
+ * A publish page, as My apps opens it: to update a published app, website or
+ * widget, or for a new one. Any other page is left alone.
  */
 export const showPublishPage = (
   state: LauncherTabState,
@@ -129,6 +138,7 @@ export const launcherPageBack = (state: LauncherTabState): LauncherTabState => {
     case 'publish':
     case 'publish-app':
     case 'publish-website':
+    case 'publish-widget':
       return { ...state, page: 'launcher', publishEditTarget: null };
     default:
       return state;
@@ -185,6 +195,40 @@ export function keepOpenLauncherStates(
 export const LauncherTabContext = createContext<string | null>(null);
 
 export const useLauncherTabId = () => useContext(LauncherTabContext);
+
+/**
+ * False inside a launcher tab while it is hidden. The tab stays mounted, so a
+ * dialog opened in it would still show over the other tabs: it steps aside
+ * (useLauncherTabDialog) and comes back as it was.
+ */
+export const LauncherTabShownContext = createContext(true);
+
+/**
+ * Changes each time the launcher starts over (a library search from the top
+ * bar, say). A menu left open in it is closed then, not shown again later.
+ */
+export const LauncherRestartContext = createContext(0);
+
+/**
+ * A dialog's `open` and `keepMounted` inside a launcher tab: while the tab is
+ * hidden it is put away, with what it holds kept mounted, and it shows again
+ * with the tab. When the launcher starts over it is closed with `onClose`.
+ * Outside a launcher tab it is just `open`.
+ */
+export const useLauncherTabDialog = (open: boolean, onClose?: () => void) => {
+  const isTabShown = useContext(LauncherTabShownContext);
+  const restart = useContext(LauncherRestartContext);
+  const restartRef = useRef(restart);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (restartRef.current === restart) return;
+    restartRef.current = restart;
+    if (open) onCloseRef.current?.();
+  }, [open, restart]);
+  const isOpen = open && restartRef.current === restart;
+  return { open: isOpen && isTabShown, keepMounted: isOpen && !isTabShown };
+};
 
 /**
  * `addTab`'s data for a Q-App or website opened from inside a launcher tab:

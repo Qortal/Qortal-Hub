@@ -1,10 +1,11 @@
 import { createContext } from 'react';
 import type { DownloadResourceFunction } from '../hooks/useFetchResources';
+import type { ShowOptions } from '../hooks/useModal';
 
 export interface AppContextInterface {
   onCancel: (value?: any) => void;
   onOk: (payload?: any) => void;
-  show: (data?: any) => Promise<any>;
+  show: (data?: any, options?: ShowOptions) => Promise<any>;
   showInfo: (data?: any) => void;
   downloadResource: DownloadResourceFunction;
   getIndividualUserInfo: (address: string) => Promise<any>;

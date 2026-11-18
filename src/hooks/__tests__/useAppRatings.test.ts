@@ -239,6 +239,72 @@ describe('RatingsCacheInitializer — network error', () => {
   });
 });
 
+describe('allRatingsLoadedAtom — whether every rating is known', () => {
+  const mockModules = () => {
+    vi.doMock('../../App', () => ({ getBaseApiReact: () => BASE_URL }));
+    vi.doMock('../../utils/ratingsIndexedDB', () => ({
+      loadRatingsCacheFromDB: vi.fn().mockResolvedValue(new Map()),
+      saveRatingsCacheToDB: vi.fn(),
+    }));
+    vi.doMock('../../constants/constants', () => ({
+      RATING_CACHE_TTL: 30 * 60 * 1000,
+    }));
+  };
+
+  const renderLoaded = async () => {
+    const mod = await freshImport();
+    const { useAtomValue } = await import('jotai');
+    const hook = renderHook(
+      () => ({
+        loaded: useAtomValue(mod.allRatingsLoadedAtom),
+        ratings: mod.useAppRatings(),
+      }),
+      {
+        wrapper: ({ children }) =>
+          React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(mod.RatingsCacheInitializer),
+            children
+          ),
+      }
+    );
+    return hook.result;
+  };
+
+  it('is true once the node sent its list of all ratings', async () => {
+    mockModules();
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(fakeResponse(200, makeBulkResponse()));
+    const result = await renderLoaded();
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+  });
+
+  it('is false on a node without that list', async () => {
+    mockModules();
+    global.fetch = vi.fn().mockResolvedValue(fakeResponse(404, {}));
+    const result = await renderLoaded();
+    await waitFor(() => expect(result.current.loaded).toBe(false));
+  });
+
+  it('is false when the list did not come, and true again after a refresh that gets it', async () => {
+    mockModules();
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    const result = await renderLoaded();
+    await waitFor(() => expect(result.current.loaded).toBe(false));
+
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(fakeResponse(200, makeBulkResponse()));
+    const { act } = await import('@testing-library/react');
+    await act(async () => {
+      await result.current.ratings.refreshRatings();
+    });
+    expect(result.current.loaded).toBe(true);
+  });
+});
+
 describe('RatingsCacheInitializer — IndexedDB cache hit', () => {
   it('bulk data overwrites cached data with fresher values', async () => {
     vi.doMock('../../App', () => ({ getBaseApiReact: () => BASE_URL }));

@@ -17,7 +17,7 @@ describe('parseLauncherLink', () => {
     expect(
       parseLauncherLink('  qortal://APP/Q-Tube/video/abc?identifier=clip1  ')
     ).toEqual({
-      kind: 'app',
+      kind: 'resource',
       link: 'qortal://APP/Q-Tube/video/abc?identifier=clip1',
       service: 'APP',
       name: 'Q-Tube',
@@ -28,7 +28,7 @@ describe('parseLauncherLink', () => {
 
   it('accepts the protocol in any letter case', () => {
     expect(parseLauncherLink('QORTAL://website/Simon')).toMatchObject({
-      kind: 'app',
+      kind: 'resource',
       service: 'WEBSITE',
       name: 'Simon',
     });
@@ -36,7 +36,7 @@ describe('parseLauncherLink', () => {
 
   it('reads a bare name after the protocol as a website', () => {
     expect(parseLauncherLink('qortal://Simon')).toMatchObject({
-      kind: 'app',
+      kind: 'resource',
       service: 'WEBSITE',
       name: 'Simon',
       path: '',
@@ -45,7 +45,7 @@ describe('parseLauncherLink', () => {
 
   it('reads the short form with a service', () => {
     expect(parseLauncherLink('app/Q-Mail')).toMatchObject({
-      kind: 'app',
+      kind: 'resource',
       link: 'qortal://app/Q-Mail',
       service: 'APP',
       name: 'Q-Mail',
@@ -73,6 +73,18 @@ describe('parseLauncherLink', () => {
       kind: 'group',
       link: 'qortal://use-group/action-join/groupid-694',
     });
+  });
+
+  it("recognises an app's page link, in any case", () => {
+    expect(parseLauncherLink('qortal://use-app-page/APP/Q-Shop')).toEqual({
+      kind: 'page',
+      link: 'qortal://use-app-page/APP/Q-Shop',
+      service: 'APP',
+      name: 'Q-Shop',
+    });
+    expect(
+      parseLauncherLink('QORTAL://use-app-page/website/My%20Site')
+    ).toMatchObject({ kind: 'page', service: 'WEBSITE', name: 'My Site' });
   });
 
   it('rejects other qortal://use- links', () => {

@@ -1,8 +1,19 @@
 import { useState } from 'react';
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import {
+  alpha,
+  Box,
+  Button,
+  IconButton,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import FolderZipRoundedIcon from '@mui/icons-material/FolderZipRounded';
+import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import { useDropzone } from 'react-dropzone';
 import { useTranslation } from 'react-i18next';
-import { PublishQAppChoseFile, PublishQAppInfo } from './Apps-styles';
 import type { PublishProfileSource } from './publishProfiles';
 import {
   canPickFolder,
@@ -25,6 +36,29 @@ export const formatPublishDate = (timestamp: number, language?: string) => {
     return date.toLocaleDateString();
   }
 };
+
+/**
+ * A small (i) that explains a choice on hover, focus or tap. Its name says
+ * which choice; the text is its description, so screen readers read it too.
+ */
+const InfoTip = ({ text, label }: { text: string; label: string }) => (
+  <Tooltip
+    arrow
+    describeChild
+    enterDelay={0}
+    enterTouchDelay={0}
+    placement="top"
+    title={text}
+  >
+    <IconButton
+      aria-label={label}
+      size="small"
+      sx={{ color: 'text.secondary', p: 0.5 }}
+    >
+      <InfoOutlinedIcon sx={{ fontSize: 18 }} />
+    </IconButton>
+  </Tooltip>
+);
 
 interface PublishSourcePickerProps {
   source: PublishSource | null;
@@ -61,18 +95,37 @@ export const PublishSourcePicker = ({
   const [isPicking, setIsPicking] = useState(false);
   const maxSizeMb = Math.round(maxSize / (1024 * 1024));
 
-  const textSx =
-    surface === 'dialog'
-      ? { backgroundColor: theme.palette.background.paper, fontSize: '14px' }
-      : {};
   const buttonSx = {
-    minWidth: '120px',
-    padding: '0 16px',
-    width: 'auto',
-    ...(surface === 'dialog'
-      ? { backgroundColor: theme.palette.background.default, fontSize: '14px' }
-      : {}),
+    borderRadius: '12px',
+    fontWeight: 600,
+    px: 2,
+    textTransform: 'none',
   };
+  const infoLabel = (choiceLabel: string) =>
+    t('core:publish_source.info_about', {
+      choice: choiceLabel,
+      postProcess: 'capitalizeFirstChar',
+    });
+  const choice = (label: string, button: React.ReactNode, info: string) => (
+    <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: 0.25 }}>
+      {button}
+      <InfoTip label={infoLabel(label)} text={info} />
+    </Box>
+  );
+  const sameLabel =
+    savedSource?.kind === 'folder'
+      ? t('core:publish_source.same_folder', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      : t('core:publish_source.same_file', {
+          postProcess: 'capitalizeFirstChar',
+        });
+  const fileLabel = source
+    ? t('core:action.change_file', { postProcess: 'capitalizeFirstChar' })
+    : t('core:action.choose_file', { postProcess: 'capitalizeFirstChar' });
+  const folderLabel = t('core:publish_source.choose_folder', {
+    postProcess: 'capitalizeFirstChar',
+  });
 
   const tooLarge = (name: string) =>
     onError(
@@ -151,23 +204,38 @@ export const PublishSourcePicker = ({
     >
       {showSaved ? (
         <>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            <Button
-              disabled={isPicking}
-              onClick={reuseSaved}
-              variant="contained"
-            >
-              {savedSource.kind === 'folder'
-                ? t('core:publish_source.same_folder', {
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '10px',
+            }}
+          >
+            {choice(
+              sameLabel,
+              <Button
+                disableElevation
+                disabled={isPicking}
+                onClick={reuseSaved}
+                startIcon={<HistoryRoundedIcon />}
+                sx={buttonSx}
+                variant="contained"
+              >
+                {sameLabel}
+              </Button>,
+              savedSource.kind === 'folder'
+                ? t('core:publish_source.info_same_folder', {
                     postProcess: 'capitalizeFirstChar',
                   })
-                : t('core:publish_source.same_file', {
+                : t('core:publish_source.info_same_file', {
                     postProcess: 'capitalizeFirstChar',
-                  })}
-            </Button>
+                  })
+            )}
             <Button
               disabled={isPicking}
               onClick={() => setOfferSaved(false)}
+              sx={buttonSx}
               variant="outlined"
             >
               {t('core:publish_source.choose_another', {
@@ -186,54 +254,100 @@ export const PublishSourcePicker = ({
           </Typography>
         </>
       ) : (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          <PublishQAppChoseFile sx={buttonSx} {...getRootProps()}>
-            <input {...getInputProps()} />
-            {source
-              ? t('core:action.change_file', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-              : t('core:action.choose_file', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-          </PublishQAppChoseFile>
-          {canPickFolder() && (
-            <PublishQAppChoseFile
-              disabled={isPicking}
-              onClick={() => pick(() => pickFolderSource({ changedSince }))}
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px',
+          }}
+        >
+          {choice(
+            fileLabel,
+            <Button
+              startIcon={<FolderZipRoundedIcon />}
               sx={buttonSx}
+              variant="outlined"
+              {...getRootProps({ role: 'button' })}
             >
-              {t('core:publish_source.choose_folder', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </PublishQAppChoseFile>
+              <input {...getInputProps()} />
+              {fileLabel}
+            </Button>,
+            t('core:publish_source.info_file', {
+              size: maxSizeMb,
+              postProcess: 'capitalizeFirstChar',
+            })
           )}
+          {canPickFolder() &&
+            choice(
+              folderLabel,
+              <Button
+                disabled={isPicking}
+                onClick={() => pick(() => pickFolderSource({ changedSince }))}
+                startIcon={<FolderOpenRoundedIcon />}
+                sx={buttonSx}
+                variant="outlined"
+              >
+                {folderLabel}
+              </Button>,
+              t('core:publish_source.info_folder', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            )}
         </Box>
       )}
 
       {source && (
-        <PublishQAppInfo sx={textSx}>
-          {source.kind === 'folder'
-            ? t('core:publish_source.selected_folder', {
-                name: source.name,
-                postProcess: 'capitalizeFirstChar',
-              })
-            : t('core:publish_source.selected_file', {
-                name: source.name,
-                postProcess: 'capitalizeFirstChar',
-              })}
-        </PublishQAppInfo>
+        <Box
+          sx={{
+            alignItems: 'center',
+            backgroundColor: alpha(
+              theme.palette.success.main,
+              surface === 'dialog' ? 0.1 : 0.08
+            ),
+            border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`,
+            borderRadius: '12px',
+            display: 'flex',
+            gap: 1.25,
+            px: 1.5,
+            py: 1,
+          }}
+        >
+          {source.kind === 'folder' ? (
+            <FolderOpenRoundedIcon sx={{ color: theme.palette.success.main }} />
+          ) : (
+            <FolderZipRoundedIcon sx={{ color: theme.palette.success.main }} />
+          )}
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: '14px',
+                fontWeight: 600,
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {source.kind === 'folder'
+                ? t('core:publish_source.selected_folder', {
+                    name: source.name,
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:publish_source.selected_file', {
+                    name: source.name,
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+            </Typography>
+            {source.changedFiles != null && changedSince ? (
+              <Typography sx={{ color: 'text.secondary', fontSize: '13px' }}>
+                {t('core:publish_source.changed_files', {
+                  date: formatPublishDate(changedSince, i18n?.language),
+                  number: source.changedFiles,
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            ) : null}
+          </Box>
+        </Box>
       )}
-
-      {source?.changedFiles != null && changedSince ? (
-        <PublishQAppInfo sx={textSx}>
-          {t('core:publish_source.changed_files', {
-            date: formatPublishDate(changedSince, i18n?.language),
-            number: source.changedFiles,
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </PublishQAppInfo>
-      ) : null}
     </Box>
   );
 };
