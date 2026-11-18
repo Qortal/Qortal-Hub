@@ -288,6 +288,9 @@ export const AppsDesktop = ({
   const [heldTabWidthPx, setHeldTabWidthPx] = useState<number | null>(null);
   const shownTabWidthPx =
     heldTabWidthPx === null ? tabWidthPx : Math.min(heldTabWidthPx, tabWidthPx);
+  // The tab on screen after a close with the mouse: it waits for the hold to
+  // end before it scrolls into view. A tab chosen meanwhile doesn't wait.
+  const heldShownTabIdRef = useRef<string | null>(null);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
   const tabScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const tabAddButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -688,12 +691,20 @@ export const AppsDesktop = ({
   }, [show, tabs.length]);
 
   // Keeps the selected tab in view when the tabs scroll, a new one included.
-  // Not while tabs are closed with the mouse, which would move the tabs under
-  // the pointer: the tab selected meanwhile comes into view after.
+  // Not the tab shown after a close with the mouse, while the widths are held:
+  // scrolling would move the tabs under the pointer, so it comes into view
+  // after. Any tab chosen meanwhile comes into view at once.
   useLayoutEffect(() => {
     const area = tabScrollAreaRef.current;
     const selectedTabId = selectedTab?.tabId;
-    if (!area || !selectedTabId || heldTabWidthPx !== null) return;
+    if (!area || !selectedTabId) return;
+    if (
+      heldTabWidthPx !== null &&
+      selectedTabId === heldShownTabIdRef.current
+    ) {
+      return;
+    }
+    heldShownTabIdRef.current = null;
     const tabElement = Array.from(
       area.querySelectorAll<HTMLElement>('[data-tab-id]')
     ).find((element) => element.dataset.tabId === selectedTabId);
@@ -1023,14 +1034,30 @@ export const AppsDesktop = ({
     setOpenSnack(true);
   };
 
-  /** `tabs` with `newTab` after the tab `afterTabId`, or at the end. */
-  const withTabAfter = (prev, newTab, afterTabId?: string) => {
+  /**
+   * `tabs` with `newTab` after the tab `afterTabId`, else before the tab
+   * `beforeTabId`, else at the end.
+   */
+  const withTabAfter = (
+    prev,
+    newTab,
+    afterTabId?: string,
+    beforeTabId?: string
+  ) => {
     const sourceIndex = afterTabId
       ? prev.findIndex((tab) => tab?.tabId === afterTabId)
       : -1;
-    if (sourceIndex === -1) return [...prev, newTab];
+    const nextIndex =
+      sourceIndex === -1 && beforeTabId
+        ? prev.findIndex((tab) => tab?.tabId === beforeTabId)
+        : -1;
+    if (sourceIndex === -1 && nextIndex === -1) return [...prev, newTab];
     const nextTabs = [...prev];
-    nextTabs.splice(sourceIndex + 1, 0, newTab);
+    nextTabs.splice(
+      sourceIndex === -1 ? nextIndex : sourceIndex + 1,
+      0,
+      newTab
+    );
     return pinnedFirst(nextTabs);
   };
 
@@ -1040,14 +1067,19 @@ export const AppsDesktop = ({
    */
   const openNewLauncherTab = ({
     afterTabId,
+    beforeTabId,
     query = '',
-  }: { afterTabId?: string; query?: string } = {}): boolean => {
+  }: {
+    afterTabId?: string;
+    beforeTabId?: string;
+    query?: string;
+  } = {}): boolean => {
     if (tabs.length >= MAX_OPEN_APP_TABS) {
       noteTabLimit();
       return false;
     }
     const newTab = newLauncherTab(uid.rnd());
-    setTabs((prev) => withTabAfter(prev, newTab, afterTabId));
+    setTabs((prev) => withTabAfter(prev, newTab, afterTabId, beforeTabId));
     setLauncherTabStates((prev) => ({
       ...prev,
       [newTab.tabId]: newLauncherTabState(query),
@@ -1090,7 +1122,10 @@ export const AppsDesktop = ({
     // A launcher tab reopened (Ctrl+Shift+T) is a new one: nothing it held
     // was kept.
     if (isLauncherTab(data)) {
-      openNewLauncherTab({ afterTabId: data.afterTabId });
+      openNewLauncherTab({
+        afterTabId: data.afterTabId,
+        beforeTabId: data.beforeTabId,
+      });
       return;
     }
     if (data?.internal) {
@@ -1156,8 +1191,9 @@ export const AppsDesktop = ({
     }
 
     // Only the tab menu pins a tab: a tab opened any other way starts
-    // unpinned, a duplicate of a pinned tab too.
-    const { pinned: _pinned, ...tabData } = data;
+    // unpinned, a duplicate of a pinned tab too. `beforeTabId` only places a
+    // reopened tab (Ctrl+Shift+T): the tab doesn't keep it.
+    const { pinned: _pinned, beforeTabId, ...tabData } = data;
 
     // Opened from inside a launcher tab: the app takes that tab's place, as
     // a page opened from a browser's new tab does, unless the tab's publish
@@ -1189,7 +1225,7 @@ export const AppsDesktop = ({
       ...tabData,
       tabId: uid.rnd(),
     };
-    setTabs((prev) => withTabAfter(prev, newTab, data.afterTabId));
+    setTabs((prev) => withTabAfter(prev, newTab, data.afterTabId, beforeTabId));
     setSelectedTab(newTab);
     setMode('viewer');
     setDesktopViewMode('apps');
@@ -1454,6 +1490,7 @@ export const AppsDesktop = ({
         setMode('viewer');
       }
     }
+    heldShownTabIdRef.current = holdWidths ? (shownTab?.tabId ?? null) : null;
     tabsTokenRef.current += 1;
     executeEvent('setTabsToNav', {
       data: {
@@ -1861,8 +1898,15 @@ export const AppsDesktop = ({
         }}
       >
         <AppsHorizontalTabBar
-          // Tabs closed with the mouse fit the strip again once it is left.
-          onPointerLeave={() => setHeldTabWidthPx(null)}
+          // Tabs closed with the mouse fit the strip again once it is left,
+          // also for a tab's menu: it is on the page, outside the strip.
+          onPointerOut={(event) => {
+            const next = event.relatedTarget;
+            if (next instanceof Node && event.currentTarget.contains(next)) {
+              return;
+            }
+            setHeldTabWidthPx(null);
+          }}
           sx={{
             transition: `opacity ${show ? '200ms ease-out' : '140ms ease-in'}, transform ${show ? '200ms ease-out' : '140ms ease-in'}`,
             opacity: show ? 1 : 0,

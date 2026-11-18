@@ -402,8 +402,13 @@ const TabComponent = ({
               event.preventDefault();
               return;
             }
-            // `detail` counts mouse clicks: it is 0 for Enter or Space.
-            onClose({ byPointer: event.detail > 0 });
+            // `detail` counts mouse clicks: it is 0 for Enter or Space. A tap
+            // leaves no pointer on the strip, so it counts as a key.
+            onClose({
+              byPointer:
+                event.detail > 0 &&
+                (event.nativeEvent as PointerEvent).pointerType !== 'touch',
+            });
           }}
           onAuxClick={(event) => {
             if (interactionLockRef.current) {

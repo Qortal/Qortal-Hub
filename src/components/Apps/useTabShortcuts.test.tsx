@@ -289,7 +289,8 @@ describe('reopening closed tabs', () => {
     reopen();
 
     expect(reopened()).toEqual([
-      { name: 'Q-Mail', service: 'APP' },
+      // The first tab comes back before the one that was on its right.
+      { beforeTabId: 'chat', name: 'Q-Mail', service: 'APP' },
       {
         afterTabId: 'chat',
         name: 'Q-Tube',
@@ -352,8 +353,8 @@ describe('reopening closed tabs', () => {
     reopen();
 
     expect(reopened()).toEqual([
-      { name: 'Q-Mail', service: 'APP' },
-      { name: 'Q-Mail', service: 'APP' },
+      { beforeTabId: 'chat', name: 'Q-Mail', service: 'APP' },
+      { beforeTabId: 'chat', name: 'Q-Mail', service: 'APP' },
     ]);
   });
 

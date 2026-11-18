@@ -24,6 +24,8 @@ export type ClosedTab = {
   data: Record<string, any>;
   /** The tab that was on its left, to reopen it in the same place. */
   afterTabId?: string;
+  /** Without an open tab on its left: the next open tab on its right. */
+  beforeTabId?: string;
 };
 
 /** Local dev and preview tabs have no service; Q-Chat's is INTERNAL. */
@@ -62,7 +64,7 @@ export function tabForShortcut<T extends { tabId: string }>(
 // dev tab's link names a stand-in app, so that tab keeps its own fields. The
 // id, the place in the strip and the lock belonged to the closed tab.
 function reopenData(tab: StripTab, link: QortalLink | null) {
-  const { afterTabId, lock, lockMessage, tabId, ...data } = tab;
+  const { afterTabId, beforeTabId, lock, lockMessage, tabId, ...data } = tab;
   if (!link || data.internal || isLocalDevTab(data)) return data;
   return {
     ...data,
@@ -88,9 +90,18 @@ export function closedTabsBetween(
   previous.forEach((tab, index) => {
     if (!tab?.tabId || open.has(tab.tabId)) return;
     const leftTabId = previous[index - 1]?.tabId;
+    // The first tab, or one closed along with the tab on its left, comes
+    // back before the next tab on its right that stayed open.
+    const rightTabId = previous
+      .slice(index + 1)
+      .find((item) => item?.tabId && open.has(item.tabId))?.tabId;
     closed.push({
       data: reopenData(tab, linkOf(tab.tabId)),
-      ...(leftTabId && open.has(leftTabId) ? { afterTabId: leftTabId } : {}),
+      ...(leftTabId && open.has(leftTabId)
+        ? { afterTabId: leftTabId }
+        : rightTabId
+          ? { beforeTabId: rightTabId }
+          : {}),
     });
   });
   return closed.reverse();
@@ -200,7 +211,9 @@ export function useTabShortcuts({
       executeEvent('addTab', {
         data: closed.afterTabId
           ? { ...closed.data, afterTabId: closed.afterTabId }
-          : closed.data,
+          : closed.beforeTabId
+            ? { ...closed.data, beforeTabId: closed.beforeTabId }
+            : closed.data,
       });
       executeEvent('open-apps-mode', {});
     };

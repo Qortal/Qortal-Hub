@@ -20,6 +20,7 @@ import {
   it,
   vi,
 } from 'vitest';
+import type { TabShortcutAction } from '../../../electron/src/tab-shortcuts';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
 import { lightTheme } from '../../styles/theme-light';
@@ -146,6 +147,18 @@ const recordTabOrder = (event: CustomEvent) => {
   shownTab = event.detail?.data?.selectedTab?.name ?? null;
 };
 
+let shortcut: ((action: TabShortcutAction) => void) | null = null;
+/** A tab shortcut, as Electron main sends it. */
+const press = (action: TabShortcutAction) =>
+  act(() => {
+    shortcut?.(action);
+  });
+/** Time for the top bar to hear of a selected tab, 100 ms later. */
+const letTheTopBarHear = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  });
+
 const realResizeObserver = globalThis.ResizeObserver;
 beforeAll(() => {
   globalThis.ResizeObserver = class {
@@ -167,6 +180,15 @@ beforeEach(() => {
   );
   tabOrder = [];
   shownTab = null;
+  shortcut = null;
+  vi.stubGlobal('electronAPI', {
+    onTabShortcut: (callback: (action: TabShortcutAction) => void) => {
+      shortcut = callback;
+      return () => {
+        if (shortcut === callback) shortcut = null;
+      };
+    },
+  });
   subscribeToEvent('openGlobalSnackBar', recordNote);
   subscribeToEvent('setTabsToNav', recordTabOrder);
 });
@@ -611,5 +633,324 @@ describe('AppsDesktop tab strip: widths and scrolling', () => {
       fireEvent.click(tabNamed('App 1'));
     });
     expect(scrollLeft()).toBe(0);
+  });
+
+  describe('after a tab is closed', () => {
+    const withAncestors = (node: Element | null) => {
+      const nodes: Element[] = [];
+      for (let element = node; element; element = element.parentElement) {
+        nodes.push(element);
+      }
+      return nodes;
+    };
+    /** An event of `type` from a pointer of `pointerType`. */
+    const pointerEvent = (
+      type: string,
+      pointerType: string,
+      init: MouseEventInit
+    ) => {
+      const event = new MouseEvent(type, init);
+      Object.defineProperty(event, 'pointerType', { value: pointerType });
+      return event;
+    };
+    /**
+     * The pointer going from `from` to `to` (null: off the page), with the
+     * events a browser sends: pointerout and pointerover, which bubble
+     * (React's onPointerLeave and onPointerEnter come from these), and
+     * pointerleave and pointerenter on each element left or entered. jsdom
+     * has no PointerEvent; the type and `relatedTarget` are what is read.
+     */
+    const pointerMoves = (
+      from: Element | null,
+      to: Element | null,
+      pointerType = 'mouse'
+    ) =>
+      act(() => {
+        const left = withAncestors(from).filter((node) => !node.contains(to));
+        const entered = withAncestors(to).filter(
+          (node) => !node.contains(from)
+        );
+        const send = (node: Element, type: string, init: MouseEventInit) =>
+          node.dispatchEvent(pointerEvent(type, pointerType, init));
+        if (from) {
+          send(from, 'pointerout', { bubbles: true, relatedTarget: to });
+        }
+        left.forEach((node) =>
+          send(node, 'pointerleave', { relatedTarget: to })
+        );
+        if (to) send(to, 'pointerover', { bubbles: true, relatedTarget: from });
+        entered
+          .reverse()
+          .forEach((node) =>
+            send(node, 'pointerenter', { relatedTarget: from })
+          );
+      });
+    /** A finger on a touch screen comes down on `target` and lifts. */
+    const touchDownUp = (target: Element) =>
+      act(() => {
+        for (const type of ['pointerdown', 'pointerup']) {
+          target.dispatchEvent(
+            pointerEvent(type, 'touch', {
+              bubbles: true,
+              button: 0,
+              cancelable: true,
+            })
+          );
+        }
+      });
+
+    afterEach(async () => {
+      await letTheTopBarHear();
+    });
+
+    /**
+     * Nine tabs 72 px wide with a 2 px gap in a 300 px strip, scrolled by the
+     * wheel to show 180 to 480: App 3 (148 to 220) and App 7 (444 to 516)
+     * are cut off. Then App 5 (296 to 368) is closed with the mouse. The
+     * strip, 590 px of tabs by then, can stay where it is.
+     */
+    const scrolledStripAfterAMouseClose = () => {
+      stub(HTMLElement.prototype, 'offsetLeft', function () {
+        if (!this.dataset?.tabId) return 0;
+        return Array.from(this.parentElement!.children).indexOf(this) * 74;
+      });
+      stub(HTMLElement.prototype, 'offsetWidth', function () {
+        return this.dataset?.tabId ? 72 : 0;
+      });
+      renderStrip();
+      openTab('App 1');
+      const area = group('unpinned')!;
+      const scrollLeft = scrollable(area);
+      stub(area, 'clientWidth', () => 300);
+      for (let i = 2; i <= 9; i++) openTab(`App ${i}`);
+      expect(scrollLeft()).toBe(664 - 300);
+      area.scrollLeft = 180;
+
+      clickClose('App 5');
+      expect(tabsIn('unpinned')).not.toContain('App 5');
+      expect(scrollLeft()).toBe(180);
+      return scrollLeft;
+    };
+
+    it('brings a tab chosen with a click while the widths are held into view', () => {
+      const scrollLeft = scrolledStripAfterAMouseClose();
+
+      // App 3 shows only its right half. Chosen with a click, it comes into
+      // view, as a chosen tab does when no tab was just closed.
+      act(() => {
+        fireEvent.click(tabNamed('App 3'));
+      });
+      expect(scrollLeft()).toBe(148);
+    });
+
+    it('brings a tab chosen from the keyboard while the widths are held into view', () => {
+      const scrollLeft = scrolledStripAfterAMouseClose();
+
+      // The mouse rests on the strip, where it closed App 5. Ctrl+1: App 1,
+      // from 0 to 72, is out of view.
+      press({ type: 'selectTab', index: 0 });
+      expect(scrollLeft()).toBe(0);
+    });
+
+    it('brings each tab chosen in turn into view while the widths are held', async () => {
+      // Tabs 72 px wide with a 2 px gap, side by side.
+      stub(HTMLElement.prototype, 'offsetLeft', function () {
+        if (!this.dataset?.tabId) return 0;
+        return Array.from(this.parentElement!.children).indexOf(this) * 74;
+      });
+      stub(HTMLElement.prototype, 'offsetWidth', function () {
+        return this.dataset?.tabId ? 72 : 0;
+      });
+      renderStrip();
+      openTab('App 1');
+      const area = group('unpinned')!;
+      const scrollLeft = scrollable(area);
+      stub(area, 'clientWidth', () => 300);
+      for (let i = 2; i <= 8; i++) openTab(`App ${i}`);
+      // App 8 runs from 7 × 74 = 518 to 590: the strip shows 290 to 590.
+      expect(scrollLeft()).toBe(590 - 300);
+
+      // App 7 is closed with the mouse, which stays on the strip.
+      clickClose('App 7');
+      expect(scrollLeft()).toBe(590 - 300);
+
+      // Ctrl+1 shows App 1, whose tab (0 to 72) is out of view.
+      press({ type: 'selectTab', index: 0 });
+      await waitFor(() => expect(shownTab).toBe('App 1'), SLOW);
+      expect(scrollLeft()).toBe(0);
+
+      // App 5 (296 to 368) shows only its edge. Chosen with a click, it comes
+      // into view, as a chosen tab does when no tab was just closed.
+      act(() => {
+        fireEvent.click(tabNamed('App 5'));
+      });
+      expect(scrollLeft()).toBe(368 - 300);
+    });
+
+    it('fits the tabs again after a tab is closed with a tap', async () => {
+      renderStrip();
+      openTab('App 1');
+      stub(strip(), 'clientWidth', () => 620);
+      for (let i = 2; i <= 4; i++) openTab(`App ${i}`);
+      expect(parseFloat(widthOf('App 1'))).toBeLessThan(180);
+
+      // A tap on a touch screen: the finger comes down on the ×, lifts, and
+      // the pointer leaves with it. The click only comes after that.
+      const close = closeButtonOf('App 2');
+      pointerMoves(null, close, 'touch');
+      touchDownUp(close);
+      pointerMoves(close, null, 'touch');
+      act(() => {
+        close.dispatchEvent(
+          pointerEvent('click', 'touch', {
+            bubbles: true,
+            button: 0,
+            cancelable: true,
+            detail: 1,
+          })
+        );
+      });
+      expect(tabsIn('unpinned')).toEqual(['App 1', 'App 3', 'App 4']);
+
+      // No pointer rests on the strip after a tap: three tabs fit at 180 px.
+      await waitFor(() => expect(widthOf('App 3')).toBe('180px'), {
+        timeout: 5000,
+      });
+    }, 15_000);
+
+    it('fits the tabs again once the pointer left the strip over a tab’s menu', async () => {
+      const user = userEvent.setup();
+      renderStrip();
+      openTab('App 1');
+      stub(strip(), 'clientWidth', () => 620);
+      for (let i = 2; i <= 4; i++) openTab(`App ${i}`);
+      const shrunk = widthOf('App 1');
+
+      clickClose('App 2');
+      expect(widthOf('App 3')).toBe(shrunk);
+
+      // A right click opens a tab's menu below the strip. The pointer goes
+      // down onto it, the menu is dismissed, and the pointer is over the page.
+      const app1 = tabNamed('App 1');
+      fireEvent.contextMenu(app1);
+      const menu = screen.getByRole('menu');
+      pointerMoves(app1, menu);
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull(), SLOW);
+      pointerMoves(null, document.body);
+
+      // Three tabs fit at 180 px once the pointer is off the strip.
+      expect(widthOf('App 3')).toBe('180px');
+    });
+  });
+});
+
+describe('AppsDesktop tab strip: closed tabs come back where they were', () => {
+  /** Every tab in the strip, pinned ones first, as they show. */
+  const stripTabs = () =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-tab-id]')).map(
+      (tab) => tab.getAttribute('aria-label')
+    );
+
+  afterEach(async () => {
+    await letTheTopBarHear();
+  });
+
+  it('brings the tabs Close other tabs closed back where they were', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    openTab('Q-Share');
+
+    await chooseFromMenu(user, 'Q-Blog', 'Close other tabs');
+    expect(stripTabs()).toEqual(['Q-Blog']);
+
+    // Ctrl+Shift+T, once for each closed tab.
+    press({ type: 'reopenClosedTab' });
+    press({ type: 'reopenClosedTab' });
+    press({ type: 'reopenClosedTab' });
+
+    expect(stripTabs()).toEqual(['Q-Tube', 'Q-Mail', 'Q-Blog', 'Q-Share']);
+  });
+
+  it('brings tabs back on both sides of a locked tab that stayed open', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    act(() => {
+      executeEvent('addLock', { data: { tabId: tabIdOf('Q-Mail') } });
+    });
+
+    await chooseFromMenu(user, 'Q-Mail', 'Close all tabs');
+    expect(stripTabs()).toEqual(['Q-Mail']);
+
+    press({ type: 'reopenClosedTab' });
+    press({ type: 'reopenClosedTab' });
+
+    expect(stripTabs()).toEqual(['Q-Tube', 'Q-Mail', 'Q-Blog']);
+  });
+
+  it('brings the first tab back first when it was closed on its own', () => {
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+
+    act(() => {
+      fireEvent.click(closeButtonOf('Q-Tube'));
+    });
+    expect(stripTabs()).toEqual(['Q-Mail', 'Q-Blog']);
+
+    press({ type: 'reopenClosedTab' });
+
+    expect(stripTabs()).toEqual(['Q-Tube', 'Q-Mail', 'Q-Blog']);
+  });
+
+  it('brings a launcher tab back before the tab that was on its right', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    act(() => {
+      executeEvent('newTabWindow', {});
+    });
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    expect(stripTabs()).toEqual(['New tab', 'Q-Tube', 'Q-Mail']);
+
+    await chooseFromMenu(user, 'Q-Mail', 'Close other tabs');
+    expect(stripTabs()).toEqual(['Q-Mail']);
+
+    press({ type: 'reopenClosedTab' });
+    press({ type: 'reopenClosedTab' });
+
+    expect(stripTabs()).toEqual(['New tab', 'Q-Tube', 'Q-Mail']);
+  });
+
+  it('brings a pinned tab closed on its own back first among the other tabs', async () => {
+    const user = userEvent.setup();
+    renderStrip();
+    openTab('Q-Tube');
+    openTab('Q-Mail');
+    openTab('Q-Blog');
+    await chooseFromMenu(user, 'Q-Tube', 'Pin tab');
+    await chooseFromMenu(user, 'Q-Mail', 'Pin tab');
+
+    // What Ctrl+W sends: it closes a pinned tab too.
+    act(() => {
+      executeEvent('removeTab', { data: { tabId: tabIdOf('Q-Tube') } });
+    });
+    expect(stripTabs()).toEqual(['Q-Mail', 'Q-Blog']);
+
+    press({ type: 'reopenClosedTab' });
+
+    // It comes back unpinned, and the pinned tab stays first in the list.
+    expect(stripTabs()).toEqual(['Q-Mail', 'Q-Tube', 'Q-Blog']);
+    await waitFor(
+      () => expect(tabOrder).toEqual(['Q-Mail*', 'Q-Tube', 'Q-Blog']),
+      SLOW
+    );
   });
 });
