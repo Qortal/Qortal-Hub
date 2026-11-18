@@ -2,20 +2,23 @@
  * Install monero-ts@0.11.22 in an isolated directory and set XMR_MONERO_TS_PATH
  * to that package directory; it is not a production Hub dependency yet.
  */
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import { createRequire } from 'node:module';
 
 const blockNetwork = () => {
   throw new Error('Network access forbidden in XMR account verification');
 };
-require('node:http').request = blockNetwork;
-require('node:https').request = blockNetwork;
+http.request = blockNetwork;
+https.request = blockNetwork;
 globalThis.fetch = blockNetwork;
-const monero = require(process.env.XMR_MONERO_TS_PATH || 'monero-ts');
+const loadPackage = createRequire(import.meta.url);
+const monero = loadPackage(process.env.XMR_MONERO_TS_PATH || 'monero-ts');
 const fixtures = JSON.parse(
   fs.readFileSync(
-    path.join(__dirname, '../src/lib/monero/fixtures/account-v1.json')
+    new URL('../src/lib/monero/fixtures/account-v1.json', import.meta.url)
   )
 );
 

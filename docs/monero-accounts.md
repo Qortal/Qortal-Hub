@@ -97,7 +97,7 @@ For the full Monero engine comparison, install the pinned SDK outside Hub:
 ```sh
 npm install --prefix /tmp/hub-xmr-sdk --ignore-scripts --no-audit --no-fund monero-ts@0.11.22
 XMR_MONERO_TS_PATH=/tmp/hub-xmr-sdk/node_modules/monero-ts \
-  node scripts/verify-xmr-monero-engine.cjs
+  node scripts/verify-xmr-monero-engine.mjs
 ```
 
 The SDK source tag is [v0.11.22](https://github.com/woodser/monero-ts/releases/tag/v0.11.22). This verification does not establish mainnet scanning performance, actual Electron/mobile runtime acceptance, hardware-backed custody, a cryptographic audit, a funded payment or atomic-swap safety.
