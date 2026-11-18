@@ -17,7 +17,8 @@ import { getCacheKey, ratingsStoreAtom } from '../../../hooks/useAppRatings';
 import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import type { AppRatingData } from '../../../types/ratings';
 import { executeEvent } from '../../../utils/events';
-import { openQortalUseGroupLink } from '../../../utils/openQortalUseGroupLink';
+import { openQortalLink } from '../../../utils/qortalLink/openQortalLink';
+import { launcherTabLinkOptions } from '../AppPage/appPageLink';
 import {
   getPinnedAppKey,
   type PinnedApp,
@@ -89,6 +90,8 @@ export type AppsLauncherRequest = {
 };
 
 interface AppsLauncherProps {
+  /** Every app, hidden from the library or not: a pin keeps its details. */
+  allQapps?: LauncherApp[];
   availableQapps: LauncherApp[];
   categories: any[];
   contentHeight?: string;
@@ -118,6 +121,7 @@ export const AppsLauncher = (props: AppsLauncherProps) => {
 };
 
 const AppsLauncherPage = ({
+  allQapps,
   availableQapps,
   categories,
   contentHeight,
@@ -352,22 +356,7 @@ const AppsLauncherPage = ({
 
   const openLink = useCallback(
     (target: LauncherLink) => {
-      if (target.kind === 'group') {
-        void openQortalUseGroupLink(target.link);
-      } else {
-        executeEvent('addTab', {
-          data: inLauncherTab(
-            {
-              service: target.service,
-              name: target.name,
-              identifier: target.identifier,
-              path: target.path,
-            },
-            launcherTabId
-          ),
-        });
-        executeEvent('open-apps-mode', {});
-      }
+      void openQortalLink(target, launcherTabLinkOptions(launcherTabId));
       setQuery('');
     },
     [launcherTabId]
@@ -534,7 +523,7 @@ const AppsLauncherPage = ({
                 {/* Once the bookmarks are read: they say what is in a folder. */}
                 {areBookmarksReady ? (
                   <MemoSaved
-                    availableQapps={availableQapps}
+                    availableQapps={allQapps ?? availableQapps}
                     bookmarks={bookmarks}
                     myAddress={myAddress}
                     myApp={myApp}
