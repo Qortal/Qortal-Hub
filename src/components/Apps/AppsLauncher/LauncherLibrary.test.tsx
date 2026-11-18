@@ -11,7 +11,14 @@ vi.mock('react-i18next', () => ({
 
 // The tabs show what the library hands them.
 vi.mock('../AppsLibrary', () => {
-  const tabs = ['official', 'community', 'categories', 'my-apps', 'private'];
+  const tabs = [
+    'official',
+    'community',
+    'categories',
+    'widgets',
+    'my-apps',
+    'private',
+  ];
   return {
     AppsTabs: ({
       currentTab,
@@ -47,6 +54,15 @@ vi.mock('../AppsLibrary', () => {
       <div data-testid="community">{`${categoryValue}|${statusValue}|${sortValue}`}</div>
     ),
     CategoriesTab: () => <div>categories</div>,
+    WidgetsTab: ({
+      libraryRefreshKey,
+      sortValue,
+    }: {
+      libraryRefreshKey: number;
+      sortValue: string;
+    }) => (
+      <div data-testid="widgets">{`${sortValue}|${libraryRefreshKey}`}</div>
+    ),
     MyAppsTab: ({ libraryRefreshKey }: { libraryRefreshKey: number }) => (
       <div>{`my-apps ${libraryRefreshKey}`}</div>
     ),
@@ -111,6 +127,7 @@ describe('LauncherLibrary', () => {
       'official',
       'community',
       'categories',
+      'widgets',
       'my-apps',
       'private',
     ]) {
@@ -216,6 +233,34 @@ describe('LauncherLibrary', () => {
     expect(screen.getByTestId('community')).toHaveTextContent('all|all|');
     expect(document.activeElement).not.toBe(document.body);
     expect(screen.getByLabelText('core:filter.category')).toHaveFocus();
+  });
+
+  it('sorts the widgets like the community apps, without their filters, and reloads them', async () => {
+    const user = userEvent.setup();
+    renderLibrary({ getQapps: vi.fn(async () => {}) });
+
+    await user.click(screen.getByRole('tab', { name: 'widgets' }));
+    const widgets = () => screen.getByTestId('widgets');
+    expect(widgets()).toHaveTextContent('highest_rated|0');
+    // A sort, but none of Community's filters.
+    expect(screen.getByLabelText('core:filter.sort_by')).toBeVisible();
+    expect(screen.queryByLabelText('core:filter.category')).toBeNull();
+    expect(screen.queryByLabelText('core:filter.status')).toBeNull();
+
+    await user.click(screen.getByLabelText('core:filter.sort_by'));
+    await user.click(
+      within(await screen.findByRole('menu')).getByRole('menuitemradio', {
+        name: 'core:sort.newest',
+      })
+    );
+    expect(widgets()).toHaveTextContent('newest|0');
+
+    await user.click(screen.getByRole('button', { name: REFRESH }));
+    expect(widgets()).toHaveTextContent('newest|1');
+
+    // The sort is one preference: Community has it too.
+    await user.click(screen.getByRole('tab', { name: 'community' }));
+    expect(screen.getByTestId('community')).toHaveTextContent('all|all|newest');
   });
 
   it('links each panel to its tab', () => {

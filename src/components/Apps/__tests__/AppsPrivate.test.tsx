@@ -201,6 +201,27 @@ describe('AppsPrivate – Update', () => {
     );
   });
 
+  it('shows the status in readable text, its colour in the frame and icon', async () => {
+    getGroupAdminsAddress.mockResolvedValue(['Qsomeone-else']);
+    renderDialog();
+    const status = await screen.findByText(
+      'core:publish_update.not_admin group=Builders'
+    );
+    expect(
+      status.parentElement?.querySelector(
+        '[data-testid="ErrorOutlineRoundedIcon"]'
+      )
+    ).not.toBeNull();
+    // text.primary of the light theme, not error.main.
+    expect(getComputedStyle(status).color).toBe('rgba(0, 0, 0, 0.87)');
+  });
+
+  it('lets the fee and the buttons wrap on a narrow screen', async () => {
+    renderDialog();
+    const actions = publishButton().closest('.MuiDialogActions-root')!;
+    expect(getComputedStyle(actions).flexWrap).toBe('wrap');
+  });
+
   it("uses the admin groups from sign-in when the node can't answer", async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     getGroupAdminsAddress.mockRejectedValue(new Error('offline'));

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -60,16 +60,22 @@ const rating = (averageRating: number, totalVotes: number) => ({
 });
 
 const renderPage = (
-  props: Partial<React.ComponentProps<typeof AppsCategoryDesktop>> = {}
+  props: Partial<React.ComponentProps<typeof AppsCategoryDesktop>> = {},
+  ratings: Record<string, ReturnType<typeof rating>> = {
+    Alpha: rating(2, 10),
+    Charlie: rating(5, 10),
+    Bravo: rating(4, 10),
+  }
 ) => {
   const store = createStore();
   store.set(
     ratingsStoreAtom,
-    new Map([
-      [getCacheKey('Alpha', 'APP'), rating(2, 10)],
-      [getCacheKey('Charlie', 'APP'), rating(5, 10)],
-      [getCacheKey('Bravo', 'APP'), rating(4, 10)],
-    ])
+    new Map(
+      Object.entries(ratings).map(([name, value]) => [
+        getCacheKey(name, 'APP'),
+        value,
+      ])
+    )
   );
   const ui = (
     extra: Partial<React.ComponentProps<typeof AppsCategoryDesktop>>
@@ -97,6 +103,22 @@ const renderPage = (
 
 const cardNames = () =>
   screen.queryAllByTestId('app-card').map((card) => card.textContent);
+
+const featuredRow = () =>
+  screen.queryByRole('region', { name: 'core:official_apps.featured' });
+
+/** The Featured row's apps, in order; null without the row. */
+const featuredNames = () => {
+  const row = featuredRow();
+  if (!row) return null;
+  return within(row)
+    .getAllByRole('article')
+    .map(
+      (card) =>
+        document.getElementById(card.getAttribute('aria-labelledby') ?? '')
+          ?.textContent
+    );
+};
 
 describe('AppsCategoryDesktop', () => {
   beforeEach(() => {
@@ -204,5 +226,86 @@ describe('AppsCategoryDesktop', () => {
     rerenderWith({ isShow: false });
     rerenderWith({ isShow: true });
     expect(field()).toHaveValue('');
+  });
+});
+
+describe('AppsCategoryDesktop, its Featured row', () => {
+  // The cards' ratings would ask the node again and replace the test's.
+  beforeEach(() => {
+    executeEvent.mockClear();
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {}))
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const videos = [
+    { name: 'Q-Tube', service: 'APP', metadata: { category: 'VIDEO' } },
+    { name: 'Clips', service: 'APP', metadata: { category: 'VIDEO' } },
+    { name: 'Reels', service: 'APP', metadata: { category: 'VIDEO' } },
+    { name: 'Dull', service: 'APP', metadata: { category: 'VIDEO' } },
+    { name: 'Tool', service: 'APP', metadata: { category: 'TOOLS' } },
+  ];
+  const ratings = {
+    'Q-Tube': rating(4.6, 20),
+    Clips: rating(4, 10),
+    Reels: rating(4.2, 5),
+    Dull: rating(2.5, 30),
+    Tool: rating(5, 30),
+  };
+  const videoPage = {
+    availableQapps: videos,
+    category: { id: 'VIDEO', name: 'Video' },
+  };
+
+  it("features the category's best rated, official apps too", () => {
+    renderPage(videoPage, ratings);
+    expect(featuredNames()).toEqual(['Q-Tube', 'Clips', 'Reels']);
+    expect(
+      within(featuredRow()!).getByText('core:launcher.library.top_rated_hint')
+    ).toBeInTheDocument();
+  });
+
+  it('features the best of every category on All categories', () => {
+    renderPage({ ...videoPage, category: { id: 'all', name: 'All' } }, ratings);
+    expect(featuredNames()).toEqual(['Tool', 'Q-Tube', 'Clips', 'Reels']);
+  });
+
+  it("opens an app from the row as one of the category's, so Back comes here", async () => {
+    const user = userEvent.setup();
+    renderPage(videoPage, ratings);
+    await user.click(
+      within(featuredRow()!).getByRole('button', { name: 'Clips' })
+    );
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfoCategory', {
+      data: videos[1],
+    });
+  });
+
+  it('steps aside while a search narrows the list', async () => {
+    const user = userEvent.setup();
+    renderPage(videoPage, ratings);
+    const field = screen.getByRole('textbox', {
+      name: 'core:launcher.library.search_in_category',
+    });
+
+    await user.type(field, 'cli');
+    await waitFor(() => expect(featuredRow()).toBeNull());
+    expect(cardNames()).toEqual(['Clips']);
+
+    await user.clear(field);
+    await waitFor(() =>
+      expect(featuredNames()).toEqual(['Q-Tube', 'Clips', 'Reels'])
+    );
+  });
+
+  it('has no row where fewer than three apps are rated well', () => {
+    renderPage();
+    expect(featuredRow()).toBeNull();
+    expect(cardNames()).toEqual(['Charlie', 'Bravo', 'Alpha']);
   });
 });

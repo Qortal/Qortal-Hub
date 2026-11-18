@@ -932,6 +932,10 @@ export const Group = ({
   const setMutedGroups = useSetAtom(mutedGroupsAtom);
   const mutedGroups = useAtomValue(mutedGroupsAtom);
   const memberGroupsForReticulum = useAtomValue(memberGroupsAtom);
+  // Read when a group's link opens, after the listener was set up. A group
+  // joined a moment ago is in this list before the background sends it.
+  const memberGroupsAtomRef = useRef(memberGroupsForReticulum);
+  memberGroupsAtomRef.current = memberGroupsForReticulum;
   const memberGroupsWithReticulumActivity = useAtomValue(
     memberGroupsWithReticulumChatAtom
   );
@@ -3700,10 +3704,11 @@ export const Group = ({
         }
         setNotificationReticulumMessageId(eventId);
       }
-      const findGroup = memberGroupsRef.current?.find(
-        (group: any) => +group?.groupId === +groupId
-      );
-      if (findGroup?.groupId === selectedGroup?.groupId) {
+      const isTheGroup = (group: any) => +group?.groupId === +groupId;
+      const findGroup =
+        memberGroupsRef.current?.find(isTheGroup) ??
+        memberGroupsAtomRef.current?.find(isTheGroup);
+      if (findGroup && findGroup.groupId === selectedGroup?.groupId) {
         isLoadingOpenSectionFromNotification.current = false;
         setChatMode('groups');
         setGroupSection('chat');

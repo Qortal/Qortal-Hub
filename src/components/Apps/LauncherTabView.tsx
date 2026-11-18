@@ -8,6 +8,7 @@ import {
   isAppInfoPage,
   isPublishPage,
   LauncherTabContext,
+  LauncherTabShownContext,
   type LauncherTabState,
   type PublishEditTarget,
   showPublishPage,
@@ -18,6 +19,8 @@ type LauncherTabViewProps = {
   state: LauncherTabState;
   /** On screen. A hidden tab stays mounted, as it was left. */
   isShown: boolean;
+  /** Every app, hidden from the library or not: pins keep their details. */
+  allQapps?: any[];
   availableQapps: any[];
   categories: any[];
   contentHeight: string;
@@ -45,6 +48,7 @@ export const LauncherTabView = memo(function LauncherTabView({
   tabId,
   state,
   isShown,
+  allQapps,
   availableQapps,
   categories,
   contentHeight,
@@ -72,76 +76,91 @@ export const LauncherTabView = memo(function LauncherTabView({
 
   return (
     <LauncherTabContext.Provider value={tabId}>
-      <Box
-        data-launcher-tab-id={tabId}
-        sx={{
-          display: isShown ? 'flex' : 'none',
-          flexDirection: 'column',
-          height: '100%',
-          minHeight: 0,
-          overflow: 'hidden',
-          position: 'relative',
-          width: '100%',
-        }}
-      >
-        <AppsLauncher
-          availableQapps={availableQapps}
-          categories={categories}
-          contentHeight={contentHeight}
-          getQapps={getQapps}
-          isShow={isShown && page === 'launcher'}
-          myAddress={myAddress}
-          myApp={myApp}
-          myName={myName}
-          myWebsite={myWebsite}
-          request={request}
-          setMode={setMode}
-        />
-
-        {isAppInfoPage(page) ? (
-          <Box sx={{ height: contentHeight, overflow: 'auto', width: '100%' }}>
-            <AppInfo app={appInfo} myName={myName} />
-          </Box>
-        ) : null}
-
-        {/* Kept under an app's details opened from it, for Back. */}
-        {page === 'category' || page === 'appInfo-from-category' ? (
-          <AppsCategoryDesktop
+      <LauncherTabShownContext.Provider value={isShown}>
+        <Box
+          data-launcher-tab-id={tabId}
+          sx={{
+            display: isShown ? 'flex' : 'none',
+            flexDirection: 'column',
+            height: '100%',
+            minHeight: 0,
+            overflow: 'hidden',
+            position: 'relative',
+            width: '100%',
+          }}
+        >
+          <AppsLauncher
+            allQapps={allQapps}
             availableQapps={availableQapps}
-            category={category}
+            categories={categories}
             contentHeight={contentHeight}
-            isShow={page === 'category'}
+            getQapps={getQapps}
+            isShow={isShown && page === 'launcher'}
+            myAddress={myAddress}
+            myApp={myApp}
             myName={myName}
+            myWebsite={myWebsite}
+            request={request}
+            setMode={setMode}
           />
-        ) : null}
 
-        {isPublishPage(page) ? (
-          <Box sx={{ height: contentHeight, overflow: 'auto', width: '100%' }}>
-            <AppPublish
-              key={
-                publishEditTarget
-                  ? `update-${publishEditTarget.service}-${publishEditTarget.name}`
-                  : page
-              }
-              categories={categories}
-              initialAppType={
-                publishEditTarget?.service ??
-                (page === 'publish-website' ? 'WEBSITE' : 'APP')
-              }
-              initialName={publishEditTarget?.name}
-              isAppTypeLocked={
-                page === 'publish-app' ||
-                page === 'publish-website' ||
-                !!publishEditTarget
-              }
-              isUpdate={!!publishEditTarget}
-              myAddress={myAddress}
+          {isAppInfoPage(page) ? (
+            <Box
+              sx={{ height: contentHeight, overflow: 'auto', width: '100%' }}
+            >
+              <AppInfo app={appInfo} myName={myName} />
+            </Box>
+          ) : null}
+
+          {/* Kept under an app's details opened from it, for Back. */}
+          {page === 'category' || page === 'appInfo-from-category' ? (
+            <AppsCategoryDesktop
+              availableQapps={availableQapps}
+              category={category}
+              contentHeight={contentHeight}
+              isShow={page === 'category'}
               myName={myName}
-              onUnsavedChange={handleUnsavedChange}
             />
-          </Box>
-        ) : null}
-      </Box>
+          ) : null}
+
+          {isPublishPage(page) ? (
+            <Box
+              sx={{ height: contentHeight, overflow: 'auto', width: '100%' }}
+            >
+              <AppPublish
+                key={
+                  publishEditTarget
+                    ? [
+                        'update',
+                        publishEditTarget.service,
+                        publishEditTarget.name,
+                        publishEditTarget.identifier ?? '',
+                      ].join('\u0000')
+                    : page
+                }
+                categories={categories}
+                initialAppType={
+                  publishEditTarget?.service ??
+                  (page === 'publish-website' ? 'WEBSITE' : 'APP')
+                }
+                initialName={publishEditTarget?.name}
+                isAppTypeLocked={
+                  page === 'publish-app' ||
+                  page === 'publish-website' ||
+                  page === 'publish-widget' ||
+                  !!publishEditTarget
+                }
+                isUpdate={!!publishEditTarget}
+                myAddress={myAddress}
+                myName={myName}
+                onUnsavedChange={handleUnsavedChange}
+                startAsWidget={page === 'publish-widget'}
+                widgetToUpdate={publishEditTarget?.identifier}
+              />
+            </Box>
+          ) : null}
+        </Box>
+      </LauncherTabShownContext.Provider>
     </LauncherTabContext.Provider>
   );
 });
