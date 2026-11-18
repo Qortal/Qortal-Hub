@@ -357,6 +357,75 @@ describe('AppsDesktop tab strip: closing from a tab’s menu', () => {
     expect(shownTab).toBe('Q-Mail');
   });
 
+  describe('a right-click while a tab’s menu is open', () => {
+    // jsdom has no layout: say what lies under the pointer, as a browser
+    // would find it under the open menu's backdrop.
+    const underPointer = (...elements: Element[]) => {
+      (document as any).elementsFromPoint = () => elements;
+    };
+    afterEach(() => {
+      delete (document as any).elementsFromPoint;
+    });
+    /** A tab found directly, as the open menu hides the rest from roles. */
+    const tabElement = (name: string) =>
+      document.querySelector<HTMLElement>(
+        `[data-tab-id][aria-label="${name}"]`
+      )!;
+    const backdrop = () =>
+      document.querySelector<HTMLElement>('.MuiBackdrop-root')!;
+    const rightClickOutsideMenu = () =>
+      act(() => {
+        fireEvent.contextMenu(backdrop(), { clientX: 40, clientY: 10 });
+      });
+
+    it('opens the menu of the other tab right-clicked', async () => {
+      const user = userEvent.setup();
+      renderStrip();
+      openTab('Q-Tube');
+      openTab('Q-Mail');
+      openTab('Q-Blog');
+
+      fireEvent.contextMenu(tabNamed('Q-Tube'));
+      underPointer(backdrop(), tabElement('Q-Mail'));
+      rightClickOutsideMenu();
+
+      // One menu, and it's Q-Mail's.
+      await waitFor(() => expect(screen.getAllByRole('menu')).toHaveLength(1));
+      await user.click(menuItem('Close other tabs'));
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull(), SLOW);
+      expect(tabsIn('unpinned')).toEqual(['Q-Mail']);
+    });
+
+    it('opens the same tab’s menu again where it was right-clicked', async () => {
+      const user = userEvent.setup();
+      renderStrip();
+      openTab('Q-Tube');
+      openTab('Q-Mail');
+
+      fireEvent.contextMenu(tabNamed('Q-Tube'));
+      underPointer(backdrop(), tabElement('Q-Tube'));
+      rightClickOutsideMenu();
+
+      await waitFor(() => expect(screen.getAllByRole('menu')).toHaveLength(1));
+      await user.click(menuItem('Close other tabs'));
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull(), SLOW);
+      expect(tabsIn('unpinned')).toEqual(['Q-Tube']);
+    });
+
+    it('closes the menu when no tab is under the pointer', async () => {
+      renderStrip();
+      openTab('Q-Tube');
+      openTab('Q-Mail');
+
+      fireEvent.contextMenu(tabNamed('Q-Tube'));
+      underPointer(backdrop());
+      rightClickOutsideMenu();
+
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull(), SLOW);
+      expect(tabsIn('unpinned')).toEqual(['Q-Tube', 'Q-Mail']);
+    });
+  });
+
   it('stays on the tab on screen when an item is chosen from another tab’s menu', async () => {
     const user = userEvent.setup();
     renderStrip();

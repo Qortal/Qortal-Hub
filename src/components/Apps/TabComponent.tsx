@@ -81,6 +81,28 @@ type TabComponentProps = {
   tabInteractionLockedRef?: MutableRefObject<boolean>;
 };
 
+/**
+ * Opens the menu of the tab at (x, y), under an open menu's backdrop
+ * (`menuRoot`): the right-click goes to that tab as if nothing covered it.
+ */
+const openTabMenuAt = (x: number, y: number, menuRoot: Element) => {
+  const tab = (document.elementsFromPoint?.(x, y) ?? []).find(
+    (element): element is HTMLElement =>
+      element instanceof HTMLElement &&
+      element.dataset.tabId !== undefined &&
+      !menuRoot.contains(element)
+  );
+  tab?.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      button: 2,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+    })
+  );
+};
+
 const TabComponent = ({
   app,
   onCloseAll,
@@ -463,6 +485,12 @@ const TabComponent = ({
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          // A right-click outside the menu closes it, and the tab under the
+          // pointer (this one or another) opens its own menu there.
+          const target = event.target as HTMLElement;
+          if (target.closest?.('.MuiMenu-paper')) return;
+          setMenuPosition(null);
+          openTabMenuAt(event.clientX, event.clientY, event.currentTarget);
         }}
         anchorReference="anchorPosition"
         anchorPosition={
