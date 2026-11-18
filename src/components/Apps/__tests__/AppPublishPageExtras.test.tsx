@@ -21,7 +21,10 @@ i18n.use(capitalizeFirstChar as never).init({
     en: {
       core: {
         app_page: {
-          edit: { error_shot_unavailable: 'a screenshot could not be read' },
+          edit: {
+            error_shot_unavailable: 'a screenshot could not be read',
+            error_shots_changed: 'the screenshots were replaced',
+          },
           publish: {
             confirm_retry: 'publish the rest of the page?',
             left_page: 'page text not published: {{error}}',
@@ -40,6 +43,7 @@ i18n.use(capitalizeFirstChar as never).init({
 const mocks = vi.hoisted(() => ({
   show: vi.fn(),
   prepare: vi.fn(),
+  checkExtras: vi.fn(),
   publishExtras: vi.fn(),
   onDrop: null as null | ((files: File[]) => void),
 }));
@@ -72,6 +76,7 @@ vi.mock('../AppPage/PublishPageExtras', () => ({
   }),
   extrasPartCount: (extras: any) =>
     (extras?.shots ? 1 : 0) + (extras?.page ? 1 : 0),
+  checkPageExtras: (...args: unknown[]) => mocks.checkExtras(...args),
   publishPageExtras: (...args: unknown[]) => mocks.publishExtras(...args),
 }));
 
@@ -186,6 +191,7 @@ describe('publishing the app with its page', () => {
     vi.clearAllMocks();
     mocks.show.mockResolvedValue(undefined);
     mocks.prepare.mockReturnValue(PAGE_PART);
+    mocks.checkExtras.mockResolvedValue(undefined);
     mocks.publishExtras.mockResolvedValue(null);
     vi.mocked(executeEvent).mockImplementation((name: string) => {
       if (name === 'addTab') closeForm?.();
@@ -212,7 +218,8 @@ describe('publishing the app with its page', () => {
     expect(mocks.publishExtras).toHaveBeenCalledWith(
       { service: 'APP', name: 'TestApp' },
       PAGE_PART,
-      'APP-SIG'
+      'APP-SIG',
+      expect.any(Function)
     );
     // The page goes after the app.
     expect(sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
@@ -269,13 +276,69 @@ describe('publishing the app with its page', () => {
     expect(mocks.publishExtras).toHaveBeenLastCalledWith(
       { service: 'APP', name: 'TestApp' },
       { page: PAGE_PART.page, shots: null, pageWasRead: true },
-      'APP-SIG'
+      'APP-SIG',
+      expect.any(Function)
     );
     // The app itself went out once.
     expect(sendMessage).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(executeEvent).toHaveBeenCalledWith('addTab', expect.anything())
     );
+  });
+
+  it("stops before the fee when the page part's screenshots can't go, and says why", async () => {
+    mocks.prepare.mockReturnValue({ ...PAGE_PART, shots: [SHOT] });
+    mocks.checkExtras.mockRejectedValue(new AppPageError('SHOTS_CHANGED'));
+    renderForm();
+    await publish();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('snack')).toHaveTextContent(
+        'The screenshots were replaced'
+      )
+    );
+    expect(mocks.checkExtras).toHaveBeenCalledWith(
+      { service: 'APP', name: 'TestApp' },
+      { ...PAGE_PART, shots: [SHOT] },
+      expect.any(Function)
+    );
+    // Nothing to confirm, and nothing sent.
+    expect(mocks.show).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(mocks.publishExtras).not.toHaveBeenCalled();
+  });
+
+  it('checks the screenshots again before the fee of a Retry', async () => {
+    mocks.prepare.mockReturnValue({ ...PAGE_PART, shots: [SHOT] });
+    mocks.publishExtras.mockResolvedValueOnce({
+      extras: { page: null, shots: [SHOT] },
+      error: new AppPageError('SHOTS_CHANGED'),
+    });
+    renderForm();
+    await publish();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
+    );
+    mocks.show.mockClear();
+    mocks.checkExtras.mockRejectedValue(new AppPageError('SHOTS_CHANGED'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('snack')).toHaveTextContent(
+        'The screenshots were replaced'
+      )
+    );
+    expect(mocks.checkExtras).toHaveBeenLastCalledWith(
+      { service: 'APP', name: 'TestApp' },
+      { page: null, shots: [SHOT], pageWasRead: undefined },
+      expect.any(Function)
+    );
+    expect(mocks.show).not.toHaveBeenCalled();
+    expect(mocks.publishExtras).toHaveBeenCalledTimes(1);
+    // What's left stays to try again.
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
   });
 
   it('says the app was published once the form has closed', async () => {

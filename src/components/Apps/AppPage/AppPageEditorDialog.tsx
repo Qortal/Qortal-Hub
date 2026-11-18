@@ -40,19 +40,25 @@ import {
   isAppPageEmpty,
   normalizeAppLink,
   sameAppPage,
+  SHOT_LIMITS,
   ShotsManifest,
   suggestNextVersion,
 } from './appPageData';
 import {
   appIconUrl,
+  AppPageError,
+  fetchShotsManifest,
   FilesProgress,
+  findAppPageResources,
   publishAppIcon,
   publishAppPage,
   publishAppShots,
   republishAppDetails,
 } from './appPageQdn';
 import {
+  checkShotsCurrent,
   draftsFromManifest,
+  heldAfterPublish,
   sameShotDrafts,
   uploadsFromDrafts,
 } from './appPageDrafts';
@@ -108,6 +114,9 @@ const sameListing = (a: Listing, b: Listing) =>
 const signatureOf = (response: any): string =>
   typeof response?.signature === 'string' ? response.signature : '';
 
+const isShotsChanged = (cause: unknown) =>
+  (cause as AppPageError)?.code === 'SHOTS_CHANGED';
+
 export const AppPageEditorDialog = ({
   open,
   initialTab,
@@ -162,12 +171,27 @@ export const AppPageEditorDialog = ({
   const [pageDraft, setPageDraftState] = useState<AppPageData>(
     page || EMPTY_APP_PAGE
   );
-  // What the screenshots are now: the ones just saved, or the node's.
+  // The screenshots read again here, after they were replaced on the node.
+  const [freshShots, setFreshShots] = useState<{
+    manifest: ShotsManifest | null;
+    version: string;
+  } | null>(null);
+  const [reloadingShots, setReloadingShots] = useState(false);
+  const [shotsReplaced, setShotsReplaced] = useState(false);
+  // What the screenshots are now: the ones read again, the ones just saved,
+  // or the node's.
   const baseShots = useMemo(
     () =>
-      savedShots ||
-      draftsFromManifest(getBaseApiReact(), ref, shots, shotsVersion),
-    [ref, savedShots, shots, shotsVersion]
+      freshShots
+        ? draftsFromManifest(
+            getBaseApiReact(),
+            ref,
+            freshShots.manifest,
+            freshShots.version
+          )
+        : savedShots ||
+          draftsFromManifest(getBaseApiReact(), ref, shots, shotsVersion),
+    [freshShots, ref, savedShots, shots, shotsVersion]
   );
   const [shotDrafts, setShotDraftsState] = useState<ShotDraft[]>(baseShots);
   // Parts the user changed since opening: the rest follow late-loading data.
@@ -196,15 +220,30 @@ export const AppPageEditorDialog = ({
     null
   );
   const iconInput = useRef<HTMLInputElement>(null);
+  // The check before the fee is running: Publish waits for it.
+  const [checking, setChecking] = useState(false);
+  const checkingRef = useRef(false);
+  // Counts openings and closings: work started before one changes nothing.
+  const sessionRef = useRef(0);
 
   // A fresh start each time the dialog opens.
   useEffect(() => {
+    sessionRef.current += 1;
+    checkingRef.current = false;
+    setChecking(false);
+    setReloadingShots(false);
     if (!open) return;
     pageTouched.current = false;
     shotsTouched.current = false;
     setTab(initialTab);
     setPageDraftState(page || EMPTY_APP_PAGE);
-    setShotDraftsState(baseShots);
+    setFreshShots(null);
+    setShotsReplaced(false);
+    // The node's or the saved ones: what was read again last time is gone.
+    setShotDraftsState(
+      savedShots ||
+        draftsFromManifest(getBaseApiReact(), ref, shots, shotsVersion)
+    );
     setIcon(null);
     setIconFailed(false);
     setListing(listingOf(app));
@@ -241,8 +280,9 @@ export const AppPageEditorDialog = ({
   // it would replace the real one with what the empty editor holds.
   const pageChanged =
     !pageUnreadable && !pageLoading && !sameAppPage(pageDraft, page);
+  const shotsBusy = shotsLoading || reloadingShots;
   const shotsChanged =
-    !shotsUnreadable && !shotsLoading && !sameShotDrafts(shotDrafts, baseShots);
+    !shotsUnreadable && !shotsBusy && !sameShotDrafts(shotDrafts, baseShots);
   const listingChanged = !sameListing(listing, listingOf(app));
   const versionPartChanged =
     pageDraft.version.trim() !== (page?.version || '').trim() ||
@@ -270,16 +310,42 @@ export const AppPageEditorDialog = ({
   const errorText = (cause: unknown) => appPageErrorText(t, cause);
 
   const save = async () => {
-    if (parts.length === 0 || linkErrors.length) return;
+    if (parts.length === 0 || linkErrors.length || checkingRef.current) return;
+    // Closed and opened again while this waits: that opening is over.
+    const session = sessionRef.current;
     setError('');
+    setShotsReplaced(false);
+    // Before the fee: screenshots read back from a set replaced since, or
+    // that the node can't confirm, stop it.
+    if (parts.includes('screenshots')) {
+      checkingRef.current = true;
+      setChecking(true);
+      let current = true;
+      let failure: unknown = null;
+      try {
+        await checkShotsCurrent(getBaseApiReact(), ref, shotDrafts);
+      } catch (cause) {
+        current = false;
+        failure = cause;
+      }
+      if (session !== sessionRef.current) return;
+      checkingRef.current = false;
+      setChecking(false);
+      if (!current) {
+        setShotsReplaced(isShotsChanged(failure));
+        setError(errorText(failure));
+        return;
+      }
+    }
     let fee: { fee: string };
     try {
       fee = await getFee('ARBITRARY');
     } catch (cause) {
       // The node can't be reached: say so, rather than act as if cancelled.
-      setError(errorText(cause));
+      if (session === sessionRef.current) setError(errorText(cause));
       return;
     }
+    if (session !== sessionRef.current) return;
     try {
       await show({
         message: t('core:app_page.edit.confirm', {
@@ -307,6 +373,7 @@ export const AppPageEditorDialog = ({
         failed = true;
         setProgress((value) => ({ ...value, [part]: 'failed' }));
         setError(errorText(cause));
+        setShotsReplaced(part === 'screenshots' && isShotsChanged(cause));
       }
     };
 
@@ -348,8 +415,19 @@ export const AppPageEditorDialog = ({
     }
     if (parts.includes('screenshots')) {
       await step('screenshots', async () => {
-        await publishAppShots(ref, await uploadsFromDrafts(shotDrafts));
-        saved.shots = shotDrafts;
+        // Checked again: the set may have been replaced since the fee.
+        const uploads = await uploadsFromDrafts(
+          getBaseApiReact(),
+          ref,
+          shotDrafts
+        );
+        await publishAppShots(ref, uploads);
+        // Held as pictures under their new files: a second change, or a
+        // retry of a later part, reads none of them back by an old name.
+        const { held, move } = heldAfterPublish(shotDrafts, uploads);
+        saved.shots = held;
+        setFreshShots(null);
+        setShotDraftsState(move);
       });
     }
     if (parts.includes('icon') && icon) {
@@ -361,6 +439,44 @@ export const AppPageEditorDialog = ({
     setSaving(false);
     if (Object.keys(saved).length) onSaved(saved);
     if (!failed) onClose();
+  };
+
+  // Reads the screenshots again; the pictures added here stay, after them.
+  // Dropped when the dialog was closed meanwhile.
+  const reloadShots = async () => {
+    const session = sessionRef.current;
+    setError('');
+    setShotsReplaced(false);
+    setReloadingShots(true);
+    try {
+      const base = getBaseApiReact();
+      const resources = await findAppPageResources(base, ref);
+      const manifest = resources.shots
+        ? await fetchShotsManifest(base, ref)
+        : null;
+      if (session !== sessionRef.current) return;
+      if (resources.shots && !manifest) {
+        throw new AppPageError('SHOT_UNAVAILABLE');
+      }
+      const version = resources.shots?.signature || '';
+      const added = shotDrafts.filter(
+        (shot) => !shot.id.startsWith('existing-')
+      );
+      const published = draftsFromManifest(base, ref, manifest, version);
+      setFreshShots({ manifest, version });
+      // Published ones make way for the added ones over the limit.
+      setShotDraftsState([
+        ...published.slice(0, Math.max(0, SHOT_LIMITS.count - added.length)),
+        ...added.slice(0, SHOT_LIMITS.count),
+      ]);
+      shotsTouched.current = added.length > 0;
+    } catch (cause) {
+      if (session !== sessionRef.current) return;
+      setShotsReplaced(true);
+      setError(errorText(cause));
+    } finally {
+      if (session === sessionRef.current) setReloadingShots(false);
+    }
   };
 
   const pickIcon = async (file: File | undefined) => {
@@ -592,8 +708,8 @@ export const AppPageEditorDialog = ({
             })}
           </Alert>
         )}
-        {tab === 'screenshots' && shotsLoading && loadingNote}
-        {tab === 'screenshots' && !shotsUnreadable && !shotsLoading && (
+        {tab === 'screenshots' && shotsBusy && loadingNote}
+        {tab === 'screenshots' && !shotsUnreadable && !shotsBusy && (
           <Box sx={{ pt: 1 }}>
             <Typography
               sx={{ color: 'text.secondary', fontSize: '13.5px', mb: 2 }}
@@ -780,7 +896,25 @@ export const AppPageEditorDialog = ({
         )}
 
         {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
+          <Alert
+            action={
+              shotsReplaced ? (
+                <Button
+                  color="inherit"
+                  disabled={saving || reloadingShots}
+                  onClick={() => void reloadShots()}
+                  size="small"
+                  sx={{ textTransform: 'none' }}
+                >
+                  {t('core:action.refresh', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
+              ) : undefined
+            }
+            severity="error"
+            sx={{ mt: 2 }}
+          >
             {error}
           </Alert>
         )}
@@ -845,7 +979,9 @@ export const AppPageEditorDialog = ({
           </Button>
           <Button
             disableElevation
-            disabled={saving || parts.length === 0 || linkErrors.length > 0}
+            disabled={
+              saving || checking || parts.length === 0 || linkErrors.length > 0
+            }
             onClick={() => void save()}
             startIcon={
               saving ? <CircularProgress color="inherit" size={14} /> : null

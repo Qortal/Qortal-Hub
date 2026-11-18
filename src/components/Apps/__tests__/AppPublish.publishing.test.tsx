@@ -70,6 +70,7 @@ import {
   infoSnackGlobalAtom,
   openSnackGlobalAtom,
 } from '../../../atoms/global';
+import { blobBytes } from '../AppPage/blobBytes';
 
 const SIGNATURE =
   '5HaYMw82wjG8k2Ddq6ccr7hDcjz58hK2GjhFzVbSKMFDE8hRqkG3QXQrNNLmmKZN';
@@ -692,6 +693,369 @@ describe('the publish form, against the node', () => {
       // Another name or type would read another page over the parts kept.
       expect(name).toHaveAttribute('aria-disabled', 'true');
       expect(type).toBeDisabled();
+    });
+  });
+
+  describe('screenshots replaced on the node since the form read them', () => {
+    /** A set of screenshots, each picture four bytes of its own number. */
+    const shotsAs = (
+      signature: string,
+      captions: string[],
+      first: number
+    ): NodeShots => ({
+      signature,
+      manifest: {
+        v: 1,
+        shots: captions.map((caption, index) => ({
+          file: `${index + 1}.webp`,
+          caption,
+        })),
+        updated: 1,
+      },
+      files: Object.fromEntries(
+        captions.map((_, index) => [
+          `${index + 1}.webp`,
+          Array(4).fill(first + index),
+        ])
+      ),
+    });
+    const readHere = () => shotsAs('S1', ['Home', 'Editor'], 11);
+    const fromElsewhere = () => shotsAs('S2', ['Sunset', 'Beach'], 21);
+    const replaced = enCore.app_page.edit.error_shots_changed;
+    const capitalized = (text: string) =>
+      text.charAt(0).toUpperCase() + text.slice(1);
+    const captionFields = () =>
+      screen.getAllByRole('textbox', {
+        name: /app_page\.screenshots\.caption/i,
+      });
+    const captionValues = () =>
+      captionFields().map((field) => (field as HTMLInputElement).value);
+    /** Picks "Change the screenshots" once they're read, then edits one. */
+    const changeFirstCaption = async (value: string) => {
+      fireEvent.click(
+        await screen.findByRole('radio', { name: /change the screenshots/i })
+      );
+      fireEvent.change(captionFields()[0], { target: { value } });
+    };
+    const refreshButton = () =>
+      screen.queryByRole('button', { name: /action\.refresh/i });
+    const pressRetry = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      });
+    };
+    const addPicture = async () => {
+      await act(async () => {
+        fireEvent.change(
+          document.querySelector(
+            'input[type="file"][accept="image/png,image/jpeg,image/webp"]'
+          )!,
+          {
+            target: {
+              files: [
+                new File([new Uint8Array([1, 2, 3])], 'new.png', {
+                  type: 'image/png',
+                }),
+              ],
+            },
+          }
+        );
+      });
+    };
+    /** Lets the node's late answers arrive. */
+    const settle = () =>
+      act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    /** The pictures in a published screenshots zip, by their numbers. */
+    const picturesIn = async (payload: { data: Blob }) => {
+      const zip = await blobBytes(payload.data);
+      return [11, 12, 21, 22].filter((byte) =>
+        zip.some((_, at) => [0, 1, 2, 3].every((i) => zip[at + i] === byte))
+      );
+    };
+
+    it('stops before the fee, then publishes the current ones once loaded', async () => {
+      node.shots = readHere();
+      renderForm();
+      await formReady();
+      await changeFirstCaption('Start');
+      chooseZip();
+
+      // Another device replaces the screenshots meanwhile.
+      node.shots = fromElsewhere();
+      await pressPublish();
+      await waitFor(() => expect(errorsShown()).toHaveLength(1));
+      expect(errorsShown()[0][1]).toMatchObject({
+        message: capitalized(replaced),
+      });
+      // Nothing to confirm, and nothing sent.
+      expect(mocks.show).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(screen.getByText(capitalized(replaced))).toBeInTheDocument();
+
+      // Refresh loads the current ones; a change made to them goes out.
+      fireEvent.click(refreshButton()!);
+      await changeFirstCaption('Evening');
+      expect(captionValues()).toEqual(['Evening', 'Beach']);
+      expect(refreshButton()).toBeNull();
+      await pressPublish();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(1));
+      expect(await picturesIn(published('IMAGE')[0])).toEqual([21, 22]);
+      expect(mocks.show).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the pictures added here when it loads the current ones', async () => {
+      node.shots = readHere();
+      renderForm();
+      await formReady();
+      await changeFirstCaption('Start');
+      await addPicture();
+      await waitFor(() =>
+        expect(captionValues()).toEqual(['Start', 'Editor', ''])
+      );
+      chooseZip();
+      node.shots = fromElsewhere();
+      await pressPublish();
+      await waitFor(() => expect(errorsShown()).toHaveLength(1));
+
+      fireEvent.click(refreshButton()!);
+      // Still to publish with the current ones: no need to pick Change.
+      await waitFor(() =>
+        expect(captionValues()).toEqual(['Sunset', 'Beach', ''])
+      );
+      await pressPublish();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(1));
+      const zip = await blobBytes(published('IMAGE')[0].data);
+      expect(await picturesIn(published('IMAGE')[0])).toEqual([21, 22]);
+      // The added picture went with them, as the third.
+      expect(new TextDecoder().decode(zip)).toContain('"file":"3.webp"');
+    });
+
+    it('loads a set taken all off elsewhere on Refresh, then publishes without it', async () => {
+      node.shots = readHere();
+      renderForm();
+      await formReady();
+      await changeFirstCaption('Start');
+      chooseZip();
+      // Another device takes every screenshot off meanwhile.
+      node.shots = shotsAs('S2', [], 21);
+      await pressPublish();
+      await waitFor(() => expect(errorsShown()).toHaveLength(1));
+
+      fireEvent.click(refreshButton()!);
+      await waitFor(() =>
+        expect(
+          screen.getByText(enCore.app_page.publish.shots_optional, {
+            exact: false,
+          })
+        ).toBeInTheDocument()
+      );
+      expect(screen.queryAllByRole('textbox', { name: /caption/i })).toEqual(
+        []
+      );
+      // The page has no screenshots now: the app goes out without any.
+      await pressPublish();
+      await waitFor(() => expect(published('APP')).toHaveLength(1));
+      expect(published('IMAGE')).toHaveLength(0);
+      expect(errorsShown()).toHaveLength(1);
+    });
+
+    it('asks for no fee and publishes nothing when the form closes during the check', async () => {
+      node.shots = readHere();
+      const { unmount } = renderForm();
+      await formReady();
+      await changeFirstCaption('Start');
+      chooseZip();
+
+      holdNextPartsSearch = true;
+      await pressPublish();
+      await waitFor(() => expect(releasePartsSearch).not.toBeNull());
+      // The tab closes while the node answers the check.
+      unmount();
+      await act(async () => {
+        releasePartsSearch!();
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(mocks.show).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("stops before the fee when the node can't say what it has now", async () => {
+      node.shots = readHere();
+      renderForm();
+      await formReady();
+      await changeFirstCaption('Start');
+      chooseZip();
+
+      node.partsSearchDown = true;
+      await pressPublish();
+      await waitFor(() => expect(errorsShown()).toHaveLength(1));
+      expect(errorsShown()[0][1]).toMatchObject({
+        message: capitalized(enCore.app_page.edit.error_shots_unverified),
+      });
+      expect(mocks.show).not.toHaveBeenCalled();
+      expect(sendMessage).not.toHaveBeenCalled();
+      // Nothing to load again: Publish asks the node again.
+      expect(refreshButton()).toBeNull();
+      expect(captionValues()).toEqual(['Start', 'Editor']);
+
+      node.partsSearchDown = false;
+      await pressPublish();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(1));
+      expect(await picturesIn(published('IMAGE')[0])).toEqual([11, 12]);
+    });
+
+    it('keeps them to retry when they are replaced after the confirmation', async () => {
+      node.page = pageWith('Story');
+      node.shots = readHere();
+      renderForm();
+      await formReady();
+      fireEvent.change(version(), { target: { value: '2.0' } });
+      await changeFirstCaption('Start');
+      chooseZip();
+      // Another device replaces them while the app goes out.
+      mocks.show.mockImplementation(async () => {
+        node.shots = fromElsewhere();
+      });
+      await pressPublish();
+      await waitFor(() => expect(globalSnack()).not.toBeNull());
+
+      expect(published('APP')).toHaveLength(1);
+      expect(publishedVersions()).toEqual(['2.0']);
+      expect(published('IMAGE')).toHaveLength(0);
+      expect(globalSnack()).toEqual({
+        type: 'warning',
+        message:
+          "The app was published, but its screenshots weren't: " + replaced,
+      });
+      expect(addTabCalls()).toHaveLength(0);
+      expect(unsaved).toBe(true);
+
+      // Retry as they are would put the captions on the other pictures.
+      mocks.show.mockClear();
+      await pressRetry();
+      await waitFor(() => expect(errorsShown()).toHaveLength(1));
+      expect(mocks.show).not.toHaveBeenCalled();
+      expect(published('IMAGE')).toHaveLength(0);
+
+      // Refresh loads the current ones; Retry publishes a change to them.
+      fireEvent.click(refreshButton()!);
+      await changeFirstCaption('Evening');
+      await pressRetry();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(1));
+      expect(await picturesIn(published('IMAGE')[0])).toEqual([21, 22]);
+      expect(published('APP')).toHaveLength(1);
+      await waitFor(() => expect(addTabCalls()).toHaveLength(1));
+    });
+
+    it('stops a Retry made while Refresh loads, keeping what is left', async () => {
+      node.page = pageWith('Story');
+      node.shots = readHere();
+      renderForm();
+      await formReady();
+      fireEvent.change(version(), { target: { value: '2.0' } });
+      await changeFirstCaption('Start');
+      chooseZip();
+      mocks.show.mockImplementation(async () => {
+        node.shots = fromElsewhere();
+      });
+      await pressPublish();
+      await waitFor(() => expect(globalSnack()).not.toBeNull());
+      expect(published('IMAGE')).toHaveLength(0);
+
+      // Refresh, and the node takes its time answering.
+      holdNextPartsSearch = true;
+      fireEvent.click(refreshButton()!);
+      await waitFor(() => expect(releasePartsSearch).not.toBeNull());
+      await pressRetry();
+      await settle();
+      // The form still holds the old ones: nothing goes out, and nothing
+      // counts as done.
+      expect(errorsShown()).toHaveLength(1);
+      expect(published('IMAGE')).toHaveLength(0);
+      expect(addTabCalls()).toHaveLength(0);
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
+
+      await act(async () => {
+        releasePartsSearch!();
+      });
+      await changeFirstCaption('Evening');
+      expect(captionValues()).toEqual(['Evening', 'Beach']);
+    });
+
+    it('publishes a second change with the pictures it just published', async () => {
+      node.page = pageWith('Story');
+      node.shots = readHere();
+      // The page text fails, so the form stays after its screenshots went out.
+      sendMessage.mockImplementation(async (_action, payload) =>
+        payload?.service === 'JSON'
+          ? { error: 'Insufficient balance' }
+          : { signature: SIGNATURE }
+      );
+      renderForm();
+      await formReady();
+      fireEvent.change(version(), { target: { value: '2.0' } });
+      fireEvent.click(
+        await screen.findByRole('radio', { name: /change the screenshots/i })
+      );
+      // The first one is taken off: the node numbers the rest anew.
+      fireEvent.click(
+        screen.getAllByRole('button', { name: /action\.remove/i })[0]
+      );
+      chooseZip();
+      await pressPublish();
+      await waitFor(() => expect(globalSnack()?.type).toBe('warning'));
+      expect(published('IMAGE')).toHaveLength(1);
+      expect(await picturesIn(published('IMAGE')[0])).toEqual([12]);
+      // The node lists that publish after the next block: "Editor" is its
+      // 1.webp there.
+      node.shots = shotsAs('S3', ['Editor'], 12);
+
+      // Published once: the app again doesn't send them again.
+      await pressPublish();
+      await waitFor(() => expect(published('APP')).toHaveLength(2));
+      expect(published('IMAGE')).toHaveLength(1);
+
+      // A change to them goes out with the pictures it published.
+      fireEvent.change(captionFields()[0], { target: { value: 'News' } });
+      await pressPublish();
+      await waitFor(() => expect(published('IMAGE')).toHaveLength(2));
+      expect(await picturesIn(published('IMAGE')[1])).toEqual([12]);
+      expect(screen.queryByText(capitalized(replaced))).toBeNull();
+      expect(errorsShown()).toHaveLength(0);
+    });
+
+    it('sends neither the old ones nor a picture set aside after taking them all off', async () => {
+      node.page = pageWith('Story');
+      node.shots = readHere();
+      // The page text fails, so the form stays after its screenshots went out.
+      sendMessage.mockImplementation(async (_action, payload) =>
+        payload?.service === 'JSON'
+          ? { error: 'Insufficient balance' }
+          : { signature: SIGNATURE }
+      );
+      renderForm();
+      await formReady();
+      fireEvent.change(version(), { target: { value: '2.0' } });
+      // A picture added, then set aside by "No screenshots".
+      fireEvent.click(
+        await screen.findByRole('radio', { name: /change the screenshots/i })
+      );
+      await addPicture();
+      await waitFor(() => expect(captionFields()).toHaveLength(3));
+      fireEvent.click(screen.getByRole('radio', { name: /no screenshots/i }));
+      chooseZip();
+      await pressPublish();
+      await waitFor(() => expect(globalSnack()?.type).toBe('warning'));
+      expect(published('IMAGE')).toHaveLength(1);
+      expect(await picturesIn(published('IMAGE')[0])).toEqual([]);
+
+      // The app again: the page has no screenshots now, and none are sent.
+      await pressPublish();
+      await waitFor(() => expect(published('APP')).toHaveLength(2));
+      expect(published('IMAGE')).toHaveLength(1);
+      expect(errorsShown()).toHaveLength(0);
     });
   });
 });

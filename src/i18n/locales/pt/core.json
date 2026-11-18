@@ -205,6 +205,8 @@
       "error_page_too_large": "o texto da página é longo demais para a QDN. Encurte as seções Sobre ou Novidades.",
       "error_page_unverified": "seu nó não conseguiu confirmar o que a página do app tem agora, então ela foi mantida como estava. Tente novamente em instantes.",
       "error_shot_unavailable": "não foi possível recuperar uma captura de tela da QDN. Tente novamente em instantes.",
+      "error_shots_changed": "as capturas de tela foram substituídas na QDN desde que foram carregadas aqui, então estas legendas ficariam com outras imagens. Carregue as capturas atuais e faça sua alteração de novo.",
+      "error_shots_unverified": "seu nó não conseguiu confirmar quais capturas de tela o app tem agora, então elas foram mantidas como estavam. Tente novamente em instantes.",
       "files_progress": "lendo os arquivos do app no seu nó: {{done}} de {{total}}",
       "hint": "Cada parte que você alterar é publicada separadamente. O app em si só é enviado novamente quando você altera os detalhes da listagem.",
       "icon_hint": "O ícone é a imagem do nome {{name}}, então ele muda em todos os lugares onde a imagem desse nome aparece.",

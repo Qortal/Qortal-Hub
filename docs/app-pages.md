@@ -205,3 +205,20 @@ the parts left, with the app's signature from that publish. The app opens once
 nothing in the form is left unpublished, so input typed while the app uploads
 stays too. The name and type can't change while the app is being published or
 while parts are left.
+
+Screenshots kept from the published ones are read back from the node by file
+name, and a new publish numbers the files anew. So before the fee, and again
+right before the screenshots go out (before and after reading them back), Hub
+checks that the ones it reads back come from the node's current set (the
+signature they were read from). When the set was replaced since (from another
+device, say), the screenshots aren't published, and the form or the app page's
+editor offers Refresh: it loads the current ones and keeps the pictures added
+there, after them; over the limit of 5, the last current ones make way for the
+added pictures. Until Refresh is done, a publish still stops as replaced. When
+the node can't say (its search fails, or it lists none although they were read
+from one), they aren't published either. Before the fee this stops the whole
+publish; after it, the app and the page text still go out and the screenshots
+are left to retry. Screenshots just published from Hub are held as pictures from
+then on, under their new file names, until the page reads them from the node
+again: a second change, or a retry of a later part, never reads them back by an
+old name. Taking them all off, or publishing only new pictures, needs no check.

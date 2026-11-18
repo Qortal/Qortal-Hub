@@ -205,6 +205,8 @@
       "error_page_too_large": "sivun teksti on liian pitkä QDN:ää varten. Lyhennä Tietoja- tai Mitä uutta -osiota.",
       "error_page_unverified": "solmusi ei pystynyt varmistamaan, mitä sovelluksen sivulla nyt on, joten se jätettiin ennalleen. Yritä hetken kuluttua uudelleen.",
       "error_shot_unavailable": "kuvakaappausta ei voitu hakea QDN:stä. Yritä hetken kuluttua uudelleen.",
+      "error_shots_changed": "kuvakaappaukset on korvattu QDN:ssä sen jälkeen, kun ne ladattiin tänne, joten nämä kuvatekstit päätyisivät muiden kuvien yhteyteen. Lataa nykyiset kuvakaappaukset ja tee muutoksesi uudelleen.",
+      "error_shots_unverified": "solmusi ei pystynyt varmistamaan, mitkä kuvakaappaukset sovelluksella nyt on, joten ne jätettiin ennalleen. Yritä hetken kuluttua uudelleen.",
       "files_progress": "luetaan sovelluksen tiedostoja solmustasi: {{done}}/{{total}}",
       "hint": "Jokainen muuttamasi osa julkaistaan erikseen. Itse sovellus lähetetään uudelleen vain, kun muutat sen perustietoja.",
       "icon_hint": "Kuvake on nimen {{name}} kuva, joten se vaihtuu kaikkialla, missä tämän nimen kuva näkyy.",

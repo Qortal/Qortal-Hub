@@ -37,12 +37,17 @@ import {
   findAppPageResources,
   publishAppPage,
   publishAppShots,
+  ShotUpload,
 } from './appPageQdn';
 import {
+  checkShotsCurrent,
   draftsFromManifest,
+  heldAfterPublish,
+  manifestOfHeld,
   shotDraftsChanged,
   uploadsFromDrafts,
 } from './appPageDrafts';
+import { appPageErrorText } from './appPageErrors';
 import { ScreenshotsEditor, ShotDraft } from './ScreenshotsEditor';
 import type { CaptureSource } from './ScreenshotCaptureDialog';
 
@@ -76,9 +81,24 @@ export interface PartsLeft {
   error: unknown;
 }
 
+/** What became of the screenshots, for the form that holds them. */
+export type ShotsOutcome = { app: { service: string; name: string } } & (
+  | {
+      /** Published: the list as it went out, and its pictures. */
+      published: ShotDraft[];
+      uploads: ShotUpload[];
+    }
+  | {
+      /** Not published: the set they were read from was replaced since. */
+      replaced: true;
+    }
+);
+
 export interface PublishExtrasHandle {
   /** What to publish with the app, from what the form holds now. */
   prepare: () => PublishExtras;
+  /** Tells the form what became of the screenshots it gave. */
+  noteShots: (outcome: ShotsOutcome) => void;
 }
 
 /** What the form will publish with the app, for its summary and preview. */
@@ -132,16 +152,40 @@ const readCurrentPage = async (
   return page;
 };
 
+const isShotsChanged = (cause: unknown) =>
+  (cause as AppPageError)?.code === 'SHOTS_CHANGED';
+
+/**
+ * Before the fee: the screenshots to publish come from the node's current set
+ * (see checkShotsCurrent). Throws why not, and tells `onShots` when the set
+ * was replaced, so the form offers to load the current one.
+ */
+export const checkPageExtras = async (
+  app: { service: string; name: string },
+  extras: PublishExtras | null,
+  onShots?: (outcome: ShotsOutcome) => void
+): Promise<void> => {
+  try {
+    await checkShotsCurrent(getBaseApiReact(), app, extras?.shots ?? null);
+  } catch (cause) {
+    if (isShotsChanged(cause)) onShots?.({ app, replaced: true });
+    throw cause;
+  }
+};
+
 /**
  * Publishes the page parts after the app. `appSignature` is the app's new
  * signature, so the version and What's new describe this upload. Each part
  * goes out on its own; the ones that failed come back, so they can be tried
- * again without the app. Null when every part went out.
+ * again without the app. Null when every part went out. `onShots` hears what
+ * became of the screenshots: the form holds them as published, or offers to
+ * load the current ones.
  */
 export const publishPageExtras = async (
   app: { service: string; name: string },
   extras: PublishExtras | null,
-  appSignature: string
+  appSignature: string,
+  onShots?: (outcome: ShotsOutcome) => void
 ): Promise<PartsLeft | null> => {
   if (!extras) return null;
   const left: PublishExtras = { ...extras, page: null, shots: null };
@@ -164,12 +208,22 @@ export const publishPageExtras = async (
     }
   }
   if (extras.shots) {
+    let outcome: ShotsOutcome | null = null;
     try {
-      await publishAppShots(app, await uploadsFromDrafts(extras.shots));
+      // Checked again: the set may have been replaced since the fee.
+      const uploads = await uploadsFromDrafts(
+        getBaseApiReact(),
+        app,
+        extras.shots
+      );
+      await publishAppShots(app, uploads);
+      outcome = { app, published: extras.shots, uploads };
     } catch (cause) {
       left.shots = extras.shots;
       if (!left.page) error = cause;
+      if (isShotsChanged(cause)) outcome = { app, replaced: true };
     }
+    if (outcome) onShots?.(outcome);
   }
   return left.page || left.shots ? { extras: left, error } : null;
 };
@@ -206,6 +260,14 @@ export const PublishPageExtras = forwardRef<
   // Counts the Retry presses after a failed read.
   const [retry, setRetry] = useState(0);
   const retryReadRef = useRef(0);
+  // The screenshots were replaced on the node since the form read them.
+  const [shotsReplaced, setShotsReplaced] = useState(false);
+  // Refresh is reading the current ones; each press or reset counts.
+  const [reloadingShots, setReloadingShots] = useState(false);
+  const reloadRunRef = useRef(0);
+  // The screenshots this form just published, holding their pictures, until
+  // the form reads the node's again.
+  const [ownShots, setOwnShots] = useState<ShotDraft[] | null>(null);
   const shotsTitleId = useId();
 
   // What the app's page has now, for an update.
@@ -226,6 +288,10 @@ export const PublishPageExtras = forwardRef<
       setWhatsNew('');
       setMode('keep');
       setError('');
+      setShotsReplaced(false);
+      setOwnShots(null);
+      reloadRunRef.current += 1;
+      setReloadingShots(false);
     }
     if (!name || !service) {
       setPageLoad('idle');
@@ -323,21 +389,98 @@ export const PublishPageExtras = forwardRef<
       page: pageExtras(),
       pageWasRead: pageLoad === 'loaded',
     }),
+    noteShots: (outcome) => {
+      // For another app's screenshots, or ones read again since: too late.
+      if (outcome.app.service !== service || outcome.app.name !== name) return;
+      if (!isKnown(shotsLoad)) return;
+      if ('replaced' in outcome) {
+        setShotsReplaced(true);
+        return;
+      }
+      // The published list is what the node has now; edits made meanwhile
+      // stay, on top of it.
+      const { held, move } = heldAfterPublish(
+        outcome.published,
+        outcome.uploads
+      );
+      setOwnShots(held);
+      setExistingShots(manifestOfHeld(held));
+      setShotsVersion('');
+      if (held.length) {
+        setShots((current) => move(current));
+      } else {
+        // Taken off: what the form held was set aside, and stays off.
+        setShots([]);
+        setMode('keep');
+      }
+      setShotsReplaced(false);
+    },
   }));
+
+  // Reads the screenshots again, after they were replaced on the node: the
+  // pictures added here stay, after the current ones, which make way for
+  // them over the limit. The rest of the form stays as it is. Until it ends,
+  // the form holds the old ones, so a publish meanwhile stops as replaced.
+  const reloadShots = async () => {
+    const run = ++reloadRunRef.current;
+    const base = getBaseApiReact();
+    const app = { service, name };
+    setReloadingShots(true);
+    setError('');
+    try {
+      const resources = await findAppPageResources(base, app);
+      const manifest = resources.shots
+        ? await fetchShotsManifest(base, app)
+        : null;
+      if (run !== reloadRunRef.current) return;
+      if (resources.shots && !manifest) {
+        throw new AppPageError('SHOT_UNAVAILABLE');
+      }
+      const signature = resources.shots?.signature || '';
+      const current = draftsFromManifest(base, app, manifest, signature);
+      const added = shotsRef.current.filter(
+        (shot) => !shot.id.startsWith('existing-')
+      );
+      setExistingShots(manifest);
+      setShotsVersion(signature);
+      setShotsLoad(resources.shots ? 'loaded' : 'missing');
+      setOwnShots(null);
+      setShots([
+        ...current.slice(0, Math.max(0, SHOT_LIMITS.count - added.length)),
+        ...added.slice(0, SHOT_LIMITS.count),
+      ]);
+      setMode(added.length ? 'change' : 'keep');
+      setShotsReplaced(false);
+    } catch (cause) {
+      // The warning and its Refresh stay, to try again.
+      if (run === reloadRunRef.current) setError(appPageErrorText(t, cause));
+    } finally {
+      if (run === reloadRunRef.current) setReloadingShots(false);
+    }
+  };
 
   const suggestion = existingPage?.version
     ? suggestNextVersion(existingPage.version)
     : '';
   const existingDrafts = useMemo(
     () =>
+      ownShots ||
       draftsFromManifest(
         getBaseApiReact(),
         { service, name },
         existingShots,
         shotsVersion
       ),
-    [existingShots, name, service, shotsVersion]
+    [existingShots, name, ownShots, service, shotsVersion]
   );
+  // Said while what would be published reads pictures back from that set.
+  const showShotsReplaced =
+    shotsReplaced &&
+    !reloadingShots &&
+    isKnown(shotsLoad) &&
+    !!screenshotsToPublish(shots, existingShots, mode)?.some(
+      (shot) => !shot.blob
+    );
 
   const hasExisting = !!existingShots?.shots.length;
   // With no name yet there's no page to read; typing ahead is fine.
@@ -446,7 +589,9 @@ export const PublishPageExtras = forwardRef<
         </>
       )}
 
-      {(pageLoad === 'loading' || shotsLoad === 'loading') && (
+      {(pageLoad === 'loading' ||
+        shotsLoad === 'loading' ||
+        reloadingShots) && (
         <Box
           aria-live="polite"
           sx={{
@@ -484,6 +629,26 @@ export const PublishPageExtras = forwardRef<
           })}
         </Alert>
       )}
+      {showShotsReplaced && (
+        <Alert
+          action={
+            <Button
+              color="inherit"
+              onClick={() => void reloadShots()}
+              size="small"
+              sx={{ textTransform: 'none' }}
+            >
+              {t('core:action.refresh', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Button>
+          }
+          severity="warning"
+          sx={{ mb: 1.5 }}
+        >
+          {appPageErrorText(t, new AppPageError('SHOTS_CHANGED'))}
+        </Alert>
+      )}
 
       <Typography
         id={shotsTitleId}
@@ -493,7 +658,8 @@ export const PublishPageExtras = forwardRef<
           postProcess: 'capitalizeFirstChar',
         })}
       </Typography>
-      {!isKnown(shotsLoad) && shotsLoad !== 'idle' ? null : hasExisting ? (
+      {reloadingShots ||
+      (!isKnown(shotsLoad) && shotsLoad !== 'idle') ? null : hasExisting ? (
         <RadioGroup
           aria-labelledby={shotsTitleId}
           onChange={(event) => {
@@ -537,28 +703,32 @@ export const PublishPageExtras = forwardRef<
         </Typography>
       )}
 
-      {hasExisting && mode === 'keep' && existingDrafts.length > 0 && (
-        <Box sx={{ display: 'flex', gap: 1, mt: 1, overflowX: 'auto' }}>
-          {existingDrafts.map((shot, index) => (
-            <Box
-              alt={t('core:app_page.screenshots.alt_editor', {
-                index: index + 1,
-                postProcess: 'capitalizeFirstChar',
-              })}
-              component="img"
-              key={shot.id}
-              src={shot.url}
-              sx={{
-                borderRadius: '8px',
-                height: 72,
-                objectFit: 'cover',
-                width: 116,
-              }}
-            />
-          ))}
-        </Box>
-      )}
-      {(isKnown(shotsLoad) || shotsLoad === 'idle') &&
+      {!reloadingShots &&
+        hasExisting &&
+        mode === 'keep' &&
+        existingDrafts.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 1, mt: 1, overflowX: 'auto' }}>
+            {existingDrafts.map((shot, index) => (
+              <Box
+                alt={t('core:app_page.screenshots.alt_editor', {
+                  index: index + 1,
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                component="img"
+                key={shot.id}
+                src={shot.url}
+                sx={{
+                  borderRadius: '8px',
+                  height: 72,
+                  objectFit: 'cover',
+                  width: 116,
+                }}
+              />
+            ))}
+          </Box>
+        )}
+      {!reloadingShots &&
+        (isKnown(shotsLoad) || shotsLoad === 'idle') &&
         (!hasExisting || mode === 'change') && (
           <Box sx={{ mt: 1 }}>
             <ScreenshotsEditor
