@@ -1262,6 +1262,15 @@
     "search_placeholder_qapps": "搜索 Q-Apps",
     "search_placeholder_tracks": "搜索曲目或艺术家",
     "section_recommended": "推荐",
+    "status": {
+      "grateful": "感激",
+      "happy": "开心",
+      "helpful": "热心",
+      "idle": "悠闲",
+      "listening": "在听",
+      "sleepy": "犯困",
+      "ticklish": "怕痒"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "添加应用",
     "workspace_empty_prompt": "选择显示在 QORTINO 上方的内容。",

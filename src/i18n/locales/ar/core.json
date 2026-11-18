@@ -1298,6 +1298,15 @@
     "search_placeholder_qapps": "البحث في Q-Apps",
     "search_placeholder_tracks": "ابحث عن مقاطع أو فنانين",
     "section_recommended": "موصى به",
+    "status": {
+      "grateful": "ممتنّ",
+      "happy": "سعيد",
+      "helpful": "متعاون",
+      "idle": "هادئ",
+      "listening": "يستمع",
+      "sleepy": "نعسان",
+      "ticklish": "مُدغدَغ"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "إضافة تطبيق",
     "workspace_empty_prompt": "اختر ما يظهر أعلى QORTINO.",
