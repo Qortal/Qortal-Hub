@@ -97,6 +97,15 @@ describe('fetchQuitterFollowedNames', () => {
     expect(JSON.parse(posts[1][1].body)).toHaveLength(50);
   });
 
+  it('leaves out a follow of the reader under other letter case', async () => {
+    mockNode([followDoc(1), followDoc(2)]);
+
+    // Follow document 1 names the reader, written as "Followed 1".
+    expect(await fetchQuitterFollowedNames('followed 1')).toEqual([
+      'Followed 2',
+    ]);
+  });
+
   it('stops at 400 names', async () => {
     const fetchMock = mockNode(
       Array.from({ length: 450 }, (_, i) => followDoc(i + 1))

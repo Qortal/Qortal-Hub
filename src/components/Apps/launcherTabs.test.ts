@@ -77,6 +77,28 @@ describe('the pages of a launcher tab', () => {
     expect(showPublishPage(state, 'viewer')).toBe(state);
   });
 
+  it('open the publish page on a widget, or on Widget for a new one, and go back from it', () => {
+    const widget = {
+      name: 'alice',
+      service: 'APP' as const,
+      identifier: 'go-widget-now',
+    };
+    expect(
+      showPublishPage(newLauncherTabState(), 'publish', widget)
+    ).toMatchObject({ page: 'publish', publishEditTarget: widget });
+
+    const newWidget = showPublishPage(newLauncherTabState(), 'publish-widget');
+    expect(newWidget).toMatchObject({
+      page: 'publish-widget',
+      publishEditTarget: null,
+    });
+    expect(canGoBackInLauncher(newWidget)).toBe(true);
+    expect(launcherPageBack(newWidget)).toMatchObject({
+      page: 'launcher',
+      publishEditTarget: null,
+    });
+  });
+
   it('go back the way they came', () => {
     const inCategory = showCategory(newLauncherTabState(), games);
     const details = showAppInfo(inCategory, app, true);

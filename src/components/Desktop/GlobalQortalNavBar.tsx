@@ -27,7 +27,7 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { extractComponents } from '../Chat/MessageDisplay';
+import { extractComponents } from '../../utils/qortalLink/parseQortalLink';
 import {
   appsSubPageCanGoBackAtom,
   balanceAtom,
@@ -47,13 +47,9 @@ import {
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { useNameSearch } from '../../hooks/useNameSearch';
-import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
-import {
-  buildAppPageLink,
-  openAppPageLink,
-  parseAppPageLink,
-} from '../Apps/AppPage/appPageLink';
 import type { PinnedApp } from '../../utils/pinnedAppsSettings';
+import { buildAppPageLink } from '../Apps/AppPage/appPageLink';
+import { openQortalLink } from '../../utils/qortalLink/openQortalLink';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
 import {
@@ -74,7 +70,11 @@ import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
-import { availableQappsAtom, shownAppPageAtom } from '../../atoms/appsAtoms';
+import {
+  allQappsAtom,
+  availableQappsAtom,
+  shownAppPageAtom,
+} from '../../atoms/appsAtoms';
 import {
   AppSearchSuggestions,
   type SuggestionGroup,
@@ -831,6 +831,8 @@ export function GlobalQortalNavBar({
   const inputElementRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const availableQapps = useAtomValue(availableQappsAtom);
+  // Hidden from the library too: a name typed in full and pins still open them.
+  const allQapps = useAtomValue(allQappsAtom);
   // Suggestions are for what the user types, not for the current link.
   const [isEditingInput, setIsEditingInput] = useState(false);
   const [appOpenCounts, setAppOpenCounts] = useState<AppOpenCounts>({});
@@ -1088,13 +1090,14 @@ export function GlobalQortalNavBar({
 
   const openLink = useCallback(
     (link: OmniboxLink, choice?: OpenChoice) => {
-      if (link.kind === 'group') {
-        finishChoice();
-        void openQortalUseGroupLink(link.link);
+      if (link.kind === 'resource') {
+        finishChoice(link.link);
+        openResource(link, choice);
         return;
       }
-      finishChoice(link.link);
-      openResource(link, choice);
+      // An app's page shows its link here; a group's link opens a window.
+      finishChoice(link.kind === 'page' ? link.link : undefined);
+      void openQortalLink(link);
     },
     [finishChoice, openResource]
   );
@@ -1104,13 +1107,6 @@ export function GlobalQortalNavBar({
     (value: string, choice?: OpenChoice) => {
       const trimmed = value.trim();
       if (!trimmed) return;
-
-      // qortal://use-app-page/<SERVICE>/<name>: the app's page, not the app.
-      if (parseAppPageLink(trimmed)) {
-        finishChoice(trimmed);
-        openAppPageLink(trimmed);
-        return;
-      }
 
       const link = parseOmniboxLink(trimmed);
       if (link) {
@@ -1125,7 +1121,7 @@ export function GlobalQortalNavBar({
       });
       executeEvent('open-apps-mode', {});
     },
-    [finishChoice, openLink]
+    [openLink]
   );
 
   const openSearchApp = useCallback(
@@ -1141,14 +1137,14 @@ export function GlobalQortalNavBar({
   // it. Anything else works as before: links open, text searches the library.
   const submitSearchInput = useCallback(
     (value: string, choice?: OpenChoice) => {
-      const exactApp = exactAppNameMatch(value, availableQapps, appOpenCounts);
+      const exactApp = exactAppNameMatch(value, allQapps, appOpenCounts);
       if (exactApp) {
         openSearchApp(exactApp, choice);
         return;
       }
       handleOpenInput(value, choice);
     },
-    [appOpenCounts, availableQapps, handleOpenInput, openSearchApp]
+    [allQapps, appOpenCounts, handleOpenInput, openSearchApp]
   );
 
   const openTabSuggestion = useCallback(
@@ -1292,6 +1288,7 @@ export function GlobalQortalNavBar({
     () =>
       isEditingInput
         ? buildOmniboxOptions(inputValue, {
+            allApps: allQapps,
             apps: availableQapps,
             bookmarks: bookmarkStore?.bookmarks,
             names: foundNames,
@@ -1302,6 +1299,7 @@ export function GlobalQortalNavBar({
           })
         : [],
     [
+      allQapps,
       appOpenCounts,
       availableQapps,
       bookmarkStore,

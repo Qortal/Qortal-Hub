@@ -29,10 +29,19 @@ import {
   useLauncherTabId,
 } from '../launcherTabs';
 import { appIconUrl, shotImageUrl } from './appPageQdn';
-import { AppPageData, isVersionCurrent } from './appPageData';
+import { AppPageData, EMPTY_APP_PAGE, isVersionCurrent } from './appPageData';
+import { HideAppDialog } from './HideAppDialog';
+import { useShowInLibrary } from './useShowInLibrary';
 import type { ShotDraft } from './ScreenshotsEditor';
 import { normalizeAppService } from './appPageIds';
-import { useAppListing, useAppPageData, useOwnedNames } from './useAppPage';
+import {
+  rememberHiddenState,
+  SavedHiddenState,
+  useAppListing,
+  useAppPageData,
+  useOwnedNames,
+  useSavedHiddenState,
+} from './useAppPage';
 import { ratingsByAddress } from './appVotes';
 import { useAppVotes } from './useAppVotes';
 import { useAppReviews, ReviewActionResult } from './useAppReviews';
@@ -89,7 +98,11 @@ export const AppPage = ({
   const wide = width >= WIDE_PAGE;
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress: string | undefined = userInfo?.address;
-  const { listing: app, reload: reloadListing } = useAppListing(initialApp);
+  const {
+    listing: app,
+    status: listingStatus,
+    reload: reloadListing,
+  } = useAppListing(initialApp);
   const service = normalizeAppService(app?.service);
   const ref = useMemo(
     () => ({ service, name: app?.name || '' }),
@@ -130,6 +143,35 @@ export const AppPage = ({
     setSnack({ type, message });
     setSnackOpen(true);
   }, []);
+
+  // Hidden from the library (appHidden.ts): what the publisher just did shows
+  // until the node lists the new record, also on a page opened again and on
+  // every other page of the app that is open.
+  const [hideOpen, setHideOpen] = useState(false);
+  const savedHidden = useSavedHiddenState(ref);
+  const setSavedHidden = (next: SavedHiddenState) =>
+    rememberHiddenState(ref, next);
+  const hiddenState =
+    savedHidden && savedHidden.at > (pageData.hidden?.updated || 0) - 60_000
+      ? savedHidden
+      : pageData.hidden;
+  // Hiding goes by what the node lists for the page (its hidden record, page
+  // text and screenshots) and for the app (the replacement keeps its title
+  // and category): it waits until the node has said, and a lookup that
+  // failed isn't "not hidden", "no page text" or "no title".
+  const hideReady =
+    !!pageData.resources &&
+    (listingStatus === 'found' || listingStatus === 'missing');
+  const hideFailed =
+    (!pageData.resources && !pageData.loading) || listingStatus === 'failed';
+  const retryHide = () => {
+    if (!pageData.resources) pageData.reload();
+    if (listingStatus === 'failed') reloadListing();
+  };
+  // Replacing empties these only if the node lists them, or they were
+  // published from here.
+  const hasPage = !!pageData.resources?.page || !!saved.page;
+  const hasShots = !!pageData.resources?.shots || !!saved.shots;
 
   // What the publisher just saved shows until the node has the new version.
   const savedPageNewer =
@@ -232,6 +274,43 @@ export const AppPage = ({
     }
   };
 
+  const { busy: hideBusy, showInLibrary } = useShowInLibrary({
+    app: ref,
+    title: listingApp?.metadata?.title || app?.name || '',
+    notify,
+    onShown: () => {
+      setSavedHidden({ hidden: false, replaced: false, at: Date.now() });
+      setTimeout(() => pageData.reload(), 90_000);
+    },
+  });
+
+  const onHidden = ({ replaced }: { replaced: boolean }) => {
+    const at = Date.now();
+    setHideOpen(false);
+    setSavedHidden({ hidden: true, replaced, at });
+    if (replaced) {
+      // The page text and screenshots it had were emptied with the app.
+      setSaved((previous) => ({
+        ...previous,
+        ...(hasPage
+          ? { page: { ...EMPTY_APP_PAGE, updated: at }, pageAt: at }
+          : {}),
+        ...(hasShots ? { shots: [], shotsAt: at } : {}),
+      }));
+    }
+    notify(
+      'success',
+      t('core:app_page.hide.done_hidden', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+    // The node lists the new versions after the next block.
+    setTimeout(() => {
+      pageData.reload();
+      reloadListing();
+    }, 90_000);
+  };
+
   const onReviewResult = (result: ReviewActionResult, success: string) => {
     if (result.ok === true) notify('success', success);
     else if (!result.cancelled && result.message)
@@ -317,6 +396,10 @@ export const AppPage = ({
         isInstalled={isInstalled}
         isPinned={isPinned}
         editLoading={editorLoading}
+        hiddenState={hiddenState}
+        hideBusy={hideBusy}
+        hideFailed={hideFailed}
+        hideReady={hideReady}
         isPublisher={isPublisher}
         onCopied={() =>
           notify(
@@ -327,6 +410,7 @@ export const AppPage = ({
           )
         }
         onEdit={() => openEditor('page')}
+        onHide={() => setHideOpen(true)}
         onOpen={() =>
           executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) })
         }
@@ -335,6 +419,8 @@ export const AppPage = ({
             .getElementById('app-page-ratings-card')
             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
+        onRetryHide={retryHide}
+        onShowAgain={() => void showInLibrary()}
         onTogglePin={togglePin}
         summary={votes.summary}
         version={page?.version || ''}
@@ -381,6 +467,19 @@ export const AppPage = ({
           )}
         </Box>
       </Box>
+
+      {isPublisher && (
+        <HideAppDialog
+          app={listingApp}
+          hasPage={hasPage}
+          hasShots={hasShots}
+          hidden={!!hiddenState?.hidden}
+          onClose={() => setHideOpen(false)}
+          onHidden={onHidden}
+          open={hideOpen}
+          ready={hideReady}
+        />
+      )}
 
       {isPublisher && (
         <AppPageEditorDialog

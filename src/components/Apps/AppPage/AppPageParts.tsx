@@ -17,7 +17,8 @@ import StarOutlineRoundedIcon from '@mui/icons-material/StarOutlineRounded';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
 import { appIconUrl } from './appPageQdn';
-import { openPageTextLink, splitTextLinks } from './appPageLink';
+import { openTextLink } from '../../../utils/qortalLink/openQortalLink';
+import { launcherTabLinkOptions, splitTextLinks } from './appPageLink';
 import { useLauncherTabId } from '../launcherTabs';
 
 export const SectionCard = ({
@@ -356,7 +357,12 @@ export const LinkifiedText = ({
           <Link
             component="button"
             key={index}
-            onClick={() => void openPageTextLink(part.value, launcherTabId)}
+            onClick={() =>
+              void openTextLink(
+                part.value,
+                launcherTabLinkOptions(launcherTabId)
+              )
+            }
             sx={{
               font: 'inherit',
               textAlign: 'left',
