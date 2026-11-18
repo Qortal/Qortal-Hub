@@ -15,6 +15,9 @@ vi.mock('../../../atoms/global', async () => {
     isNewTabWindowAtom: atom(false),
     navigationControllerAtom: atom({}),
     userInfoAtom: atom(null),
+    // A tab's menu reads the pinned apps for its Pin to bookmarks.
+    settingsLocalLastUpdatedAtom: atom(0),
+    sortablePinnedAppsAtom: atom([]),
   };
 });
 vi.mock('react-i18next', () => ({
