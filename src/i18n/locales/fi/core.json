@@ -1262,6 +1262,15 @@
     "search_placeholder_qapps": "Etsi Q-appeja",
     "search_placeholder_tracks": "Etsi kappaleita tai artisteja",
     "section_recommended": "Suositellut",
+    "status": {
+      "grateful": "kiitollinen",
+      "happy": "iloinen",
+      "helpful": "avulias",
+      "idle": "joutilas",
+      "listening": "kuuntelee",
+      "sleepy": "unelias",
+      "ticklish": "kutiherkkä"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "Lisää appi",
     "workspace_empty_prompt": "Valitse mitä näkyy QORTINOn yläpuolella.",

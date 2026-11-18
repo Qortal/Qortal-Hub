@@ -1262,6 +1262,15 @@
     "search_placeholder_qapps": "Buscar Q-Apps",
     "search_placeholder_tracks": "Buscar temas o artistas",
     "section_recommended": "Recomendado",
+    "status": {
+      "grateful": "agradecido",
+      "happy": "feliz",
+      "helpful": "servicial",
+      "idle": "tranquilo",
+      "listening": "escuchando",
+      "sleepy": "soñoliento",
+      "ticklish": "cosquilloso"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "Añadir app",
     "workspace_empty_prompt": "Elige lo que aparece encima de QORTINO.",

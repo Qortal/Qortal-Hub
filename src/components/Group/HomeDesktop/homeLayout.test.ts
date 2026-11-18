@@ -74,7 +74,7 @@ describe('normalizeHomeLayout', () => {
     const at = (key: string) => layout.grid?.find((item) => item.key === key);
     expect(at('tools')).toMatchObject({ x: 0, y: 0 });
     // Qortino keeps its place, for when it's shown again.
-    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 46 });
+    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 43 });
   });
 
   it('puts a panel the stored order lacks back after its usual neighbour', () => {
@@ -179,6 +179,57 @@ describe('the arrangement', () => {
     expect(
       normalizeHomeLayout({ grid: [{ key: 'nope' }] }).grid
     ).toBeUndefined();
+  });
+});
+
+describe('the account card’s place', () => {
+  const clock = { name: 'GO Clock', identifier: null };
+  const clockId = homeWidgetWindowId(clock);
+  /** Saved with the card at its measured 16 rows, Featured Q-Apps under it. */
+  const shortCardGrid = (): HomeGridItem[] => [
+    ...homeDefaultGrid().map((item) =>
+      item.key === 'account'
+        ? { ...item, h: 16 }
+        : item.key === 'featured'
+          ? { ...item, y: 16 }
+          : item
+    ),
+    { key: clockId, x: 0, y: 147, w: 6, h: 27 },
+  ];
+  const storedGrid = (): HomeGridItem[] =>
+    JSON.parse(localStorage.getItem(homeLayoutStorageKey(ALICE)) ?? '{}')
+      .grid ?? [];
+  const storedRect = (key: HomeWindowId) => {
+    const item = storedGrid().find((entry) => entry.key === key);
+    return item && [item.x, item.y, item.w, item.h];
+  };
+
+  it('is saved at least as tall as by default, from a copy taken in from QDN', () => {
+    saveHomeLayout(
+      ALICE,
+      { ...HOME_LAYOUT_DEFAULT, grid: shortCardGrid(), widgetWindows: [clock] },
+      { changedAt: 500 }
+    );
+    expect(storedRect('account')).toEqual([6, 0, 12, 20]);
+    expect(storedRect('featured')).toEqual([6, 20, 12, 44]);
+  });
+
+  it('is saved at least as tall as by default when a widget asks for a height', () => {
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({
+        ...HOME_LAYOUT_DEFAULT,
+        grid: shortCardGrid(),
+        widgetWindows: [clock],
+      })
+    );
+    saveHomeLayout(
+      ALICE,
+      withHomeWidgetWindowHeight(readHomeLayout(ALICE), clockId, 300)
+    );
+    expect(storedRect(clockId)?.[3]).toBe(homeGridRowsFor(300));
+    expect(storedRect('account')).toEqual([6, 0, 12, 20]);
+    expect(storedRect('featured')).toEqual([6, 20, 12, 44]);
   });
 });
 
@@ -412,7 +463,10 @@ describe('widget windows in the Home layout', () => {
 
       expect(withoutClock(shownGrid(added))).toEqual(before);
       // The widget goes under what shows...
-      expect(placeOf(added)).toMatchObject({ x: 0, y: 147 });
+      expect(placeOf(added)).toMatchObject({
+        x: 0,
+        y: Math.max(...before.map((item) => item.y + item.h)),
+      });
       // ...and Qortino keeps its place, for when it's shown again.
       expect(qortinoIn(added)).toEqual(qortinoIn(layout));
     });

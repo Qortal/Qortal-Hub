@@ -1,24 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../utils/events', () => ({ executeEvent: vi.fn() }));
-vi.mock('../../../utils/openExternalHttp', () => ({
-  openHttpUrlExternally: vi.fn(),
-}));
-vi.mock('../../../utils/openQortalUseGroupLink', () => ({
-  openQortalUseGroupLink: vi.fn(async (link: string) =>
-    link.startsWith('qortal://use-group/')
-  ),
-}));
 
 import { executeEvent } from '../../../utils/events';
-import { openHttpUrlExternally } from '../../../utils/openExternalHttp';
+import { openTextLink } from '../../../utils/qortalLink/openQortalLink';
 import {
   buildAppOpenLink,
   buildAppPageLink,
+  launcherTabLinkOptions,
   openAppPageLink,
-  openPageTextLink,
   parseAppPageLink,
-  parseQortalResourceLink,
   splitTextLinks,
 } from './appPageLink';
 
@@ -88,30 +79,11 @@ describe('links in page text', () => {
     ]);
   });
 
-  it('open in the right place', async () => {
-    await openPageTextLink('https://example.com');
-    expect(openHttpUrlExternally).toHaveBeenCalledWith('https://example.com');
-
-    await openPageTextLink('qortal://APP/Q-Tube/channel/1?identifier=abc&x=1');
-    expect(executeEvent).toHaveBeenCalledWith('addTab', {
-      data: {
-        service: 'APP',
-        name: 'Q-Tube',
-        identifier: 'abc',
-        path: 'channel/1?x=1',
-      },
-    });
-
-    vi.mocked(executeEvent).mockClear();
-    await openPageTextLink('qortal://use-group/action-join/groupid-5');
-    expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
-  });
-
   it("from a page's text in a launcher tab, name that tab", async () => {
     vi.useFakeTimers();
-    await openPageTextLink(
+    await openTextLink(
       'qortal://use-app-page/WEBSITE/Q-Blog',
-      'launcher-tab-1'
+      launcherTabLinkOptions('launcher-tab-1')
     );
     vi.runAllTimers();
     expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', {
@@ -121,25 +93,5 @@ describe('links in page text', () => {
         fromLauncherTabId: 'launcher-tab-1',
       },
     });
-
-    await openPageTextLink(
-      'qortal://APP/Q-Tube/channel/1?identifier=abc&x=1',
-      'launcher-tab-1'
-    );
-    expect(executeEvent).toHaveBeenCalledWith('addTab', {
-      data: {
-        service: 'APP',
-        name: 'Q-Tube',
-        identifier: 'abc',
-        path: 'channel/1?x=1',
-        fromLauncherTabId: 'launcher-tab-1',
-      },
-    });
-  });
-
-  it('read plain resource links only', () => {
-    expect(parseQortalResourceLink('qortal://use-group/x')).toBeNull();
-    expect(parseQortalResourceLink('qortal://APP')).toBeNull();
-    expect(parseQortalResourceLink('https://x')).toBeNull();
   });
 });

@@ -3,12 +3,14 @@ import {
   type PinnedApp,
   removeBrokenPinnedApps,
 } from '../../utils/pinnedAppsSettings';
-import { parseQortalUseGroupLink } from '../../utils/qortalGroupLinks';
+import {
+  parseQortalLink,
+  type QortalLink,
+} from '../../utils/qortalLink/parseQortalLink';
 import type { AppBookmark } from '../Apps/AppBookmarks/bookmarkTypes';
 import { isAppStartBookmark } from '../Apps/AppsLauncher/launcherItems';
 import { isLauncherTab } from '../Apps/launcherTabs';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
-import { extractComponents } from '../Chat/MessageDisplay';
 import { appOpenCountKey, type AppOpenCounts } from './appOpenCounts';
 import {
   type AppSearchOption,
@@ -59,16 +61,8 @@ export type OmniboxTab = {
 };
 
 /** A qortal:// link typed in the bar. */
-export type OmniboxLink =
-  | { kind: 'group'; link: string }
-  | {
-      identifier?: string;
-      kind: 'resource';
-      link: string;
-      name: string;
-      path: string;
-      service: string;
-    };
+/** A qortal:// link typed in the bar: Hub's one reading of links. */
+export type OmniboxLink = QortalLink;
 
 export type OmniboxOption =
   | AppSearchOption
@@ -112,25 +106,11 @@ const asText = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
 /**
- * The text as a qortal:// link, with the protocol in any case, or null. A
- * group link is kept whole, as Hub's group handlers read it.
+ * The text as a qortal:// link of any kind (a Q-App or website, an app's
+ * page, a group's link), with the protocol in any case, or null.
  */
-export const parseOmniboxLink = (input: string): OmniboxLink | null => {
-  const text = (input ?? '').trim();
-  if (!PROTOCOL_PATTERN.test(text)) return null;
-  const link = QORTAL_PROTOCOL + text.replace(PROTOCOL_PATTERN, '');
-  if (parseQortalUseGroupLink(link)) return { kind: 'group', link };
-  const parts = extractComponents(link);
-  if (!parts?.service || !parts?.name) return null;
-  return {
-    identifier: parts.identifier,
-    kind: 'resource',
-    link,
-    name: parts.name,
-    path: parts.path,
-    service: parts.service,
-  };
-};
+export const parseOmniboxLink = (input: string): OmniboxLink | null =>
+  parseQortalLink(input);
 
 /** What a tab is called in the strip. */
 export const omniboxTabTitle = (tab: OmniboxTab): string =>

@@ -17,8 +17,8 @@ import { getCacheKey, ratingsStoreAtom } from '../../../hooks/useAppRatings';
 import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import type { AppRatingData } from '../../../types/ratings';
 import { executeEvent } from '../../../utils/events';
-import { openQortalUseGroupLink } from '../../../utils/openQortalUseGroupLink';
-import { openAppPage } from '../AppPage/appPageLink';
+import { openQortalLink } from '../../../utils/qortalLink/openQortalLink';
+import { launcherTabLinkOptions } from '../AppPage/appPageLink';
 import {
   getPinnedAppKey,
   type PinnedApp,
@@ -370,24 +370,7 @@ const AppsLauncherPage = ({
 
   const openLink = useCallback(
     (target: LauncherLink) => {
-      if (target.kind === 'page') {
-        openAppPage(target, launcherTabId);
-      } else if (target.kind === 'group') {
-        void openQortalUseGroupLink(target.link);
-      } else {
-        executeEvent('addTab', {
-          data: inLauncherTab(
-            {
-              service: target.service,
-              name: target.name,
-              identifier: target.identifier,
-              path: target.path,
-            },
-            launcherTabId
-          ),
-        });
-        executeEvent('open-apps-mode', {});
-      }
+      void openQortalLink(target, launcherTabLinkOptions(launcherTabId));
       setQuery('');
     },
     [launcherTabId]

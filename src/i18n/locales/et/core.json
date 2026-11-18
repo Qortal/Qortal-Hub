@@ -1262,6 +1262,15 @@
     "search_placeholder_qapps": "Otsi Q-Appse",
     "search_placeholder_tracks": "Otsi lugusid või esitajaid",
     "section_recommended": "Soovitatud",
+    "status": {
+      "grateful": "tänulik",
+      "happy": "rõõmus",
+      "helpful": "abivalmis",
+      "idle": "rahulik",
+      "listening": "kuulab",
+      "sleepy": "unine",
+      "ticklish": "kõditundlik"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "Lisa rakendus",
     "workspace_empty_prompt": "Vali, mis asub QORTINO kohal.",

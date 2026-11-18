@@ -19,7 +19,8 @@ import {
   SectionCard,
   SectionTitle,
 } from './AppPageParts';
-import { openPageTextLink } from './appPageLink';
+import { openTextLink } from '../../../utils/qortalLink/openQortalLink';
+import { launcherTabLinkOptions } from './appPageLink';
 import { useLauncherTabId } from '../launcherTabs';
 import { APP_LINK_KINDS, AppLinkKind, AppPageData } from './appPageData';
 
@@ -148,7 +149,10 @@ export const AppAboutSection = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
                 onClick={() =>
-                  void openPageTextLink(page!.links[kind]!, launcherTabId)
+                  void openTextLink(
+                    page!.links[kind]!,
+                    launcherTabLinkOptions(launcherTabId)
+                  )
                 }
                 sx={{
                   backgroundColor: alpha(theme.palette.primary.main, 0.12),
