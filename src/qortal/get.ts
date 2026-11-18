@@ -6,6 +6,10 @@ import { getSigningContextRevision } from '../utils/chromeStorage';
 import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
 import { sendLocalForeignCoin } from './foreign-coin-send';
 import { pirateWalletResult } from './pirate-wallet-response';
+import {
+  getMoneroPublicWallet,
+  rejectUnimplementedMoneroOperation,
+} from './monero-wallet';
 import { Sha256 } from 'asmcrypto.js';
 import {
   createEndpoint,
@@ -3596,6 +3600,7 @@ export const deployAt = async (data, isFromExtension) => {
 };
 
 export const getUserWallet = async (data, isFromExtension, appInfo) => {
+  const xmrRevision = data?.coin === 'XMR' ? getSigningContextRevision() : null;
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -3670,6 +3675,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
 
   if (accepted || skip) {
     let coin = data.coin;
+    if (coin === 'XMR') return getMoneroPublicWallet(getNodeInfo, xmrRevision);
     let userWallet = {};
     let arrrAddress = '';
     const wallet = await getSaveWallet();
@@ -3746,6 +3752,7 @@ export const getWalletBalance = async (
   isFromExtension?: boolean,
   appInfo?: any
 ) => {
+  rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -4006,6 +4013,7 @@ export const getUserWalletFunc = async (coin) => {
 };
 
 export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
+  rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -4128,6 +4136,7 @@ export const getUserWalletTransactions = async (
   isFromExtension,
   appInfo
 ) => {
+  rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -5597,6 +5606,7 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
 };
 
 export const sendCoin = async (data, isFromExtension) => {
+  rejectUnimplementedMoneroOperation(data?.coin);
   const requiredFields =
     data.sendMax === true &&
     ['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(data.coin)

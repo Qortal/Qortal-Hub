@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { SecureStoragePlugin } from '@evva/capacitor-secure-storage-plugin';
+import { deriveMoneroAccount } from '../lib/monero/account';
 import {
   storeData,
   getData,
@@ -43,6 +44,10 @@ beforeEach(() => {
   vi.mocked(SecureStoragePlugin.get).mockImplementation(async ({ key }) => ({
     value: storage.get(key),
   }));
+  vi.mocked(SecureStoragePlugin.remove).mockImplementation(async ({ key }) => {
+    storage.delete(key);
+    return { value: true };
+  });
 });
 afterEach(() => {
   delete window.foreignWalletSigner;
@@ -59,15 +64,27 @@ function signer() {
 }
 it('passes only foreign roots to native storage and removes them from renderer key records', async () => {
   const native = signer();
+  const xmrWallet = deriveMoneroAccount(new Uint8Array(32).fill(7), 2, 0);
   await storeData('keyPair', {
     ...privateKeys,
     privateKey: 'qortal-secret',
     arrrSeed58: 'pirate-secret',
+    xmrWallet,
   });
   expect(native.importKeys).toHaveBeenCalledWith(privateKeys);
   const result = await getData('keyPair');
   expect(result.privateKey).toBe('qortal-secret');
   expect(result.arrrSeed58).toBe('pirate-secret');
+  expect(result.xmrWallet).toEqual(xmrWallet);
+  // XMR stays in the encrypted Hub key record and is not sent to the Bitcoin
+  // signer, plaintext wallet metadata, or another storage key.
+  expect(storage.size).toBe(1);
+  expect(storage.get('keyPair')).not.toContain(
+    xmrWallet.mainnet.privateSpendKey
+  );
+  expect(storage.get('keyPair')).not.toContain(
+    xmrWallet.stagenet.privateViewKey
+  );
   for (const [coin, value] of Object.entries(publicKeys)) {
     expect(result[`${coin.toLowerCase()}PublicKey`]).toBe(value);
     expect(result).not.toHaveProperty(`${coin.toLowerCase()}PrivateKey`);
@@ -94,6 +111,19 @@ it('clears the signing session on logout', async () => {
     { requestId: 'logout' }
   );
   expect(native.clear).toHaveBeenCalledOnce();
+});
+
+it('removes the encrypted XMR key record on logout', async () => {
+  const xmrWallet = deriveMoneroAccount(new Uint8Array(32).fill(7), 2, 0);
+  await storeData('keyPair', { xmrWallet });
+  expect((await getData('keyPair')).xmrWallet).toEqual(xmrWallet);
+  await removeKeysAndLogout(
+    ['keyPair'],
+    { source: { postMessage: vi.fn() }, origin: 'test' } as any,
+    { requestId: 'xmr-logout' }
+  );
+  expect(storage.has('keyPair')).toBe(false);
+  expect(await getData('keyPair')).toBeNull();
 });
 
 it('invalidates pending approvals across Core changes, including switching away and back', async () => {

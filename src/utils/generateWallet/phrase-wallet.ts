@@ -12,6 +12,7 @@ import { generateSaveWalletData } from './storeWallet.js';
 
 import publicKeyToAddress from './publicKeyToAddress';
 import AltcoinHDWallet from '../../encryption/AltcoinHDWallet.js';
+import { deriveMoneroAccount } from '../../lib/monero/account';
 
 export default class PhraseWallet {
   constructor(seed, walletVersion) {
@@ -190,6 +191,7 @@ export default class PhraseWallet {
       dgbWallet,
       rvnWallet,
       arrrWallet,
+      xmrWallet: deriveMoneroAccount(addrSeed, Number(this._walletVersion), nonce),
       qoraAddress,
       keyPair: {
         publicKey: addrKeyPair.publicKey,

@@ -1,0 +1,213 @@
+{
+  "warning": "Public synthetic keys. Never fund these wallets.",
+  "cases": [
+    {
+      "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "version": 1,
+      "nonce": 0,
+      "addressSeedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "452yEogpX9A8dvgUKPzw3v8XnA4BeZr3AhQvApD6VMK4RiQAtNn8JqsLJAmkzt1vXQATfXV1fDKTyXVZV2tHgRgm5v3J8Zf",
+          "publicSpendKey": "5a0580cfdc2bd92da8124ed3e719092d05dcf2db996b31f19c1514f9e53b5793",
+          "publicViewKey": "c10a3d4ada91be735d00f1512ed3e7388e574af7af94e4b64d5f62b14b5c9a2b",
+          "privateSpendKey": "d69f3664ce753f38a64a510f1e8f323d5fbb70c23f809e48df44a3736eb15e03",
+          "privateViewKey": "564f6ca9c31da3bb7487fd6791acedefbd8f63b58ec1287b8b0b5dc682dbb808"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "5ALsnPqLFr8Nmqtp5K57CM5wvUw1WpZHqNwcK4vygv9SCKwLU54rfRQj2qNuo5upaKimtnLvSVsQp5LHW9e4JbqfUhCZ6fQ",
+          "publicSpendKey": "e0a248109b3611822c5611646fd4ea1d9366323456de78832e0a52a91b6ed543",
+          "publicViewKey": "b779b0df0ffe77fb4a68239aacebc8f9c0215edae811bd19e6fb95187f5e46f5",
+          "privateSpendKey": "924dcad848f8549efec617dd3ce2039f08875a9cedca0e284db26be873ae0c0d",
+          "privateViewKey": "d1aee27506ad8effa9662402ecf5fb4ab426f39eee2cfde13de390f8dd454701"
+        }
+      }
+    },
+    {
+      "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "version": 1,
+      "nonce": 1,
+      "addressSeedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "46zNR12CQ26RCgw1SVLjYeTQq4vgCbUwweZnYwsdo4K3KaEwMTSgWJd2eNeS6FfS5oR1LWGjF4PqAWkbrBHh7qTXGpYSHR4",
+          "publicSpendKey": "8d9d75447354c390b103eae7ad066b9de66ce1cbd2fc5ee0968a0f79e6e6326f",
+          "publicViewKey": "0a969dd0d458fa09d4bda47c4aca4a8f857335d8e73ed9b1dfbfe4b52c53328c",
+          "privateSpendKey": "f6a2a7d4cad6bc42a8c3555a38efb07d434d09163412d07c14c82d61c1e92808",
+          "privateViewKey": "47bc57149ebc8c4c60963b15a3396cb7bc58688e088839a6f1a39f811b5c2702"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "55Wsoyyn7LHJ7AJ1DWU4mqc78ijjPrXmTDics3aQfFJzQM5ZNJTLGSB6Jzyoz9qvgt6EWLgYaz5aRc2a5QYMjTGXGyAEyDs",
+          "publicSpendKey": "613dfb6b04c43e66457757238a6d9cd1e22ea6171b65924c0886d50a182a8b8b",
+          "publicViewKey": "93e484e047ba481fbf99d25d46549d1f49045caed0dabad169c6e43a42281c8d",
+          "privateSpendKey": "4336eab9226a60519df4f8278ac9ae20fd6ec5ab610b676df3a8fba0794a3d02",
+          "privateViewKey": "5e49bd26aa8986b3601ef308bb019737e27e7bc1e8e7fd91dedf64687ad7430c"
+        }
+      }
+    },
+    {
+      "seedHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "version": 1,
+      "nonce": 0,
+      "addressSeedHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "45Q7HqV26HZLGizoPHzhXpjecJ31X3ZxiPbQBxazJbG7dPmtEk6mM4oEit5n2HBWNnByCkfwKyAgVJVtiofaDGMfEzzeS5M",
+          "publicSpendKey": "63a39992a3e95c7336e36cc6162543fefa6f30566a194f871348312e2274ccd9",
+          "publicViewKey": "93d40534148a7c5209f9a239f1a273419455a566c306d6689d5027c320457a7c",
+          "privateSpendKey": "67653e985bae84ed879dc2aa6357b8b913539a6898455b6a3a81bcde273aec0c",
+          "privateViewKey": "d5fdbb7c7c32b7ebab32a32d4ab47e26bc85960d0ea8d325314fe0adf0b8a706"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "55FnAfCRw22LivGrfMnjngSw6xjQwiB18LQXzXEs8W3W4xqBHXFo8utVhCWBCrcC7qfdbmSuAid6vMwNnLAyfhDb69oyRcg",
+          "publicSpendKey": "5a5f8f04a235c375ea1db100f701099b0ac859c71db3977404fcff15474cfd17",
+          "publicViewKey": "b0d9ab337f79c7ab8b70768a4bed80e6f5b5c5b994d11f7d2d5c4f2afa80ca2d",
+          "privateSpendKey": "198fd57de0793b07212ef92ee4e92cfb4ed28aed8e9aa3487016a85579c1260c",
+          "privateViewKey": "6cc8825d5b39f4646e07796478265a901fa586a6c4dce41d8c6ea8da72b0c208"
+        }
+      }
+    },
+    {
+      "seedHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "version": 1,
+      "nonce": 1,
+      "addressSeedHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "43RDVT6XvDRLdT1efuL4eQ2Dt5giAuFbqLgJ9yiXbdHAWBeGcE8ZN6YG9gcgarg41RGnnDgDSNwLCRwuT45R2ZedKa9CiFt",
+          "publicSpendKey": "2f5db0e96e04847559c54f56e8131d074e6ca7605f28ec75a4e80772791989ae",
+          "publicViewKey": "7a0929318ba4055a92fd937ec3638c5e65e89d34b6e609952568d3495b4aeea4",
+          "privateSpendKey": "bb448ecd5bca43f6a3238dfc14b549769ed7bf92c1531c07f4506521bef8fe07",
+          "privateViewKey": "4f17c921eaed6533ea5c11e12f9c37ebf7e230e8ad34a37d931020ddd4059604"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "533f987927CU49VcwqkhTV2yUKqc8F57r4MgAtcryJWxifzuw2h8XVFNavvAZC7Xp4D8dEZvLhSWdbDXXffjLHiqGwb5DXn",
+          "publicSpendKey": "2014f18d1dac8ba1bf2d61e3a67dd80bccb40c11836c9d1411290d539fac1df9",
+          "publicViewKey": "2496f271889456810c5991d793bd4148877de696e6724acc905da4f5c5cd928d",
+          "privateSpendKey": "49f000fe724cde9f8d034fdc3843a3552a3cc7dd31dad1324c68519b574bc004",
+          "privateViewKey": "ca3cb61cc8e61bc80cc0c00b918d8d874f4df76daef4f2d59d4fb37ba44d9107"
+        }
+      }
+    },
+    {
+      "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "version": 2,
+      "nonce": 0,
+      "addressSeedHex": "b9a3838a380b6529f21f4f123310aff8f08a68e044b09c33d90cff6fd2e1fdb8",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "49x9tsCH1rsEUcHzhaiGBWKJnxv3NS2y6YGFZphKK7uNMhofvG6W66RXj2f5wAoossCE2va1vNQBoLMQbVaCSQfNKow6BJE",
+          "publicSpendKey": "dbc59ecde1dc7c50915ac79026e9356d72f237fd49a111bae8b23a57e1a3657b",
+          "publicViewKey": "c73f6c098a2766b7b0c8bf32ac857e431bb00a2a8aa40673b275318f5efd25a6",
+          "privateSpendKey": "5cb4c20451172697efc230b9ef3aa239aa31ef48b3dffe21b510d310cc8b7f08",
+          "privateViewKey": "23f317e811578ee2b9508eda67694d1d797117c4633609e1b2958980ecae5001"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "54pY1yf6scdAwMmVtoXDpqWkZM78jL5gVUKJ3s1c17y6FA6DD5J83bv48n93ntRG5yBjUtVAVy2CuUzr7P9ccZbq1yU9xeH",
+          "publicSpendKey": "4ee3539d3f19c23b692295a47951f6b1de9c915c0c13faa34ee527dfbc633d54",
+          "publicViewKey": "a333a320ab7dd912bcd3c72b3d50cc402a3d12d9782676a762a0959e4cc58c08",
+          "privateSpendKey": "3e3d0e96218d1c00941d5eb0316c04d291f8b0e3cd14626934413e1ebac4eb0e",
+          "privateViewKey": "899ffb2ab4aecfdc9ce62c7b2dc2decdf8f45715073c6c8f8d99be7f24c2be0d"
+        }
+      }
+    },
+    {
+      "seedHex": "0707070707070707070707070707070707070707070707070707070707070707",
+      "version": 2,
+      "nonce": 1,
+      "addressSeedHex": "8ba61b0f85be3558e705b97d015155e237e5afc87b9290b2f56abd6086a837ef",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "4AsKpxVa56oFUAbK2zpEayjSD2HmLnraaYibq1wDPiQ6fz1eE6y2sEPUxsZkPW5FBTgRyKzj23VcR1ofBfqykqQHAg4vBrL",
+          "publicSpendKey": "f3f69e8a3592e856802f681207328efdb32fb3bc6a00b7bda0030426decbefe9",
+          "publicViewKey": "1056f13c1d8d98a72e832c001c8a46ebbd6235c6760ad604cf3c89887492be55",
+          "privateSpendKey": "ed2ed4cf3d3e43c073c291f4254baf6ee67b30ef0392b38b6bf7160cd230ee0f",
+          "privateViewKey": "500dd8e9ac77700ba70be5ae15c49c84df7c9b48fecc50fb89855e52d65b110d"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "54LGD4pf358RDrEyDRygqQ416SMXbL8QN9e56eEeoTb58hNEE5ZVkyiGTDput6ixwPADv5gk6gZF874ak6qXS9ST8RaUXex",
+          "publicSpendKey": "4206583f705d7790cfa3a863d670b311f20bb57f73eb9f33a66cc5ab9d2ec02e",
+          "publicViewKey": "02dc2453a071855c61cadd4da19e26372386bff09f75bb243da94326d69c6c41",
+          "privateSpendKey": "423fd450053d2100e78c8272ffb641dffb4e166f25c19f7f400edcaf938c2b00",
+          "privateViewKey": "e3fbd0a2f3429da9d363cd683ac20b79f47617a7e3a942ce656c53476643b704"
+        }
+      }
+    },
+    {
+      "seedHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "version": 2,
+      "nonce": 0,
+      "addressSeedHex": "1008ba1513736dcc78e205ff60bc352d0eaa952fe4114521e69541aaeab9c040",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "48xQhrA91ZtbVqmbMr5jc67oNbXx5fQXR3votpMMdvpc4KPrm8DGXri4g4yifGsZgbB2kUYjqBU6wRjMqdvXdZY57NBhUyi",
+          "publicSpendKey": "c17ff1e0875663ce3ee0c733591b8b28a6d54926c7aa301180f72611a81bdd13",
+          "publicViewKey": "d4f6400ff95d7315f686fb81d574383bf7687f71a0f33493da5e0e187c8c2a38",
+          "privateSpendKey": "30eca2c0c5b19ff557ed84dcd5bd2da2dd5ed2d94775daf60b8614bd03d2aa06",
+          "privateViewKey": "396967cfa68c92ccee7540cc1ebf7f7ef3b59d698a899f13a3911355ce687008"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "54Z7cohFKKYeUqyPtb5Uh42jSE36q3YDm6CNwoesjUXRbYzq4DqBT2pSYM4qPJCcgK7GVbjqZoniMTk7tfJnNzXMQHbUMhW",
+          "publicSpendKey": "47df3d02bca3ebe014277e59c256ff0a5a4f9f80ea63b01f10e04780ec7f00ce",
+          "publicViewKey": "922a3c5588e3e198b244a65cdc37dc2577fb1a10da81629fe375369c41059cce",
+          "privateSpendKey": "d02d3dbcc55d7630b3112e435576755895e48a2916abb2f8154e347db0260700",
+          "privateViewKey": "752dbe0a84fb0fd7ba91ea5f27b76c8cc6973709400211454e23276ad0a22102"
+        }
+      }
+    },
+    {
+      "seedHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "version": 2,
+      "nonce": 1,
+      "addressSeedHex": "27898ca59d5bacdf32aabdb079d5aa4d8a9c28c0abe2bf0dbabc9c00244c82f2",
+      "wallet": {
+        "mainnet": {
+          "derivationVersion": 1,
+          "network": "mainnet",
+          "address": "49cLeWFobzS1Q6wZb7X2boGu949zLJhcsWgt3KxkurQxUraMFhGpGwRKRoygvq5GTxN7219vZHbic5BRJbmPwzyZJW78TrX",
+          "publicSpendKey": "d2c1c2450c36bb0261a2818f2f6d565f0db7eb1d6c18b8b17d902e6e713301a6",
+          "publicViewKey": "88598c146b14386e2c2028d0ea46b77e2bca4be61449d518fd096c9fdaa8249b",
+          "privateSpendKey": "2612375b8f35607392388137dbb585e99eacfabc1e5c5fc659d83c08c4b4cc08",
+          "privateViewKey": "dd8452883fb903b9508e30e187126c1c1b6f6ddfb3587df04ebf7db34ddcc508"
+        },
+        "stagenet": {
+          "derivationVersion": 1,
+          "network": "stagenet",
+          "address": "58caNNExrfhHmXzhTrripYTaazp5u6vnz5cBjPgPopTWUfdfhM1jpKoi9sb9r66RBfLjHCuw2EwGAbpkp8t3k1L6QV2HZuq",
+          "publicSpendKey": "b3000aa73b81f0643f92a93aeaa0019ee7e82a8af9c2a71b8a91ffa668380da5",
+          "publicViewKey": "67966bcd91fdeef6099b706255228275f3a3b2d8e1d25fd032006e72eaa44bd0",
+          "privateSpendKey": "1d33927fcee01cc909efda44646d3bb0c82ed3a03faf383a99d87bcfa8fc0708",
+          "privateViewKey": "6420da9583d84d65013ea63efb87b61b7805c010813a3c2611c5503a21a67e02"
+        }
+      }
+    }
+  ]
+}

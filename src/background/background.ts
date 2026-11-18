@@ -1056,6 +1056,7 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
       ltcPrivateKey: ltcPrivateKey,
       ltcPublicKey: ltcPublicKey,
       arrrSeed58: wallet2._addresses[0].arrrWallet.seed58,
+      xmrWallet: wallet2._addresses[0].xmrWallet,
       btcAddress: wallet2._addresses[0].btcWallet.address,
       btcPublicKey: wallet2._addresses[0].btcWallet.derivedMasterPublicKey,
       btcPrivateKey: wallet2._addresses[0].btcWallet.derivedMasterPrivateKey,

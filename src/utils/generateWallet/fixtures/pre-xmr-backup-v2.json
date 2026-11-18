@@ -1,0 +1,9 @@
+{
+  "address0": "Qb4mU9JofNptvbB2KEWzQZSeL3dK5sg4Qs",
+  "encryptedSeed": "DSddUPRCuM16ynUH1424RwpscoLRArG6sbvAeqdRKRHR",
+  "salt": "HKrsMx4abdKgHYmhr1am12rhQscMUqc3a5uTHtQcDuTf",
+  "iv": "BRfKtpwiWHjeee8HZMrnDM",
+  "version": 2,
+  "mac": "54Evxro5i74zuartjnVhkCfZisU4JWegCD4G6bHCckUKGc7FoN5DGqabD9JZJwzJoRXkr2ndYi7GVDUmHVsSkyew",
+  "kdfThreads": 16
+}
