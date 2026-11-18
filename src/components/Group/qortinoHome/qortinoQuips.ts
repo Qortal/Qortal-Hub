@@ -6,6 +6,10 @@
  * core:qortino_workspace.quips.<category>.<slug>.
  */
 
+import { isNightHour } from './qortinoNight';
+
+export { isNightHour };
+
 export type QortinoQuipCategory =
   | 'promo'
   | 'ready'
@@ -152,7 +156,6 @@ export type QortinoQuipContext = {
 export const quipKey = (category: QortinoQuipCategory, slug: string) =>
   `quips.${category}.${slug}`;
 
-export const isNightHour = (hour: number) => hour >= 23 || hour < 5;
 export const isMorningHour = (hour: number) => hour >= 5 && hour < 10;
 
 function makeQuip(category: QortinoQuipCategory, slug: string): QortinoQuip {

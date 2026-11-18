@@ -1,4 +1,10 @@
-import { type MouseEvent, useCallback, useMemo, useState } from 'react';
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -189,6 +195,22 @@ export const LauncherSaved = ({
     }
     return leaves;
   }, [items]);
+
+  // A menu or question about a tile or folder that is gone (removed in
+  // another launcher tab, say) is dropped, not shown again for it.
+  useEffect(() => {
+    const hasFolder = (folderId: string) =>
+      folderItems.some((item) => item.folder.id === folderId);
+    const menuIsStale =
+      menu?.kind === 'tile'
+        ? !leavesByKey.has(menu.item.key)
+        : !!menu && !hasFolder(menu.folder.id);
+    if (menuIsStale) setMenu(null);
+    if (folderToDelete && !hasFolder(folderToDelete.id)) {
+      setFolderToDelete(null);
+    }
+  }, [folderItems, folderToDelete, leavesByKey, menu]);
+
   /** Every tile on screen, in reading order. */
   const visualKeys = useMemo(
     () => [

@@ -190,7 +190,12 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           );
           return;
         }
-        const constructUrl = `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${Date.now()}`;
+        // Core reports the page with its fragment (`/page#top`, or a hash
+        // router's `/#/search?q=a`), so Hub's parameters go before it.
+        const constructUrl = withHubQuery(
+          `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${path != null ? path : ''}`,
+          `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${Date.now()}`
+        );
         setUrl(constructUrl);
       }
     };

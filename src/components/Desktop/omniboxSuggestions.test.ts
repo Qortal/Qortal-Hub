@@ -103,6 +103,15 @@ describe('parseOmniboxLink', () => {
     );
   });
 
+  it("reads an app's page link", () => {
+    expect(parseOmniboxLink('qortal://use-app-page/APP/Q-Shop')).toEqual({
+      kind: 'page',
+      link: 'qortal://use-app-page/APP/Q-Shop',
+      name: 'Q-Shop',
+      service: 'APP',
+    });
+  });
+
   it('keeps a group link whole, for the group handlers', () => {
     expect(
       parseOmniboxLink('QORTAL://use-group/action-join/groupid-5')

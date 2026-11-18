@@ -9,7 +9,7 @@ const QUIP: ActiveQortinoQuip = {
   holdMs: 4_000,
   id: 1,
   key: 'quips.promo.intro',
-  text: "Hi Simon! I'm Qortino.",
+  text: "Hi there! I'm Qortino.",
   typingMs: 600,
   wink: false,
 };
@@ -34,11 +34,11 @@ describe("Qortino's speech bubble", () => {
       />
     );
     const bubble = screen.getByRole('button', {
-      name: "Hi Simon! I'm Qortino. Click to open Qortino",
+      name: "Hi there! I'm Qortino. Click to open Qortino",
     });
     // The whole line holds its place from the start, so the bubble never
     // grows while the words come.
-    expect(bubble).toHaveTextContent("Hi Simon! I'm Qortino.");
+    expect(bubble).toHaveTextContent("Hi there! I'm Qortino.");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300);
@@ -73,7 +73,7 @@ describe("Qortino's speech bubble", () => {
       />
     );
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByText("Hi Simon! I'm Qortino.")).toBeInTheDocument();
+    expect(screen.getByText("Hi there! I'm Qortino.")).toBeInTheDocument();
   });
 
   it('shows nothing without a line', () => {

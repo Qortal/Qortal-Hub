@@ -43,7 +43,7 @@ describe('Flagging an answer', () => {
     vi.restoreAllMocks();
   });
 
-  const renderDialog = (name: string | null = 'Tester Hub') => {
+  const renderDialog = (name: string | null = 'Publisher') => {
     const store = createStore();
     store.set(
       userInfoAtom,
@@ -137,7 +137,7 @@ describe('Flagging an answer', () => {
 
   it('keeps the preview while the dialog closes', () => {
     const store = createStore();
-    store.set(userInfoAtom, { name: 'Tester Hub' });
+    store.set(userInfoAtom, { name: 'Publisher' });
     const { rerender } = render(
       <JotaiProvider store={store}>
         <QortinoReportDialog report={REPORT} onClose={vi.fn()} />

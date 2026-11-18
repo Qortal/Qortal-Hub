@@ -29,6 +29,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
@@ -103,8 +104,8 @@ import {
   QortinoSpeechPopup,
   type QortinoMouthOffset,
 } from './qortinoHome/QortinoSpeechPopup';
+import { isNightHour } from './qortinoHome/qortinoNight';
 import {
-  isNightHour,
   pickGiggleQuip,
   pickTickleQuip,
   type QortinoQuip,
@@ -154,17 +155,26 @@ import {
   QORTINO_DONATION_THANK_YOU_MESSAGE,
 } from './qortinoDonationEasterEgg';
 import { hasRequiredQortinoOnboardingBalance } from './qortinoOnboarding';
+import {
+  HOME_WORKSPACE_COPY_LIMIT,
+  noteQortinoWorkspaceSettings,
+  QORTINO_WORKSPACE_SETTINGS_KEY,
+} from './HomeDesktop/homeLayout';
+import { HotkeyAppAvatar, QortinoWorkspaceApps } from './QortinoWorkspaceApps';
+import { QortinoFitBox } from './QortinoFitBox';
+import { namesOwnResources } from '../Apps/libraryResources';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
 const AVATAR_IDENTIFIER = 'qortal_avatar';
-export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
+export { QORTINO_WORKSPACE_SETTINGS_KEY };
 const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
 const ONBOARDING_RECOGNITION_DURATION_MS = 2600;
 /**
- * A press on Qortino's head shorter than this opens Qortino; held this long
- * it becomes a tickle, and from then on the finger may roam.
+ * A press on Qortino's head shorter than this is a tap (he winks, and opens
+ * Qortino where Qortino AI can run); held this long it becomes a tickle, and
+ * from then on the finger may roam.
  */
 const QORTINO_TAP_MAX_MS = 420;
 /** Before the tickle begins, a finger that travels further is a swipe or a scroll. */
@@ -182,8 +192,12 @@ const QORTINO_MASCOT_SIZE = Math.round(
 const QORTINO_MASCOT_STAGE_PADDING_X = 26;
 const QORTINO_MASCOT_STAGE_PADDING_Y = 28;
 const QORTINO_MASCOT_VERTICAL_LIFT_PX = 12;
+/**
+ * Qortino's size while Getting started shows over him: his window keeps the
+ * rows the Workspace and he share, so he gets a little smaller.
+ */
+const QORTINO_COMPACT_MASCOT_ZOOM = 0.82;
 const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 251;
-const QORTINO_COMPANION_MIN_HEIGHT_PX = 130;
 const HOTKEY_SLOT_COUNT = 6;
 const HOTKEY_PICKER_SEARCH_DEBOUNCE_MS = 320;
 const CURATED_HOTKEY_APP_NAMES = [
@@ -203,6 +217,11 @@ type QortinoGratefulState = {
   nonce: number;
 };
 const QORTINO_STATUS_REFERENCE_LABEL = 'standby';
+/**
+ * The music player's look is made at this size: it shows as big as its
+ * window lets it (QortinoFitBox), growing in a big one.
+ */
+const MUSIC_PLAYER_NATURAL_SIZE = { height: 280, width: 240 };
 const HOTKEY_SLOT_VALUE_SEPARATOR = '::';
 const EARBUMP_AUDIO_SERVICE = 'AUDIO';
 const MUSIC_PLAYER_DOWNLOAD_SCOPE = 'music-player';
@@ -214,8 +233,16 @@ type HotkeyAppService = 'APP' | 'WEBSITE';
 
 type MusicTrack = EarbumpTrack;
 
-type WorkspaceState = {
+/** What one Workspace window holds. */
+type WorkspaceWindowState = {
   hotkeys: HotkeySlotValue[];
+  mode: WorkspaceMode;
+};
+
+type WorkspaceState = {
+  /** The first Workspace's apps. */
+  hotkeys: HotkeySlotValue[];
+  /** What the first Workspace shows. */
   mode: WorkspaceMode;
   musicPlaying: boolean;
   musicQuery: string;
@@ -223,13 +250,40 @@ type WorkspaceState = {
   repeatMode: RepeatMode;
   selectedTrackId: string;
   version: 1;
+  /**
+   * What the Workspace's copies hold, by their key (Home's layout lists the
+   * copies). There's one music player: one window at the most shows it.
+   */
+  windows?: Record<string, WorkspaceWindowState>;
+};
+
+/** A Workspace window on Home: the first one ('' key) or a copy. */
+export type QortinoWorkspacePlace = {
+  key: string;
+  /** Where its content goes, its slot on Home. Null while it's hidden. */
+  node: HTMLElement | null;
+  /** Its name, as Edit Home shows it. */
+  title: string;
 };
 
 type HomeQortinoWorkspaceCardProps = {
   onGettingStartedComplete?: () => void;
-  /** Qortino under the hotkeys (Home's Qortino AI module); off, the card
-   * is the workspace bay alone. */
-  showQortino?: boolean;
+  /**
+   * Getting started shows, or stops showing: Home lets the Workspace make
+   * way meanwhile, as Qortino's window grows with it. Told before the
+   * screen updates, so both change at once.
+   */
+  onGettingStartedShownChange?: (shown: boolean) => void;
+  /**
+   * Where Qortino shows (with Getting started, for a new account): its
+   * window's slot on Home. Null while it's hidden.
+   */
+  qortinoNode?: HTMLElement | null;
+  /**
+   * Every Workspace window on Home, hidden ones too. What a copy left out
+   * held is let go of. Left out: no Workspace shows, and nothing is let go.
+   */
+  workspaces?: readonly QortinoWorkspacePlace[];
 };
 
 type QortinoSectionRuntimeFallbackProps = {
@@ -310,6 +364,48 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   version: 1,
 };
 
+/** The first Workspace's key; its copies have keys of their own. */
+const FIRST_WORKSPACE_KEY = '';
+const WORKSPACE_COPY_KEY_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+
+const EMPTY_WORKSPACE_WINDOW: WorkspaceWindowState = {
+  hotkeys: DEFAULT_HOTKEYS,
+  mode: 'empty',
+};
+
+const workspaceWindowOf = (
+  state: WorkspaceState,
+  key: string
+): WorkspaceWindowState =>
+  key === FIRST_WORKSPACE_KEY
+    ? { hotkeys: state.hotkeys, mode: state.mode }
+    : (state.windows?.[key] ?? EMPTY_WORKSPACE_WINDOW);
+
+const withWorkspaceWindow = (
+  state: WorkspaceState,
+  key: string,
+  change: (current: WorkspaceWindowState) => WorkspaceWindowState
+): WorkspaceState => {
+  const next = change(workspaceWindowOf(state, key));
+  return key === FIRST_WORKSPACE_KEY
+    ? { ...state, hotkeys: next.hotkeys, mode: next.mode }
+    : { ...state, windows: { ...state.windows, [key]: next } };
+};
+
+const workspaceWindowsOf = (state: WorkspaceState) => [
+  workspaceWindowOf(state, FIRST_WORKSPACE_KEY),
+  ...Object.values(state.windows ?? {}),
+];
+
+/** The Workspace showing the music player, or null when none does. */
+const musicWorkspaceKeyOf = (state: WorkspaceState): string | null => {
+  if (state.mode === 'music') return FIRST_WORKSPACE_KEY;
+  const copy = Object.entries(state.windows ?? {}).find(
+    ([, window]) => window.mode === 'music'
+  );
+  return copy ? copy[0] : null;
+};
+
 const LEGACY_HOTKEY_APP_NAME_MAP: Record<string, string> = {
   earbump: 'Ear-Bump',
   earbumpupdated: 'Ear-Bump',
@@ -356,45 +452,6 @@ const formatHotkeyAppLabel = (appName: string) =>
   appName
     .replace(/[-_]+/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase());
-
-const getHotkeyAppThumbnailUrl = (appName: string) =>
-  `${getBaseApiReact()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
-
-const HotkeyAppAvatar = ({
-  appName,
-  radius = 12,
-  size = 36,
-}: {
-  appName: string;
-  radius?: number;
-  size?: number;
-}) => (
-  <Avatar
-    alt={appName}
-    imgProps={{ loading: 'lazy' }}
-    src={getHotkeyAppThumbnailUrl(appName)}
-    sx={{
-      background: alpha('#A9C9FF', 0.06),
-      borderRadius: `${radius}px`,
-      boxShadow: `inset 0 0 0 1px ${alpha('#A9C9FF', 0.08)}`,
-      height: `${size}px`,
-      width: `${size}px`,
-      '& img': {
-        objectFit: 'fill',
-      },
-    }}
-  >
-    <Box
-      alt=""
-      component="img"
-      src={LogoSelected}
-      sx={{
-        height: 'auto',
-        width: `${Math.round(size * 0.68)}px`,
-      }}
-    />
-  </Avatar>
-);
 
 const truncateQortinoBubbleMessage = (
   message: string | null,
@@ -506,19 +563,12 @@ const QortinoSectionRuntimeFallback = ({
   );
 };
 
-const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
-  if (!value || typeof value !== 'object') {
-    return { ...DEFAULT_WORKSPACE_STATE };
-  }
+const sanitizeWorkspaceMode = (value: unknown): WorkspaceMode =>
+  value === 'hotkeys' || value === 'music' ? value : 'empty';
 
-  const parsed = value as Partial<WorkspaceState>;
-  const nextMode: WorkspaceMode =
-    parsed.mode === 'hotkeys' || parsed.mode === 'music'
-      ? parsed.mode
-      : 'empty';
-
-  const sanitizedHotkeys = Array.isArray(parsed.hotkeys)
-    ? parsed.hotkeys
+const sanitizeHotkeys = (value: unknown): HotkeySlotValue[] => {
+  const sanitizedHotkeys = Array.isArray(value)
+    ? value
         .slice(0, HOTKEY_SLOT_COUNT)
         .map(
           (item): HotkeySlotValue =>
@@ -527,13 +577,55 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
               : null
         )
     : [];
-  const paddedHotkeys = Array.from(
+  return Array.from(
     { length: HOTKEY_SLOT_COUNT },
     (_, index) => sanitizedHotkeys[index] ?? null
   );
+};
+
+/**
+ * The copies' windows, cleaned. Only the first window showing the music
+ * player keeps it (the first Workspace's counts as before any copy's).
+ */
+const sanitizeWorkspaceWindows = (
+  value: unknown,
+  musicTaken: boolean
+): Record<string, WorkspaceWindowState> | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const windows: Record<string, WorkspaceWindowState> = {};
+  let hasMusic = musicTaken;
+  for (const [key, raw] of Object.entries(value)) {
+    if (Object.keys(windows).length >= HOME_WORKSPACE_COPY_LIMIT) break;
+    if (!WORKSPACE_COPY_KEY_PATTERN.test(key)) continue;
+    const entry = (
+      raw && typeof raw === 'object' ? raw : {}
+    ) as Partial<WorkspaceWindowState>;
+    let mode = sanitizeWorkspaceMode(entry.mode);
+    if (mode === 'music') {
+      if (hasMusic) mode = 'empty';
+      hasMusic = true;
+    }
+    windows[key] = { hotkeys: sanitizeHotkeys(entry.hotkeys), mode };
+  }
+  return Object.keys(windows).length > 0 ? windows : undefined;
+};
+
+const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
+  if (!value || typeof value !== 'object') {
+    return { ...DEFAULT_WORKSPACE_STATE };
+  }
+
+  const parsed = value as Partial<WorkspaceState>;
+  const nextMode = sanitizeWorkspaceMode(parsed.mode);
+  const windows = sanitizeWorkspaceWindows(
+    parsed.windows,
+    nextMode === 'music'
+  );
 
   return {
-    hotkeys: paddedHotkeys,
+    hotkeys: sanitizeHotkeys(parsed.hotkeys),
     mode: nextMode,
     musicPlaying: parsed.musicPlaying === true,
     musicQuery: typeof parsed.musicQuery === 'string' ? parsed.musicQuery : '',
@@ -544,7 +636,31 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
         ? parsed.selectedTrackId.trim()
         : DEFAULT_WORKSPACE_STATE.selectedTrackId,
     version: 1,
+    ...(windows ? { windows } : {}),
   };
+};
+
+/**
+ * The state without what the copies taken off Home held (`signature` has the
+ * keys of the Workspace windows still there, one a line): the music stops if
+ * the player was in one of them. The same state back when none is gone.
+ */
+const withoutWorkspaceWindowsGone = (
+  state: WorkspaceState,
+  signature: string
+): WorkspaceState => {
+  const kept = new Set(signature.split('\n'));
+  const gone = Object.keys(state.windows ?? {}).filter((key) => !kept.has(key));
+  if (gone.length === 0) return state;
+  const musicKey = musicWorkspaceKeyOf(state);
+  const windows = { ...state.windows };
+  gone.forEach((key) => delete windows[key]);
+  return sanitizeWorkspaceState({
+    ...state,
+    musicPlaying:
+      musicKey !== null && gone.includes(musicKey) ? false : state.musicPlaying,
+    windows,
+  });
 };
 
 const openExternalUrl = (url: string) => {
@@ -591,6 +707,7 @@ const persistWorkspaceState = async (
 
   try {
     if (typeof window.sendMessage !== 'function') return;
+    noteQortinoWorkspaceSettings(userAddress, nextState);
     await window.sendMessage('addUserSettings', {
       keyValue: {
         key: QORTINO_WORKSPACE_SETTINGS_KEY,
@@ -610,9 +727,12 @@ const loadWorkspaceState = async (
       const stored = await window.sendMessage('getUserSettings', {
         key: QORTINO_WORKSPACE_SETTINGS_KEY,
       });
+      const held =
+        stored && !(stored as { error?: unknown }).error ? stored : null;
+      noteQortinoWorkspaceSettings(userAddress, held);
 
-      if (stored && !stored.error) {
-        return sanitizeWorkspaceState(stored);
+      if (held) {
+        return sanitizeWorkspaceState(held);
       }
     }
   } catch {
@@ -710,7 +830,16 @@ const EMPTY_MUSIC_TRACK_BASE: MusicTrack = {
 };
 
 export const QortinoMusicPlaybackController = memo(
-  function QortinoMusicPlaybackController() {
+  function QortinoMusicPlaybackController({
+    workspaceKeys,
+  }: {
+    /**
+     * The keys of every Workspace window on Home ('' for the first one). What
+     * a copy left out held is let go of, as the card does. Left out: nothing
+     * is let go.
+     */
+    workspaceKeys?: readonly string[];
+  }) {
     const userInfo = useAtomValue(userInfoAtom);
     const userAddress = userInfo?.address;
     const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
@@ -721,6 +850,8 @@ export const QortinoMusicPlaybackController = memo(
       loadWorkspaceStateFromFallbackStorage(userAddress)
     );
     const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+    // A Workspace shows the player: Home's hidden or isn't showing it.
+    const isMusicOn = musicWorkspaceKeyOf(workspaceState) !== null;
     const [earbumpDiscoveryTracks, setEarbumpDiscoveryTracks] = useState<
       MusicTrack[]
     >([]);
@@ -764,10 +895,17 @@ export const QortinoMusicPlaybackController = memo(
     useEffect(() => {
       if (!workspaceHydrated) return;
       void persistWorkspaceState(workspaceState, userAddress);
-      emitSharedEarbumpActivity(
-        workspaceState.mode === 'music' && workspaceState.musicPlaying
-      );
+      emitSharedEarbumpActivity(isMusicOn && workspaceState.musicPlaying);
     }, [userAddress, workspaceHydrated, workspaceState]);
+
+    // A copy of the Workspace taken off Home while its card doesn't show.
+    const workspaceKeysSignature = workspaceKeys?.join('\n');
+    useEffect(() => {
+      if (!workspaceHydrated || workspaceKeysSignature === undefined) return;
+      setWorkspaceState((current) =>
+        withoutWorkspaceWindowsGone(current, workspaceKeysSignature)
+      );
+    }, [workspaceHydrated, workspaceKeysSignature]);
 
     useEffect(() => {
       if (!selectedTrackSnapshot?.id) return;
@@ -775,7 +913,7 @@ export const QortinoMusicPlaybackController = memo(
     }, [selectedTrackSnapshot]);
 
     useEffect(() => {
-      if (!workspaceHydrated || workspaceState.mode !== 'music') {
+      if (!workspaceHydrated || !isMusicOn) {
         return undefined;
       }
 
@@ -810,7 +948,7 @@ export const QortinoMusicPlaybackController = memo(
       return () => {
         controller.abort();
       };
-    }, [applyWorkspaceState, workspaceHydrated, workspaceState.mode]);
+    }, [applyWorkspaceState, isMusicOn, workspaceHydrated]);
 
     const knownMusicTracksById = useMemo(() => {
       const nextMap = new Map<string, MusicTrack>();
@@ -842,11 +980,7 @@ export const QortinoMusicPlaybackController = memo(
     );
 
     useEffect(() => {
-      if (
-        !workspaceHydrated ||
-        workspaceState.mode !== 'music' ||
-        !workspaceState.selectedTrackId
-      ) {
+      if (!workspaceHydrated || !isMusicOn || !workspaceState.selectedTrackId) {
         return undefined;
       }
 
@@ -882,7 +1016,7 @@ export const QortinoMusicPlaybackController = memo(
     }, [
       knownMusicTracksById,
       workspaceHydrated,
-      workspaceState.mode,
+      isMusicOn,
       workspaceState.selectedTrackId,
     ]);
 
@@ -947,7 +1081,7 @@ export const QortinoMusicPlaybackController = memo(
     }, [activeTrack, earbumpDiscoveryTracks, resolveMusicTrack]);
     const isResolvingSelectedTrack =
       workspaceHydrated &&
-      workspaceState.mode === 'music' &&
+      isMusicOn &&
       Boolean(workspaceState.selectedTrackId) &&
       activeTrack.id !== workspaceState.selectedTrackId;
 
@@ -969,7 +1103,6 @@ export const QortinoMusicPlaybackController = memo(
         setSelectedTrackSnapshot(nextTrack);
         applyWorkspaceState((current) => ({
           ...current,
-          mode: 'music',
           musicPlaying: true,
           selectedTrackId: nextTrack.id,
         }));
@@ -978,7 +1111,7 @@ export const QortinoMusicPlaybackController = memo(
     );
 
     useEffect(() => {
-      if (workspaceState.mode !== 'music') return;
+      if (!isMusicOn) return;
       if (!activeTrack.id || !activeTrack.name) return;
       if (activeTrackReadyState === 'ready' || hasTrackPlaybackMetadata) return;
       if (
@@ -1001,7 +1134,7 @@ export const QortinoMusicPlaybackController = memo(
       downloadResource,
       hasTrackPlaybackMetadata,
       wasActiveTrackCancelledByMusicPlayer,
-      workspaceState.mode,
+      isMusicOn,
     ]);
 
     useEffect(() => {
@@ -1055,7 +1188,7 @@ export const QortinoMusicPlaybackController = memo(
       };
 
       const handleStalled = () => {
-        if (!activeTrack.id || workspaceState.mode !== 'music') return;
+        if (!activeTrack.id || !isMusicOn) return;
         void downloadResource({
           downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
           identifier: activeTrack.id,
@@ -1083,7 +1216,7 @@ export const QortinoMusicPlaybackController = memo(
       applyWorkspaceState,
       downloadResource,
       handleCycleTrack,
-      workspaceState.mode,
+      isMusicOn,
       workspaceState.repeatMode,
     ]);
 
@@ -1104,7 +1237,7 @@ export const QortinoMusicPlaybackController = memo(
         audio.load();
       }
 
-      if (workspaceState.mode !== 'music' || !workspaceState.musicPlaying) {
+      if (!isMusicOn || !workspaceState.musicPlaying) {
         audio.pause();
         return;
       }
@@ -1122,7 +1255,7 @@ export const QortinoMusicPlaybackController = memo(
       applyWorkspaceState,
       isResolvingSelectedTrack,
       workspaceHydrated,
-      workspaceState.mode,
+      isMusicOn,
       workspaceState.musicPlaying,
     ]);
 
@@ -1993,7 +2126,9 @@ const HotkeyPickerVirtualScroll = memo(function HotkeyPickerVirtualScroll({
 
 export const HomeQortinoWorkspaceCard = ({
   onGettingStartedComplete,
-  showQortino = true,
+  onGettingStartedShownChange,
+  qortinoNode = null,
+  workspaces,
 }: HomeQortinoWorkspaceCardProps) => {
   const { t } = useTranslation(['group', 'core']);
   const qw = useCallback(
@@ -2097,6 +2232,15 @@ export const HomeQortinoWorkspaceCard = ({
   );
 
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+  // The music player is on while a Workspace shows it, shown or hidden.
+  const musicWorkspaceKey = musicWorkspaceKeyOf(workspaceState);
+  const isMusicOn = musicWorkspaceKey !== null;
+  const hasHotkeysWorkspace = workspaceWindowsOf(workspaceState).some(
+    (window) => window.mode === 'hotkeys'
+  );
+  // The Workspace whose module or hotkey picker is open.
+  const [pickerWorkspaceKey, setPickerWorkspaceKey] =
+    useState(FIRST_WORKSPACE_KEY);
   const [selectedHotkeySlot, setSelectedHotkeySlot] = useState(0);
   const [hotkeySearchQuery, setHotkeySearchQuery] = useState('');
   const [debouncedHotkeySearchQuery, setDebouncedHotkeySearchQuery] =
@@ -2140,11 +2284,15 @@ export const HomeQortinoWorkspaceCard = ({
   const jotaiStore = useStore();
   // Qortino AI on Home: now and then a line from his mouth and, once Qortino
   // AI has a model on this computer, a box next to him to ask it something.
+  // Only while Qortino's window shows on Home.
+  const showQortino = qortinoNode != null;
   const qortinoAiPossible = isQortinoLlmInferenceAvailable();
   const qortinoAiReady = useQortinoReady();
   const qortinoStageRef = useRef<HTMLDivElement | null>(null);
   const [qortinoComposerFocused, setQortinoComposerFocused] = useState(false);
   const [qortinoQuipTyping, setQortinoQuipTyping] = useState(false);
+  // Qortino's faces, as in GO: his eyes for a moment (a wink for a tap,
+  // happy after a tickle), and a hop.
   const [qortinoHopKey, setQortinoHopKey] = useState(0);
   const [qortinoEyesFlash, setQortinoEyesFlash] = useState<QortinoEyes | null>(
     null
@@ -2168,11 +2316,23 @@ export const HomeQortinoWorkspaceCard = ({
     },
     []
   );
+  // Whether it's night, looked at every minute: with Home left open he
+  // dozes off and wakes on time, not at the card's next change.
+  const [isQortinoNight, setIsQortinoNight] = useState(() =>
+    isNightHour(new Date().getHours())
+  );
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setIsQortinoNight(isNightHour(new Date().getHours())),
+      60_000
+    );
+    return () => window.clearInterval(timer);
+  }, []);
   /**
    * The press on Qortino's head: when and where it began, whether the
    * finger wandered off before the tickle began (then it is a swipe or a
-   * scroll: no tap, no tickle), and once he is being tickled, when the
-   * finger last moved.
+   * scroll: no tap, no tickle), whether he is being tickled, and since
+   * then, when the finger last moved.
    */
   const qortinoPressRef = useRef<{
     at: number;
@@ -2439,7 +2599,7 @@ export const HomeQortinoWorkspaceCard = ({
     return () => {
       stage.removeEventListener('touchmove', onTouchMove);
     };
-  }, [showQortino]);
+  }, [qortinoNode]);
 
   // While he is tickled he giggles, a new giggle every second or two, and
   // quicker while the finger rubs him.
@@ -2526,13 +2686,15 @@ export const HomeQortinoWorkspaceCard = ({
     [endQortinoPress, giggleQortino]
   );
 
-  // Lifted: a short press opens Qortino AI (in the desktop app); after a
-  // tickle he answers it, in the bubble his giggles were in.
+  // Lifted: a tap gets a wink, and opens Qortino AI (in the desktop app);
+  // after a tickle he answers it, in the bubble his giggles were in, and
+  // hops, happy.
   const handleQortinoPointerRelease = useCallback(() => {
     const press = qortinoPressRef.current;
     endQortinoPress();
     if (!press || press.moved) return;
     if (!press.tickling) {
+      flashQortinoEyes('wink', 750);
       if (!qortinoAiPossible) return;
       setQortinoAgentParked(false);
       setQortinoAgentOpen(true);
@@ -2706,11 +2868,21 @@ export const HomeQortinoWorkspaceCard = ({
     void persistWorkspaceState(workspaceState, userAddress);
   }, [userAddress, workspaceHydrated, workspaceState]);
 
+  // A copy of the Workspace taken off Home: what it held goes with it, and
+  // the music stops if the player was in it.
+  const workspaceKeysSignature = workspaces
+    ?.map((place) => place.key)
+    .join('\n');
   useEffect(() => {
-    emitSharedEarbumpActivity(
-      workspaceState.mode === 'music' && workspaceState.musicPlaying
+    if (!workspaceHydrated || workspaceKeysSignature === undefined) return;
+    setWorkspaceState((current) =>
+      withoutWorkspaceWindowsGone(current, workspaceKeysSignature)
     );
-  }, [workspaceState.mode, workspaceState.musicPlaying]);
+  }, [workspaceHydrated, workspaceKeysSignature]);
+
+  useEffect(() => {
+    emitSharedEarbumpActivity(isMusicOn && workspaceState.musicPlaying);
+  }, [isMusicOn, workspaceState.musicPlaying]);
 
   useEffect(() => {
     if (!selectedTrackSnapshot?.id) {
@@ -2928,8 +3100,7 @@ export const HomeQortinoWorkspaceCard = ({
       ).flat() as QAppResourceRecord[];
       const nextCatalog = Array.from(
         new Map(
-          (Array.isArray(responseData) ? responseData : [])
-            ?.filter((res) => !res?.identifier)
+          namesOwnResources(responseData)
             .map((resource) => {
               const appName =
                 typeof resource?.name === 'string' ? resource.name.trim() : '';
@@ -2983,7 +3154,7 @@ export const HomeQortinoWorkspaceCard = ({
 
   useEffect(() => {
     if (
-      workspaceState.mode !== 'hotkeys' &&
+      !hasHotkeysWorkspace &&
       !openHotkeyPickerDialog &&
       availableHotkeyApps.length > 0
     ) {
@@ -2991,7 +3162,7 @@ export const HomeQortinoWorkspaceCard = ({
     }
 
     if (
-      (workspaceState.mode === 'hotkeys' || openHotkeyPickerDialog) &&
+      (hasHotkeysWorkspace || openHotkeyPickerDialog) &&
       availableHotkeyApps.length === 0 &&
       !isHotkeyAppsLoading
     ) {
@@ -2999,10 +3170,10 @@ export const HomeQortinoWorkspaceCard = ({
     }
   }, [
     availableHotkeyApps.length,
+    hasHotkeysWorkspace,
     isHotkeyAppsLoading,
     loadHotkeyApps,
     openHotkeyPickerDialog,
-    workspaceState.mode,
   ]);
 
   const hotkeyAppsByName = useMemo(() => {
@@ -3109,6 +3280,9 @@ export const HomeQortinoWorkspaceCard = ({
     [completedCount, steps.length]
   );
   const isOnboardingVisible = dismissed === false;
+  useLayoutEffect(() => {
+    onGettingStartedShownChange?.(isOnboardingVisible);
+  }, [isOnboardingVisible, onGettingStartedShownChange]);
   const isQortsAcquiredAwaitingNext =
     isOnboardingVisible &&
     hasQorts &&
@@ -3274,7 +3448,7 @@ export const HomeQortinoWorkspaceCard = ({
     setPostOnboardingMessage(
       t(
         'group:home.post_onboarding_workspace_ready',
-        'All set. You can start building your workspace above.'
+        'All set. You can start building your workspace now.'
       )
     );
     setShowOnboardingCompletionConfetti(true);
@@ -3289,13 +3463,25 @@ export const HomeQortinoWorkspaceCard = ({
     }, 4200);
   }, [isOnboardingVisible, t]);
 
+  // The "all set" message stays until a Workspace has something in it. A
+  // Workspace can be filled during Getting started too: then the message
+  // goes with the confetti.
+  const hasFilledWorkspace = hasHotkeysWorkspace || isMusicOn;
   useEffect(() => {
-    if (workspaceState.mode === 'empty' || postOnboardingMessage == null) {
+    if (
+      !hasFilledWorkspace ||
+      postOnboardingMessage == null ||
+      showOnboardingCompletionConfetti
+    ) {
       return;
     }
 
     setPostOnboardingMessage(null);
-  }, [postOnboardingMessage, workspaceState.mode]);
+  }, [
+    hasFilledWorkspace,
+    postOnboardingMessage,
+    showOnboardingCompletionConfetti,
+  ]);
 
   const musicSearchQuery = workspaceState.musicQuery.trim();
   const knownMusicTracksById = useMemo(() => {
@@ -3336,7 +3522,7 @@ export const HomeQortinoWorkspaceCard = ({
   );
 
   useEffect(() => {
-    if (!workspaceHydrated || workspaceState.mode !== 'music') {
+    if (!workspaceHydrated || !isMusicOn) {
       return undefined;
     }
 
@@ -3389,12 +3575,12 @@ export const HomeQortinoWorkspaceCard = ({
       controller.abort();
       setIsEarbumpDiscoveryLoading(false);
     };
-  }, [applyWorkspaceState, qw, workspaceHydrated, workspaceState.mode]);
+  }, [applyWorkspaceState, qw, workspaceHydrated, isMusicOn]);
 
   useEffect(() => {
     searchRequestRef.current?.abort();
 
-    if (workspaceState.mode !== 'music' || !musicSearchQuery) {
+    if (!isMusicOn || !musicSearchQuery) {
       setEarbumpSearchTracks([]);
       setEarbumpSearchError(null);
       setIsEarbumpSearchLoading(false);
@@ -3436,14 +3622,10 @@ export const HomeQortinoWorkspaceCard = ({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [musicSearchQuery, qw, workspaceState.mode]);
+  }, [musicSearchQuery, qw, isMusicOn]);
 
   useEffect(() => {
-    if (
-      !workspaceHydrated ||
-      workspaceState.mode !== 'music' ||
-      !workspaceState.selectedTrackId
-    ) {
+    if (!workspaceHydrated || !isMusicOn || !workspaceState.selectedTrackId) {
       return undefined;
     }
 
@@ -3479,7 +3661,7 @@ export const HomeQortinoWorkspaceCard = ({
   }, [
     knownMusicTracksById,
     workspaceHydrated,
-    workspaceState.mode,
+    isMusicOn,
     workspaceState.selectedTrackId,
   ]);
 
@@ -3533,7 +3715,7 @@ export const HomeQortinoWorkspaceCard = ({
   const isTrackLoadError = activeTrackReadyState === 'error';
   const isResolvingSelectedTrack =
     workspaceHydrated &&
-    workspaceState.mode === 'music' &&
+    isMusicOn &&
     Boolean(workspaceState.selectedTrackId) &&
     activeTrack.id !== workspaceState.selectedTrackId;
   const activeTrackDurationSeconds = useMemo(() => {
@@ -3690,7 +3872,7 @@ export const HomeQortinoWorkspaceCard = ({
 
   useEffect(() => {
     const currentTrack =
-      workspaceState.mode === 'music' && activeTrack.id && activeTrack.name
+      isMusicOn && activeTrack.id && activeTrack.name
         ? {
             id: activeTrack.id,
             name: activeTrack.name,
@@ -3708,15 +3890,10 @@ export const HomeQortinoWorkspaceCard = ({
     }
 
     activeEarbumpDownloadRef.current = currentTrack;
-  }, [
-    activeTrack.id,
-    activeTrack.name,
-    cancelEarbumpTrackDownload,
-    workspaceState.mode,
-  ]);
+  }, [activeTrack.id, activeTrack.name, cancelEarbumpTrackDownload, isMusicOn]);
 
   useEffect(() => {
-    if (workspaceState.mode !== 'music') {
+    if (!isMusicOn) {
       return;
     }
 
@@ -3750,7 +3927,7 @@ export const HomeQortinoWorkspaceCard = ({
     downloadResource,
     hasTrackPlaybackMetadata,
     wasActiveTrackCancelledByMusicPlayer,
-    workspaceState.mode,
+    isMusicOn,
   ]);
 
   useEffect(() => {
@@ -3842,17 +4019,18 @@ export const HomeQortinoWorkspaceCard = ({
     if (isBayPickerOpen) return 'guide' as const;
     if (isOnboardingVisible) return 'guide' as const;
     if (isWorkspaceFreshlyUnlocked) return 'celebrate' as const;
-    if (workspaceState.mode === 'music' && workspaceState.musicPlaying) {
+    if (isMusicOn && workspaceState.musicPlaying) {
       return 'music' as const;
     }
-    if (workspaceState.mode === 'hotkeys') return 'hotkeys' as const;
+    if (hasHotkeysWorkspace) return 'hotkeys' as const;
     return 'empty' as const;
   }, [
     qortinoGratefulState,
+    hasHotkeysWorkspace,
     isOnboardingVisible,
+    isMusicOn,
     isWorkspaceFreshlyUnlocked,
     isBayPickerOpen,
-    workspaceState.mode,
     workspaceState.musicPlaying,
   ]);
 
@@ -3952,10 +4130,24 @@ export const HomeQortinoWorkspaceCard = ({
   ]);
   */
 
-  const firstEmptyHotkeySlot = useMemo(
-    () => workspaceState.hotkeys.findIndex((slot) => slot == null),
-    [workspaceState.hotkeys]
-  );
+  /** A Workspace's first slot without an app: where a new one goes. */
+  const firstEmptyHotkeySlotOf = (key: string) =>
+    Math.max(
+      0,
+      workspaceWindowOf(workspaceState, key).hotkeys.findIndex(
+        (slot) => slot == null
+      )
+    );
+  const pickerHotkeys = workspaceWindowOf(
+    workspaceState,
+    pickerWorkspaceKey
+  ).hotkeys;
+  // The player is in one Workspace at a time (its name, for the picker).
+  const musicWorkspaceTitle =
+    musicWorkspaceKey === null
+      ? null
+      : (workspaces?.find((place) => place.key === musicWorkspaceKey)?.title ??
+        null);
   const qortinoIsTalking = Boolean(qortinoDisplayedMessage);
   const qortinoQuipsEnabled =
     qortinoAiPossible &&
@@ -4026,12 +4218,15 @@ export const HomeQortinoWorkspaceCard = ({
     },
     [flashQortinoEyes, jotaiStore]
   );
-  // Late at night, with nothing to do, Qortino dozes off.
+  // Late at night, with nothing to do, Qortino dozes off. The hour is looked
+  // at every minute (isQortinoNight), and a tickle wakes him fully.
   const qortinoSleepy =
     hasName &&
     resolvedHasAvatar &&
     !isOnboardingVisible &&
-    isNightHour(new Date().getHours()) &&
+    isQortinoNight &&
+    !qortinoIsTalking &&
+    !isQortinoTickled &&
     !qortinoQuip &&
     !qortinoComposerFocused &&
     (qortinoMood === 'empty' || qortinoMood === 'hotkeys');
@@ -4077,7 +4272,6 @@ export const HomeQortinoWorkspaceCard = ({
       setSelectedTrackSnapshot(nextTrack);
       applyWorkspaceState((current) => ({
         ...current,
-        mode: 'music',
         musicPlaying: true,
         selectedTrackId: nextTrack.id,
       }));
@@ -4155,7 +4349,7 @@ export const HomeQortinoWorkspaceCard = ({
     };
 
     const handleStalled = () => {
-      if (!activeTrack.id || workspaceState.mode !== 'music') {
+      if (!activeTrack.id || !isMusicOn) {
         return;
       }
 
@@ -4192,7 +4386,7 @@ export const HomeQortinoWorkspaceCard = ({
     downloadResource,
     handleCycleTrack,
     qw,
-    workspaceState.mode,
+    isMusicOn,
     workspaceState.repeatMode,
   ]);
 
@@ -4219,7 +4413,7 @@ export const HomeQortinoWorkspaceCard = ({
       audio.load();
     }
 
-    if (workspaceState.mode !== 'music' || !workspaceState.musicPlaying) {
+    if (!isMusicOn || !workspaceState.musicPlaying) {
       audio.pause();
       return;
     }
@@ -4237,19 +4431,36 @@ export const HomeQortinoWorkspaceCard = ({
     applyWorkspaceState,
     isResolvingSelectedTrack,
     workspaceHydrated,
-    workspaceState.mode,
+    isMusicOn,
     workspaceState.musicPlaying,
   ]);
 
   const handleSelectWorkspaceMode = useCallback(
-    (mode: WorkspaceMode) => {
-      applyWorkspaceState((current) => ({
-        ...current,
-        mode,
-        musicPlaying: mode === 'music' ? current.musicPlaying : false,
-        onboardingCelebrationSeen:
-          current.onboardingCelebrationSeen || dismissed === true,
-      }));
+    (key: string, mode: WorkspaceMode) => {
+      // There's one music player: picked here, it leaves the Workspace that
+      // showed it.
+      const playerLeaves = musicWorkspaceKey === key && mode !== 'music';
+      applyWorkspaceState((current) => {
+        const musicKey = musicWorkspaceKeyOf(current);
+        let next =
+          mode === 'music' && musicKey !== null && musicKey !== key
+            ? withWorkspaceWindow(current, musicKey, (window) => ({
+                ...window,
+                mode: 'empty',
+              }))
+            : current;
+        next = withWorkspaceWindow(next, key, (window) => ({
+          ...window,
+          mode,
+        }));
+        return {
+          ...next,
+          musicPlaying:
+            musicWorkspaceKeyOf(next) !== null ? current.musicPlaying : false,
+          onboardingCelebrationSeen:
+            current.onboardingCelebrationSeen || dismissed === true,
+        };
+      });
 
       if (mode === 'hotkeys') {
         setOpenModulePickerDialog(false);
@@ -4260,7 +4471,9 @@ export const HomeQortinoWorkspaceCard = ({
         setOpenHotkeyPickerDialog(false);
         pushReaction(qw('reaction_music_panel_ready', 'Music panel ready.'));
       } else {
-        cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
+        if (playerLeaves) {
+          cancelEarbumpTrackDownload(activeEarbumpDownloadRef.current);
+        }
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(false);
         pushReaction(qw('reaction_panel_cleared', 'Panel cleared.'));
@@ -4270,6 +4483,7 @@ export const HomeQortinoWorkspaceCard = ({
       applyWorkspaceState,
       cancelEarbumpTrackDownload,
       dismissed,
+      musicWorkspaceKey,
       pushReaction,
       qw,
     ]
@@ -4286,45 +4500,46 @@ export const HomeQortinoWorkspaceCard = ({
         knownApp?.service ?? parsedSlot.service,
         knownApp?.appName ?? parsedSlot.appName
       );
-      applyWorkspaceState((current) => {
-        const nextHotkeys = [...current.hotkeys];
-        nextHotkeys[selectedHotkeySlot] = nextSlotValue;
-        return {
-          ...current,
-          hotkeys: nextHotkeys,
-          mode: 'hotkeys',
-          onboardingCelebrationSeen:
-            current.onboardingCelebrationSeen || dismissed === true,
-        };
-      });
+      applyWorkspaceState((current) => ({
+        ...withWorkspaceWindow(current, pickerWorkspaceKey, (window) => {
+          const nextHotkeys = [...window.hotkeys];
+          nextHotkeys[selectedHotkeySlot] = nextSlotValue;
+          return { hotkeys: nextHotkeys, mode: 'hotkeys' };
+        }),
+        onboardingCelebrationSeen:
+          current.onboardingCelebrationSeen || dismissed === true,
+      }));
       setOpenModulePickerDialog(false);
       setOpenHotkeyPickerDialog(true);
       setSelectedHotkeySlot((current) =>
         Math.min(current + 1, HOTKEY_SLOT_COUNT - 1)
       );
     },
-    [applyWorkspaceState, dismissed, hotkeyAppsByName, selectedHotkeySlot]
+    [
+      applyWorkspaceState,
+      dismissed,
+      hotkeyAppsByName,
+      pickerWorkspaceKey,
+      selectedHotkeySlot,
+    ]
   );
 
   const handleClearHotkey = useCallback(
     (slotIndex: number) => {
-      applyWorkspaceState((current) => {
-        const nextHotkeys = [...current.hotkeys];
-        nextHotkeys[slotIndex] = null;
-
-        return {
-          ...current,
-          hotkeys: nextHotkeys,
-          mode: 'hotkeys',
-          onboardingCelebrationSeen:
-            current.onboardingCelebrationSeen || dismissed === true,
-        };
-      });
+      applyWorkspaceState((current) => ({
+        ...withWorkspaceWindow(current, pickerWorkspaceKey, (window) => {
+          const nextHotkeys = [...window.hotkeys];
+          nextHotkeys[slotIndex] = null;
+          return { hotkeys: nextHotkeys, mode: 'hotkeys' };
+        }),
+        onboardingCelebrationSeen:
+          current.onboardingCelebrationSeen || dismissed === true,
+      }));
       setSelectedHotkeySlot(slotIndex);
       setOpenModulePickerDialog(false);
       setOpenHotkeyPickerDialog(true);
     },
-    [applyWorkspaceState, dismissed]
+    [applyWorkspaceState, dismissed, pickerWorkspaceKey]
   );
 
   const handleRunHotkey = useCallback(
@@ -4384,7 +4599,6 @@ export const HomeQortinoWorkspaceCard = ({
       applyWorkspaceState((current) => {
         return {
           ...current,
-          mode: 'music',
           musicPlaying: isSameTrack ? !current.musicPlaying : true,
           onboardingCelebrationSeen:
             current.onboardingCelebrationSeen || dismissed === true,
@@ -4439,23 +4653,30 @@ export const HomeQortinoWorkspaceCard = ({
     [handleToggleTrack]
   );
 
-  const handleOpenModulePicker = useCallback(() => {
-    applyWorkspaceState((current) => ({
-      ...current,
-      onboardingCelebrationSeen: true,
-    }));
-    setOpenHotkeyPickerDialog(false);
-    setOpenModulePickerDialog(true);
-  }, [applyWorkspaceState]);
-
-  const handleOpenHotkeyPicker = useCallback(
-    (slotIndex = 0) => {
+  const handleOpenModulePicker = useCallback(
+    (key: string) => {
       applyWorkspaceState((current) => ({
         ...current,
-        mode: 'hotkeys',
+        onboardingCelebrationSeen: true,
+      }));
+      setPickerWorkspaceKey(key);
+      setOpenHotkeyPickerDialog(false);
+      setOpenModulePickerDialog(true);
+    },
+    [applyWorkspaceState]
+  );
+
+  const handleOpenHotkeyPicker = useCallback(
+    (key: string, slotIndex = 0) => {
+      applyWorkspaceState((current) => ({
+        ...withWorkspaceWindow(current, key, (window) => ({
+          ...window,
+          mode: 'hotkeys',
+        })),
         onboardingCelebrationSeen:
           current.onboardingCelebrationSeen || dismissed === true,
       }));
+      setPickerWorkspaceKey(key);
       setSelectedHotkeySlot(slotIndex);
       setHotkeySearchQuery('');
       setDebouncedHotkeySearchQuery('');
@@ -4464,35 +4685,27 @@ export const HomeQortinoWorkspaceCard = ({
     },
     [applyWorkspaceState, dismissed]
   );
-  const handleSelectWorkspaceModule = useCallback(
-    (module: WorkspaceModuleDefinition) => {
-      if (module.appName) {
-        console.log('going through');
-        setOpenModulePickerDialog(false);
-        window.requestAnimationFrame(() => {
-          openApp(module.appName as string, module.appPath ?? '');
-        });
-        return;
-      }
+  const handleSelectWorkspaceModule = (module: WorkspaceModuleDefinition) => {
+    if (module.appName) {
+      setOpenModulePickerDialog(false);
+      window.requestAnimationFrame(() => {
+        openApp(module.appName as string, module.appPath ?? '');
+      });
+      return;
+    }
 
-      if (module.mode === 'hotkeys') {
-        handleOpenHotkeyPicker(
-          firstEmptyHotkeySlot >= 0 ? firstEmptyHotkeySlot : 0
-        );
-        return;
-      }
+    if (module.mode === 'hotkeys') {
+      handleOpenHotkeyPicker(
+        pickerWorkspaceKey,
+        firstEmptyHotkeySlotOf(pickerWorkspaceKey)
+      );
+      return;
+    }
 
-      if (module.mode) {
-        handleSelectWorkspaceMode(module.mode);
-      }
-    },
-    [
-      firstEmptyHotkeySlot,
-      handleOpenHotkeyPicker,
-      handleSelectWorkspaceMode,
-      openApp,
-    ]
-  );
+    if (module.mode) {
+      handleSelectWorkspaceMode(pickerWorkspaceKey, module.mode);
+    }
+  };
 
   const workspaceLabelColor = alpha(theme.palette.text.secondary, 0.78);
   const subtleLine = getBlueAmbientLineBackground(theme, 'soft');
@@ -5011,18 +5224,24 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const workspaceBayHeightPx =
     QORTINO_WORKSPACE_BAY_HEIGHT_PX + workspaceBaySeparatorExtension;
-  const onboardingCompanionLift = 8;
+  // Under Getting started, Qortino's content tucks under its edge, as it
+  // did under the Workspace; alone in its window it doesn't.
+  const qortinoCompanionLift = isOnboardingVisible
+    ? qortinoLayoutDebug.separatorOffsetY + 8
+    : 0;
 
-  const workspaceBaySection = (
+  // Getting started, for a new account: in Qortino's window, over Qortino.
+  const gettingStartedSection = isOnboardingVisible ? (
     <Box
       sx={{
         background: workspaceBayBackground,
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
+        flexShrink: 0,
+        height: `${workspaceBayHeightPx}px`,
         minHeight: 0,
-        px: isOnboardingVisible ? 2.15 : 2,
-        py: isOnboardingVisible ? 1.72 : 1.25,
+        px: 2.15,
+        py: 1.72,
         position: 'relative',
         zIndex: 1,
         '&::after': {
@@ -5038,570 +5257,432 @@ export const HomeQortinoWorkspaceCard = ({
         },
       }}
     >
-      {isOnboardingVisible ? (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.02,
+          height: '100%',
+          '@container qortino-card (max-width: 390px)': {
+            gap: 0.9,
+          },
+        }}
+      >
         <Box
           sx={{
+            alignItems: 'baseline',
             display: 'flex',
-            flexDirection: 'column',
-            gap: 1.02,
-            height: '100%',
+            justifyContent: 'space-between',
             '@container qortino-card (max-width: 390px)': {
-              gap: 0.9,
+              gap: 0.8,
             },
           }}
         >
-          <Box
+          <Typography
             sx={{
-              alignItems: 'baseline',
-              display: 'flex',
-              justifyContent: 'space-between',
-              '@container qortino-card (max-width: 390px)': {
-                gap: 0.8,
-              },
+              color: workspaceLabelColor,
+              fontSize: '0.66rem',
+              fontWeight: 700,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
             }}
           >
-            <Typography
-              sx={{
-                color: workspaceLabelColor,
-                fontSize: '0.66rem',
-                fontWeight: 700,
-                letterSpacing: '0.16em',
-                textTransform: 'uppercase',
-              }}
-            >
-              {t('group:home.getting_started', 'Getting started')}
-            </Typography>
-            <Typography
-              sx={{
-                color: alpha(theme.palette.text.secondary, 0.52),
-                fontSize: '0.64rem',
-                fontWeight: 600,
-                letterSpacing: '0.04em',
-              }}
-            >
-              {qw('onboarding_step_progress', 'Step {{current}} / {{total}}', {
-                current: currentProgressStepDisplay,
-                total: steps.length,
-              })}
-            </Typography>
-          </Box>
-          {currentStep.key === 'get_six_qorts' &&
-          !isQortsAcquiredAwaitingNext ? (
+            {t('group:home.getting_started', 'Getting started')}
+          </Typography>
+          <Typography
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.52),
+              fontSize: '0.64rem',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+            }}
+          >
+            {qw('onboarding_step_progress', 'Step {{current}} / {{total}}', {
+              current: currentProgressStepDisplay,
+              total: steps.length,
+            })}
+          </Typography>
+        </Box>
+        {currentStep.key === 'get_six_qorts' && !isQortsAcquiredAwaitingNext ? (
+          <Box
+            sx={{
+              display: 'flex',
+              flex: 1,
+              flexDirection: 'column',
+              gap: 1,
+              minHeight: 0,
+              transform: 'translateY(10px)',
+            }}
+          >
             <Box
               sx={{
-                display: 'flex',
-                flex: 1,
-                flexDirection: 'column',
-                gap: 1,
-                minHeight: 0,
-                transform: 'translateY(10px)',
+                alignItems: 'flex-start',
+                display: 'grid',
+                gap: '12px',
+                gridTemplateColumns: '40px minmax(0, 1fr)',
+                minWidth: 0,
+                pb: 1.22,
+                pt: 0.2,
+                position: 'relative',
+                '@container qortino-card (max-width: 390px)': {
+                  gap: '10px',
+                  gridTemplateColumns: '34px minmax(0, 1fr)',
+                },
+                '&::after': {
+                  background: alpha(
+                    theme.palette.common.white,
+                    isDarkMode ? 0.06 : 0.12
+                  ),
+                  bottom: 0,
+                  content: '""',
+                  height: '1px',
+                  left: 0,
+                  position: 'absolute',
+                  right: 0,
+                },
               }}
             >
-              <Box
+              <CurrentStepIcon
                 sx={{
-                  alignItems: 'flex-start',
-                  display: 'grid',
-                  gap: '12px',
-                  gridTemplateColumns: '40px minmax(0, 1fr)',
-                  minWidth: 0,
-                  pb: 1.22,
-                  pt: 0.2,
-                  position: 'relative',
+                  color: alpha(currentStep.accent, 0.92),
+                  fontSize: '32px',
+                  mt: '2px',
                   '@container qortino-card (max-width: 390px)': {
-                    gap: '10px',
-                    gridTemplateColumns: '34px minmax(0, 1fr)',
-                  },
-                  '&::after': {
-                    background: alpha(
-                      theme.palette.common.white,
-                      isDarkMode ? 0.06 : 0.12
-                    ),
-                    bottom: 0,
-                    content: '""',
-                    height: '1px',
-                    left: 0,
-                    position: 'absolute',
-                    right: 0,
+                    fontSize: '28px',
                   },
                 }}
-              >
-                <CurrentStepIcon
-                  sx={{
-                    color: alpha(currentStep.accent, 0.92),
-                    fontSize: '32px',
-                    mt: '2px',
-                    '@container qortino-card (max-width: 390px)': {
-                      fontSize: '28px',
-                    },
-                  }}
-                />
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.48,
-                    minWidth: 0,
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.primary, 0.96),
-                      fontSize: '0.98rem',
-                      fontWeight: 700,
-                      letterSpacing: '-0.02em',
-                      lineHeight: 1.08,
-                      '@container qortino-card (max-width: 390px)': {
-                        fontSize: '0.9rem',
-                      },
-                    }}
-                  >
-                    {currentStep.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.secondary, 0.76),
-                      fontSize: '0.71rem',
-                      letterSpacing: '-0.01em',
-                      lineHeight: 1.3,
-                      maxWidth: '30ch',
-                      '@container qortino-card (max-width: 390px)': {
-                        fontSize: '0.67rem',
-                        lineHeight: 1.24,
-                      },
-                    }}
-                  >
-                    {t(
-                      'group:home.get_qorts_workspace_hint',
-                      'Unlock your first 2 QORT to activate the rest of the setup.'
-                    )}
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 0,
-                  mt: 0.42,
-                }}
-              >
-                {currentStepGetQortMethods.map((method, index) => (
-                  <GettingStartedMethodRow
-                    accent={currentStep.accent}
-                    description={method.description}
-                    emphasized={method.recommended}
-                    icon={method.icon}
-                    key={method.key}
-                    label={method.label}
-                    onClick={method.onClick}
-                    showChevron={method.recommended}
-                    showDivider={index < currentStepGetQortMethods.length - 1}
-                  />
-                ))}
-              </Box>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                display: 'flex',
-                flex: 1,
-                flexDirection: 'column',
-                gap: 1,
-                minHeight: 0,
-                transform: 'translateY(10px)',
-              }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'flex-start',
-                  display: 'grid',
-                  gap: '12px',
-                  gridTemplateColumns: '40px minmax(0, 1fr)',
-                  minWidth: 0,
-                  pb: 1.16,
-                  pt: 0.2,
-                  position: 'relative',
-                  '@container qortino-card (max-width: 390px)': {
-                    gap: '10px',
-                    gridTemplateColumns: '34px minmax(0, 1fr)',
-                  },
-                  '&::after': {
-                    background: alpha(
-                      theme.palette.common.white,
-                      isDarkMode ? 0.06 : 0.12
-                    ),
-                    bottom: 0,
-                    content: '""',
-                    height: '1px',
-                    left: 0,
-                    position: 'absolute',
-                    right: 0,
-                  },
-                }}
-              >
-                <CurrentStepIcon
-                  sx={{
-                    color: alpha(currentStep.accent, 0.92),
-                    fontSize: '32px',
-                    mt: '2px',
-                    '@container qortino-card (max-width: 390px)': {
-                      fontSize: '28px',
-                    },
-                  }}
-                />
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.48,
-                    minWidth: 0,
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.primary, 0.96),
-                      fontSize: '0.98rem',
-                      fontWeight: 700,
-                      letterSpacing: '-0.008em',
-                      lineHeight: 1.08,
-                      maxWidth: '19ch',
-                      '@container qortino-card (max-width: 390px)': {
-                        fontSize: '0.92rem',
-                      },
-                    }}
-                  >
-                    {currentStep.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.secondary, 0.76),
-                      fontSize: '0.71rem',
-                      letterSpacing: '0.01em',
-                      lineHeight: 1.3,
-                      maxWidth: '31ch',
-                      '@container qortino-card (max-width: 390px)': {
-                        fontSize: '0.67rem',
-                        lineHeight: 1.24,
-                      },
-                    }}
-                  >
-                    {currentStep.helper}
-                  </Typography>
-                </Box>
-              </Box>
+              />
               <Box
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 0.48,
-                  mt: 0.42,
+                  minWidth: 0,
                 }}
               >
-                <GettingStartedPrimaryAction
-                  accent={currentStep.accent}
-                  label={currentStepPrimaryAction.label}
-                  loading={currentStepPrimaryAction.loading}
-                  onClick={currentStepPrimaryAction.onClick}
-                />
-                {currentStepSecondaryActions.length > 0 ? (
-                  <Box
-                    sx={{
-                      alignItems: 'flex-start',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 0.08,
-                      ml: -0.1,
-                    }}
-                  >
-                    {currentStepSecondaryActions.map((action, index) => (
-                      <GettingStartedSecondaryAction
-                        accent={currentStep.accent}
-                        key={`${currentStep.key}-secondary-${index}`}
-                        label={action.label}
-                        onClick={action.onClick}
-                      />
-                    ))}
-                  </Box>
-                ) : null}
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.primary, 0.96),
+                    fontSize: '0.98rem',
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.08,
+                    '@container qortino-card (max-width: 390px)': {
+                      fontSize: '0.9rem',
+                    },
+                  }}
+                >
+                  {currentStep.label}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.secondary, 0.76),
+                    fontSize: '0.71rem',
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.3,
+                    maxWidth: '30ch',
+                    '@container qortino-card (max-width: 390px)': {
+                      fontSize: '0.67rem',
+                      lineHeight: 1.24,
+                    },
+                  }}
+                >
+                  {t(
+                    'group:home.get_qorts_workspace_hint',
+                    'Unlock your first 2 QORT to activate the rest of the setup.'
+                  )}
+                </Typography>
               </Box>
             </Box>
-          )}
-        </Box>
-      ) : workspaceState.mode === 'empty' ? (
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            flex: 1,
-            flexDirection: 'column',
-            gap: 1,
-            justifyContent: 'center',
-            textAlign: 'center',
-          }}
-        >
-          <ButtonBase
-            onClick={handleOpenModulePicker}
+
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                mt: 0.42,
+              }}
+            >
+              {currentStepGetQortMethods.map((method, index) => (
+                <GettingStartedMethodRow
+                  accent={currentStep.accent}
+                  description={method.description}
+                  emphasized={method.recommended}
+                  icon={method.icon}
+                  key={method.key}
+                  label={method.label}
+                  onClick={method.onClick}
+                  showChevron={method.recommended}
+                  showDivider={index < currentStepGetQortMethods.length - 1}
+                />
+              ))}
+            </Box>
+          </Box>
+        ) : (
+          <Box
             sx={{
-              alignItems: 'center',
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(180deg, rgba(140,184,255,0.9) 0%, rgba(109,166,255,0.88) 100%)'
-                  : 'linear-gradient(180deg, rgba(148,190,255,0.92) 0%, rgba(118,171,255,0.88) 100%)',
-              border: `1px solid ${alpha('#8DB8FF', 0.22)}`,
-              borderRadius: '14px',
-              boxShadow: `0 10px 24px ${alpha('#000', 0.18)}, 0 0 0 1px ${alpha(
-                '#fff',
-                0.05
-              )} inset, 0 0 18px ${alpha('#8DB8FF', 0.16)}`,
-              display: 'inline-flex',
-              height: '42px',
-              justifyContent: 'center',
-              transition:
-                'transform 120ms ease, box-shadow 140ms ease, filter 140ms ease',
-              width: '42px',
-              '&:hover': {
-                boxShadow: `0 12px 26px ${alpha('#000', 0.22)}, 0 0 0 1px ${alpha(
-                  '#fff',
-                  0.06
-                )} inset, 0 0 22px ${alpha('#8DB8FF', 0.2)}`,
-                filter: 'brightness(1.03)',
-                transform: 'translateY(-1px)',
-              },
+              display: 'flex',
+              flex: 1,
+              flexDirection: 'column',
+              gap: 1,
+              minHeight: 0,
+              transform: 'translateY(10px)',
             }}
           >
-            <AddRoundedIcon
-              sx={{ color: APP_BLUE_SURFACE_TEXT, fontSize: '21px' }}
-            />
-          </ButtonBase>
-          <Typography
-            sx={{
-              color: alpha(theme.palette.text.primary, 0.92),
-              fontSize: '0.78rem',
-              lineHeight: 1.45,
-              maxWidth: '24ch',
-            }}
-          >
-            {qw('workspace_empty_prompt', 'Choose what lives above QORTINO.')}
-          </Typography>
-        </Box>
-      ) : workspaceState.mode === 'hotkeys' ? (
-        <Box
-          sx={{
-            display: 'flex',
-            flex: 1,
-            flexDirection: 'column',
-            minHeight: 0,
-          }}
-        >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                display: 'grid',
+                gap: '12px',
+                gridTemplateColumns: '40px minmax(0, 1fr)',
+                minWidth: 0,
+                pb: 1.16,
+                pt: 0.2,
+                position: 'relative',
+                '@container qortino-card (max-width: 390px)': {
+                  gap: '10px',
+                  gridTemplateColumns: '34px minmax(0, 1fr)',
+                },
+                '&::after': {
+                  background: alpha(
+                    theme.palette.common.white,
+                    isDarkMode ? 0.06 : 0.12
+                  ),
+                  bottom: 0,
+                  content: '""',
+                  height: '1px',
+                  left: 0,
+                  position: 'absolute',
+                  right: 0,
+                },
+              }}
+            >
+              <CurrentStepIcon
+                sx={{
+                  color: alpha(currentStep.accent, 0.92),
+                  fontSize: '32px',
+                  mt: '2px',
+                  '@container qortino-card (max-width: 390px)': {
+                    fontSize: '28px',
+                  },
+                }}
+              />
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.48,
+                  minWidth: 0,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.primary, 0.96),
+                    fontSize: '0.98rem',
+                    fontWeight: 700,
+                    letterSpacing: '-0.008em',
+                    lineHeight: 1.08,
+                    maxWidth: '19ch',
+                    '@container qortino-card (max-width: 390px)': {
+                      fontSize: '0.92rem',
+                    },
+                  }}
+                >
+                  {currentStep.label}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.secondary, 0.76),
+                    fontSize: '0.71rem',
+                    letterSpacing: '0.01em',
+                    lineHeight: 1.3,
+                    maxWidth: '31ch',
+                    '@container qortino-card (max-width: 390px)': {
+                      fontSize: '0.67rem',
+                      lineHeight: 1.24,
+                    },
+                  }}
+                >
+                  {currentStep.helper}
+                </Typography>
+              </Box>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.48,
+                mt: 0.42,
+              }}
+            >
+              <GettingStartedPrimaryAction
+                accent={currentStep.accent}
+                label={currentStepPrimaryAction.label}
+                loading={currentStepPrimaryAction.loading}
+                onClick={currentStepPrimaryAction.onClick}
+              />
+              {currentStepSecondaryActions.length > 0 ? (
+                <Box
+                  sx={{
+                    alignItems: 'flex-start',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.08,
+                    ml: -0.1,
+                  }}
+                >
+                  {currentStepSecondaryActions.map((action, index) => (
+                    <GettingStartedSecondaryAction
+                      accent={currentStep.accent}
+                      key={`${currentStep.key}-secondary-${index}`}
+                      label={action.label}
+                      onClick={action.onClick}
+                    />
+                  ))}
+                </Box>
+              ) : null}
+            </Box>
+          </Box>
+        )}
+      </Box>
+    </Box>
+  ) : null;
+
+  /** One Workspace window's module: its first app slot is where a new app goes. */
+  const renderWorkspace = (key: string) => {
+    const { hotkeys, mode } = workspaceWindowOf(workspaceState, key);
+    return (
+      <Box
+        sx={{
+          background: workspaceBayBackground,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          justifyContent: 'center',
+          minHeight: 0,
+          px: 2,
+          py: 1.25,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        {mode === 'empty' ? (
           <Box
             sx={{
               alignItems: 'center',
               display: 'flex',
-              justifyContent: 'space-between',
-              pb: '12px',
-              pl: '10px',
-              pr: '10px',
-              pt: '10px',
-              transform: `translateY(${qortinoLayoutDebug.musicHeaderOffsetY - 11}px)`,
-              '@container qortino-card (max-width: 390px)': {
-                pb: '10px',
-                pl: '8px',
-                pr: '8px',
-                pt: '8px',
-              },
+              flex: 1,
+              flexDirection: 'column',
+              gap: 1,
+              justifyContent: 'center',
+              textAlign: 'center',
             }}
           >
-            <Typography
+            <ButtonBase
+              onClick={() => handleOpenModulePicker(key)}
               sx={{
-                color: alpha(theme.palette.text.secondary, 0.82),
-                fontSize: '0.66rem',
-                fontWeight: 700,
-                letterSpacing: '0.11em',
-                textTransform: 'uppercase',
+                alignItems: 'center',
+                background:
+                  theme.palette.mode === 'dark'
+                    ? 'linear-gradient(180deg, rgba(140,184,255,0.9) 0%, rgba(109,166,255,0.88) 100%)'
+                    : 'linear-gradient(180deg, rgba(148,190,255,0.92) 0%, rgba(118,171,255,0.88) 100%)',
+                border: `1px solid ${alpha('#8DB8FF', 0.22)}`,
+                borderRadius: '14px',
+                boxShadow: `0 10px 24px ${alpha('#000', 0.18)}, 0 0 0 1px ${alpha(
+                  '#fff',
+                  0.05
+                )} inset, 0 0 18px ${alpha('#8DB8FF', 0.16)}`,
+                display: 'inline-flex',
+                height: '42px',
+                justifyContent: 'center',
+                transition:
+                  'transform 120ms ease, box-shadow 140ms ease, filter 140ms ease',
+                width: '42px',
+                '&:hover': {
+                  boxShadow: `0 12px 26px ${alpha('#000', 0.22)}, 0 0 0 1px ${alpha(
+                    '#fff',
+                    0.06
+                  )} inset, 0 0 22px ${alpha('#8DB8FF', 0.2)}`,
+                  filter: 'brightness(1.03)',
+                  transform: 'translateY(-1px)',
+                },
               }}
             >
-              {qw('workspace_header_hotkeys', 'Hotkeys')}
+              <AddRoundedIcon
+                sx={{ color: APP_BLUE_SURFACE_TEXT, fontSize: '21px' }}
+              />
+            </ButtonBase>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.primary, 0.92),
+                fontSize: '0.78rem',
+                lineHeight: 1.45,
+                maxWidth: '24ch',
+              }}
+            >
+              {qw(
+                'workspace_empty_prompt',
+                'Choose what this workspace shows.'
+              )}
             </Typography>
-            <Box sx={{ display: 'flex', gap: '6px' }}>
-              <IconButton
-                onClick={() =>
-                  handleOpenHotkeyPicker(
-                    firstEmptyHotkeySlot >= 0 ? firstEmptyHotkeySlot : 0
-                  )
-                }
-                size="small"
-                sx={{
-                  borderRadius: '9px',
-                  color: alpha('#9FC4FF', 0.92),
-                  height: '30px',
-                  width: '30px',
-                  '&:hover': {
-                    background: alpha('#8DB8FF', 0.1),
-                  },
-                }}
-              >
-                <TuneRoundedIcon sx={{ fontSize: '18px' }} />
-              </IconButton>
-              <IconButton
-                onClick={() => handleSelectWorkspaceMode('empty')}
-                size="small"
-                sx={{
-                  borderRadius: '9px',
-                  color: alpha(theme.palette.text.secondary, 0.84),
-                  height: '30px',
-                  width: '30px',
-                  '&:hover': {
-                    background: alpha(
-                      theme.palette.common.white,
-                      isDarkMode ? 0.05 : 0.08
-                    ),
-                  },
-                }}
-              >
-                <CloseRoundedIcon sx={{ fontSize: '18px' }} />
-              </IconButton>
-            </Box>
           </Box>
-
-          <Box
-            sx={{
-              alignContent: 'start',
-              display: 'grid',
-              flex: 1,
-              gap: '10px',
-              gridAutoRows: 'minmax(0, 1fr)',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-              minHeight: 0,
-              width: '100%',
-              px: '10px',
-              pb: '10px',
-              '@container qortino-card (max-width: 390px)': {
-                gap: '8px',
-                px: '8px',
-                pb: '8px',
-              },
+        ) : mode === 'hotkeys' ? (
+          <QortinoWorkspaceApps
+            apps={hotkeys.map((slotValue) =>
+              slotValue ? resolveHotkeyApp(slotValue) : null
+            )}
+            labels={{
+              add: qw('workspace_add_app', 'Add app'),
+              close: qw('close_module', 'Close {{module}}', {
+                module: qw('modules_hotkeys_label', 'Hotkeys'),
+              }),
+              edit: qw('edit_apps', 'Choose the apps'),
+              title: qw('workspace_header_hotkeys', 'Hotkeys'),
             }}
+            onAdd={(slot) => handleOpenHotkeyPicker(key, slot)}
+            onClose={() => handleSelectWorkspaceMode(key, 'empty')}
+            onEdit={() =>
+              handleOpenHotkeyPicker(key, firstEmptyHotkeySlotOf(key))
+            }
+            onOpen={(slot) => {
+              const slotValue = hotkeys[slot];
+              if (slotValue) handleRunHotkey(slotValue);
+            }}
+          />
+        ) : (
+          <QortinoFitBox
+            max={1.5}
+            min={0.45}
+            natural={MUSIC_PLAYER_NATURAL_SIZE}
           >
-            {workspaceState.hotkeys.map((appName, index) => {
-              const app = appName ? resolveHotkeyApp(appName) : null;
-
-              return (
-                <ButtonBase
-                  key={`slot-${index}`}
-                  onClick={() =>
-                    app
-                      ? handleRunHotkey(app.appName)
-                      : handleOpenHotkeyPicker(index)
-                  }
-                  sx={{
-                    alignItems: 'center',
-                    background: 'transparent',
-                    border: '1px solid transparent',
-                    borderRadius: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.8,
-                    height: '100%',
-                    justifyContent: 'center',
-                    minWidth: 0,
-                    px: 0.7,
-                    py: 0.7,
-                    transition:
-                      'background 150ms ease, box-shadow 150ms ease, transform 120ms ease',
-                    '&:hover': {
-                      background: `linear-gradient(180deg, ${alpha('#9FC4FF', 0.18)} 0%, ${alpha(
-                        '#8DB8FF',
-                        0.1
-                      )} 58%, ${alpha('#8DB8FF', 0.04)} 100%)`,
-                      boxShadow: `inset 0 0 0 1px ${alpha('#9FC4FF', 0.14)}`,
-                      transform: 'translateY(-1px)',
-                    },
-                  }}
-                >
-                  {app ? (
-                    <>
-                      <HotkeyAppAvatar
-                        appName={app.appName}
-                        radius={11}
-                        size={34}
-                      />
-                      <Typography
-                        sx={{
-                          color: alpha(theme.palette.text.primary, 0.92),
-                          display: '-webkit-box',
-                          fontSize: '0.61rem',
-                          fontWeight: 700,
-                          lineHeight: 1.18,
-                          overflow: 'hidden',
-                          textAlign: 'center',
-                          textOverflow: 'ellipsis',
-                          WebkitBoxOrient: 'vertical',
-                          WebkitLineClamp: 2,
-                        }}
-                      >
-                        {app.label}
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
-                      <Box
-                        sx={{
-                          alignItems: 'center',
-                          color: alpha(theme.palette.text.secondary, 0.62),
-                          display: 'flex',
-                          height: '34px',
-                          justifyContent: 'center',
-                          width: '34px',
-                        }}
-                      >
-                        <AddRoundedIcon sx={{ fontSize: '19px' }} />
-                      </Box>
-                      <Typography
-                        sx={{
-                          color: alpha(theme.palette.text.secondary, 0.7),
-                          fontSize: '0.59rem',
-                          fontWeight: 700,
-                          lineHeight: 1.12,
-                          textAlign: 'center',
-                        }}
-                      >
-                        {qw('workspace_add_app', 'Add app')}
-                      </Typography>
-                    </>
-                  )}
-                </ButtonBase>
-              );
-            })}
-          </Box>
-        </Box>
-      ) : (
-        <QortinoMusicPlayer
-          activeTrack={activeTrack}
-          activeTrackDurationSeconds={activeTrackDurationSeconds}
-          activeTrackPlaybackUrl={activeTrackPlaybackUrl}
-          activeTrackReadyPercent={activeTrackReadyPercent}
-          audioRef={audioRef}
-          isTrackLoadError={isTrackLoadError}
-          isTrackPeerStarved={isTrackPeerStarved}
-          isTrackPlayable={isTrackPlayable}
-          isTrackPreparing={isTrackPreparing}
-          isTrackReady={isTrackReady}
-          musicPlaying={workspaceState.musicPlaying}
-          musicStatusSlotMessage={musicStatusSlotMessage}
-          onClearStreamError={clearMusicStreamError}
-          onClose={() => handleSelectWorkspaceMode('empty')}
-          onCycleTrack={handleCycleTrack}
-          onOpenSearch={() => setOpenMusicSearchDialog(true)}
-          onToggleRepeatMode={handleToggleRepeatMode}
-          onToggleTrack={handleToggleTrack}
-          qortinoLayoutDebug={qortinoLayoutDebug}
-          repeatMode={workspaceState.repeatMode}
-          title={qw('workspace_header_music', 'Music player')}
-        />
-      )}
-    </Box>
-  );
+            <QortinoMusicPlayer
+              activeTrack={activeTrack}
+              activeTrackDurationSeconds={activeTrackDurationSeconds}
+              activeTrackPlaybackUrl={activeTrackPlaybackUrl}
+              activeTrackReadyPercent={activeTrackReadyPercent}
+              audioRef={audioRef}
+              isTrackLoadError={isTrackLoadError}
+              isTrackPeerStarved={isTrackPeerStarved}
+              isTrackPlayable={isTrackPlayable}
+              isTrackPreparing={isTrackPreparing}
+              isTrackReady={isTrackReady}
+              musicPlaying={workspaceState.musicPlaying}
+              musicStatusSlotMessage={musicStatusSlotMessage}
+              onClearStreamError={clearMusicStreamError}
+              onClose={() => handleSelectWorkspaceMode(key, 'empty')}
+              onCycleTrack={handleCycleTrack}
+              onOpenSearch={() => setOpenMusicSearchDialog(true)}
+              onToggleRepeatMode={handleToggleRepeatMode}
+              onToggleTrack={handleToggleTrack}
+              qortinoLayoutDebug={qortinoLayoutDebug}
+              repeatMode={workspaceState.repeatMode}
+              title={qw('workspace_header_music', 'Music player')}
+            />
+          </QortinoFitBox>
+        )}
+      </Box>
+    );
+  };
 
   const qortinoStatusKey = isQortinoTickled
     ? 'ticklish'
@@ -5611,8 +5692,7 @@ export const HomeQortinoWorkspaceCard = ({
         ? 'helpful'
         : isWorkspaceFreshlyUnlocked || qortinoEyesFlash === 'happy'
           ? 'happy'
-          : qortinoComposerFocused ||
-              (workspaceState.mode === 'music' && workspaceState.musicPlaying)
+          : qortinoComposerFocused || (isMusicOn && workspaceState.musicPlaying)
             ? 'listening'
             : qortinoQuip
               ? 'chatty'
@@ -5650,6 +5730,7 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const renderQortinoCompanionPreviewSection = useCallback(
     ({
+      compact = false,
       composer = null,
       displayedMessage,
       isTickled,
@@ -5671,6 +5752,11 @@ export const HomeQortinoWorkspaceCard = ({
       showConfetti = false,
       statusLabel,
     }: {
+      /**
+       * Under Getting started: Qortino in the room it leaves, a little
+       * smaller, with his name over his bubble.
+       */
+      compact?: boolean;
       /** The ask box next to him, once Qortino AI has a model. */
       composer?: ReactNode;
       displayedMessage: string | null;
@@ -5696,6 +5782,109 @@ export const HomeQortinoWorkspaceCard = ({
       statusLabel: string;
     }) => {
       const shouldShowQortinoConfetti = showConfetti;
+      // Qortino's name and status.
+      const nameAndStatus = (
+        <Box
+          sx={{
+            alignItems: 'flex-start',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            mb: compact ? 0 : 1.05,
+            mt: compact ? 0 : '10px',
+            ...(compact ? { alignSelf: 'stretch' } : {}),
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: compact ? 'center' : 'flex-start',
+              display: 'flex',
+              // Compact: the status before the name, on one line.
+              flexDirection: compact ? 'row-reverse' : 'column',
+              gap: compact ? '6px' : '3px',
+              minWidth: '78px',
+            }}
+          >
+            <Typography
+              sx={{
+                color: workspaceLabelColor,
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                transform: compact
+                  ? 'none'
+                  : `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
+                textTransform: 'uppercase',
+              }}
+            >
+              QORTINO
+            </Typography>
+            <Box
+              sx={{
+                alignSelf: compact ? 'center' : 'flex-start',
+                overflow: 'visible',
+                position: 'relative',
+                transform: compact
+                  ? 'none'
+                  : `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
+              }}
+            >
+              <Box
+                sx={{
+                  border: '1px solid transparent',
+                  borderRadius: '4px',
+                  px: '3px',
+                  py: '1px',
+                  visibility: 'hidden',
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: 'transparent',
+                    fontSize: '0.58rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {QORTINO_STATUS_REFERENCE_LABEL}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
+                  border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
+                  borderRadius: '4px',
+                  boxShadow: `inset 0 1px 0 ${alpha(
+                    theme.palette.common.white,
+                    isDarkMode ? 0.08 : 0.22
+                  )}`,
+                  position: 'absolute',
+                  px: '3px',
+                  py: '1px',
+                  right: 0,
+                  top: 0,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: isDarkMode
+                      ? alpha('#FFFFFF', 0.98)
+                      : alpha('#2A4F86', 0.95),
+                    fontSize: '0.58rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                    // A status of two words stays on one line.
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {statusLabel}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      );
 
       return (
         <Box
@@ -5727,8 +5916,19 @@ export const HomeQortinoWorkspaceCard = ({
             overflow: 'hidden',
             position: 'relative',
             px: 2,
-            pb: 1.5,
+            // A little under the 23 rows Qortino's window starts with
+            // (HOME_GRID_QORTINO_H), whatever the fonts, so the left column
+            // ends level with the others.
+            pb: compact ? 0.5 : 1,
             pt: 0,
+            ...(compact
+              ? {
+                  display: 'flex',
+                  flex: '1 1 auto',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                }
+              : {}),
           }}
         >
           <DotPattern
@@ -5785,110 +5985,29 @@ export const HomeQortinoWorkspaceCard = ({
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: '100%',
-              transform: `translateY(${-(qortinoLayoutDebug.separatorOffsetY + onboardingCompanionLift)}px)`,
+              height: compact ? 'auto' : '100%',
+              transform: compact
+                ? 'none'
+                : `translateY(${-qortinoCompanionLift}px)`,
             }}
           >
+            {compact ? null : nameAndStatus}
             <Box
               sx={{
-                alignItems: 'flex-start',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                mb: 1.05,
-                mt: '10px',
-                position: 'relative',
-                zIndex: 1,
-              }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'flex-start',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '3px',
-                  minWidth: '78px',
-                }}
-              >
-                <Typography
-                  sx={{
-                    color: workspaceLabelColor,
-                    fontSize: '0.68rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.14em',
-                    transform: `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  QORTINO
-                </Typography>
-                <Box
-                  sx={{
-                    alignSelf: 'flex-start',
-                    overflow: 'visible',
-                    position: 'relative',
-                    transform: `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
-                  }}
-                >
-                  <Box
-                    sx={{
-                      border: '1px solid transparent',
-                      borderRadius: '4px',
-                      px: '3px',
-                      py: '1px',
-                      visibility: 'hidden',
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: 'transparent',
-                        fontSize: '0.58rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {QORTINO_STATUS_REFERENCE_LABEL}
-                    </Typography>
-                  </Box>
-                  <Box
-                    sx={{
-                      background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
-                      border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
-                      borderRadius: '4px',
-                      boxShadow: `inset 0 1px 0 ${alpha(
-                        theme.palette.common.white,
-                        isDarkMode ? 0.08 : 0.22
-                      )}`,
-                      position: 'absolute',
-                      px: '3px',
-                      py: '1px',
-                      right: 0,
-                      top: 0,
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: isDarkMode
-                          ? alpha('#FFFFFF', 0.98)
-                          : alpha('#2A4F86', 0.95),
-                        fontSize: '0.58rem',
-                        fontWeight: 700,
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {statusLabel}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-            <Box
-              sx={{
-                alignItems: 'end',
+                alignItems: compact ? 'center' : 'end',
                 columnGap: 1,
                 display: 'grid',
-                gridTemplateColumns: `${qortinoMascotStageWidth}px minmax(0, 1fr)`,
-                mt: '-11px',
-                minHeight: `${Math.max(qortinoMascotStageHeight, 96)}px`,
+                gridTemplateColumns: `${
+                  compact
+                    ? Math.round(
+                        qortinoMascotStageWidth * QORTINO_COMPACT_MASCOT_ZOOM
+                      )
+                    : qortinoMascotStageWidth
+                }px minmax(0, 1fr)`,
+                mt: compact ? 0 : '-11px',
+                minHeight: compact
+                  ? 0
+                  : `${Math.max(qortinoMascotStageHeight, 96)}px`,
                 position: 'relative',
                 zIndex: 1,
               }}
@@ -5903,13 +6022,15 @@ export const HomeQortinoWorkspaceCard = ({
                   overflow: 'visible',
                   touchAction: 'none',
                   transform: `translateY(${qortinoMascotCenteredOffsetY}px)`,
-                  // Long-press would select/highlight the mascot (blue frame).
+                  // Holding him to tickle would select him (a blue frame).
                   userSelect: 'none',
                   WebkitTouchCallout: 'none',
                   WebkitUserSelect: 'none',
                   width: `${qortinoMascotStageWidth}px`,
+                  ...(compact ? { zoom: QORTINO_COMPACT_MASCOT_ZOOM } : {}),
                 }}
                 ref={qortinoStageRef}
+                data-qortino-eyes={mascotMotion?.eyes ?? 'open'}
                 data-testid="qortino-mascot-stage"
                 onDragOver={onMascotDragOver}
                 onDrop={onMascotDrop}
@@ -5934,16 +6055,17 @@ export const HomeQortinoWorkspaceCard = ({
                   alignItems: 'start',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 1.02,
+                  gap: compact ? 0.75 : 1.02,
                   // With the ask box, it sits at his chin and what he says
                   // pops up above it, so the box never moves.
                   justifyContent: composer ? 'flex-end' : 'center',
-                  minHeight: `${qortinoMascotStageHeight}px`,
+                  minHeight: compact ? 0 : `${qortinoMascotStageHeight}px`,
                   minWidth: 0,
                   pb: composer ? '14px' : 0,
                   width: '100%',
                 }}
               >
+                {compact ? nameAndStatus : null}
                 {displayedMessage ? (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
@@ -6045,14 +6167,13 @@ export const HomeQortinoWorkspaceCard = ({
     },
     [
       isDarkMode,
-      onboardingCompanionLift,
+      qortinoCompanionLift,
       qortinoCompanionDebug.bubbleOffsetX,
       qortinoCompanionDebug.bubbleOffsetY,
       qortinoCompanionDebug.nameOffsetX,
       qortinoCompanionDebug.nameOffsetY,
       qortinoCompanionDebug.statusOffsetX,
       qortinoCompanionDebug.statusOffsetY,
-      qortinoLayoutDebug.separatorOffsetY,
       qortinoLookDebug,
       qortinoMascotCenteredOffsetY,
       qortinoMascotStageHeight,
@@ -6065,6 +6186,7 @@ export const HomeQortinoWorkspaceCard = ({
   );
 
   const qortinoCompanionSection = renderQortinoCompanionPreviewSection({
+    compact: isOnboardingVisible,
     composer: showQortinoComposer ? (
       <QortinoHomeComposer
         onFocusChange={setQortinoComposerFocused}
@@ -6073,14 +6195,20 @@ export const HomeQortinoWorkspaceCard = ({
     ) : null,
     displayedMessage: qortinoDisplayedMessage,
     isTickled: isQortinoTickled,
-    isListening: workspaceState.mode === 'music' && workspaceState.musicPlaying,
+    isListening: isMusicOn && workspaceState.musicPlaying,
     isTalking: qortinoIsTalking,
     mascotMotion: {
-      antennaGlow: qortinoComposerFocused || qortinoQuipTyping,
+      // The antenna lights up while he listens: to the ask box, to his own
+      // words, or to the music.
+      antennaGlow:
+        qortinoComposerFocused ||
+        qortinoQuipTyping ||
+        (isMusicOn && workspaceState.musicPlaying),
       chattering: qortinoQuipTyping,
       dozing: qortinoSleepy && qortinoEyesFlash == null,
       eyes: qortinoEyesFlash ?? (qortinoSleepy ? 'sleepy' : 'open'),
       gaze: qortinoMascotGaze,
+      // Once the account is set up, he looks around now and then.
       glancing: hasName && resolvedHasAvatar && !isOnboardingVisible,
       hopKey: qortinoHopKey,
     },
@@ -6305,69 +6433,92 @@ export const HomeQortinoWorkspaceCard = ({
     </AnimatePresence>
   );
 
+  const windowPanelSx = {
+    ...dashboardPanelSx(theme, 'base'),
+    borderRadius: '18px',
+    containerName: 'qortino-card',
+    containerType: 'inline-size',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  } as const;
+
+  // Qortino's window takes the height of what it shows.
+  const qortinoWindow = (
+    <Box
+      ref={panelRef}
+      data-qortino-part="qortino"
+      sx={
+        // Under Getting started Home gives the window a height of its own
+        // (homeGridForGettingStarted): it fills it.
+        isOnboardingVisible
+          ? { ...windowPanelSx, height: '100%' }
+          : windowPanelSx
+      }
+      onMouseMove={handleDashboardPanelPointerMove}
+      onMouseLeave={handleDashboardPanelPointerLeave}
+    >
+      <ErrorBoundary
+        fallback={
+          <QortinoSectionRuntimeFallback
+            body={qw(
+              'runtime_qortino_body',
+              'The rest of Home is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.'
+            )}
+            theme={theme}
+            title={qw('runtime_qortino_title', 'QORTINO hit a runtime snag.')}
+            variant="qortino"
+          />
+        }
+      >
+        {gettingStartedSection}
+        {qortinoCompanionSection}
+      </ErrorBoundary>
+    </Box>
+  );
+
+  const workspaceWindow = (key: string) => (
+    <Box
+      data-qortino-part="workspace"
+      sx={{ ...windowPanelSx, height: '100%' }}
+      onMouseMove={handleDashboardPanelPointerMove}
+      onMouseLeave={handleDashboardPanelPointerLeave}
+    >
+      <ErrorBoundary
+        fallback={
+          <QortinoSectionRuntimeFallback
+            body={qw(
+              'runtime_workspace_bay_body',
+              'The rest of Home is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.'
+            )}
+            theme={theme}
+            title={qw(
+              'runtime_workspace_bay_title',
+              'This workspace hit a runtime snag.'
+            )}
+            variant="workspace"
+          />
+        }
+      >
+        {renderWorkspace(key)}
+      </ErrorBoundary>
+    </Box>
+  );
+
   return (
     <>
-      <Box
-        ref={panelRef}
-        sx={{
-          ...dashboardPanelSx(theme, 'base'),
-          borderRadius: '18px',
-          containerName: 'qortino-card',
-          containerType: 'inline-size',
-          display: 'grid',
-          // In a short Home window the workspace bay gives up room first,
-          // so QORTINO below always shows.
-          gridTemplateRows: showQortino
-            ? `minmax(0, ${workspaceBayHeightPx}px) minmax(${QORTINO_COMPANION_MIN_HEIGHT_PX}px, 1fr)`
-            : `minmax(${workspaceBayHeightPx}px, 1fr)`,
-          height: '100%',
-          overflow: 'hidden',
-          position: 'relative',
-          width: '100%',
-        }}
-        onMouseMove={handleDashboardPanelPointerMove}
-        onMouseLeave={handleDashboardPanelPointerLeave}
-      >
-        <ErrorBoundary
-          fallback={
-            <QortinoSectionRuntimeFallback
-              body={qw(
-                'runtime_workspace_bay_body',
-                'QORTINO below is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.'
-              )}
-              theme={theme}
-              title={qw(
-                'runtime_workspace_bay_title',
-                'Workspace bay hit a runtime snag.'
-              )}
-              variant="workspace"
-            />
-          }
-        >
-          {workspaceBaySection}
-        </ErrorBoundary>
-
-        {showQortino ? (
-          <ErrorBoundary
-            fallback={
-              <QortinoSectionRuntimeFallback
-                body={qw(
-                  'runtime_qortino_body',
-                  'The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.'
-                )}
-                theme={theme}
-                title={qw(
-                  'runtime_qortino_title',
-                  'QORTINO hit a runtime snag.'
-                )}
-                variant="qortino"
-              />
-            }
-          >
-            {qortinoCompanionSection}
-          </ErrorBoundary>
-        ) : null}
-      </Box>
+      {qortinoNode ? createPortal(qortinoWindow, qortinoNode) : null}
+      {(workspaces ?? []).map((place) =>
+        place.node
+          ? createPortal(
+              workspaceWindow(place.key),
+              place.node,
+              `workspace:${place.key}`
+            )
+          : null
+      )}
       {qortinoDonationOverlay}
       {openModulePickerDialog ? (
         <Dialog
@@ -6412,7 +6563,10 @@ export const HomeQortinoWorkspaceCard = ({
                   mt: 0.3,
                 }}
               >
-                {qw('dialog_module_subtitle', 'Pick what lives above QORTINO.')}
+                {qw(
+                  'dialog_module_subtitle',
+                  'Pick what this workspace shows.'
+                )}
               </Typography>
             </Box>
             <IconButton
@@ -6485,6 +6639,25 @@ export const HomeQortinoWorkspaceCard = ({
                   >
                     {module.description}
                   </Typography>
+                  {module.mode === 'music' &&
+                  musicWorkspaceTitle &&
+                  musicWorkspaceKey !== pickerWorkspaceKey ? (
+                    <Typography
+                      sx={{
+                        color: curatedAccentBlue,
+                        fontSize: '0.66rem',
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        mt: 0.3,
+                      }}
+                    >
+                      {qw(
+                        'modules_music_elsewhere',
+                        'In {{window}} now. Picked here, it moves here.',
+                        { window: musicWorkspaceTitle }
+                      )}
+                    </Typography>
+                  ) : null}
                 </Box>
               </ButtonBase>
             ))}
@@ -6572,7 +6745,7 @@ export const HomeQortinoWorkspaceCard = ({
               width: '100%',
             }}
           >
-            {workspaceState.hotkeys.map((appName, index) => {
+            {pickerHotkeys.map((appName, index) => {
               const app = appName ? resolveHotkeyApp(appName) : null;
               const isActive = selectedHotkeySlot === index;
 
@@ -6839,7 +7012,7 @@ export const HomeQortinoWorkspaceCard = ({
             >
               {qw(
                 'dialog_music_search_subtitle',
-                'Find a track, press play, and drop it into the player above.'
+                'Find a track and press play to put it in the player.'
               )}
             </Typography>
           </Box>

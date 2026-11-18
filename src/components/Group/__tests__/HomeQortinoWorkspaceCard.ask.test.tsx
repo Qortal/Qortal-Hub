@@ -1,5 +1,11 @@
 import { createContext } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -61,6 +67,9 @@ const flush = () =>
     await vi.advanceTimersByTimeAsync(0);
   });
 
+/** Qortino's window on Home, which the card fills. */
+const qortinoSlots: HTMLElement[] = [];
+
 /** Home with Qortino AI ready: the signed-in account sees the ask box. */
 const renderHome = async () => {
   window.qortinoLlm = bridge as unknown as typeof window.qortinoLlm;
@@ -74,10 +83,12 @@ const renderHome = async () => {
     json: () => Promise.resolve([]),
   }) as typeof fetch;
   window.sendMessage = vi.fn(async () => null) as typeof window.sendMessage;
+  const qortinoNode = document.body.appendChild(document.createElement('div'));
+  qortinoSlots.push(qortinoNode);
   const view = render(
     <ThemeProvider theme={createTheme()}>
       <I18nextProvider i18n={i18n}>
-        <HomeQortinoWorkspaceCard />
+        <HomeQortinoWorkspaceCard qortinoNode={qortinoNode} />
       </I18nextProvider>
     </ThemeProvider>
   );
@@ -110,6 +121,8 @@ describe('A question sent next to Qortino on Home', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    qortinoSlots.splice(0).forEach((node) => node.remove());
     vi.useRealTimers();
     delete window.qortinoLlm;
     clearPendingQortinoQuestion();

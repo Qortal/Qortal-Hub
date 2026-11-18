@@ -2110,10 +2110,15 @@ function App() {
       />
       <QAppScreenCapturePermission active={extState === 'authenticated' && isMainWindow} />
       {extState === 'authenticated' && isMainWindow && (
-        <GlobalQortalNavBar
-          desktopViewMode={desktopViewMode}
-          utilityNav={titleBarRightNav}
-        />
+        // The top bar's join window asks for the fee in mainContent's dialog.
+        <QORTAL_APP_CONTEXT.Provider
+          value={contextValue as AppContextInterface}
+        >
+          <GlobalQortalNavBar
+            desktopViewMode={desktopViewMode}
+            utilityNav={titleBarRightNav}
+          />
+        </QORTAL_APP_CONTEXT.Provider>
       )}
 
       <Box

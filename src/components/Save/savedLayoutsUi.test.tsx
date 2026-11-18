@@ -19,8 +19,10 @@ import { darkTheme } from '../../styles/theme-dark';
 import { executeEvent } from '../../utils/events';
 import { saveSidePanel, SIDE_PANEL_DEFAULT } from '../Desktop/sidePanel';
 import {
+  HOME_LAYOUT_DEFAULT,
   readHomeLayout,
   saveHomeLayout,
+  withHomeWorkspaceCopy,
 } from '../Group/HomeDesktop/homeLayout';
 import { LayoutRestoreOffer } from './LayoutRestoreOffer';
 import { LAYOUT_EDIT_DONE_EVENT, LayoutSavePrompt } from './LayoutSavePrompt';
@@ -121,6 +123,54 @@ describe('RestoreLayoutButton', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
     expect(readHomeLayout(ALICE).hidden).toEqual(['feed']);
+  });
+});
+
+describe('restoring Home with a copy of the Workspace that holds apps here', () => {
+  /** A copy made here since Home's layout was saved, with apps in it. */
+  const copyHoldingApps = () => {
+    saveHomeLayout(
+      ALICE,
+      withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace', 'k1')
+    );
+    localStorage.setItem(
+      `home-qortino-workspace-v1_${ALICE}`,
+      JSON.stringify({
+        hotkeys: [],
+        mode: 'empty',
+        version: 1,
+        windows: { k1: { hotkeys: ['APP::Q-Tube'], mode: 'hotkeys' } },
+      })
+    );
+  };
+
+  it('keeps it when the layout offered at sign-in is restored', () => {
+    copyHoldingApps();
+    renderWith(<LayoutRestoreOffer />, savedSettings(['feed'], 70));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    expect(readHomeLayout(ALICE)).toEqual(
+      expect.objectContaining({ hidden: ['feed'], workspaces: ['k1'] })
+    );
+  });
+
+  it('keeps it with Restore from QDN, which then has nothing more to restore', () => {
+    copyHoldingApps();
+    renderWith(
+      <RestoreLayoutButton part="homeLayout" />,
+      savedSettings(['feed'], 70)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore from QDN' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    expect(readHomeLayout(ALICE)).toEqual(
+      expect.objectContaining({ hidden: ['feed'], workspaces: ['k1'] })
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Restore from QDN', hidden: true })
+    ).toBeNull();
   });
 });
 

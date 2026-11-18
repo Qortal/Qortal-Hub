@@ -3,6 +3,7 @@ import {
   buildPrefillMetadataUrl,
   buildPrefillSearchUrl,
   findOwnDefaultResource,
+  findOwnResource,
   loadPublishPrefill,
   prefillFromMetadata,
   tagsFromMetadata,
@@ -192,5 +193,67 @@ describe('loadPublishPrefill', () => {
         signal: controller.signal,
       })
     ).rejects.toThrow('aborted');
+  });
+});
+
+describe('a resource under an identifier (a widget)', () => {
+  it('searches the exact name for that identifier, not the default', () => {
+    const url = new URL(
+      buildPrefillSearchUrl(NODE, 'APP', 'Q-Weather', 'go-widget-now')
+    );
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      service: 'APP',
+      name: 'Q-Weather',
+      exactmatchnames: 'true',
+      identifier: 'go-widget-now',
+      includemetadata: 'true',
+      mode: 'ALL',
+      limit: '0',
+    });
+    expect(
+      buildPrefillMetadataUrl(NODE, 'APP', 'Q-Weather', 'go-widget-now')
+    ).toBe(`${NODE}/arbitrary/metadata/APP/Q-Weather/go-widget-now`);
+  });
+
+  it('picks exactly that identifier, not one that only contains it', () => {
+    const results = [
+      { name: 'Q-Weather', service: 'APP', identifier: 'go-widget-now-2' },
+      { name: 'Q-Weather', service: 'APP' },
+      { name: 'q-weather', service: 'APP', identifier: 'go-widget-now' },
+    ];
+    expect(findOwnResource(results, 'APP', 'Q-Weather', 'go-widget-now')).toBe(
+      results[2]
+    );
+    expect(findOwnResource(results, 'APP', 'Q-Weather')).toBe(results[1]);
+    expect(findOwnResource(results, 'APP', 'Q-Weather', 'go-widget')).toBe(
+      null
+    );
+  });
+
+  it("loads that resource's metadata", async () => {
+    const fetchFn = vi.fn(() =>
+      reply([
+        {
+          name: 'Q-Weather',
+          service: 'APP',
+          identifier: 'go-widget-now',
+          metadata: { title: 'Now', tags: ['go-widget', 'weather'] },
+        },
+      ])
+    );
+    await expect(
+      loadPublishPrefill(NODE, 'APP', 'Q-Weather', {
+        fetchFn,
+        identifier: 'go-widget-now',
+      })
+    ).resolves.toEqual({
+      kind: 'found',
+      prefill: {
+        title: 'Now',
+        description: '',
+        category: '',
+        tags: ['go-widget', 'weather'],
+      },
+    });
   });
 });

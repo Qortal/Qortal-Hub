@@ -7,6 +7,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
@@ -17,6 +18,12 @@ import { ErrorText } from '../index';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
+import { useAcceptDelay } from '../../hooks/useAcceptDelay';
+import {
+  DECLINE_GUARD_MS,
+  permissionSecondsLeft,
+  QORTAL_REQUEST_COUNTDOWN_SECONDS,
+} from '../../qortal/permissionPromptQueue';
 import {
   QortalRequestDetails,
   QortalRequestDetailsData,
@@ -38,10 +45,13 @@ export type MessageQortalRequestExtension = {
   checkbox1?: { label?: string; value?: boolean };
   confirmCheckbox?: boolean;
   confirmCheckboxLabel?: string;
+  /** When the requester stops waiting for an answer (ms since the epoch). */
+  expiresAt?: number;
 };
 
 type QortalRequestExtensionDialogProps = {
   open: boolean;
+  /** The request on screen. A new object means a new request. */
   message: MessageQortalRequestExtension | null | Record<string, unknown>;
   sendPaymentError: string;
   confirmRequestRead: boolean;
@@ -70,7 +80,25 @@ export function QortalRequestExtensionDialog({
     sourceKind?: string;
     sourceLabel?: string;
   };
-  const canAccept = !requestMessage.confirmCheckbox || confirmRequestRead;
+  // Each request on screen gets its own countdown, checkboxes and second
+  // before Accept, also when one follows another without the dialog closing.
+  // A request that waited behind others counts down only the time it has left.
+  const [shownRequest, setShownRequest] = useState(() => ({
+    message,
+    key: 0,
+    secondsLeft: permissionSecondsLeft(requestMessage.expiresAt, Date.now()),
+  }));
+  if (shownRequest.message !== message) {
+    setShownRequest({
+      message,
+      key: shownRequest.key + 1,
+      secondsLeft: permissionSecondsLeft(requestMessage.expiresAt, Date.now()),
+    });
+  }
+  const acceptReady = useAcceptDelay(open, message);
+  const declineReady = useAcceptDelay(open, message, DECLINE_GUARD_MS);
+  const canAccept =
+    acceptReady && (!requestMessage.confirmCheckbox || confirmRequestRead);
   const bodyLines = [
     requestMessage.text2,
     requestMessage.text3,
@@ -108,6 +136,7 @@ export function QortalRequestExtensionDialog({
       }}
     >
       <Box
+        key={shownRequest.key}
         sx={{
           backgroundColor:
             theme.palette.mode === 'dark'
@@ -232,7 +261,8 @@ export function QortalRequestExtensionDialog({
             >
               <CountdownCircleTimer
                 isPlaying
-                duration={60}
+                duration={QORTAL_REQUEST_COUNTDOWN_SECONDS}
+                initialRemainingTime={shownRequest.secondsLeft}
                 colors={['#2D7FF9', '#E8A13A', '#C45151', '#C45151']}
                 colorsTime={[24, 12, 3, 0]}
                 onComplete={onCountdownComplete}
@@ -601,7 +631,7 @@ export function QortalRequestExtensionDialog({
                   transform: 'translateY(-1px)',
                 },
               }}
-              onClick={onCancel}
+              onClick={declineReady ? onCancel : undefined}
             >
               {t('core:action.decline', { postProcess: 'capitalizeFirstChar' })}
             </CustomButtonAccept>

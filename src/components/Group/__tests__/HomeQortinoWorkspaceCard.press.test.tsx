@@ -1,5 +1,11 @@
 import { createContext } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -56,6 +62,9 @@ beforeAll(() => {
   }
 });
 
+/** Qortino's window on Home, which the card fills. */
+const qortinoSlots: HTMLElement[] = [];
+
 const renderUnlockedCard = ({ desktopApp = true } = {}) => {
   // The desktop app's bridge to the model process (preload.ts).
   if (desktopApp) window.qortinoLlm = {} as typeof window.qortinoLlm;
@@ -69,11 +78,13 @@ const renderUnlockedCard = ({ desktopApp = true } = {}) => {
     json: () => Promise.resolve([]),
   }) as typeof fetch;
   window.sendMessage = vi.fn(async () => null) as typeof window.sendMessage;
+  const qortinoNode = document.body.appendChild(document.createElement('div'));
+  qortinoSlots.push(qortinoNode);
   render(
     <JotaiProvider store={store}>
       <ThemeProvider theme={createTheme()}>
         <I18nextProvider i18n={i18n}>
-          <HomeQortinoWorkspaceCard />
+          <HomeQortinoWorkspaceCard qortinoNode={qortinoNode} />
         </I18nextProvider>
       </ThemeProvider>
     </JotaiProvider>
@@ -91,6 +102,8 @@ describe("Pressing Qortino's head on Home", () => {
   });
 
   afterEach(() => {
+    cleanup();
+    qortinoSlots.splice(0).forEach((node) => node.remove());
     vi.useRealTimers();
     delete window.qortinoLlm;
   });
@@ -104,6 +117,8 @@ describe("Pressing Qortino's head on Home", () => {
     });
     fireEvent.pointerUp(stage, { clientX: 51, clientY: 50, pointerId: 1 });
     expect(store.get(qortinoAgentOpenAtom)).toBe(true);
+    // A tap gets his wink too.
+    expect(stage.getAttribute('data-qortino-eyes')).toBe('wink');
   });
 
   it('opens nothing on a right click', () => {
