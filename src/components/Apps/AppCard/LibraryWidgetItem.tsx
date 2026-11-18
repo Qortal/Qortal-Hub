@@ -2,6 +2,7 @@ import { type MouseEvent, memo, useCallback, useId } from 'react';
 import { Box, Typography } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../../utils/events';
@@ -54,7 +55,54 @@ interface WidgetItemProps {
   onHome: boolean;
   onOpenDetails: () => void;
   onAdd: (event: MouseEvent) => void;
+  /** The publisher's own widget, in My apps: opens the publish form on it. */
+  onUpdate?: (event: MouseEvent) => void;
+  /** Retired by its publisher (no go-widget tag): only they see it. */
+  notListed?: boolean;
 }
+
+/** Update, on the publisher's own widget: gives way first in a tight tile. */
+const UpdateAction = ({
+  onUpdate,
+  titleId,
+}: Required<Pick<WidgetItemProps, 'onUpdate'>> & { titleId: string }) => {
+  const { t } = useTranslation(['core']);
+  return (
+    <LibraryActionButton
+      describedBy={titleId}
+      kind="secondary"
+      onClick={onUpdate}
+      shrink
+    >
+      {t('core:developer.update', cap)}
+    </LibraryActionButton>
+  );
+};
+
+/** A quiet note on a widget its publisher retired: it is in no list. */
+const NotListedNote = () => {
+  const { t } = useTranslation(['core']);
+  return (
+    <Box
+      component="span"
+      sx={(theme) => ({
+        alignItems: 'center',
+        color: libraryMuted(theme),
+        display: 'inline-flex',
+        flexShrink: 0,
+        fontSize: '12px',
+        fontWeight: 600,
+        gap: 0.5,
+        height: 22,
+        whiteSpace: 'nowrap',
+        '& .MuiSvgIcon-root': { fontSize: 15 },
+      })}
+    >
+      <VisibilityOffRoundedIcon aria-hidden />
+      {t('core:publish_widget.not_listed', cap)}
+    </Box>
+  );
+};
 
 /** Add to Home, or a quiet note once it is there (it is removed on Home). */
 const HomeAction = ({
@@ -123,6 +171,8 @@ export const LibraryWidgetTile = ({
   onHome,
   onOpenDetails,
   onAdd,
+  onUpdate,
+  notListed = false,
 }: WidgetItemProps) => {
   const { t } = useTranslation(['core']);
   const titleId = useId();
@@ -206,6 +256,7 @@ export const LibraryWidgetTile = ({
           overflow: 'hidden',
         }}
       >
+        {notListed ? <NotListedNote /> : null}
         <CategoryLabel widget={widget} />
         {tags.map((tag, index) => (
           <LibraryChip key={`${tag}-${index}`} label={tag} tone="neutral" />
@@ -223,6 +274,9 @@ export const LibraryWidgetTile = ({
           pt: 1,
         }}
       >
+        {onUpdate ? (
+          <UpdateAction onUpdate={onUpdate} titleId={titleId} />
+        ) : null}
         <HomeAction onAdd={onAdd} onHome={onHome} titleId={titleId} />
       </Box>
     </Box>
@@ -235,6 +289,8 @@ export const LibraryWidgetRow = ({
   onHome,
   onOpenDetails,
   onAdd,
+  onUpdate,
+  notListed = false,
 }: WidgetItemProps) => {
   const { t } = useTranslation(['core']);
   const titleId = useId();
@@ -307,6 +363,7 @@ export const LibraryWidgetRow = ({
               />
             </Box>
           </Box>
+          {notListed ? <NotListedNote /> : null}
           <CategoryLabel widget={widget} />
         </Box>
 
@@ -361,6 +418,9 @@ export const LibraryWidgetRow = ({
       </Box>
 
       <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
+        {onUpdate ? (
+          <UpdateAction onUpdate={onUpdate} titleId={titleId} />
+        ) : null}
         <HomeAction onAdd={onAdd} onHome={onHome} titleId={titleId} />
       </Box>
     </Box>
@@ -370,14 +430,19 @@ export const LibraryWidgetRow = ({
 /**
  * A widget of the library. Its title (or a click anywhere else on the card)
  * opens its page, with its ratings and reviews; Add to Home puts it on Home's
- * Widgets window. Nothing of the widget runs here.
+ * Widgets window. Nothing of the widget runs here. In My apps, its publisher
+ * also gets Update, and a note when they have retired it.
  */
 const WidgetCardInner = ({
   widget,
   view = 'grid',
+  onUpdate,
+  notListed = false,
 }: {
   widget: LibraryWidget;
   view?: LibraryView;
+  onUpdate?: (widget: LibraryWidget) => void;
+  notListed?: boolean;
 }) => {
   const { t } = useTranslation(['core', 'group']);
   const { onHome, add, limit } = useWidgetOnHome(widget);
@@ -394,11 +459,21 @@ const WidgetCardInner = ({
     [add, limit, t, widget.title]
   );
 
+  const handleUpdate = useCallback(
+    (event: MouseEvent) => {
+      event.stopPropagation();
+      onUpdate?.(widget);
+    },
+    [onUpdate, widget]
+  );
+
   const props: WidgetItemProps = {
     widget,
     onHome,
     onOpenDetails: openDetails,
     onAdd: handleAdd,
+    onUpdate: onUpdate ? handleUpdate : undefined,
+    notListed,
   };
   return view === 'list' ? (
     <LibraryWidgetRow {...props} />

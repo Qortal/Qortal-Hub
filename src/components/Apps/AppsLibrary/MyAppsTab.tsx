@@ -3,10 +3,13 @@ import { Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
+import WidgetsIcon from '@mui/icons-material/Widgets';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
 import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
+import CloudOffRoundedIcon from '@mui/icons-material/CloudOffRounded';
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded';
+import WidgetsRoundedIcon from '@mui/icons-material/WidgetsRounded';
 import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../../../atoms/global';
 import { getBaseApiReact } from '../../../App';
@@ -14,6 +17,7 @@ import { executeEvent } from '../../../utils/events';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { PublishedAppCard } from '../AppCard';
 import { LibraryActionButton } from '../AppCard/libraryCardParts';
+import { WidgetCard } from '../AppCard/LibraryWidgetItem';
 import type { PublishEditTarget } from '../launcherTabs';
 import { AppCollection } from './AppCollection';
 import { APP_SKELETON } from './libraryLayout';
@@ -23,12 +27,15 @@ import {
   LibrarySkeleton,
 } from './LibrarySection';
 import { cap } from './libraryStyles';
-import { libraryViewAtom } from './libraryView';
+import { type LibraryView, libraryViewAtom } from './libraryView';
 import {
   PublishButton,
   PublishNewContainer,
   SectionContainer,
 } from './LibraryTab-styles';
+import type { OwnWidget } from './ownWidgets';
+import { useOwnWidgets } from './useOwnWidgets';
+import { type LibraryWidget, libraryWidgetKey } from './widgetLibrary';
 
 interface MyAppsTabProps {
   myName: string;
@@ -45,6 +52,23 @@ const serviceOf = (app: any): 'APP' | 'WEBSITE' =>
     ? 'WEBSITE'
     : 'APP';
 
+/**
+ * What Update on a widget opens: the widget under its identifier, or the
+ * name's own app when that app is the widget.
+ */
+const widgetUpdateTarget = (widget: {
+  name: string;
+  identifier: string | null;
+}): PublishEditTarget =>
+  widget.identifier
+    ? { name: widget.name, service: 'APP', identifier: widget.identifier }
+    : { name: widget.name, service: 'APP' };
+
+const matchesSearch = (widget: OwnWidget, searchLower: string) =>
+  widget.name.toLowerCase().includes(searchLower) ||
+  widget.title.toLowerCase().includes(searchLower) ||
+  widget.description.toLowerCase().includes(searchLower);
+
 export const MyAppsTab = ({
   myName,
   availableQapps,
@@ -53,7 +77,7 @@ export const MyAppsTab = ({
   libraryRefreshKey = 0,
 }: MyAppsTabProps) => {
   const theme = useTheme();
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['core', 'group']);
   const view = useAtomValue(libraryViewAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress = userInfo?.address ?? null;
@@ -138,11 +162,27 @@ export const MyAppsTab = ({
     return result;
   }, [myNames, availableQapps, searchValue]);
 
+  // The names' widgets: a section of their own, loaded beside the apps.
+  const ownWidgets = useOwnWidgets(myNames, libraryRefreshKey);
+  const myWidgets = useMemo(() => {
+    if (!searchValue) return ownWidgets.widgets;
+    const searchLower = searchValue.toLowerCase();
+    return ownWidgets.widgets.filter((widget) =>
+      matchesSearch(widget, searchLower)
+    );
+  }, [ownWidgets.widgets, searchValue]);
+
+  const updateWidget = useCallback(
+    (widget: LibraryWidget) => setMode('publish', widgetUpdateTarget(widget)),
+    [setMode]
+  );
+
   const isLoadingNames = myAddress != null && !namesLoaded;
   const hasNoNames = myAddress != null && namesLoaded && myNames.length === 0;
 
   const appsTitle = t('core:developer.your_published_apps', cap);
   const sitesTitle = t('core:developer.your_published_websites', cap);
+  const widgetsTitle = t('core:developer.your_published_widgets', cap);
 
   if (isLoadingNames) {
     return (
@@ -189,6 +229,55 @@ export const MyAppsTab = ({
       view={itemView}
     />
   );
+
+  const renderOwnWidget = (widget: OwnWidget, itemView: LibraryView) => (
+    <WidgetCard
+      notListed={!widget.listed}
+      onUpdate={updateWidget}
+      view={itemView}
+      widget={widget}
+    />
+  );
+
+  let widgetsContent;
+  if (ownWidgets.phase === 'loading') {
+    widgetsContent = (
+      <LibrarySkeleton {...APP_SKELETON} count={1} view={view} />
+    );
+  } else if (ownWidgets.phase === 'error') {
+    widgetsContent = (
+      <LibraryEmptyState
+        action={
+          <LibraryActionButton kind="secondary" onClick={ownWidgets.retry}>
+            {t('core:retry', cap)}
+          </LibraryActionButton>
+        }
+        compact
+        icon={<CloudOffRoundedIcon />}
+        title={t('group:home_widgets.picker_error', cap)}
+        tone="error"
+      />
+    );
+  } else if (myWidgets.length > 0) {
+    widgetsContent = (
+      <AppCollection
+        apps={myWidgets}
+        getKey={libraryWidgetKey}
+        label={widgetsTitle}
+        myName={myName}
+        renderItem={renderOwnWidget}
+        virtualize={false}
+      />
+    );
+  } else {
+    widgetsContent = (
+      <LibraryEmptyState
+        compact
+        icon={<WidgetsRoundedIcon />}
+        title={t('core:developer.no_widgets_yet', cap)}
+      />
+    );
+  }
 
   return (
     <AppsWidthLimiter sx={{ alignItems: 'stretch' }}>
@@ -241,6 +330,16 @@ export const MyAppsTab = ({
           )}
         </LibrarySection>
 
+        {/* Published Widgets Section */}
+        <LibrarySection
+          count={ownWidgets.phase === 'ready' ? myWidgets.length : undefined}
+          hint={t('core:launcher.library.my_widgets_hint', cap)}
+          icon={<WidgetsRoundedIcon />}
+          title={widgetsTitle}
+        >
+          {widgetsContent}
+        </LibrarySection>
+
         {/* Publish New Section */}
         <LibrarySection
           hint={t('core:message.generic.one_app_per_name', cap)}
@@ -286,6 +385,27 @@ export const MyAppsTab = ({
                 }}
               >
                 {t('core:developer.publish_site', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            </PublishButton>
+            <PublishButton
+              onClick={() => {
+                // A new widget: the form opens on Widget.
+                setMode('publish-widget');
+              }}
+            >
+              <WidgetsIcon
+                sx={{ fontSize: '32px', color: theme.palette.primary.main }}
+              />
+              <Typography
+                sx={{
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: theme.palette.text.primary,
+                }}
+              >
+                {t('core:developer.publish_widget', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>

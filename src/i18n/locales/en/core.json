@@ -203,6 +203,7 @@
       "error_file_missing": "one of the app's files could not be read from your node. Try again later.",
       "error_files_unknown": "your node doesn't list this app's files, so it can't be published again from here. Publish it from its folder in the publish form.",
       "error_page_too_large": "the page text is too long for QDN. Shorten About or What's new.",
+      "error_page_unverified": "your node couldn't confirm what the app's page has now, so it was left as it is. Try again in a moment.",
       "error_shot_unavailable": "a screenshot could not be read back from QDN. Try again in a moment.",
       "files_progress": "reading the app's files from your node: {{done}} of {{total}}",
       "hint": "Each part you change is published on its own. The app itself is only uploaded again when you change its listing details.",
@@ -276,6 +277,30 @@
       "source": "source code",
       "support": "support",
       "website": "website"
+    },
+    "publish": {
+      "choose_file_first": "choose the app's zip file first",
+      "choose_name_first": "choose a name first",
+      "confirm_retry": "publish what's left of the app's page, without the app?",
+      "confirm_with_page_one": "publish the app, then update its page right after it? That is {{count}} more publish.",
+      "confirm_with_page_other": "publish the app, then update its page right after it? That is {{count}} more publishes.",
+      "hint": "Shown on the app's page in the library. Each part is a small publish of its own, right after the app.",
+      "left_both": "the app was published, but its page text and screenshots weren't: {{error}}",
+      "left_hint": "What's left stays here. Retry publishes only that, not the app again.",
+      "left_page": "the app was published, but its page text wasn't: {{error}}",
+      "left_shots": "the app was published, but its screenshots weren't: {{error}}",
+      "page_loading": "loading the app's current page…",
+      "page_unreadable": "your node couldn't read the app's current page, so its version, What's new and screenshots aren't published with this update. You can change them on the app's page later.",
+      "shots_change": "change the screenshots",
+      "shots_change_hint": "Start from the current ones: remove, reorder or caption them, and add new ones.",
+      "shots_keep_one": "keep the current screenshot",
+      "shots_keep_other": "keep the current {{count}} screenshots",
+      "shots_none": "no screenshots",
+      "shots_none_removes": "The current screenshots are taken off the page.",
+      "shots_optional": "Optional. Take them yourself in a preview of the app, or choose pictures. Without any, no screenshots are published.",
+      "title": "page in the library",
+      "version_last": "last version: {{version}}",
+      "whats_new_placeholder": "what changed in this version?"
     },
     "rating": {
       "average_label": "average rating {{average}} out of 5",
@@ -600,13 +625,16 @@
   "developer": {
     "no_apps_yet": "you haven't published any apps yet",
     "no_sites_yet": "you haven't published any websites yet",
+    "no_widgets_yet": "you haven't published any widgets yet",
     "publish_app": "publish app",
     "publish_new": "publish new",
     "publish_site": "publish website",
+    "publish_widget": "publish widget",
     "update": "update",
     "view_stats": "view stats",
     "your_published_apps": "your published apps",
-    "your_published_websites": "your published websites"
+    "your_published_websites": "your published websites",
+    "your_published_widgets": "your published widgets"
   },
   "devmode_apps": "dev Mode Apps",
   "directory": "directory",
@@ -700,6 +728,7 @@
       "featured_previous": "show the previous featured apps",
       "filter_categories": "filter categories",
       "my_apps_hint": "published under the names on this account",
+      "my_widgets_hint": "small Q-Apps for Home, published under the names on this account",
       "no_category_matches": "no category matches “{{query}}”",
       "no_filter_matches": "no Q-Apps or websites match these filters",
       "no_name_text": "register a Qortal name to publish Q-Apps and websites. They will show up here.",
@@ -1071,11 +1100,51 @@
     "select_name": "select a Qortal name",
     "selected_file": "selected file: {{filename}}"
   },
+  "private_publish": {
+    "identifier_hint": "a short id, such as q-notes. Members need it and the name to open the app.",
+    "intro_access": "open a private app shared with one of your private groups. Its publisher can tell you its name and identifier.",
+    "intro_publish": "the app is encrypted for one of your groups, so only its members can open it.",
+    "intro_update": "publish a new version of this private app for the same group.",
+    "logo_hint": "a square picture works best.",
+    "section_app": "the app",
+    "section_details": "app details",
+    "section_find": "find the app",
+    "section_name_group": "name and group"
+  },
   "publish": "publish",
+  "publish_form": {
+    "check_category": "pick a category",
+    "check_description": "add a short description",
+    "check_done": "done",
+    "check_files": "choose the files",
+    "check_name": "choose a name",
+    "check_open": "not done yet",
+    "check_title": "add a title",
+    "intro": "fill in the parts below. The preview shows how it will look in the library.",
+    "listing_hint": "how it shows in the library and in search.",
+    "missing_hint": "complete the open points first.",
+    "part_app": "the app",
+    "part_website": "the website",
+    "preview_empty_description": "your short description shows here.",
+    "preview_empty_title": "your title",
+    "preview_title": "in the library",
+    "section_files": "files",
+    "section_listing": "listing",
+    "section_name": "name and type",
+    "summary_fee": "total fee",
+    "summary_parts": "what gets published",
+    "summary_title": "before publishing",
+    "tags_hint": "up to 5, 20 characters each"
+  },
   "publish_source": {
     "changed_files": "files changed since {{date}}: {{number}}",
     "choose_another": "choose another",
     "choose_folder": "choose folder",
+    "info_about": "more information: {{choice}}",
+    "info_file": "a .zip with the built files of your app or website, including its index.html. Up to {{size}} MB.",
+    "info_folder": "the folder with your built files, such as dist or build. Hub zips it for you.",
+    "info_same_file": "opens the file picker at the .zip you published last time.",
+    "info_same_folder": "opens the folder you published from last time, so you can publish it again with your latest changes.",
     "read_error": "the selected folder or file couldn't be read",
     "same_file": "same file as last time",
     "same_folder": "same folder as last time",
@@ -1094,6 +1163,31 @@
     "logo_kept": "logo kept from the current version",
     "not_admin": "you're no longer an admin of {{group}}, so this app can't be updated from this account.",
     "title": "update {{name}}"
+  },
+  "publish_widget": {
+    "check_id": "choose a widget ID",
+    "choose_label": "widget to publish",
+    "confirm_new": "publish the new widget {{resource}}?",
+    "confirm_update": "update the widget {{resource}}?",
+    "heading": "publish a widget",
+    "id_hint": "lowercase letters, digits and dashes. Publish again under the same ID to update the widget.",
+    "id_invalid": "use lowercase letters and digits, with single dashes between them",
+    "id_label": "widget ID",
+    "id_taken": "your widget “{{title}}” has this ID: publishing replaces it.",
+    "intro": "a small Q-App for Home in Qortal Hub and the widgets screen in Qortal GO.",
+    "listing_hint": "how it shows in the widget list.",
+    "new_widget": "a new widget",
+    "not_listed": "not listed",
+    "note": "publishes `{{resource}}` with the tag `go-widget`. It's listed under Add widget in Qortal Hub and Qortal GO, and in the library's Widgets tab.",
+    "part_widget": "the widget",
+    "preview_title": "in the widget list",
+    "published": "widget published. Add it from Home → Widgets → Add widget; the node can take a minute to list it.",
+    "relist_note": "not listed now: publishing lists it again.",
+    "section_hint": "a name can publish several widgets next to its app.",
+    "tag_locked": "tag {{number}}: go-widget, added for widgets",
+    "title_long": "widget lists show about {{number}} characters",
+    "type_widget": "widget",
+    "update_instead": "update it instead"
   },
   "q_apps": {
     "about": "about this Q-App",
@@ -1433,6 +1527,81 @@
     "loading": "Loading",
     "loading_message": "Pulling the latest public data from the default Qortal node.",
     "retry": "Retry"
+  },
+  "widget_guide": {
+    "contents": "contents",
+    "copy_failed": "couldn't copy",
+    "copy_hint": "the whole guide, for your notes or an AI assistant",
+    "copy_markdown": "copy as Markdown",
+    "lead": "A widget is a small Q-App on Home in Qortal Hub and on the widgets screen in Qortal GO. One publish runs in both. It shows one thing at a glance and opens your app for everything else.",
+    "learn_more": "learn more",
+    "look": {
+      "background": "Keep the page background transparent: the host draws the card. Follow the dark and light themes.",
+      "fast": "Show something within about 300 ms: draw the data you kept last time, then refresh. Have an empty state and an error state, never a blank frame or a spinner that doesn't stop.",
+      "fit": "It fills whatever frame it gets, from about 80 × 92 px to a wide card in the Hub. Show fewer items or drop pictures when it's small, use two columns when it's wide. Nothing overflows; only a vertical list may scroll.",
+      "input": "Use buttons and vertical lists, with tap targets at least 40 px tall. No sideways swipes, carousels or long presses: GO uses them to switch screens and arrange widgets.",
+      "one_job": "One job: a number, a short list or the next item. No app bar, menus, tabs, sign-in or splash screen.",
+      "open": "A tap opens your full app at the right place, with `OPEN_NEW_TAB`.",
+      "title": "What a widget looks like"
+    },
+    "messages": {
+      "poll": "Poll no more often than every 30 s; every few minutes is better for most data.",
+      "theme": "`THEME_CHANGED` (`theme`) and `LANGUAGE_CHANGED` (`language`): redraw in the new theme or language.",
+      "title": "Messages from the host",
+      "visibility": "`GO_WIDGET_VISIBILITY` (`payload.visible`): pause timers, animations and polling while it is `false`, and while `document.visibilityState` is `hidden`."
+    },
+    "publish": {
+      "bundle": "Zip the folder with `index.html` at its root. One HTML file with inline CSS and JavaScript starts fastest; stay under about 200 KB.",
+      "ids": "Service `APP`, identifier `go-widget-<slug>`, tag `go-widget`. The Widget option of this form sets all three.",
+      "listing": "The widget list shows the title, the description and your name's avatar. Keep the title to 24 characters and the description to one sentence.",
+      "name": "Publish it under your app's name: the Hub keeps `localStorage` per name, so the widget can read what your app saved.",
+      "own_app": "If your app is already small and fast, it can be its own widget: draw a compact view when the address has `goWidget=1`, and tag the app `go-widget`.",
+      "title": "Publishing",
+      "update": "To update it, publish again under the same name and ID. To retire it, publish it again without the `go-widget` tag: it leaves the list, but anyone who added it keeps loading it, so leave a short notice in it."
+    },
+    "requests": {
+      "always": "Always: `GO_WIDGET_SET_SIZE`, `GO_WIDGET_INFO`, `GET_NODE_INFO`, `GET_NODE_STATUS`, `IS_USING_PUBLIC_NODE`, `WHICH_UI`, `GET_PRIMARY_NAME`, `GET_DAY_SUMMARY`, `GET_TX_ACTIVITY_SUMMARY`, `QDN_RESOURCE_DISPLAYED`, `NAVIGATION_HISTORY`.",
+      "never": "Never: payments, publishing, signing, encryption, chat messages, files, notifications, full screen, pop-ups, and `alert`, `confirm` or `prompt`. A refused request rejects: catch it and keep working.",
+      "open": "For anything a widget can't do, open your full app at the right page. Use `OPEN_NEW_TAB` with a `qortal://APP/<name>/<path>` link, not `LINK_TO_QDN_RESOURCE`, which can load the other app inside the widget:",
+      "read": "Read-only requests that Core answers itself, as in any Q-App: `SEARCH_QDN_RESOURCES`, `FETCH_QDN_RESOURCE`, `GET_BALANCE`, `GET_NAME_DATA`, `SEARCH_CHAT_MESSAGES`, `FETCH_BLOCK` and the like. Feeds need `mode: 'ALL'`.",
+      "screen": "Only while Home (in GO, the widgets screen) is showing: `OPEN_NEW_TAB`, `SET_TAB`, `OPEN_USER_LOOKUP`, `GET_USER_ACCOUNT` and `GET_WALLET_BALANCE`. The last two ask the user, so ask only after a tap.",
+      "title": "What a widget may ask for",
+      "web": "Code and data come only from your bundle, the node and QDN. No outside web services: they may be blocked, and they reveal the user's IP address and activity."
+    },
+    "size": {
+      "ask": "Ask once for the size you need. It holds until the user resizes the widget.",
+      "grid": "Rows are 40 px with 12 px gaps, 2 to 14 rows tall. GO has 4 columns, about 79 px each on a phone; the Hub fits as many columns of at least 84 px as it can, so a widget can be much wider than a phone. New widgets are 4 × 5 cells, about 351 to 406 × 248 px.",
+      "only_widget": "`GO_WIDGET_SET_SIZE` and `GO_WIDGET_INFO` answer only inside a widget frame. Send them only when `goWidget=1` is in the address, with a time limit, and never wait for them before drawing.",
+      "title": "Size",
+      "values": "`width` is `'small'` (1 column), `'half'` (2) or `'full'` (4); `height` is in CSS px, rounded up to whole rows."
+    },
+    "start": {
+      "param": "`goWidget=1` is always there: draw the widget view from the first frame.",
+      "request": "Call Core's `qortalRequest` by its bare name; `window.qortalRequest` is undefined. In the Hub the widget is the top-level page (`window.parent === window`), in GO an iframe; the same call works in both.",
+      "storage": "`localStorage`: the Hub keeps one per app name, GO one for every Q-App on the node. Start every key with your name.",
+      "theme": "Read `theme` and `lang` from the address when you start. The host's messages are changes after that.",
+      "title": "How it starts"
+    },
+    "starter": {
+      "intro": "A whole widget, small on purpose: the newest Q-App, in the right theme, paused while hidden, refreshed every few minutes, and opening the app on a tap. Replace `yourname`, the search and `draw` with your own.",
+      "title": "A starting point"
+    },
+    "test": {
+      "tab": "Open it as an app with `?goWidget=1&theme=dark`, then `light`, and resize the window from about 80 × 92 px to 830 × 248 px. In a tab nothing answers `GO_WIDGET_*`: it must still draw.",
+      "title": "Testing",
+      "update": "The Hub shows a new version the next time the widget loads (Arrange → Reload); GO within about an hour.",
+      "widget": "After publishing, add it in the Hub (Home → Widgets → Add widget) and in GO (the widgets screen → +). Check theme and language switching, the smallest and largest sizes, that it pauses out of view, and that a tap opens the right page."
+    },
+    "tip": {
+      "about": "how to build a widget",
+      "any_size": "Fit any size, from one small tile to a wide card. Nothing overflows.",
+      "first_frame": "Draw the widget view from the first frame when the address has `goWidget=1`, on a transparent background.",
+      "read_only": "Read-only: no payments, publishing or pop-ups. A tap opens your full app with `OPEN_NEW_TAB`.",
+      "request": "Call Core's `qortalRequest` by its bare name: it works in GO (an iframe) and in the Hub (a top-level page).",
+      "theme": "Follow `theme` and `lang` from the address, and pause timers and polling while the widget is hidden.",
+      "title": "Building it as a widget"
+    },
+    "title": "Building a widget"
   },
   "widgets": {
     "add_to_home": "add to Home",
