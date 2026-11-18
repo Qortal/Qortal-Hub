@@ -39,6 +39,7 @@ import {
   type HomeWindowId,
   homeGridCellAt,
   homeGridColumnPx,
+  homeGridEdited,
   homeGridFlow,
   homeGridHeightPx,
   homeGridRectPx,
@@ -88,7 +89,9 @@ export type HomeGridWindowAction = {
   label: string;
   /**
    * Gets the grid as it shows: the shown windows where and as tall as they
-   * show (homeGridShown), the hidden ones where they're kept.
+   * show (homeGridShown), the hidden ones where they're kept. As an edit
+   * saves it (homeGridEdited), the rows a shorter account card leaves the
+   * window under it stay the card's place.
    */
   onClick: (shown: HomeGridItem[]) => void;
 };
@@ -285,8 +288,9 @@ export const HomeGrid = ({
     return rows;
   }, [measuredRows, windowsById]);
   const shownLayout = useMemo(
-    () => homeGridShown(grid, (id) => windowsById.has(id), contentRows),
-    [contentRows, grid, windowsById]
+    () =>
+      homeGridShown(grid, (id) => windowsById.has(id), contentRows, flowing),
+    [contentRows, flowing, grid, windowsById]
   );
 
   // Editing.
@@ -362,13 +366,20 @@ export const HomeGrid = ({
     });
   }, [editing, reduceMotion, windows]);
 
-  // What's shown: the drag's layout while one is going on (with the
-  // content-sized windows at their measured height), else the saved one.
+  // What's shown: the drag's layout while one is going on, as it would be
+  // saved (with the content-sized windows at their measured height), else
+  // the saved one.
   const layout =
     useMemo(
       () =>
-        dragLayout ? homeGridShown(dragLayout, () => true, contentRows) : null,
-      [contentRows, dragLayout]
+        dragLayout && dragStart
+          ? homeGridShown(
+              homeGridEdited(grid, dragStart, dragLayout),
+              () => true,
+              contentRows
+            )
+          : null,
+      [contentRows, dragLayout, dragStart, grid]
     ) ?? shownLayout;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -556,7 +567,10 @@ export const HomeGrid = ({
     stopAutoScroll();
     if (!drag.moved) return;
     if (!cancelled && !sameHomeGrid(drag.layout, drag.start)) {
-      onChangeGrid(mergeHomeGrid(gridPropRef.current, drag.layout));
+      const stored = gridPropRef.current;
+      onChangeGrid(
+        mergeHomeGrid(stored, homeGridEdited(stored, drag.start, drag.layout))
+      );
     }
     const frame = frameRefs.current.get(drag.key);
     if (frame) {
@@ -637,7 +651,8 @@ export const HomeGrid = ({
     if (!event.key.startsWith('Arrow')) return;
     event.preventDefault();
     if (next && !sameHomeGrid(next, items)) {
-      onChangeGrid(mergeHomeGrid(gridPropRef.current, next));
+      const stored = gridPropRef.current;
+      onChangeGrid(mergeHomeGrid(stored, homeGridEdited(stored, items, next)));
     }
   };
 
@@ -945,11 +960,13 @@ export const HomeGrid = ({
             <Tooltip key={action.label} title={action.label}>
               <IconButton
                 aria-label={action.label}
-                onClick={() =>
+                onClick={() => {
+                  const stored = gridPropRef.current;
+                  const shown = layoutRef.current;
                   action.onClick(
-                    mergeHomeGrid(gridPropRef.current, layoutRef.current)
-                  )
-                }
+                    mergeHomeGrid(stored, homeGridEdited(stored, shown, shown))
+                  );
+                }}
                 onPointerDown={(event) => event.stopPropagation()}
                 size="small"
                 sx={{ color: theme.palette.text.secondary, p: '4px' }}
@@ -1019,10 +1036,13 @@ export const HomeGrid = ({
           if (!window || !item) return null;
           const held = dragKey === id;
           // A window being moved keeps its place until it's dropped (it
-          // follows the pointer); the others show where they'd go.
+          // follows the pointer), at the height it would land with; the
+          // others show where they'd go.
           const start = dragStartByKey.get(id);
           const px = homeGridRectPx(
-            held && dragKind === 'move' && start ? start : item,
+            held && dragKind === 'move' && start
+              ? { ...start, h: item.h }
+              : item,
             columnPx
           );
           const auto = followsContent(id);

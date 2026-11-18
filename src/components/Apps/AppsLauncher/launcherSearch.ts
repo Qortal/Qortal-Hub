@@ -1,10 +1,12 @@
 import { QORTAL_PROTOCOL } from '../../../constants/constants';
-import { parseQortalUseGroupLink } from '../../../utils/qortalGroupLinks';
+import {
+  parseQortalLink,
+  type QortalLink,
+} from '../../../utils/qortalLink/parseQortalLink';
 import {
   compareByWeightedRating,
   type RatingSummary,
 } from '../../../utils/appRatingScore';
-import { extractComponents } from '../../Chat/MessageDisplay';
 import { isOfficialApp } from '../config/officialApps';
 
 /** A Q-App or website as the node lists it (`/arbitrary/resources/search`). */
@@ -20,17 +22,12 @@ export type LauncherApp = {
   [key: string]: unknown;
 };
 
-/** What the search box holds when it is an address, not search words. */
-export type LauncherLink =
-  | {
-      kind: 'app';
-      link: string;
-      service: string;
-      name: string;
-      identifier?: string;
-      path?: string;
-    }
-  | { kind: 'group'; link: string };
+/**
+ * What the search box holds when it is an address, not search words: Hub's
+ * one reading of qortal:// links (a Q-App or website, an app's page, a
+ * group's link).
+ */
+export type LauncherLink = QortalLink;
 
 const PROTOCOL_PATTERN = /^qortal:\/\//i;
 /** `APP/Q-Tube` or `WEBSITE/name/page`, the short way to write an address. */
@@ -44,28 +41,11 @@ const SHORT_LINK_PATTERN = /^(app|website)\/[^/\s]/i;
 export function parseLauncherLink(input: string): LauncherLink | null {
   const text = (input ?? '').trim();
   if (!text) return null;
-
-  let link: string;
-  if (PROTOCOL_PATTERN.test(text)) {
-    link = QORTAL_PROTOCOL + text.replace(PROTOCOL_PATTERN, '');
-  } else if (SHORT_LINK_PATTERN.test(text)) {
-    link = QORTAL_PROTOCOL + text;
-  } else {
-    return null;
+  if (PROTOCOL_PATTERN.test(text)) return parseQortalLink(text);
+  if (SHORT_LINK_PATTERN.test(text)) {
+    return parseQortalLink(QORTAL_PROTOCOL + text);
   }
-
-  if (parseQortalUseGroupLink(link)) return { kind: 'group', link };
-
-  const parts = extractComponents(link);
-  if (!parts?.service || !parts?.name) return null;
-  return {
-    kind: 'app',
-    link,
-    service: parts.service,
-    name: parts.name,
-    identifier: parts.identifier,
-    path: parts.path,
-  };
+  return null;
 }
 
 const lower = (value: unknown): string =>

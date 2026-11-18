@@ -1,77 +1,96 @@
-import { useMemo } from 'react';
-import {
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  SelectChangeEvent,
-  styled,
-} from '@mui/material';
+import { useId, useState } from 'react';
+import { Menu, MenuItem } from '@mui/material';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import SortRoundedIcon from '@mui/icons-material/SortRounded';
 import { useTranslation } from 'react-i18next';
+import {
+  cap,
+  libraryMenuItemSx,
+  libraryMenuPaperSx,
+  usePrefersReducedMotion,
+} from '../AppsLibrary/libraryStyles';
+import { useLauncherTabDialog } from '../launcherTabs';
+import { FilterPill } from './FilterPill';
 
-export type SortOption = 'newest' | 'oldest' | 'alphabetical' | 'highest_rated' | 'most_rated' | 'recently_updated';
+export type SortOption =
+  | 'newest'
+  | 'oldest'
+  | 'alphabetical'
+  | 'highest_rated'
+  | 'most_rated'
+  | 'recently_updated';
 
 interface SortDropdownProps {
   value: SortOption;
   onChange: (value: SortOption) => void;
 }
 
-const StyledFormControl = styled(FormControl)(({ theme }) => ({
-  minWidth: '160px',
-  '& .MuiInputBase-root': {
-    height: '36px',
-    fontSize: '14px',
-  },
-  '& .MuiInputLabel-root': {
-    fontSize: '14px',
-    transform: 'translate(14px, 8px) scale(1)',
-    '&.Mui-focused, &.MuiFormLabel-filled': {
-      transform: 'translate(14px, -9px) scale(0.75)',
-    },
-  },
-}));
+/** In a fixed order, the same in every language. */
+const SORT_OPTIONS: SortOption[] = [
+  'highest_rated',
+  'most_rated',
+  'recently_updated',
+  'newest',
+  'oldest',
+  'alphabetical',
+];
 
-const SORT_OPTIONS: SortOption[] = ['alphabetical', 'newest', 'oldest', 'highest_rated', 'most_rated', 'recently_updated'];
-
+/** How the library is sorted: a pill that opens a short menu. */
 export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
   const { t } = useTranslation(['core']);
-
-  const handleChange = (event: SelectChangeEvent) => {
-    onChange(event.target.value as SortOption);
-  };
-
-  // Sort options alphabetically based on translated labels
-  const sortedOptions = useMemo(() => {
-    return SORT_OPTIONS.map((option) => ({
-      value: option,
-      label: t(`core:sort.${option}`, {
-        postProcess: 'capitalizeFirstChar',
-      }),
-    })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [t]);
+  const reduce = usePrefersReducedMotion();
+  const popupId = useId();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // In a hidden launcher tab the menu steps aside, and comes back with it.
+  const menuShown = useLauncherTabDialog(!!anchor, () => setAnchor(null));
+  const label = t('core:filter.sort_by', cap);
+  const close = () => setAnchor(null);
 
   return (
-    <StyledFormControl size="small">
-      <InputLabel id="sort-select-label">
-        {t('core:filter.sort_by', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </InputLabel>
-      <Select
-        labelId="sort-select-label"
-        id="sort-select"
-        value={value}
-        label={t('core:filter.sort_by', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-        onChange={handleChange}
+    <>
+      <FilterPill
+        icon={<SortRoundedIcon />}
+        label={label}
+        onClick={(event) => setAnchor(event.currentTarget)}
+        open={!!anchor}
+        popupId={popupId}
+        popupRole="menu"
+        valueLabel={t(`core:sort.${value}`, cap)}
+      />
+      <Menu
+        anchorEl={anchor}
+        anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+        id={popupId}
+        onClose={close}
+        {...menuShown}
+        slotProps={{
+          list: { 'aria-label': label, sx: { py: 0.75 } },
+          paper: {
+            sx: (theme) => ({ ...libraryMenuPaperSx(theme), minWidth: 220 }),
+          },
+        }}
+        transformOrigin={{ horizontal: 'left', vertical: 'top' }}
+        // Menu passes this to the Popover, which sets the transition's
+        // timeout from it, over slotProps.
+        transitionDuration={reduce ? 0 : 'auto'}
       >
-        {sortedOptions.map((option) => (
-          <MenuItem key={option.value} value={option.value}>
-            {option.label}
+        {SORT_OPTIONS.map((option) => (
+          <MenuItem
+            aria-checked={option === value}
+            key={option}
+            onClick={() => {
+              onChange(option);
+              close();
+            }}
+            role="menuitemradio"
+            selected={option === value}
+            sx={libraryMenuItemSx}
+          >
+            {t(`core:sort.${option}`, cap)}
+            <CheckRoundedIcon aria-hidden className="libraryCheck" />
           </MenuItem>
         ))}
-      </Select>
-    </StyledFormControl>
+      </Menu>
+    </>
   );
 };

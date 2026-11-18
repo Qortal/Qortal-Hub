@@ -79,6 +79,14 @@ export class MockWebContents extends EventEmitter {
   focus() {
     this.focusCount += 1;
   }
+  zoomLevel = 0;
+  getZoomLevel() {
+    return this.zoomLevel;
+  }
+  setZoomLevel(level: number) {
+    if (this.destroyed) throw new Error('Object has been destroyed');
+    this.zoomLevel = level;
+  }
   debugger = new (class extends EventEmitter {
     attached = false;
     isAttached() {

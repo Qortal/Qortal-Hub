@@ -10,74 +10,14 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { ReticulumUserCard } from './ReticulumUserCard';
 import type { ReticulumUserCardData } from './ReticulumUserCard';
-import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
+import { extractComponents } from '../../utils/qortalLink/parseQortalLink';
+import { openQortalLink } from '../../utils/qortalLink/openQortalLink';
+
+// Moved to utils/qortalLink; still importable from here.
+export { extractComponents };
 
 const stripTrailingQortalLinkPunctuation = (value: string) =>
   value.replace(/[),.;!?]+$/g, '');
-
-// Decode the name once, after splitting the URI into segments. Decoding the
-// whole link would turn escaped route/query delimiters into URL structure.
-const decodeQortalName = (name: string): string => {
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    // Retain compatibility with literal percent signs in unescaped names.
-    return name;
-  }
-};
-
-// The protocol is read in any case: QORTAL://APP/Q-Tube works too.
-const QORTAL_LINK_PATTERN = /^qortal:\/\//i;
-const QORTAL_USE_LINK_PATTERN = /^qortal:\/\/use-/i;
-
-export const extractComponents = (url: string) => {
-  if (!url || !QORTAL_LINK_PATTERN.test(url)) {
-    return null;
-  }
-
-  // Skip links starting with "qortal://use-"
-  if (QORTAL_USE_LINK_PATTERN.test(url)) {
-    return null;
-  }
-
-  // Remove protocol prefix
-  url = url.replace(/^qortal:\/\/?/i, '').trim();
-
-  // If nothing meaningful left (e.g., "qortal://", "qortal:////"), return null
-  if (!/[^/]/.test(url)) return null;
-
-  // Case 1: url contains a slash -> already service-based
-  if (url.includes('/')) {
-    // Identifier is part of QDN resource identity when present. Keep older
-    // links without identifier working, and route future reopen flows here.
-    const [basePart, queryString = ''] = url.split('?');
-    const parts = basePart.split('/');
-    const service = parts[0].toUpperCase();
-    parts.shift();
-    const name = decodeQortalName(parts[0] ?? '');
-    parts.shift();
-
-    const params = new URLSearchParams(queryString);
-    const identifier = params.get('identifier') || undefined;
-    if (identifier) {
-      params.delete('identifier');
-    }
-
-    const remainingQuery = params.toString();
-    const basePath = parts.join('/');
-    const path = `${basePath}${remainingQuery ? `?${remainingQuery}` : ''}`;
-
-    return { service, name, identifier, path };
-  }
-
-  // Case 2: url is just a username -> default to WEBSITE
-  return {
-    service: 'WEBSITE',
-    name: decodeQortalName(url),
-    identifier: undefined,
-    path: '',
-  };
-};
 
 function processText(input) {
   const linkRegex = /(qortal:\/\/\S+)/g;
@@ -635,19 +575,9 @@ export const MessageDisplay = ({
       openHttpUrlExternally(target.getAttribute('href'));
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
-
-      try {
-        if (await openQortalUseGroupLink(url)) return;
-      } catch (error) {
-        console.log(error);
-      }
-
-      const res = extractComponents(url);
-      if (res) {
-        const { service, name, identifier, path } = res;
-        executeEvent('addTab', { data: { service, name, identifier, path } });
-        executeEvent('open-apps-mode', {});
-      }
+      // Every kind of qortal:// link: a Q-App or website, an app's page, or
+      // a group's link.
+      await openQortalLink(url);
     }
   };
 
