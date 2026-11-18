@@ -90,6 +90,8 @@ export type AppsLauncherRequest = {
 };
 
 interface AppsLauncherProps {
+  /** Every app, hidden from the library or not: a pin keeps its details. */
+  allQapps?: LauncherApp[];
   availableQapps: LauncherApp[];
   categories: any[];
   contentHeight?: string;
@@ -119,6 +121,7 @@ export const AppsLauncher = (props: AppsLauncherProps) => {
 };
 
 const AppsLauncherPage = ({
+  allQapps,
   availableQapps,
   categories,
   contentHeight,
@@ -537,7 +540,7 @@ const AppsLauncherPage = ({
                 {/* Once the bookmarks are read: they say what is in a folder. */}
                 {areBookmarksReady ? (
                   <MemoSaved
-                    availableQapps={availableQapps}
+                    availableQapps={allQapps ?? availableQapps}
                     bookmarks={bookmarks}
                     myAddress={myAddress}
                     myApp={myApp}

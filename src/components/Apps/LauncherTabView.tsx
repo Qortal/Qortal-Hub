@@ -19,6 +19,8 @@ type LauncherTabViewProps = {
   state: LauncherTabState;
   /** On screen. A hidden tab stays mounted, as it was left. */
   isShown: boolean;
+  /** Every app, hidden from the library or not: pins keep their details. */
+  allQapps?: any[];
   availableQapps: any[];
   categories: any[];
   contentHeight: string;
@@ -46,6 +48,7 @@ export const LauncherTabView = memo(function LauncherTabView({
   tabId,
   state,
   isShown,
+  allQapps,
   availableQapps,
   categories,
   contentHeight,
@@ -87,6 +90,7 @@ export const LauncherTabView = memo(function LauncherTabView({
           }}
         >
           <AppsLauncher
+            allQapps={allQapps}
             availableQapps={availableQapps}
             categories={categories}
             contentHeight={contentHeight}
