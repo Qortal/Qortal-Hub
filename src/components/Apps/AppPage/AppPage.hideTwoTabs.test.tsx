@@ -13,6 +13,12 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
 import { createStore, Provider } from 'jotai';
 
+// Each test runs a hide or show through two launcher tabs' pages: up to about
+// 2.5 s on a fast machine, past Vitest's 5 s default on a busy CI runner. A
+// test stopped by the limit leaves its last act() open, and the tests after it
+// then render nothing.
+vi.setConfig({ testTimeout: 20_000 });
+
 i18n.init({ lng: 'en', fallbackLng: 'en', resources: { en: { core: {} } } });
 // The fee shows as text only with its string there.
 i18n.addResource('en', 'core', 'message.generic.fee_qort', 'fee: {{fee}} QORT');
