@@ -38,10 +38,10 @@ describe('parseQortalLink', () => {
       path: 'video/abc?t=3',
     });
     // A bare name is a website; the protocol may be in any case.
-    expect(parseQortalLink('QORTAL://Simon')).toMatchObject({
+    expect(parseQortalLink('QORTAL://Publisher')).toMatchObject({
       kind: 'resource',
       service: 'WEBSITE',
-      name: 'Simon',
+      name: 'Publisher',
     });
   });
 
@@ -111,9 +111,9 @@ describe('openQortalLink', () => {
 
   it('hands a Q-App or website to the place that opens it its own way', async () => {
     const openResource = vi.fn();
-    await openQortalLink('qortal://WEBSITE/Simon/blog', { openResource });
+    await openQortalLink('qortal://WEBSITE/Publisher/blog', { openResource });
     expect(openResource).toHaveBeenCalledWith(
-      expect.objectContaining({ service: 'WEBSITE', name: 'Simon' })
+      expect.objectContaining({ service: 'WEBSITE', name: 'Publisher' })
     );
     expect(events()).toEqual([]);
   });
