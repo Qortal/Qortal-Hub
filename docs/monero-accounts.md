@@ -104,6 +104,10 @@ The SDK source tag is [v0.11.22](https://github.com/woodser/monero-ts/releases/t
 
 ## Build, rollout and recovery
 
+For Linux acceptance use the [desktop AppImage testing guide](xmr-desktop-testing.md).
+The browser-only Vite server cannot run Reticulum or this branch's isolated
+desktop Q-App viewer. Test public XMR account requests inside the AppImage.
+
 This is a source branch increment, not a deployed release. Build the renderer and sync it before any desktop development test:
 
 ```sh
