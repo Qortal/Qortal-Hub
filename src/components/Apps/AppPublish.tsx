@@ -7,24 +7,17 @@ import {
   useState,
 } from 'react';
 import {
-  AppLibrarySubTitle,
-  AppPublishTagsContainer,
-  AppsLibraryContainer,
-  AppsWidthLimiter,
-  PublishQAppCTAButton,
-  PublishQAppInfo,
-} from './Apps-styles';
-import {
-  InputBase,
-  InputLabel,
+  Alert,
+  Box,
+  Button,
   MenuItem,
-  Select,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   useTheme,
 } from '@mui/material';
-import { styled } from '@mui/system';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
-import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
@@ -38,6 +31,8 @@ import {
   utf8ByteLength,
 } from '../../utils/qdnMetadataLimits';
 import { useTranslation } from 'react-i18next';
+import { useSetAtom } from 'jotai';
+import { infoSnackGlobalAtom, openSnackGlobalAtom } from '../../atoms/global';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import {
   EMPTY_PREFILL,
@@ -55,6 +50,23 @@ import {
 } from './publishProfiles';
 import { PublishSource } from './publishSource';
 import { PublishSourcePicker, formatPublishDate } from './PublishSourcePicker';
+import {
+  ExtrasSummary,
+  extrasPartCount,
+  PagePart,
+  PartsLeft,
+  PublishExtras,
+  PublishExtrasHandle,
+  PublishPageExtras,
+  publishPageExtras,
+} from './AppPage/PublishPageExtras';
+import { NameAvatar } from './AppPage/AppPageParts';
+import { appPageErrorText } from './AppPage/appPageErrors';
+import {
+  FormSection,
+  PublishPreviewCard,
+  PublishSummaryCard,
+} from './PublishFormParts';
 import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 
 const TITLE_MAX_CHARS = 80;
@@ -75,42 +87,55 @@ const useLimitedText = (limit: (value: string) => string) => {
   return [value, setLimited] as const;
 };
 
-const CustomSelect = styled(Select)({
-  border: '0.5px solid var(--50-white, #FFFFFF80)',
-  padding: '0px 15px',
-  borderRadius: '8px',
-  height: '36px',
-  width: '100%',
-  maxWidth: '450px',
-  '& .MuiSelect-select': {
-    padding: '0px',
-  },
-  '&:hover': {
-    borderColor: 'none',
-  },
-  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-    borderColor: 'none',
-  },
-  '&.Mui-disabled': {
-    opacity: 0.5, // Lower opacity when disabled
-  },
-  '& .MuiSvgIcon-root': {
-    color: 'var(--50-white, #FFFFFF80)',
-  },
-});
+/** Two columns from this form width on. */
+const WIDE_FORM = 980;
 
-const LabelRow = styled('div')({
-  alignItems: 'center',
-  display: 'flex',
-  justifyContent: 'space-between',
-  marginBottom: '2px',
-  width: '100%',
-});
+/**
+ * The form's width. A hidden or collapsed container (display: none) measures
+ * 0: the form keeps the width it last had, so it is laid out as it was when it
+ * shows again.
+ */
+const useElementWidth = () => {
+  const [width, setWidth] = useState(0);
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!element) return;
+    const measure = () => {
+      const next = element.clientWidth;
+      if (next > 0) setWidth(next);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+  return { width, ref: setElement };
+};
 
-const CounterText = styled('span')(({ theme }) => ({
-  color: theme.palette.text.secondary,
-  fontSize: '12px',
-}));
+/** How much input each part of the form has had. */
+interface InputCounts {
+  /** Everything but the page parts: name, files and listing. */
+  app: number;
+  page: number;
+  shots: number;
+}
+
+/**
+ * Page parts that failed after their app went out. The form keeps them, to
+ * publish them again without the app.
+ */
+interface LeftParts {
+  app: { service: string; name: string };
+  /** The app's signature, which the page's version describes. */
+  signature: string;
+  page: boolean;
+  shots: boolean;
+  /** What failed and why, in words. */
+  message: string;
+  /** Each part's input when it was last taken for a publish. */
+  published: InputCounts;
+}
 
 interface AppPublishProps {
   categories: any;
@@ -159,6 +184,10 @@ export const AppPublish = ({
   const [tag5, setTag5] = useLimitedText(limitQdnTag);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
+  // The form closes as the published app opens: what the publish did is told
+  // by Hub's own snackbar, which stays.
+  const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const [isLoading, setIsLoading] = useState('');
   const [prefillPending, setPrefillPending] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
@@ -169,17 +198,64 @@ export const AppPublish = ({
   // Anything the user chose or typed since the form opened or last published.
   // What a prefill fills in is not counted.
   const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
-  const noteInput = () => setHasUnsavedInput(true);
+  // Counts the input, so a publish that ends later sees what came after it.
+  const inputCountRef = useRef(0);
+  const noteInput = () => {
+    inputCountRef.current += 1;
+    setHasUnsavedInput(true);
+  };
   const markEdited = (field: string) => {
     editedFieldsRef.current.add(field);
     noteInput();
   };
+  // The page parts' share of it, so a retry of some parts knows what it
+  // publishes.
+  const partInputRef = useRef<Record<PagePart, number>>({ page: 0, shots: 0 });
+  const notePartInput = (part: PagePart) => {
+    partInputRef.current[part] += 1;
+    noteInput();
+  };
+  const inputCounts = (): InputCounts => {
+    const { page, shots } = partInputRef.current;
+    return { app: inputCountRef.current - page - shots, page, shots };
+  };
+  /** Whether the form has input that the publish taken at `published` left out. */
+  const hasInputSince = (published: InputCounts) => {
+    const now = inputCounts();
+    return (
+      now.app > published.app ||
+      now.page > published.page ||
+      now.shots > published.shots
+    );
+  };
+  // Page parts that failed after the app went out, kept to publish again.
+  const [leftParts, setLeftParts] = useState<LeftParts | null>(null);
+  const retryingRef = useRef(false);
+  // An app being published keeps its name and type until its page parts are
+  // out: the page section would otherwise show another app's page.
+  const [appPublishing, setAppPublishing] = useState(false);
   const onUnsavedChangeRef = useRef(onUnsavedChange);
   onUnsavedChangeRef.current = onUnsavedChange;
   useEffect(() => {
     onUnsavedChangeRef.current?.(hasUnsavedInput);
   }, [hasUnsavedInput]);
   useEffect(() => () => onUnsavedChangeRef.current?.(false), []);
+  // Whether the form is still open (its tab closes it, and so does a sign-out).
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  // Screenshots, version and What's new, published right after the app.
+  const pageExtrasRef = useRef<PublishExtrasHandle>(null);
+  const [extrasSummary, setExtrasSummary] = useState<ExtrasSummary | null>(
+    null
+  );
+  const [unitFee, setUnitFee] = useState<number | null>(null);
+  const { width, ref: formRef } = useElementWidth();
+  const wide = width >= WIDE_FORM;
   const maxFileSize = appType === 'APP' ? 50 * 1024 * 1024 : 400 * 1024 * 1024; // 50MB or 400MB
   const showError = (message: string) => {
     setInfoSnack({ type: 'error', message });
@@ -283,6 +359,19 @@ export const AppPublish = ({
     if (initialName) setName(initialName);
   }, [initialName]);
 
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(getFee('ARBITRARY'))
+      .then((fee) => {
+        const value = Number(fee?.fee);
+        if (alive && Number.isFinite(value)) setUnitFee(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const mySortedNames = useSortedMyNames(names, myName);
   const tagLabel = (number: number) =>
     t('core:tag_number', { number, postProcess: 'capitalizeFirstChar' });
@@ -310,15 +399,68 @@ export const AppPublish = ({
     tag5.length,
   ]);
 
+  /** What failed after the app went out, and why, in words. */
+  const partsLeftText = (left: PartsLeft) =>
+    t(
+      left.extras.page
+        ? left.extras.shots
+          ? 'core:app_page.publish.left_both'
+          : 'core:app_page.publish.left_page'
+        : 'core:app_page.publish.left_shots',
+      {
+        // Never empty, and never an internal code such as SHOT_UNAVAILABLE.
+        error: appPageErrorText(t, left.error, { inSentence: true }),
+        postProcess: 'capitalizeFirstChar',
+      }
+    );
+
+  /** Tells Hub's own snackbar what went out, which stays if the form closes. */
+  const tellPublished = (leftText: string) => {
+    setInfoSnackGlobal(
+      leftText
+        ? { type: 'warning', message: leftText }
+        : {
+            type: 'success',
+            message: t('core:message.success.published', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+          }
+    );
+    setOpenSnackGlobal(true);
+  };
+
+  /** The app and its page are out: the app opens in the form's place. */
+  const openPublishedApp = (app: { service: string; name: string }) => {
+    setHasUnsavedInput(false);
+    onUnsavedChangeRef.current?.(false);
+    const dataObj = {
+      name: app.name,
+      service: app.service,
+      metadata: {
+        title: title,
+        description: description,
+        category: category,
+      },
+      created: Date.now(),
+    };
+    executeEvent('addTab', {
+      data: inLauncherTab(dataObj, launcherTabId),
+    });
+  };
+
   const publishApp = async () => {
     // Publishing before the form is filled in would replace the app's details.
     if (prefillPending) return;
+    // What the form holds now is what this publish takes.
+    const taken = inputCounts();
+    setAppPublishing(true);
     try {
       const file = source?.file;
       const data = {
         name,
-        title,
-        description,
+        // Spaces alone are no title or description, as in the checklist.
+        title: title.trim(),
+        description: description.trim(),
         category,
         appType,
         file,
@@ -332,10 +474,21 @@ export const AppPublish = ({
         'file',
       ];
 
+      // What's missing, in the words of the checklist beside Publish.
+      const fieldLabels: Record<string, string> = {
+        name: 'core:publish_form.check_name',
+        title: 'core:publish_form.check_title',
+        description: 'core:publish_form.check_description',
+        category: 'core:publish_form.check_category',
+        appType: 'core:app_service_type',
+        file: 'core:publish_form.check_files',
+      };
       const missingFields: string[] = [];
       requiredFields.forEach((field) => {
         if (!data[field]) {
-          missingFields.push(field);
+          missingFields.push(
+            t(fieldLabels[field], { postProcess: 'capitalizeFirstChar' })
+          );
         }
       });
       if (missingFields.length > 0) {
@@ -346,13 +499,22 @@ export const AppPublish = ({
         });
         throw new Error(errorMsg);
       }
+      const extras = pageExtrasRef.current?.prepare() ?? null;
+      const extraParts = extrasPartCount(extras);
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: t('core:message.question.publish_app', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
+        message: extraParts
+          ? t('core:app_page.publish.confirm_with_page', {
+              count: extraParts,
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('core:message.question.publish_app', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+        publishFee: extraParts
+          ? `${(Number(fee.fee) * (1 + extraParts)).toFixed(2)} QORT`
+          : fee.fee + ' QORT',
       });
       setIsLoading(
         t('core:message.generic.publishing', {
@@ -391,17 +553,15 @@ export const AppPublish = ({
             );
           });
       });
-      setInfoSnack({
-        type: 'success',
-        message: t('core:message.success.published', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      });
-      setOpenSnack(true);
-      // What was typed is published now, before the app opens in the tab.
-      setHasUnsavedInput(false);
-      onUnsavedChangeRef.current?.(false);
       const signature = publishSignature(response);
+      // The page parts go after the app; the ones that fail are given back.
+      const left = await publishPageExtras(
+        { service: appType, name },
+        extras,
+        signature || ''
+      );
+      const leftText = left ? partsLeftText(left) : '';
+      tellPublished(leftText);
       const published: PublishProfile = {
         publishedAt: Date.now(),
         metadata: {
@@ -426,19 +586,27 @@ export const AppPublish = ({
         publishProfileKey(myAddress, appType, name),
         published
       );
-      const dataObj = {
-        name: name,
-        service: appType,
-        metadata: {
-          title: title,
-          description: description,
-          category: category,
-        },
-        created: Date.now(),
-      };
-      executeEvent('addTab', {
-        data: inLauncherTab(dataObj, launcherTabId),
-      });
+      // The form closed while its page parts went out: no tab opens.
+      if (!isMountedRef.current) return;
+      // Some of the page didn't go out: the form keeps it, still unsaved, to
+      // publish it again without the app.
+      if (left) {
+        setLeftParts({
+          app: { service: appType, name },
+          signature: signature || '',
+          page: !!left.extras.page,
+          shots: !!left.extras.shots,
+          message: leftText,
+          published: taken,
+        });
+        return;
+      }
+      setLeftParts(null);
+      // Input given while it was publishing isn't published: the form stays
+      // with it, unsaved.
+      if (hasInputSince(taken)) return;
+      // What was typed is published now, before the app opens in the tab.
+      openPublishedApp({ service: appType, name });
     } catch (error) {
       setInfoSnack({
         type: 'error',
@@ -450,402 +618,277 @@ export const AppPublish = ({
       });
       setOpenSnack(true);
     } finally {
+      setAppPublishing(false);
       setIsLoading('');
     }
   };
 
-  return (
-    <AppsLibraryContainer
-      sx={{
-        alignItems: 'center',
-        height: '100%',
-        paddingTop: '30px',
-      }}
+  /**
+   * Publishes the page parts that failed after the app, as the form holds
+   * them now, without the app. The app opens once nothing is left unpublished.
+   */
+  const retryLeftParts = async () => {
+    const pending = leftParts;
+    if (!pending || retryingRef.current) return;
+    retryingRef.current = true;
+    const taken = inputCounts();
+    try {
+      const prepared = pageExtrasRef.current?.prepare() ?? null;
+      const extras: PublishExtras = {
+        page: pending.page ? (prepared?.page ?? null) : null,
+        shots: pending.shots ? (prepared?.shots ?? null) : null,
+        pageWasRead: prepared?.pageWasRead,
+      };
+      // A part emptied since has nothing to publish: it is done.
+      const parts = extrasPartCount(extras);
+      if (parts) {
+        const fee = await getFee('ARBITRARY');
+        await show({
+          message: t('core:app_page.publish.confirm_retry', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: `${(Number(fee.fee) * parts).toFixed(2)} QORT`,
+        });
+        setIsLoading(
+          t('core:message.generic.publishing', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      const left = parts
+        ? await publishPageExtras(pending.app, extras, pending.signature)
+        : null;
+      const leftText = left ? partsLeftText(left) : '';
+      if (parts) tellPublished(leftText);
+      // The parts that went out now are published as the form held them.
+      const published: InputCounts = {
+        ...pending.published,
+        ...(pending.page && !left?.extras.page ? { page: taken.page } : {}),
+        ...(pending.shots && !left?.extras.shots ? { shots: taken.shots } : {}),
+      };
+      if (!isMountedRef.current) return;
+      if (left) {
+        setLeftParts({
+          ...pending,
+          page: !!left.extras.page,
+          shots: !!left.extras.shots,
+          message: leftText,
+          published,
+        });
+        return;
+      }
+      setLeftParts(null);
+      // Input given since, that none of this published, stays unsaved here.
+      if (hasInputSince(published)) return;
+      openPublishedApp(pending.app);
+    } catch (error) {
+      // Declined: the parts stay to try again, and nothing failed.
+      if (error?.isCanceled) return;
+      // The fee couldn't be read: the parts stay to try again.
+      setInfoSnack({
+        type: 'error',
+        message:
+          error?.message ||
+          t('core:message.error.publish_app', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
+    } finally {
+      retryingRef.current = false;
+      setIsLoading('');
+    }
+  };
+
+  const tags = [tag1, tag2, tag3, tag4, tag5];
+  const tagSetters = [setTag1, setTag2, setTag3, setTag4, setTag5];
+  const categoryName =
+    categories?.find((item) => item?.id === category)?.name || '';
+  const capital = { postProcess: 'capitalizeFirstChar' };
+  const checklist = [
+    {
+      key: 'name',
+      label: t('core:publish_form.check_name', capital),
+      done: !!name,
+    },
+    {
+      key: 'files',
+      label: t('core:publish_form.check_files', capital),
+      done: !!source,
+    },
+    {
+      key: 'title',
+      label: t('core:publish_form.check_title', capital),
+      done: !!title.trim(),
+    },
+    {
+      key: 'description',
+      label: t('core:publish_form.check_description', capital),
+      done: !!description.trim(),
+    },
+    {
+      key: 'category',
+      label: t('core:publish_form.check_category', capital),
+      done: !!category,
+    },
+  ];
+  const parts = [
+    {
+      key: 'app',
+      label:
+        appType === 'WEBSITE'
+          ? t('core:publish_form.part_website', capital)
+          : t('core:publish_form.part_app', capital),
+    },
+    ...(extrasSummary?.pageText
+      ? [{ key: 'page', label: t('core:app_page.edit.part_page', capital) }]
+      : []),
+    ...(extrasSummary &&
+    ['chosen', 'remove'].includes(extrasSummary.screenshots)
+      ? [
+          {
+            key: 'shots',
+            label: t('core:app_page.edit.part_screenshots', capital),
+          },
+        ]
+      : []),
+  ];
+  const heading =
+    isUpdate && name
+      ? t('core:publish_update.title', { name, ...capital })
+      : appType === 'WEBSITE'
+        ? t('core:developer.publish_site', capital)
+        : t('core:developer.publish_app', capital);
+
+  const preview = (
+    <PublishPreviewCard
+      categoryName={categoryName}
+      description={description}
+      isWebsite={appType === 'WEBSITE'}
+      name={name}
+      shotUrls={extrasSummary?.shotUrls || []}
+      // Each tag once, as the library shows them.
+      tags={Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)))}
+      title={title}
+      version={extrasSummary?.version || ''}
+    />
+  );
+  const leftNotice = leftParts && (
+    <Alert
+      action={
+        <Button
+          color="inherit"
+          disabled={!!isLoading}
+          onClick={retryLeftParts}
+          size="small"
+          sx={{ textTransform: 'none' }}
+        >
+          {t('core:retry', capital)}
+        </Button>
+      }
+      severity="warning"
+      sx={{ mb: 2 }}
     >
-      <AppsWidthLimiter
-        sx={{
-          width: 'auto',
-        }}
+      {leftParts.message}
+      <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
+        {t('core:app_page.publish.left_hint', capital)}
+      </Box>
+    </Alert>
+  );
+  const summary = (
+    <PublishSummaryCard
+      busy={!!isLoading}
+      checklist={checklist}
+      disabled={prefillPending}
+      onPublish={publishApp}
+      parts={parts}
+      publishLabel={t('core:action.publish', capital)}
+      unitFee={unitFee}
+    />
+  );
+
+  const sections = (
+    <Box sx={{ minWidth: 0 }}>
+      <FormSection
+        hint={t('core:message.generic.one_app_per_name', capital)}
+        number={1}
+        title={t('core:publish_form.section_name', capital)}
       >
-        <AppLibrarySubTitle>
-          {isUpdate && name
-            ? t('core:publish_update.title', {
-                name,
-                postProcess: 'capitalizeFirstChar',
-              })
-            : appType === 'WEBSITE'
-              ? t('core:developer.publish_site', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-              : t('core:developer.publish_app', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-        </AppLibrarySubTitle>
-
-        {profile?.publishedAt ? (
-          <Typography
-            sx={{ color: theme.palette.text.secondary, fontSize: '13px' }}
+        <Box
+          sx={{
+            alignItems: 'flex-start',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
+          <TextField
+            // Page parts still to publish belong to the app published here.
+            disabled={isUpdate || !!leftParts || appPublishing}
+            label={t('core:name_app', capital)}
+            onChange={(event) => {
+              noteInput();
+              setName(event?.target.value);
+            }}
+            select
+            SelectProps={{ displayEmpty: true }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ flex: '1 1 260px' }}
+            value={name}
           >
-            {t('core:publish_update.last_published', {
-              date: formatPublishDate(profile.publishedAt, i18n?.language),
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        ) : null}
-
-        <Spacer height="18px" />
-
-        <PublishQAppInfo>
-          {t('core:message.generic.one_app_per_name', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </PublishQAppInfo>
-
-        <Spacer height="18px" />
-
-        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          {t('core:name_app', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </InputLabel>
-
-        <CustomSelect
-          placeholder={t('core:action.select_name_app', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-          displayEmpty
-          value={name}
-          onChange={(event) => {
-            noteInput();
-            setName(event?.target.value);
-          }}
-          disabled={isUpdate}
-        >
-          <MenuItem value="">
-            <em
-              style={{
-                color: theme.palette.text.secondary,
-              }}
-            >
-              {t('core:action.select_name_app', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </em>
-            {/* This is the placeholder item */}
-          </MenuItem>
-          {mySortedNames.map((name) => {
-            return <MenuItem value={name}>{name}</MenuItem>;
-          })}
-        </CustomSelect>
-
-        <Spacer height="15px" />
-
-        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          {t('core:app_service_type', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </InputLabel>
-
-        <CustomSelect
-          placeholder={t('core:service_type', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-          displayEmpty
-          value={appType}
-          onChange={(event) => {
-            noteInput();
-            setAppType(event?.target.value);
-          }}
-          disabled={isAppTypeLocked}
-        >
-          <MenuItem value="">
-            <em
-              style={{
-                color: theme.palette.text.secondary,
-              }}
-            >
-              {t('core:action.select_app_type', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </em>
-          </MenuItem>
-
-          <MenuItem value={'APP'}>
-            {t('core:app', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </MenuItem>
-
-          <MenuItem value={'WEBSITE'}>
-            {t('core:website', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </MenuItem>
-        </CustomSelect>
-
-        <Spacer height="15px" />
-
-        <LabelRow>
-          <InputLabel sx={{ fontSize: '14px' }}>
-            {t('core:title', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </InputLabel>
-          {activeField === 'title' && (
-            <CounterText>{`${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`}</CounterText>
-          )}
-        </LabelRow>
-
-        <InputBase
-          value={title}
-          onFocus={() => setActiveField('title')}
-          onBlur={() => setActiveField(null)}
-          onChange={(e) => {
-            markEdited('title');
-            setTitle(e.target.value.slice(0, TITLE_MAX_CHARS));
-          }}
-          sx={{
-            border: `0.5px solid ${theme.palette.action.disabled}`,
-            padding: '0px 15px',
-            borderRadius: '8px',
-            height: '36px',
-            width: '100%',
-            maxWidth: '450px',
-          }}
-          placeholder={t('core:title', { postProcess: 'capitalizeFirstChar' })}
-          inputProps={{
-            'aria-label': 'Title',
-            fontSize: '14px',
-            fontWeight: 400,
-            maxLength: TITLE_MAX_CHARS,
-          }}
-        />
-
-        <Spacer height="15px" />
-
-        <LabelRow>
-          <InputLabel sx={{ fontSize: '14px' }}>
-            {t('core:description', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </InputLabel>
-          {activeField === 'description' && (
-            <CounterText>{`${utf8ByteLength(description)}/${QDN_DESCRIPTION_MAX_BYTES}`}</CounterText>
-          )}
-        </LabelRow>
-
-        <InputBase
-          value={description}
-          onFocus={() => setActiveField('description')}
-          onBlur={() => setActiveField(null)}
-          onChange={(e) => {
-            markEdited('description');
-            setDescription(e.target.value.slice(0, DESCRIPTION_MAX_CHARS));
-          }}
-          sx={{
-            border: `0.5px solid ${theme.palette.action.disabled}`,
-            padding: '0px 15px',
-            borderRadius: '8px',
-            height: '36px',
-            width: '100%',
-            maxWidth: '450px',
-          }}
-          placeholder={t('core:description', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-          inputProps={{
-            'aria-label': 'Description',
-            fontSize: '14px',
-            fontWeight: 400,
-            maxLength: DESCRIPTION_MAX_CHARS,
-          }}
-        />
-
-        <Spacer height="15px" />
-
-        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          {t('core:category', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </InputLabel>
-
-        <CustomSelect
-          displayEmpty
-          placeholder={t('core:action.select_category', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-          value={category}
-          onChange={(event) => {
-            markEdited('category');
-            setCategory(event?.target.value);
-          }}
-        >
-          <MenuItem value="">
-            <em
-              style={{
-                color: theme.palette.text.secondary,
-              }}
-            >
-              {t('core:action.select_category', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </em>
-          </MenuItem>
-          {categories?.map((category) => {
-            return <MenuItem value={category?.id}>{category?.name}</MenuItem>;
-          })}
-        </CustomSelect>
-
-        <Spacer height="15px" />
-
-        <LabelRow>
-          <InputLabel sx={{ fontSize: '14px' }}>
-            {t('core:tags', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </InputLabel>
-          {activeTagInfo && (
-            <CounterText>{`${tagLabel(activeTagInfo.number)}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`}</CounterText>
-          )}
-        </LabelRow>
-
-        <AppPublishTagsContainer>
-          <InputBase
-            value={tag1}
-            onFocus={() => setActiveField('tag1')}
-            onBlur={() => setActiveField(null)}
-            onChange={(e) => {
-              markEdited('tag1');
-              setTag1(e.target.value.slice(0, TAG_MAX_CHARS));
+            <MenuItem value="">
+              <em style={{ color: theme.palette.text.secondary }}>
+                {t('core:action.select_name_app', capital)}
+              </em>
+            </MenuItem>
+            {mySortedNames.map((item) => (
+              <MenuItem key={item} value={item}>
+                <Box
+                  component="span"
+                  sx={{ alignItems: 'center', display: 'flex', gap: 1 }}
+                >
+                  <NameAvatar decorative name={item} size={24} />
+                  {item}
+                </Box>
+              </MenuItem>
+            ))}
+          </TextField>
+          <ToggleButtonGroup
+            aria-label={t('core:app_service_type', capital)}
+            disabled={isAppTypeLocked || !!leftParts || appPublishing}
+            exclusive
+            onChange={(_, value) => {
+              if (!value) return;
+              noteInput();
+              setAppType(value);
             }}
             sx={{
-              border: `0.5px solid ${theme.palette.action.disabled}`,
-              padding: '0px 15px',
-              borderRadius: '8px',
-              height: '36px',
-              width: '100px',
+              '& .MuiToggleButton-root': {
+                borderRadius: '12px',
+                px: 2.5,
+                textTransform: 'none',
+              },
             }}
-            placeholder={tagLabel(1)}
-            inputProps={{
-              'aria-label': tagLabel(1),
-              fontSize: '14px',
-              fontWeight: 400,
-              maxLength: TAG_MAX_CHARS,
-            }}
-          />
-          <InputBase
-            value={tag2}
-            onFocus={() => setActiveField('tag2')}
-            onBlur={() => setActiveField(null)}
-            onChange={(e) => {
-              markEdited('tag2');
-              setTag2(e.target.value.slice(0, TAG_MAX_CHARS));
-            }}
-            sx={{
-              border: `0.5px solid ${theme.palette.action.disabled}`,
-              padding: '0px 15px',
-              borderRadius: '8px',
-              height: '36px',
-              width: '100px',
-            }}
-            placeholder={tagLabel(2)}
-            inputProps={{
-              'aria-label': tagLabel(2),
-              fontSize: '14px',
-              fontWeight: 400,
-              maxLength: TAG_MAX_CHARS,
-            }}
-          />
-          <InputBase
-            value={tag3}
-            onFocus={() => setActiveField('tag3')}
-            onBlur={() => setActiveField(null)}
-            onChange={(e) => {
-              markEdited('tag3');
-              setTag3(e.target.value.slice(0, TAG_MAX_CHARS));
-            }}
-            sx={{
-              border: `0.5px solid ${theme.palette.action.disabled}`,
-              padding: '0px 15px',
-              borderRadius: '8px',
-              height: '36px',
-              width: '100px',
-            }}
-            placeholder={tagLabel(3)}
-            inputProps={{
-              'aria-label': tagLabel(3),
-              fontSize: '14px',
-              fontWeight: 400,
-              maxLength: TAG_MAX_CHARS,
-            }}
-          />
-          <InputBase
-            value={tag4}
-            onFocus={() => setActiveField('tag4')}
-            onBlur={() => setActiveField(null)}
-            onChange={(e) => {
-              markEdited('tag4');
-              setTag4(e.target.value.slice(0, TAG_MAX_CHARS));
-            }}
-            sx={{
-              border: `0.5px solid ${theme.palette.action.disabled}`,
-              padding: '0px 15px',
-              borderRadius: '8px',
-              height: '36px',
-              width: '100px',
-            }}
-            placeholder={tagLabel(4)}
-            inputProps={{
-              'aria-label': tagLabel(4),
-              fontSize: '14px',
-              fontWeight: 400,
-              maxLength: TAG_MAX_CHARS,
-            }}
-          />
-          <InputBase
-            value={tag5}
-            onFocus={() => setActiveField('tag5')}
-            onBlur={() => setActiveField(null)}
-            onChange={(e) => {
-              markEdited('tag5');
-              setTag5(e.target.value.slice(0, TAG_MAX_CHARS));
-            }}
-            sx={{
-              border: `0.5px solid ${theme.palette.action.disabled}`,
-              padding: '0px 15px',
-              borderRadius: '8px',
-              height: '36px',
-              width: '100px',
-            }}
-            placeholder={tagLabel(5)}
-            inputProps={{
-              'aria-label': tagLabel(5),
-              fontSize: '14px',
-              fontWeight: 400,
-              maxLength: TAG_MAX_CHARS,
-            }}
-          />
-        </AppPublishTagsContainer>
+            value={appType}
+          >
+            <ToggleButton value="APP">
+              {t('core:app_page.hero.type_app')}
+            </ToggleButton>
+            <ToggleButton value="WEBSITE">
+              {t('core:website', capital)}
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      </FormSection>
 
-        <Spacer height="30px" />
-
-        <PublishQAppInfo>
-          {t('core:message.generic.select_zip', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </PublishQAppInfo>
-
-        <Spacer height="10px" />
-
-        <PublishQAppInfo>
-          {t('core:private_apps.max_file_size', {
-            size: maxFileSize / (1024 * 1024),
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </PublishQAppInfo>
-
-        <Spacer height="18px" />
-
+      <FormSection
+        hint={t('core:private_apps.max_file_size', {
+          size: maxFileSize / (1024 * 1024),
+          ...capital,
+        })}
+        number={2}
+        title={t('core:publish_form.section_files', capital)}
+      >
         <PublishSourcePicker
           changedSince={profileChangedSince(profile)}
           maxSize={maxFileSize}
@@ -857,20 +900,206 @@ export const AppPublish = ({
           savedSource={profile?.source}
           source={source}
         />
+      </FormSection>
 
-        <Spacer height="35px" />
+      <FormSection
+        hint={t('core:publish_form.listing_hint', capital)}
+        number={3}
+        title={t('core:publish_form.section_listing', capital)}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField
+            fullWidth
+            FormHelperTextProps={{ sx: { textAlign: 'end' } }}
+            helperText={`${utf8ByteLength(title)}/${QDN_TITLE_MAX_BYTES}`}
+            inputProps={{ maxLength: TITLE_MAX_CHARS }}
+            label={t('core:title', capital)}
+            onBlur={() => setActiveField(null)}
+            onChange={(event) => {
+              markEdited('title');
+              setTitle(event.target.value.slice(0, TITLE_MAX_CHARS));
+            }}
+            onFocus={() => setActiveField('title')}
+            value={title}
+          />
+          <TextField
+            fullWidth
+            FormHelperTextProps={{ sx: { textAlign: 'end' } }}
+            helperText={`${utf8ByteLength(description)}/${QDN_DESCRIPTION_MAX_BYTES}`}
+            inputProps={{ maxLength: DESCRIPTION_MAX_CHARS }}
+            label={t('core:description', capital)}
+            minRows={2}
+            multiline
+            onBlur={() => setActiveField(null)}
+            onChange={(event) => {
+              markEdited('description');
+              setDescription(
+                event.target.value.slice(0, DESCRIPTION_MAX_CHARS)
+              );
+            }}
+            onFocus={() => setActiveField('description')}
+            value={description}
+          />
+          <TextField
+            label={t('core:category', capital)}
+            onChange={(event) => {
+              markEdited('category');
+              setCategory(event?.target.value);
+            }}
+            select
+            SelectProps={{ displayEmpty: true }}
+            InputLabelProps={{ shrink: true }}
+            sx={{ maxWidth: 420 }}
+            value={category}
+          >
+            <MenuItem value="">
+              <em style={{ color: theme.palette.text.secondary }}>
+                {t('core:action.select_category', capital)}
+              </em>
+            </MenuItem>
+            {categories?.map((item) => (
+              <MenuItem key={item?.id} value={item?.id}>
+                {item?.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Box>
+            <Box
+              sx={{
+                alignItems: 'baseline',
+                display: 'flex',
+                justifyContent: 'space-between',
+                mb: 1,
+              }}
+            >
+              <Typography sx={{ fontSize: '14px', fontWeight: 600 }}>
+                {t('core:tags', capital)}
+              </Typography>
+              <Typography sx={{ color: 'text.secondary', fontSize: '12px' }}>
+                {activeTagInfo
+                  ? `${tagLabel(activeTagInfo.number)}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`
+                  : t('core:publish_form.tags_hint', capital)}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1,
+                gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+              }}
+            >
+              {tags.map((tag, index) => (
+                <TextField
+                  inputProps={{
+                    'aria-label': tagLabel(index + 1),
+                    maxLength: TAG_MAX_CHARS,
+                  }}
+                  key={index}
+                  onBlur={() => setActiveField(null)}
+                  onChange={(event) => {
+                    markEdited(`tag${index + 1}`);
+                    tagSetters[index](
+                      event.target.value.slice(0, TAG_MAX_CHARS)
+                    );
+                  }}
+                  onFocus={() => setActiveField(`tag${index + 1}`)}
+                  placeholder={tagLabel(index + 1)}
+                  size="small"
+                  value={tag}
+                />
+              ))}
+            </Box>
+          </Box>
+        </Box>
+      </FormSection>
 
-        <PublishQAppCTAButton
-          sx={{
-            alignSelf: 'center',
-            '&.Mui-disabled': { opacity: 0.5 },
-          }}
-          disabled={prefillPending}
-          onClick={publishApp}
+      <FormSection
+        hint={t('core:app_page.publish.hint', capital)}
+        number={4}
+        title={t('core:app_page.publish.title', capital)}
+      >
+        <PublishPageExtras
+          bare
+          file={source?.file ?? null}
+          name={name}
+          onInput={notePartInput}
+          onSummaryChange={setExtrasSummary}
+          ref={pageExtrasRef}
+          service={appType}
+        />
+      </FormSection>
+    </Box>
+  );
+
+  return (
+    <Box
+      ref={formRef}
+      sx={{
+        height: '100%',
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        width: '100%',
+      }}
+    >
+      <Box
+        sx={{
+          maxWidth: '1160px',
+          mx: 'auto',
+          pb: 6,
+          pt: { xs: 3, sm: 4 },
+          px: { xs: 2, sm: 3 },
+        }}
+      >
+        <Box sx={{ mb: 3 }}>
+          <Typography
+            component="h1"
+            sx={{
+              fontSize: { xs: '24px', sm: '28px' },
+              fontWeight: 750,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            {heading}
+          </Typography>
+          {profile?.publishedAt ? (
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: '13px' }}
+            >
+              {t('core:publish_update.last_published', {
+                date: formatPublishDate(profile.publishedAt, i18n?.language),
+                ...capital,
+              })}
+            </Typography>
+          ) : (
+            <Typography sx={{ color: 'text.secondary', fontSize: '14px' }}>
+              {t('core:publish_form.intro', capital)}
+            </Typography>
+          )}
+        </Box>
+
+        {/* One tree for both layouts: the side column is a plain box when
+            narrow, so nothing in the form is rebuilt when it gets wider or
+            narrower. */}
+        <Box
+          sx={
+            wide
+              ? {
+                  alignItems: 'start',
+                  display: 'grid',
+                  gap: 2.5,
+                  gridTemplateColumns: 'minmax(0, 1fr) 340px',
+                }
+              : undefined
+          }
         >
-          {t('core:action.publish', { postProcess: 'capitalizeFirstChar' })}
-        </PublishQAppCTAButton>
-      </AppsWidthLimiter>
+          {sections}
+          <Box sx={wide ? { position: 'sticky', top: 16 } : undefined}>
+            {preview}
+            {leftNotice}
+            {summary}
+          </Box>
+        </Box>
+      </Box>
 
       <LoadingSnackbar
         open={!!isLoading || prefillPending}
@@ -887,6 +1116,6 @@ export const AppPublish = ({
         info={infoSnack}
         setInfo={setInfoSnack}
       />
-    </AppsLibraryContainer>
+    </Box>
   );
 };

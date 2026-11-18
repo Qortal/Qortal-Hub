@@ -188,3 +188,20 @@ The capture goes through `qappGuest:shot` in main, which takes one request,
 itself prepared for that owner. It returns a PNG of the guest's view, at most
 1,600 pixels on the longest side; the renderer re-encodes it to WebP like any
 other picture. Nothing runs inside the app.
+
+When publishing, the screenshots are optional, and nothing is published for
+them unless the publisher adds some: taken by hand in the dialog or chosen from
+files. For an update of an app that has screenshots, the publisher keeps them
+(the default), changes them (starting from the current ones), or takes them off
+the page, which publishes an empty list.
+
+The publish form sends the page parts right after the app. The page text goes
+over the page the node has at that moment, so About and links saved since the
+form opened stay. When the node can't say what the page has (its search
+fails, it lists a page it can't read, or it lists none although the form read
+one), the page text isn't published. Each part goes out on its own. When one
+fails, the form stays open with it, still unsaved, and Retry publishes only
+the parts left, with the app's signature from that publish. The app opens once
+nothing in the form is left unpublished, so input typed while the app uploads
+stays too. The name and type can't change while the app is being published or
+while parts are left.
