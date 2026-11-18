@@ -31,6 +31,8 @@ import { SidePanelAppIcon } from './SidePanelAppIcon';
 import { ARC_OUTER_PX, SidePanelArc } from './SidePanelArc';
 import { sidePanelItemLabel } from './sidePanelLabels';
 import { SidePanelEditor } from './SidePanelEditor';
+import { RestoreLayoutButton } from '../Save/RestoreLayoutButton';
+import { LAYOUT_EDIT_DONE_EVENT } from '../Save/LayoutSavePrompt';
 import {
   isSidePanelItemShown,
   SIDE_PANEL_DEFAULT,
@@ -635,7 +637,8 @@ export const DesktopSideBar = ({
             })}
             onClick={() =>
               runSidebarAction(() => {
-                executeEvent('newTabWindow', {});
+                // The launcher tab there is, or a new one (AppsDesktop).
+                executeEvent('showLauncherTab', {});
                 setDesktopViewMode('apps');
               })
             }
@@ -945,9 +948,12 @@ export const DesktopSideBar = ({
 
       <SidePanelEditor
         devMode={!!isEnabledDevMode}
+        extraActions={<RestoreLayoutButton part="sidePanel" />}
         onChange={updatePanel}
         onClose={() => {
           setIsEditorOpen(false);
+          // The settings may be worth saving to QDN.
+          executeEvent(LAYOUT_EDIT_DONE_EVENT, {});
           if (!alwaysOpen) hideSidebar();
         }}
         open={isEditorOpen}

@@ -35,6 +35,16 @@ import {
   savedLauncherAtom,
   useTakeInSavedLauncher,
 } from '../Apps/AppsLauncher/launcherQdnSync';
+import {
+  markLayoutsSaved,
+  NO_SAVED_LAYOUTS,
+  readLocalLayouts,
+  savedLayoutsAtom,
+  type SavedLayouts,
+  takeInSavedLayouts,
+  takeInSavedSidePanelItems,
+  toSavedLayoutSettings,
+} from './savedLayouts';
 
 /** The account's settings on QDN: one encrypted file, saved as a whole. */
 export const SETTINGS_IDENTIFIER = 'ext_saved_settings';
@@ -71,7 +81,8 @@ const errorOf = (reason: unknown, fallback: string) => {
 
 /**
  * Saves the account's settings to QDN: the pinned apps, and with them the
- * bookmarks, the bookmark folders and the order of the launcher's tiles.
+ * bookmarks, the bookmark folders, the order of the launcher's tiles, Home's
+ * layout and the side panel.
  *
  * - Settings saved on another device since they were read here are taken
  *   in first, so they are not written over: their bookmarks and arrangement
@@ -79,6 +90,10 @@ const errorOf = (reason: unknown, fallback: string) => {
  *   an app pinned there is not removed by saving a change made here. They
  *   also become what Revert goes back to, even if this save is called off.
  *   With `overwrite`, settings that could not be read are written over.
+ * - Home's layout and the side panel go as this device has them. When one
+ *   changed both here and on another device (it's offered to restore), this
+ *   device's is saved, and a side panel keeps the Q-Apps and websites added
+ *   there.
  * - It asks to confirm, with the fee, before it publishes. `canceled` means
  *   that was declined; a failure throws, with a message to show.
  */
@@ -93,6 +108,8 @@ export const useSaveSettingsToQdn = (
   const savedLauncher = useAtomValue(savedLauncherAtom);
   const setSavedLauncher = useSetAtom(savedLauncherAtom);
   const takeIn = useTakeInSavedLauncher();
+  const savedLayouts = useAtomValue(savedLayoutsAtom);
+  const setSavedLayouts = useSetAtom(savedLayoutsAtom);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const { t } = useTranslation(['core']);
 
@@ -105,6 +122,12 @@ export const useSaveSettingsToQdn = (
       });
 
       let pins = pinnedApps;
+      // The layouts as saved, as last read: a layout never changed here
+      // goes as it was saved.
+      let layoutsSaved: SavedLayouts =
+        savedLayouts.address === address
+          ? savedLayouts.saved
+          : NO_SAVED_LAYOUTS;
       if (address && name && !overwrite) {
         const known =
           savedLauncher.address === address ? savedLauncher.savedAt : 0;
@@ -135,8 +158,15 @@ export const useSaveSettingsToQdn = (
               );
             }
           }
+          const layouts = takeInSavedLayouts(address, settings);
+          setSavedLayouts(layouts);
+          layoutsSaved = layouts.saved;
         }
       }
+      // A side panel changed both here and in the copy offered to restore
+      // keeps the Q-Apps and websites added there.
+      if (address) takeInSavedSidePanelItems(address, layoutsSaved);
+      const localLayouts = address ? readLocalLayouts(address) : null;
 
       let bookmarks: AppBookmarksForAddress | null = null;
       if (address) {
@@ -159,6 +189,9 @@ export const useSaveSettingsToQdn = (
       const data64 = await objectToBase64({
         sortablePinnedApps: serializePinnedAppsForQdn(pins),
         ...(launcher ? toSavedLauncherSettings(launcher) : {}),
+        ...(localLayouts
+          ? toSavedLayoutSettings(localLayouts, layoutsSaved)
+          : {}),
       });
       const encrypted = await sendMessage(
         'ENCRYPT_DATA',
@@ -205,6 +238,9 @@ export const useSaveSettingsToQdn = (
       const savedAt = Date.now();
       setOldPinnedApps(pins);
       setSettingsQdnLastUpdated(savedAt);
+      if (address && localLayouts) {
+        setSavedLayouts(markLayoutsSaved(address, localLayouts, layoutsSaved));
+      }
       if (address && launcher) {
         setSavedLauncher({ address, status: 'saved', launcher, savedAt });
         if (bookmarks) {
@@ -224,9 +260,11 @@ export const useSaveSettingsToQdn = (
       name,
       pinnedApps,
       savedLauncher,
+      savedLayouts,
       setOldPinnedApps,
       setPinnedApps,
       setSavedLauncher,
+      setSavedLayouts,
       setSettingsQdnLastUpdated,
       show,
       t,

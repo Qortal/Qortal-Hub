@@ -1,49 +1,68 @@
 import { useState } from 'react';
-import { Box, Typography, useTheme } from '@mui/material';
+import { Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import PublishIcon from '@mui/icons-material/Publish';
-import AddIcon from '@mui/icons-material/Add';
 import { AppsWidthLimiter } from '../Apps-styles';
-import { Spacer } from '../../../common/Spacer';
 import { AppsPrivate, PrivateAppAction } from '../AppsPrivate';
 import { PublishedPrivateApps } from '../PublishedPrivateApps';
+import { LibrarySection } from './LibrarySection';
+import { cap } from './libraryStyles';
+import type { PublishedPrivateApp } from '../privateAppMetadata';
 import {
   PublishButton,
   PublishNewContainer,
   SectionContainer,
-  SectionTitle,
-  StyledDivider,
 } from './LibraryTab-styles';
 
 interface PrivateTabProps {
   myName: string;
   myAddress: string;
+  /** Changes when the library's refresh button is pressed. */
+  libraryRefreshKey?: number;
+  /**
+   * False while the tab is out of sight, as when its launcher tab is hidden:
+   * a dialog it opened steps aside, keeping what was entered.
+   */
+  isActive?: boolean;
 }
 
-export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
+export const PrivateTab = ({
+  myName,
+  myAddress,
+  libraryRefreshKey = 0,
+  isActive = true,
+}: PrivateTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const [refreshKey, setRefreshKey] = useState(0);
   const [action, setAction] = useState<PrivateAppAction | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<PublishedPrivateApp | null>(
+    null
+  );
+
+  const open = (next: PrivateAppAction, target?: PublishedPrivateApp) => {
+    setUpdateTarget(target ?? null);
+    setAction(next);
+  };
 
   return (
-    <AppsWidthLimiter>
+    <AppsWidthLimiter sx={{ alignItems: 'stretch' }}>
       <SectionContainer>
-        <PublishedPrivateApps myAddress={myAddress} refreshKey={refreshKey} />
+        <PublishedPrivateApps
+          myAddress={myAddress}
+          onUpdate={(app) => open('update', app)}
+          refreshKey={refreshKey + libraryRefreshKey}
+        />
 
-        <StyledDivider />
-
-        <Box>
-          <SectionTitle>
-            <AddIcon sx={{ fontSize: '20px' }} />
-            {t('core:private_apps.actions_title', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </SectionTitle>
-          <Spacer height="16px" />
+        <LibrarySection
+          hint={t('core:launcher.library.private_actions_hint', cap)}
+          icon={<LockOpenRoundedIcon />}
+          title={t('core:private_apps.actions_title', cap)}
+        >
           <PublishNewContainer>
-            <PublishButton onClick={() => setAction('access')}>
+            <PublishButton onClick={() => open('access')}>
               <LockOpenIcon
                 sx={{ fontSize: '32px', color: theme.palette.primary.main }}
               />
@@ -59,7 +78,7 @@ export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
                 })}
               </Typography>
             </PublishButton>
-            <PublishButton onClick={() => setAction('publish')}>
+            <PublishButton onClick={() => open('publish')}>
               <PublishIcon
                 sx={{ fontSize: '32px', color: theme.palette.secondary.main }}
               />
@@ -76,14 +95,19 @@ export const PrivateTab = ({ myName, myAddress }: PrivateTabProps) => {
               </Typography>
             </PublishButton>
           </PublishNewContainer>
-        </Box>
+        </LibrarySection>
       </SectionContainer>
 
       <AppsPrivate
+        isShown={isActive}
         myName={myName}
         myAddress={myAddress}
         action={action}
-        onClose={() => setAction(null)}
+        updateTarget={updateTarget}
+        onClose={() => {
+          setAction(null);
+          setUpdateTarget(null);
+        }}
         onPublished={() => setRefreshKey((key) => key + 1)}
       />
     </AppsWidthLimiter>

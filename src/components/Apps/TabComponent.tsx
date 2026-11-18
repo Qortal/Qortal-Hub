@@ -6,20 +6,29 @@ import {
   ListItemText,
   Menu,
   MenuItem,
+  Tooltip,
   useTheme,
 } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseFullscreenRoundedIcon from '@mui/icons-material/CloseFullscreenRounded';
 import LockIcon from '@mui/icons-material/Lock';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import { useRef, useState, type MutableRefObject } from 'react';
 import { alpha } from '@mui/material/styles';
 import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
 import { AppsHorizontalTabButton, AppsHorizontalTabLabel } from './Apps-styles';
 import { getBaseApiReact } from '../../App';
+import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { useTranslation } from 'react-i18next';
+import { isLauncherTab } from './launcherTabs';
+import { TAB_IDEAL_WIDTH_PX, tabShowsLabel } from './tabStripLayout';
+
+/** The × of a narrow tab shows on hover through this class. */
+const CLOSE_BUTTON_CLASS = 'app-tab-close';
 
 function devTabLabel(app: any): string {
   const base =
@@ -47,8 +56,14 @@ type TabComponentProps = {
   onSelect: () => void;
   /** Dev-mode / local preview tabs (label + icon only; same chrome as app tabs) */
   isDevApp?: boolean;
-  /** When false and the strip is wide enough, tab stays fixed at ~180px (measured in AppsDesktop). */
-  tabStripCompresses?: boolean;
+  /**
+   * A pinned tab shows only its icon, has no ×, and middle-click leaves it
+   * open: it closes only once it is unpinned.
+   */
+  isPinned?: boolean;
+  onTogglePin?: () => void;
+  /** The tab's width, worked out for the whole strip in AppsDesktop. */
+  widthPx?: number;
   /** Mutable drag-lock shared from AppsDesktop to avoid rerenders during drag. */
   tabInteractionLockedRef?: MutableRefObject<boolean>;
 };
@@ -63,7 +78,9 @@ const TabComponent = ({
   onClose,
   onSelect,
   isDevApp = false,
-  tabStripCompresses = true,
+  isPinned = false,
+  onTogglePin,
+  widthPx = TAB_IDEAL_WIDTH_PX,
   tabInteractionLockedRef,
 }: TabComponentProps) => {
   const theme = useTheme();
@@ -86,13 +103,32 @@ const TabComponent = ({
   const interactionLockRef = tabInteractionLockedRef ?? localInteractionLockRef;
 
   const treatAsDevApp = Boolean(isDevApp);
+  const isLauncher = isLauncherTab(app);
   const canDuplicate = !app?.internal && !!app?.service;
-  const label = treatAsDevApp
-    ? devTabLabel(app)
-    : app?.privateAppProperties?.name ||
-      app?.metadata?.title ||
-      app?.name ||
-      '';
+  const label = isLauncher
+    ? t('core:app_tab.new_tab', { postProcess: 'capitalizeFirstChar' })
+    : treatAsDevApp
+      ? devTabLabel(app)
+      : app?.privateAppProperties?.name ||
+        app?.metadata?.title ||
+        app?.name ||
+        '';
+  // A narrow or pinned tab shows its icon, with its title in a tooltip.
+  const iconOnly = isPinned || !tabShowsLabel(widthPx);
+  // Next to the icon of a narrow tab there is room only for the × of the
+  // selected tab; the others show theirs on hover or keyboard focus.
+  const closeWaitsForHover = iconOnly && !isVisuallySelected;
+  const menuItemTextSx = {
+    '& .MuiTypography-root': {
+      fontSize: '12px',
+      fontWeight: 600,
+      color: theme.palette.text.primary,
+    },
+  };
+  const menuItemIconSx = {
+    minWidth: '24px !important',
+    marginRight: '6px',
+  };
   // Active tabs stay close to the normal hover surface so the workspace, not
   // the tab strip, carries the visual focus.
   const selectedTabBackground =
@@ -126,12 +162,15 @@ const TabComponent = ({
     zIndex: isDragging ? 5 : 'auto',
   };
 
-  return (
+  const tabButton = (
     <AppsHorizontalTabButton
       ref={setNodeRef}
       disableRipple
       {...attributes}
       {...listeners}
+      aria-label={label || undefined}
+      data-pinned={isPinned ? 'true' : undefined}
+      data-tab-id={app?.tabId}
       onClick={(event) => {
         if (interactionLockRef.current) {
           event.preventDefault();
@@ -158,6 +197,8 @@ const TabComponent = ({
         if (event.button !== 1) return;
         event.preventDefault();
         event.stopPropagation();
+        // A pinned tab is unpinned before it closes.
+        if (isPinned) return;
         onClose();
       }}
       onContextMenu={(event) => {
@@ -225,16 +266,40 @@ const TabComponent = ({
             transform: `${dndStyle.transform || ''} scale(1)`.trim(),
           },
         },
-        ...(!tabStripCompresses && {
-          flex: '0 0 180px',
-          flexShrink: 0,
-          maxWidth: '180px',
-          minWidth: '180px',
-          width: '180px',
+        flex: `0 0 ${widthPx}px`,
+        maxWidth: `${widthPx}px`,
+        minWidth: `${widthPx}px`,
+        width: `${widthPx}px`,
+        ...(iconOnly && {
+          gap: '4px',
+          justifyContent: 'center',
+          padding: '0 6px',
+        }),
+        ...(closeWaitsForHover && {
+          [`&:hover .${CLOSE_BUTTON_CLASS}, &:focus-within .${CLOSE_BUTTON_CLASS}`]:
+            {
+              display: 'inline-flex',
+            },
         }),
       }}
     >
-      {app?.isPrivate && !app?.privateAppProperties?.logo ? (
+      {isLauncher ? (
+        <Box
+          sx={{
+            alignItems: 'center',
+            color: isVisuallySelected
+              ? selectedTabTextColor
+              : theme.palette.text.secondary,
+            display: 'flex',
+            flexShrink: 0,
+            height: '22px',
+            justifyContent: 'center',
+            width: '22px',
+          }}
+        >
+          <AppsIcon color="currentColor" height={14} width={14} />
+        </Box>
+      ) : app?.isPrivate && !app?.privateAppProperties?.logo ? (
         <Box
           sx={{
             alignItems: 'center',
@@ -296,63 +361,72 @@ const TabComponent = ({
         </Avatar>
       )}
 
-      <AppsHorizontalTabLabel
-        sx={{
-          color: isVisuallySelected
-            ? selectedTabTextColor
-            : theme.palette.text.secondary,
-          fontWeight: 500,
-        }}
-      >
-        {label}
-      </AppsHorizontalTabLabel>
-
-      <IconButton
-        disableRipple
-        onClick={(event) => {
-          event.stopPropagation();
-          if (interactionLockRef.current) {
-            event.preventDefault();
-            return;
-          }
-          onClose();
-        }}
-        onAuxClick={(event) => {
-          if (interactionLockRef.current) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
-          if (event.button !== 1) return;
-          event.preventDefault();
-          event.stopPropagation();
-          onClose();
-        }}
-        onPointerDown={(event) => {
-          event.stopPropagation();
-        }}
-        size="small"
-        sx={{
-          color: isVisuallySelected
-            ? alpha(selectedTabTextColor, 0.92)
-            : theme.palette.text.secondary,
-          flexShrink: 0,
-          height: 22,
-          width: 22,
-          opacity: isVisuallySelected ? 1 : 0.76,
-          '&:hover': {
-            backgroundColor: isVisuallySelected
-              ? alpha(selectedTabTextColor, 0.18)
-              : theme.palette.action.selected,
+      {!iconOnly && (
+        <AppsHorizontalTabLabel
+          sx={{
             color: isVisuallySelected
               ? selectedTabTextColor
-              : theme.palette.text.primary,
-            opacity: 1,
-          },
-        }}
-      >
-        <CloseRoundedIcon sx={{ fontSize: 15 }} />
-      </IconButton>
+              : theme.palette.text.secondary,
+            fontWeight: 500,
+          }}
+        >
+          {label}
+        </AppsHorizontalTabLabel>
+      )}
+
+      {!isPinned && (
+        <IconButton
+          aria-label={t('core:app_tab.close', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          className={CLOSE_BUTTON_CLASS}
+          disableRipple
+          onClick={(event) => {
+            event.stopPropagation();
+            if (interactionLockRef.current) {
+              event.preventDefault();
+              return;
+            }
+            onClose();
+          }}
+          onAuxClick={(event) => {
+            if (interactionLockRef.current) {
+              event.preventDefault();
+              event.stopPropagation();
+              return;
+            }
+            if (event.button !== 1) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onClose();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          size="small"
+          sx={{
+            color: isVisuallySelected
+              ? alpha(selectedTabTextColor, 0.92)
+              : theme.palette.text.secondary,
+            flexShrink: 0,
+            height: 22,
+            width: 22,
+            opacity: isVisuallySelected ? 1 : 0.76,
+            ...(closeWaitsForHover && { display: 'none' }),
+            '&:hover': {
+              backgroundColor: isVisuallySelected
+                ? alpha(selectedTabTextColor, 0.18)
+                : theme.palette.action.selected,
+              color: isVisuallySelected
+                ? selectedTabTextColor
+                : theme.palette.text.primary,
+              opacity: 1,
+            },
+          }}
+        >
+          <CloseRoundedIcon sx={{ fontSize: 15 }} />
+        </IconButton>
+      )}
 
       <Menu
         open={!!menuPosition}
@@ -373,11 +447,44 @@ const TabComponent = ({
               border: `1px solid ${theme.palette.border.subtle}`,
               borderRadius: '6px',
               color: theme.palette.text.primary,
-              width: '164px',
+              minWidth: '164px',
             },
           },
         }}
       >
+        {onTogglePin && (
+          <MenuItem
+            onClick={() => {
+              onTogglePin();
+              setMenuPosition(null);
+            }}
+          >
+            <ListItemIcon sx={menuItemIconSx}>
+              {isPinned ? (
+                <PushPinIcon
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontSize: 18,
+                  }}
+                />
+              ) : (
+                <PushPinOutlinedIcon
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontSize: 18,
+                  }}
+                />
+              )}
+            </ListItemIcon>
+
+            <ListItemText
+              sx={menuItemTextSx}
+              primary={t(isPinned ? 'core:app_tab.unpin' : 'core:app_tab.pin', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            />
+          </MenuItem>
+        )}
         {canDuplicate && (
           <MenuItem
             onClick={() => {
@@ -385,12 +492,7 @@ const TabComponent = ({
               setMenuPosition(null);
             }}
           >
-            <ListItemIcon
-              sx={{
-                minWidth: '24px !important',
-                marginRight: '6px',
-              }}
-            >
+            <ListItemIcon sx={menuItemIconSx}>
               <ContentCopyIcon
                 sx={{
                   color: theme.palette.text.primary,
@@ -400,13 +502,7 @@ const TabComponent = ({
             </ListItemIcon>
 
             <ListItemText
-              sx={{
-                '& .MuiTypography-root': {
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: theme.palette.text.primary,
-                },
-              }}
+              sx={menuItemTextSx}
               primary={t('core:app_tab.duplicate', {
                 postProcess: 'capitalizeFirstChar',
               })}
@@ -419,12 +515,7 @@ const TabComponent = ({
             setMenuPosition(null);
           }}
         >
-          <ListItemIcon
-            sx={{
-              minWidth: '24px !important',
-              marginRight: '6px',
-            }}
-          >
+          <ListItemIcon sx={menuItemIconSx}>
             <CloseFullscreenRoundedIcon
               sx={{
                 color: theme.palette.text.primary,
@@ -434,13 +525,7 @@ const TabComponent = ({
           </ListItemIcon>
 
           <ListItemText
-            sx={{
-              '& .MuiTypography-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                color: theme.palette.text.primary,
-              },
-            }}
+            sx={menuItemTextSx}
             primary={t('core:app_tab.close_all', {
               postProcess: 'capitalizeFirstChar',
             })}
@@ -448,6 +533,18 @@ const TabComponent = ({
         </MenuItem>
       </Menu>
     </AppsHorizontalTabButton>
+  );
+
+  return (
+    <Tooltip
+      disableInteractive
+      enterDelay={400}
+      enterNextDelay={200}
+      placement="bottom"
+      title={iconOnly && !isDragging && !menuPosition ? label : ''}
+    >
+      {tabButton}
+    </Tooltip>
   );
 };
 

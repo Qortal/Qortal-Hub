@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { pickNextTabFromMru, tabsLeftByCloseAll } from './tabSelection';
+import {
+  closeAllKeptNoteKey,
+  pickNextTabFromMru,
+  tabsLeftByCloseAll,
+} from './tabSelection';
 
 const tab = (tabId: string, lock = false) => ({ tabId, lock });
+const pinnedTab = (tabId: string, lock = false) => ({
+  tabId,
+  lock,
+  pinned: true,
+});
 
 describe('tabsLeftByCloseAll', () => {
   it('closes everything when no tab is locked', () => {
@@ -36,6 +45,46 @@ describe('tabsLeftByCloseAll', () => {
   it('falls back to the first locked tab', () => {
     const tabs = [tab('a'), tab('b', true), tab('c', true)];
     expect(tabsLeftByCloseAll(tabs, 'a', []).nextTab).toEqual(tab('b', true));
+  });
+
+  it('keeps pinned tabs open too, with the locked ones, in their order', () => {
+    const tabs = [pinnedTab('p'), tab('a'), tab('b', true), tab('c')];
+    expect(tabsLeftByCloseAll(tabs, 'a', []).kept).toEqual([
+      pinnedTab('p'),
+      tab('b', true),
+    ]);
+  });
+
+  it('stays on a selected pinned tab, or shows the latest pinned one', () => {
+    const tabs = [pinnedTab('p'), pinnedTab('q'), tab('a')];
+    expect(tabsLeftByCloseAll(tabs, 'q', []).nextTab).toEqual(pinnedTab('q'));
+    expect(tabsLeftByCloseAll(tabs, 'a', ['q', 'p', 'a']).nextTab).toEqual(
+      pinnedTab('p')
+    );
+  });
+});
+
+describe('closeAllKeptNoteKey', () => {
+  it('has no note when nothing stayed open', () => {
+    expect(closeAllKeptNoteKey([])).toBeNull();
+  });
+
+  it('names the kind of tab that stayed open', () => {
+    expect(closeAllKeptNoteKey([tab('a', true)])).toBe(
+      'core:app_tab.locked_kept_open'
+    );
+    expect(closeAllKeptNoteKey([pinnedTab('p')])).toBe(
+      'core:app_tab.pinned_kept_open'
+    );
+  });
+
+  it('has one note when both kinds stayed open', () => {
+    expect(closeAllKeptNoteKey([pinnedTab('p'), tab('a', true)])).toBe(
+      'core:app_tab.pinned_and_locked_kept_open'
+    );
+    expect(closeAllKeptNoteKey([pinnedTab('p', true)])).toBe(
+      'core:app_tab.pinned_and_locked_kept_open'
+    );
   });
 });
 
