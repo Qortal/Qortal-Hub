@@ -1,7 +1,9 @@
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { Box, Button, Paper, Typography, alpha, useTheme } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { appLockedAtom } from '../../atoms/presence';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 
 const TIMEOUT_MS = 60_000;
@@ -32,6 +34,15 @@ export function NotificationPermissionSlideDown() {
   const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_S);
   const autoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isAppLocked = useAtomValue(appLockedAtom);
+
+  // Requests still waiting when Hub locks are declined: nothing waits to be
+  // answered behind the lock screen.
+  useEffect(() => {
+    if (!isAppLocked || queue.length === 0) return;
+    queue.forEach((request) => sendResponse(request.requestId, false));
+    setQueue([]);
+  }, [isAppLocked, queue]);
 
   useEffect(() => {
     const listener = (

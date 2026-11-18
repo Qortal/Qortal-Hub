@@ -2,6 +2,8 @@ import i18n from '../../i18n/i18n';
 import { TIME_SECONDS_30_IN_MILLISECONDS } from '../../constants/constants';
 import { serializeQortalRequestError } from '../../qortal/qortal-request-errors';
 import { executeEvent } from '../../utils/events';
+import { isHubLocked } from '../../atoms/presence';
+import { hubLockedError } from '../../qortal/hubLocked';
 
 /**
  * What a Home widget may ask the Hub for: the qortalRequest actions that
@@ -171,6 +173,14 @@ export const createWidgetRequestHandler =
     }
     if (ACKNOWLEDGED.has(data.action)) {
       reply({ result: true, error: null });
+      return;
+    }
+    if (data.action === 'SET_TAB' && isHubLocked()) {
+      // No tab opens behind the lock screen.
+      reply({
+        result: null,
+        error: serializeQortalRequestError(hubLockedError()),
+      });
       return;
     }
     if (data.action === 'SET_TAB') {

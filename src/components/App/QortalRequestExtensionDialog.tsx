@@ -7,6 +7,8 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
+import { useEffect } from 'react';
+import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
@@ -21,6 +23,7 @@ import {
   QortalRequestDetails,
   QortalRequestDetailsData,
 } from './QortalRequestDetails';
+import { appLockedAtom } from '../../atoms/presence';
 
 const QORTAL_REQUEST_DIALOG_Z_INDEX = 11000;
 
@@ -65,6 +68,12 @@ export function QortalRequestExtensionDialog({
 }: QortalRequestExtensionDialogProps) {
   const theme = useTheme();
   const { t } = useTranslation(['core', 'question']);
+  const isAppLocked = useAtomValue(appLockedAtom);
+  // A request still on screen when Hub locks is declined: nothing waits to be
+  // answered behind the lock screen.
+  useEffect(() => {
+    if (open && isAppLocked) onCancel();
+  }, [open, isAppLocked, onCancel]);
   const requestMessage = (message || {}) as MessageQortalRequestExtension & {
     appName?: string;
     sourceKind?: string;

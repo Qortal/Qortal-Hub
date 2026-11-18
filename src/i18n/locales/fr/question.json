@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "la récupération du solde {{ token }} n'est pas autorisée via une passerelle",
       "gateway_wallet_local_node": "le portefeuille {{ token }} ne peut pas être consulté via la passerelle. Utilisez votre nœud local.",
       "get_foreign_fee": "erreur lors de l'obtention des frais étrangers",
+      "hub_locked": "Qortal Hub est verrouillé. Déverrouillez-le et réessayez.",
       "insufficient_balance": "votre solde d'actif est insuffisant",
       "insufficient_balance_qort": "votre solde QORT est insuffisant",
       "insufficient_funds": "fonds insuffisants",

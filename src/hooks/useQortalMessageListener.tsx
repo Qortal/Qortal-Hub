@@ -1,6 +1,8 @@
 import { attachQAppRequestBridge } from '../qortal/qapp-guest-request-bridge';
 import { useCallback, useEffect, useState } from 'react';
 import { executeEvent } from '../utils/events';
+import { isHubLocked } from '../atoms/presence';
+import { hubLockedError } from '../qortal/hubLocked';
 import {
   infoSnackGlobalAtom,
   navigationControllerAtom,
@@ -953,6 +955,12 @@ export const useQortalMessageListener = (
         if (event.ports[0]) {
           event.ports[0].postMessage({ result: true, error: null });
         }
+      } else if (event?.data?.action === 'SET_TAB' && isHubLocked()) {
+        // No tab opens behind the lock screen.
+        event.ports[0]?.postMessage({
+          result: null,
+          error: serializeQortalRequestError(hubLockedError()),
+        });
       } else if (event?.data?.action === 'SET_TAB' && !isDevMode) {
         executeEvent('addTab', {
           data: event?.data?.payload,
