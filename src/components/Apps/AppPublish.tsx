@@ -144,7 +144,7 @@ const useElementWidth = () => {
 
 /** How much input each part of the form has had. */
 interface InputCounts {
-  /** Everything but the page parts: name, files and listing. */
+  /** Everything but the Q-App's page parts, which a widget doesn't publish. */
   app: number;
   page: number;
   shots: number;
@@ -162,8 +162,6 @@ interface LeftParts {
   shots: boolean;
   /** What failed and why, in words. */
   message: string;
-  /** Each part's input when it was last taken for a publish. */
-  published: InputCounts;
 }
 
 interface AppPublishProps {
@@ -221,6 +219,10 @@ export const AppPublish = ({
   // A widget: one the name has published ('' for a new one), and a new one's ID.
   const [widgetChoice, setWidgetChoice] = useState(widgetToUpdate ?? '');
   const [widgetSlug, setWidgetSlug] = useState('');
+  // A Q-App's publish leaves a typed widget ID behind: the form keeps it.
+  const widgetSlugRef = useRef(widgetSlug);
+  widgetSlugRef.current = widgetSlug;
+  const widgetIdTyped = () => !!widgetSlugRef.current.trim();
   // Whether the node has said which widgets the name has.
   const [nameWidgetsStatus, setNameWidgetsStatus] = useState<
     'loading' | 'ready' | 'failed'
@@ -335,13 +337,25 @@ export const AppPublish = ({
     const { page, shots } = partInputRef.current;
     return { app: inputCountRef.current - page - shots, page, shots };
   };
-  /** Whether the form has input that the publish taken at `published` left out. */
-  const hasInputSince = (published: InputCounts) => {
+  // Each part's input when it last went out: a widget's publish leaves the
+  // Q-App's page parts out.
+  const publishedInputRef = useRef<InputCounts>({ app: 0, page: 0, shots: 0 });
+  /**
+   * Whether the form holds typed input that hasn't gone out. A page part
+   * counts only while it still holds something: another type or name
+   * empties it.
+   */
+  const hasUnpublishedInput = () => {
     const now = inputCounts();
+    const published = publishedInputRef.current;
+    const drafts = pageExtrasRef.current?.hasDrafts() ?? {
+      page: false,
+      shots: false,
+    };
     return (
       now.app > published.app ||
-      now.page > published.page ||
-      now.shots > published.shots
+      (now.page > published.page && drafts.page) ||
+      (now.shots > published.shots && drafts.shots)
     );
   };
   // Page parts that failed after the app went out, kept to publish again.
@@ -837,8 +851,6 @@ export const AppPublish = ({
       // been picked while this one was publishing, even if it was put back.
       const movedOn =
         isWidget && targetNowRef.current.changes !== targetChanges;
-      // Input given while it was publishing isn't published: it stays unsaved.
-      const editedMeanwhile = isWidget && hasInputSince(taken);
       const signature = publishSignature(response);
       // The page parts go after the app; the ones that fail are given back.
       // A widget has none.
@@ -848,6 +860,17 @@ export const AppPublish = ({
         signature || ''
       );
       const leftText = left ? partsLeftText(left) : '';
+      // What this publish took is published now: the form's fields, and for
+      // a Q-App the page parts that went out.
+      const before = publishedInputRef.current;
+      publishedInputRef.current = isWidget
+        ? { ...before, app: taken.app }
+        : {
+            ...before,
+            app: taken.app,
+            page: left?.extras.page ? before.page : taken.page,
+            shots: left?.extras.shots ? before.shots : taken.shots,
+          };
       tellPublished(
         leftText,
         isWidget
@@ -925,15 +948,15 @@ export const AppPublish = ({
           page: !!left.extras.page,
           shots: !!left.extras.shots,
           message: leftText,
-          published: taken,
         });
         return;
       }
       // A widget is added from Home, not opened as an app: the form stays,
       // now on this widget, so publishing again updates it.
       if (isWidget) {
-        // Input given while it was publishing stays unsaved.
-        if (!movedOn && !editedMeanwhile) {
+        // Input given while it was publishing stays unsaved, and so do the
+        // Q-App's page parts, which a widget doesn't publish.
+        if (!movedOn && !hasUnpublishedInput()) {
           setHasUnsavedInput(false);
           onUnsavedChangeRef.current?.(false);
         }
@@ -960,9 +983,9 @@ export const AppPublish = ({
         return;
       }
       setLeftParts(null);
-      // Input given while it was publishing isn't published: the form stays
-      // with it, unsaved.
-      if (hasInputSince(taken)) return;
+      // Input given while it was publishing, or a widget ID typed for a widget,
+      // isn't published: the form stays with it, unsaved.
+      if (hasUnpublishedInput() || widgetIdTyped()) return;
       // What was typed is published now, before the app opens in the tab.
       openPublishedApp({ service: appType, name });
     } catch (error) {
@@ -1019,8 +1042,9 @@ export const AppPublish = ({
       const leftText = left ? partsLeftText(left) : '';
       if (parts) tellPublished(leftText);
       // The parts that went out now are published as the form held them.
-      const published: InputCounts = {
-        ...pending.published,
+      const before = publishedInputRef.current;
+      publishedInputRef.current = {
+        ...before,
         ...(pending.page && !left?.extras.page ? { page: taken.page } : {}),
         ...(pending.shots && !left?.extras.shots ? { shots: taken.shots } : {}),
       };
@@ -1031,13 +1055,12 @@ export const AppPublish = ({
           page: !!left.extras.page,
           shots: !!left.extras.shots,
           message: leftText,
-          published,
         });
         return;
       }
       setLeftParts(null);
       // Input given since, that none of this published, stays unsaved here.
-      if (hasInputSince(published)) return;
+      if (hasUnpublishedInput() || widgetIdTyped()) return;
       openPublishedApp(pending.app);
     } catch (error) {
       // Declined: the parts stay to try again, and nothing failed.

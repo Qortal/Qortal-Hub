@@ -359,6 +359,33 @@ describe('the page part of the publish form', () => {
   });
 });
 
+describe('what the page section holds of its own', () => {
+  it('has a page draft while a version or What changed is typed', async () => {
+    nodeWith(null, null);
+    const ref = renderExtras();
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await settled();
+    expect(ref.current!.hasDrafts()).toEqual({ page: false, shots: false });
+
+    const whatsNew = screen.getByLabelText('app_page.whats_new.title');
+    fireEvent.change(whatsNew, { target: { value: 'Faster' } });
+    expect(ref.current!.hasDrafts().page).toBe(true);
+    fireEvent.change(whatsNew, { target: { value: '  ' } });
+    expect(ref.current!.hasDrafts().page).toBe(false);
+  });
+
+  it('has a screenshots draft once pictures are chosen, not for the ones kept', async () => {
+    nodeWith(null, TWO_SHOTS);
+    const ref = renderExtras();
+    await screen.findByRole('radio', { name: /app_page.publish.shots_keep/ });
+    expect(ref.current!.hasDrafts().shots).toBe(false);
+    fireEvent.click(
+      screen.getByRole('radio', { name: /app_page.publish.shots_none/ })
+    );
+    expect(ref.current!.hasDrafts().shots).toBe(true);
+  });
+});
+
 describe('the current page, while it loads or when it cannot be read', () => {
   it('publishes no page part until the current page has loaded', async () => {
     slowPage(() => new Promise(() => {}));

@@ -56,7 +56,10 @@ vi.mock('../../../background/background.ts', () => ({
 
 vi.mock('../AppPage/PublishPageExtras', () => ({
   PublishPageExtras: React.forwardRef((_props, ref) => {
-    useImperativeHandle(ref, () => ({ prepare: () => null }));
+    useImperativeHandle(ref, () => ({
+      prepare: () => null,
+      hasDrafts: () => ({ page: false, shots: false }),
+    }));
     return null;
   }),
   extrasPartCount: () => 0,
