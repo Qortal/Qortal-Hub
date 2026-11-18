@@ -75,6 +75,21 @@ describe('PublishSourcePicker', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('names each info button after its choice and reads out its text', () => {
+    renderPicker();
+    const fileInfo = screen.getByRole('button', {
+      name: 'core:publish_source.info_about choice=core:action.choose_file',
+    });
+    expect(fileInfo).toHaveAccessibleDescription(
+      'core:publish_source.info_file size=50'
+    );
+    expect(
+      screen.getByRole('button', {
+        name: 'core:publish_source.info_about choice=core:publish_source.choose_folder',
+      })
+    ).toHaveAccessibleDescription('core:publish_source.info_folder');
+  });
+
   it('reopens the folder picker at the saved path and shows what changed', async () => {
     const user = userEvent.setup();
     bridges.electron.selectAndZipDirectory.mockResolvedValue({

@@ -18,6 +18,7 @@ Code: `src/components/Apps/AppPage/`. Capture: `electron/src/qapp-screenshot.ts`
 | ----------- | ----------- | -------------- | ---------------------------------------- |
 | Page text   | `JSON`      | the app's      | `qhub_app_page_v1_<SERVICE>`             |
 | Screenshots | `IMAGE`     | the app's      | `qhub_app_shots_v1_<SERVICE>`            |
+| Hidden      | `JSON`      | the app's      | `qhub_app_hidden_v1_<SERVICE>`           |
 | Icon        | `THUMBNAIL` | the app's      | `qortal_avatar` (unchanged)              |
 | A review    | `COMMENT`   | the reviewer's | `qhub_review_v1_<SERVICE>_<key>`         |
 | A reply     | `COMMENT`   | the author's   | `qhub_reply_v1_<SERVICE>_<key>_<random>` |
@@ -88,6 +89,52 @@ whatever the original file carried besides the pixels. Read a picture with
 `/arbitrary/IMAGE/<name>/qhub_app_shots_v1_<SERVICE>?filepath=1.webp`.
 A list with no screenshots is a single file, which Core serves without
 `filepath`.
+
+### Hidden from the library
+
+A Q-App or website can't be deleted: every publish stays on Qortal's
+blockchain and QDN. Its publisher can hide it from Hub's library instead, with
+the button beside Edit page, which publishes one small record:
+
+```json
+{
+  "v": 1,
+  "app": { "service": "APP", "name": "Q-Blog" },
+  "hidden": true,
+  "replaced": false,
+  "updated": 1763150000000
+}
+```
+
+The record's QDN title is `hidden`, or `shown` once the publisher shows the
+app again. So the library reads every app's state from one search, without
+downloading the records:
+`/arbitrary/resources/search?service=JSON&identifier=qhub_app_hidden_v1_&prefix=true&mode=ALL&includemetadata=true`.
+Only the app's name can publish under it, so nobody else can hide an app.
+
+Hub leaves a hidden app out of the library, its search and the top bar's
+suggestions, except under the user's own names, so the publisher can still find
+theirs. Links, pins, bookmarks, open tabs, its exact name typed in the top bar
+and a widget's page still open it (`allQappsAtom` keeps every app for these).
+
+Each person can still choose to see them: the eye button in the library's
+header leaves them out while it is on (the default) and lists them too once it
+is off. The choice is kept on the device (`launcher-hide-hidden-apps-v1` in
+`localStorage`).
+
+When hiding, the publisher can also replace the app with a small page saying
+its publisher removed it (`"replaced": true`). The page is one `index.html`
+with that line in every language Hub has, and it follows Hub's `?lang=` and
+`?theme=`. The page text and screenshots are then published empty too. Each of
+these is a publish of its own, with its own fee, and the record comes last.
+
+The same app's page can be open in several launcher tabs at once. Hub publishes
+one hide or show of an app at a time: while one goes on, the hide button and
+"Show in the library" wait on every page of that app, and a hide window left
+open elsewhere says another tab is publishing it. Once the app is hidden, hide
+windows still open for it close without publishing. If a hide and replace
+stops halfway, a window open in another tab goes on from where it stopped,
+with the replacement kept, rather than publish those parts again.
 
 ### Reviews and replies
 
@@ -188,3 +235,20 @@ The capture goes through `qappGuest:shot` in main, which takes one request,
 itself prepared for that owner. It returns a PNG of the guest's view, at most
 1,600 pixels on the longest side; the renderer re-encodes it to WebP like any
 other picture. Nothing runs inside the app.
+
+When publishing, the screenshots are optional, and nothing is published for
+them unless the publisher adds some: taken by hand in the dialog or chosen from
+files. For an update of an app that has screenshots, the publisher keeps them
+(the default), changes them (starting from the current ones), or takes them off
+the page, which publishes an empty list.
+
+The publish form sends the page parts right after the app. The page text goes
+over the page the node has at that moment, so About and links saved since the
+form opened stay. When the node can't say what the page has (its search
+fails, it lists a page it can't read, or it lists none although the form read
+one), the page text isn't published. Each part goes out on its own. When one
+fails, the form stays open with it, still unsaved, and Retry publishes only
+the parts left, with the app's signature from that publish. The app opens once
+nothing in the form is left unpublished, so input typed while the app uploads
+stays too. The name and type can't change while the app is being published or
+while parts are left.

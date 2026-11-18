@@ -1,8 +1,7 @@
 import { useEffect, MutableRefObject } from 'react';
 import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
-import { extractComponents } from '../components/Chat/MessageDisplay';
-import { openAppPageLink } from '../components/Apps/AppPage/appPageLink';
+import { openQortalLink } from '../utils/qortalLink/openQortalLink';
 import { openQWalletsTab } from '../utils/openQWalletsTab';
 
 type PermissionHandler = (
@@ -72,14 +71,9 @@ export function useAppMessageHandler(
         } else if (payload?.openWallets) {
           openQWalletsTab();
         } else if (payload?.link) {
-          // An app's or website's page opens as a page, not as the app.
-          if (!openAppPageLink(payload.link)) {
-            const data = extractComponents(payload.link);
-            if (data) {
-              executeEvent('addTab', { data });
-              executeEvent('open-apps-mode', {});
-            }
-          }
+          // Any kind of qortal:// link: a Q-App or website, an app's page,
+          // or a group's link.
+          void openQortalLink(payload.link);
         }
       } else if (message.action === 'NOTIFICATION_PERMISSION_REQUEST') {
         executeEvent('show-notification-permission', {
