@@ -1,3 +1,24 @@
+import {
+  hasControlCharacter,
+  hasDotSegment,
+} from '../../utils/nodeEndpointPath';
+
+/**
+ * True for a service or name that stays one path segment of
+ * /render/<service>/<name>: not empty, not a "." or ".." segment (also with a
+ * ";…" suffix or percent-encoded), and without a slash, backslash or control
+ * character.
+ */
+export function isAppRenderSegment(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value !== '' &&
+    !/[/\\]/.test(value) &&
+    !hasControlCharacter(value) &&
+    !hasDotSegment(value)
+  );
+}
+
 /** Keep the literal path punctuation used by Core's injected router base and
  * master's render URLs. Encoding '+' as '%2B', for example, breaks existing
  * routers and Core's navigation reports. Delimiters and literal '%' still need

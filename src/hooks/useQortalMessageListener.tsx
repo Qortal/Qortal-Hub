@@ -37,6 +37,10 @@ import {
   isQAppFileSaveAction,
 } from '../qortal/qapp-file-save-request';
 import { serializeQortalRequestError } from '../qortal/qortal-request-errors';
+import {
+  invalidSetTabError,
+  tabFromSetTabRequest,
+} from '../qortal/qapp-set-tab';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -954,8 +958,16 @@ export const useQortalMessageListener = (
           event.ports[0].postMessage({ result: true, error: null });
         }
       } else if (event?.data?.action === 'SET_TAB' && !isDevMode) {
+        const tab = tabFromSetTabRequest(event?.data?.payload);
+        if (!tab) {
+          event.ports[0]?.postMessage({
+            result: null,
+            error: serializeQortalRequestError(invalidSetTabError()),
+          });
+          return;
+        }
         executeEvent('addTab', {
-          data: event?.data?.payload,
+          data: tab,
         });
         const reply = {
           action: 'SET_TAB_SUCCESS',
