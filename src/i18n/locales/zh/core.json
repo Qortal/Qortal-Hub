@@ -597,13 +597,16 @@
   "developer": {
     "no_apps_yet": "您还没有发布任何应用",
     "no_sites_yet": "您还没有发布任何网站",
+    "no_widgets_yet": "您还没有发布任何小组件",
     "publish_app": "发布应用",
     "publish_new": "发布新项目",
     "publish_site": "发布网站",
+    "publish_widget": "发布小组件",
     "update": "更新",
     "view_stats": "查看统计",
     "your_published_apps": "您发布的应用",
-    "your_published_websites": "您发布的网站"
+    "your_published_websites": "您发布的网站",
+    "your_published_widgets": "您发布的小组件"
   },
   "devmode_apps": "开发模式应用程序",
   "directory": "目录",
@@ -697,6 +700,7 @@
       "featured_previous": "显示上一组精选应用",
       "filter_categories": "筛选分类",
       "my_apps_hint": "以此账户的名称发布",
+      "my_widgets_hint": "以此账户的名称发布、首页用的小型 Q-App",
       "no_category_matches": "没有与“{{query}}”匹配的分类",
       "no_filter_matches": "没有符合这些筛选条件的 Q-App 或网站",
       "no_name_text": "注册一个 Qortal 名称即可发布 Q-App 和网站，它们会显示在这里。",

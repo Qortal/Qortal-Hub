@@ -126,7 +126,12 @@ export const LauncherTabView = memo(function LauncherTabView({
               <AppPublish
                 key={
                   publishEditTarget
-                    ? `update-${publishEditTarget.service}-${publishEditTarget.name}`
+                    ? [
+                        'update',
+                        publishEditTarget.service,
+                        publishEditTarget.name,
+                        publishEditTarget.identifier ?? '',
+                      ].join('\u0000')
                     : page
                 }
                 categories={categories}
@@ -138,12 +143,15 @@ export const LauncherTabView = memo(function LauncherTabView({
                 isAppTypeLocked={
                   page === 'publish-app' ||
                   page === 'publish-website' ||
+                  page === 'publish-widget' ||
                   !!publishEditTarget
                 }
                 isUpdate={!!publishEditTarget}
                 myAddress={myAddress}
                 myName={myName}
                 onUnsavedChange={handleUnsavedChange}
+                startAsWidget={page === 'publish-widget'}
+                widgetToUpdate={publishEditTarget?.identifier}
               />
             </Box>
           ) : null}

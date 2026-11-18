@@ -28,6 +28,7 @@ i18n.use(capitalizeFirstChar as never).init({
           error: { missing_fields: enCore.message.error.missing_fields },
         },
         publish_source: enCore.publish_source,
+        publish_update: { title: enCore.publish_update.title },
         publish_widget: enCore.publish_widget,
         widget_guide: enCore.widget_guide,
         tag_number: 'tag {{number}}',
@@ -81,7 +82,9 @@ vi.mock('../../HomeWidgets/fetchHomeWidgets', () => ({
   rememberPublishedWidget: (widget) => rememberPublishedWidget(widget),
 }));
 
+import { getDefaultStore } from 'jotai';
 import { AppPublish } from '../AppPublish';
+import { publishedOwnWidgetsAtom } from '../AppsLibrary/ownWidgets';
 import { executeEvent } from '../../../utils/events';
 import { installPublishBridges } from '../../../test/mocks/publishBridges';
 
@@ -240,6 +243,7 @@ describe('AppPublish – publishing a widget', { timeout: 20_000 }, () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getDefaultStore().set(publishedOwnWidgetsAtom, []);
     pageDrafts = { page: false, shots: false };
     bridges = installPublishBridges();
     bridges.electron.selectAndZipDirectory.mockResolvedValue({
@@ -368,6 +372,19 @@ describe('AppPublish – publishing a widget', { timeout: 20_000 }, () => {
       name: 'TestApp',
       identifier: 'go-widget-my-clock',
     });
+    // My apps shows it at once, as published, until the node lists it.
+    expect(getDefaultStore().get(publishedOwnWidgetsAtom)).toEqual([
+      expect.objectContaining({
+        name: 'TestApp',
+        identifier: 'go-widget-my-clock',
+        title: 'Node title',
+        description: 'Node description',
+        category: 'games',
+        categoryName: 'Games',
+        tags: ['node'],
+        replaces: 0,
+      }),
+    ]);
     expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
 
     // The form is now on that widget: publishing again updates it, with the
@@ -544,6 +561,91 @@ describe('AppPublish – publishing a widget', { timeout: 20_000 }, () => {
     expect(payload).not.toHaveProperty('identifier');
     expect(payload).toMatchObject({ tag1: 'node', tag2: '' });
     expect(prepareExtras).toHaveBeenCalled();
+  });
+
+  it('opens on the widget an Update in My apps is for, with the name, type and widget fixed', async () => {
+    const user = userEvent.setup();
+    mockNode({ widgets: [NOW_WIDGET] });
+    renderForm({
+      isAppTypeLocked: true,
+      isUpdate: true,
+      widgetToUpdate: 'go-widget-now',
+    });
+    await waitFor(() => expect(title()).toHaveValue('Now'));
+
+    expect(screen.getByRole('button', { name: 'Widget' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(
+      screen.getByRole('button', { name: 'app_page.hero.type_app' })
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Website' })).toBeDisabled();
+    const choice = screen.getByRole('combobox', { name: 'Widget to publish' });
+    expect(choice).toHaveAttribute('aria-disabled', 'true');
+    // Its title once the name's widgets are in, also in the heading.
+    await waitFor(() => expect(choice).toHaveTextContent('Now'));
+    expect(screen.getByText('Update Now')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: 'Widget ID' })
+    ).not.toBeInTheDocument();
+    // They built it already: no short guide.
+    expect(
+      screen.queryByRole('dialog', { name: 'Building it as a widget' })
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Choose folder' }));
+    await screen.findByText('Selected folder: dist');
+    await user.click(screen.getByRole('button', { name: /action\.publish/i }));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(sendMessage).toHaveBeenCalledWith(
+      'publishOnQDN',
+      expect.objectContaining({
+        service: 'APP',
+        name: 'TestApp',
+        identifier: 'go-widget-now',
+        title: 'Now',
+        tag1: 'go-widget',
+        tag2: 'weather',
+      })
+    );
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Update the widget APP / TestApp / go-widget-now?',
+      })
+    );
+    // My apps shows the update in place of the version the node had.
+    expect(getDefaultStore().get(publishedOwnWidgetsAtom)).toEqual([
+      expect.objectContaining({
+        identifier: 'go-widget-now',
+        title: 'Now',
+        tags: ['weather'],
+        replaces: NOW_WIDGET.updated,
+      }),
+    ]);
+  });
+
+  it('opens on Widget for a new one from Publish widget, with the short guide', async () => {
+    const user = userEvent.setup();
+    mockNode();
+    renderForm({ isAppTypeLocked: true, startAsWidget: true });
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Building it as a widget' })
+    ).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('button', { name: 'Widget' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    // Still a Q-App: App is there to go back to, Website isn't.
+    expect(
+      screen.getByRole('button', { name: 'app_page.hero.type_app' })
+    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Website' })).toBeDisabled();
+    expect(
+      screen.getByRole('textbox', { name: 'Widget ID' })
+    ).toBeInTheDocument();
   });
 
   describe('what one kind leaves for the other', { timeout: 30_000 }, () => {

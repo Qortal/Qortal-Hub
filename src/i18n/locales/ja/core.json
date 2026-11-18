@@ -597,13 +597,16 @@
   "developer": {
     "no_apps_yet": "まだアプリを公開していません",
     "no_sites_yet": "まだサイトを公開していません",
+    "no_widgets_yet": "まだウィジェットを公開していません",
     "publish_app": "アプリを公開",
     "publish_new": "新規公開",
     "publish_site": "サイトを公開",
+    "publish_widget": "ウィジェットを公開",
     "update": "更新",
     "view_stats": "統計を見る",
     "your_published_apps": "公開済みアプリ",
-    "your_published_websites": "公開済みサイト"
+    "your_published_websites": "公開済みサイト",
+    "your_published_widgets": "公開済みウィジェット"
   },
   "devmode_apps": "開発モードアプリ",
   "directory": "ディレクトリ",
@@ -697,6 +700,7 @@
       "featured_previous": "前のおすすめアプリを表示",
       "filter_categories": "カテゴリを絞り込む",
       "my_apps_hint": "このアカウントの名前で公開されたもの",
+      "my_widgets_hint": "このアカウントの名前で公開した、ホーム用の小さなQ-App",
       "no_category_matches": "「{{query}}」に一致するカテゴリはありません",
       "no_filter_matches": "これらのフィルターに一致するQ-AppやWebサイトはありません",
       "no_name_text": "Q-AppやWebサイトを公開するには、Qortal名を登録してください。公開したものはここに表示されます。",

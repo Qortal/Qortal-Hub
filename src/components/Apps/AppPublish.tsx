@@ -32,7 +32,7 @@ import {
   utf8ByteLength,
 } from '../../utils/qdnMetadataLimits';
 import { useTranslation } from 'react-i18next';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { infoSnackGlobalAtom, openSnackGlobalAtom } from '../../atoms/global';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import {
@@ -85,6 +85,11 @@ import { WidgetGuideDialog } from './WidgetPublish/WidgetGuideDialog';
 import { GuideText } from './WidgetPublish/WidgetGuideParts';
 import { rememberPublishedWidget } from '../HomeWidgets/fetchHomeWidgets';
 import { WIDGET_TAG } from '../HomeWidgets/homeWidgets';
+import {
+  publishedOwnWidgetInPlace,
+  publishedOwnWidgetsAtom,
+  withPublishedOwnWidget,
+} from './AppsLibrary/ownWidgets';
 import { inLauncherTab, useLauncherTabId } from './launcherTabs';
 
 const TITLE_MAX_CHARS = 80;
@@ -96,18 +101,6 @@ type PublishKind = 'APP' | 'WIDGET' | 'WEBSITE';
 
 /** The prefill of a new widget: nothing is published yet to load. */
 const NEW_WIDGET = '\u0000new-widget';
-
-/**
- * A widget published from this form: its list entry and details, and when
- * the version it replaced was published (0: none), from the node's list.
- */
-type PublishedHere = {
-  widget: NameWidget;
-  prefill: PublishPrefill;
-  replaces: number;
-};
-const publishedHereKey = (name: string, identifier: string) =>
-  `${name}\u0000${identifier}`;
 
 /**
  * Text state whose setter applies Core's metadata limit, so the form shows what
@@ -180,6 +173,13 @@ interface AppPublishProps {
   isAppTypeLocked?: boolean;
   /** Opened from Update on a published app: the name can't be changed. */
   isUpdate?: boolean;
+  /** Opened from Publish widget in My apps: on Widget, for a new one. */
+  startAsWidget?: boolean;
+  /**
+   * Opened from Update on one of the name's widgets (My apps): its identifier.
+   * The form stays on that widget, as Update keeps the name.
+   */
+  widgetToUpdate?: string;
   /**
    * Told whether the form holds input that is not published yet, and false
    * when it closes: a launcher tab asks before it closes with some.
@@ -195,6 +195,8 @@ export const AppPublish = ({
   initialAppType = 'APP',
   isAppTypeLocked = false,
   isUpdate = false,
+  startAsWidget = false,
+  widgetToUpdate,
   onUnsavedChange,
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
@@ -202,15 +204,20 @@ export const AppPublish = ({
   const [title, setTitle] = useLimitedText(limitQdnTitle);
   const [description, setDescription] = useLimitedText(limitQdnDescription);
   const [category, setCategory] = useState('');
-  const [kind, setKind] = useState<PublishKind>(initialAppType);
+  const [kind, setKind] = useState<PublishKind>(
+    widgetToUpdate || startAsWidget ? 'WIDGET' : initialAppType
+  );
   const appType = kind === 'WEBSITE' ? 'WEBSITE' : 'APP';
   const isWidget = kind === 'WIDGET';
   // Opened as "Publish app" or "Publish website": that service only. A Q-App
-  // can still go out as a widget; Update is for the name's own app.
+  // can still go out as a widget; Update is for the name's own app, or for
+  // the one widget it was opened on.
   const lockedService = isAppTypeLocked ? initialAppType : null;
-  const canPickWidget = !isUpdate && lockedService !== 'WEBSITE';
+  const updatesOneWidget = !!widgetToUpdate;
+  const canPickWidget =
+    updatesOneWidget || (!isUpdate && lockedService !== 'WEBSITE');
   // A widget: one the name has published ('' for a new one), and a new one's ID.
-  const [widgetChoice, setWidgetChoice] = useState('');
+  const [widgetChoice, setWidgetChoice] = useState(widgetToUpdate ?? '');
   const [widgetSlug, setWidgetSlug] = useState('');
   // A Q-App's publish leaves a typed widget ID behind: the form keeps it.
   const widgetSlugRef = useRef(widgetSlug);
@@ -222,24 +229,46 @@ export const AppPublish = ({
   >('loading');
   const [nameWidgetsAttempt, setNameWidgetsAttempt] = useState(0);
   const [nameWidgets, setNameWidgets] = useState<NameWidget[]>([]);
-  const [guideTipOpen, setGuideTipOpen] = useState(false);
+  // A new widget from Publish widget: its short guide shows at once.
+  const [guideTipOpen, setGuideTipOpen] = useState(startAsWidget);
   const [guideOpen, setGuideOpen] = useState(false);
   // The short guide opens by itself the first time Widget is picked.
-  const guideTipShownRef = useRef(false);
+  const guideTipShownRef = useRef(startAsWidget || updatesOneWidget);
+  // What the widgets published from here show in My apps until the node
+  // lists them.
+  const setPublishedOwnWidgets = useSetAtom(publishedOwnWidgetsAtom);
+  const store = useStore();
+  // When the version the form is filled in from was published (0: none), or
+  // when the node was asked for it and couldn't say.
+  const loadedVersionRef = useRef(0);
   // A widget just published from here: the form already holds its details,
   // which the node may not list yet.
   const justPublishedRef = useRef('');
-  // The widgets published from this form. Until the node lists a version
-  // newer than the one each replaced, the form shows them as published.
-  const publishedHereRef = useRef(new Map<string, PublishedHere>());
   // The name the form's fields were last filled in for.
   const filledForNameRef = useRef<string | null>(null);
   const widgetId = widgetChoice || widgetIdentifier(widgetSlug);
+  // The name's widgets as My apps shows them: one published from here that
+  // the node doesn't list in that version yet, as it was published.
+  const publishedOwnWidgets = useAtomValue(publishedOwnWidgetsAtom);
+  const shownNameWidgets = useMemo(
+    () =>
+      nameWidgets.map((widget) => {
+        const publishedHere = publishedOwnWidgetInPlace(
+          publishedOwnWidgets,
+          { name, identifier: widget.identifier },
+          widget.updated
+        );
+        return publishedHere
+          ? { ...widget, title: publishedHere.title, listed: true }
+          : widget;
+      }),
+    [nameWidgets, publishedOwnWidgets, name]
+  );
   // A typed ID that one of the name's widgets has already.
   const widgetTakenBy = widgetChoice
     ? undefined
-    : nameWidgets.find((widget) => widget.identifier === widgetId);
-  const chosenWidget = nameWidgets.find(
+    : shownNameWidgets.find((widget) => widget.identifier === widgetId);
+  const chosenWidget = shownNameWidgets.find(
     (widget) => widget.identifier === widgetChoice
   );
   const updatesWidget = !!widgetChoice || !!widgetTakenBy;
@@ -429,6 +458,7 @@ export const AppPublish = ({
       setPrefillPending(false);
       return;
     }
+    loadedVersionRef.current = 0;
     setProfile(null);
     if (prefillTarget === NEW_WIDGET) {
       // Nothing published to load. A new widget starts from what the form
@@ -455,16 +485,29 @@ export const AppPublish = ({
         setProfile(savedProfile);
         // What this PC sent last time, when the network has nothing to give.
         const fromProfile = prefillFromProfile(savedProfile);
-        // Published from this form, and the node doesn't list a newer
-        // version yet: what was published, not the version it replaced.
+        const nodeUpdated = result.kind === 'found' ? (result.updated ?? 0) : 0;
+        // A widget published from here that the node doesn't list in that
+        // version yet: its details as published, as My apps shows them, not
+        // the version it replaced.
         const publishedHere = identifier
-          ? publishedHereRef.current.get(publishedHereKey(name, identifier))
-          : undefined;
-        const fromHere =
-          publishedHere &&
-          !(result.kind === 'found' && result.updated > publishedHere.replaces);
-        const prefill = fromHere
-          ? publishedHere.prefill
+          ? publishedOwnWidgetInPlace(
+              store.get(publishedOwnWidgetsAtom),
+              { name, identifier },
+              nodeUpdated
+            )
+          : null;
+        loadedVersionRef.current = publishedHere
+          ? publishedHere.publishedAt
+          : result.kind === 'unavailable'
+            ? Date.now()
+            : nodeUpdated;
+        const prefill = publishedHere
+          ? {
+              title: publishedHere.title,
+              description: publishedHere.description,
+              category: publishedHere.category ?? '',
+              tags: publishedHere.tags ?? [],
+            }
           : result.kind === 'found'
             ? result.prefill
             : (fromProfile ?? EMPTY_PREFILL);
@@ -475,11 +518,12 @@ export const AppPublish = ({
             : prefill
         );
         filledForNameRef.current = name;
-        if (result.kind === 'unavailable' && !fromHere) {
+        if (result.kind === 'unavailable') {
+          // A publish from here is this PC's last publish too.
           setInfoSnack({
             type: 'warning',
             message: t(
-              fromProfile
+              fromProfile || publishedHere
                 ? 'core:publish_update.filled_from_profile'
                 : 'core:message.generic.app_details_unavailable',
               { postProcess: 'capitalizeFirstChar' }
@@ -508,26 +552,27 @@ export const AppPublish = ({
       .then((widgets) => {
         // An answer for another name is dropped.
         if (controller.signal.aborted) return;
-        // A widget published from this form, listed in the version it
-        // replaced: shown as published, as the form fills it in.
-        const shown = (widgets ?? []).map((widget) => {
-          const publishedHere = publishedHereRef.current.get(
-            publishedHereKey(name, widget.identifier)
-          );
-          return publishedHere && !(widget.updated > publishedHere.replaces)
-            ? publishedHere.widget
-            : widget;
-        });
-        // A new widget published from this form that the node doesn't list
-        // yet: still one of the name's.
-        const unlisted = [...publishedHereRef.current]
-          .filter(([key]) => key.startsWith(publishedHereKey(name, '')))
-          .map(([, publishedHere]) => publishedHere.widget)
+        const listed = widgets ?? [];
+        // A new widget published from here that the node doesn't list yet:
+        // still one of the name's.
+        const unlisted = store
+          .get(publishedOwnWidgetsAtom)
           .filter(
-            (widget) =>
-              !shown.some((item) => item.identifier === widget.identifier)
-          );
-        setNameWidgets([...unlisted, ...shown]);
+            (item) =>
+              !listed.some((widget) => widget.identifier === item.identifier) &&
+              publishedOwnWidgetInPlace(
+                [item],
+                { name, identifier: item.identifier },
+                0
+              )
+          )
+          .map((item) => ({
+            identifier: item.identifier,
+            title: item.title,
+            updated: item.publishedAt,
+            listed: true,
+          }));
+        setNameWidgets([...unlisted, ...listed]);
         setNameWidgetsStatus(widgets ? 'ready' : 'failed');
       })
       .catch(() => {
@@ -679,6 +724,8 @@ export const AppPublish = ({
     setAppPublishing(!isWidget);
     try {
       const file = source?.file;
+      // As the form has it now: another widget may be picked meanwhile.
+      const loadedVersion = loadedVersionRef.current;
       const data = {
         name,
         // Spaces alone are no title or description, as in the checklist.
@@ -830,12 +877,40 @@ export const AppPublish = ({
           ? 'core:publish_widget.published'
           : 'core:message.success.published'
       );
-      // The widget picker asks the node again until it lists this version.
       if (isWidget) {
+        // The widget picker asks the node again until it lists this version.
         rememberPublishedWidget(
           { name, identifier: widgetId },
           Date.now(),
           startedAt
+        );
+        // My apps shows it at once, as published, until the node lists it.
+        const replaced = chosenWidget ?? widgetTakenBy;
+        setPublishedOwnWidgets((list) =>
+          withPublishedOwnWidget(
+            list,
+            {
+              name,
+              identifier: widgetId,
+              title: title.trim() || name,
+              description: description.trim(),
+              updated: 0,
+              ...(category
+                ? {
+                    category,
+                    categoryName:
+                      categories?.find((item) => item?.id === category)?.name ||
+                      '',
+                  }
+                : {}),
+              tags: withoutWidgetTag(publishedTags.filter(Boolean)),
+            },
+            {
+              // The version this one replaces: the one the form loaded, or
+              // the one the name's widgets list has.
+              replaces: Math.max(replaced?.updated ?? 0, loadedVersion),
+            }
+          )
         );
       }
       const published: PublishProfile = {
@@ -891,18 +966,6 @@ export const AppPublish = ({
           updated: Date.now(),
           listed: true,
         };
-        // Until the node lists a newer version than the one this replaced,
-        // the form fills it in and lists it as published here.
-        publishedHereRef.current.set(publishedHereKey(name, widgetId), {
-          widget: publishedWidget,
-          prefill: {
-            title,
-            description,
-            category,
-            tags: publishedTags.filter(Boolean),
-          },
-          replaces: (chosenWidget ?? widgetTakenBy)?.updated ?? 0,
-        });
         // It is one of the name's widgets now: not listed under another name.
         if (targetNowRef.current.name === name) {
           setNameWidgets((list) => [
@@ -1082,8 +1145,13 @@ export const AppPublish = ({
         ]
       : []),
   ];
-  const heading =
-    isUpdate && name
+  // Update on a widget names the widget, the way Update names the app.
+  const heading = updatesOneWidget
+    ? t('core:publish_update.title', {
+        name: chosenWidget?.title || widgetToUpdate,
+        ...capital,
+      })
+    : isUpdate && name
       ? t('core:publish_update.title', { name, ...capital })
       : isWidget
         ? t('core:publish_widget.heading', capital)
@@ -1219,7 +1287,10 @@ export const AppPublish = ({
                   kind: another one would put another page in the form. */}
               <ToggleButton
                 disabled={
-                  !!leftParts || appPublishing || lockedService === 'WEBSITE'
+                  !!leftParts ||
+                  appPublishing ||
+                  lockedService === 'WEBSITE' ||
+                  updatesOneWidget
                 }
                 value="APP"
               >
@@ -1263,6 +1334,7 @@ export const AppPublish = ({
             >
               {nameWidgets.length > 0 || widgetChoice ? (
                 <TextField
+                  disabled={updatesOneWidget}
                   FormHelperTextProps={{ sx: warningTextSx }}
                   helperText={
                     chosenWidget && !chosenWidget.listed
@@ -1284,7 +1356,7 @@ export const AppPublish = ({
                     {t('core:publish_widget.new_widget', capital)}
                   </MenuItem>
                   {(chosenWidget || !widgetChoice
-                    ? nameWidgets
+                    ? shownNameWidgets
                     : [
                         // Chosen, and not in the node's answer (yet).
                         {
@@ -1293,7 +1365,7 @@ export const AppPublish = ({
                           updated: 0,
                           listed: true,
                         },
-                        ...nameWidgets,
+                        ...shownNameWidgets,
                       ]
                   ).map((widget) => (
                     <MenuItem key={widget.identifier} value={widget.identifier}>

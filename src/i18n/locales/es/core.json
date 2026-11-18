@@ -597,13 +597,16 @@
   "developer": {
     "no_apps_yet": "aún no has publicado ninguna app",
     "no_sites_yet": "aún no has publicado ningún sitio web",
+    "no_widgets_yet": "aún no has publicado ningún widget",
     "publish_app": "publicar app",
     "publish_new": "publicar nuevo",
     "publish_site": "publicar sitio web",
+    "publish_widget": "publicar widget",
     "update": "actualizar",
     "view_stats": "ver estadísticas",
     "your_published_apps": "tus apps publicadas",
-    "your_published_websites": "tus sitios web publicados"
+    "your_published_websites": "tus sitios web publicados",
+    "your_published_widgets": "tus widgets publicados"
   },
   "devmode_apps": "aplicaciones en modo de desarrollo",
   "directory": "directorio",
@@ -697,6 +700,7 @@
       "featured_previous": "mostrar las apps destacadas anteriores",
       "filter_categories": "filtrar categorías",
       "my_apps_hint": "publicadas con los nombres de esta cuenta",
+      "my_widgets_hint": "pequeñas Q-Apps para Inicio, publicadas con los nombres de esta cuenta",
       "no_category_matches": "ninguna categoría coincide con «{{query}}»",
       "no_filter_matches": "ninguna Q-App ni sitio web coincide con estos filtros",
       "no_name_text": "registra un nombre de Qortal para publicar Q-Apps y sitios web. Aparecerán aquí.",

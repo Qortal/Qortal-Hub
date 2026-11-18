@@ -597,13 +597,16 @@
   "developer": {
     "no_apps_yet": "et ole vielä julkaissut sovelluksia",
     "no_sites_yet": "et ole vielä julkaissut verkkosivustoja",
+    "no_widgets_yet": "et ole vielä julkaissut widgetejä",
     "publish_app": "julkaise sovellus",
     "publish_new": "julkaise uusi",
     "publish_site": "julkaise verkkosivusto",
+    "publish_widget": "julkaise widget",
     "update": "päivitä",
     "view_stats": "näytä tilastot",
     "your_published_apps": "julkaistut sovelluksesi",
-    "your_published_websites": "julkaistut verkkosivustosi"
+    "your_published_websites": "julkaistut verkkosivustosi",
+    "your_published_widgets": "julkaistut widgetisi"
   },
   "devmode_apps": "kehittäjätilan sovellukset",
   "directory": "hakemisto",
@@ -697,6 +700,7 @@
       "featured_previous": "näytä edelliset suositellut sovellukset",
       "filter_categories": "suodata kategorioita",
       "my_apps_hint": "julkaistu tämän tilin nimillä",
+      "my_widgets_hint": "pieniä Q-Appeja etusivulle, julkaistu tämän tilin nimillä",
       "no_category_matches": "mikään kategoria ei vastaa hakua ”{{query}}”",
       "no_filter_matches": "mikään Q-App tai verkkosivusto ei vastaa näitä suodattimia",
       "no_name_text": "rekisteröi Qortal-nimi julkaistaksesi Q-Appeja ja verkkosivustoja. Ne näkyvät täällä.",

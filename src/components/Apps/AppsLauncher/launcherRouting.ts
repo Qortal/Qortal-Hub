@@ -12,6 +12,7 @@ export const LAUNCHER_SUB_PAGE_MODES = [
   'publish',
   'publish-app',
   'publish-website',
+  'publish-widget',
 ];
 
 export const isLauncherSubPage = (mode: string): boolean =>
