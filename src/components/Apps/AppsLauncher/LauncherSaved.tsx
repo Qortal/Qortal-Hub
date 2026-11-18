@@ -1,4 +1,10 @@
-import { type MouseEvent, useCallback, useMemo, useState } from 'react';
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   DndContext,
@@ -31,6 +37,7 @@ import type {
   AppBookmarksForAddress,
 } from '../AppBookmarks/bookmarkTypes';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
+import { useLauncherTabId } from '../launcherTabs';
 import {
   LauncherBookmarkIcon,
   LauncherBookmarkTile,
@@ -144,6 +151,7 @@ export const LauncherSaved = ({
   const [view, setView] = useLauncherView(myAddress);
   const countEdit = useCountLauncherEdit(myAddress);
   const openPin = useOpenLauncherPin();
+  const launcherTabId = useLauncherTabId();
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [drop, setDrop] = useState<LauncherDrop | null>(null);
@@ -187,6 +195,22 @@ export const LauncherSaved = ({
     }
     return leaves;
   }, [items]);
+
+  // A menu or question about a tile or folder that is gone (removed in
+  // another launcher tab, say) is dropped, not shown again for it.
+  useEffect(() => {
+    const hasFolder = (folderId: string) =>
+      folderItems.some((item) => item.folder.id === folderId);
+    const menuIsStale =
+      menu?.kind === 'tile'
+        ? !leavesByKey.has(menu.item.key)
+        : !!menu && !hasFolder(menu.folder.id);
+    if (menuIsStale) setMenu(null);
+    if (folderToDelete && !hasFolder(folderToDelete.id)) {
+      setFolderToDelete(null);
+    }
+  }, [folderItems, folderToDelete, leavesByKey, menu]);
+
   /** Every tile on screen, in reading order. */
   const visualKeys = useMemo(
     () => [
@@ -293,9 +317,11 @@ export const LauncherSaved = ({
   const openItem = useCallback(
     (item: LauncherLeafItem) => {
       if (item.pin) void openPin(item.pin.app);
-      else if (item.type === 'bookmark') openLauncherBookmark(item.bookmark);
+      else if (item.type === 'bookmark') {
+        openLauncherBookmark(item.bookmark, launcherTabId);
+      }
     },
-    [openPin]
+    [launcherTabId, openPin]
   );
 
   const startRenaming = useCallback(

@@ -9,6 +9,10 @@ import {
   registerMainWindowFileIpc,
 } from './main-window-files';
 import {
+  PUBLISH_PROFILES_FILE,
+  registerPublishProfileIpc,
+} from './publish-profiles';
+import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
   foreignWalletPublicKey,
@@ -52,6 +56,8 @@ import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
 import { openLocalPath } from './desktop-shell';
 import { installDisplayMediaPicker } from './display-media-picker';
+import { installTabShortcuts } from './tab-shortcuts';
+import { followHubZoom, installZoomKeys, menuPopupPoint } from './hub-zoom';
 import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
   log as loggerLog,
@@ -236,6 +242,7 @@ import {
   noteMainLoopStallForProfiling,
   runMainPressureTask,
 } from './main-pressure';
+import { encodeCapturedShot, parseShotRequest } from './qapp-screenshot';
 
 const GCALL_AUDIO_RENDERER_SEND_AT_MS = Symbol.for(
   'qortal.gcallAudioRendererSendAtMs'
@@ -1115,6 +1122,16 @@ export class ElectronCapacitorApp {
       mainWindowFiles.revoke(contentsId);
       void qappFileSaves?.cleanup();
     });
+    // Tab shortcuts typed in the Hub page or in a Q-App (did-attach-webview)
+    // all go to the Hub page, which owns the tabs.
+    const hubPage = () =>
+      this.MainWindow && !this.MainWindow.isDestroyed()
+        ? this.MainWindow.webContents
+        : null;
+    installTabShortcuts(this.MainWindow.webContents, hubPage, process.platform);
+    // The zoom keys too, from anywhere: they zoom the Hub page, and every
+    // Q-App with it.
+    installZoomKeys(this.MainWindow.webContents, hubPage, process.platform);
     configuredQAppSessions.clear();
     this.MainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
       const prepared = [...preparedQAppGuests.values()].find(
@@ -1150,6 +1167,10 @@ export class ElectronCapacitorApp {
         maybeStartRendererCpuProfile(guest, 'qapp-guest');
       });
       guest.setWindowOpenHandler(() => ({ action: 'deny' }));
+      // A Q-App's key presses never reach the Hub page.
+      installTabShortcuts(guest, hubPage, process.platform);
+      installZoomKeys(guest, hubPage, process.platform);
+      followHubZoom(guest, hubPage);
       const allowedGuestUrl = (nextUrl: string) => {
         const bound = attachedQAppGuests.get(guest.id)?.prepared;
         const candidates = bound ? [bound] : [...preparedQAppGuests.values()];
@@ -1616,14 +1637,13 @@ ipcMain.handle('systemCallReadiness:refreshSnapshot', () =>
 
 ipcMain.handle(
   'window:showAppMenu',
-  (event, { x, y }: { x?: number; y?: number }) => {
+  (event, point: { x?: number; y?: number }) => {
     const win = myCapacitorApp.getMainWindow();
     const menu = Menu.getApplicationMenu();
     if (menu && win && !win.isDestroyed()) {
       menu.popup({
         window: win,
-        x: x ?? 0,
-        y: y ?? 32,
+        ...menuPopupPoint(point, win.webContents.getZoomFactor()),
       });
     }
   }
@@ -1633,6 +1653,13 @@ const mainWindowFiles = registerMainWindowFileIpc({
   ipcMain,
   dialog,
   checkSender: requireMainShellEvent,
+});
+
+registerPublishProfileIpc({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  getFilePath: () => path.join(app.getPath('userData'), PUBLISH_PROFILES_FILE),
+  onError: (error) => loggerError('Publish profiles', error),
 });
 
 // Helper to get or create the shared settings directory
@@ -3177,6 +3204,31 @@ ipcMain.handle('qappGuest:release', (event, owner: QAppGuestOwner) => {
   void cleanupQAppOwner(owner);
   return true;
 });
+// Screenshots for an app's page: a capture of a guest Hub prepared for this
+// owner, taken when the publisher asks. Nothing runs inside the app.
+ipcMain.handle(
+  'qappGuest:shot',
+  async (event, owner: QAppGuestOwner, request) => {
+    validateQAppReticulumIpcSender(event);
+    if (event.senderFrame !== event.sender.mainFrame)
+      throw new Error('QAPP_PERMISSION_DENIED');
+    if (!parseShotRequest(request)) throw new Error('QAPP_INVALID_REQUEST');
+    const key = qappGuestOwnerKey(owner);
+    let contents: WebContents | null = null;
+    for (const attached of attachedQAppGuests.values()) {
+      if (
+        attached.prepared &&
+        qappGuestOwnerKey(attached.prepared.owner) === key
+      ) {
+        contents = attached.contents;
+        break;
+      }
+    }
+    if (!contents || contents.isDestroyed())
+      throw new Error('QAPP_GUEST_NOT_FOUND');
+    return encodeCapturedShot(await contents.capturePage());
+  }
+);
 ipcMain.handle(
   'qappReticulum:request',
   async (event, owner: QAppReticulumOwner, options) => {

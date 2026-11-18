@@ -93,6 +93,16 @@ export type HomeLayout = {
   grid?: HomeGridItem[];
   /** Widgets in windows of their own, in the order they were added. */
   widgetWindows?: HomeWidgetWindow[];
+  /**
+   * When it last changed on this device (ms), what the copy in the QDN
+   * settings is weighed against. Missing: never changed here.
+   */
+  changedAt?: number;
+};
+
+const changedAtOf = (value: unknown): number | undefined => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 };
 
 export const HOME_LAYOUT_DEFAULT: HomeLayout = {
@@ -183,14 +193,17 @@ export const normalizeHomeLayout = (
       ...(fallback.widgetWindows?.length
         ? { widgetWindows: [...fallback.widgetWindows] }
         : {}),
+      ...(fallback.changedAt ? { changedAt: fallback.changedAt } : {}),
     };
   }
-  const { grid, hidden, stack, widgetWindows } = value as {
+  const { changedAt, grid, hidden, stack, widgetWindows } = value as {
+    changedAt?: unknown;
     grid?: unknown;
     hidden?: unknown;
     stack?: unknown;
     widgetWindows?: unknown;
   };
+  const normalChangedAt = changedAtOf(changedAt);
   const normalStack = Array.isArray(stack)
     ? completeHomeStack(stack)
     : [...fallback.stack];
@@ -213,6 +226,7 @@ export const normalizeHomeLayout = (
     stack: normalStack,
     ...(normalGrid ? { grid: [...normalGrid] } : {}),
     ...(normalWidgets.length ? { widgetWindows: [...normalWidgets] } : {}),
+    ...(normalChangedAt ? { changedAt: normalChangedAt } : {}),
   };
 };
 
@@ -411,11 +425,29 @@ export const readHomeLayout = (address?: string | null): HomeLayout => {
   }
 };
 
-export const saveHomeLayout = (address: string, layout: HomeLayout) => {
+/**
+ * Saves the account's layout. A layout that changed is marked as changed
+ * now, unless `changedAt` says when (one taken in from QDN keeps its time).
+ * "Now" is always later than the time it had: one taken in from a device
+ * whose clock is ahead must not make a change made here look older.
+ */
+export const saveHomeLayout = (
+  address: string,
+  layout: HomeLayout,
+  options: { changedAt?: number } = {}
+) => {
+  const before = readHomeLayout(address);
+  const next = normalizeHomeLayout(layout);
+  const changedAt =
+    options.changedAt ??
+    (sameHomeLayout(before, next)
+      ? before.changedAt
+      : Math.max(Date.now(), (before.changedAt ?? 0) + 1));
+  const { changedAt: _ignored, ...content } = next;
   try {
     window.localStorage.setItem(
       homeLayoutStorageKey(address),
-      JSON.stringify(normalizeHomeLayout(layout))
+      JSON.stringify(changedAt ? { ...content, changedAt } : content)
     );
   } catch (error) {
     console.warn('Unable to save the Home layout.', error);

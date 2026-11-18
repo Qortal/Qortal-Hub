@@ -6,6 +6,7 @@ import {
   rm,
   symlink,
   unlink,
+  utimes,
 } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -112,6 +113,92 @@ describe('main window file selections', () => {
     expect((await call('fs:selectAndZip', dir)).buffer).toEqual(first.buffer);
     expect(dialogs.showOpenDialog).toHaveBeenCalledTimes(1);
     await expect(call('fs:selectAndZip', root)).rejects.toThrow('not selected');
+  });
+  it('opens the folder picker at a saved path and counts files changed since the last publish', async () => {
+    const dir = join(root, 'dist');
+    await mkdir(join(dir, 'assets'), { recursive: true });
+    await writeFile(join(dir, 'index.html'), 'old');
+    await writeFile(join(dir, 'assets', 'app.js'), 'new');
+    await writeFile(join(dir, 'assets', 'style.css'), 'new');
+    const lastPublish = Date.now() - 60_000;
+    const before = new Date(lastPublish - 60_000);
+    const after = new Date(lastPublish + 30_000);
+    await utimes(join(dir, 'index.html'), before, before);
+    await utimes(join(dir, 'assets', 'app.js'), after, after);
+    await utimes(join(dir, 'assets', 'style.css'), after, after);
+    // A folder's own time doesn't count: only the files the zip holds.
+    await utimes(join(dir, 'assets'), after, after);
+    dialogs.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [dir],
+    });
+
+    const result = await call('fs:selectAndZip', undefined, {
+      defaultPath: dir,
+      changedSince: lastPublish,
+    });
+
+    expect(dialogs.showOpenDialog).toHaveBeenCalledWith({
+      properties: ['openDirectory'],
+      defaultPath: dir,
+    });
+    expect(result.directoryPath).toBe(dir);
+    expect(result.buffer.length).toBeGreaterThan(0);
+    expect(result.changedFiles).toBe(2);
+    // The same folder again, already granted: the count follows the files.
+    await utimes(join(dir, 'index.html'), after, after);
+    expect(
+      (await call('fs:selectAndZip', dir, { changedSince: lastPublish }))
+        .changedFiles
+    ).toBe(3);
+  });
+  it('falls back to the usual pickers when the saved path is gone or invalid', async () => {
+    dialogs.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] });
+    await call('fs:selectAndZip', undefined, {
+      defaultPath: join(root, 'moved-away'),
+      changedSince: 1,
+    });
+    await call('dialog:openFile', { defaultPath: 'relative/app.zip' });
+    await call('dialog:openFile', { defaultPath: join(root, 'gone.zip') });
+    await call('fs:selectAndZip', undefined, { defaultPath: 42 });
+    expect(dialogs.showOpenDialog.mock.calls).toEqual([
+      [{ properties: ['openDirectory'] }],
+      [
+        {
+          properties: ['openFile'],
+          filters: [{ name: 'ZIP Files', extensions: ['zip'] }],
+        },
+      ],
+      [
+        {
+          properties: ['openFile'],
+          filters: [{ name: 'ZIP Files', extensions: ['zip'] }],
+        },
+      ],
+      [{ properties: ['openDirectory'] }],
+    ]);
+  });
+  it('treats a saved path as a place to open the picker, never as a grant', async () => {
+    const saved = join(root, 'last.zip');
+    const picked = join(root, 'picked.zip');
+    await writeFile(saved, 'last');
+    await writeFile(picked, 'picked');
+    dialogs.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [picked],
+    });
+
+    expect(await call('dialog:openFile', { defaultPath: saved })).toBe(picked);
+    expect(dialogs.showOpenDialog).toHaveBeenCalledWith({
+      properties: ['openFile'],
+      filters: [{ name: 'ZIP Files', extensions: ['zip'] }],
+      defaultPath: saved,
+    });
+    expect((await call('fs:readFile', picked)).toString()).toBe('picked');
+    await expect(call('fs:readFile', saved)).rejects.toThrow('not selected');
+    await expect(
+      call('fs:selectAndZip', root, { defaultPath: root })
+    ).rejects.toThrow('not selected');
   });
   it('preserves backup writes, chunked downloads, and failed-download cleanup', async () => {
     const output = join(root, 'backup.json');

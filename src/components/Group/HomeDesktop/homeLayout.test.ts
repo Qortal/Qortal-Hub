@@ -74,7 +74,7 @@ describe('normalizeHomeLayout', () => {
     const at = (key: string) => layout.grid?.find((item) => item.key === key);
     expect(at('tools')).toMatchObject({ x: 0, y: 0 });
     // Qortino keeps its place, for when it's shown again.
-    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 46 });
+    expect(at('qortino')).toMatchObject({ x: 0, y: 0, h: 43 });
   });
 
   it('puts a panel the stored order lacks back after its usual neighbour', () => {
@@ -116,6 +116,7 @@ describe('readHomeLayout', () => {
     saveHomeLayout(ALICE, { hidden: ['qortino'], stack: ['feed', 'widgets'] });
 
     expect(readHomeLayout(ALICE)).toEqual({
+      changedAt: expect.any(Number),
       hidden: ['qortino'],
       stack: ['feed', 'widgets', 'groupActivity'],
     });
@@ -181,6 +182,57 @@ describe('the arrangement', () => {
   });
 });
 
+describe('the account card’s place', () => {
+  const clock = { name: 'GO Clock', identifier: null };
+  const clockId = homeWidgetWindowId(clock);
+  /** Saved with the card at its measured 16 rows, Featured Q-Apps under it. */
+  const shortCardGrid = (): HomeGridItem[] => [
+    ...homeDefaultGrid().map((item) =>
+      item.key === 'account'
+        ? { ...item, h: 16 }
+        : item.key === 'featured'
+          ? { ...item, y: 16 }
+          : item
+    ),
+    { key: clockId, x: 0, y: 147, w: 6, h: 27 },
+  ];
+  const storedGrid = (): HomeGridItem[] =>
+    JSON.parse(localStorage.getItem(homeLayoutStorageKey(ALICE)) ?? '{}')
+      .grid ?? [];
+  const storedRect = (key: HomeWindowId) => {
+    const item = storedGrid().find((entry) => entry.key === key);
+    return item && [item.x, item.y, item.w, item.h];
+  };
+
+  it('is saved at least as tall as by default, from a copy taken in from QDN', () => {
+    saveHomeLayout(
+      ALICE,
+      { ...HOME_LAYOUT_DEFAULT, grid: shortCardGrid(), widgetWindows: [clock] },
+      { changedAt: 500 }
+    );
+    expect(storedRect('account')).toEqual([6, 0, 12, 20]);
+    expect(storedRect('featured')).toEqual([6, 20, 12, 44]);
+  });
+
+  it('is saved at least as tall as by default when a widget asks for a height', () => {
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({
+        ...HOME_LAYOUT_DEFAULT,
+        grid: shortCardGrid(),
+        widgetWindows: [clock],
+      })
+    );
+    saveHomeLayout(
+      ALICE,
+      withHomeWidgetWindowHeight(readHomeLayout(ALICE), clockId, 300)
+    );
+    expect(storedRect(clockId)?.[3]).toBe(homeGridRowsFor(300));
+    expect(storedRect('account')).toEqual([6, 0, 12, 20]);
+    expect(storedRect('featured')).toEqual([6, 20, 12, 44]);
+  });
+});
+
 describe('useHomeLayout', () => {
   it('saves for the account and keeps every user of it in step', () => {
     const first = renderHook(() => useHomeLayout(ALICE));
@@ -198,6 +250,7 @@ describe('useHomeLayout', () => {
     expect(
       JSON.parse(localStorage.getItem(homeLayoutStorageKey(ALICE)) ?? '{}')
     ).toEqual({
+      changedAt: expect.any(Number),
       hidden: ['featured'],
       stack: ['widgets', 'groupActivity', 'feed'],
     });
@@ -213,6 +266,54 @@ describe('useHomeLayout', () => {
     });
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
+  });
+});
+
+describe('when the layout changed', () => {
+  it('marks a change, and only a change, with its time', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    saveHomeLayout(ALICE, { hidden: ['qortino'], stack: [] });
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    now.mockReturnValue(2_000);
+    saveHomeLayout(ALICE, readHomeLayout(ALICE));
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    saveHomeLayout(ALICE, { hidden: [], stack: [] });
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    saveHomeLayout(ALICE, { hidden: ['feed'], stack: [] }, { changedAt: 500 });
+    expect(readHomeLayout(ALICE).changedAt).toBe(500);
+    now.mockRestore();
+  });
+
+  it('counts a widget window added or removed, and the height its widget asks for', () => {
+    const clock = { name: 'GO Clock', identifier: null };
+    const clockId = homeWidgetWindowId(clock);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    saveHomeLayout(ALICE, withHomeWidgetWindow(readHomeLayout(ALICE), clock));
+    expect(readHomeLayout(ALICE).changedAt).toBe(1_000);
+
+    now.mockReturnValue(2_000);
+    const askHeight = () =>
+      saveHomeLayout(
+        ALICE,
+        withHomeWidgetWindowHeight(readHomeLayout(ALICE), clockId, 140)
+      );
+    askHeight();
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    // The same height again changes nothing.
+    now.mockReturnValue(3_000);
+    askHeight();
+    expect(readHomeLayout(ALICE).changedAt).toBe(2_000);
+
+    saveHomeLayout(
+      ALICE,
+      withoutHomeWidgetWindow(readHomeLayout(ALICE), clockId)
+    );
+    expect(readHomeLayout(ALICE).changedAt).toBe(3_000);
+    now.mockRestore();
   });
 });
 
@@ -362,7 +463,10 @@ describe('widget windows in the Home layout', () => {
 
       expect(withoutClock(shownGrid(added))).toEqual(before);
       // The widget goes under what shows...
-      expect(placeOf(added)).toMatchObject({ x: 0, y: 147 });
+      expect(placeOf(added)).toMatchObject({
+        x: 0,
+        y: Math.max(...before.map((item) => item.y + item.h)),
+      });
       // ...and Qortino keeps its place, for when it's shown again.
       expect(qortinoIn(added)).toEqual(qortinoIn(layout));
     });

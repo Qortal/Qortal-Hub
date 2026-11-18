@@ -39,6 +39,7 @@ import {
   type HomeWindowId,
   homeGridCellAt,
   homeGridColumnPx,
+  homeGridEdited,
   homeGridFlow,
   homeGridHeightPx,
   homeGridRectPx,
@@ -122,6 +123,8 @@ type HomeGridProps = {
   hiddenWindows: readonly { id: HomeWindowId; title: string }[];
   onChangeGrid: (grid: HomeGridItem[]) => void;
   onHideWindow: (id: HomeWindowId) => void;
+  /** More buttons in the edit toolbar (restoring the layout saved on QDN). */
+  editActions?: ReactNode;
   /** Edit Home started or stopped. */
   onEditingChange?: (editing: boolean) => void;
   onResetGrid: () => void;
@@ -160,6 +163,7 @@ const scrollParentOf = (node: HTMLElement | null): HTMLElement | null => {
 export const HomeGrid = ({
   active,
   addWidget,
+  editActions,
   grid,
   headerEnd,
   headerStart,
@@ -258,8 +262,9 @@ export const HomeGrid = ({
     [windows]
   );
   const shownLayout = useMemo(
-    () => homeGridShown(grid, (id) => windowsById.has(id), measuredRows),
-    [grid, measuredRows, windowsById]
+    () =>
+      homeGridShown(grid, (id) => windowsById.has(id), measuredRows, flowing),
+    [flowing, grid, measuredRows, windowsById]
   );
 
   // Editing.
@@ -333,13 +338,20 @@ export const HomeGrid = ({
     });
   }, [editing, reduceMotion, windows]);
 
-  // What's shown: the drag's layout while one is going on (with the
-  // content-sized windows at their measured height), else the saved one.
+  // What's shown: the drag's layout while one is going on, as it would be
+  // saved (with the content-sized windows at their measured height), else
+  // the saved one.
   const layout =
     useMemo(
       () =>
-        dragLayout ? homeGridShown(dragLayout, () => true, measuredRows) : null,
-      [dragLayout, measuredRows]
+        dragLayout && dragStart
+          ? homeGridShown(
+              homeGridEdited(grid, dragStart, dragLayout),
+              () => true,
+              measuredRows
+            )
+          : null,
+      [dragLayout, dragStart, grid, measuredRows]
     ) ?? shownLayout;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -527,7 +539,10 @@ export const HomeGrid = ({
     stopAutoScroll();
     if (!drag.moved) return;
     if (!cancelled && !sameHomeGrid(drag.layout, drag.start)) {
-      onChangeGrid(mergeHomeGrid(gridPropRef.current, drag.layout));
+      const stored = gridPropRef.current;
+      onChangeGrid(
+        mergeHomeGrid(stored, homeGridEdited(stored, drag.start, drag.layout))
+      );
     }
     const frame = frameRefs.current.get(drag.key);
     if (frame) {
@@ -608,7 +623,8 @@ export const HomeGrid = ({
     if (!event.key.startsWith('Arrow')) return;
     event.preventDefault();
     if (next && !sameHomeGrid(next, items)) {
-      onChangeGrid(mergeHomeGrid(gridPropRef.current, next));
+      const stored = gridPropRef.current;
+      onChangeGrid(mergeHomeGrid(stored, homeGridEdited(stored, items, next)));
     }
   };
 
@@ -670,6 +686,7 @@ export const HomeGrid = ({
       <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
         {editing ? (
           <>
+            {editActions}
             <Button
               aria-haspopup="menu"
               disabled={hiddenWindows.length === 0}
@@ -978,10 +995,13 @@ export const HomeGrid = ({
           if (!window || !item) return null;
           const held = dragKey === id;
           // A window being moved keeps its place until it's dropped (it
-          // follows the pointer); the others show where they'd go.
+          // follows the pointer), at the height it would land with; the
+          // others show where they'd go.
           const start = dragStartByKey.get(id);
           const px = homeGridRectPx(
-            held && dragKind === 'move' && start ? start : item,
+            held && dragKind === 'move' && start
+              ? { ...start, h: item.h }
+              : item,
             columnPx
           );
           const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
