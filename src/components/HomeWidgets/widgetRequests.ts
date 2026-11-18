@@ -1,5 +1,5 @@
 import i18n from '../../i18n/i18n';
-import { TIME_SECONDS_30_IN_MILLISECONDS } from '../../constants/constants';
+import { qappRequestTimeoutMs } from '../../qortal/qappRequestTimeout';
 import { serializeQortalRequestError } from '../../qortal/qortal-request-errors';
 import { executeEvent } from '../../utils/events';
 import { isHubLocked } from '../../atoms/presence';
@@ -193,7 +193,8 @@ export const createWidgetRequestHandler =
       const response = await sendMessage(
         data.action,
         data,
-        TIME_SECONDS_30_IN_MILLISECONDS,
+        // Long enough for an approval, as for a Q-App in a tab.
+        qappRequestTimeoutMs(data.action, data, true),
         true,
         { name: owner.name, service: owner.service, tabId: owner.tabId }
       );

@@ -94,10 +94,16 @@ vi.mock('../qapp-save-file', async () =>
 
 // ── Imports (after mocks) ────────────────────────────────────────────────────
 
+import { renderHook } from '@testing-library/react';
 import { getDefaultStore } from 'jotai';
 import { appLockedAtom } from '../../atoms/presence';
 import { executeEvent } from '../../utils/events';
-import { openNewTab, openUserLookup } from '../get';
+import { openNewTab, openUserLookup, sessionPermissions } from '../get';
+import { useAppMessageHandler } from '../../hooks/useAppMessageHandler';
+import {
+  hasSessionPermission,
+  VALID_SESSION_PERMISSIONS,
+} from '../qortal-requests';
 import { HUB_LOCKED_CODE, refuseWhileHubLocked } from '../hubLocked';
 import { dispatchQAppFileSaveRequest } from '../qapp-file-save-request';
 
@@ -225,5 +231,94 @@ describe("a Q-App's stream save", () => {
       expect.objectContaining({ tabId: 'tab-1' }),
       expect.objectContaining({ action: 'FILE_SAVE_WRITE', saveId: 'save-1' })
     );
+  });
+});
+
+// get.ts shows approval requests one at a time: the others wait their turn.
+describe('approval requests waiting their turn when Hub locks', () => {
+  let reachedTheDialog: string[];
+  let unmount: () => void;
+
+  // Hub's own window: what get.ts and the message handler post reaches every
+  // listener, from Hub's origin.
+  const postToHub = (data: any) =>
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data,
+        origin: window.location.origin,
+        source: window,
+      })
+    );
+  const answer = (requestId: string, accepted: boolean) =>
+    postToHub({
+      action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
+      requestId,
+      result: { accepted },
+    });
+  const ask = (tabId: number) =>
+    sessionPermissions({ permissions: ['SEND_COIN'] }, true, {
+      tabId,
+      name: `App ${tabId}`,
+    });
+
+  beforeEach(() => {
+    reachedTheDialog = [];
+    vi.mocked(hasSessionPermission).mockReturnValue(false);
+    VALID_SESSION_PERMISSIONS.splice(
+      0,
+      VALID_SESSION_PERMISSIONS.length,
+      'SEND_COIN'
+    );
+    vi.spyOn(window, 'postMessage').mockImplementation((data: any) => {
+      setTimeout(() => postToHub(data), 0);
+    });
+    // App's handler: the request reaches the approval dialog and waits.
+    unmount = renderHook(() =>
+      useAppMessageHandler(
+        { current: true },
+        {
+          current: (message) => {
+            reachedTheDialog.push(message.requestId);
+          },
+        }
+      )
+    ).unmount;
+  });
+
+  afterEach(() => {
+    unmount();
+    vi.restoreAllMocks();
+  });
+
+  it('are all declined, and none reaches the dialog after the lock', async () => {
+    const asked = [ask(1), ask(2), ask(3)].map((request) =>
+      request.then(
+        () => 'accepted',
+        () => 'declined'
+      )
+    );
+    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(1));
+
+    // Hub locks: the dialog declines the request on screen.
+    lockHub(true);
+    answer(reachedTheDialog[0], false);
+
+    expect(await Promise.all(asked)).toEqual([
+      'declined',
+      'declined',
+      'declined',
+    ]);
+    expect(reachedTheDialog).toHaveLength(1);
+  });
+
+  it('reach the dialog one after another while Hub is unlocked', async () => {
+    const first = ask(1);
+    const second = ask(2);
+    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(1));
+    answer(reachedTheDialog[0], true);
+    await expect(first).resolves.toBe(true);
+    await vi.waitFor(() => expect(reachedTheDialog).toHaveLength(2));
+    answer(reachedTheDialog[1], true);
+    await expect(second).resolves.toBe(true);
   });
 });
