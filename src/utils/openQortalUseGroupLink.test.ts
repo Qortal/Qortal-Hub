@@ -64,6 +64,51 @@ describe('openQortalUseGroupLink', () => {
     ]);
   });
 
+  describe('from a Q-App or a widget', () => {
+    const eventId = '06a3daa0-938c-40df-a7fe-a3cec373d992';
+    // The join window, as it answers a link it opens for.
+    const joinWindow = (e: Event) => {
+      (e as CustomEvent).detail.opened = true;
+    };
+
+    afterEach(() => {
+      document.removeEventListener('globalActionJoinGroup', joinWindow);
+    });
+
+    it('opens only the join window, for the join link and an event alike', async () => {
+      const getCalendarEvent = vi.fn().mockResolvedValue(null);
+      vi.stubGlobal('reticulumChat', { getCalendarEvent });
+      document.addEventListener('globalActionJoinGroup', joinWindow);
+
+      for (const link of [
+        'qortal://use-group/action-join/groupid-123',
+        `qortal://use-group/action-calendar/groupid-123/eventid-${eventId}`,
+      ]) {
+        await expect(
+          openQortalUseGroupLink(link, { fromApp: true })
+        ).resolves.toBe(true);
+      }
+
+      expect(events.map(({ name }) => name)).toEqual([
+        'globalActionJoinGroup',
+        'globalActionJoinGroup',
+      ]);
+      expect(events[0].detail).toMatchObject({
+        groupId: '123',
+        fromApp: true,
+      });
+      expect(getCalendarEvent).not.toHaveBeenCalled();
+    });
+
+    it('says so when no join window opened for it', async () => {
+      await expect(
+        openQortalUseGroupLink('qortal://use-group/action-join/groupid-123', {
+          fromApp: true,
+        })
+      ).resolves.toBe(false);
+    });
+  });
+
   it('leaves app links and search text to the caller', async () => {
     for (const input of [
       'qortal://APP/Q-Tube',

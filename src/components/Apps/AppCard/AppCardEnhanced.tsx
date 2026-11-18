@@ -1,9 +1,7 @@
-import { Avatar, useTheme } from '@mui/material';
+import { useTheme } from '@mui/material';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getBaseApiReact } from '../../../App';
-import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import {
   isAppPinnedAtomFamily,
   settingsLocalLastUpdatedAtom,
@@ -11,22 +9,9 @@ import {
 } from '../../../atoms/global';
 import { executeEvent } from '../../../utils/events';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
-import { AppRating } from '../AppRating';
-import {
-  AppCardEnhancedContainer,
-  AppCardHeader,
-  AppCardHeaderInfo,
-  AppCardTitle,
-  AppCardDeveloper,
-  AppCardDescription,
-  AppCardTagsContainer,
-  AppCardActions,
-  AppButton,
-  AppButtonText,
-  CategoryChip,
-  TagChip,
-  AppCircle,
-} from '../Apps-styles';
+import { inLauncherTab, useLauncherTabId } from '../launcherTabs';
+import type { LibraryView } from '../AppsLibrary/libraryView';
+import { LibraryAppRow, LibraryAppTile } from './LibraryAppItem';
 
 const PINNED_KEY_SEP = '\0';
 
@@ -34,15 +19,27 @@ interface AppCardEnhancedProps {
   app: any;
   myName: string;
   isFromCategory?: boolean;
+  /** A card of the grid, or a row of the list. */
+  view?: LibraryView;
+  /** Set on the account's own apps: shows Update. */
+  onUpdate?: () => void;
 }
 
+/**
+ * An app or website of the library. Its title opens the app's page (a click
+ * anywhere else on the card does too), Open starts it in a tab, and the pin
+ * keeps it on the launcher.
+ */
 const AppCardEnhancedInner = ({
   app,
   myName,
   isFromCategory = false,
+  view = 'grid',
+  onUpdate,
 }: AppCardEnhancedProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const launcherTabId = useLauncherTabId();
   const isInstalled = app?.status?.status === 'READY';
 
   const pinnedKey = useMemo(
@@ -95,9 +92,9 @@ const AppCardEnhancedInner = ({
   const handleOpenClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      executeEvent('addTab', { data: app });
+      executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) });
     },
-    [app]
+    [app, launcherTabId]
   );
 
   const truncatedDescription = useMemo(() => {
@@ -121,108 +118,37 @@ const AppCardEnhancedInner = ({
     return Array.isArray(rawTags) ? rawTags.slice(0, 3) : [];
   }, [app?.metadata?.tags]);
 
-  return (
-    <AppCardEnhancedContainer onClick={handleCardClick}>
-      <AppCardHeader>
-        <AppCircle
-          sx={{
-            border: 'none',
-            height: '60px',
-            width: '60px',
-            flexShrink: 0,
-          }}
-        >
-          <Avatar
-            sx={{
-              height: '40px',
-              width: '40px',
-              '& img': {
-                objectFit: 'fill',
-              },
-            }}
-            alt={app?.name}
-            src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${app?.name}/qortal_avatar?async=true`}
-          >
-            <img
-              style={{
-                width: '28px',
-                height: 'auto',
-              }}
-              src={LogoSelected}
-              alt="app-icon"
-            />
-          </Avatar>
-        </AppCircle>
+  const handleUpdateClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onUpdate?.();
+    },
+    [onUpdate]
+  );
 
-        <AppCardHeaderInfo>
-          <AppCardTitle>{app?.metadata?.title || app?.name}</AppCardTitle>
-          <AppCardDeveloper>
-            {t('core:app_detail.by_developer', {
-              developer: app?.name,
-              postProcess: 'capitalizeFirstChar',
-              defaultValue: 'by @{{developer}}',
-            })}
-          </AppCardDeveloper>
-          <AppRating app={app} myName={myName} />
-        </AppCardHeaderInfo>
-      </AppCardHeader>
+  const itemProps = {
+    app,
+    title: app?.metadata?.title || app?.name,
+    developerLine: t('core:app_detail.by_developer', {
+      developer: app?.name,
+      postProcess: 'capitalizeFirstChar',
+    }),
+    description: truncatedDescription,
+    categoryId: app?.metadata?.category,
+    categoryName: app?.metadata?.categoryName,
+    tags,
+    isInstalled,
+    isPinned: isSelectedAppPinned,
+    onOpenDetails: handleCardClick,
+    onTogglePin: handlePinClick,
+    onOpen: handleOpenClick,
+    onUpdate: onUpdate ? handleUpdateClick : undefined,
+  };
 
-      <AppCardDescription>{truncatedDescription}</AppCardDescription>
-
-      <AppCardTagsContainer>
-        {app?.metadata?.categoryName && (
-          <CategoryChip
-            label={app.metadata.categoryName}
-            size="small"
-            onClick={(e) => e.stopPropagation()}
-          />
-        )}
-        {tags.map((tag: string, index: number) => (
-          <TagChip
-            key={`${tag}-${index}`}
-            label={tag}
-            size="small"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ))}
-      </AppCardTagsContainer>
-
-      <AppCardActions>
-        <AppButton
-          onClick={handlePinClick}
-          sx={{
-            backgroundColor: theme.palette.background.default,
-            opacity: isSelectedAppPinned ? 0.6 : 1,
-          }}
-        >
-          <AppButtonText>
-            {isSelectedAppPinned
-              ? t('core:action.unpin', { postProcess: 'capitalizeFirstChar' })
-              : t('core:action.pin', { postProcess: 'capitalizeFirstChar' })}
-          </AppButtonText>
-        </AppButton>
-
-        <AppButton
-          onClick={handleOpenClick}
-          sx={{
-            backgroundColor: isInstalled
-              ? theme.palette.primary.main
-              : theme.palette.background.default,
-            color: isInstalled
-              ? theme.palette.primary.contrastText
-              : theme.palette.text.primary,
-          }}
-        >
-          <AppButtonText>
-            {isInstalled
-              ? t('core:action.open', { postProcess: 'capitalizeFirstChar' })
-              : t('core:action.download', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-          </AppButtonText>
-        </AppButton>
-      </AppCardActions>
-    </AppCardEnhancedContainer>
+  return view === 'list' ? (
+    <LibraryAppRow {...itemProps} />
+  ) : (
+    <LibraryAppTile {...itemProps} />
   );
 };
 

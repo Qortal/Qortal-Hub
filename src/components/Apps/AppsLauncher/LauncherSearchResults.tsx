@@ -1,48 +1,42 @@
-import { type ReactNode, useCallback } from 'react';
+import { type ReactNode, useId } from 'react';
 import LinkIcon from '@mui/icons-material/Link';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { AppCardEnhanced } from '../AppCard';
 import { AppsWidthLimiter } from '../Apps-styles';
-import { VirtualAppGrid } from '../AppsLibrary/VirtualAppGrid';
+import { AppCollection } from '../AppsLibrary/AppCollection';
+import { CountBadge, LibraryPanel } from '../AppsLibrary/LibrarySection';
+import { LibraryViewToggle } from '../AppsLibrary/LibraryViewToggle';
 import type { LauncherApp, LauncherLink } from './launcherSearch';
 import { LAUNCHER_TILE_WIDTH_PX } from './LauncherTile';
-
-const CARD_MIN_WIDTH = 320;
-const CARD_HEIGHT = 220;
-const GRID_GAP = 16;
-
-const getAppKey = (app: LauncherApp) => `${app?.service}-${app?.name}`;
 
 const SectionTitle = ({
   children,
   count,
+  id,
 }: {
   children: ReactNode;
   count?: number;
+  id?: string;
 }) => (
   <Typography
     component="h2"
+    id={id}
     sx={(theme) => ({
+      alignItems: 'center',
       color: theme.palette.text.primary,
-      fontSize: '15px',
-      fontWeight: 600,
-      lineHeight: 1.3,
+      display: 'flex',
+      fontSize: '17px',
+      fontWeight: 650,
+      gap: 1,
+      lineHeight: '28px',
       margin: 0,
     })}
   >
     {children}
+    {/* Part of the heading's name: the saved tiles are no list that says
+        how many it holds. */}
     {count !== undefined ? (
-      <Box
-        component="span"
-        sx={(theme) => ({
-          color: theme.palette.text.secondary,
-          fontWeight: 400,
-          marginLeft: '8px',
-        })}
-      >
-        {count}
-      </Box>
+      <CountBadge decorative={false}>{count}</CountBadge>
     ) : null}
   </Typography>
 );
@@ -78,10 +72,10 @@ export const LauncherSearchResults = ({
   isActive,
 }: LauncherSearchResultsProps) => {
   const { t } = useTranslation(['core']);
-  const renderApp = useCallback(
-    (app: LauncherApp) => <AppCardEnhanced app={app} myName={myName} />,
-    [myName]
-  );
+  const appsTitleId = useId();
+  const appsTitle = t('core:launcher.results_apps', {
+    postProcess: 'capitalizeFirstChar',
+  });
   const hasNothing = !link && apps.length === 0 && savedTiles.length === 0;
 
   return (
@@ -181,30 +175,31 @@ export const LauncherSearchResults = ({
       ) : null}
 
       {apps.length > 0 ? (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            width: '100%',
-          }}
-        >
-          <SectionTitle count={apps.length}>
-            {t('core:launcher.results_apps', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </SectionTitle>
-          <VirtualAppGrid
+        <LibraryPanel labelledBy={appsTitleId}>
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px 16px',
+              justifyContent: 'space-between',
+              mb: 2,
+            }}
+          >
+            <SectionTitle count={apps.length} id={appsTitleId}>
+              {appsTitle}
+            </SectionTitle>
+            {/* The library's bar is hidden while searching. */}
+            <LibraryViewToggle />
+          </Box>
+          <AppCollection
             active={isActive}
-            gap={GRID_GAP}
-            getKey={getAppKey}
-            items={apps}
-            minColumnWidth={CARD_MIN_WIDTH}
-            renderItem={renderApp}
-            rowHeight={CARD_HEIGHT}
+            apps={apps}
+            label={appsTitle}
+            myName={myName}
             scrollElement={scrollElement}
           />
-        </Box>
+        </LibraryPanel>
       ) : null}
 
       {hasNothing ? (

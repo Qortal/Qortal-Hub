@@ -106,6 +106,7 @@ vi.mock('../AppsLibrary', () => {
 });
 
 import { sortablePinnedAppsAtom } from '../../../atoms/global';
+import { LauncherTabContext } from '../launcherTabs';
 import { AppsLauncher, type AppsLauncherRequest } from './AppsLauncher';
 
 const library = [
@@ -183,23 +184,27 @@ const installBookmarkStorage = (forAddress: unknown) => {
 
 const renderLauncher = async (
   props: Partial<React.ComponentProps<typeof AppsLauncher>> = {},
-  pins: unknown[] = [{ name: 'Q-Mail', service: 'APP' }]
+  pins: unknown[] = [{ name: 'Q-Mail', service: 'APP' }],
+  /** The launcher tab it is shown in, if any. */
+  launcherTabId: string | null = null
 ) => {
   const store = createStore();
   store.set(sortablePinnedAppsAtom, pins as never);
   const ui = (extra: Partial<React.ComponentProps<typeof AppsLauncher>>) => (
     <Provider store={store}>
       <ThemeProvider theme={createTheme()}>
-        <AppsLauncher
-          availableQapps={library}
-          categories={[]}
-          isShow
-          myAddress={ADDRESS}
-          myName="Simon"
-          setMode={vi.fn()}
-          {...props}
-          {...extra}
-        />
+        <LauncherTabContext.Provider value={launcherTabId}>
+          <AppsLauncher
+            availableQapps={library}
+            categories={[]}
+            isShow
+            myAddress={ADDRESS}
+            myName="Simon"
+            setMode={vi.fn()}
+            {...props}
+            {...extra}
+          />
+        </LauncherTabContext.Provider>
       </ThemeProvider>
     </Provider>
   );
@@ -247,6 +252,21 @@ describe('AppsLauncher', () => {
     expect(executeEvent).toHaveBeenCalledWith('addTab', {
       data: expect.objectContaining({ name: 'Q-Mail', service: 'APP' }),
     });
+  });
+
+  it('keeps the title of a pinned app its publisher hid from the library', async () => {
+    await renderLauncher(
+      {
+        allQapps: library,
+        // The library leaves it out.
+        availableQapps: library.filter((app) => app.name !== 'TubeFan'),
+      },
+      [{ name: 'TubeFan', service: 'WEBSITE' }]
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Fans of the tube' })
+    ).toBeVisible();
   });
 
   it('builds nothing before it is first shown', async () => {
@@ -340,6 +360,25 @@ describe('AppsLauncher', () => {
         path: '',
       },
     });
+  });
+
+  it("opens an app's page from its qortal://use-app-page link", async () => {
+    const user = userEvent.setup();
+    await renderLauncher();
+
+    await user.type(searchBox(), 'qortal://use-app-page/APP/Q-Shop');
+    expect(
+      screen.getByRole('button', { name: /core:action.open_as_qortal_link/ })
+    ).toBeVisible();
+    await user.keyboard('{Enter}');
+
+    await vi.waitFor(() =>
+      expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', {
+        data: { name: 'Q-Shop', service: 'APP' },
+      })
+    );
+    expect(executeEvent).not.toHaveBeenCalledWith('addTab', expect.anything());
+    expect(searchBox()).toHaveValue('');
   });
 
   it('says so when nothing matches, and Enter opens nothing', async () => {
@@ -692,6 +731,60 @@ describe('AppsLauncher', () => {
       expect(
         await screen.findByRole('button', { name: 'Renamed channel' })
       ).toBeVisible();
+    });
+  });
+});
+
+describe('AppsLauncher in a launcher tab', () => {
+  const TAB = 'launcher-tab-7';
+  const openedHere = (data: Record<string, unknown>) =>
+    expect(executeEvent).toHaveBeenCalledWith('addTab', {
+      data: { ...data, fromLauncherTabId: TAB },
+    });
+
+  it('opens a pinned app and the best match in that tab', async () => {
+    const user = userEvent.setup();
+    await renderLauncher({}, undefined, TAB);
+
+    await user.click(screen.getByRole('button', { name: 'Q-Mail' }));
+    expect(executeEvent).toHaveBeenCalledWith('addTab', {
+      data: expect.objectContaining({
+        name: 'Q-Mail',
+        service: 'APP',
+        fromLauncherTabId: TAB,
+      }),
+    });
+
+    await user.type(searchBox(), 'tube{Enter}');
+    openedHere(library[0]);
+  });
+
+  it('opens a typed qortal:// address in that tab', async () => {
+    const user = userEvent.setup();
+    await renderLauncher({}, undefined, TAB);
+
+    await user.type(searchBox(), 'qortal://APP/Q-Tube/video/abc{Enter}');
+
+    openedHere({
+      service: 'APP',
+      name: 'Q-Tube',
+      identifier: undefined,
+      path: 'video/abc',
+    });
+  });
+
+  it('opens a bookmark in that tab', async () => {
+    const user = userEvent.setup();
+    installBookmarkStorage(savedBookmarks());
+    await renderLauncher({}, undefined, TAB);
+
+    await user.click(await screen.findByRole('button', { name: 'My channel' }));
+
+    openedHere({
+      service: 'APP',
+      name: 'Q-Tube',
+      identifier: 'chan',
+      path: 'channel/me',
     });
   });
 });
