@@ -248,20 +248,20 @@ describe('Edit Home while Getting started shows', () => {
     renderHome();
     // Qortino's window has the Workspace's rows and its own.
     expect(frame('workspace')).toBeNull();
-    expect(places().qortino).toEqual(['0px', '0px', '106px', '440px']);
+    expect(places().qortino).toEqual(['0px', '0px', '106px', '410px']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
 
     // Qortino as big as he's kept, not as tall as Getting started.
-    expect(places().workspace).toEqual(['0px', '0px', '106px', '210px']);
-    expect(places().qortino).toEqual(['0px', '230px', '106px', '210px']);
-    expect(places().tools?.slice(0, 2)).toEqual(['0px', '460px']);
+    expect(places().workspace).toEqual(['0px', '0px', '106px', '180px']);
+    expect(places().qortino).toEqual(['0px', '200px', '106px', '210px']);
+    expect(places().tools?.slice(0, 2)).toEqual(['0px', '430px']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(frame('workspace')).toBeNull();
-    expect(places().qortino).toEqual(['0px', '0px', '106px', '440px']);
-    expect(places().tools?.slice(0, 2)).toEqual(['0px', '460px']);
+    expect(places().qortino).toEqual(['0px', '0px', '106px', '410px']);
+    expect(places().tools?.slice(0, 2)).toEqual(['0px', '430px']);
   });
 
   it('saves Qortino dragged next to the Workspace as it showed, then fills again after Done', () => {
@@ -282,13 +282,13 @@ describe('Edit Home while Getting started shows', () => {
     const preview = drag('Qortino', -18, 0);
 
     expect(preview.qortino).toEqual(['0px', '0px', '106px', '210px']);
-    expect(preview.workspace).toEqual(['0px', '230px', '106px', '210px']);
+    expect(preview.workspace).toEqual(['0px', '230px', '106px', '180px']);
     expect(places()).toEqual(preview);
     expect(savedPlaces(preview)).toEqual(preview);
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(frame('workspace')).toBeNull();
-    expect(places().qortino).toEqual(['0px', '0px', '106px', '440px']);
+    expect(places().qortino).toEqual(['0px', '0px', '106px', '410px']);
     expect(places().tools).toEqual(preview.tools);
   });
 
@@ -333,8 +333,8 @@ describe('Getting started done after a change made while Qortino did not fill', 
     measureQortino(420);
     renderHome();
     // Default layout: Qortino's window has the Workspace's rows and its own.
-    expect(places().qortino).toEqual(['0px', '0px', '106px', '440px']);
-    expect(places().tools?.slice(0, 2)).toEqual(['0px', '460px']);
+    expect(places().qortino).toEqual(['0px', '0px', '106px', '410px']);
+    expect(places().tools?.slice(0, 2)).toEqual(['0px', '430px']);
 
     // The Workspace switched off in Settings, a window moved in Edit Home
     // (Wallet Activity over Node Status), the Workspace switched on again.
@@ -357,7 +357,7 @@ describe('Getting started done after a change made while Qortino did not fill', 
     measureQortino();
     renderHome();
     // Qortino's window has the Workspace's rows and its own.
-    expect(places().tools?.[1]).toBe('460px');
+    expect(places().tools?.[1]).toBe('430px');
 
     // Settings > Modules: the Workspace off; Edit Home: Featured Q-Apps a
     // little taller; Settings > Modules: the Workspace on again.

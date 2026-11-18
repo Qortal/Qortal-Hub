@@ -238,8 +238,8 @@ describe('Edit Home while Getting started shows', () => {
     // While dragged: on top, the Workspace and Qortino under it, each as
     // big as it's kept.
     expect(preview.featured?.slice(0, 2)).toEqual(['0px', '0px']);
-    expect(preview.workspace).toEqual(['0px', '440px', '106px', '210px']);
-    expect(preview.qortino).toEqual(['0px', '670px', '106px', '210px']);
+    expect(preview.workspace).toEqual(['0px', '440px', '106px', '180px']);
+    expect(preview.qortino).toEqual(['0px', '640px', '106px', '210px']);
     expect(places()).toEqual(preview);
     expect(savedPlaces(preview)).toEqual(preview);
   });
@@ -253,8 +253,8 @@ describe('Edit Home while Getting started shows', () => {
 
     const shown = places();
     expect(shown.wallet?.slice(0, 2)).toEqual(['378px', '0px']);
-    expect(shown.workspace).toEqual(['0px', '0px', '106px', '210px']);
-    expect(shown.qortino).toEqual(['0px', '230px', '106px', '210px']);
+    expect(shown.workspace).toEqual(['0px', '0px', '106px', '180px']);
+    expect(shown.qortino).toEqual(['0px', '200px', '106px', '210px']);
     expect(savedPlaces(shown)).toEqual(shown);
   });
 
@@ -269,14 +269,14 @@ describe('Edit Home while Getting started shows', () => {
     });
 
     const shown = places();
-    expect(shown.qortino).toEqual(['0px', '230px', '106px', '260px']);
-    expect(shown.tools?.slice(0, 2)).toEqual(['0px', '510px']);
+    expect(shown.qortino).toEqual(['0px', '200px', '106px', '260px']);
+    expect(shown.tools?.slice(0, 2)).toEqual(['0px', '480px']);
     expect(savedPlaces(shown)).toEqual(shown);
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     // The Workspace's rows and Qortino's, Quick Tools where it was.
     expect(frame('workspace')).toBeNull();
-    expect(places().qortino).toEqual(['0px', '0px', '106px', '490px']);
+    expect(places().qortino).toEqual(['0px', '0px', '106px', '460px']);
     expect(places().tools).toEqual(shown.tools);
   });
 
@@ -304,7 +304,7 @@ describe('Edit Home once Getting started is done', () => {
   it('moves a window as before, the Workspace among the others', () => {
     card.gettingStarted = false;
     renderHome();
-    expect(places().workspace).toEqual(['0px', '0px', '106px', '210px']);
+    expect(places().workspace).toEqual(['0px', '0px', '106px', '180px']);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
 
     const preview = drag('Featured Q-Apps', -6, -20);

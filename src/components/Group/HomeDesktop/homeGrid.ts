@@ -154,25 +154,36 @@ export const homeWindowMinSize = (key: HomeWindowId) =>
 
 /**
  * Qortino's height under the Workspace in the default layout. The two take
- * the 46 rows Qortino's window had when the Workspace was part of it. Qortino's
+ * the 43 rows Qortino's window had when the Workspace was part of it. Qortino's
  * height follows its content, so this is only where it starts.
  */
 const HOME_GRID_QORTINO_H = 23;
 
-/** The top of the default layout: today's three columns. */
+/**
+ * The top of the default layout: today's three columns. Quick Tools is tall
+ * enough for each key's name under its icon (HomeQuickToolsPad), the
+ * Workspace and Qortino get the rest: Qortino its HOME_GRID_QORTINO_H rows,
+ * the Workspace what's left.
+ */
 const HOME_GRID_TOP: Record<
   Exclude<HomeFixedWindowId, HomeStackPanelId>,
   GridRect
 > = {
-  workspace: { x: 0, y: 0, w: 6, h: 46 - HOME_GRID_QORTINO_H },
-  qortino: { x: 0, y: 46 - HOME_GRID_QORTINO_H, w: 6, h: HOME_GRID_QORTINO_H },
-  tools: { x: 0, y: 46, w: 6, h: 18 },
+  workspace: { x: 0, y: 0, w: 6, h: 43 - HOME_GRID_QORTINO_H },
+  qortino: { x: 0, y: 43 - HOME_GRID_QORTINO_H, w: 6, h: HOME_GRID_QORTINO_H },
+  tools: { x: 0, y: 43, w: 6, h: 21 },
   account: { x: 6, y: 0, w: 12, h: 20 },
   featured: { x: 6, y: 20, w: 12, h: 44 },
   status: { x: 18, y: 0, w: 6, h: 33 },
   wallet: { x: 18, y: 33, w: 6, h: 31 },
 };
 const HOME_GRID_TOP_ROWS = 64;
+/**
+ * The account card's place is always saved this tall, its default: its
+ * content decides how tall it shows, and the rows it leaves go to the window
+ * under it (homeGridShown).
+ */
+const HOME_ACCOUNT_PLACE_H = HOME_GRID_TOP.account.h;
 /** Group Activity and the feed: 610 px, as before. */
 const HOME_GRID_LIST_H = 63;
 /** Widgets until its content has been measured. */
@@ -343,11 +354,12 @@ const splitQortinoWindow = (qortino: HomeGridItem): HomeGridItem[] => {
 /**
  * A stored layout made whole: unknown and repeated windows dropped (a
  * widget's window or a copy of the Workspace too, unless `extras` lists
- * it), every window inside the grid and within its sizes, no overlaps,
- * nothing left floating. A window it lacks (one added later) goes under
- * everything, at its default size, Home's own windows first. A grid from
- * before the Workspace was a window of its own gets it from the top of
- * Qortino's window (splitQortinoWindow). Anything that isn't a list gives
+ * it), every window inside the grid and within its sizes (the account
+ * card's place always HOME_ACCOUNT_PLACE_H tall), no overlaps, nothing left
+ * floating. A window it lacks (one added later) goes under everything, at
+ * its default size, Home's own windows first. A grid from before the
+ * Workspace was a window of its own gets it from the top of Qortino's window
+ * (splitQortinoWindow). Anything that isn't a list gives
  * undefined.
  *
  * The `hidden` windows keep their places, which the shown ones may have
@@ -379,6 +391,10 @@ export const normalizeHomeGrid = (
     items = items.flatMap((item) =>
       item === qortino ? splitQortinoWindow(item) : [item]
     );
+  }
+  const card = items.findIndex((item) => item.key === 'account');
+  if (card >= 0 && items[card].h !== HOME_ACCOUNT_PLACE_H) {
+    items[card] = { ...items[card], h: HOME_ACCOUNT_PLACE_H };
   }
   const defaults = homeDefaultGrid(stack);
   let bottom = items.reduce((low, item) => Math.max(low, item.y + item.h), 0);
@@ -491,23 +507,129 @@ export const resizeHomeWindow = (
 /**
  * The windows Home shows, as it lays them out: the hidden ones left out, the
  * ones whose height follows their content at their measured height, and
- * everything risen into the room that leaves.
+ * everything risen into the room that leaves. A window right under the
+ * account card, in the same columns, keeps its bottom when the card came out
+ * shorter than its place, and takes the rows left (Featured Q-Apps under a
+ * new account's card), so the columns stay level. Under a taller card it goes
+ * down; under any other window it rises as usual. When the windows flow
+ * (homeGridFlow), no columns stand beside each other: every window keeps its
+ * own height.
  */
 export const homeGridShown = (
   grid: readonly HomeGridItem[],
   shown: (key: HomeWindowId) => boolean,
-  measuredRows: Partial<Record<HomeWindowId, number>> = {}
-): HomeGridItem[] =>
-  settleHomeGrid(
-    grid
-      .filter((item) => shown(item.key))
-      .map((item) => {
-        const rows = measuredRows[item.key];
-        return rows && HOME_AUTO_HEIGHT_WINDOWS.has(item.key)
-          ? { ...item, h: clamp(rows, 1, HOME_GRID_MAX_MEASURED_H) }
-          : item;
-      })
+  measuredRows: Partial<Record<HomeWindowId, number>> = {},
+  flowing = false
+): HomeGridItem[] => {
+  const items = grid.filter((item) => shown(item.key));
+  const sized = items.map((item) => {
+    const rows = measuredRows[item.key];
+    return rows && HOME_AUTO_HEIGHT_WINDOWS.has(item.key)
+      ? { ...item, h: clamp(rows, 1, HOME_GRID_MAX_MEASURED_H) }
+      : item;
+  });
+  return settleHomeGrid(
+    sized.map((item) => {
+      if (flowing || HOME_AUTO_HEIGHT_WINDOWS.has(item.key)) return item;
+      const aboveIndex = items.findIndex(
+        (other) =>
+          other.key === 'account' &&
+          other.x === item.x &&
+          other.w === item.w &&
+          other.y + other.h === item.y
+      );
+      if (aboveIndex < 0) return item;
+      // Never taller than the window can be made.
+      const left = Math.min(
+        items[aboveIndex].h - sized[aboveIndex].h,
+        maxHeightOf(item.key) - item.h
+      );
+      return left > 0 ? { ...item, y: item.y - left, h: item.h + left } : item;
+    })
   );
+};
+
+/**
+ * An edit of the shown layout, as it's saved. In `start`, the shown layout
+ * the edit began from, the window under the account card may have the rows a
+ * shorter card left (homeGridShown). Those rows are only for show: unless the
+ * edit changed its height, the window is saved at its own height. While it's
+ * still right under the card, the rows stay the card's place, so Home shows
+ * the two as before.
+ *
+ * The card is always saved at its default place's height, whatever it
+ * measured while the edit went on. Made taller, what it reaches goes down,
+ * except a window right under it whose height the edit changed, which keeps
+ * its bottom (as far as its smallest size allows). Made shorter, what was
+ * under it rises.
+ */
+export const homeGridEdited = (
+  stored: readonly HomeGridItem[],
+  start: readonly HomeGridItem[],
+  next: readonly HomeGridItem[]
+): HomeGridItem[] => {
+  const at = (items: readonly HomeGridItem[], key: HomeWindowId) =>
+    items.find((item) => item.key === key);
+  const saved = new Map<HomeWindowId, HomeGridItem>();
+  for (const edited of next) {
+    const own = at(stored, edited.key);
+    const shown = at(start, edited.key);
+    if (!own || !shown || HOME_AUTO_HEIGHT_WINDOWS.has(edited.key)) continue;
+    const taken = shown.h - own.h;
+    if (taken <= 0 || edited.h !== shown.h) continue;
+    const above = stored.find(
+      (other) =>
+        other.key === 'account' &&
+        !!at(start, other.key) &&
+        other.x === own.x &&
+        other.w === own.w &&
+        other.y + other.h === own.y
+    );
+    // Only the rows the card left, as homeGridShown capped them: any
+    // other difference (a height stored since the edit began) is saved as
+    // the edit has it.
+    if (!above) continue;
+    const room = above.h - at(start, above.key).h;
+    if (Math.min(room, maxHeightOf(edited.key) - own.h) !== taken) continue;
+    const aboveNow = at(next, above.key);
+    if (
+      aboveNow &&
+      aboveNow.x === edited.x &&
+      aboveNow.w === edited.w &&
+      aboveNow.y + aboveNow.h === edited.y
+    ) {
+      saved.set(aboveNow.key, { ...aboveNow, h: aboveNow.h + taken });
+      saved.set(edited.key, { ...edited, y: edited.y + taken, h: own.h });
+    } else {
+      saved.set(edited.key, { ...edited, h: own.h });
+    }
+  }
+  const out = next.map((item) => saved.get(item.key) ?? item);
+  const card = at(out, 'account');
+  const extra = card ? HOME_ACCOUNT_PLACE_H - card.h : 0;
+  if (extra === 0) return out;
+  const under = out.find(
+    (item) =>
+      !HOME_AUTO_HEIGHT_WINDOWS.has(item.key) &&
+      item.x === card.x &&
+      item.w === card.w &&
+      item.y === card.y + card.h
+  );
+  const give =
+    under && at(next, under.key).h !== at(start, under.key)?.h
+      ? clamp(under.h - homeWindowMinSize(under.key).h, 0, extra)
+      : 0;
+  return resizeHomeWindow(
+    out.map((item) =>
+      give > 0 && item === under
+        ? { ...item, y: item.y + give, h: item.h - give }
+        : item
+    ),
+    'account',
+    card.w,
+    HOME_ACCOUNT_PLACE_H
+  );
+};
 
 /**
  * The Workspace right above or under Qortino, in the same columns, as in

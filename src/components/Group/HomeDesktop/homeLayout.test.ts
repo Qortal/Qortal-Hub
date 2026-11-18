@@ -87,8 +87,8 @@ describe('normalizeHomeLayout', () => {
     const at = (key: string) => layout.grid?.find((item) => item.key === key);
     expect(at('tools')).toMatchObject({ x: 0, y: 0 });
     // They keep their places, for when they're shown again.
-    expect(at('workspace')).toMatchObject({ x: 0, y: 0, h: 23 });
-    expect(at('qortino')).toMatchObject({ x: 0, y: 23, h: 23 });
+    expect(at('workspace')).toMatchObject({ x: 0, y: 0, h: 20 });
+    expect(at('qortino')).toMatchObject({ x: 0, y: 20, h: 23 });
   });
 
   it('puts a panel the stored order lacks back after its usual neighbour', () => {
@@ -174,12 +174,12 @@ describe('copies of the Workspace', () => {
     expect(grid.find((item) => item.key === copyId)).toEqual({
       key: copyId,
       x: 0,
-      y: 23,
+      y: 20,
       w: 6,
-      h: 23,
+      h: 20,
     });
     expect(grid.find((item) => item.key === 'qortino')).toMatchObject({
-      y: 46,
+      y: 40,
     });
     // Saved and read back, it stays.
     saveHomeLayout(ALICE, layout);
@@ -217,7 +217,7 @@ describe('copies of the Workspace', () => {
     const grid = homeLayoutGrid(removed);
     expect(grid.find((item) => item.key === copyId)).toBeUndefined();
     expect(grid.find((item) => item.key === 'qortino')).toMatchObject({
-      y: 23,
+      y: 20,
     });
   });
 
@@ -246,7 +246,7 @@ describe('copies of the Workspace', () => {
       x: 0,
       y: 147,
       w: 6,
-      h: 23,
+      h: 20,
     });
     expect(sameHomeLayout(layout, HOME_LAYOUT_DEFAULT)).toBe(false);
   });
@@ -372,6 +372,57 @@ describe('the arrangement', () => {
     expect(
       normalizeHomeLayout({ grid: [{ key: 'nope' }] }).grid
     ).toBeUndefined();
+  });
+});
+
+describe('the account card’s place', () => {
+  const clock = { name: 'GO Clock', identifier: null };
+  const clockId = homeWidgetWindowId(clock);
+  /** Saved with the card at its measured 16 rows, Featured Q-Apps under it. */
+  const shortCardGrid = (): HomeGridItem[] => [
+    ...homeDefaultGrid().map((item) =>
+      item.key === 'account'
+        ? { ...item, h: 16 }
+        : item.key === 'featured'
+          ? { ...item, y: 16 }
+          : item
+    ),
+    { key: clockId, x: 0, y: 147, w: 6, h: 27 },
+  ];
+  const storedGrid = (): HomeGridItem[] =>
+    JSON.parse(localStorage.getItem(homeLayoutStorageKey(ALICE)) ?? '{}')
+      .grid ?? [];
+  const storedRect = (key: HomeWindowId) => {
+    const item = storedGrid().find((entry) => entry.key === key);
+    return item && [item.x, item.y, item.w, item.h];
+  };
+
+  it('is saved at least as tall as by default, from a copy taken in from QDN', () => {
+    saveHomeLayout(
+      ALICE,
+      { ...HOME_LAYOUT_DEFAULT, grid: shortCardGrid(), widgetWindows: [clock] },
+      { changedAt: 500 }
+    );
+    expect(storedRect('account')).toEqual([6, 0, 12, 20]);
+    expect(storedRect('featured')).toEqual([6, 20, 12, 44]);
+  });
+
+  it('is saved at least as tall as by default when a widget asks for a height', () => {
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({
+        ...HOME_LAYOUT_DEFAULT,
+        grid: shortCardGrid(),
+        widgetWindows: [clock],
+      })
+    );
+    saveHomeLayout(
+      ALICE,
+      withHomeWidgetWindowHeight(readHomeLayout(ALICE), clockId, 300)
+    );
+    expect(storedRect(clockId)?.[3]).toBe(homeGridRowsFor(300));
+    expect(storedRect('account')).toEqual([6, 0, 12, 20]);
+    expect(storedRect('featured')).toEqual([6, 20, 12, 44]);
   });
 });
 

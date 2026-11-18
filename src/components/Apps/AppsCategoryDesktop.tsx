@@ -1,210 +1,345 @@
-import { useEffect, useMemo, useState } from 'react';
 import {
-  AppCardsGrid,
-  AppLibrarySubTitle,
-  AppsDesktopLibraryBody,
-  AppsDesktopLibraryHeader,
-  AppsLibraryContainer,
-  AppsSearchContainer,
-  AppsSearchLeft,
-  AppsSearchRight,
-  AppsWidthLimiter,
-} from './Apps-styles';
-import { Box, ButtonBase, InputBase, useTheme } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import { Spacer } from '../../common/Spacer';
-import { AppCardEnhanced } from './AppCard';
-import { useTranslation } from 'react-i18next';
+  type CSSProperties,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Box, Button, Typography } from '@mui/material';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import SearchOffRoundedIcon from '@mui/icons-material/SearchOffRounded';
 import { useAtom } from 'jotai';
-import { appSortAtom } from '../../atoms/appsAtoms';
-import { SortDropdown, SortOption } from './Filters';
+import { useTranslation } from 'react-i18next';
+import { appSortAtom, filterAndSortApps } from '../../atoms/appsAtoms';
+import { executeEvent } from '../../utils/events';
+import { AppsLibraryContainer } from './Apps-styles';
+import { AppCollection } from './AppsLibrary/AppCollection';
+import { LauncherTabShownContext } from './launcherTabs';
+import {
+  CountBadge,
+  LibraryEmptyState,
+  LibraryPanel,
+  LibraryResultsStatus,
+} from './AppsLibrary/LibrarySection';
+import {
+  accentTileSx,
+  cap,
+  formatLibraryNumber,
+  libraryFocusRing,
+  libraryMuted,
+} from './AppsLibrary/libraryStyles';
+import { LibraryViewToggle } from './AppsLibrary/LibraryViewToggle';
+import { TopRatedAppsBanner } from './AppsLibrary/TopRatedAppsBanner';
+import { useRatingsForSort } from './AppsLibrary/useRatingsForSort';
+import { CategoryIcon } from './config/categoryIconComponents';
+import { LibraryFilterField } from './Filters/LibraryFilterField';
+import { SortDropdown } from './Filters/SortDropdown';
+import { StatusFilter, type StatusFilterOption } from './Filters/StatusFilter';
 
-// Sorting function (same as CommunityAppsTab)
-const sortApps = (apps: any[], sortOption: SortOption): any[] => {
-  const sorted = [...apps];
+const SEARCH_DEBOUNCE_MS = 350;
 
-  switch (sortOption) {
-    case 'newest':
-      return sorted.sort((a, b) => (b.created || 0) - (a.created || 0));
-    case 'oldest':
-      return sorted.sort((a, b) => (a.created || 0) - (b.created || 0));
-    case 'alphabetical':
-      return sorted.sort((a, b) => {
-        const titleA = (a.metadata?.title || a.name || '').toLowerCase();
-        const titleB = (b.metadata?.title || b.name || '').toLowerCase();
-        return titleA.localeCompare(titleB);
-      });
-    case 'recently_updated':
-      return sorted.sort((a, b) => (b.updated || 0) - (a.updated || 0));
-    default:
-      return sorted;
-  }
-};
+/** The Featured row lines up with the list below it. */
+const FEATURED_SX = { mb: 2, width: '90%' };
 
+interface AppsCategoryDesktopProps {
+  availableQapps: any[];
+  myName: string;
+  category: { id: string; name: string } | null | undefined;
+  isShow: boolean;
+  contentHeight?: string;
+}
+
+/** Every app and website of one category (or of all of them). */
 export const AppsCategoryDesktop = ({
   availableQapps,
   myName,
   category,
   isShow,
   contentHeight,
-}) => {
+}: AppsCategoryDesktopProps) => {
   const [searchValue, setSearchValue] = useState('');
+  const [debouncedValue, setDebouncedValue] = useState('');
+  const [status, setStatus] = useState<StatusFilterOption>('all');
+  const [sortOption, setSortOption] = useAtom(appSortAtom);
+  const { t, i18n } = useTranslation(['core']);
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const ratingsMap = useRatingsForSort(sortOption);
+  // In a hidden launcher tab the page stays as it was (its search too), but
+  // its grid stops measuring until the tab shows again.
+  const isTabShown = useContext(LauncherTabShownContext);
 
   useEffect(() => {
     if (!isShow) setSearchValue('');
   }, [isShow]);
-  const [sortOption, setSortOption] = useAtom(appSortAtom);
-  const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group', 'question']);
 
-  const categoryList = useMemo(() => {
-    if (category?.id === 'all') return availableQapps;
-    return availableQapps.filter(
-      (app) => app?.metadata?.category === category?.id
-    );
-  }, [availableQapps, category]);
+  // Another category starts at the top, without the last search.
+  useEffect(() => {
+    setSearchValue('');
+    setDebouncedValue('');
+    if (scroller) scroller.scrollTop = 0;
+    // The scroller is not a reason to start over.
+  }, [category?.id]);
 
-  const [debouncedValue, setDebouncedValue] = useState('');
-
-  // Debounce logic
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
-    }, 350);
+    }, SEARCH_DEBOUNCE_MS);
     return () => {
       clearTimeout(handler);
     };
   }, [searchValue]);
 
-  const searchedAndSortedList = useMemo(() => {
-    let result = categoryList;
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const measure = () => setHeaderHeight(header.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
-    if (debouncedValue) {
-      result = result.filter(
-        (app) =>
-          app.name.toLowerCase().includes(debouncedValue.toLowerCase()) ||
-          (app?.metadata?.title &&
-            app?.metadata?.title
-              ?.toLowerCase()
-              .includes(debouncedValue.toLowerCase()))
-      );
-    }
+  const categoryList = useMemo(() => {
+    if (category?.id === 'all') return availableQapps ?? [];
+    return (availableQapps ?? []).filter(
+      (app) => app?.metadata?.category === category?.id
+    );
+  }, [availableQapps, category]);
 
-    return sortApps(result, sortOption);
-  }, [debouncedValue, categoryList, sortOption]);
+  const shown = useMemo(
+    () =>
+      filterAndSortApps(categoryList, {
+        sort: sortOption,
+        category: 'all',
+        status,
+        search: debouncedValue.trim(),
+        ratingsMap,
+      }),
+    [categoryList, debouncedValue, ratingsMap, sortOption, status]
+  );
+
+  // The Featured row picks from the category's apps, official ones too, with
+  // the status filter (A to Z, so apps rated alike keep that order).
+  const appsForFeatured = useMemo(
+    () =>
+      filterAndSortApps(categoryList, {
+        sort: 'alphabetical',
+        category: 'all',
+        status,
+        search: '',
+      }),
+    [categoryList, status]
+  );
+
+  const title =
+    category?.id === 'all'
+      ? t('core:launcher.library.all_categories', cap)
+      : (category?.name ?? '');
+  const isSearching = !!debouncedValue.trim();
+  const isFiltered = isSearching || status !== 'all';
+  const locale = i18n?.language;
+  // Spoken after the search's own pause, so not at every key.
+  const resultsMessage = !isFiltered
+    ? ''
+    : shown.length === 0
+      ? t('core:message.generic.no_results', cap)
+      : t('core:launcher.library.status_apps_shown', {
+          postProcess: 'capitalizeFirstChar',
+          shown: formatLibraryNumber(shown.length, locale),
+          total: formatLibraryNumber(categoryList.length, locale),
+        });
 
   return (
     <AppsLibraryContainer
       sx={{
-        display: !isShow && 'none',
+        display: isShow ? 'flex' : 'none',
         height: contentHeight || '100%',
         overflow: 'hidden',
         padding: '0px',
-        paddingTop: '30px',
       }}
     >
-      <AppsDesktopLibraryHeader
-        sx={{
-          maxWidth: '1200px',
-          width: '90%',
-        }}
+      <Box
+        ref={setScroller}
+        style={
+          {
+            '--library-sticky-offset': `${headerHeight}px`,
+          } as CSSProperties
+        }
+        sx={(theme) => ({
+          flex: 1,
+          minHeight: 0,
+          overflowX: 'hidden',
+          overflowY: 'auto',
+          scrollbarColor: `${theme.palette.divider} transparent`,
+          scrollbarWidth: 'thin',
+          width: '100%',
+        })}
       >
-        <AppsWidthLimiter
+        <Box
           sx={{
-            justifyContent: 'flex-end',
             alignItems: 'center',
-            flexDirection: 'row',
+            display: 'flex',
+            flexDirection: 'column',
+            mx: 'auto',
+            maxWidth: '1500px',
+            width: '90%',
           }}
         >
-          <AppsSearchContainer
-            sx={{
-              width: '412px',
-            }}
+          <Box
+            ref={headerRef}
+            sx={(theme) => ({
+              backgroundColor: theme.palette.background.default,
+              containerName: 'library-bar',
+              containerType: 'inline-size',
+              display: 'flex',
+              justifyContent: 'center',
+              position: 'sticky',
+              top: 0,
+              width: '100%',
+              zIndex: 2,
+            })}
           >
-            <AppsSearchLeft>
-              <SearchIcon />
-
-              <InputBase
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.5,
+                minWidth: 0,
+                py: 2,
+                width: '90%',
+              }}
+            >
+              <Box>
+                <Button
+                  disableRipple
+                  onClick={() => executeEvent('navigateBack', {})}
+                  startIcon={<ArrowBackRoundedIcon />}
+                  sx={(theme) => ({
+                    borderRadius: '12px',
+                    color: libraryMuted(theme),
+                    fontSize: '13.5px',
+                    fontWeight: 600,
+                    height: 34,
+                    ml: -1,
+                    px: 1.25,
+                    textTransform: 'none',
+                    '& .MuiButton-startIcon .MuiSvgIcon-root': {
+                      fontSize: 18,
+                    },
+                    '&:hover': { color: theme.palette.text.primary },
+                    '&.Mui-focusVisible': libraryFocusRing(theme, 2),
+                  })}
+                >
+                  {t('core:action.back', cap)}
+                </Button>
+              </Box>
+              <Box
                 sx={{
-                  background: theme.palette.background.paper,
-                  borderRadius: '6px',
-                  flex: 1,
-                  ml: 1,
-                  paddingLeft: '12px',
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 1.5,
+                  minWidth: 0,
                 }}
-                placeholder={t('core:action.search_apps', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                inputProps={{
-                  'aria-label': t('core:action.search_apps', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                  fontSize: '16px',
-                  fontWeight: 400,
-                }}
-              />
-            </AppsSearchLeft>
-
-            <AppsSearchRight>
-              {searchValue && (
-                <ButtonBase
-                  onClick={() => {
-                    setSearchValue('');
+              >
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flex: '1 1 260px',
+                    gap: 1.25,
+                    minWidth: 0,
                   }}
                 >
-                  <img src={IconClearInput} />
-                </ButtonBase>
-              )}
-            </AppsSearchRight>
-          </AppsSearchContainer>
-        </AppsWidthLimiter>
-      </AppsDesktopLibraryHeader>
-
-      <AppsDesktopLibraryBody
-        sx={{
-          alignItems: 'center',
-          height: 'calc(100% - 36px)',
-          overflow: 'auto',
-          padding: '0px',
-          width: '90%',
-          maxWidth: '1200px',
-        }}
-      >
-        <Spacer height="25px" />
-
-        <AppsWidthLimiter>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              width: '100%',
-            }}
-          >
-            <AppLibrarySubTitle>{`Category: ${category?.name}`}</AppLibrarySubTitle>
-            <SortDropdown value={sortOption} onChange={setSortOption} />
+                  <Box aria-hidden sx={(theme) => accentTileSx(theme, 40, 12)}>
+                    <CategoryIcon id={category?.id} size={22} />
+                  </Box>
+                  <Typography
+                    component="h1"
+                    sx={(theme) => ({
+                      color: theme.palette.text.primary,
+                      fontSize: '20px',
+                      fontWeight: 650,
+                      lineHeight: '28px',
+                      m: 0,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    })}
+                  >
+                    {title}
+                  </Typography>
+                  <CountBadge>
+                    {isFiltered
+                      ? t('core:launcher.library.count_filtered', {
+                          shown: formatLibraryNumber(shown.length, locale),
+                          total: formatLibraryNumber(
+                            categoryList.length,
+                            locale
+                          ),
+                        })
+                      : categoryList.length}
+                  </CountBadge>
+                </Box>
+                <LibraryFilterField
+                  label={t('core:launcher.library.search_in_category', {
+                    category: title,
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  onChange={setSearchValue}
+                  sx={{ flex: '1 1 200px', maxWidth: 320 }}
+                  value={searchValue}
+                />
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                  }}
+                >
+                  <SortDropdown onChange={setSortOption} value={sortOption} />
+                  <StatusFilter onChange={setStatus} value={status} />
+                  <LibraryViewToggle />
+                </Box>
+              </Box>
+            </Box>
           </Box>
 
-          <Spacer height="25px" />
-        </AppsWidthLimiter>
-
-        <AppsWidthLimiter>
-          <AppCardsGrid>
-            {searchedAndSortedList.map((app) => (
-              <AppCardEnhanced
-                key={`${app?.service}-${app?.name}`}
-                app={app}
+          {isSearching ? null : (
+            // Another category or filter starts the row from its first card.
+            <TopRatedAppsBanner
+              apps={appsForFeatured}
+              isFromCategory
+              key={`${category?.id}|${status}`}
+              sx={FEATURED_SX}
+            />
+          )}
+          <LibraryPanel sx={{ mb: 4, width: '90%' }}>
+            {shown.length > 0 ? (
+              <AppCollection
+                active={isShow && isTabShown}
+                apps={shown}
+                isFromCategory
+                label={title}
                 myName={myName}
-                isFromCategory={true}
+                scrollElement={scroller}
               />
-            ))}
-          </AppCardsGrid>
-          <Spacer height="25px" />
-        </AppsWidthLimiter>
-      </AppsDesktopLibraryBody>
+            ) : (
+              <LibraryEmptyState
+                icon={<SearchOffRoundedIcon />}
+                title={t('core:message.generic.no_results', cap)}
+              />
+            )}
+            <LibraryResultsStatus message={resultsMessage} />
+          </LibraryPanel>
+        </Box>
+      </Box>
     </AppsLibraryContainer>
   );
 };

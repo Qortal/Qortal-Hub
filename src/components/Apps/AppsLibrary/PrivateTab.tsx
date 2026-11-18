@@ -1,25 +1,26 @@
 import { useState } from 'react';
-import { Box, Typography, useTheme } from '@mui/material';
+import { Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import PublishIcon from '@mui/icons-material/Publish';
-import AddIcon from '@mui/icons-material/Add';
 import { AppsWidthLimiter } from '../Apps-styles';
-import { Spacer } from '../../../common/Spacer';
 import { AppsPrivate, PrivateAppAction } from '../AppsPrivate';
 import { PublishedPrivateApps } from '../PublishedPrivateApps';
+import { LibrarySection } from './LibrarySection';
+import { cap } from './libraryStyles';
 import type { PublishedPrivateApp } from '../privateAppMetadata';
 import {
   PublishButton,
   PublishNewContainer,
   SectionContainer,
-  SectionTitle,
-  StyledDivider,
 } from './LibraryTab-styles';
 
 interface PrivateTabProps {
   myName: string;
   myAddress: string;
+  /** Changes when the library's refresh button is pressed. */
+  libraryRefreshKey?: number;
   /**
    * False while the tab is out of sight, as when its launcher tab is hidden:
    * a dialog it opened steps aside, keeping what was entered.
@@ -30,6 +31,7 @@ interface PrivateTabProps {
 export const PrivateTab = ({
   myName,
   myAddress,
+  libraryRefreshKey = 0,
   isActive = true,
 }: PrivateTabProps) => {
   const theme = useTheme();
@@ -46,24 +48,19 @@ export const PrivateTab = ({
   };
 
   return (
-    <AppsWidthLimiter>
+    <AppsWidthLimiter sx={{ alignItems: 'stretch' }}>
       <SectionContainer>
         <PublishedPrivateApps
           myAddress={myAddress}
           onUpdate={(app) => open('update', app)}
-          refreshKey={refreshKey}
+          refreshKey={refreshKey + libraryRefreshKey}
         />
 
-        <StyledDivider />
-
-        <Box>
-          <SectionTitle>
-            <AddIcon sx={{ fontSize: '20px' }} />
-            {t('core:private_apps.actions_title', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </SectionTitle>
-          <Spacer height="16px" />
+        <LibrarySection
+          hint={t('core:launcher.library.private_actions_hint', cap)}
+          icon={<LockOpenRoundedIcon />}
+          title={t('core:private_apps.actions_title', cap)}
+        >
           <PublishNewContainer>
             <PublishButton onClick={() => open('access')}>
               <LockOpenIcon
@@ -98,7 +95,7 @@ export const PrivateTab = ({
               </Typography>
             </PublishButton>
           </PublishNewContainer>
-        </Box>
+        </LibrarySection>
       </SectionContainer>
 
       <AppsPrivate

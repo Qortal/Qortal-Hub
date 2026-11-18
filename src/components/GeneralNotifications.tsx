@@ -42,7 +42,7 @@ import {
   setNotificationOsPushDisabled,
   setPermission,
 } from '../qortal/qortal-requests';
-import { extractComponents } from './Chat/MessageDisplay';
+import { openQortalLink } from '../utils/qortalLink/openQortalLink';
 import {
   executeEvent,
   subscribeToEvent,
@@ -465,12 +465,9 @@ export const GeneralNotifications = ({
                   setAnchorEl(null);
                   const link = notification?.link;
                   if (!link) return;
-                  const data = extractComponents(link);
-                  if (!data) return;
-                  executeEvent('addTab', {
-                    data: { ...data, navigateIfAlreadyOpen: true },
-                  });
-                  executeEvent('open-apps-mode', {});
+                  // Any kind of qortal:// link; an app that is open shows
+                  // the link's page.
+                  void openQortalLink(link, { navigateIfAlreadyOpen: true });
                 }}
                 sx={{
                   borderRadius: '12px',
