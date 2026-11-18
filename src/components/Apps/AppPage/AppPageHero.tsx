@@ -22,21 +22,23 @@ import ShareRoundedIcon from '@mui/icons-material/ShareRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import { useTranslation } from 'react-i18next';
 import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../../utils/events';
-import { AppRating } from '../AppRating';
 import { formatLongDate, formatRelative } from './AppPageParts';
 import { buildAppOpenLink, buildAppPageLink } from './appPageLink';
+import type { RatingSummary } from './appVotes';
 import { useLauncherTabDialog } from '../launcherTabs';
 
 interface AppPageHeroProps {
   app: any;
   iconUrl: string;
   accent: string | null;
-  /** The user's name, for rating from the header's stars. */
-  myName?: string;
+  summary: RatingSummary;
   version: string;
   versionCurrent: boolean;
   isInstalled: boolean;
@@ -44,27 +46,51 @@ interface AppPageHeroProps {
   isPublisher: boolean;
   /** The page is still loading: editing would start from an empty one. */
   editLoading?: boolean;
+  /** Whether its publisher hid it from the library (appHidden.ts). */
+  hiddenState?: { hidden: boolean; replaced: boolean } | null;
+  /** Hiding or showing it is being published. */
+  hideBusy?: boolean;
+  /**
+   * The node has said whether it is hidden and what its page has. Until
+   * then the button is off: it would hide what is hidden already.
+   */
+  hideReady?: boolean;
+  /** The node couldn't say: Retry asks it again. */
+  hideFailed?: boolean;
+  onRetryHide?: () => void;
   onOpen: () => void;
   onTogglePin: () => void;
   onEdit: () => void;
   onCopied: () => void;
+  /** The publisher's hide button, and show button once it is hidden. */
+  onHide?: () => void;
+  onShowAgain?: () => void;
+  onRatingsClick: () => void;
 }
 
 export const AppPageHero = ({
   app,
   iconUrl,
   accent,
-  myName,
+  summary,
   version,
   versionCurrent,
   isInstalled,
   isPinned,
   isPublisher,
   editLoading = false,
+  hiddenState = null,
+  hideBusy = false,
+  hideReady = true,
+  hideFailed = false,
+  onRetryHide,
   onOpen,
   onTogglePin,
   onEdit,
   onCopied,
+  onHide,
+  onShowAgain,
+  onRatingsClick,
 }: AppPageHeroProps) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation(['core']);
@@ -77,6 +103,23 @@ export const AppPageHero = ({
   const title = app?.metadata?.title || app?.name;
   const category = app?.metadata?.categoryName;
   const updated = app?.updated || app?.created || 0;
+  const isHidden = !!hiddenState?.hidden;
+  const hiddenNote = !isHidden
+    ? ''
+    : isPublisher
+      ? hiddenState?.replaced
+        ? t('core:app_page.hide.note_publisher_replaced')
+        : t('core:app_page.hide.note_publisher_hidden')
+      : hiddenState?.replaced
+        ? t('core:app_page.hide.note_replaced')
+        : t('core:app_page.hide.note_hidden');
+  const hideLabel = isHidden
+    ? t('core:app_page.hide.button_show', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    : t('core:app_page.hide.button_hide', {
+        postProcess: 'capitalizeFirstChar',
+      });
 
   const copy = async (text: string) => {
     setShareAnchor(null);
@@ -232,7 +275,29 @@ export const AppPageHero = ({
               rowGap: 0.5,
             }}
           >
-            <AppRating app={app} myName={myName} />
+            <Button
+              onClick={onRatingsClick}
+              size="small"
+              startIcon={
+                <StarRoundedIcon sx={{ color: theme.palette.warning.main }} />
+              }
+              sx={{
+                color: 'text.primary',
+                fontWeight: 650,
+                minWidth: 0,
+                px: 0.75,
+                textTransform: 'none',
+              }}
+            >
+              {summary.total > 0
+                ? t('core:app_page.hero.rating_summary', {
+                    average: summary.average.toFixed(1),
+                    count: summary.total,
+                  })
+                : t('core:app_page.hero.no_ratings', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+            </Button>
             {updated > 0 && (
               <Tooltip title={formatLongDate(updated, i18n.language)}>
                 <Typography
@@ -277,6 +342,57 @@ export const AppPageHero = ({
               </Box>
             )}
           </Box>
+
+          {hiddenNote && (
+            <Box
+              role="note"
+              sx={{
+                alignItems: 'flex-start',
+                backgroundColor: alpha(theme.palette.warning.main, 0.1),
+                border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}`,
+                borderRadius: '12px',
+                color: 'text.primary',
+                display: 'flex',
+                fontSize: '13.5px',
+                gap: 1,
+                maxWidth: '640px',
+                mt: 1.5,
+                px: 1.5,
+                py: 1,
+              }}
+            >
+              <VisibilityOffRoundedIcon
+                sx={{ color: 'warning.main', fontSize: 18, mt: '1px' }}
+              />
+              <Typography sx={{ fontSize: 'inherit' }}>{hiddenNote}</Typography>
+            </Box>
+          )}
+
+          {isPublisher && hideFailed && (
+            <Box
+              role="alert"
+              sx={{
+                alignItems: 'center',
+                color: 'text.secondary',
+                display: 'flex',
+                flexWrap: 'wrap',
+                fontSize: '12.5px',
+                gap: 1,
+                mt: 1.5,
+              }}
+            >
+              {t('core:app_page.hide.load_failed', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              <Button
+                onClick={onRetryHide}
+                size="small"
+                sx={{ minWidth: 0, textTransform: 'none' }}
+              >
+                {t('core:retry', { postProcess: 'capitalizeFirstChar' })}
+              </Button>
+            </Box>
+          )}
 
           <Box
             sx={{
@@ -374,6 +490,31 @@ export const AppPageHero = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
+            )}
+            {isPublisher && (onHide || onShowAgain) && (
+              <Tooltip describeChild title={hideLabel}>
+                <span>
+                  <IconButton
+                    aria-label={hideLabel}
+                    disabled={hideBusy || !hideReady}
+                    onClick={isHidden ? onShowAgain : onHide}
+                    sx={{
+                      border: `1px solid ${alpha(theme.palette.text.primary, 0.18)}`,
+                      borderRadius: '14px',
+                      height: 44,
+                      width: 44,
+                    }}
+                  >
+                    {hideBusy ? (
+                      <CircularProgress color="inherit" size={18} />
+                    ) : isHidden ? (
+                      <VisibilityRoundedIcon fontSize="small" />
+                    ) : (
+                      <VisibilityOffRoundedIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
           </Box>
         </Box>

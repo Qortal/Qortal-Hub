@@ -36,10 +36,15 @@ export const newLauncherTab = (tabId: string): LauncherTab => ({
   service: 'INTERNAL',
 });
 
-/** The published app or website a publish page updates. */
+/** The published app, website or widget a publish page updates. */
 export type PublishEditTarget = {
   name: string;
   service: 'APP' | 'WEBSITE';
+  /**
+   * One of the name's widgets: the APP under this identifier. Without it,
+   * the name's own app or website.
+   */
+  identifier?: string;
 };
 
 /** A launcher tab's page: the launcher itself, or a page opened from it. */
@@ -50,7 +55,8 @@ export type LauncherPage =
   | 'category'
   | 'publish'
   | 'publish-app'
-  | 'publish-website';
+  | 'publish-website'
+  | 'publish-widget';
 
 /** Which page a launcher tab is on, and what that page shows. */
 export type LauncherTabState = {
@@ -75,7 +81,10 @@ export const newLauncherTabState = (query = ''): LauncherTabState => ({
 });
 
 export const isPublishPage = (page: string): boolean =>
-  page === 'publish' || page === 'publish-app' || page === 'publish-website';
+  page === 'publish' ||
+  page === 'publish-app' ||
+  page === 'publish-website' ||
+  page === 'publish-widget';
 
 export const isAppInfoPage = (page: string): boolean =>
   page === 'appInfo' || page === 'appInfo-from-category';
@@ -97,8 +106,8 @@ export const showCategory = (
 ): LauncherTabState => ({ ...state, page: 'category', category });
 
 /**
- * A publish page, as My apps opens it: to update a published app or website,
- * or for a new one. Any other page is left alone.
+ * A publish page, as My apps opens it: to update a published app, website or
+ * widget, or for a new one. Any other page is left alone.
  */
 export const showPublishPage = (
   state: LauncherTabState,
@@ -129,6 +138,7 @@ export const launcherPageBack = (state: LauncherTabState): LauncherTabState => {
     case 'publish':
     case 'publish-app':
     case 'publish-website':
+    case 'publish-widget':
       return { ...state, page: 'launcher', publishEditTarget: null };
     default:
       return state;

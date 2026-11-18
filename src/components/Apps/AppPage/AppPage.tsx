@@ -2,40 +2,49 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../../App';
+import { getBaseApiReact } from '../../../App';
 import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
   userInfoAtom,
 } from '../../../atoms/global';
 import { shownAppPageAtom } from '../../../atoms/appsAtoms';
-import { getFee } from '../../../background/background';
-import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../../constants/constants';
-import { useAppRating } from '../../../hooks/useAppRatings';
 import { executeEvent } from '../../../utils/events';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
-import { AppRatingBreakdown } from '../AppInfo/AppRatingBreakdown';
 import { saveToLocalStorage } from '../AppsNavBarDesktop';
 import { AppPageHero } from './AppPageHero';
 import { AppScreenshots, GalleryShot } from './AppScreenshots';
 import { AppAboutSection } from './AppAboutSection';
+import { AppRatingsPanel } from './AppRatingsPanel';
+import { AppReviewsSection } from './AppReviewsSection';
 import { AppDetailsCard } from './AppDetailsCard';
 import {
   AppPageEditorDialog,
   EditorSaved,
   EditorTab,
 } from './AppPageEditorDialog';
-import { SectionCard, SectionTitle } from './AppPageParts';
 import {
   inLauncherTab,
   LauncherTabShownContext,
   useLauncherTabId,
 } from '../launcherTabs';
 import { appIconUrl, shotImageUrl } from './appPageQdn';
-import { AppPageData, isVersionCurrent } from './appPageData';
+import { AppPageData, EMPTY_APP_PAGE, isVersionCurrent } from './appPageData';
+import { HideAppDialog } from './HideAppDialog';
+import { useShowInLibrary } from './useShowInLibrary';
 import type { ShotDraft } from './ScreenshotsEditor';
 import { normalizeAppService } from './appPageIds';
-import { useAppListing, useAppPageData, useOwnedNames } from './useAppPage';
+import {
+  rememberHiddenState,
+  SavedHiddenState,
+  useAppListing,
+  useAppPageData,
+  useOwnedNames,
+  useSavedHiddenState,
+} from './useAppPage';
+import { ratingsByAddress } from './appVotes';
+import { useAppVotes } from './useAppVotes';
+import { useAppReviews, ReviewActionResult } from './useAppReviews';
 import { useIconAccent } from './useIconAccent';
 
 type Snack = { type: string; message: string } | null;
@@ -52,14 +61,14 @@ interface SavedParts {
 }
 
 /** Two columns from this page width on. */
-const WIDE_PAGE = 920;
+export const WIDE_PAGE = 920;
 
 /**
  * The page's width. A hidden or collapsed container (display: none) measures
  * 0: the page keeps the width it last had, so it is laid out as it was when it
  * shows again.
  */
-const useWidth = () => {
+export const useWidth = () => {
   const [width, setWidth] = useState(0);
   const [element, setElement] = useState<HTMLElement | null>(null);
   useEffect(() => {
@@ -85,12 +94,15 @@ export const AppPage = ({
   myName?: string;
 }) => {
   const { t } = useTranslation(['core']);
-  const { show } = useContext(QORTAL_APP_CONTEXT);
   const { width, ref: containerRef } = useWidth();
   const wide = width >= WIDE_PAGE;
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress: string | undefined = userInfo?.address;
-  const { listing: app, reload: reloadListing } = useAppListing(initialApp);
+  const {
+    listing: app,
+    status: listingStatus,
+    reload: reloadListing,
+  } = useAppListing(initialApp);
   const service = normalizeAppService(app?.service);
   const ref = useMemo(
     () => ({ service, name: app?.name || '' }),
@@ -111,6 +123,8 @@ export const AppPage = ({
   }, [isTabShown, ref, setShownAppPage]);
 
   const pageData = useAppPageData(ref);
+  const votes = useAppVotes(ref, { address: myAddress, name: myName });
+  const reviews = useAppReviews(ref, { name: myName });
   const ownedNames = useOwnedNames(myAddress);
   const isPublisher = ownedNames.some(
     (name) => name.toLowerCase() === ref.name.toLowerCase()
@@ -122,12 +136,42 @@ export const AppPage = ({
     open: false,
     tab: 'page',
   });
+  const [prompt, setPrompt] = useState<number | null>(null);
   const [snack, setSnack] = useState<Snack>(null);
   const [snackOpen, setSnackOpen] = useState(false);
   const notify = useCallback((type: string, message: string) => {
     setSnack({ type, message });
     setSnackOpen(true);
   }, []);
+
+  // Hidden from the library (appHidden.ts): what the publisher just did shows
+  // until the node lists the new record, also on a page opened again and on
+  // every other page of the app that is open.
+  const [hideOpen, setHideOpen] = useState(false);
+  const savedHidden = useSavedHiddenState(ref);
+  const setSavedHidden = (next: SavedHiddenState) =>
+    rememberHiddenState(ref, next);
+  const hiddenState =
+    savedHidden && savedHidden.at > (pageData.hidden?.updated || 0) - 60_000
+      ? savedHidden
+      : pageData.hidden;
+  // Hiding goes by what the node lists for the page (its hidden record, page
+  // text and screenshots) and for the app (the replacement keeps its title
+  // and category): it waits until the node has said, and a lookup that
+  // failed isn't "not hidden", "no page text" or "no title".
+  const hideReady =
+    !!pageData.resources &&
+    (listingStatus === 'found' || listingStatus === 'missing');
+  const hideFailed =
+    (!pageData.resources && !pageData.loading) || listingStatus === 'failed';
+  const retryHide = () => {
+    if (!pageData.resources) pageData.reload();
+    if (listingStatus === 'failed') reloadListing();
+  };
+  // Replacing empties these only if the node lists them, or they were
+  // published from here.
+  const hasPage = !!pageData.resources?.page || !!saved.page;
+  const hasShots = !!pageData.resources?.shots || !!saved.shots;
 
   // What the publisher just saved shows until the node has the new version.
   const savedPageNewer =
@@ -211,137 +255,66 @@ export const AppPage = ({
     setSettingsLocalLastUpdated(Date.now());
   };
 
-  // The app's rating poll, from the ratings store the library's cards use.
-  const { rating: appRating, refresh: refreshRating } = useAppRating(
-    app?.name,
-    app?.service
+  const ratingByAddress = useMemo(
+    () => ratingsByAddress(votes.voters),
+    [votes.voters]
   );
-  const hasPublishedRating = appRating?.hasPublishedRating ?? null;
-  const pollInfo = appRating?.pollInfo ?? null;
+  const myRating = votes.pending?.rating ?? votes.mine?.rating ?? null;
 
-  // The first rating creates the app's poll, later ones vote on it.
-  const handleRate = async (rating: number) => {
-    try {
-      if (!myName) {
-        throw new Error(
-          t('core:message.generic.name_rate', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      }
-      if (!app?.name) return;
-
-      const fee = await getFee('CREATE_POLL');
-
-      await show({
-        message: t('core:message.question.rate_app', {
-          rate: rating,
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
-
-      if (hasPublishedRating === false) {
-        const pollName = `app-library-${app.service}-rating-${app.name}`;
-        const pollOptions = [`1, 2, 3, 4, 5, initialValue-${rating}`];
-        const pollDescription = t('core:message.generic.rating', {
-          name: app.name,
-          service: app.service,
-          postProcess: 'capitalizeFirstChar',
-        });
-
-        await new Promise((res, rej) => {
-          window
-            .sendMessage(
-              'createPoll',
-              {
-                pollName: pollName,
-                pollDescription: pollDescription,
-                pollOptions: pollOptions,
-                pollOwnerAddress: myName,
-              },
-              TIME_MINUTES_1_IN_MILLISECONDS
-            )
-            .then((response: any) => {
-              if (response.error) {
-                rej(response?.message);
-                return;
-              } else {
-                res(response);
-                notify(
-                  'success',
-                  t('core:message.success.rated_app', {
-                    postProcess: 'capitalizeFirstChar',
-                  })
-                );
-                refreshRating();
-              }
-            })
-            .catch((error: any) => {
-              rej(error);
-            });
-        });
-      } else {
-        const pollName = `app-library-${app.service}-rating-${app.name}`;
-
-        const optionIndex = pollInfo?.pollOptions.findIndex(
-          (option: any) => +option.optionName === +rating
-        );
-        if (isNaN(optionIndex) || optionIndex === -1) {
-          throw new Error(
-            t('core:message.error.rating_option', {
-              postProcess: 'capitalizeFirstChar',
-            })
-          );
-        }
-
-        await new Promise((res, rej) => {
-          window
-            .sendMessage(
-              'voteOnPoll',
-              {
-                pollName: pollName,
-                optionIndex,
-              },
-              TIME_MINUTES_1_IN_MILLISECONDS
-            )
-            .then((response: any) => {
-              if (response.error) {
-                rej(response?.message);
-                return;
-              } else {
-                res(response);
-                notify(
-                  'success',
-                  t('core:message.success.rated_app', {
-                    postProcess: 'capitalizeFirstChar',
-                  })
-                );
-                refreshRating();
-              }
-            })
-            .catch((error: any) => {
-              rej(error);
-            });
-        });
-      }
-    } catch (error: any) {
-      const errorMessage =
-        typeof error === 'string' ? error : error?.message || '';
-      let snackMessage: string;
-      if (errorMessage.includes('ALREADY_VOTED_FOR_THAT_OPTION')) {
-        snackMessage = t('core:message.error.app_already_voted', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      } else {
-        snackMessage =
-          errorMessage ||
-          t('core:message.error.rate', {
-            postProcess: 'capitalizeFirstChar',
-          });
-      }
-      notify('error', snackMessage);
+  const rate = async (rating: number) => {
+    const result = await votes.vote(rating);
+    if (result.ok === true) {
+      notify(
+        'success',
+        t('core:app_page.rating.sent', { postProcess: 'capitalizeFirstChar' })
+      );
+      setPrompt(rating);
+    } else if (!result.cancelled && result.message) {
+      notify('error', result.message);
     }
+  };
+
+  const { busy: hideBusy, showInLibrary } = useShowInLibrary({
+    app: ref,
+    title: listingApp?.metadata?.title || app?.name || '',
+    notify,
+    onShown: () => {
+      setSavedHidden({ hidden: false, replaced: false, at: Date.now() });
+      setTimeout(() => pageData.reload(), 90_000);
+    },
+  });
+
+  const onHidden = ({ replaced }: { replaced: boolean }) => {
+    const at = Date.now();
+    setHideOpen(false);
+    setSavedHidden({ hidden: true, replaced, at });
+    if (replaced) {
+      // The page text and screenshots it had were emptied with the app.
+      setSaved((previous) => ({
+        ...previous,
+        ...(hasPage
+          ? { page: { ...EMPTY_APP_PAGE, updated: at }, pageAt: at }
+          : {}),
+        ...(hasShots ? { shots: [], shotsAt: at } : {}),
+      }));
+    }
+    notify(
+      'success',
+      t('core:app_page.hide.done_hidden', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+    // The node lists the new versions after the next block.
+    setTimeout(() => {
+      pageData.reload();
+      reloadListing();
+    }, 90_000);
+  };
+
+  const onReviewResult = (result: ReviewActionResult, success: string) => {
+    if (result.ok === true) notify('success', success);
+    else if (!result.cancelled && result.message)
+      notify('error', result.message);
   };
 
   // The editor starts from the page text and screenshots the node has: it
@@ -363,17 +336,44 @@ export const AppPage = ({
     />
   );
   const ratings = (
-    <SectionCard
-      aria-labelledby="app-page-ratings"
-      component="section"
-      id="app-page-ratings-card"
-      sx={{ mb: 2 }}
-    >
-      <SectionTitle id="app-page-ratings">
-        {t('core:app_detail.ratings', { postProcess: 'capitalizeFirstChar' })}
-      </SectionTitle>
-      <AppRatingBreakdown app={app} myName={myName} onRate={handleRate} />
-    </SectionCard>
+    <AppRatingsPanel
+      canRate={!!myName}
+      loading={votes.loading}
+      mine={votes.mine}
+      myAddress={myAddress}
+      onRate={rate}
+      onRetry={votes.reload}
+      pending={votes.pending}
+      pollExists={votes.pollExists}
+      pollStatus={votes.pollStatus}
+      summary={votes.summary}
+      voters={votes.voters}
+    />
+  );
+  const reviewsSection = (
+    <AppReviewsSection
+      appName={ref.name}
+      appTitle={title}
+      failed={reviews.failed}
+      hasMore={reviews.hasMore}
+      loading={reviews.loading}
+      loadingMore={reviews.loadingMore}
+      myName={myName}
+      myRating={myRating}
+      myReview={reviews.myReview}
+      myReviewStatus={reviews.myReviewStatus}
+      onDismissPrompt={() => setPrompt(null)}
+      onLoadMore={reviews.loadMore}
+      onResult={onReviewResult}
+      onRetry={reviews.reload}
+      onRetryMyReview={reviews.retryMyReview}
+      prompt={prompt}
+      ratingByAddress={ratingByAddress}
+      removeItem={reviews.removeItem}
+      submitReply={reviews.submitReply}
+      submitReview={reviews.submitReview}
+      threads={reviews.threads}
+    />
   );
   const details = (
     <AppDetailsCard app={listingApp} version={page?.version || ''} />
@@ -396,8 +396,11 @@ export const AppPage = ({
         isInstalled={isInstalled}
         isPinned={isPinned}
         editLoading={editorLoading}
+        hiddenState={hiddenState}
+        hideBusy={hideBusy}
+        hideFailed={hideFailed}
+        hideReady={hideReady}
         isPublisher={isPublisher}
-        myName={myName}
         onCopied={() =>
           notify(
             'success',
@@ -407,10 +410,19 @@ export const AppPage = ({
           )
         }
         onEdit={() => openEditor('page')}
+        onHide={() => setHideOpen(true)}
         onOpen={() =>
           executeEvent('addTab', { data: inLauncherTab(app, launcherTabId) })
         }
+        onRatingsClick={() =>
+          document
+            .getElementById('app-page-ratings-card')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        onRetryHide={retryHide}
+        onShowAgain={() => void showInLibrary()}
         onTogglePin={togglePin}
+        summary={votes.summary}
         version={page?.version || ''}
         versionCurrent={versionCurrent}
       />
@@ -425,9 +437,10 @@ export const AppPage = ({
           shots={gallery}
         />
 
-        {/* The about card keeps its place in the tree in both layouts, so
-            it stays as it was (read more included) when the page gets wider
-            or narrower. Only the ratings and details move. */}
+        {/* The about card and the reviews keep their places in the tree in
+            both layouts (the slots between them are empty when wide), so
+            what is typed in them is kept when the page gets wider or
+            narrower. Only the ratings and details move. */}
         <Box
           sx={
             wide
@@ -443,6 +456,7 @@ export const AppPage = ({
           <Box sx={{ minWidth: 0 }}>
             {about}
             {!wide && ratings}
+            {reviewsSection}
             {!wide && details}
           </Box>
           {wide && (
@@ -453,6 +467,19 @@ export const AppPage = ({
           )}
         </Box>
       </Box>
+
+      {isPublisher && (
+        <HideAppDialog
+          app={listingApp}
+          hasPage={hasPage}
+          hasShots={hasShots}
+          hidden={!!hiddenState?.hidden}
+          onClose={() => setHideOpen(false)}
+          onHidden={onHidden}
+          open={hideOpen}
+          ready={hideReady}
+        />
+      )}
 
       {isPublisher && (
         <AppPageEditorDialog

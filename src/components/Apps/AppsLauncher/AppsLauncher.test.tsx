@@ -254,6 +254,21 @@ describe('AppsLauncher', () => {
     });
   });
 
+  it('keeps the title of a pinned app its publisher hid from the library', async () => {
+    await renderLauncher(
+      {
+        allQapps: library,
+        // The library leaves it out.
+        availableQapps: library.filter((app) => app.name !== 'TubeFan'),
+      },
+      [{ name: 'TubeFan', service: 'WEBSITE' }]
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Fans of the tube' })
+    ).toBeVisible();
+  });
+
   it('builds nothing before it is first shown', async () => {
     const { container } = await renderLauncher({ isShow: false });
 
