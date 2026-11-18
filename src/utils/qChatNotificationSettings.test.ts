@@ -256,7 +256,7 @@ describe('applyScopeNotificationSettings / setScopeNotificationSettings', () => 
         version: 1,
       },
     });
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => [
         { channelId: 'general', categoryId: '' },
         { channelId: 'random', categoryId: '' },
@@ -285,7 +285,7 @@ describe('applyScopeNotificationSettings / setScopeNotificationSettings', () => 
         version: 1,
       },
     });
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => [
         { channelId: 'general', categoryId: '' },
         { channelId: 'random', categoryId: '' },
@@ -322,7 +322,7 @@ describe('applyScopeNotificationSettings / setScopeNotificationSettings', () => 
         },
       },
     });
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => [
         { channelId: 'general', categoryId: '' },
         { channelId: 'random', categoryId: '' },
@@ -354,7 +354,7 @@ describe('applyScopeNotificationSettings / setScopeNotificationSettings', () => 
         version: 1,
       },
     });
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => [
         { channelId: 'general', categoryId: 'sec-1' },
         { channelId: 'support', categoryId: 'sec-1' },
@@ -433,7 +433,7 @@ describe('applyScopeNotificationSettings / setScopeNotificationSettings', () => 
 describe('applyNotificationSettingsToAllGroups', () => {
   it('applies settings to all provided groups', async () => {
     mockSendMessage({});
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => []),
     };
     await applyNotificationSettingsToAllGroups([1, 2, 3], {
@@ -654,7 +654,7 @@ describe('getScopeMutedUntil', () => {
 describe('setScopeMuted / unmuteScope', () => {
   it('writes mutedUntil on all channels for group scope', async () => {
     mockSendMessage({});
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => [
         { channelId: 'general', categoryId: '' },
         { channelId: 'random', categoryId: '' },
@@ -673,7 +673,7 @@ describe('setScopeMuted / unmuteScope', () => {
 
   it('writes mutedUntil on all channels in section for section scope', async () => {
     mockSendMessage({});
-    window.reticulumChat = {
+    (window as any).reticulumChat = {
       getChannels: vi.fn(async () => [
         { channelId: 'support', categoryId: 'sec-1' },
         { channelId: 'offtopic', categoryId: 'sec-1' },
