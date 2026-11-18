@@ -210,16 +210,6 @@ export const AppButtonText = styled(Typography)({
   lineHeight: 1.2,
 });
 
-export const AppPublishTagsContainer = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '10px',
-  justifyContent: 'flex-start',
-  width: '100%',
-}));
-
 export const AppInfoSnippetMiddle = styled(Box)(({ theme }) => ({
   alignItems: 'flex-start',
   backgroundColor: theme.palette.background.default,
@@ -313,6 +303,7 @@ export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
       : `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.35)}`,
 }));
 
+/** The strip itself doesn't scroll: only its unpinned tabs do. */
 export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
   alignSelf: 'center',
   alignItems: 'center',
@@ -325,13 +316,47 @@ export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-start',
   minHeight: 0,
   minWidth: 0,
-  overflowX: 'auto',
-  overflowY: 'hidden',
+  overflow: 'hidden',
   padding: '0 10px 0 6px',
   position: 'relative',
   width: '100%',
-  '::-webkit-scrollbar': {
-    display: 'none',
+}));
+
+export const APPS_HORIZONTAL_TAB_BUTTON_HEIGHT_PX = 36;
+export const APPS_HORIZONTAL_TAB_SCROLLBAR_PX = 4;
+
+/**
+ * The tabs that aren't pinned, which scroll sideways once they are at their
+ * narrowest. A thin scrollbar runs under them, with the same room above them,
+ * so they line up with the pinned tabs and the + button whether it shows or
+ * not.
+ */
+export const AppsHorizontalTabScrollArea = styled(Box)(({ theme }) => ({
+  alignSelf: 'center',
+  boxSizing: 'border-box',
+  flex: '0 1 auto',
+  height: `${
+    APPS_HORIZONTAL_TAB_BUTTON_HEIGHT_PX + 2 * APPS_HORIZONTAL_TAB_SCROLLBAR_PX
+  }px`,
+  minWidth: 0,
+  overflowX: 'auto',
+  overflowY: 'hidden',
+  paddingTop: `${APPS_HORIZONTAL_TAB_SCROLLBAR_PX}px`,
+  position: 'relative',
+  '&::-webkit-scrollbar': {
+    height: `${APPS_HORIZONTAL_TAB_SCROLLBAR_PX}px`,
+  },
+  '&::-webkit-scrollbar-track': {
+    backgroundColor: 'transparent',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundClip: 'padding-box',
+    backgroundColor: alpha(theme.palette.text.primary, 0.14),
+    border: 0,
+    borderRadius: '999px',
+  },
+  '&:hover::-webkit-scrollbar-thumb': {
+    backgroundColor: alpha(theme.palette.text.primary, 0.28),
   },
 }));
 
@@ -348,7 +373,7 @@ export const AppsHorizontalTabButton = styled(ButtonBase)(({ theme }) => ({
   display: 'flex',
   flex: '0 1 180px',
   gap: '8px',
-  height: '36px',
+  height: `${APPS_HORIZONTAL_TAB_BUTTON_HEIGHT_PX}px`,
   justifyContent: 'flex-start',
   minWidth: 0,
   padding: '0 10px',
@@ -428,20 +453,6 @@ export const PublishQAppCTARight = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-end',
 }));
 
-export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
-  alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
-  borderColor: theme.palette.text.primary,
-  borderRadius: '25px',
-  borderStyle: 'solid',
-  borderWidth: '1px',
-  color: theme.palette.text.primary,
-  display: 'flex',
-  height: '29px',
-  justifyContent: 'center',
-  width: '101px',
-}));
-
 export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.paper,
@@ -450,31 +461,6 @@ export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
   height: '80px',
   justifyContent: 'center',
   width: '60px',
-}));
-
-export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
-  fontSize: '16px',
-  fontStyle: 'italic',
-  fontWeight: 400,
-  lineHeight: 1.2,
-}));
-
-export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
-  alignItems: 'center',
-  backgroundColor: theme.palette.background.paper,
-  borderRadius: '8px',
-  color: theme.palette.text.primary,
-  display: 'flex',
-  fontSize: '16px',
-  fontWeight: 600,
-  height: '40px',
-  justifyContent: 'center',
-  width: '120px',
-  '&:hover': {
-    backgroundColor: 'action.hover',
-  },
 }));
 
 export const AppsCategoryInfo = styled(Box)(({ theme }) => ({

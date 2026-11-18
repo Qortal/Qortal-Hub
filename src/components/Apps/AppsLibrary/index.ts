@@ -4,3 +4,4 @@ export { CommunityAppsTab } from './CommunityAppsTab';
 export { CategoriesTab } from './CategoriesTab';
 export { MyAppsTab } from './MyAppsTab';
 export { PrivateTab } from './PrivateTab';
+export { WidgetsTab } from './WidgetsTab';

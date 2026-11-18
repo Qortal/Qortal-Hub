@@ -1,6 +1,8 @@
 import React, { createContext } from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createStore, Provider } from 'jotai';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -49,6 +51,7 @@ vi.mock('../../../utils/events', () => ({
 
 // Import after mocks
 import { AppCardEnhanced } from '../AppCard/AppCardEnhanced';
+import { executeEvent } from '../../../utils/events';
 
 describe('AppCardEnhanced', () => {
   const mockApp = {
@@ -57,7 +60,8 @@ describe('AppCardEnhanced', () => {
     created: 1700000000000,
     metadata: {
       title: 'Test Application',
-      description: 'This is a test application with a long description that should be truncated when displayed in the card component.',
+      description:
+        'This is a test application with a long description that should be truncated when displayed in the card component.',
       category: 'games',
       categoryName: 'Games',
       tags: 'game,fun,test',
@@ -160,5 +164,165 @@ describe('AppCardEnhanced', () => {
     // The card has pin and open action buttons
     const buttons = screen.getAllByRole('button');
     expect(buttons.length).toBeGreaterThan(0);
+  });
+});
+
+describe('AppCardEnhanced in the library', () => {
+  const app = {
+    name: 'TestApp',
+    service: 'APP',
+    metadata: {
+      title: 'Test Application',
+      description: 'A short description.',
+      category: 'GAMING',
+      categoryName: 'Games',
+      tags: 'game,fun',
+    },
+    status: { status: 'READY' },
+  };
+
+  const renderCard = (
+    props: Partial<React.ComponentProps<typeof AppCardEnhanced>> = {},
+    mode: 'light' | 'dark' = 'light'
+  ) =>
+    render(
+      <Provider store={createStore()}>
+        <ThemeProvider theme={createTheme({ palette: { mode } })}>
+          <I18nextProvider i18n={i18n}>
+            <AppCardEnhanced app={app} myName="user1" {...props} />
+          </I18nextProvider>
+        </ThemeProvider>
+      </Provider>
+    );
+
+  beforeEach(() => {
+    vi.mocked(executeEvent).mockClear();
+  });
+
+  it('shows the category as a plain label, readable in the dark theme on hover', () => {
+    renderCard({}, 'dark');
+    const category = screen.getByText('Games');
+    // A clickable MUI Chip took its hover colour from action.selected.
+    expect(category.closest('button, [role="button"]')).toBeNull();
+    expect(category.closest('.MuiChip-root')).toBeNull();
+    expect(document.querySelector('.MuiChip-root')).toBeNull();
+  });
+
+  it('shows tags that are not buttons', () => {
+    renderCard();
+    expect(
+      screen.getByText('fun').closest('button, [role="button"]')
+    ).toBeNull();
+  });
+
+  it('opens the app page from its title, by click or with Enter', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    const title = screen.getByRole('button', { name: 'Test Application' });
+
+    await user.click(title);
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', { data: app });
+
+    vi.mocked(executeEvent).mockClear();
+    title.focus();
+    await user.keyboard('{Enter}');
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfo', { data: app });
+  });
+
+  it('opens the page within the category when it is shown there', async () => {
+    const user = userEvent.setup();
+    renderCard({ isFromCategory: true });
+    await user.click(screen.getByRole('button', { name: 'Test Application' }));
+    expect(executeEvent).toHaveBeenCalledWith('selectedAppInfoCategory', {
+      data: app,
+    });
+  });
+
+  it('starts the app from Open without opening its page', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    const open = screen.getByRole('button', { name: 'action.open' });
+    expect(open).toHaveAccessibleDescription('Test Application');
+
+    await user.click(open);
+    expect(executeEvent).toHaveBeenCalledTimes(1);
+    expect(executeEvent).toHaveBeenCalledWith('addTab', { data: app });
+  });
+
+  it('pins and unpins the app', async () => {
+    const user = userEvent.setup();
+    renderCard();
+    const pin = screen.getByRole('button', { name: 'action.pin' });
+    expect(pin).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(pin);
+    expect(pin).toHaveAttribute('aria-pressed', 'true');
+    await user.click(pin);
+    expect(pin).toHaveAttribute('aria-pressed', 'false');
+    expect(executeEvent).not.toHaveBeenCalled();
+  });
+
+  it('offers Update on the account’s own app', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderCard({ onUpdate });
+
+    await user.click(screen.getByRole('button', { name: 'developer.update' }));
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(executeEvent).not.toHaveBeenCalled();
+  });
+
+  it('lets Update give way in a tight tile, keeping Open or Download whole', () => {
+    renderCard({ onUpdate: vi.fn() });
+    // German "Aktualisieren" + pin + "Herunterladen" is wider than a narrow
+    // tile: Update's text is cut short instead of the row leaving the card.
+    expect(
+      getComputedStyle(screen.getByRole('button', { name: 'developer.update' }))
+        .flexShrink
+    ).toBe('1');
+    const other = screen.getByRole('button', {
+      name: /action\.(open|download)/,
+    });
+    expect(getComputedStyle(other).flexShrink).toBe('0');
+  });
+
+  it('has no Update on other apps', () => {
+    renderCard();
+    expect(
+      screen.queryByRole('button', { name: 'developer.update' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a row in the list view, without the tags', () => {
+    renderCard({ view: 'list' });
+    const row = screen.getByRole('article', { name: 'Test Application' });
+    expect(within(row).getByText('by @TestApp')).toBeInTheDocument();
+    expect(within(row).getByText('Games')).toBeInTheDocument();
+    expect(within(row).queryByText('fun')).not.toBeInTheDocument();
+    expect(row).toHaveAttribute('data-library-row');
+  });
+
+  it('keeps a row to two lines, the details right next to the name', () => {
+    renderCard({ view: 'list' });
+    const row = screen.getByRole('article', { name: 'Test Application' });
+    /** The innermost element of the row holding both texts. */
+    const lineOf = (first: HTMLElement, second: HTMLElement) => {
+      let node: HTMLElement | null = first;
+      while (node && !node.contains(second)) node = node.parentElement;
+      return node as HTMLElement;
+    };
+    const name = within(row).getByRole('button', { name: 'Test Application' });
+    const developer = within(row).getByText('by @TestApp');
+    const description = within(row).getByText('A short description.');
+
+    // The name, its rating and its category on the first line.
+    const firstLine = lineOf(name, within(row).getByText('Games'));
+    expect(firstLine).not.toBe(row);
+    expect(firstLine.querySelector('.MuiSkeleton-root')).not.toBeNull();
+    expect(firstLine).not.toContainElement(developer);
+    // Who made it and what it does on the second.
+    const secondLine = lineOf(developer, description);
+    expect(secondLine).not.toContainElement(name);
+    expect(secondLine).toHaveTextContent('by @TestApp·A short description.');
   });
 });

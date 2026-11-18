@@ -25,6 +25,36 @@ type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 const cache = new Map<string, { at: number; widgets: HomeWidgetListing[] }>();
 
+/**
+ * Widgets published from this Hub that the node may not list yet: until an
+ * answer has them, the picker asks the node each time instead of using what
+ * it kept (for a while at most, in case the publish never makes it). An
+ * update counts as listed only in a version from when it was published on:
+ * the version it replaced is listed already.
+ */
+const PUBLISHED_WAIT_MS = 15 * 60_000;
+type Waiting = { key: string; since: number };
+const published = new Map<string, { at: number; since: number }>();
+
+const waitingFor = (now: number): Waiting[] => {
+  for (const [key, { at }] of published) {
+    if (now - at > PUBLISHED_WAIT_MS) published.delete(key);
+  }
+  return [...published].map(([key, { since }]) => ({ key, since }));
+};
+
+/** Whether `widgets` has a waiting widget in its new version (or newer). */
+const listsVersion = (widgets: HomeWidgetListing[]) => {
+  const updated = new Map(
+    widgets.map((widget) => [homeWidgetKey(widget), widget.updated])
+  );
+  return ({ key, since }: Waiting) =>
+    updated.has(key) && updated.get(key) >= since;
+};
+
+const listsAll = (widgets: HomeWidgetListing[], waiting: Waiting[]) =>
+  waiting.every(listsVersion(widgets));
+
 export const widgetSearchUrls = (baseUrl: string) => {
   const common =
     'service=APP&mode=ALL&limit=0&includemetadata=true&excludeblocked=true';
@@ -81,8 +111,16 @@ export async function fetchHomeWidgets(
     now?: number;
   } = {}
 ): Promise<HomeWidgetListing[]> {
+  const waiting = waitingFor(now);
   const cached = cache.get(baseUrl);
-  if (!fresh && cached && now - cached.at < CACHE_MS) return cached.widgets;
+  if (
+    !fresh &&
+    cached &&
+    now - cached.at < CACHE_MS &&
+    listsAll(cached.widgets, waiting)
+  ) {
+    return cached.widgets;
+  }
 
   const urls = widgetSearchUrls(baseUrl);
   const [byIdentifier, byTag] = await Promise.allSettled([
@@ -96,6 +134,10 @@ export async function fetchHomeWidgets(
     byIdentifier.status === 'fulfilled' ? byIdentifier.value : [],
     byTag.status === 'fulfilled' ? byTag.value : []
   );
+  const listed = listsVersion(widgets);
+  waiting.forEach((entry) => {
+    if (listed(entry)) published.delete(entry.key);
+  });
   // Only a full answer with widgets in it is kept: a half one, or none yet
   // (a widget published a minute ago), is asked again next time.
   if (
@@ -108,4 +150,20 @@ export async function fetchHomeWidgets(
   return widgets;
 }
 
-export const clearHomeWidgetCacheForTests = () => cache.clear();
+/**
+ * A widget was just published from this Hub: the picker asks the node again
+ * each time until the node lists it in a version published `since` (when
+ * the publish started) or later.
+ */
+export const rememberPublishedWidget = (
+  widget: { name: string; identifier: string | null },
+  now = Date.now(),
+  since = now
+) => {
+  published.set(homeWidgetKey(widget), { at: now, since });
+};
+
+export const clearHomeWidgetCacheForTests = () => {
+  cache.clear();
+  published.clear();
+};

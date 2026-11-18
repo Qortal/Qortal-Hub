@@ -43,12 +43,15 @@ export interface QdnAppResource {
     title?: string;
     description?: string;
     tags?: unknown;
+    category?: string;
+    categoryName?: string;
   } | null;
   created?: number;
   updated?: number;
+  size?: number;
 }
 
-/** A widget the picker offers. */
+/** A widget the picker (and the library's Widgets tab) offers. */
 export interface HomeWidgetListing {
   name: string;
   /** null: the name's default APP resource. */
@@ -56,6 +59,14 @@ export interface HomeWidgetListing {
   title: string;
   description: string;
   updated: number;
+  /** When it was first published, when the node says. */
+  created?: number;
+  category?: string;
+  categoryName?: string;
+  /** Its other tags, without go-widget. */
+  tags?: string[];
+  /** Bytes, when the node says. */
+  size?: number;
 }
 
 /**
@@ -86,20 +97,38 @@ export const normalizeIdentifier = (identifier: unknown): string | null =>
     ? identifier
     : null;
 
-const hasWidgetTag = (tags: unknown): boolean =>
+/** Whether the tags list it as a widget: `go-widget`, in any letter case. */
+export const hasWidgetTag = (tags: unknown): boolean =>
   Array.isArray(tags) &&
   tags.some(
     (tag) => typeof tag === 'string' && tag.trim().toLowerCase() === WIDGET_TAG
   );
 
-/** The listing for `resource` when it is a widget, else null. */
-export const toWidgetListing = (
+const otherTags = (tags: unknown): string[] =>
+  Array.isArray(tags)
+    ? tags
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag && tag.toLowerCase() !== WIDGET_TAG)
+    : [];
+
+const textOf = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+const positive = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+
+/**
+ * The listing an APP resource would have as a widget, tagged or not: My apps
+ * also shows its publisher a widget they retired (see above). Null for what
+ * can't be a widget.
+ */
+export const widgetListingOf = (
   resource: QdnAppResource | null | undefined
 ): HomeWidgetListing | null => {
   if (!resource || resource.service !== 'APP') return null;
   const name = typeof resource.name === 'string' ? resource.name.trim() : '';
   if (!name) return null;
-  if (!hasWidgetTag(resource.metadata?.tags)) return null;
   const identifier = normalizeIdentifier(resource.identifier);
   const title =
     typeof resource.metadata?.title === 'string' &&
@@ -110,14 +139,30 @@ export const toWidgetListing = (
     typeof resource.metadata?.description === 'string'
       ? resource.metadata.description.trim()
       : '';
+  const created = positive(resource.created);
+  const category = textOf(resource.metadata?.category);
+  const categoryName = textOf(resource.metadata?.categoryName);
+  const tags = otherTags(resource.metadata?.tags);
+  const size = positive(resource.size);
   return {
     name,
     identifier,
     title,
     description,
     updated: Number(resource.updated ?? resource.created ?? 0) || 0,
+    ...(created ? { created } : {}),
+    ...(category ? { category } : {}),
+    ...(categoryName ? { categoryName } : {}),
+    ...(tags.length ? { tags } : {}),
+    ...(size ? { size } : {}),
   };
 };
+
+/** The listing for `resource` when it is a widget, else null. */
+export const toWidgetListing = (
+  resource: QdnAppResource | null | undefined
+): HomeWidgetListing | null =>
+  hasWidgetTag(resource?.metadata?.tags) ? widgetListingOf(resource) : null;
 
 /** One key per widget: a name may publish several (by identifier). */
 export const homeWidgetKey = (widget: {

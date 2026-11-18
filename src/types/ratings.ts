@@ -8,6 +8,8 @@ export interface PollInfo {
   pollDescription: string;
   pollOptions: Array<{ optionName: string }>;
   owner: string;
+  /** Who created the poll; `owner` is only an address the creator named. */
+  creatorPublicKey?: string;
   published: number;
 }
 
