@@ -1282,6 +1282,15 @@
     "search_placeholder_qapps": "Поиск Q-Apps",
     "search_placeholder_tracks": "Поиск треков или исполнителей",
     "section_recommended": "Рекомендуемое",
+    "status": {
+      "grateful": "благодарный",
+      "happy": "весёлый",
+      "helpful": "отзывчивый",
+      "idle": "спокойный",
+      "listening": "слушает",
+      "sleepy": "сонный",
+      "ticklish": "щекотно"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "Добавить приложение",
     "workspace_empty_prompt": "Выберите, что будет над QORTINO.",

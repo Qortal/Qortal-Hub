@@ -1352,6 +1352,15 @@ declare global {
       onNotificationClicked: (
         cb: (notificationId: string, data?: Record<string, unknown>) => void
       ) => () => void;
+      /** Dismiss the desktop notifications for a group, or for one of its
+       *  channels when `channelId` is given. A non-finite or negative
+       *  `groupId` targets direct messages instead. */
+      dismissNotifications: (
+        groupId: number,
+        channelId?: string
+      ) => Promise<{ success: boolean }>;
+      /** Dismiss the notification for a single Q-Chat event. */
+      dismissNotification: (eventId: string) => Promise<{ success: boolean }>;
     };
 
     reticulumResources?: {

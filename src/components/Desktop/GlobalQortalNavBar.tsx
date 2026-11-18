@@ -27,7 +27,7 @@ import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { extractComponents } from '../Chat/MessageDisplay';
+import { extractComponents } from '../../utils/qortalLink/parseQortalLink';
 import {
   appsSubPageCanGoBackAtom,
   balanceAtom,
@@ -47,13 +47,9 @@ import {
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { useNameSearch } from '../../hooks/useNameSearch';
-import { openQortalUseGroupLink } from '../../utils/openQortalUseGroupLink';
-import {
-  buildAppPageLink,
-  openAppPageLink,
-  parseAppPageLink,
-} from '../Apps/AppPage/appPageLink';
 import type { PinnedApp } from '../../utils/pinnedAppsSettings';
+import { buildAppPageLink } from '../Apps/AppPage/appPageLink';
+import { openQortalLink } from '../../utils/qortalLink/openQortalLink';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { formatQortAmount } from '../../utils/numberFunctions';
 import {
@@ -1094,13 +1090,14 @@ export function GlobalQortalNavBar({
 
   const openLink = useCallback(
     (link: OmniboxLink, choice?: OpenChoice) => {
-      if (link.kind === 'group') {
-        finishChoice();
-        void openQortalUseGroupLink(link.link);
+      if (link.kind === 'resource') {
+        finishChoice(link.link);
+        openResource(link, choice);
         return;
       }
-      finishChoice(link.link);
-      openResource(link, choice);
+      // An app's page shows its link here; a group's link opens a window.
+      finishChoice(link.kind === 'page' ? link.link : undefined);
+      void openQortalLink(link);
     },
     [finishChoice, openResource]
   );
@@ -1110,13 +1107,6 @@ export function GlobalQortalNavBar({
     (value: string, choice?: OpenChoice) => {
       const trimmed = value.trim();
       if (!trimmed) return;
-
-      // qortal://use-app-page/<SERVICE>/<name>: the app's page, not the app.
-      if (parseAppPageLink(trimmed)) {
-        finishChoice(trimmed);
-        openAppPageLink(trimmed);
-        return;
-      }
 
       const link = parseOmniboxLink(trimmed);
       if (link) {
@@ -1131,7 +1121,7 @@ export function GlobalQortalNavBar({
       });
       executeEvent('open-apps-mode', {});
     },
-    [finishChoice, openLink]
+    [openLink]
   );
 
   const openSearchApp = useCallback(

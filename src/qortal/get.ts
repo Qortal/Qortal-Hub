@@ -69,8 +69,7 @@ import {
   USER_DECLINED_REQUEST_CODE,
 } from './qortal-request-errors.ts';
 import { getPublishesFromAdminsAdminSpace } from '../components/Chat/AdminSpaceInner.tsx';
-import { extractComponents } from '../components/Chat/MessageDisplay.tsx';
-import { openAppPageLink } from '../components/Apps/AppPage/appPageLink';
+import { openQortalLink } from '../utils/qortalLink/openQortalLink';
 import {
   decryptResource,
   getGroupAdmins,
@@ -92,6 +91,10 @@ import {
   TIME_SECONDS_2_IN_MILLISECONDS,
   TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../constants/constants.ts';
+import {
+  createPermissionPromptQueue,
+  PERMISSION_ALREADY_GIVEN,
+} from './permissionPromptQueue';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
@@ -529,31 +532,61 @@ const handleMessage = (event) => {
 
 window.addEventListener('message', handleMessage);
 
-async function getUserPermission(payload, isFromExtension) {
-  return new Promise((resolve) => {
-    const requestId = generatePermissionRequestId();
-    responseResolvers.set(requestId, resolve); // Store resolver by requestId
-    const targetOrigin = window.location.origin;
+// The approval dialog shows one request at a time. A request that comes while
+// another one is on screen waits its turn instead of taking its place, within
+// the same minute it always had from when the app asked.
+const askPermissionInTurn = createPermissionPromptQueue();
 
-    // Send the request message
-    window.postMessage(
-      {
-        action: 'QORTAL_REQUEST_PERMISSION',
-        payload,
-        requestId,
-        isFromExtension,
-      },
-      targetOrigin
+// For a request that waited its turn: true when the stored "always allow" or
+// the tab's session permission now allows it, so it is not shown.
+const alreadyAllowed =
+  (appInfo, sessionPermission: string | null, storedKey?: string) => async () =>
+    (!!storedKey && !!(await getPermission(storedKey))) ||
+    !!(
+      sessionPermission &&
+      appInfo?.tabId &&
+      appInfo?.name &&
+      hasSessionPermission(appInfo.tabId, appInfo.name, sessionPermission)
     );
 
-    // Optional timeout to handle no response scenario
-    setTimeout(() => {
-      if (responseResolvers.has(requestId)) {
-        responseResolvers.get(requestId)(false); // Resolve with `false` if no response
-        responseResolvers.delete(requestId);
-      }
-    }, TIME_MINUTES_1_IN_MILLISECONDS);
-  });
+async function getUserPermission(
+  payload,
+  isFromExtension,
+  isAlreadyAllowed?: () => boolean | Promise<boolean>
+) {
+  return askPermissionInTurn(
+    (expiresAt) =>
+      new Promise((resolve) => {
+        const requestId = generatePermissionRequestId();
+        responseResolvers.set(requestId, resolve); // Store resolver by requestId
+        const targetOrigin = window.location.origin;
+
+        // Send the request message. The dialog counts down to expiresAt.
+        window.postMessage(
+          {
+            action: 'QORTAL_REQUEST_PERMISSION',
+            payload: { ...payload, expiresAt },
+            requestId,
+            isFromExtension,
+          },
+          targetOrigin
+        );
+
+        // No answer: the dialog's own countdown declines the request a moment
+        // earlier, this only covers a dialog that never opened.
+        setTimeout(
+          () => {
+            if (responseResolvers.has(requestId)) {
+              responseResolvers.get(requestId)(false); // Resolve with `false` if no response
+              responseResolvers.delete(requestId);
+            }
+          },
+          Math.max(0, expiresAt - Date.now())
+        );
+      }),
+    false,
+    isAlreadyAllowed
+  );
 }
 
 export const authorizeRnsDestination = async (
@@ -631,12 +664,19 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
             }),
           },
         },
-        isFromExtension
+        isFromExtension,
+        alreadyAllowed(
+          appInfo,
+          'GET_USER_ACCOUNT',
+          `qAPPAutoAuth-${appInfo?.name}`
+        )
       );
     }
 
     const { accepted = false, checkbox1 = false } = resPermission || {};
-    if (resPermission) {
+    // Only a tick is stored: an unticked answer must not undo an "always"
+    // given to a request just before this one.
+    if (resPermission && checkbox1) {
       setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
     }
     if (accepted || skip) {
@@ -910,8 +950,15 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
         }),
         isSessionPermission: true,
       },
-      isFromExtension
+      isFromExtension,
+      () =>
+        unapprovedSessionPermissions(
+          { tabId, name: appInfo.name },
+          permissions,
+          hasSessionPermission
+        ).length === 0
     );
+    if (resPermission === PERMISSION_ALREADY_GIVEN) return true;
 
     const { accepted = false } = resPermission || {};
     if (!accepted) {
@@ -1553,12 +1600,13 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(appInfo, 'GET_LIST_ITEMS', 'qAPPAutoLists')
     );
     const { accepted, checkbox1 } = resPermission;
     acceptedVar = accepted;
     checkbox1Var = checkbox1;
-    setPermission('qAPPAutoLists', checkbox1);
+    if (checkbox1) setPermission('qAPPAutoLists', checkbox1);
   }
 
   if (acceptedVar || skip) {
@@ -2725,11 +2773,12 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(appInfo, null, `qAPPSendChatMessage-${appInfo?.name}`)
     );
   }
   const { accepted = false, checkbox1 = false } = resPermission || {};
-  if (resPermission && accepted) {
+  if (resPermission && accepted && checkbox1) {
     setPermission(`qAPPSendChatMessage-${appInfo?.name}`, checkbox1);
   }
   if (accepted || skip) {
@@ -2975,7 +3024,8 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
         highlightedText: `${groupInfo.groupName}`,
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(appInfo, 'JOIN_GROUP')
     );
     const { accepted } = resPermission || {
       accepted: false,
@@ -3651,12 +3701,17 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(
+        appInfo,
+        'GET_USER_WALLET',
+        `qAPPAutoGetUserWallet-${appInfo?.name}-${data.coin}`
+      )
     );
   }
   const { accepted = false, checkbox1 = false } = resPermission || {};
 
-  if (resPermission) {
+  if (resPermission && checkbox1) {
     setPermission(
       `qAPPAutoGetUserWallet-${appInfo?.name}-${data.coin}`,
       checkbox1
@@ -3802,11 +3857,16 @@ export const getWalletBalance = async (
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(
+        appInfo,
+        'GET_WALLET_BALANCE',
+        `qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`
+      )
     );
   }
   const { accepted = false, checkbox1 = false } = resPermission || {};
-  if (resPermission) {
+  if (resPermission && checkbox1) {
     setPermission(
       `qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`,
       checkbox1
@@ -4059,12 +4119,17 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(
+        appInfo,
+        'GET_USER_WALLET_INFO',
+        `getUserWalletInfo-${appInfo?.name}-${data.coin}`
+      )
     );
   }
   const { accepted = false, checkbox1 = false } = resPermission || {};
 
-  if (resPermission) {
+  if (resPermission && checkbox1) {
     setPermission(`getUserWalletInfo-${appInfo?.name}-${data.coin}`, checkbox1);
   }
 
@@ -4178,12 +4243,17 @@ export const getUserWalletTransactions = async (
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(
+        appInfo,
+        'GET_USER_WALLET_TRANSACTIONS',
+        `getUserWalletTransactions-${appInfo?.name}-${data.coin}`
+      )
     );
   }
   const { accepted = false, checkbox1 = false } = resPermission || {};
 
-  if (resPermission) {
+  if (resPermission && checkbox1) {
     setPermission(
       `getUserWalletTransactions-${appInfo?.name}-${data.coin}`,
       checkbox1
@@ -6312,36 +6382,24 @@ export const openNewTab = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
-  // An app's or website's page, not the app (qortal://use-app-page/…).
-  if (openAppPageLink(data.qortalLink)) return true;
-
-  const res = extractComponents(data.qortalLink);
-  if (res) {
-    const { service, name, identifier, path } = res;
-    if (!service && !name)
-      throw new Error(
-        i18n.t('auth:message.error.invalid_qortal_link', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    executeEvent('addTab', {
-      data: {
-        service,
-        name,
-        identifier,
-        path,
-        ...(data.navigateIfAlreadyOpen && { navigateIfAlreadyOpen: true }),
-      },
-    });
-    executeEvent('open-apps-mode', {});
+  // Every kind of qortal:// link: a Q-App or website, an app's page, or a
+  // group's link. Nothing it opens acts without asking (openQortalLink.ts).
+  // The link is text: anything else a Q-App sends is no link. A Q-App's or
+  // widget's group link only opens the join window, if none is open.
+  if (
+    typeof data.qortalLink === 'string' &&
+    (await openQortalLink(data.qortalLink, {
+      navigateIfAlreadyOpen: !!data.navigateIfAlreadyOpen,
+      fromApp: true,
+    }))
+  ) {
     return true;
-  } else {
-    throw new Error(
-      i18n.t('auth:message.error.invalid_qortal_link', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
   }
+  throw new Error(
+    i18n.t('auth:message.error.invalid_qortal_link', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 };
 
 export const openUserLookup = async (data) => {
@@ -6398,7 +6456,8 @@ export const lockTab = async (data, isFromExtension, appInfo) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      alreadyAllowed(appInfo, 'LOCK_TAB')
     );
 
     const { accepted } = resPermission || { accepted: false };

@@ -92,6 +92,7 @@ import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
 import { openLocalPath } from './desktop-shell';
 import { installDisplayMediaPicker } from './display-media-picker';
 import { installTabShortcuts } from './tab-shortcuts';
+import { followHubZoom, installZoomKeys, menuPopupPoint } from './hub-zoom';
 import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
   log as loggerLog,
@@ -1169,6 +1170,9 @@ export class ElectronCapacitorApp {
         ? this.MainWindow.webContents
         : null;
     installTabShortcuts(this.MainWindow.webContents, hubPage, process.platform);
+    // The zoom keys too, from anywhere: they zoom the Hub page, and every
+    // Q-App with it.
+    installZoomKeys(this.MainWindow.webContents, hubPage, process.platform);
     configuredQAppSessions.clear();
     this.MainWindow.webContents.on(
       'will-attach-webview',
@@ -1212,6 +1216,8 @@ export class ElectronCapacitorApp {
       guest.setWindowOpenHandler(() => ({ action: 'deny' }));
       // A Q-App's key presses never reach the Hub page.
       installTabShortcuts(guest, hubPage, process.platform);
+      installZoomKeys(guest, hubPage, process.platform);
+      followHubZoom(guest, hubPage);
       const allowedGuestUrl = (nextUrl: string) => {
         const bound = attachedQAppGuests.get(guest.id)?.prepared;
         const candidates = bound ? [bound] : [...preparedQAppGuests.values()];
@@ -1693,14 +1699,13 @@ ipcMain.handle('systemCallReadiness:refreshSnapshot', () =>
 
 ipcMain.handle(
   'window:showAppMenu',
-  (event, { x, y }: { x?: number; y?: number }) => {
+  (event, point: { x?: number; y?: number }) => {
     const win = myCapacitorApp.getMainWindow();
     const menu = Menu.getApplicationMenu();
     if (menu && win && !win.isDestroyed()) {
       menu.popup({
         window: win,
-        x: x ?? 0,
-        y: y ?? 32,
+        ...menuPopupPoint(point, win.webContents.getZoomFactor()),
       });
     }
   }

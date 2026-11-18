@@ -11,12 +11,7 @@ import { saveFile } from '../qortal/get';
 import { mimeToExtensionMap } from '../utils/memeTypes';
 import i18n from '../i18n/i18n';
 import { useAtomValue, useSetAtom } from 'jotai';
-import {
-  QORTAL_PROTOCOL,
-  TIME_HOURS_1_IN_MILLISECONDS,
-  TIME_MINUTES_30_IN_MILLISECONDS,
-  TIME_SECONDS_30_IN_MILLISECONDS,
-} from '../constants/constants';
+import { QORTAL_PROTOCOL } from '../constants/constants';
 import { buildQortalResourceLink } from '../utils/qortalLink';
 import {
   dispatchQAppReticulumRequest,
@@ -37,6 +32,7 @@ import {
   isQAppFileSaveAction,
 } from '../qortal/qapp-file-save-request';
 import { serializeQortalRequestError } from '../qortal/qortal-request-errors';
+import { qappRequestTimeoutMs } from '../qortal/qappRequestTimeout';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -705,20 +701,15 @@ export const useQortalMessageListener = (
       const sendMessageToRuntime = (message, eventPort) => {
         if (!eventPort) return;
 
-        let timeout: number = TIME_SECONDS_30_IN_MILLISECONDS;
-        if (
-          message?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' &&
-          message?.payload?.resources?.length > 0
-        ) {
-          timeout =
-            message?.payload?.resources?.length *
-            TIME_MINUTES_30_IN_MILLISECONDS;
-        } else if (message?.action === 'PUBLISH_QDN_RESOURCE') {
-          timeout = TIME_HOURS_1_IN_MILLISECONDS;
-        }
-
         // Build deduplication key for read-only actions
         const isDeduplicable = deduplicableActions.has(message?.action);
+        // Long enough for an approval and the work after it, and never less
+        // than the app itself waits.
+        const timeout = qappRequestTimeoutMs(
+          message?.action,
+          message?.payload,
+          isDeduplicable
+        );
         let requestKey = '';
         if (isDeduplicable) {
           requestKey = `${message.action}-${JSON.stringify(message.payload || {})}`;
@@ -801,9 +792,10 @@ export const useQortalMessageListener = (
         // Store the promise for deduplication
         if (isDeduplicable) {
           pendingRequests.set(requestKey, requestPromise);
-          requestPromise.finally(() => {
-            pendingRequests.delete(requestKey);
-          });
+          // Forget it once settled. A failure reaches the app below, so the
+          // cleanup must not leave a rejected promise of its own behind.
+          const forget = () => pendingRequests.delete(requestKey);
+          requestPromise.then(forget, forget);
         }
 
         requestPromise

@@ -1262,6 +1262,15 @@
     "search_placeholder_qapps": "Q-Apps を検索",
     "search_placeholder_tracks": "トラックやアーティストを検索",
     "section_recommended": "おすすめ",
+    "status": {
+      "grateful": "感謝中",
+      "happy": "ごきげん",
+      "helpful": "お手伝い",
+      "idle": "のんびり",
+      "listening": "きいてる",
+      "sleepy": "おねむ",
+      "ticklish": "くすぐったい"
+    },
     "track_meta_separator": "·",
     "workspace_add_app": "アプリを追加",
     "workspace_empty_prompt": "QORTINO の上に置くものを選んでください。",
