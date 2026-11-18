@@ -222,8 +222,7 @@ it('routes XMR balance, info, history and send to the local engine after read pe
   expect(
     await sendCoin(
       { coin: 'XMR', amount: '0.000000000001', recipient: 'fixture' },
-      false,
-      appInfo
+      false
     )
   ).toBe('a'.repeat(64));
   expect(getKeyPair).not.toHaveBeenCalled();
