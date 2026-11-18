@@ -948,11 +948,13 @@ describe('the publish form, against the node', () => {
       // Refresh loads the current ones; Retry publishes a change to them.
       fireEvent.click(refreshButton()!);
       await changeFirstCaption('Evening');
+      expect(unsaved).toBe(true);
       await pressRetry();
       await waitFor(() => expect(published('IMAGE')).toHaveLength(1));
       expect(await picturesIn(published('IMAGE')[0])).toEqual([21, 22]);
       expect(published('APP')).toHaveLength(1);
       await waitFor(() => expect(addTabCalls()).toHaveLength(1));
+      expect(unsaved).toBe(false);
     });
 
     it('stops a Retry made while Refresh loads, keeping what is left', async () => {
@@ -981,6 +983,7 @@ describe('the publish form, against the node', () => {
       expect(errorsShown()).toHaveLength(1);
       expect(published('IMAGE')).toHaveLength(0);
       expect(addTabCalls()).toHaveLength(0);
+      expect(unsaved).toBe(true);
       expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
 
       await act(async () => {
