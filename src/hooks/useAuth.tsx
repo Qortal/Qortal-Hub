@@ -59,6 +59,25 @@ function isGatewayNode(nodeInfo?: ApiKey | null) {
   return !nodeInfo?.url || nodeInfo.url.includes(EXT_NODE_QORTAL_LINK);
 }
 
+/**
+ * What a node says to a yes/no question such as "is this key valid?". Only
+ * Core's own answer counts as a no: 401, 403 or "false". An error page from
+ * a proxy in front of a busy node (502, 503, an HTML page), or no answer at
+ * all, means the node didn't answer, not that the key is wrong.
+ */
+export type NodeYesNoAnswer = 'yes' | 'no' | 'no-answer';
+
+export async function readNodeYesNoAnswer(
+  response: Response
+): Promise<NodeYesNoAnswer> {
+  if (response.status === 401 || response.status === 403) return 'no';
+  if (!response.ok) return 'no-answer';
+  const text = (await response.text()).trim();
+  if (text === 'true') return 'yes';
+  if (text === 'false') return 'no';
+  return 'no-answer';
+}
+
 export const useAuth = () => {
   const setIsOpenResetApikey = useSetAtom(isOpenDialogResetApikey);
   const setIsOpenCustomApikeyDialog = useSetAtom(isOpenDialogCustomApikey);
@@ -194,7 +213,7 @@ export const useAuth = () => {
                 setIsUrlInvalid(true);
               }
             }
-            return { isValid: false, validatedNodeInfo };
+            return { isValid: false, validatedNodeInfo, nodeAnswered: false };
           }
 
           if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
@@ -203,47 +222,34 @@ export const useAuth = () => {
         }
 
         let isValid = false;
-        let keyRefused = false;
+        // False when the node didn't answer the key check (an error page or
+        // nothing): a key can't be judged then.
+        let nodeAnsweredKeyCheck = true;
 
         const url = `${baseUrl}/admin/settings/localAuthBypassEnabled`;
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          // Non-2xx (502/503/504 HTML page, 429, etc.) — node not answering, not a refusal
-          // Leave isValid as false, skip local key management and dialog
-        } else {
-          // Assuming the response is in plain text and will be 'true' or 'false'
-          const data = await response.text();
-          // Core skips the key only for requests from its own machine, so the
-          // bypass counts only for a loopback node URL, not a node on the LAN.
-          if (data && data === 'true' && isLoopbackNodeUrl(baseUrl)) {
-            isValid = true;
-          }
+        let bypass: NodeYesNoAnswer = 'no-answer';
+        try {
+          bypass = await readNodeYesNoAnswer(await fetch(url));
+        } catch (error) {
+          // No answer at all. A node on this computer stops here, as before;
+          // any other node is still asked about the key.
+          if (isLocal) throw error;
         }
-
-        // Only test the apikey if the first endpoint was reachable and didn't accept us
-        if (!isValid && response.ok) {
+        // Core skips the key only for requests from its own machine, so the
+        // bypass counts only for a loopback node URL, not a node on the LAN.
+        if (bypass === 'yes' && isLoopbackNodeUrl(baseUrl)) {
+          isValid = true;
+        } else {
+          let keyCheck: NodeYesNoAnswer = 'no-answer';
           try {
             const url2 = `${baseUrl}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
             const response2 = await fetch(url2);
-
-            if (response2.ok) {
-              const data2 = await response2.text();
-              if (data2 === 'true') {
-                isValid = true;
-              } else {
-                // 2xx response with body !== 'true' means key was tested and rejected
-                keyRefused = true;
-              }
-            } else if (response2.status === 401 || response2.status === 403) {
-              // Core returned HTTP 401/403 with {"error":4,"message":"API key invalid"}
-              // This is a real key refusal
-              keyRefused = true;
-            }
-            // Other non-2xx (5xx, 429, HTML page) — node not answering, skip
+            keyCheck = await readNodeYesNoAnswer(response2);
           } catch (error) {
-            // Network error or timeout — node not answering, skip
+            keyCheck = 'no-answer';
           }
+          isValid = keyCheck === 'yes';
+          nodeAnsweredKeyCheck = keyCheck !== 'no-answer';
         }
         if (!isValid && isLocal && !isElectron) {
           const resGenerateApiKey = await generateApiKey();
@@ -254,10 +260,15 @@ export const useAuth = () => {
         }
         if (!isValid && isLocal && !disablePopup) {
           setIsOpenResetApikey(true);
-        } else if (!isValid && !isLocal && keyRefused && !disablePopup) {
-          // Only show the key dialog when Core actually refused the key, not for transport errors
-          // Never show it for the public gateway (user has no key to enter)
-          if (validatedNodeInfo?.url !== HTTPS_EXT_NODE_QORTAL_LINK) {
+        } else if (!isValid && !isLocal && !disablePopup) {
+          if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
+            // Nobody has a key for the public node: offer the local node.
+            setPublicNodeUnavailable(true);
+            setIsOpenCoreSetup(true);
+          } else if (!nodeAnsweredKeyCheck) {
+            // Busy or down: as when /admin/status doesn't answer.
+            setIsUrlInvalid(true);
+          } else {
             setIsOpenCustomApikeyDialog(true);
           }
         }
@@ -275,7 +286,12 @@ export const useAuth = () => {
           }
         }
 
-        return { isValid, validatedNodeInfo };
+        // nodeAnswered false: the key wasn't judged, so it isn't a wrong key.
+        return {
+          isValid,
+          validatedNodeInfo,
+          nodeAnswered: nodeAnsweredKeyCheck,
+        };
       } catch (error) {
         return { isValid: false, validatedNodeInfo };
       }

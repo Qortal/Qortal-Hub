@@ -1,8 +1,12 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { useCallback, useMemo } from 'react';
 import { useSidePanelSettings } from '../Desktop/sidePanel';
-import { useHomeLayout } from '../Group/HomeDesktop/homeLayout';
 import {
+  type HomeLayout,
+  useHomeLayout,
+} from '../Group/HomeDesktop/homeLayout';
+import {
+  homeLayoutAsTakenIn,
   readLocalLayouts,
   restoreSavedLayouts,
   sameLayoutPart,
@@ -33,8 +37,8 @@ export const useHasUnsavedLayouts = (address: string | null | undefined) =>
   useUnsavedLayoutParts(address).length > 0;
 
 /**
- * The layout saved on QDN for `part`, when it differs from this device's,
- * and the way to put it in place.
+ * The layout saved on QDN for `part`, when putting it in place would change
+ * this device's, and the way to put it in place.
  */
 export const useSavedLayout = (
   address: string | null | undefined,
@@ -45,8 +49,13 @@ export const useSavedLayout = (
   const [sidePanel] = useSidePanelSettings(address);
   const found = address && state.address === address ? state.saved[part] : null;
   const local = part === 'homeLayout' ? homeLayout : sidePanel;
+  // Home's keeps the Workspace's copies that hold something here.
+  const restored =
+    found && part === 'homeLayout'
+      ? homeLayoutAsTakenIn(address, found.value as HomeLayout)
+      : found?.value;
   const differs =
-    !!found && !sameLayoutPart(part, local as never, found.value as never);
+    !!found && !sameLayoutPart(part, local as never, restored as never);
   const restore = useCallback(() => {
     if (!address) return;
     setState((current) => restoreSavedLayouts(address, current, [part]));

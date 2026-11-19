@@ -68,6 +68,7 @@ import {
   codedQortalRequestError,
   USER_DECLINED_REQUEST_CODE,
 } from './qortal-request-errors.ts';
+import { refuseWhileHubLocked } from './hubLocked';
 import { getPublishesFromAdminsAdminSpace } from '../components/Chat/AdminSpaceInner.tsx';
 import { openQortalLink } from '../utils/qortalLink/openQortalLink';
 import {
@@ -6382,6 +6383,7 @@ export const openNewTab = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
+  refuseWhileHubLocked();
   // Every kind of qortal:// link: a Q-App or website, an app's page, or a
   // group's link. Nothing it opens acts without asking (openQortalLink.ts).
   // The link is text: anything else a Q-App sends is no link. A Q-App's or
@@ -6412,6 +6414,7 @@ export const openUserLookup = async (data) => {
     throw new Error(errorMsg);
   }
 
+  refuseWhileHubLocked();
   executeEvent('openUserLookupDrawer', {
     addressOrName: user,
   });

@@ -35,7 +35,6 @@ import {
   navigationControllerAtom,
   openSnackGlobalAtom,
   qortBalanceLoadingAtom,
-  settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
   txListAtom,
   userInfoAtom,
@@ -48,6 +47,11 @@ import {
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import type { PinnedApp } from '../../utils/pinnedAppsSettings';
+import {
+  isPinnedApp,
+  pinnedAppOfTab,
+  useTogglePinnedApp,
+} from '../../hooks/usePinnedApps';
 import { buildAppPageLink } from '../Apps/AppPage/appPageLink';
 import { openQortalLink } from '../../utils/qortalLink/openQortalLink';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
@@ -68,7 +72,6 @@ import { SubscriptionsStatus } from './SubscriptionsStatus';
 import { AppBookmarksButton } from '../Apps/AppBookmarks';
 import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
-import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
 import {
   allQappsAtom,
@@ -189,27 +192,6 @@ function shortenAddress(address?: string) {
 function formatQortBalance(balance: unknown, locale: string) {
   if (typeof balance !== 'number' && typeof balance !== 'string') return '--';
   return formatQortAmount(balance, locale) ?? '--';
-}
-
-function isSamePinnedApp(item: any, candidate: any) {
-  if (!item || !candidate) return false;
-
-  if (candidate?.isPrivate) {
-    const itemProperties = item?.privateAppProperties;
-    const candidateProperties = candidate?.privateAppProperties;
-
-    return (
-      !!item?.isPrivate &&
-      itemProperties?.name === candidateProperties?.name &&
-      itemProperties?.service === candidateProperties?.service &&
-      itemProperties?.identifier === candidateProperties?.identifier
-    );
-  }
-
-  return (
-    item?.name?.toLowerCase() === candidate.name.toLowerCase() &&
-    item?.service?.toUpperCase() === candidate.service
-  );
 }
 
 function AuthenticatedUserAvatar({
@@ -816,8 +798,6 @@ export function GlobalQortalNavBar({
   const sortablePinnedApps = useAtomValue(sortablePinnedAppsAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
-  const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
-  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
   const { t } = useTranslation(['core', 'question']);
   const [selectedTab, setSelectedTab] = useState<SelectedTab>(null);
   const [inputValue, setInputValue] = useState('');
@@ -971,51 +951,21 @@ export function GlobalQortalNavBar({
       path: parsedLink.path,
     };
   }, [currentLink, selectedTab]);
-  const pinnedCandidate = useMemo(() => {
-    if (selectedTab?.isPrivate || selectedTab?.privateAppProperties) {
-      const privateAppProperties = selectedTab?.privateAppProperties || {};
-      const name = privateAppProperties.name || selectedTab?.name;
-      const service = privateAppProperties.service || selectedTab?.service;
-      const identifier =
-        privateAppProperties.identifier || selectedTab?.identifier;
-
-      if (!name || !service || !identifier) {
-        return null;
-      }
-
-      return {
-        isPrivate: true,
-        isPreview: selectedTab.isPreview ?? true,
-        privateAppProperties: {
-          ...privateAppProperties,
-          name,
-          service,
-          identifier,
-        },
-      };
-    }
-
-    if (!bookmarkSelectedTab?.service || !bookmarkSelectedTab?.name) {
-      return null;
-    }
-    if (
-      bookmarkSelectedTab.internal ||
-      bookmarkSelectedTab.service === INTERNAL_TAB_SERVICE
-    ) {
-      return null;
-    }
-
-    return {
-      name: bookmarkSelectedTab.name,
-      service: bookmarkSelectedTab.service.toUpperCase(),
-    };
-  }, [bookmarkSelectedTab, selectedTab]);
-  const isCurrentAppPinned = useMemo(() => {
-    if (!pinnedCandidate) return false;
-    return !!sortablePinnedApps?.some((item) =>
-      isSamePinnedApp(item, pinnedCandidate)
-    );
-  }, [pinnedCandidate, sortablePinnedApps]);
+  // A private app pins as its tab says; any other app as the page on screen
+  // names it.
+  const pinnedCandidate = useMemo(
+    () =>
+      pinnedAppOfTab(
+        selectedTab?.isPrivate || selectedTab?.privateAppProperties
+          ? selectedTab
+          : bookmarkSelectedTab
+      ),
+    [bookmarkSelectedTab, selectedTab]
+  );
+  const isCurrentAppPinned = useMemo(
+    () => isPinnedApp(sortablePinnedApps, pinnedCandidate),
+    [pinnedCandidate, sortablePinnedApps]
+  );
 
   useEffect(() => {
     if (isInputFocusedRef.current) return;
@@ -1394,26 +1344,11 @@ export function GlobalQortalNavBar({
         setOpenSnackGlobal(true);
       });
   }, [shownLink, setInfoSnackGlobal, setOpenSnackGlobal, t]);
-  const handleTogglePinnedApp = useCallback(() => {
-    if (!pinnedCandidate) return;
-
-    setSortablePinnedApps((prev) => {
-      const isPinned = prev?.some((item) =>
-        isSamePinnedApp(item, pinnedCandidate)
-      );
-      const updatedApps = isPinned
-        ? prev.filter((item) => !isSamePinnedApp(item, pinnedCandidate))
-        : [...prev, pinnedCandidate];
-
-      saveToLocalStorage(
-        'ext_saved_settings',
-        'sortablePinnedApps',
-        updatedApps
-      );
-      return updatedApps;
-    });
-    setSettingsLocalLastUpdated(Date.now());
-  }, [pinnedCandidate, setSettingsLocalLastUpdated, setSortablePinnedApps]);
+  const togglePinnedApp = useTogglePinnedApp();
+  const handleTogglePinnedApp = useCallback(
+    () => togglePinnedApp(pinnedCandidate),
+    [pinnedCandidate, togglePinnedApp]
+  );
 
   const handleCopyAddressSuccess = useCallback(() => {
     setInfoSnackGlobal({

@@ -50,6 +50,7 @@ describe('HomeLayoutSettings', () => {
   it('has a switch for every window but the account card', () => {
     renderSettings();
     const names = [
+      'Workspace',
       'Qortino',
       'Quick Tools',
       'Featured Q-Apps',
@@ -78,6 +79,7 @@ describe('HomeLayoutSettings', () => {
       changedAt: expect.any(Number),
       hidden: ['featured'],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: 2,
     });
   });
 
@@ -112,6 +114,7 @@ describe('HomeLayoutSettings', () => {
       changedAt: expect.any(Number),
       hidden: [],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: 2,
     });
     expect(reset).toBeDisabled();
   });
@@ -136,6 +139,7 @@ describe('HomeLayoutSettings', () => {
       changedAt: expect.any(Number),
       hidden: [],
       stack: ['widgets', 'groupActivity', 'feed'],
+      version: 2,
       widgetWindows: [clock],
     });
     expect(reset).toBeDisabled();
@@ -145,5 +149,50 @@ describe('HomeLayoutSettings', () => {
     renderSettings(null);
     expect(panelSwitch('Qortino')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Edit Home' })).toBeDisabled();
+  });
+});
+
+describe('Reset to default with copies of the Workspace', () => {
+  it("keeps the Workspace's copies when it resets", () => {
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({
+        grid: [{ key: 'workspace:k1', x: 0, y: 0, w: 6, h: 23 }],
+        hidden: ['qortino'],
+        stack: ['widgets', 'groupActivity', 'feed'],
+        version: 2,
+        workspaces: ['k1'],
+      })
+    );
+    renderSettings();
+    const reset = screen.getByRole('button', { name: 'Reset to default' });
+
+    fireEvent.click(reset);
+
+    expect(stored()).toEqual({
+      changedAt: expect.any(Number),
+      hidden: [],
+      stack: ['widgets', 'groupActivity', 'feed'],
+      version: 2,
+      workspaces: ['k1'],
+    });
+    expect(reset).toBeDisabled();
+  });
+
+  it('has nothing to reset when only copies of the Workspace were added', () => {
+    localStorage.setItem(
+      homeLayoutStorageKey(ALICE),
+      JSON.stringify({
+        hidden: [],
+        stack: ['widgets', 'groupActivity', 'feed'],
+        version: 2,
+        workspaces: ['k1'],
+      })
+    );
+    renderSettings();
+
+    expect(
+      screen.getByRole('button', { name: 'Reset to default' })
+    ).toBeDisabled();
   });
 });

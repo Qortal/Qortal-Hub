@@ -17,6 +17,7 @@ import {
 } from '../encryption/encryption';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTakeInSavedLauncher } from '../components/Apps/AppsLauncher/launcherQdnSync';
+import { loadQortinoWorkspaceSettings } from '../components/Group/HomeDesktop/homeLayout';
 import {
   savedLayoutsAtom,
   takeInSavedLayouts,
@@ -108,6 +109,8 @@ export const useQortalGetSaveSettings = (
         console.error(error);
       }
       try {
+        // What the Workspace's copies hold, which Home may not have read yet.
+        await loadQortinoWorkspaceSettings(myAddress);
         setSavedLayouts(takeInSavedLayouts(myAddress, found?.settings ?? null));
       } catch (error) {
         console.error(error);

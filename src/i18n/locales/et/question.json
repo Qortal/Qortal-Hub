@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "{{ token }} saldo kättesaamine ei ole lüüsi kaudu lubatud",
       "gateway_wallet_local_node": "ei saa vaadata {{ token }} rahakotti lüüsi kaudu. Palun kasuta oma kohalikku haaret.",
       "get_foreign_fee": "viga välismaise tasu kättesaamisel",
+      "hub_locked": "Qortal Hub on lukus. Ava see ja proovi uuesti.",
       "insufficient_balance": "sinu vara saldo on ebapiisav",
       "insufficient_balance_qort": "sinu QORT-saldo on ebapiisav",
       "insufficient_funds": "ebapiisavad vahendid",

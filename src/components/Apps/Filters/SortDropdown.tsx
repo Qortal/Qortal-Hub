@@ -9,6 +9,7 @@ import {
   libraryMenuPaperSx,
   usePrefersReducedMotion,
 } from '../AppsLibrary/libraryStyles';
+import { useLauncherTabDialog } from '../launcherTabs';
 import { FilterPill } from './FilterPill';
 
 export type SortOption =
@@ -40,6 +41,8 @@ export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
   const reduce = usePrefersReducedMotion();
   const popupId = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // In a hidden launcher tab the menu steps aside, and comes back with it.
+  const menuShown = useLauncherTabDialog(!!anchor, () => setAnchor(null));
   const label = t('core:filter.sort_by', cap);
   const close = () => setAnchor(null);
 
@@ -59,7 +62,7 @@ export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
         anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
         id={popupId}
         onClose={close}
-        open={!!anchor}
+        {...menuShown}
         slotProps={{
           list: { 'aria-label': label, sx: { py: 0.75 } },
           paper: {

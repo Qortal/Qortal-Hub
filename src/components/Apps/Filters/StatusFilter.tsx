@@ -9,6 +9,7 @@ import {
   libraryMenuPaperSx,
   usePrefersReducedMotion,
 } from '../AppsLibrary/libraryStyles';
+import { useLauncherTabDialog } from '../launcherTabs';
 import { FilterPill } from './FilterPill';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
@@ -30,6 +31,8 @@ export const StatusFilter = ({ value, onChange }: StatusFilterProps) => {
   const reduce = usePrefersReducedMotion();
   const popupId = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // In a hidden launcher tab the menu steps aside, and comes back with it.
+  const menuShown = useLauncherTabDialog(!!anchor, () => setAnchor(null));
   const label = t('core:filter.status', cap);
   const close = () => setAnchor(null);
   const optionLabel = (option: StatusFilterOption) =>
@@ -52,7 +55,7 @@ export const StatusFilter = ({ value, onChange }: StatusFilterProps) => {
         anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
         id={popupId}
         onClose={close}
-        open={!!anchor}
+        {...menuShown}
         slotProps={{
           list: { 'aria-label': label, sx: { py: 0.75 } },
           paper: {

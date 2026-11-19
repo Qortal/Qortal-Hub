@@ -1,6 +1,8 @@
 import i18n from '../i18n/i18n';
 import { normalizeQappIdentityContext } from './qapp-identity';
 import { codedQortalRequestError } from './qortal-request-errors';
+import { isHubLocked } from '../atoms/presence';
+import { hubLockedError, refuseWhileHubLocked } from './hubLocked';
 
 export const isQAppFileSaveAction = (action: unknown) =>
   [
@@ -11,6 +13,8 @@ export const isQAppFileSaveAction = (action: unknown) =>
   ].includes(action as string);
 
 export async function dispatchQAppFileSaveRequest(message, context) {
+  // Opening a save asks in a window of its own; one already open goes on.
+  if (message?.action === 'FILE_SAVE_OPEN') refuseWhileHubLocked();
   const api = window.electronAPI?.qappFileSave;
   if (!api)
     throw codedQortalRequestError(
@@ -53,5 +57,13 @@ export async function dispatchQAppFileSaveRequest(message, context) {
       result.error,
       i18n.t('question:stream_save.failed')
     );
+  // Its prompt was answered after Hub locked: the save doesn't start.
+  if (message.action === 'FILE_SAVE_OPEN' && result?.saveId && isHubLocked()) {
+    await api(owner, {
+      action: 'FILE_SAVE_ABORT',
+      saveId: result.saveId,
+    }).catch(() => undefined);
+    throw hubLockedError();
+  }
   return result;
 }

@@ -9,11 +9,15 @@ import { useCallback, useEffect, useState } from 'react';
  * Everything here but the hook is pure.
  */
 
-/** The panel's own buttons; `divider` is the line between its two groups. */
+/**
+ * The panel's own buttons; `divider` is the line between its two groups.
+ * `qortinoAi` shows only where Qortino AI can run, `dev` only in dev mode.
+ */
 export type SidePanelBuiltInKind =
   | 'home'
   | 'apps'
   | 'qchat'
+  | 'qortinoAi'
   | 'dev'
   | 'divider'
   | 'info'
@@ -85,6 +89,7 @@ export const SIDE_PANEL_BUILT_INS: readonly SidePanelBuiltInKind[] = [
   'home',
   'apps',
   'qchat',
+  'qortinoAi',
   'dev',
   'divider',
   'info',
@@ -93,10 +98,11 @@ export const SIDE_PANEL_BUILT_INS: readonly SidePanelBuiltInKind[] = [
 ];
 
 /**
- * The panel's own buttons that can be hidden: the language, the theme, and
- * the node's information, which the title bar shows on hover too.
+ * The panel's own buttons that can be hidden: Qortino AI, the language, the
+ * theme, and the node's information, which the title bar shows on hover too.
  */
 export const SIDE_PANEL_HIDEABLE: readonly SidePanelBuiltInKind[] = [
+  'qortinoAi',
   'info',
   'language',
   'theme',

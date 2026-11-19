@@ -1,5 +1,12 @@
 import { createContext } from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -51,6 +58,9 @@ beforeAll(() => {
   }
 });
 
+/** Qortino's window on Home, which the card fills. */
+const qortinoSlots: HTMLElement[] = [];
+
 const renderSetUpCard = () => {
   localStorage.setItem('getting_started_status_QADDR', 'completed');
   const store = createStore();
@@ -65,11 +75,13 @@ const renderSetUpCard = () => {
     })
   ) as unknown as typeof fetch;
   window.sendMessage = vi.fn(async () => null) as typeof window.sendMessage;
+  const qortinoNode = document.body.appendChild(document.createElement('div'));
+  qortinoSlots.push(qortinoNode);
   render(
     <JotaiProvider store={store}>
       <ThemeProvider theme={createTheme()}>
         <I18nextProvider i18n={i18n}>
-          <HomeQortinoWorkspaceCard />
+          <HomeQortinoWorkspaceCard qortinoNode={qortinoNode} />
         </I18nextProvider>
       </ThemeProvider>
     </JotaiProvider>
@@ -108,6 +120,8 @@ describe("Qortino's faces on Home", () => {
   });
 
   afterEach(() => {
+    cleanup();
+    qortinoSlots.splice(0).forEach((node) => node.remove());
     vi.useRealTimers();
   });
 
@@ -165,6 +179,9 @@ describe("Qortino's faces on Home", () => {
     expect(screen.getByText('happy')).toBeInTheDocument();
     wait(1_700);
     expect(eyes(stage)).toBe('open');
+    // His answer to the tickle is still in his bubble; then he's idle again.
+    expect(screen.getByText('chatty')).toBeInTheDocument();
+    wait(10_000);
     expect(screen.getByText('idle')).toBeInTheDocument();
   });
 

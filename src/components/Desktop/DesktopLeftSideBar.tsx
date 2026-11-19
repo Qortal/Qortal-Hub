@@ -43,6 +43,7 @@ import {
   enabledDevModeAtom,
   hasUnreadGroupsAtom,
   isNewTabWindowAtom,
+  qortinoAgentOpenAtom,
   supportChatOpenAtom,
   userInfoAtom,
 } from '../../atoms/global';
@@ -53,6 +54,9 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { openQChatTab, QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
+import qortinoHeadUrl from '../../assets/svgs/QortinoHead.svg';
+import { isQortinoLlmNativeAvailable } from '../../qortinoAgent/qortinoLlm';
+import { toggleQortinoAgentSheet } from '../../qortinoAgent/qortinoSheetNav';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
@@ -109,9 +113,7 @@ export const clampSidebarNudgeTop = (
 const readSidebarNudgeTop = (height = TRIGGER_HEIGHT_PX) => {
   if (typeof window === 'undefined') return 0;
   try {
-    const savedValue = window.localStorage.getItem(
-      SIDEBAR_NUDGE_POSITION_KEY
-    );
+    const savedValue = window.localStorage.getItem(SIDEBAR_NUDGE_POSITION_KEY);
     if (savedValue !== null) {
       const saved = Number(savedValue);
       if (Number.isFinite(saved)) {
@@ -376,6 +378,7 @@ export const DesktopSideBar = ({
   } | null>(null);
   const hasUnreadChat = hasUnreadDirects || hasUnreadGroups;
   const effectiveUnreadChat = hasUnreadChat;
+  const qortinoOpen = useAtomValue(qortinoAgentOpenAtom);
   const isQChatActive =
     desktopViewMode === 'apps' &&
     selectedAppsTab?.internal === QCHAT_INTERNAL_TAB_ID;
@@ -671,6 +674,35 @@ export const DesktopSideBar = ({
             ) : null}
           </Box>
         );
+      case 'qortinoAi':
+        // Only where Qortino AI can run (the desktop app).
+        return isQortinoLlmNativeAvailable() ? (
+          <Box data-tour="hub-qortino-ai" key="qortinoAi">
+            <SidebarItem
+              active={qortinoOpen}
+              label={t('core:qortino_agent.sidebar', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              onClick={() => runSidebarAction(toggleQortinoAgentSheet)}
+            >
+              <Box
+                component="img"
+                alt=""
+                src={qortinoHeadUrl}
+                sx={{
+                  filter: qortinoOpen
+                    ? 'none'
+                    : 'grayscale(0.55) saturate(0.7) brightness(0.92)',
+                  height: `${ICON_SIZE_PX + 4}px`,
+                  objectFit: 'contain',
+                  opacity: qortinoOpen ? 1 : 0.86,
+                  transition: 'filter 160ms ease, opacity 160ms ease',
+                  width: `${ICON_SIZE_PX + 4}px`,
+                }}
+              />
+            </SidebarItem>
+          </Box>
+        ) : null;
       case 'dev':
         return isEnabledDevMode ? (
           <SidebarItem
@@ -831,7 +863,8 @@ export const DesktopSideBar = ({
           items={panel.items.filter(
             (item) =>
               isSidePanelItemShown(item) &&
-              (item.kind !== 'dev' || isEnabledDevMode)
+              (item.kind !== 'dev' || isEnabledDevMode) &&
+              (item.kind !== 'qortinoAi' || isQortinoLlmNativeAvailable())
           )}
           labelOf={(item) => sidePanelItemLabel(item, t)}
           onEdit={() => setIsEditorOpen(true)}

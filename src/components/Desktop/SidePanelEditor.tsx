@@ -66,6 +66,8 @@ import {
   withSidePanelItemShown,
   withSidePanelQdnItem,
 } from './sidePanel';
+import qortinoHeadUrl from '../../assets/svgs/QortinoHead.svg';
+import { isQortinoLlmNativeAvailable } from '../../qortinoAgent/qortinoLlm';
 
 type SidePanelEditorProps = {
   open: boolean;
@@ -100,8 +102,11 @@ export const SidePanelEditor = ({
   const availableQapps = useAtomValue(availableQappsAtom);
   const [query, setQuery] = useState('');
 
+  // Qortino AI only where it can run, dev mode only when it's on.
   const listed = settings.items.filter(
-    (item) => item.kind !== 'dev' || devMode
+    (item) =>
+      (item.kind !== 'dev' || devMode) &&
+      (item.kind !== 'qortinoAi' || isQortinoLlmNativeAvailable())
   );
   const added = settings.items.filter(isSidePanelQdnItem);
   const full = added.length >= SIDE_PANEL_ADDED_LIMIT;
@@ -136,6 +141,15 @@ export const SidePanelEditor = ({
         return <AppsIcon height={18} color="currentColor" />;
       case 'qchat':
         return <MessagingIconFilled height={18} color="currentColor" />;
+      case 'qortinoAi':
+        return (
+          <Box
+            alt=""
+            component="img"
+            src={qortinoHeadUrl}
+            sx={{ height: 20, objectFit: 'contain', width: 20 }}
+          />
+        );
       case 'dev':
         return <CodeRoundedIcon sx={{ fontSize: 20 }} />;
       case 'divider':
