@@ -417,6 +417,8 @@
   "app_tab": {
     "close": "关闭标签页",
     "close_all": "关闭所有标签页",
+    "close_others": "关闭其他标签页",
+    "close_right": "关闭右侧标签页",
     "duplicate": "复制标签页",
     "limit_reached": "已达到标签页数量上限。请关闭一个标签页后再打开新的。",
     "locked_kept_open": "已锁定的标签页保持打开。请逐个关闭以确认。",

@@ -91,9 +91,12 @@ import {
 } from '../App/dialogSurface';
 
 import {
-  closeAllKeptNoteKey,
+  keptOpenNoteKey,
+  otherTabIds,
   pickNextTabFromMru,
-  tabsLeftByCloseAll,
+  staysOpenWithOthers,
+  tabIdsToTheRight,
+  tabToShowAfterClose,
 } from './tabSelection';
 import { useHiddenAppsLoader } from './AppPage/useHiddenApps';
 import { namesOwnResources } from './libraryResources';
@@ -154,24 +157,28 @@ const MAX_TAB_MRU_DEPTH = 64;
 /** A restored private app being downloaded and decrypted again. */
 type PrivateReopenRequest = { tabId: string; address: string };
 
-/** Prefer the tab that was to the right of the closed tab; if closed tab was last, use the new last tab */
-function positionalTabAfterClose(
-  remainingTabs: { tabId: string }[],
-  removedTabId: string,
-  tabsBeforeRemove: { tabId: string }[]
-): { tabId: string } | null {
-  if (!remainingTabs.length) return null;
-  const removedIndex = tabsBeforeRemove.findIndex(
-    (tab) => tab?.tabId === removedTabId
-  );
-  if (removedIndex === -1) {
-    return remainingTabs[remainingTabs.length - 1] ?? remainingTabs[0] ?? null;
-  }
-  if (removedIndex < remainingTabs.length) {
-    return remainingTabs[removedIndex] ?? null;
-  }
-  return remainingTabs[removedIndex - 1] ?? null;
-}
+type CloseTabsOptions = {
+  /**
+   * The tab was closed on its own: its ×, a middle click, Ctrl+W. A pinned
+   * tab closes too, and a locked one asks first. Otherwise (Close all tabs,
+   * Close other tabs, Close tabs to the right) pinned and locked tabs stay
+   * open, and a note says so.
+   */
+  direct?: boolean;
+  /** The close of a locked tab was confirmed. */
+  confirmed?: boolean;
+  /**
+   * Closed with the mouse on the strip: the tabs keep their widths until the
+   * pointer leaves it, so the next tab's × comes where the last one was.
+   */
+  holdWidths?: boolean;
+  /**
+   * The tab whose menu closed them: it shows if the tab on screen closes,
+   * as in a browser.
+   */
+  showTabId?: string;
+};
+
 const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 
 const restrictTabsToHorizontalAxis = ({ transform }) => ({
@@ -285,6 +292,16 @@ export const AppsDesktop = ({
   const [sidebarOffsetPx, setSidebarOffsetPx] = useState(0);
   const [enteringTabIds, setEnteringTabIds] = useState<string[]>([]);
   const [tabWidthPx, setTabWidthPx] = useState(TAB_IDEAL_WIDTH_PX);
+  // While tabs are closed with the mouse, the others keep the width they had
+  // (null when they don't): the tab that moves up comes with its × under the
+  // pointer, as in a browser. They still shrink to fit, in a narrower
+  // window for one, but they never grow until the hold ends.
+  const [heldTabWidthPx, setHeldTabWidthPx] = useState<number | null>(null);
+  const shownTabWidthPx =
+    heldTabWidthPx === null ? tabWidthPx : Math.min(heldTabWidthPx, tabWidthPx);
+  // The tab on screen after a close with the mouse: it waits for the hold to
+  // end before it scrolls into view. A tab chosen meanwhile doesn't wait.
+  const heldShownTabIdRef = useRef<string | null>(null);
   const tabScrollerRef = useRef<HTMLDivElement | null>(null);
   const tabScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const tabAddButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -674,11 +691,31 @@ export const AppsDesktop = ({
     return () => ro.disconnect();
   }, [updateTabStripLayout]);
 
+  // The hold on the tab widths ends once the strip is out of sight, and when
+  // a tab opens: the tabs fit the strip again, the new one included.
+  const tabCountRef = useRef(tabs.length);
+  useLayoutEffect(() => {
+    if (!show || tabs.length > tabCountRef.current) {
+      setHeldTabWidthPx(null);
+    }
+    tabCountRef.current = tabs.length;
+  }, [show, tabs.length]);
+
   // Keeps the selected tab in view when the tabs scroll, a new one included.
+  // Not the tab shown after a close with the mouse, while the widths are held:
+  // scrolling would move the tabs under the pointer, so it comes into view
+  // after. Any tab chosen meanwhile comes into view at once.
   useLayoutEffect(() => {
     const area = tabScrollAreaRef.current;
     const selectedTabId = selectedTab?.tabId;
     if (!area || !selectedTabId) return;
+    if (
+      heldTabWidthPx !== null &&
+      selectedTabId === heldShownTabIdRef.current
+    ) {
+      return;
+    }
+    heldShownTabIdRef.current = null;
     const tabElement = Array.from(
       area.querySelectorAll<HTMLElement>('[data-tab-id]')
     ).find((element) => element.dataset.tabId === selectedTabId);
@@ -693,10 +730,11 @@ export const AppsDesktop = ({
       area.scrollLeft = nextScrollLeft;
     }
   }, [
+    heldTabWidthPx,
     pinnedTabs.length,
     selectedTab?.tabId,
     show,
-    tabWidthPx,
+    shownTabWidthPx,
     unpinnedTabs.length,
   ]);
 
@@ -1003,14 +1041,30 @@ export const AppsDesktop = ({
     setOpenSnack(true);
   };
 
-  /** `tabs` with `newTab` after the tab `afterTabId`, or at the end. */
-  const withTabAfter = (prev, newTab, afterTabId?: string) => {
+  /**
+   * `tabs` with `newTab` after the tab `afterTabId`, else before the tab
+   * `beforeTabId`, else at the end.
+   */
+  const withTabAfter = (
+    prev,
+    newTab,
+    afterTabId?: string,
+    beforeTabId?: string
+  ) => {
     const sourceIndex = afterTabId
       ? prev.findIndex((tab) => tab?.tabId === afterTabId)
       : -1;
-    if (sourceIndex === -1) return [...prev, newTab];
+    const nextIndex =
+      sourceIndex === -1 && beforeTabId
+        ? prev.findIndex((tab) => tab?.tabId === beforeTabId)
+        : -1;
+    if (sourceIndex === -1 && nextIndex === -1) return [...prev, newTab];
     const nextTabs = [...prev];
-    nextTabs.splice(sourceIndex + 1, 0, newTab);
+    nextTabs.splice(
+      sourceIndex === -1 ? nextIndex : sourceIndex + 1,
+      0,
+      newTab
+    );
     return pinnedFirst(nextTabs);
   };
 
@@ -1020,10 +1074,12 @@ export const AppsDesktop = ({
    */
   const openNewLauncherTab = ({
     afterTabId,
+    beforeTabId,
     query = '',
     state,
   }: {
     afterTabId?: string;
+    beforeTabId?: string;
     query?: string;
     /** Its first page, when it is not the launcher with `query`. */
     state?: LauncherTabState;
@@ -1033,7 +1089,7 @@ export const AppsDesktop = ({
       return false;
     }
     const newTab = newLauncherTab(uid.rnd());
-    setTabs((prev) => withTabAfter(prev, newTab, afterTabId));
+    setTabs((prev) => withTabAfter(prev, newTab, afterTabId, beforeTabId));
     setLauncherTabStates((prev) => ({
       ...prev,
       [newTab.tabId]: state ?? newLauncherTabState(query),
@@ -1113,7 +1169,10 @@ export const AppsDesktop = ({
     // A launcher tab reopened (Ctrl+Shift+T) is a new one: nothing it held
     // was kept.
     if (isLauncherTab(data)) {
-      openNewLauncherTab({ afterTabId: data.afterTabId });
+      openNewLauncherTab({
+        afterTabId: data.afterTabId,
+        beforeTabId: data.beforeTabId,
+      });
       return;
     }
     if (data?.internal) {
@@ -1179,8 +1238,9 @@ export const AppsDesktop = ({
     }
 
     // Only the tab menu pins a tab: a tab opened any other way starts
-    // unpinned, a duplicate of a pinned tab too.
-    const { pinned: _pinned, ...tabData } = data;
+    // unpinned, a duplicate of a pinned tab too. `beforeTabId` only places a
+    // reopened tab (Ctrl+Shift+T): the tab doesn't keep it.
+    const { pinned: _pinned, beforeTabId, ...tabData } = data;
 
     // Opened from inside a launcher tab: the app takes that tab's place, as
     // a page opened from a browser's new tab does, unless the tab's publish
@@ -1212,7 +1272,7 @@ export const AppsDesktop = ({
       ...tabData,
       tabId: uid.rnd(),
     };
-    setTabs((prev) => withTabAfter(prev, newTab, data.afterTabId));
+    setTabs((prev) => withTabAfter(prev, newTab, data.afterTabId, beforeTabId));
     setSelectedTab(newTab);
     setMode('viewer');
     setDesktopViewMode('apps');
@@ -1379,34 +1439,78 @@ export const AppsDesktop = ({
     };
   }, []);
 
-  const performTabRemoval = (tabId) => {
-    // Clear session permissions for this tab
-    clearSessionPermissionsByTabId(tabId);
+  /**
+   * Every way of closing tabs ends here: a tab's ×, a middle click, Ctrl+W,
+   * Dev Mode's tabs and the tab menu's Close other tabs, Close tabs to the
+   * right and Close all tabs.
+   */
+  const closeTabs = (
+    tabIds: readonly string[],
+    {
+      confirmed = false,
+      direct = false,
+      holdWidths = false,
+      showTabId,
+    }: CloseTabsOptions = {}
+  ) => {
+    const named = tabs.filter(
+      (tab) => tab?.tabId && tabIds.includes(tab.tabId)
+    );
+    if (!named.length) return;
 
+    // A locked tab closed on its own asks first, and closes once confirmed.
+    const locked = direct && !confirmed && named.find((tab) => !!tab.lock);
+    if (locked) {
+      setPendingTabToRemove(locked);
+      setShowCloseTabDialog(true);
+      return;
+    }
+
+    // Closed along with others, pinned and locked tabs stay open.
+    const kept = direct ? [] : named.filter(staysOpenWithOthers);
+    if (kept.length > 0) {
+      setInfoSnack({
+        type: 'info',
+        message: t(keptOpenNoteKey(kept), {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      setOpenSnack(true);
+    }
+    const closingIds = new Set(
+      named.filter((tab) => !kept.includes(tab)).map((tab) => tab.tabId)
+    );
+    if (closingIds.size === 0) return;
+
+    closingIds.forEach((tabId) => clearSessionPermissionsByTabId(tabId));
     recentTabIdsRef.current = recentTabIdsRef.current.filter(
-      (id) => id !== tabId
+      (id) => !closingIds.has(id)
+    );
+    setEnteringTabIds((prev) => prev.filter((id) => !closingIds.has(id)));
+    const remainingTabs = tabs.filter((tab) => !closingIds.has(tab?.tabId));
+    setHeldTabWidthPx(
+      holdWidths && remainingTabs.length > 0 ? shownTabWidthPx : null
     );
 
-    const wasClosingActive = selectedTab?.tabId === tabId;
-    const copyTabs = [...tabs].filter((tab) => tab?.tabId !== tabId);
-    const remainingIds = new Set(copyTabs.map((t) => t.tabId));
-
-    setEnteringTabIds((prev) => prev.filter((id) => id !== tabId));
-    if (copyTabs?.length === 0) {
+    if (remainingTabs.length === 0) {
       recentTabIdsRef.current = [];
-      setTabs(copyTabs);
+      setTabs([]);
       setSelectedTab(null);
+      setIsNewTabWindow(false);
       tabsTokenRef.current += 1;
       const tabsToken = tabsTokenRef.current;
       executeEvent('setTabsToNav', {
         data: {
-          tabs: copyTabs,
+          tabs: [],
           selectedTab: null,
+          isNewTabWindow: false,
           tabsToken,
         },
       });
       executeEvent('forceNavClear', { data: { tabsToken } });
       executeEvent('clearNavInput', {});
+      setMode('home');
+      setDevMode('home');
       returnFromAppsMode();
       window.setTimeout(() => {
         setMode('home');
@@ -1415,25 +1519,20 @@ export const AppsDesktop = ({
       return;
     }
 
-    let nextTab = null;
-    if (
-      !wasClosingActive &&
-      selectedTab?.tabId &&
-      remainingIds.has(selectedTab.tabId)
-    ) {
-      nextTab = selectedTab;
-    } else if (wasClosingActive) {
-      nextTab =
-        pickNextTabFromMru(copyTabs, recentTabIdsRef.current) ||
-        positionalTabAfterClose(copyTabs, tabId, tabs);
-    } else {
-      nextTab = copyTabs[0] ?? null;
-    }
-
-    setTabs(copyTabs);
-    setSelectedTab(nextTab);
-    if (wasClosingActive && nextTab) {
-      if (isLocalDevTab(nextTab)) {
+    setTabs(remainingTabs);
+    // When the tab on screen closed, the next one shows in its place.
+    let shownTab = selectedTab;
+    if (selectedTab?.tabId && closingIds.has(selectedTab.tabId)) {
+      shownTab =
+        remainingTabs.find((tab) => tab.tabId === showTabId) ??
+        tabToShowAfterClose(
+          tabs,
+          remainingTabs,
+          selectedTab.tabId,
+          recentTabIdsRef.current
+        );
+      setSelectedTab(shownTab);
+      if (isLocalDevTab(shownTab)) {
         setDesktopViewMode('dev');
         setDevMode('viewer');
       } else {
@@ -1441,37 +1540,27 @@ export const AppsDesktop = ({
         setMode('viewer');
       }
     }
+    heldShownTabIdRef.current = holdWidths ? (shownTab?.tabId ?? null) : null;
     tabsTokenRef.current += 1;
-    const tabsToken = tabsTokenRef.current;
-    setTimeout(() => {
-      executeEvent('setTabsToNav', {
-        data: {
-          tabs: copyTabs,
-          selectedTab: nextTab,
-          tabsToken,
-        },
-      });
-    }, 400);
+    executeEvent('setTabsToNav', {
+      data: {
+        tabs: remainingTabs,
+        selectedTab: shownTab,
+        isNewTabWindow,
+        tabsToken: tabsTokenRef.current,
+      },
+    });
   };
 
+  // Ctrl+W and Dev Mode's tabs close a tab on its own, as its × does.
   const removeTabFunc = (e) => {
-    const data = e.detail?.data;
-    const tabToRemove = tabs.find((tab) => tab?.tabId === data?.tabId);
-
-    // Check if the tab has a lock
-    if (tabToRemove?.lock) {
-      setPendingTabToRemove(tabToRemove);
-      setShowCloseTabDialog(true);
-      return;
-    }
-
-    // Proceed with removal if no lock
-    performTabRemoval(data?.tabId);
+    const tabId = e.detail?.data?.tabId;
+    if (tabId) closeTabs([tabId], { direct: true });
   };
 
   const handleCloseTabDialogConfirm = () => {
     if (pendingTabToRemove) {
-      performTabRemoval(pendingTabToRemove.tabId);
+      closeTabs([pendingTabToRemove.tabId], { confirmed: true, direct: true });
     }
     setShowCloseTabDialog(false);
     setPendingTabToRemove(null);
@@ -1638,8 +1727,10 @@ export const AppsDesktop = ({
     [navigationController]
   );
 
-  // A launcher tab has no Pin: it is a page on the way to an app.
+  // A launcher tab has no Pin: it is a page on the way to an app. A tab
+  // pinned or unpinned ends a hold on the widths, as a tab opening does.
   const toggleTabPinned = useCallback((tabId: string) => {
+    setHeldTabWidthPx(null);
     setTabs((prev) => {
       const tab = prev.find((item) => item?.tabId === tabId);
       return tab && !isLauncherTab(tab)
@@ -1648,87 +1739,9 @@ export const AppsDesktop = ({
     });
   }, []);
 
-  const closeAllTabs = useCallback(() => {
-    // A locked tab asks before it closes (removeTabFunc), and a pinned tab
-    // closes only once it is unpinned, so Close All keeps both open rather
-    // than closing them without asking.
-    const { kept: keptTabs, nextTab } = tabsLeftByCloseAll(
-      tabs,
-      selectedTab?.tabId,
-      recentTabIdsRef.current
-    );
-    const keptIds = new Set(keptTabs.map((tab) => tab.tabId));
-    tabs.forEach((tab) => {
-      if (tab?.tabId && !keptIds.has(tab.tabId)) {
-        clearSessionPermissionsByTabId(tab.tabId);
-      }
-    });
-    if (keptTabs.length > 0) {
-      recentTabIdsRef.current = recentTabIdsRef.current.filter((id) =>
-        keptIds.has(id)
-      );
-      setEnteringTabIds((prev) => prev.filter((id) => keptIds.has(id)));
-      setIsNewTabWindow(false);
-      setTabs(keptTabs);
-      setSelectedTab(nextTab);
-      if (isLocalDevTab(nextTab)) {
-        setDesktopViewMode('dev');
-        setDevMode('viewer');
-      } else {
-        setDesktopViewMode('apps');
-        setMode('viewer');
-      }
-      tabsTokenRef.current += 1;
-      executeEvent('setTabsToNav', {
-        data: {
-          tabs: keptTabs,
-          selectedTab: nextTab,
-          isNewTabWindow: false,
-          tabsToken: tabsTokenRef.current,
-        },
-      });
-      setInfoSnack({
-        type: 'info',
-        message: t(closeAllKeptNoteKey(keptTabs), {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      });
-      setOpenSnack(true);
-      return;
-    }
-    recentTabIdsRef.current = [];
-    setTabs([]);
-    setSelectedTab(null);
-    setIsNewTabWindow(false);
-    executeEvent('clearNavInput', {});
-    tabsTokenRef.current += 1;
-    executeEvent('setTabsToNav', {
-      data: {
-        tabs: [],
-        selectedTab: null,
-        isNewTabWindow: false,
-        tabsToken: tabsTokenRef.current,
-      },
-    });
-    executeEvent('forceNavClear', {
-      data: { tabsToken: tabsTokenRef.current },
-    });
-    setMode('home');
-    setDevMode('home');
-    returnFromAppsMode();
-    window.setTimeout(() => {
-      setMode('home');
-      setDevMode('home');
-    }, 0);
-  }, [
-    tabs,
-    selectedTab,
-    t,
-    returnFromAppsMode,
-    setIsNewTabWindow,
-    setMode,
-    setDevMode,
-  ]);
+  // A locked tab asks before it closes, and a pinned tab closes only on its
+  // own, so Close All keeps both open (closeTabs).
+  const closeAllTabs = () => closeTabs(tabs.map((tab) => tab?.tabId));
 
   useEffect(() => {
     if (tabs.length === 0 && selectedTab) {
@@ -1863,6 +1876,14 @@ export const AppsDesktop = ({
     [pinnedTabIds]
   );
 
+  // Close other tabs and Close tabs to the right, in a tab's menu: greyed
+  // out (undefined) when they would close nothing. The menu's tab shows if
+  // the tab on screen closes.
+  const closingOf = (tabIds: string[], menuTabId: string) =>
+    tabIds.length > 0
+      ? () => closeTabs(tabIds, { showTabId: menuTabId })
+      : undefined;
+
   const renderTab = (tab) => (
     <TabComponent
       key={tab?.tabId}
@@ -1871,18 +1892,24 @@ export const AppsDesktop = ({
       isPinned={isPinnedTab(tab)}
       isSelected={tab?.tabId === selectedTab?.tabId}
       tabInteractionLockedRef={tabInteractionLockedRef}
-      widthPx={isPinnedTab(tab) ? PINNED_TAB_WIDTH_PX : tabWidthPx}
+      widthPx={isPinnedTab(tab) ? PINNED_TAB_WIDTH_PX : shownTabWidthPx}
       isEntering={enteringTabIds.includes(tab?.tabId)}
       onCloseAll={closeAllTabs}
+      onCloseOthers={closingOf(otherTabIds(tabs, tab?.tabId), tab?.tabId)}
+      onCloseToTheRight={closingOf(
+        tabIdsToTheRight(tabs, tab?.tabId),
+        tab?.tabId
+      )}
       onDuplicate={() => duplicateTab(tab)}
       onTogglePin={
         isLauncherTab(tab) ? undefined : () => toggleTabPinned(tab?.tabId)
       }
-      onClose={() => {
-        executeEvent('removeTab', {
-          data: tab,
-        });
-      }}
+      onClose={(request) =>
+        closeTabs([tab?.tabId], {
+          direct: true,
+          holdWidths: request?.byPointer === true,
+        })
+      }
       onSelect={() => {
         if (isLocalDevTab(tab)) {
           executeEvent('open-dev-mode', {});
@@ -1942,6 +1969,15 @@ export const AppsDesktop = ({
         }}
       >
         <AppsHorizontalTabBar
+          // Tabs closed with the mouse fit the strip again once it is left,
+          // also for a tab's menu: it is on the page, outside the strip.
+          onPointerOut={(event) => {
+            const next = event.relatedTarget;
+            if (next instanceof Node && event.currentTarget.contains(next)) {
+              return;
+            }
+            setHeldTabWidthPx(null);
+          }}
           sx={{
             transition: `opacity ${show ? '200ms ease-out' : '140ms ease-in'}, transform ${show ? '200ms ease-out' : '140ms ease-in'}`,
             opacity: show ? 1 : 0,
