@@ -179,6 +179,9 @@ describe("Qortino's faces on Home", () => {
     expect(screen.getByText('happy')).toBeInTheDocument();
     wait(1_700);
     expect(eyes(stage)).toBe('open');
+    // His answer to the tickle is still in his bubble; then he's idle again.
+    expect(screen.getByText('chatty')).toBeInTheDocument();
+    wait(10_000);
     expect(screen.getByText('idle')).toBeInTheDocument();
   });
 

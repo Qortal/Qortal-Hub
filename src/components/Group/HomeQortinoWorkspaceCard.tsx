@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useStore } from 'jotai';
 import {
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
@@ -53,6 +53,9 @@ import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
 import {
   balanceAtom,
+  qortinoAgentOpenAtom,
+  qortinoAgentParkedAtom,
+  rawWalletAtom,
   resourceKeySelector,
   txListAtom,
   useGetResourceStatus,
@@ -94,11 +97,31 @@ import {
   DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS,
   type QortinoLookDebugSettings,
 } from './qortinoLookDebug';
+import { isQortinoLlmInferenceAvailable } from '../../qortinoAgent/qortinoLlm';
+import { releaseQortinoAfterHomeDraft } from '../../qortinoAgent/homeDraftWarmup';
+import { askQortino } from '../../qortinoAgent/pendingQuestion';
+import { QortinoHomeComposer } from './qortinoHome/QortinoHomeComposer';
+import {
+  QortinoSpeechPopup,
+  type QortinoMouthOffset,
+} from './qortinoHome/QortinoSpeechPopup';
 import { isNightHour } from './qortinoHome/qortinoNight';
+import {
+  pickGiggleQuip,
+  pickTickleQuip,
+  type QortinoQuip,
+} from './qortinoHome/qortinoQuips';
 import {
   useQortinoGlances,
   type QortinoGaze,
 } from './qortinoHome/useQortinoGlances';
+import {
+  readRecentQortinoQuips,
+  useQortinoQuips,
+  type ActiveQortinoQuip,
+  type SayOptions,
+} from './qortinoHome/useQortinoQuips';
+import { useQortinoReady } from './qortinoHome/useQortinoReady';
 import {
   DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS,
   type QortinoLayoutDebugSettings,
@@ -160,12 +183,18 @@ const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
 const ONBOARDING_RECOGNITION_DURATION_MS = 2600;
 /**
- * A press on Qortino's head shorter than this is a tap (he winks); held this
- * long it becomes a tickle, and from then on the finger may roam.
+ * A press on Qortino's head shorter than this is a tap (he winks, and opens
+ * Qortino where Qortino AI can run); held this long it becomes a tickle, and
+ * from then on the finger may roam.
  */
 const QORTINO_TAP_MAX_MS = 420;
 /** Before the tickle begins, a finger that travels further is a swipe or a scroll. */
 const QORTINO_TAP_SLOP_PX = 10;
+/** Time between giggles while he is tickled; quicker while the finger moves. */
+const QORTINO_GIGGLE_MS: readonly [number, number] = [1_500, 1_900];
+const QORTINO_GIGGLE_RUBBED_MS: readonly [number, number] = [850, 1_150];
+/** The finger moved this recently: it is rubbing, he laughs harder. */
+const QORTINO_RUBBING_MS = 450;
 const QORTINO_MASCOT_BASE_SIZE = 168;
 const QORTINO_MASCOT_SCALE = 0.68;
 const QORTINO_MASCOT_SIZE = Math.round(
@@ -2443,6 +2472,18 @@ export const HomeQortinoWorkspaceCard = ({
     setShowOnboardingCompletionConfetti,
   ] = useState(false);
   const [isQortinoTickled, setIsQortinoTickled] = useState(false);
+  const [qortinoSheetOpen, setQortinoAgentOpen] = useAtom(qortinoAgentOpenAtom);
+  const [, setQortinoAgentParked] = useAtom(qortinoAgentParkedAtom);
+  const jotaiStore = useStore();
+  // Qortino AI on Home: now and then a line from his mouth and, once Qortino
+  // AI has a model on this computer, a box next to him to ask it something.
+  // Only while Qortino's window shows on Home.
+  const showQortino = qortinoNode != null;
+  const qortinoAiPossible = isQortinoLlmInferenceAvailable();
+  const qortinoAiReady = useQortinoReady();
+  const qortinoStageRef = useRef<HTMLDivElement | null>(null);
+  const [qortinoComposerFocused, setQortinoComposerFocused] = useState(false);
+  const [qortinoQuipTyping, setQortinoQuipTyping] = useState(false);
   // Qortino's faces, as in GO: his eyes for a moment (a wink for a tap,
   // happy after a tickle), and a hop.
   const [qortinoHopKey, setQortinoHopKey] = useState(0);
@@ -2483,7 +2524,8 @@ export const HomeQortinoWorkspaceCard = ({
   /**
    * The press on Qortino's head: when and where it began, whether the
    * finger wandered off before the tickle began (then it is a swipe or a
-   * scroll: no tap, no tickle), and whether he is being tickled.
+   * scroll: no tap, no tickle), whether he is being tickled, and since
+   * then, when the finger last moved.
    */
   const qortinoPressRef = useRef<{
     at: number;
@@ -2491,8 +2533,16 @@ export const HomeQortinoWorkspaceCard = ({
     y: number;
     moved: boolean;
     tickling: boolean;
+    lastMoveAt: number;
   } | null>(null);
   const qortinoTickleTimerRef = useRef<number | null>(null);
+  const qortinoGiggleTimerRef = useRef<number | null>(null);
+  const qortinoNextGiggleAtRef = useRef(0);
+  const qortinoLastGiggleRef = useRef<string | null>(null);
+  /** Qortino's speech (set once the line picker below exists). */
+  const sayQortinoQuipRef = useRef<
+    (quip: QortinoQuip, options?: SayOptions) => void
+  >(() => {});
   const [qortinoGratefulState, setQortinoGratefulState] =
     useState<QortinoGratefulState | null>(null);
   const [qortinoDonationOverlayState, setQortinoDonationOverlayState] =
@@ -2711,20 +2761,59 @@ export const HomeQortinoWorkspaceCard = ({
     setSelectedTrackSnapshot(null);
   }, [cancelEarbumpTrackDownload, userAddress]);
 
-  const clearQortinoTickleTimer = () => {
-    if (qortinoTickleTimerRef.current != null) {
-      window.clearTimeout(qortinoTickleTimerRef.current);
-      qortinoTickleTimerRef.current = null;
+  const clearQortinoPressTimers = () => {
+    for (const ref of [qortinoTickleTimerRef, qortinoGiggleTimerRef]) {
+      if (ref.current != null) {
+        window.clearTimeout(ref.current);
+        ref.current = null;
+      }
     }
   };
 
   const endQortinoPress = useCallback(() => {
     qortinoPressRef.current = null;
-    clearQortinoTickleTimer();
+    clearQortinoPressTimers();
     setIsQortinoTickled(false);
   }, []);
 
-  useEffect(() => () => clearQortinoTickleTimer(), []);
+  useEffect(() => () => clearQortinoPressTimers(), []);
+
+  // On a touch screen, no scrolling of Home under a finger that tickles him
+  // (React's touch listeners are passive, so this one is native).
+  useEffect(() => {
+    const stage = qortinoStageRef.current;
+    if (!stage) return;
+    const onTouchMove = (event: TouchEvent) => {
+      if (qortinoPressRef.current?.tickling && event.cancelable) {
+        event.preventDefault();
+      }
+    };
+    stage.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      stage.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [qortinoNode]);
+
+  // While he is tickled he giggles, a new giggle every second or two, and
+  // quicker while the finger rubs him.
+  const giggleQortino = useCallback(() => {
+    const press = qortinoPressRef.current;
+    if (!press?.tickling) return;
+    const giggle = pickGiggleQuip({ last: qortinoLastGiggleRef.current });
+    qortinoLastGiggleRef.current = giggle.key;
+    sayQortinoQuipRef.current(giggle, {
+      holdMs: 4_000,
+      keepBubble: true,
+      remember: false,
+    });
+    const [low, high] =
+      Date.now() - press.lastMoveAt < QORTINO_RUBBING_MS
+        ? QORTINO_GIGGLE_RUBBED_MS
+        : QORTINO_GIGGLE_MS;
+    const delay = low + Math.random() * (high - low);
+    qortinoNextGiggleAtRef.current = Date.now() + delay;
+    qortinoGiggleTimerRef.current = window.setTimeout(giggleQortino, delay);
+  }, []);
 
   const handleQortinoPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -2732,9 +2821,10 @@ export const HomeQortinoWorkspaceCard = ({
       // (A finger or a pen presses with button 0.)
       if (event.button > 0) return;
       event.currentTarget.setPointerCapture?.(event.pointerId);
-      clearQortinoTickleTimer();
+      clearQortinoPressTimers();
       qortinoPressRef.current = {
         at: Date.now(),
+        lastMoveAt: 0,
         moved: false,
         tickling: false,
         x: event.clientX,
@@ -2747,41 +2837,78 @@ export const HomeQortinoWorkspaceCard = ({
         if (!press || press.moved) return;
         press.tickling = true;
         setIsQortinoTickled(true);
+        giggleQortino();
       }, QORTINO_TAP_MAX_MS);
     },
-    []
+    [giggleQortino]
   );
 
   const handleQortinoPointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const press = qortinoPressRef.current;
-      // Being tickled, the finger may go wherever it likes.
-      if (!press || press.moved || press.tickling) return;
+      if (!press || press.moved) return;
+      // Being tickled: the finger may go wherever it likes, and rubbing
+      // makes him laugh sooner.
+      if (press.tickling) {
+        const now = Date.now();
+        press.lastMoveAt = now;
+        const [low, high] = QORTINO_GIGGLE_RUBBED_MS;
+        if (qortinoNextGiggleAtRef.current - now > high) {
+          if (qortinoGiggleTimerRef.current != null) {
+            window.clearTimeout(qortinoGiggleTimerRef.current);
+          }
+          const delay = low + Math.random() * (high - low);
+          qortinoNextGiggleAtRef.current = now + delay;
+          qortinoGiggleTimerRef.current = window.setTimeout(
+            giggleQortino,
+            delay
+          );
+        }
+        return;
+      }
       const travel = Math.hypot(
         event.clientX - press.x,
         event.clientY - press.y
       );
       if (travel <= QORTINO_TAP_SLOP_PX) return;
-      // Moved on before the tickle began: a swipe or a scroll of Home,
-      // which carries on as if Qortino were not there.
+      // Moved on before the tickle began: a swipe to the next screen or a
+      // scroll of Home, which carries on as if Qortino were not there.
       endQortinoPress();
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     },
-    [endQortinoPress]
+    [endQortinoPress, giggleQortino]
   );
 
-  // Lifted: a tap gets a wink; after a tickle he hops, happy.
+  // Lifted: a tap gets a wink, and opens Qortino AI (in the desktop app);
+  // after a tickle he answers it, in the bubble his giggles were in, and
+  // hops, happy.
   const handleQortinoPointerRelease = useCallback(() => {
     const press = qortinoPressRef.current;
     endQortinoPress();
     if (!press || press.moved) return;
     if (!press.tickling) {
       flashQortinoEyes('wink', 750);
+      if (!qortinoAiPossible) return;
+      setQortinoAgentParked(false);
+      setQortinoAgentOpen(true);
       return;
     }
+    sayQortinoQuipRef.current(
+      pickTickleQuip({
+        heldMs: Date.now() - press.at,
+        recent: readRecentQortinoQuips(),
+      }),
+      { keepBubble: true }
+    );
     setQortinoHopKey((key) => key + 1);
     flashQortinoEyes('happy', 1_600);
-  }, [endQortinoPress, flashQortinoEyes]);
+  }, [
+    endQortinoPress,
+    flashQortinoEyes,
+    qortinoAiPossible,
+    setQortinoAgentOpen,
+    setQortinoAgentParked,
+  ]);
 
   const showQortinoDonationOverlay = useCallback(
     ({
@@ -4245,6 +4372,87 @@ export const HomeQortinoWorkspaceCard = ({
       : (workspaces?.find((place) => place.key === musicWorkspaceKey)?.title ??
         null);
   const qortinoIsTalking = Boolean(qortinoDisplayedMessage);
+  const qortinoQuipsEnabled =
+    qortinoAiPossible &&
+    showQortino &&
+    hasName &&
+    resolvedHasAvatar &&
+    !isOnboardingVisible;
+  const resolveQortinoQuip = useCallback(
+    (quip: QortinoQuip) =>
+      String(t(`core:qortino_workspace.${quip.key}`, { name: name ?? '' })),
+    [name, t]
+  );
+  const {
+    quip: qortinoQuip,
+    dismiss: dismissQortinoQuip,
+    say: sayQortinoQuip,
+  } = useQortinoQuips({
+    aiReady: qortinoAiReady,
+    blocked:
+      Boolean(qortinoDisplayedMessage) ||
+      qortinoComposerFocused ||
+      Boolean(qortinoDonationOverlayState) ||
+      qortinoSheetOpen ||
+      isBayPickerOpen,
+    enabled: qortinoQuipsEnabled,
+    resolveText: resolveQortinoQuip,
+    targetRef: qortinoStageRef,
+  });
+  sayQortinoQuipRef.current = sayQortinoQuip;
+  // Jokes end in a wink, once the words are out.
+  const qortinoQuipId = qortinoQuip?.id;
+  const qortinoQuipWinks = qortinoQuip?.wink === true;
+  const qortinoQuipTypingMs = qortinoQuip?.typingMs ?? 0;
+  useEffect(() => {
+    if (!qortinoQuipId || !qortinoQuipWinks) return;
+    const timer = window.setTimeout(
+      () => flashQortinoEyes('wink', 750),
+      450 + qortinoQuipTypingMs
+    );
+    return () => window.clearTimeout(timer);
+  }, [flashQortinoEyes, qortinoQuipId, qortinoQuipTypingMs, qortinoQuipWinks]);
+  const showQortinoComposer =
+    qortinoAiPossible && qortinoAiReady && showQortino && !isOnboardingVisible;
+  const handleQortinoQuipTap = useCallback(() => {
+    dismissQortinoQuip();
+    setQortinoAgentParked(false);
+    setQortinoAgentOpen(true);
+  }, [dismissQortinoQuip, setQortinoAgentOpen, setQortinoAgentParked]);
+  const handleQortinoAsk = useCallback(
+    (question: string) => {
+      setQortinoComposerFocused(false);
+      setQortinoHopKey((key) => key + 1);
+      flashQortinoEyes('happy', 1_400);
+      const account = () =>
+        jotaiStore.get(rawWalletAtom)?.address0 ||
+        jotaiStore.get(userInfoAtom)?.address;
+      const asker = account();
+      // A moment to see him hop before his window opens.
+      window.setTimeout(() => {
+        // Signed out meanwhile: the question is not left for the next
+        // account, and the model loaded for it is let go.
+        if (!asker || account() !== asker) {
+          releaseQortinoAfterHomeDraft();
+          return;
+        }
+        askQortino(question);
+      }, 380);
+    },
+    [flashQortinoEyes, jotaiStore]
+  );
+  // Late at night, with nothing to do, Qortino dozes off. The hour is looked
+  // at every minute (isQortinoNight), and a tickle wakes him fully.
+  const qortinoSleepy =
+    hasName &&
+    resolvedHasAvatar &&
+    !isOnboardingVisible &&
+    isQortinoNight &&
+    !qortinoIsTalking &&
+    !isQortinoTickled &&
+    !qortinoQuip &&
+    !qortinoComposerFocused &&
+    (qortinoMood === 'empty' || qortinoMood === 'hotkeys');
   const qortinoBodyStageScale = Math.max(1, qortinoLookDebug.bodyScale);
   const qortinoBodyStageWidthScale = Math.max(
     1,
@@ -5536,6 +5744,8 @@ export const HomeQortinoWorkspaceCard = ({
         '&::after': {
           background: alpha(theme.palette.common.white, 0.05),
           content: '""',
+          // The line over Qortino; nothing under it without him.
+          display: showQortino ? undefined : 'none',
           height: '1px',
           left: '18px',
           position: 'absolute',
@@ -5996,15 +6206,6 @@ export const HomeQortinoWorkspaceCard = ({
     );
   };
 
-  // Late at night, with nothing to do, Qortino dozes off.
-  const qortinoSleepy =
-    hasName &&
-    resolvedHasAvatar &&
-    !isOnboardingVisible &&
-    isQortinoNight &&
-    !qortinoIsTalking &&
-    !isQortinoTickled &&
-    (qortinoMood === 'empty' || qortinoMood === 'hotkeys');
   const qortinoStatusKey = isQortinoTickled
     ? 'ticklish'
     : qortinoGratefulState
@@ -6013,12 +6214,25 @@ export const HomeQortinoWorkspaceCard = ({
         ? 'helpful'
         : isWorkspaceFreshlyUnlocked || qortinoEyesFlash === 'happy'
           ? 'happy'
-          : isMusicOn && workspaceState.musicPlaying
+          : qortinoComposerFocused || (isMusicOn && workspaceState.musicPlaying)
             ? 'listening'
-            : qortinoSleepy
-              ? 'sleepy'
-              : 'idle';
+            : qortinoQuip
+              ? 'chatty'
+              : qortinoSleepy
+                ? 'sleepy'
+                : 'idle';
   const qortinoStatusLabel = qw(`status.${qortinoStatusKey}`, qortinoStatusKey);
+  // Qortino's mouth, from the bottom-left corner of his speech bubble: the
+  // bubble sits next to him, lower when the ask box is under it.
+  const qortinoMouthOffset: QortinoMouthOffset = {
+    x: -Math.round(qortinoMascotStageWidth * 0.56),
+    y: showQortinoComposer ? 2 : -18,
+  };
+  const qortinoMascotGaze: QortinoGaze | undefined = qortinoComposerFocused
+    ? { x: 4.5, y: 2.5 }
+    : qortinoQuip
+      ? { x: 3, y: -1 }
+      : undefined;
   const qortinoMascotCenteredOffsetY = Math.round(
     (QORTINO_MASCOT_SIZE - qortinoMascotStageHeight) / 2
   );
@@ -6039,19 +6253,24 @@ export const HomeQortinoWorkspaceCard = ({
   const renderQortinoCompanionPreviewSection = useCallback(
     ({
       compact = false,
+      composer = null,
       displayedMessage,
       isTickled,
       isListening,
       isTalking,
+      mascotMotion,
       messageKey,
       mood,
+      mouthOffset,
       onMascotDragOver,
       onMascotDrop,
-      mascotMotion,
       onMascotPointerCancel,
       onMascotPointerDown,
       onMascotPointerMove,
       onMascotPointerRelease,
+      onQuipTap,
+      onQuipTypingChange,
+      quip = null,
       showConfetti = false,
       statusLabel,
     }: {
@@ -6060,15 +6279,23 @@ export const HomeQortinoWorkspaceCard = ({
        * smaller, with his name over his bubble.
        */
       compact?: boolean;
+      /** The ask box next to him, once Qortino AI has a model. */
+      composer?: ReactNode;
       displayedMessage: string | null;
       isTickled: boolean;
       isListening: boolean;
       isTalking: boolean;
+      mascotMotion?: QortinoMascotMotion;
       messageKey: string;
       mood: 'celebrate' | 'empty' | 'grateful' | 'guide' | 'hotkeys' | 'music';
+      mouthOffset: QortinoMouthOffset;
+      /** Null where Qortino AI can't run: the bubble opens nothing. */
+      onQuipTap: (() => void) | null;
+      onQuipTypingChange: (typing: boolean) => void;
+      /** A line from his mouth, when no other message is up. */
+      quip?: ActiveQortinoQuip | null;
       onMascotDragOver?: (event: ReactDragEvent<HTMLDivElement>) => void;
       onMascotDrop?: (event: ReactDragEvent<HTMLDivElement>) => void;
-      mascotMotion?: QortinoMascotMotion;
       onMascotPointerCancel?: () => void;
       onMascotPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
       onMascotPointerMove?: (event: ReactPointerEvent<HTMLDivElement>) => void;
@@ -6324,6 +6551,7 @@ export const HomeQortinoWorkspaceCard = ({
                   width: `${qortinoMascotStageWidth}px`,
                   ...(compact ? { zoom: QORTINO_COMPACT_MASCOT_ZOOM } : {}),
                 }}
+                ref={qortinoStageRef}
                 data-qortino-eyes={mascotMotion?.eyes ?? 'open'}
                 data-testid="qortino-mascot-stage"
                 onDragOver={onMascotDragOver}
@@ -6350,9 +6578,12 @@ export const HomeQortinoWorkspaceCard = ({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: compact ? 0.75 : 1.02,
-                  justifyContent: 'center',
+                  // With the ask box, it sits at his chin and what he says
+                  // pops up above it, so the box never moves.
+                  justifyContent: composer ? 'flex-end' : 'center',
                   minHeight: compact ? 0 : `${qortinoMascotStageHeight}px`,
                   minWidth: 0,
+                  pb: composer ? '14px' : 0,
                   width: '100%',
                 }}
               >
@@ -6441,7 +6672,15 @@ export const HomeQortinoWorkspaceCard = ({
                       </motion.div>
                     </Box>
                   </motion.div>
-                ) : null}
+                ) : (
+                  <QortinoSpeechPopup
+                    mouth={mouthOffset}
+                    onTap={onQuipTap ?? undefined}
+                    onTypingChange={onQuipTypingChange}
+                    quip={quip}
+                  />
+                )}
+                {composer}
               </Box>
             </Box>
           </Box>
@@ -6470,25 +6709,41 @@ export const HomeQortinoWorkspaceCard = ({
 
   const qortinoCompanionSection = renderQortinoCompanionPreviewSection({
     compact: isOnboardingVisible,
+    composer: showQortinoComposer ? (
+      <QortinoHomeComposer
+        onFocusChange={setQortinoComposerFocused}
+        onSend={handleQortinoAsk}
+      />
+    ) : null,
     displayedMessage: qortinoDisplayedMessage,
     isTickled: isQortinoTickled,
     isListening: isMusicOn && workspaceState.musicPlaying,
     isTalking: qortinoIsTalking,
+    mascotMotion: {
+      // The antenna lights up while he listens: to the ask box, to his own
+      // words, or to the music.
+      antennaGlow:
+        qortinoComposerFocused ||
+        qortinoQuipTyping ||
+        (isMusicOn && workspaceState.musicPlaying),
+      chattering: qortinoQuipTyping,
+      dozing: qortinoSleepy && qortinoEyesFlash == null,
+      eyes: qortinoEyesFlash ?? (qortinoSleepy ? 'sleepy' : 'open'),
+      gaze: qortinoMascotGaze,
+      // Once the account is set up, he looks around now and then.
+      glancing: hasName && resolvedHasAvatar && !isOnboardingVisible,
+      hopKey: qortinoHopKey,
+    },
+    mouthOffset: qortinoMouthOffset,
+    onQuipTap: qortinoAiPossible ? handleQortinoQuipTap : null,
+    onQuipTypingChange: setQortinoQuipTyping,
+    quip: qortinoQuip,
     messageKey: qortinoGratefulState
       ? `grateful-${qortinoGratefulState.nonce}`
       : (qortinoDisplayedMessage ?? 'empty'),
     mood: qortinoMood,
     onMascotDragOver: handleQortinoDonationDragOver,
     onMascotDrop: handleQortinoDonationDrop,
-    mascotMotion: {
-      // The antenna lights up while he listens to the music.
-      antennaGlow: isMusicOn && workspaceState.musicPlaying,
-      dozing: qortinoSleepy && qortinoEyesFlash == null,
-      eyes: qortinoEyesFlash ?? (qortinoSleepy ? 'sleepy' : 'open'),
-      // Once the account is set up, he looks around now and then.
-      glancing: hasName && resolvedHasAvatar && !isOnboardingVisible,
-      hopKey: qortinoHopKey,
-    },
     onMascotPointerCancel: endQortinoPress,
     onMascotPointerDown: handleQortinoPointerDown,
     onMascotPointerMove: handleQortinoPointerMove,

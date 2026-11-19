@@ -35,6 +35,29 @@ describe('normalizeSidePanel', () => {
     ]);
   });
 
+  it('puts Qortino AI after Q-Chat in a panel arranged before it, and lets it be hidden', () => {
+    const before = normalizeSidePanel({
+      items: [
+        { kind: 'qchat' },
+        { kind: 'home' },
+        { kind: 'apps' },
+        { kind: 'dev' },
+        { kind: 'divider' },
+        { kind: 'info' },
+        { kind: 'language' },
+        { kind: 'theme' },
+      ],
+    });
+    expect(keys(before).slice(0, 3)).toEqual(['qchat', 'qortinoAi', 'home']);
+
+    const hidden = normalizeSidePanel({
+      items: [{ hidden: true, kind: 'qortinoAi' }],
+    });
+    expect(
+      hidden.items.find((item) => item.kind === 'qortinoAi')
+    ).toMatchObject({ hidden: true });
+  });
+
   it('keeps a stored order, without unknown or repeated buttons', () => {
     const settings = normalizeSidePanel({
       background: 0.4,
@@ -61,6 +84,7 @@ describe('normalizeSidePanel', () => {
       'home',
       'apps',
       'qchat',
+      'qortinoAi',
       'dev',
       'divider',
       'info',
@@ -227,7 +251,7 @@ describe('changing the buttons', () => {
       service: 'website',
     });
 
-    expect(keys(site).slice(3, 7)).toEqual([
+    expect(keys(site).slice(4, 8)).toEqual([
       'dev',
       'qdn:APP:q-tube',
       'qdn:WEBSITE:qortal wiki',
