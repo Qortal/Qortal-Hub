@@ -1,4 +1,4 @@
-import { atom } from 'jotai';
+import { atom, getDefaultStore } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 
 /**
@@ -27,6 +27,9 @@ export const isIdleAtom = atom<boolean>(false);
  * update the idle timer while locked, but it must never unlock the app.
  */
 export const appLockedAtom = atom<boolean>(false);
+
+/** Whether Hub is locked right now, for code that runs outside React. */
+export const isHubLocked = () => getDefaultStore().get(appLockedAtom);
 
 /**
  * Set of Qortal addresses that are currently online according to the

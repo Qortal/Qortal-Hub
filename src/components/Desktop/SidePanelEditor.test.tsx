@@ -111,6 +111,26 @@ describe('SidePanelEditor', () => {
     ).not.toBeChecked();
   });
 
+  it('lists Qortino AI after Q-Chat where it can run, and hides it', () => {
+    window.qortinoLlm = {} as typeof window.qortinoLlm;
+    try {
+      const onSettings = renderEditor();
+      expect(rows().slice(2, 4)).toEqual(['qchat', 'qortinoAi']);
+
+      fireEvent.click(
+        screen.getByRole('checkbox', { name: 'show Qortino AI' })
+      );
+
+      expect(
+        lastSettings(onSettings).items.find(
+          (item: { kind: string }) => item.kind === 'qortinoAi'
+        )
+      ).toEqual({ hidden: true, kind: 'qortinoAi' });
+    } finally {
+      delete window.qortinoLlm;
+    }
+  });
+
   it('makes the buttons a bit bigger', () => {
     const onSettings = renderEditor();
 

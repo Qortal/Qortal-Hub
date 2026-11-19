@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "无法通过网关获取 {{ token }} 余额",
       "gateway_wallet_local_node": "无法通过网关查看 {{ token }} 钱包。请使用本地节点。",
       "get_foreign_fee": "获取外部费用时出错",
+      "hub_locked": "Qortal Hub 已锁定。请解锁后重试。",
       "insufficient_balance": "您的资产余额不足",
       "insufficient_balance_qort": "您的 QORT 余额不足",
       "insufficient_funds": "资金不足",

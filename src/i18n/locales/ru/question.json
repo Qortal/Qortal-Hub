@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "получение баланса {{ token }} через шлюз запрещено",
       "gateway_wallet_local_node": "нельзя просмотреть кошелек {{ token }} через шлюз. Используйте локальный узел.",
       "get_foreign_fee": "ошибка при получении внешней комиссии",
+      "hub_locked": "Qortal Hub заблокирован. Разблокируйте его и повторите попытку.",
       "insufficient_balance": "недостаточно средств на счете",
       "insufficient_balance_qort": "недостаточно QORT на балансе",
       "insufficient_funds": "недостаточно средств",
