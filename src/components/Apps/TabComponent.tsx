@@ -393,9 +393,9 @@ const TabComponent = ({
           src={
             app?.privateAppProperties?.logo
               ? app?.privateAppProperties?.logo
-              : `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+              : `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(
                   app?.name
-                }/qortal_avatar?async=true`
+                )}/qortal_avatar?async=true`
           }
         >
           <img

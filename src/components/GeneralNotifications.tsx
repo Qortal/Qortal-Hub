@@ -515,7 +515,7 @@ export const GeneralNotifications = ({
                         ? undefined
                         : `${getBaseApiReact()}${
                             notification?.image ||
-                            `/arbitrary/THUMBNAIL/${notification?.appName || 'Q-Mail'}/qortal_avatar?async=true`
+                            `/arbitrary/THUMBNAIL/${encodeURIComponent(notification?.appName || 'Q-Mail')}/qortal_avatar?async=true`
                           }`
                     }
                     sx={{

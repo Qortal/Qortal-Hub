@@ -908,7 +908,7 @@ const AppTile = ({
     ? undefined
     : isQTrade
       ? qTradeLogo
-      : `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
+      : `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${encodeURIComponent(appName)}/qortal_avatar?async=true`;
   const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
   const [hasTileVideoError, setHasTileVideoError] = useState(false);
   const hasRetriedRef = useRef(false);
