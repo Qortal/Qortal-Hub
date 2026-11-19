@@ -46,6 +46,8 @@ native permission prompt showing the trusted app identity, **suggested filename*
 and **declared size**. It explicitly says these details come from the app and
 are not a guarantee of content or safety. Approval opens the native save dialog.
 Approval is per save, never a session-wide permission. Hub never auto-opens files.
+While Hub is locked, `FILE_SAVE_OPEN` shows nothing and fails with `HUB_LOCKED`;
+a save opened before Hub locked goes on.
 
 ```js
 const { saveId } = await qortalRequestWithTimeout(
@@ -111,7 +113,8 @@ may already have been saved; cancellation cannot roll back a completed save.
 
 Error codes include `SAVE_CANCELLED`, `SAVE_BUSY`, `SAVE_NOT_FOUND`,
 `SAVE_INVALID_REQUEST`, `SAVE_INVALID_CHUNK`, `SAVE_INCOMPLETE`, `SAVE_IO_ERROR`,
-`SAVE_PERMISSION_DENIED`, and `SAVE_UNAVAILABLE`. OS errors are redacted.
+`SAVE_PERMISSION_DENIED`, `SAVE_UNAVAILABLE` and `HUB_LOCKED`. OS errors are
+redacted.
 
 ## Manual smoke test
 

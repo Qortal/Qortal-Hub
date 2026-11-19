@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { HomeWindowId } from './homeGrid';
+import type { HomeFixedWindowId } from './homeGrid';
 
 /** Each Home window's name, as the settings and Edit Home show it. */
-export const useHomeWindowTitles = (): Record<HomeWindowId, string> => {
+export const useHomeWindowTitles = (): Record<HomeFixedWindowId, string> => {
   const { t } = useTranslation(['group']);
   return useMemo(
     () => ({
@@ -16,9 +16,20 @@ export const useHomeWindowTitles = (): Record<HomeWindowId, string> => {
       tools: t('group:dashboard.quick_tools_module'),
       wallet: t('group:dashboard.wallet_activity'),
       widgets: t('group:dashboard.widgets_module'),
+      workspace: t('group:dashboard.workspace_module'),
     }),
     [t]
   );
+};
+
+/**
+ * The names of the Workspace's copies, in the layout's order: "Workspace 2",
+ * "Workspace 3"…
+ */
+export const useHomeWorkspaceCopyTitle = () => {
+  const { t } = useTranslation(['group']);
+  return (index: number) =>
+    t('group:dashboard.workspace_numbered', { n: index + 2 });
 };
 
 type ScreenRect = { height: number; left: number; top: number; width: number };

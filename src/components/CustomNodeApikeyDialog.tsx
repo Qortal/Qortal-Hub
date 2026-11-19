@@ -69,7 +69,7 @@ export function CustomNodeApikeyDialog() {
         apikey,
         name: selectedNode?.name || '',
       };
-      const { isValid } = await validateApiKey(payload);
+      const { isValid, nodeAnswered } = await validateApiKey(payload);
       if (isValid) {
         const customNodes = await getCustomNodes();
         const copyCustomNodes = [...customNodes];
@@ -91,6 +91,8 @@ export function CustomNodeApikeyDialog() {
         setOpen(false);
         return;
       }
+      // The node didn't answer, and Hub has said so: the key wasn't judged.
+      if (nodeAnswered === false) return;
       setMessage(
         t('node:error.invalidKey', {
           postProcess: 'capitalizeFirstChar',

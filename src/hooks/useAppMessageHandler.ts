@@ -1,4 +1,5 @@
 import { useEffect, MutableRefObject } from 'react';
+import { isHubLocked } from '../atoms/presence';
 import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
 import { openQortalLink } from '../utils/qortalLink/openQortalLink';
@@ -76,6 +77,18 @@ export function useAppMessageHandler(
           void openQortalLink(payload.link);
         }
       } else if (message.action === 'NOTIFICATION_PERMISSION_REQUEST') {
+        // As for approvals: nothing waits behind the lock screen.
+        if (isHubLocked()) {
+          window.postMessage(
+            {
+              action: 'NOTIFICATION_PERMISSION_RESPONSE',
+              requestId: message.requestId,
+              result: { accepted: false },
+            },
+            window.location.origin
+          );
+          return;
+        }
         executeEvent('show-notification-permission', {
           requestId: message.requestId,
           appInfo: message.appInfo,
@@ -86,6 +99,19 @@ export function useAppMessageHandler(
         message?.isFromExtension &&
         event.source === window
       ) {
+        // While Hub is locked nothing is shown over or behind the lock screen:
+        // the request is answered as declined.
+        if (isHubLocked()) {
+          window.postMessage(
+            {
+              action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
+              requestId: message?.requestId,
+              result: { accepted: false },
+            },
+            window.location.origin
+          );
+          return;
+        }
         const handler = permissionHandlerRef.current;
         handler?.(message, event);
       } else if (message?.action === 'getFileFromIndexedDB') {

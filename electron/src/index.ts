@@ -67,6 +67,7 @@ import {
   stopSharedReticulumDaemon,
 } from './reticulum-daemon';
 import { registerReticulumMeshIpcHandlers } from './reticulum-mesh';
+import { registerQortinoLlmIpcHandlers } from './qortino-llm';
 import { startReticulumForAppLaunch } from './reticulum-launch';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
 import {
@@ -85,6 +86,7 @@ import * as net from 'net';
 
 registerReticulumIpcHandlers();
 registerReticulumMeshIpcHandlers();
+registerQortinoLlmIpcHandlers();
 
 function isBenignStdioWriteError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException)?.code;

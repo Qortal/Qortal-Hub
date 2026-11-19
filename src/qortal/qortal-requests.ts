@@ -88,6 +88,7 @@ import {
   clearRnsDestinationPermissionsByTabId,
 } from './get.ts';
 import { serializeQortalRequestError } from './qortal-request-errors.ts';
+import { refuseWhileHubLocked } from './hubLocked';
 import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
@@ -1760,7 +1761,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error: error?.message,
+              ...serializeQortalRequestError(error),
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1786,7 +1787,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error: error?.message,
+              ...serializeQortalRequestError(error),
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -2558,6 +2559,7 @@ function setupMessageListenerQortalRequest() {
 
       case 'SHOW_PDF_READER': {
         try {
+          refuseWhileHubLocked();
           if (!request.payload?.blob) {
             throw new Error('Missing blob');
           }
@@ -2580,7 +2582,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error: error?.message,
+              ...serializeQortalRequestError(error),
               type: 'backgroundMessageResponse',
             },
             event.origin

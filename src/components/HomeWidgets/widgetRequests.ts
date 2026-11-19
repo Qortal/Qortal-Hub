@@ -1,7 +1,13 @@
 import i18n from '../../i18n/i18n';
 import { qappRequestTimeoutMs } from '../../qortal/qappRequestTimeout';
 import { serializeQortalRequestError } from '../../qortal/qortal-request-errors';
+import {
+  invalidSetTabError,
+  tabFromSetTabRequest,
+} from '../../qortal/qapp-set-tab';
 import { executeEvent } from '../../utils/events';
+import { isHubLocked } from '../../atoms/presence';
+import { hubLockedError } from '../../qortal/hubLocked';
 
 /**
  * What a Home widget may ask the Hub for: the qortalRequest actions that
@@ -173,8 +179,24 @@ export const createWidgetRequestHandler =
       reply({ result: true, error: null });
       return;
     }
+    if (data.action === 'SET_TAB' && isHubLocked()) {
+      // No tab opens behind the lock screen.
+      reply({
+        result: null,
+        error: serializeQortalRequestError(hubLockedError()),
+      });
+      return;
+    }
     if (data.action === 'SET_TAB') {
-      executeEvent('addTab', { data: data.payload });
+      const tab = tabFromSetTabRequest(data.payload);
+      if (!tab) {
+        reply({
+          result: null,
+          error: serializeQortalRequestError(invalidSetTabError()),
+        });
+        return;
+      }
+      executeEvent('addTab', { data: tab });
       executeEvent('open-apps-mode', {});
       reply({ result: true, error: null });
       return;

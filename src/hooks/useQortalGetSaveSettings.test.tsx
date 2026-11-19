@@ -9,6 +9,17 @@ import {
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
+import {
+  HOME_LAYOUT_DEFAULT,
+  readHomeLayout,
+  saveHomeLayout,
+  withHomeWorkspaceCopy,
+} from '../components/Group/HomeDesktop/homeLayout';
+import {
+  markLayoutsSaved,
+  NO_SAVED_LAYOUTS,
+  readLocalLayouts,
+} from '../components/Save/savedLayouts';
 import { setPinnedAppsAccount } from '../utils/pinnedAppsStorage';
 
 const qdn = vi.hoisted(() => ({ settings: null as unknown }));
@@ -52,8 +63,11 @@ const savedLocally = (address: string, sortablePinnedApps: unknown) => {
   setPinnedAppsAccount(null);
 };
 
-/** Signs in and waits until the QDN answer has been handled. */
-const signIn = async (address: string, name: string) => {
+/**
+ * Signs in and waits until the QDN answer has been handled. With
+ * `withLayouts`, Home's layout and the side panel are taken in too.
+ */
+const signIn = async (address: string, name: string, withLayouts = false) => {
   const store = createStore();
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <Provider store={store}>{children}</Provider>
@@ -61,7 +75,7 @@ const signIn = async (address: string, name: string) => {
   renderHook(
     () => {
       useRetrieveDataLocalStorage(address);
-      useQortalGetSaveSettings(name, true);
+      useQortalGetSaveSettings(name, true, withLayouts ? address : undefined);
     },
     { wrapper }
   );
@@ -96,5 +110,45 @@ describe('useQortalGetSaveSettings at sign-in', () => {
     publishedOnQdn(Date.now() + 60_000, pins('Saved on QDN'));
 
     expect(await signIn('QAlice', 'Alice')).toEqual(pins('Saved on QDN'));
+  });
+
+  it("keeps a copy of the Workspace that holds apps in the account's settings, before Home has read them", async () => {
+    // Home's layout with a copy of the Workspace, saved to QDN from here.
+    saveHomeLayout(
+      'QAlice',
+      withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace', 'k1')
+    );
+    markLayoutsSaved('QAlice', readLocalLayouts('QAlice'), NO_SAVED_LAYOUTS);
+    // Apps are in it: the account's settings have them, this device's
+    // storage doesn't.
+    vi.stubGlobal(
+      'sendMessage',
+      vi.fn(async (action: string) =>
+        action === 'getUserSettings'
+          ? {
+              hotkeys: [],
+              mode: 'empty',
+              version: 1,
+              windows: { k1: { hotkeys: ['APP::Q-Tube'], mode: 'hotkeys' } },
+            }
+          : null
+      )
+    );
+    // Saved since on another device, without it.
+    publishedOnQdn(Date.now() + 60_000, pins('Saved on QDN'));
+    qdn.settings = {
+      sortablePinnedApps: pins('Saved on QDN'),
+      homeLayout: {
+        v: 1,
+        layout: { hidden: ['feed'], stack: ['widgets', 'groupActivity'] },
+        changedAt: Date.now() + 60_000,
+      },
+    };
+
+    await signIn('QAlice', 'Alice', true);
+
+    expect(readHomeLayout('QAlice')).toEqual(
+      expect.objectContaining({ hidden: ['feed'], workspaces: ['k1'] })
+    );
   });
 });
