@@ -953,7 +953,7 @@
       "register_name": "Souhaitez-vous enregistrer ce nom?",
       "reset_pinned": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser les applications épinglées par défaut?",
       "reset_qdn": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser avec vos applications QDN enregistrées?",
-      "transfer_qort": "voulez-vous transférer {{ amount }} QORT"
+      "transfer_qort_to": "voulez-vous transférer {{ amount }} QORT à {{ recipient }} ?"
     },
     "success": {
       "order_submitted": "Votre commande d'achat a été soumise",

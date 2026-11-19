@@ -953,7 +953,7 @@
       "register_name": "您想注册这个名字吗？",
       "reset_pinned": "不喜欢您当前的本地更改吗？您想重置默认的固定应用吗？",
       "reset_qdn": "不喜欢您当前的本地更改吗？您想重置保存的QDN固定应用吗？",
-      "transfer_qort": "要转账 {{ amount }} QORT 吗"
+      "transfer_qort_to": "要向 {{ recipient }} 转账 {{ amount }} QORT 吗？"
     },
     "success": {
       "order_submitted": "您的买入订单已提交",

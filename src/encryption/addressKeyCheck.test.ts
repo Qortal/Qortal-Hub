@@ -9,6 +9,7 @@ import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddres
 import {
   assertPublicKeyForAddress,
   AT_ADDRESS_VERSION,
+  isAddressShaped,
   isValidAddressWithVersion,
   isValidQortalAddress,
   publicKeyBelongsToAddress,
@@ -96,6 +97,23 @@ describe('isValidAddressWithVersion', () => {
     expect(
       isValidAddressWithVersion(mistyped(atAddress), [AT_ADDRESS_VERSION])
     ).toBe(false);
+  });
+});
+
+describe('isAddressShaped', () => {
+  it('is true for anything that decodes to 25 bytes, valid or not', () => {
+    expect(isAddressShaped(accountAAddress)).toBe(true);
+    expect(isAddressShaped(mistyped(accountAAddress))).toBe(true);
+    expect(isAddressShaped(atAddress)).toBe(true);
+  });
+
+  it('is false for names, keys and other text', () => {
+    expect(isAddressShaped('Account-A')).toBe(false);
+    expect(isAddressShaped('Recipient B')).toBe(false);
+    expect(isAddressShaped('Who?#1')).toBe(false);
+    expect(isAddressShaped(accountAKey)).toBe(false);
+    expect(isAddressShaped('')).toBe(false);
+    expect(isAddressShaped(undefined)).toBe(false);
   });
 });
 

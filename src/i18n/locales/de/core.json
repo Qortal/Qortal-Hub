@@ -953,7 +953,7 @@
       "register_name": "Möchten Sie diesen Namen registrieren?",
       "reset_pinned": "Mögen Sie Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf die standardmäßigen angestellten Apps zurücksetzen?",
       "reset_qdn": "Mögen Sie Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf Ihre gespeicherten QDN -Apps zurücksetzen?",
-      "transfer_qort": "Möchten Sie {{ amount }} QORT überweisen"
+      "transfer_qort_to": "Möchten Sie {{ amount }} QORT an {{ recipient }} überweisen?"
     },
     "success": {
       "order_submitted": "Ihre Kaufbestellung wurde eingereicht",

@@ -953,7 +953,7 @@
       "register_name": "この名前を登録しますか？",
       "reset_pinned": "あなたの現在のローカルの変更が気に入らない？デフォルトのピン留めアプリにリセットしますか？",
       "reset_qdn": "あなたの現在のローカルの変更が気に入らない？保存したQDNピン留めアプリにリセットしますか？",
-      "transfer_qort": "{{ amount }} QORT を送金しますか"
+      "transfer_qort_to": "{{ amount }} QORT を {{ recipient }} に送金しますか？"
     },
     "success": {
       "order_submitted": "購入注文が提出されました",

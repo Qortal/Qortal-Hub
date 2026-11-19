@@ -953,7 +953,7 @@
       "register_name": "kas soovid selle nime registreerida?",
       "reset_pinned": "ei meeldi kohalikud muudatused? Kas soovid taastada vaikimisi kinnitatud rakendused?",
       "reset_qdn": "ei meeldi kohalikud muudatused? Kas soovid taastada oma QDN-i salvestatud kinnitatud rakendused?",
-      "transfer_qort": "kas soovid kanda üle {{ amount }} QORT?"
+      "transfer_qort_to": "kas soovid kanda {{ amount }} QORT üle saajale {{ recipient }}?"
     },
     "success": {
       "order_submitted": "sinu ostutellimus esitatud",

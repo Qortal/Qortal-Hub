@@ -65,6 +65,7 @@ export const backgroundFactory = () => ({
   processTransactionVersion2: vi.fn(),
   registerName: vi.fn(),
   removeAdmin: vi.fn(),
+  resolveRecipient: vi.fn(),
   sellName: vi.fn(),
   sendChatGroup: vi.fn(),
   sendChatNotification: vi.fn(),
