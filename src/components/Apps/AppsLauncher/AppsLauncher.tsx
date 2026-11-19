@@ -17,8 +17,8 @@ import { getCacheKey, ratingsStoreAtom } from '../../../hooks/useAppRatings';
 import { useHandlePrivateApps } from '../../../hooks/useHandlePrivateApps';
 import type { AppRatingData } from '../../../types/ratings';
 import { executeEvent } from '../../../utils/events';
-import { openQortalUseGroupLink } from '../../../utils/openQortalUseGroupLink';
-import { openAppPage } from '../AppPage/appPageLink';
+import { openQortalLink } from '../../../utils/qortalLink/openQortalLink';
+import { launcherTabLinkOptions } from '../AppPage/appPageLink';
 import {
   getPinnedAppKey,
   type PinnedApp,
@@ -29,6 +29,8 @@ import type { AppsLibraryTabValue } from '../AppsLibrary';
 import { libraryMuted } from '../AppsLibrary/libraryStyles';
 import {
   inLauncherTab,
+  LauncherRestartContext,
+  LauncherTabShownContext,
   type PublishEditTarget,
   useLauncherTabId,
 } from '../launcherTabs';
@@ -90,6 +92,8 @@ export type AppsLauncherRequest = {
 };
 
 interface AppsLauncherProps {
+  /** Every app, hidden from the library or not: a pin keeps its details. */
+  allQapps?: LauncherApp[];
   availableQapps: LauncherApp[];
   categories: any[];
   contentHeight?: string;
@@ -115,10 +119,16 @@ interface AppsLauncherProps {
 export const AppsLauncher = (props: AppsLauncherProps) => {
   const hasBeenShownRef = useRef(props.isShow);
   if (props.isShow) hasBeenShownRef.current = true;
-  return hasBeenShownRef.current ? <AppsLauncherPage {...props} /> : null;
+  // A request starts the launcher over, and closes a menu left open in it.
+  return hasBeenShownRef.current ? (
+    <LauncherRestartContext.Provider value={props.request?.nonce ?? 0}>
+      <AppsLauncherPage {...props} />
+    </LauncherRestartContext.Provider>
+  ) : null;
 };
 
 const AppsLauncherPage = ({
+  allQapps,
   availableQapps,
   categories,
   contentHeight,
@@ -301,6 +311,13 @@ const AppsLauncherPage = ({
     // The request's query belongs to its nonce.
   }, [isShow, request?.nonce, scroller]);
 
+  // A request with a search that is not taken in yet: its results take the
+  // place of the pins and the library right after this render.
+  const isSearchRequested =
+    isShow &&
+    handledNonceRef.current !== (request?.nonce ?? 0) &&
+    !!request?.query?.trim();
+
   // Leaving the search returns to the page as it was.
   useLayoutEffect(() => {
     if (!scroller || !isShowRef.current || isSearching) return;
@@ -353,24 +370,7 @@ const AppsLauncherPage = ({
 
   const openLink = useCallback(
     (target: LauncherLink) => {
-      if (target.kind === 'page') {
-        openAppPage(target, launcherTabId);
-      } else if (target.kind === 'group') {
-        void openQortalUseGroupLink(target.link);
-      } else {
-        executeEvent('addTab', {
-          data: inLauncherTab(
-            {
-              service: target.service,
-              name: target.name,
-              identifier: target.identifier,
-              path: target.path,
-            },
-            launcherTabId
-          ),
-        });
-        executeEvent('open-apps-mode', {});
-      }
+      void openQortalLink(target, launcherTabLinkOptions(launcherTabId));
       setQuery('');
     },
     [launcherTabId]
@@ -499,73 +499,79 @@ const AppsLauncherPage = ({
               </Box>
             ) : null}
 
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: isSearching ? 'none' : 'flex',
-                flexDirection: 'column',
-                width: '100%',
-              }}
+            {/* A menu left open here steps aside while this part is hidden:
+                the tab shows another page, or the search results. */}
+            <LauncherTabShownContext.Provider
+              value={isShow && !isSearching && !isSearchRequested}
             >
-              <AppsWidthLimiter sx={{ gap: '6px', paddingTop: '10px' }}>
-                <Box
-                  sx={{
-                    alignItems: 'baseline',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '4px 16px',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                  }}
-                >
-                  <Typography component="h2" sx={sectionTitleSx}>
-                    {t('core:launcher.pinned_and_bookmarks', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  <Typography
-                    sx={(theme) => ({
-                      color: libraryMuted(theme),
-                      fontSize: '13px',
-                    })}
-                  >
-                    {t('core:launcher.pinned_hint', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                </Box>
-                {/* Once the bookmarks are read: they say what is in a folder. */}
-                {areBookmarksReady ? (
-                  <MemoSaved
-                    availableQapps={availableQapps}
-                    bookmarks={bookmarks}
-                    myAddress={myAddress}
-                    myApp={myApp}
-                    myWebsite={myWebsite}
-                    onBookmarksChange={saveBookmarks}
-                  />
-                ) : null}
-              </AppsWidthLimiter>
-
               <Box
-                ref={libraryStartRef}
-                sx={{ height: '8px', width: '100%' }}
-              />
+                sx={{
+                  alignItems: 'center',
+                  display: isSearching ? 'none' : 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
+                }}
+              >
+                <AppsWidthLimiter sx={{ gap: '6px', paddingTop: '10px' }}>
+                  <Box
+                    sx={{
+                      alignItems: 'baseline',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '4px 16px',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                    }}
+                  >
+                    <Typography component="h2" sx={sectionTitleSx}>
+                      {t('core:launcher.pinned_and_bookmarks', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                    <Typography
+                      sx={(theme) => ({
+                        color: libraryMuted(theme),
+                        fontSize: '13px',
+                      })}
+                    >
+                      {t('core:launcher.pinned_hint', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                  </Box>
+                  {/* Once the bookmarks are read: they say what is in a folder. */}
+                  {areBookmarksReady ? (
+                    <MemoSaved
+                      availableQapps={allQapps ?? availableQapps}
+                      bookmarks={bookmarks}
+                      myAddress={myAddress}
+                      myApp={myApp}
+                      myWebsite={myWebsite}
+                      onBookmarksChange={saveBookmarks}
+                    />
+                  ) : null}
+                </AppsWidthLimiter>
 
-              <MemoLibrary
-                availableQapps={availableQapps}
-                categories={categories}
-                currentTab={currentTab}
-                getQapps={getQapps}
-                isActive={isShow && !isSearching}
-                myAddress={myAddress}
-                myName={myName}
-                onTabChange={handleTabChange}
-                scrollElement={scroller}
-                setMode={setMode}
-                stickyTop={HEADER_HEIGHT_PX}
-              />
-            </Box>
+                <Box
+                  ref={libraryStartRef}
+                  sx={{ height: '8px', width: '100%' }}
+                />
+
+                <MemoLibrary
+                  availableQapps={availableQapps}
+                  categories={categories}
+                  currentTab={currentTab}
+                  getQapps={getQapps}
+                  isActive={isShow && !isSearching}
+                  myAddress={myAddress}
+                  myName={myName}
+                  onTabChange={handleTabChange}
+                  scrollElement={scroller}
+                  setMode={setMode}
+                  stickyTop={HEADER_HEIGHT_PX}
+                />
+              </Box>
+            </LauncherTabShownContext.Provider>
           </Box>
         </Box>
       </Box>

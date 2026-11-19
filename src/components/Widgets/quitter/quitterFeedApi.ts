@@ -640,7 +640,11 @@ export const fetchQuitterFollowedNames = async (
       start + QUITTER_FOLLOW_BATCH_SIZE
     );
     for (const result of await fetchFollowedNames(batch, signal)) {
-      if (!result || result === normalizedUserName) {
+      // Names are case-insensitive: a follow of oneself is left out in any case.
+      if (
+        !result ||
+        result.trim().toLowerCase() === normalizedUserName.toLowerCase()
+      ) {
         continue;
       }
 

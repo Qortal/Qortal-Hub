@@ -9,6 +9,8 @@ import { sha256 } from '@noble/hashes/sha256';
  *   and links (see appPageData.ts).
  * - `IMAGE/<app name>/qhub_app_shots_v1_<SERVICE>`: the screenshots, several
  *   files in one resource with a `shots.json` list.
+ * - `JSON/<app name>/qhub_app_hidden_v1_<SERVICE>`: whether its publisher hid
+ *   it from the library (appHidden.ts).
  * - `COMMENT/<reviewer>/qhub_review_v1_<SERVICE>_<key>`: one review per name
  *   and app; publishing it again replaces it.
  * - `COMMENT/<author>/qhub_reply_v1_<SERVICE>_<key>_<random>`: a reply.
@@ -51,6 +53,11 @@ export const appPageIdentifier = (service: string): string =>
 
 export const appShotsIdentifier = (service: string): string =>
   `${APP_PAGE_IDENTIFIER_PREFIX}shots_v1_${normalizeAppService(service)}`;
+
+export const APP_HIDDEN_IDENTIFIER_PREFIX = `${APP_PAGE_IDENTIFIER_PREFIX}hidden_v1_`;
+
+export const appHiddenIdentifier = (service: string): string =>
+  `${APP_HIDDEN_IDENTIFIER_PREFIX}${normalizeAppService(service)}`;
 
 const toHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');

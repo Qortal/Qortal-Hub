@@ -1,6 +1,10 @@
 import i18n from '../../i18n/i18n';
-import { TIME_SECONDS_30_IN_MILLISECONDS } from '../../constants/constants';
+import { qappRequestTimeoutMs } from '../../qortal/qappRequestTimeout';
 import { serializeQortalRequestError } from '../../qortal/qortal-request-errors';
+import {
+  invalidSetTabError,
+  tabFromSetTabRequest,
+} from '../../qortal/qapp-set-tab';
 import { executeEvent } from '../../utils/events';
 
 /**
@@ -174,7 +178,15 @@ export const createWidgetRequestHandler =
       return;
     }
     if (data.action === 'SET_TAB') {
-      executeEvent('addTab', { data: data.payload });
+      const tab = tabFromSetTabRequest(data.payload);
+      if (!tab) {
+        reply({
+          result: null,
+          error: serializeQortalRequestError(invalidSetTabError()),
+        });
+        return;
+      }
+      executeEvent('addTab', { data: tab });
       executeEvent('open-apps-mode', {});
       reply({ result: true, error: null });
       return;
@@ -183,7 +195,8 @@ export const createWidgetRequestHandler =
       const response = await sendMessage(
         data.action,
         data,
-        TIME_SECONDS_30_IN_MILLISECONDS,
+        // Long enough for an approval, as for a Q-App in a tab.
+        qappRequestTimeoutMs(data.action, data, true),
         true,
         { name: owner.name, service: owner.service, tabId: owner.tabId }
       );

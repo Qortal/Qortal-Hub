@@ -70,6 +70,7 @@ import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
 import { QortinoNotificationHost } from './components/Snackbar/QortinoNotificationHost';
+import { QortinoAgentHost } from './components/Group/QortinoAgent/QortinoAgentHost';
 import { getWallets, storeWallets } from './background/background.ts';
 import {
   executeEvent,
@@ -2018,6 +2019,10 @@ function App() {
           />
         )}
 
+        {extState === 'authenticated' && isMainWindow ? (
+          <QortinoAgentHost />
+        ) : null}
+
         <QortinoNotificationHost
           open={openSnack}
           setOpen={setOpenSnack}
@@ -2105,10 +2110,15 @@ function App() {
       />
       <QAppScreenCapturePermission active={extState === 'authenticated' && isMainWindow} />
       {extState === 'authenticated' && isMainWindow && (
-        <GlobalQortalNavBar
-          desktopViewMode={desktopViewMode}
-          utilityNav={titleBarRightNav}
-        />
+        // The top bar's join window asks for the fee in mainContent's dialog.
+        <QORTAL_APP_CONTEXT.Provider
+          value={contextValue as AppContextInterface}
+        >
+          <GlobalQortalNavBar
+            desktopViewMode={desktopViewMode}
+            utilityNav={titleBarRightNav}
+          />
+        </QORTAL_APP_CONTEXT.Provider>
       )}
 
       <Box

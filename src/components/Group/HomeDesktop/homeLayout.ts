@@ -14,9 +14,14 @@ import {
   type HomeGridItem,
   type HomeWidgetWindowId,
   type HomeWindowId,
+  type HomeWorkspaceCopyId,
   homeDefaultGrid,
   homeGridRowsFor,
+  homeGridWithWindowUnder,
   homeWidgetWindowId,
+  homeWorkspaceCopyId,
+  homeWorkspaceCopyKey,
+  isHomeGridPlaceFree,
   mergeHomeGrid,
   normalizeHomeGrid,
   resizeHomeWindow,
@@ -29,6 +34,7 @@ import { parseHomeCustomizableCardsLayout } from './utils';
  * listed: it holds the settings, so switching it off would hide the way back.
  */
 export type HomePanelId =
+  | 'workspace'
   | 'qortino'
   | 'tools'
   | 'featured'
@@ -46,6 +52,7 @@ export type HomeStackPanelId = Extract<
 
 /** The panels of the top part, in the order the settings list them. */
 export const HOME_TOP_PANEL_IDS: readonly HomePanelId[] = [
+  'workspace',
   'qortino',
   'tools',
   'featured',
@@ -94,6 +101,14 @@ export type HomeLayout = {
   /** Widgets in windows of their own, in the order they were added. */
   widgetWindows?: HomeWidgetWindow[];
   /**
+   * The Workspace's copies, made with Duplicate in Edit Home, oldest first:
+   * the keys of their windows (homeWorkspaceCopyId). A copy is removed
+   * rather than hidden.
+   */
+  workspaces?: string[];
+  /** HOME_LAYOUT_VERSION: every layout read has it. */
+  version?: number;
+  /**
    * When it last changed on this device (ms), what the copy in the QDN
    * settings is weighed against. Missing: never changed here.
    */
@@ -105,9 +120,19 @@ const changedAtOf = (value: unknown): number | undefined => {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
 };
 
+/**
+ * What the stored layout means. 2: the Workspace and Qortino are windows of
+ * their own. A layout stored without it is older: Qortino's switch hid both.
+ */
+export const HOME_LAYOUT_VERSION = 2;
+
+/** Copies of the Workspace at the most, besides the Workspace itself. */
+export const HOME_WORKSPACE_COPY_LIMIT = 8;
+
 export const HOME_LAYOUT_DEFAULT: HomeLayout = {
   hidden: [],
   stack: [...HOME_STACK_PANEL_IDS],
+  version: HOME_LAYOUT_VERSION,
 };
 
 export const homeLayoutStorageKey = (address: string) =>
@@ -116,6 +141,29 @@ export const homeLayoutStorageKey = (address: string) =>
 const isHomePanelId = (value: unknown): value is HomePanelId =>
   typeof value === 'string' &&
   (HOME_PANEL_IDS as readonly string[]).includes(value);
+
+const WORKSPACE_KEY_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+
+/** The stored copies of the Workspace, cleaned: valid keys, no repeats. */
+export const normalizeHomeWorkspaces = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const keys: string[] = [];
+  for (const key of value) {
+    if (
+      typeof key !== 'string' ||
+      !WORKSPACE_KEY_PATTERN.test(key) ||
+      keys.includes(key)
+    ) {
+      continue;
+    }
+    keys.push(key);
+    if (keys.length >= HOME_WORKSPACE_COPY_LIMIT) break;
+  }
+  return keys;
+};
+
+export const homeWorkspaceCopyIds = (layout: HomeLayout) =>
+  (layout.workspaces ?? []).map(homeWorkspaceCopyId);
 
 const isHomeStackPanelId = (value: unknown): value is HomeStackPanelId =>
   typeof value === 'string' &&
@@ -193,32 +241,52 @@ export const normalizeHomeLayout = (
       ...(fallback.widgetWindows?.length
         ? { widgetWindows: [...fallback.widgetWindows] }
         : {}),
+      ...(fallback.workspaces?.length
+        ? { workspaces: [...fallback.workspaces] }
+        : {}),
+      version: HOME_LAYOUT_VERSION,
       ...(fallback.changedAt ? { changedAt: fallback.changedAt } : {}),
     };
   }
-  const { changedAt, grid, hidden, stack, widgetWindows } = value as {
-    changedAt?: unknown;
-    grid?: unknown;
-    hidden?: unknown;
-    stack?: unknown;
-    widgetWindows?: unknown;
-  };
+  const { changedAt, grid, hidden, stack, version, widgetWindows, workspaces } =
+    value as {
+      changedAt?: unknown;
+      grid?: unknown;
+      hidden?: unknown;
+      stack?: unknown;
+      version?: unknown;
+      widgetWindows?: unknown;
+      workspaces?: unknown;
+    };
   const normalChangedAt = changedAtOf(changedAt);
+  // Stored before the Workspace was a window of its own, when Qortino's
+  // switch hid it too.
+  const older = !(Number(version) >= HOME_LAYOUT_VERSION);
   const normalStack = Array.isArray(stack)
     ? completeHomeStack(stack)
     : [...fallback.stack];
   const normalWidgets = Array.isArray(widgetWindows)
     ? normalizeHomeWidgetWindows(widgetWindows)
     : (fallback.widgetWindows ?? []);
+  const normalWorkspaces = Array.isArray(workspaces)
+    ? normalizeHomeWorkspaces(workspaces)
+    : [...(fallback.workspaces ?? [])];
   const normalHidden = Array.isArray(hidden)
-    ? HOME_PANEL_IDS.filter((id) => hidden.includes(id))
+    ? HOME_PANEL_IDS.filter(
+        (id) =>
+          hidden.includes(id) ||
+          (older && id === 'workspace' && hidden.includes('qortino'))
+      )
     : [...fallback.hidden];
   // The hidden panels don't move the shown ones (normalizeHomeGrid).
   const normalGrid =
     normalizeHomeGrid(
       grid,
       normalStack,
-      normalWidgets.map(homeWidgetWindowId),
+      [
+        ...normalWidgets.map(homeWidgetWindowId),
+        ...normalWorkspaces.map(homeWorkspaceCopyId),
+      ],
       normalHidden
     ) ?? fallback.grid;
   return {
@@ -226,6 +294,8 @@ export const normalizeHomeLayout = (
     stack: normalStack,
     ...(normalGrid ? { grid: [...normalGrid] } : {}),
     ...(normalWidgets.length ? { widgetWindows: [...normalWidgets] } : {}),
+    ...(normalWorkspaces.length ? { workspaces: normalWorkspaces } : {}),
+    version: HOME_LAYOUT_VERSION,
     ...(normalChangedAt ? { changedAt: normalChangedAt } : {}),
   };
 };
@@ -251,21 +321,26 @@ export const sameHomeLayout = (a: HomeLayout, b: HomeLayout) =>
   a.hidden.every((id, index) => b.hidden[index] === id) &&
   a.stack.length === b.stack.length &&
   a.stack.every((id, index) => b.stack[index] === id) &&
+  (a.workspaces ?? []).join('\n') === (b.workspaces ?? []).join('\n') &&
   sameHomeGrid(a.grid, b.grid) &&
   sameHomeWidgetWindows(a.widgetWindows, b.widgetWindows);
 
 /**
  * Where every window is: the account's arrangement, or the default one, with
- * the widget windows it lacks under everything. Only the shown windows make
- * room for them: the hidden ones keep their places (normalizeHomeGrid).
+ * the widget windows and the copies of the Workspace it lacks under
+ * everything. Only the shown windows make room for them: the hidden ones
+ * keep their places (normalizeHomeGrid).
  */
 export const homeLayoutGrid = (layout: HomeLayout): HomeGridItem[] => {
   const grid = layout.grid ?? homeDefaultGrid(layout.stack);
-  const widgets = homeWidgetWindowIds(layout);
-  if (widgets.every((id) => grid.some((item) => item.key === id))) {
+  const extras = [
+    ...homeWidgetWindowIds(layout),
+    ...homeWorkspaceCopyIds(layout),
+  ];
+  if (extras.every((id) => grid.some((item) => item.key === id))) {
     return grid;
   }
-  return normalizeHomeGrid(grid, layout.stack, widgets, layout.hidden) ?? grid;
+  return normalizeHomeGrid(grid, layout.stack, extras, layout.hidden) ?? grid;
 };
 
 /** A widget added in a window of its own, under everything. */
@@ -370,6 +445,180 @@ export const withHomeWidgetWindowHeight = (
   };
 };
 
+const newWorkspaceKey = () =>
+  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/**
+ * Duplicate: a new, empty copy of the Workspace right under `under` (the
+ * Workspace or a copy of it), as big as it. Shown windows in its way go down
+ * to make room; hidden ones keep their places. The same layout back at the
+ * HOME_WORKSPACE_COPY_LIMIT.
+ */
+export const withHomeWorkspaceCopy = (
+  layout: HomeLayout,
+  under: HomeWindowId,
+  key: string = newWorkspaceKey()
+): HomeLayout => {
+  const current = layout.workspaces ?? [];
+  if (
+    current.length >= HOME_WORKSPACE_COPY_LIMIT ||
+    current.includes(key) ||
+    !WORKSPACE_KEY_PATTERN.test(key)
+  ) {
+    return layout;
+  }
+  return {
+    ...layout,
+    grid: homeGridWithWindowUnder(
+      homeLayoutGrid(layout),
+      under,
+      homeWorkspaceCopyId(key),
+      layout.hidden
+    ),
+    workspaces: [...current, key],
+  };
+};
+
+/** A copy of the Workspace taken off Home; the shown windows under it rise. */
+export const withoutHomeWorkspaceCopy = (
+  layout: HomeLayout,
+  id: HomeWorkspaceCopyId
+): HomeLayout => {
+  const key = homeWorkspaceCopyKey(id);
+  return normalizeHomeLayout({
+    ...layout,
+    grid: layout.grid?.filter((item) => item.key !== id),
+    version: HOME_LAYOUT_VERSION,
+    workspaces: (layout.workspaces ?? []).filter((other) => other !== key),
+  });
+};
+
+/**
+ * Where the Qortino card keeps what the Workspaces hold on this device, per
+ * account (`<key>_<address>`): each copy's in `windows`, by its key.
+ */
+export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
+
+/**
+ * What the account's user settings hold under the Qortino card's key, as
+ * last read or written on this device, by address. `null`: nothing there,
+ * so the card goes by its localStorage copy.
+ */
+const qortinoWorkspaceSettings = new Map<string, unknown>();
+
+/** Notes what the account's user settings hold under the Qortino card's key. */
+export const noteQortinoWorkspaceSettings = (
+  address: string | undefined,
+  value: unknown
+) => {
+  if (address) qortinoWorkspaceSettings.set(address, value ?? null);
+};
+
+/**
+ * Reads the account's user settings under the Qortino card's key, as the
+ * card does, and notes what they hold.
+ */
+export const loadQortinoWorkspaceSettings = async (address: string) => {
+  let value: unknown = null;
+  try {
+    if (typeof window.sendMessage === 'function') {
+      const stored = (await window.sendMessage('getUserSettings', {
+        key: QORTINO_WORKSPACE_SETTINGS_KEY,
+      })) as { error?: unknown } | null;
+      if (stored && !stored.error) value = stored;
+    }
+  } catch {
+    // The card goes by its localStorage copy then too.
+  }
+  noteQortinoWorkspaceSettings(address, value);
+};
+
+/**
+ * The keys of the Workspace's copies that hold something on this device: a
+ * module picked in them, or apps put in. Read as the Qortino card reads them:
+ * the account's user settings first, then the localStorage copy.
+ */
+export const readHeldHomeWorkspaceCopies = (address: string): string[] => {
+  try {
+    const stored = (qortinoWorkspaceSettings.get(address) ??
+      JSON.parse(
+        window.localStorage.getItem(
+          `${QORTINO_WORKSPACE_SETTINGS_KEY}_${address}`
+        ) || 'null'
+      )) as { windows?: unknown } | null;
+    const windows = stored?.windows;
+    if (!windows || typeof windows !== 'object') return [];
+    return Object.entries(windows).flatMap(([key, held]) => {
+      const { hotkeys, mode } = (held ?? {}) as {
+        hotkeys?: unknown;
+        mode?: unknown;
+      };
+      const holds =
+        mode === 'hotkeys' ||
+        mode === 'music' ||
+        (Array.isArray(hotkeys) &&
+          hotkeys.some((slot) => typeof slot === 'string' && !!slot.trim()));
+      return holds ? [key] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * `taken`, a layout taken in from elsewhere in place of `local`, with the
+ * Workspace's copies `local` has that hold something on this device
+ * (`held`), so what they hold isn't let go of. Each stays listed, where it
+ * was when no shown window of `taken` is there, or else right under the
+ * Workspace, as Duplicate puts a copy. Within HOME_WORKSPACE_COPY_LIMIT the
+ * copies holding something here go first; the others are as `taken` has
+ * them. `taken` itself when it lists them all.
+ */
+export const withHeldHomeWorkspaceCopies = (
+  taken: HomeLayout,
+  local: HomeLayout,
+  held: readonly string[]
+): HomeLayout => {
+  const holds = (key: string) =>
+    held.includes(key) && (local.workspaces ?? []).includes(key);
+  const takenCopies = taken.workspaces ?? [];
+  const kept = (local.workspaces ?? []).filter(
+    (key) => holds(key) && !takenCopies.includes(key)
+  );
+  if (kept.length === 0) return taken;
+  // The copies that hold nothing here make room, the newest first.
+  const empty = takenCopies.filter((key) => !holds(key));
+  const room =
+    HOME_WORKSPACE_COPY_LIMIT -
+    kept.length -
+    (takenCopies.length - empty.length);
+  const dropped = empty.slice(Math.max(0, room));
+  const copies = takenCopies.filter((key) => !dropped.includes(key));
+  const hidden: readonly HomeWindowId[] = taken.hidden;
+  const localGrid = homeLayoutGrid(local);
+  let grid = homeLayoutGrid(
+    normalizeHomeLayout({
+      ...taken,
+      version: HOME_LAYOUT_VERSION,
+      workspaces: copies,
+    })
+  );
+  for (const key of kept) {
+    const id = homeWorkspaceCopyId(key);
+    const place = localGrid.find((item) => item.key === id);
+    grid =
+      place && isHomeGridPlaceFree(grid, place, hidden)
+        ? [...grid, place]
+        : homeGridWithWindowUnder(grid, 'workspace', id, hidden);
+  }
+  return normalizeHomeLayout({
+    ...taken,
+    grid,
+    version: HOME_LAYOUT_VERSION,
+    workspaces: [...copies, ...kept],
+  });
+};
+
 const readDeviceSwitch = (key: string): boolean => {
   try {
     const raw = window.localStorage.getItem(key);
@@ -437,7 +686,7 @@ export const saveHomeLayout = (
   options: { changedAt?: number } = {}
 ) => {
   const before = readHomeLayout(address);
-  const next = normalizeHomeLayout(layout);
+  const next = normalizeHomeLayout({ ...layout, version: HOME_LAYOUT_VERSION });
   const changedAt =
     options.changedAt ??
     (sameHomeLayout(before, next)
@@ -459,6 +708,24 @@ export const saveHomeLayout = (
 
 export const isHomePanelShown = (layout: HomeLayout, id: HomePanelId) =>
   !layout.hidden.includes(id);
+
+/**
+ * Whether a window shows on Home now. While Getting started shows (in
+ * Qortino's window, which grows with it) the Workspace makes way, so the
+ * rest of Home stays where it is. That isn't saved in the layout: the
+ * Workspace comes back where it was once Getting started is done.
+ */
+export const isHomePanelShownNow = (
+  layout: HomeLayout,
+  id: HomePanelId,
+  { gettingStarted = false }: { gettingStarted?: boolean } = {}
+) =>
+  isHomePanelShown(layout, id) &&
+  !(
+    id === 'workspace' &&
+    gettingStarted &&
+    isHomePanelShown(layout, 'qortino')
+  );
 
 export const withHomePanelShown = (
   layout: HomeLayout,

@@ -39,6 +39,7 @@ import {
   type HomeWindowId,
   homeGridCellAt,
   homeGridColumnPx,
+  homeGridEdited,
   homeGridFlow,
   homeGridHeightPx,
   homeGridRectPx,
@@ -47,6 +48,7 @@ import {
   homeGridSizeFor,
   homeWindowMinSize,
   isHomeWidgetWindowId,
+  isHomeWorkspaceCopyId,
   mergeHomeGrid,
   moveHomeWindow,
   resizeHomeWindow,
@@ -85,7 +87,13 @@ type Drag = {
 export type HomeGridWindowAction = {
   icon: ReactNode;
   label: string;
-  onClick: () => void;
+  /**
+   * Gets the grid as it shows: the shown windows where and as tall as they
+   * show (homeGridShown), the hidden ones where they're kept. As an edit
+   * saves it (homeGridEdited), the rows a shorter account card leaves the
+   * window under it stay the card's place.
+   */
+  onClick: (shown: HomeGridItem[]) => void;
 };
 
 export type HomeGridWindow = {
@@ -94,10 +102,16 @@ export type HomeGridWindow = {
   title: string;
   node: ReactNode;
   /**
-   * Buttons of its own in the edit controls. A widget's window has its own
-   * instead of the hide button: it's removed, not hidden.
+   * Buttons of its own in the edit controls. A widget's window and a copy
+   * of the Workspace have a remove button among them instead of the hide
+   * button: they're removed, not hidden.
    */
   actions?: readonly HomeGridWindowAction[];
+  /**
+   * Fills its place on the grid, even a window whose height usually follows
+   * its content (Qortino while Getting started shows in it).
+   */
+  fill?: boolean;
 };
 
 type HomeGridProps = {
@@ -260,9 +274,23 @@ export const HomeGrid = ({
     () => new Map(windows.map((window) => [window.id, window])),
     [windows]
   );
+  // The windows whose height follows their content now, and how tall that
+  // is: a window that fills its place keeps the place's height.
+  const followsContent = (id: HomeWindowId) =>
+    HOME_AUTO_HEIGHT_WINDOWS.has(id) && !windowsById.get(id)?.fill;
+  const contentRows = useMemo(() => {
+    const rows: Partial<Record<HomeWindowId, number>> = {};
+    for (const [id, value] of Object.entries(measuredRows)) {
+      if (!windowsById.get(id as HomeWindowId)?.fill) {
+        rows[id as HomeWindowId] = value;
+      }
+    }
+    return rows;
+  }, [measuredRows, windowsById]);
   const shownLayout = useMemo(
-    () => homeGridShown(grid, (id) => windowsById.has(id), measuredRows),
-    [grid, measuredRows, windowsById]
+    () =>
+      homeGridShown(grid, (id) => windowsById.has(id), contentRows, flowing),
+    [contentRows, flowing, grid, windowsById]
   );
 
   // Editing.
@@ -319,15 +347,17 @@ export const HomeGrid = ({
     return callback;
   };
 
-  // A widget's window added while editing is scrolled into view: it goes
-  // under everything, maybe below the screen.
+  // A window added while editing (a widget's window or a copy of the
+  // Workspace) is scrolled into view: it may land below the screen.
   const knownWindowsRef = useRef<ReadonlySet<HomeWindowId> | null>(null);
   useEffect(() => {
     const known = knownWindowsRef.current;
     knownWindowsRef.current = new Set(windows.map((window) => window.id));
     if (!known || !editing) return;
     const added = windows.find(
-      (window) => isHomeWidgetWindowId(window.id) && !known.has(window.id)
+      (window) =>
+        (isHomeWidgetWindowId(window.id) || isHomeWorkspaceCopyId(window.id)) &&
+        !known.has(window.id)
     );
     if (!added) return;
     frameRefs.current.get(added.id)?.scrollIntoView?.({
@@ -336,13 +366,20 @@ export const HomeGrid = ({
     });
   }, [editing, reduceMotion, windows]);
 
-  // What's shown: the drag's layout while one is going on (with the
-  // content-sized windows at their measured height), else the saved one.
+  // What's shown: the drag's layout while one is going on, as it would be
+  // saved (with the content-sized windows at their measured height), else
+  // the saved one.
   const layout =
     useMemo(
       () =>
-        dragLayout ? homeGridShown(dragLayout, () => true, measuredRows) : null,
-      [dragLayout, measuredRows]
+        dragLayout && dragStart
+          ? homeGridShown(
+              homeGridEdited(grid, dragStart, dragLayout),
+              () => true,
+              contentRows
+            )
+          : null,
+      [contentRows, dragLayout, dragStart, grid]
     ) ?? shownLayout;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -530,7 +567,10 @@ export const HomeGrid = ({
     stopAutoScroll();
     if (!drag.moved) return;
     if (!cancelled && !sameHomeGrid(drag.layout, drag.start)) {
-      onChangeGrid(mergeHomeGrid(gridPropRef.current, drag.layout));
+      const stored = gridPropRef.current;
+      onChangeGrid(
+        mergeHomeGrid(stored, homeGridEdited(stored, drag.start, drag.layout))
+      );
     }
     const frame = frameRefs.current.get(drag.key);
     if (frame) {
@@ -567,7 +607,7 @@ export const HomeGrid = ({
     );
     let next: HomeGridItem[] | null = null;
     if (event.shiftKey) {
-      const rows = HOME_AUTO_HEIGHT_WINDOWS.has(key) ? 0 : KEYBOARD_RESIZE_ROWS;
+      const rows = followsContent(key) ? 0 : KEYBOARD_RESIZE_ROWS;
       const change: Record<string, [number, number]> = {
         ArrowDown: [0, rows],
         ArrowLeft: [-1, 0],
@@ -611,15 +651,18 @@ export const HomeGrid = ({
     if (!event.key.startsWith('Arrow')) return;
     event.preventDefault();
     if (next && !sameHomeGrid(next, items)) {
-      onChangeGrid(mergeHomeGrid(gridPropRef.current, next));
+      const stored = gridPropRef.current;
+      onChangeGrid(mergeHomeGrid(stored, homeGridEdited(stored, items, next)));
     }
   };
 
   const gridHeight = homeGridHeightPx(placed);
-  // Home's own windows, then the widgets' in the order they were added.
+  // Home's own windows, then the widgets' in the order they were added, then
+  // the Workspace's copies in the order they came.
   const windowOrder: HomeWindowId[] = [
     ...HOME_WINDOW_IDS,
     ...windows.map((window) => window.id).filter(isHomeWidgetWindowId),
+    ...windows.map((window) => window.id).filter(isHomeWorkspaceCopyId),
   ];
   const draggedItem = dragKey ? placedByKey.get(dragKey) : undefined;
   const transition =
@@ -818,19 +861,24 @@ export const HomeGrid = ({
   const editControls = (window: HomeGridWindow, held: boolean) => {
     const { id, title } = window;
     const isWidget = isHomeWidgetWindowId(id);
-    const hideable = id !== 'account' && !isWidget;
+    // A widget's window and a copy of the Workspace are removed (a copy with
+    // Delete too), not hidden.
+    const isCopy = isHomeWorkspaceCopyId(id);
+    const hideable = id !== 'account' && !isWidget && !isCopy;
     const actions = window.actions ?? [];
     const hasButtons = hideable || actions.length > 0;
-    const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
+    const auto = followsContent(id);
     return (
       <Box
         aria-label={
           isWidget
             ? t('group:home_widgets.arrange_widget', { title })
             : t(
-                hideable
-                  ? 'group:dashboard.edit_window'
-                  : 'group:dashboard.edit_window_no_hide',
+                isCopy
+                  ? 'group:dashboard.edit_window_removable'
+                  : hideable
+                    ? 'group:dashboard.edit_window'
+                    : 'group:dashboard.edit_window_no_hide',
                 { window: title }
               )
         }
@@ -912,7 +960,13 @@ export const HomeGrid = ({
             <Tooltip key={action.label} title={action.label}>
               <IconButton
                 aria-label={action.label}
-                onClick={action.onClick}
+                onClick={() => {
+                  const stored = gridPropRef.current;
+                  const shown = layoutRef.current;
+                  action.onClick(
+                    mergeHomeGrid(stored, homeGridEdited(stored, shown, shown))
+                  );
+                }}
                 onPointerDown={(event) => event.stopPropagation()}
                 size="small"
                 sx={{ color: theme.palette.text.secondary, p: '4px' }}
@@ -982,13 +1036,16 @@ export const HomeGrid = ({
           if (!window || !item) return null;
           const held = dragKey === id;
           // A window being moved keeps its place until it's dropped (it
-          // follows the pointer); the others show where they'd go.
+          // follows the pointer), at the height it would land with; the
+          // others show where they'd go.
           const start = dragStartByKey.get(id);
           const px = homeGridRectPx(
-            held && dragKind === 'move' && start ? start : item,
+            held && dragKind === 'move' && start
+              ? { ...start, h: item.h }
+              : item,
             columnPx
           );
-          const auto = HOME_AUTO_HEIGHT_WINDOWS.has(id);
+          const auto = followsContent(id);
           return (
             <Box
               data-home-window={id}

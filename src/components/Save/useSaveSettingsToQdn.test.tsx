@@ -67,11 +67,15 @@ import {
   withSidePanelQdnItem,
 } from '../Desktop/sidePanel';
 import {
+  HOME_LAYOUT_DEFAULT,
   readHomeLayout,
   saveHomeLayout,
+  withHomeWorkspaceCopy,
 } from '../Group/HomeDesktop/homeLayout';
 import {
   hasUnsavedLayouts,
+  markLayoutsSaved,
+  NO_SAVED_LAYOUTS,
   readLocalLayouts,
   savedLayoutsAtom,
   type SavedLayoutsState,
@@ -306,6 +310,51 @@ describe("saving Home's layout and the side panel", () => {
         layout: expect.objectContaining({ hidden: ['groupActivity'] }),
       })
     );
+  });
+
+  it('keeps a copy of the Workspace that holds something here when newer settings are taken in', async () => {
+    saveHomeLayout(
+      ADDRESS,
+      withHomeWorkspaceCopy(HOME_LAYOUT_DEFAULT, 'workspace', 'k1')
+    );
+    // The music player is in it, on this device.
+    localStorage.setItem(
+      `home-qortino-workspace-v1_${ADDRESS}`,
+      JSON.stringify({
+        hotkeys: [],
+        mode: 'empty',
+        version: 1,
+        windows: { k1: { hotkeys: [], mode: 'music' } },
+      })
+    );
+    // Saved from here, then from another device, whose clock is ahead,
+    // without it.
+    const savedHere = markLayoutsSaved(
+      ADDRESS,
+      readLocalLayouts(ADDRESS),
+      NO_SAVED_LAYOUTS
+    );
+    const theirs = Date.now() + 1_000_000;
+    qdn.record = { hasPublishRecord: true, timestamp: 500 };
+    qdn.settings = {
+      sortablePinnedApps: [],
+      homeLayout: homeLayout(['groupActivity'], theirs),
+    };
+    const { store, result } = renderSettings([], savedHere);
+
+    await act(async () => {
+      expect(await result.current.save()).toBe('saved');
+    });
+
+    const kept = expect.objectContaining({
+      hidden: ['groupActivity'],
+      workspaces: ['k1'],
+    });
+    expect(readHomeLayout(ADDRESS)).toEqual(kept);
+    // Saved with it, as a layout of its own, newer than theirs.
+    expect(published().homeLayout.layout).toEqual(kept);
+    expect(published().homeLayout.changedAt).toBeGreaterThan(theirs);
+    expect(nothingLeftToSave(store)).toBe(true);
   });
 
   it('keeps the Q-Apps and websites added to the side panel on another device', async () => {

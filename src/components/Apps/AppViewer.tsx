@@ -7,7 +7,25 @@ import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { buildPreviewUrl } from './appPreviewUrl';
-import { buildAppRenderRoot, withHubQuery } from './appRenderUrl';
+import {
+  buildAppRenderRoot,
+  isAppRenderSegment,
+  withHubQuery,
+} from './appRenderUrl';
+import {
+  endpointPathPart,
+  hasControlCharacter,
+  hasDotSegment,
+} from '../../utils/nodeEndpointPath';
+
+// True for a tab path with "." or ".." segments (also encoded, or split by
+// characters the URL parser drops), which could take it out of the app's
+// folder: such a path is not used.
+const pathLeavesApp = (path: unknown): boolean => {
+  if (typeof path !== 'string') return true;
+  const part = endpointPathPart(path);
+  return hasControlCharacter(part) || hasDotSegment(part);
+};
 
 type AppViewerProps = {
   app: any;
@@ -49,9 +67,13 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         setUrl(app?.url + `?theme=${themeMode}&lang=${currentLang}`);
         return;
       }
+      // A path with "." or ".." segments is dropped, so the tab only loads
+      // pages from this app's own folder.
+      const appPath =
+        app?.path != null && !pathLeavesApp(app.path) ? app.path : null;
       setUrl(
         withHubQuery(
-          `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${app?.path != null ? `/${app?.path}` : ''}`,
+          `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${appPath != null ? `/${appPath}` : ''}`,
           `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
         )
       );
@@ -83,8 +105,12 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     );
 
     useEffect(() => {
+      // A service or name such as ".." would not stay inside
+      // /render/<service>/<name>: such a tab loads nothing, from its start
+      // URL, a refresh or a page change.
       if (!defaultUrl || !guestOwner.tabId ||
-          !guestOwner.name || !guestOwner.service ||
+          !isAppRenderSegment(guestOwner.name) ||
+          !isAppRenderSegment(guestOwner.service) ||
           preparingRef.current || preparedInitialUrlRef.current) return;
       if (!window.electronAPI?.qappGuestPrepare) {
         setNativeGuestFailed(true);
@@ -190,7 +216,15 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           );
           return;
         }
-        const constructUrl = `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
+        // A page path with "." or ".." segments reloads the app's root page
+        // instead, so the tab stays inside the app's own folder.
+        const pagePath = path != null && !pathLeavesApp(path) ? path : '';
+        // Core reports the page with its fragment (`/page#top`, or a hash
+        // router's `/#/search?q=a`), so Hub's parameters go before it.
+        const constructUrl = withHubQuery(
+          `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${pagePath}`,
+          `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${Date.now()}`
+        );
         setUrl(constructUrl);
       }
     };
@@ -328,6 +362,9 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       try {
         await waitForNativeNavigation(previousPath, 1000);
       } catch {
+        // A page path with "." or ".." segments is not loaded: the tab stays
+        // on the page it shows.
+        if (pathLeavesApp(previousPath ?? '')) return;
         setUrl(
           withHubQuery(
             `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}${previousPath ?? ''}`,
@@ -356,6 +393,9 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const navigateToPathFunc = useCallback(
       async (e) => {
         const { path: targetPath = '' } = e.detail;
+        // A path with "." or ".." segments is ignored: the tab stays on the
+        // page it shows.
+        if (pathLeavesApp(targetPath)) return;
         try {
           await waitForNativeNavigation(targetPath, 1000);
         } catch {
@@ -364,7 +404,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           setUrl(
             withHubQuery(
               `${buildAppRenderRoot(getBaseApiReact(), app?.service, app?.name)}/${targetPath}`,
-              `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+              `theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${Date.now()}&isManualNavigation=false`
             )
           );
         }

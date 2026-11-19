@@ -177,6 +177,18 @@ const prependUniqueFeedItems = (
   return mergedItems;
 };
 
+/**
+ * Following shows Your own posts too, so a post from the composer appears
+ * there. Your name goes first, where a long follow list can't push it out of
+ * the search.
+ */
+const followingFeedAuthors = (followedNames: string[], userName: string) => [
+  userName,
+  ...followedNames.filter(
+    (name) => name.trim().toLowerCase() !== userName.toLowerCase()
+  ),
+];
+
 export const QuitterFeedWidget = ({
   batchSize = 4,
   displayMode = 'compact',
@@ -410,7 +422,10 @@ export const QuitterFeedWidget = ({
             }
 
             return fetchQuitterFeedPage({
-              allowedAuthors: followedNames,
+              allowedAuthors: followingFeedAuthors(
+                followedNames,
+                currentUserName
+              ),
               itemLimit: requestedItemLimit,
               offset: 0,
               searchLimit,
@@ -495,7 +510,10 @@ export const QuitterFeedWidget = ({
                 }
 
                 const page = await fetchQuitterFeedPage({
-                  allowedAuthors: followedNames,
+                  allowedAuthors: followingFeedAuthors(
+                    followedNames,
+                    currentUserName
+                  ),
                   itemLimit: initialBatchSize,
                   offset: 0,
                   searchLimit,
@@ -745,7 +763,7 @@ export const QuitterFeedWidget = ({
     }
 
     if (itemsRef.current.length === 0) {
-      setReloadToken((value) => value + 1);
+      handleRetryInitialFeed();
       return undefined;
     }
 

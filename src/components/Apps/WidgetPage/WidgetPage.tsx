@@ -3,7 +3,7 @@ import { Box } from '@mui/material';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
-import { availableQappsAtom } from '../../../atoms/appsAtoms';
+import { allQappsAtom } from '../../../atoms/appsAtoms';
 import { userInfoAtom } from '../../../atoms/global';
 import { executeEvent } from '../../../utils/events';
 import { useWidgetOnHome } from '../../HomeWidgets/useWidgetOnHome';
@@ -62,7 +62,8 @@ export const WidgetPage = ({
 
   // The app the widget comes with: widgets keep what their app saved (a
   // place, a choice) only under the same name, so it is worth a look first.
-  const availableQapps = useAtomValue(availableQappsAtom);
+  // Hidden from the library or not, it opens.
+  const availableQapps = useAtomValue(allQappsAtom);
   const mainApp = useMemo(
     () =>
       widget.identifier

@@ -10,6 +10,10 @@ export const sidePanelItemLabel = (item: SidePanelItem, t: TFunction) => {
       return t('core:app_other', { postProcess: 'capitalizeFirstChar' });
     case 'qchat':
       return 'Q-Chat';
+    case 'qortinoAi':
+      return t('core:qortino_agent.sidebar', {
+        postProcess: 'capitalizeFirstChar',
+      });
     case 'dev':
       return t('core:dev_mode', { postProcess: 'capitalizeFirstChar' });
     case 'divider':
