@@ -22,6 +22,7 @@ import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
+import { createNotificationQueue } from '../utils/notificationQueue';
 import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
 import { joinNodeEndpoint } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
@@ -2824,6 +2825,11 @@ function setupMessageListener() {
             const logoutFunc = async () => {
               forceCloseWebSocket();
               clearAllQueues();
+              // Ends the notification session, so anything still queued for the
+              // account being logged out is skipped rather than presented under
+              // the next one. The array clear inside it is not enough on its
+              // own: a drain already past its shift re-checks the epoch.
+              notificationQueue.invalidateSession();
               if (interval) {
                 // for announcement notification
                 clearInterval(interval);
@@ -3026,22 +3032,15 @@ export const checkNewMessages = async () => {
   }
 };
 
-const notificationQueue: Array<() => Promise<void>> = [];
-let queueProcessing = false;
 const NOTIFICATION_QUEUE_INTERVAL_MS = 5000;
 
-async function processQueue() {
-  if (queueProcessing) return;
-  queueProcessing = true;
-  while (notificationQueue.length > 0) {
-    const fn = notificationQueue.shift();
-    if (fn) await fn();
-    if (notificationQueue.length > 0) {
-      await new Promise((r) => setTimeout(r, NOTIFICATION_QUEUE_INTERVAL_MS));
-    }
-  }
-  queueProcessing = false;
-}
+// Items are owned by the session that submitted them. Logout invalidates the
+// session, so a queued notification cannot be presented under the next account
+// with the previous account's sender name and body. See
+// src/utils/notificationQueue.ts.
+const notificationQueue = createNotificationQueue({
+  intervalMs: NOTIFICATION_QUEUE_INTERVAL_MS,
+});
 
 export const fireOsNotificationPayment = async (
   notificationPayload,
@@ -3054,10 +3053,23 @@ export const fireOsNotificationPayment = async (
   groupContext?: { groupId: number; channelId: string },
   eventId?: string
 ) => {
-  notificationQueue.push(async () => {
+  // Record which account queues this item, resolved from the wallet read that
+  // starts here rather than at presentation time. The settings lookup below
+  // reads whichever account is authenticated when it runs, so this is the only
+  // way to tell whether that is still the account the notification belongs to.
+  //
+  // Started before the enqueue so the submission is stamped synchronously: the
+  // queue's session epoch is captured at that moment, not after the read settles.
+  const queuedForAddress = getSaveWallet()
+    .then((wallet) => String(wallet?.address0 || ''))
+    .catch(() => '');
+
+  notificationQueue.enqueue(async (isSessionCurrent) => {
     try {
       const isDisableNotifications =
         (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+      // Awaited above, so the session may have ended while it was in flight.
+      if (!isSessionCurrent()) return;
       if (isDisableNotifications) return;
 
       if (
@@ -3067,8 +3079,23 @@ export const fireOsNotificationPayment = async (
         const osPushDisabled = await getNotificationOsPushDisabled(
           notificationPayload.appName
         );
+        if (!isSessionCurrent()) return;
         if (osPushDisabled) return;
       }
+
+      // A queued item outlives the account that produced it. Presenting it under
+      // a different account would show the previous account's sender name and
+      // message body, decided by the new account's settings. Compared by address
+      // as well as by session, because a session can end and a new one begin
+      // without the queue noticing if the epoch was already captured.
+      const [ownedByAddress, currentAddress] = await Promise.all([
+        queuedForAddress,
+        getSaveWallet()
+          .then((wallet) => String(wallet?.address0 || ''))
+          .catch(() => ''),
+      ]);
+      if (!isSessionCurrent()) return;
+      if (ownedByAddress && currentAddress !== ownedByAddress) return;
 
       // Keyed on the event when one is supplied, so the main-process sink can
       // dedupe: it replaces an entry with the same id rather than adding a
@@ -3124,7 +3151,6 @@ export const fireOsNotificationPayment = async (
       console.error(error);
     }
   });
-  void processQueue();
 };
 
 const checkActiveChatsForNotifications = async () => {
