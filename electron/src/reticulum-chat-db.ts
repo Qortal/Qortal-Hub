@@ -10168,6 +10168,17 @@ export class ReticulumChatDatabase {
     );
   }
 
+  /**
+   * Author sequence gaps worth requesting.
+   *
+   * Known limitation, tracked separately from the permanent-gone removal: the
+   * LIMIT is applied by SQL (and by the memory loop below) before any
+   * eligibility filter, so a page can be filled by ranges that will not be
+   * requested — a parked range, for instance — and a later recoverable gap is
+   * not returned at all. Fixing it means filtering eligibility before the final
+   * limit, or paging until an eligible gap is found or the candidates run out.
+   * This predates the removal and is not caused by it.
+   */
   getAuthorSequenceGaps(
     groupId: number,
     limit: number
