@@ -18,9 +18,7 @@ import { sendCoinCase } from './background-cases';
 import { sendCoin } from '../background/background.ts';
 import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddress';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Account-A: a made-up key and the address it derives.
 const ACCOUNT_A = String(publicKeyToAddress(new Uint8Array(32).fill(41)));

@@ -59,9 +59,7 @@ import { lightTheme } from '../styles/theme-light';
 import { getFee, resolveRecipient } from '../background/background.ts';
 import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddress';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Account-A is Recipient B's address; Account-X owns names with invisible
 // characters.

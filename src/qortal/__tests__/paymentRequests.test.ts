@@ -148,10 +148,8 @@ import {
   parseDecimalAmount,
 } from '../../transactions/paymentSafety';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function address(fill: number): string {
   return String(publicKeyToAddress(new Uint8Array(32).fill(fill)));

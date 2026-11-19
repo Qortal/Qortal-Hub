@@ -73,11 +73,9 @@ import {
 } from '../transactions/paymentSafety';
 import { createTransaction } from '../transactions/transactions';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const nacl = naclUntyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 type Background = typeof import('./background');
 let bg: Background;

@@ -38,12 +38,10 @@ import {
   recipientFromNameRecord,
 } from './paymentSafety';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
 const PaymentTransaction = PaymentTransactionUntyped as any;
 const TransferAssetTransaction = TransferAssetTransactionUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // Account-A: a made-up key and the address it derives.
 const accountAAddress = String(publicKeyToAddress(new Uint8Array(32).fill(7)));
