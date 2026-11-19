@@ -12,6 +12,7 @@ import { getSigningContextRevision } from '../utils/chromeStorage';
 import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
 import { sendLocalForeignCoin } from './foreign-coin-send';
 import { pirateWalletResult } from './pirate-wallet-response';
+import { preparePirateTrade } from './pirate-trade-preparation';
 import {
   getMoneroPublicWallet,
   rejectUnimplementedMoneroOperation,
@@ -5867,6 +5868,7 @@ const getBuyingFees = async (foreignBlockchain) => {
 };
 
 export const createBuyOrder = async (data, isFromExtension) => {
+  const approvalRevision = getSigningContextRevision();
   const requiredFields = ['crosschainAtInfo', 'foreignBlockchain'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -5982,10 +5984,20 @@ export const createBuyOrder = async (data, isFromExtension) => {
     );
     const { accepted } = resPermission;
     if (accepted) {
+      const assertSession =
+        foreignBlockchain === 'PIRATECHAIN'
+          ? await preparePirateTrade(
+              crosschainAtInfo,
+              (payload) => getUserPermission(payload, isFromExtension),
+              approvalRevision
+            )
+          : undefined;
+      await assertSession?.();
       const resBuyOrder = await createBuyOrderTx({
         crosschainAtInfo,
         isGateway,
         foreignBlockchain,
+        assertSession,
       });
       return resBuyOrder;
     } else {

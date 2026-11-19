@@ -62,7 +62,9 @@ vi.mock('../../utils/decode', async () =>
   (await import('./common')).decodeFactory()
 );
 vi.mock('i18next', async () => (await import('./common')).i18nFactory());
-vi.mock('../../i18n/i18n', async () => (await import('./common')).i18nFactory());
+vi.mock('../../i18n/i18n', async () =>
+  (await import('./common')).i18nFactory()
+);
 vi.mock('aes-js', async () => (await import('./common')).aesFactory());
 vi.mock('../../encryption/Base58', async () =>
   (await import('./common')).base58Factory()
@@ -90,6 +92,8 @@ vi.mock('../local-trade-funding', () => ({
 vi.mock('../foreign-coin-send', () => ({
   sendLocalForeignCoin: vi.fn(),
 }));
+vi.mock('../pirate-trade-preparation', () => ({ preparePirateTrade: vi.fn() }));
+import { preparePirateTrade } from '../pirate-trade-preparation';
 import { fundLocalTrades } from '../local-trade-funding';
 import { sendLocalForeignCoin } from '../foreign-coin-send';
 
@@ -323,6 +327,40 @@ describe('createBuyOrder', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+
+  it('waits for ARRR preparation before responding to the trade bot', async () => {
+    const atData = { ...DEFAULT_AT_DATA, foreignBlockchain: 'PIRATECHAIN' };
+    vi.stubGlobal('fetch', makeFetch({ atData }));
+    const assertSession = vi.fn(async () => {});
+    vi.mocked(preparePirateTrade).mockResolvedValue(assertSession);
+    simulatePermission(true);
+    await createBuyOrder(
+      makeInput({ foreignBlockchain: 'PIRATECHAIN' }),
+      false
+    );
+    expect(preparePirateTrade).toHaveBeenCalledWith(
+      [atData],
+      expect.any(Function),
+      expect.any(Number)
+    );
+    expect(assertSession).toHaveBeenCalled();
+    expect(createBuyOrderTx).toHaveBeenCalledWith(
+      expect.objectContaining({ assertSession })
+    );
+  });
+
+  it('does not submit an ARRR trade when preparation is pending or declined', async () => {
+    const atData = { ...DEFAULT_AT_DATA, foreignBlockchain: 'PIRATECHAIN' };
+    for (const reason of ['pending', 'declined']) {
+      vi.stubGlobal('fetch', makeFetch({ atData }));
+      vi.mocked(preparePirateTrade).mockRejectedValue(new Error(reason));
+      simulatePermission(true);
+      await expect(
+        createBuyOrder(makeInput({ foreignBlockchain: 'PIRATECHAIN' }), false)
+      ).rejects.toThrow(reason);
+      expect(createBuyOrderTx).not.toHaveBeenCalled();
+    }
   });
 
   // ── Input validation ────────────────────────────────────────────────────────

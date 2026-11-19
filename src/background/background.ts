@@ -1432,6 +1432,7 @@ export async function createBuyOrderTx({
   crosschainAtInfo,
   isGateway,
   foreignBlockchain,
+  assertSession = undefined as (() => Promise<void>) | undefined,
 }) {
   if (isGateway) {
     throw new Error(
@@ -1464,6 +1465,7 @@ export async function createBuyOrderTx({
       ? '/crosschain/tradebot/respond'
       : '/crosschain/tradebot/respondmultiple'
   );
+  await assertSession?.();
   const responseFetch = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
