@@ -1951,10 +1951,13 @@ export class ReticulumChatDatabase {
         expires_at = excluded.expires_at,
         has_attachment = excluded.has_attachment,
         -- Keep the original arrival position. An edit or repair is the same
-        -- message and must not jump forward in the unread sequence.
+        -- message and must not jump forward in the unread sequence: promoting
+        -- the rebuild's freshly-minted arrival value would put the edit after
+        -- the user's last read moment and resurrect it as unread.
         stored_at = CASE
-          WHEN excluded.stored_at > 0 THEN excluded.stored_at
-          ELSE rchat_message_projection.stored_at
+          WHEN rchat_message_projection.stored_at > 0
+            THEN rchat_message_projection.stored_at
+          ELSE excluded.stored_at
         END
     `);
     this.stmtGetMessageProjection = this.db.prepare(
