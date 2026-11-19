@@ -48,6 +48,7 @@ import {
   startDecentralizedStunAfterP2P,
 } from './setup';
 import { shutdownPrivateTransportSidecar } from './private-transport-runtime';
+import { viewMenu } from './hub-zoom';
 import {
   startP2PNetwork,
   DEFAULT_P2P_PORT,
@@ -66,6 +67,7 @@ import {
   stopSharedReticulumDaemon,
 } from './reticulum-daemon';
 import { registerReticulumMeshIpcHandlers } from './reticulum-mesh';
+import { registerQortinoLlmIpcHandlers } from './qortino-llm';
 import { startReticulumForAppLaunch } from './reticulum-launch';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
 import {
@@ -84,6 +86,7 @@ import * as net from 'net';
 
 registerReticulumIpcHandlers();
 registerReticulumMeshIpcHandlers();
+registerQortinoLlmIpcHandlers();
 
 function isBenignStdioWriteError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException)?.code;
@@ -493,9 +496,16 @@ const trayMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
     },
   }),
 ];
+// View's zoom items zoom the Hub page, and every Q-App with it.
+const hubPageToZoom = () => {
+  const mainWindow = myCapacitorApp.getMainWindow();
+  return mainWindow && !mainWindow.isDestroyed()
+    ? mainWindow.webContents
+    : null;
+};
 const appMenuBarMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
   { role: process.platform === 'darwin' ? 'appMenu' : 'fileMenu' },
-  { role: 'viewMenu' },
+  viewMenu(hubPageToZoom),
   { role: 'editMenu' },
 ];
 

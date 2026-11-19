@@ -49,10 +49,7 @@ export const isWalletActivityTimestampRecent = (timestamp: number) =>
 export function formatWalletActivityRelativeTime(
   timestamp: number,
   now: number,
-  tDashboard: (
-    key: string,
-    options?: { count?: number }
-  ) => string
+  tDashboard: (key: string, options?: { count?: number }) => string
 ) {
   const elapsedMs = Math.max(0, now - timestamp);
   const elapsedMinutes = Math.floor(elapsedMs / 60000);

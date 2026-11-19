@@ -10,6 +10,8 @@ const KNOWN_ERRORS = [
   'PAGE_TOO_LARGE',
   'PAGE_UNVERIFIED',
   'SHOT_UNAVAILABLE',
+  'SHOTS_CHANGED',
+  'SHOTS_UNVERIFIED',
 ];
 
 /** Internal codes that are no use to a reader: say something generic. */

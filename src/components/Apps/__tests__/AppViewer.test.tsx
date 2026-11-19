@@ -8,12 +8,15 @@ import {
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// The page Core reported last, as useQortalMessageListener keeps it.
+const reported = vi.hoisted(() => ({ path: '' }));
+
 vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://localhost:12391',
 }));
 vi.mock('../../../hooks/useQortalMessageListener', () => ({
   useQortalMessageListener: () => ({
-    path: '',
+    path: reported.path,
     history: {},
     resetHistory: vi.fn(),
   }),
@@ -32,6 +35,7 @@ import { executeEvent } from '../../../utils/events';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  reported.path = '';
 });
 
 describe('AppViewer guest recovery', () => {
@@ -193,4 +197,53 @@ describe("AppViewer keeps a page's own query and fragment", () => {
     expect(url.searchParams.get('lang')).toBe('en');
     expect(url.hash).toBe('#top');
   });
+
+  // Core reports a page as its path and fragment, so a hash router's route
+  // and query are in the fragment.
+  it.each([
+    {
+      page: '/#/search?q=a',
+      pathname: '/render/APP/Q-Blog/',
+      hash: '#/search?q=a',
+    },
+    {
+      page: '/page#top',
+      pathname: '/render/APP/Q-Blog/page',
+      hash: '#top',
+    },
+  ])(
+    "puts Hub's parameters before the fragment of $page when the tab is refreshed",
+    async ({ page, pathname, hash }) => {
+      const prepare = stubGuest();
+      reported.path = page;
+      const { container } = render(
+        <AppViewer
+          app={{ ...owner, identifier: 'beta', tabId: 'blog' }}
+          isDevMode={false}
+        />
+      );
+      const source = () =>
+        container.querySelector('webview')?.getAttribute('src') ?? '';
+      await waitFor(() => expect(source()).toContain('/render/APP/Q-Blog?'));
+
+      act(() => executeEvent('refreshApp', { tabId: 'blog' }));
+      await waitFor(() => expect(source()).toContain('time='));
+
+      const url = new URL(source());
+      expect(url.pathname).toBe(pathname);
+      expect(url.searchParams.get('theme')).toBe('dark');
+      expect(url.searchParams.get('lang')).toBe('en');
+      expect(url.searchParams.get('identifier')).toBe('beta');
+      expect(url.searchParams.get('time')).toMatch(/^\d+$/);
+      expect(url.hash).toBe(hash);
+      expect(
+        qappGuestUrlAllowed(
+          prepare.mock.calls[0][1],
+          source(),
+          { ...owner, tabId: 'blog' },
+          false
+        )
+      ).toBe(true);
+    }
+  );
 });

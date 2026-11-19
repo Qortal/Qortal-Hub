@@ -12,11 +12,12 @@ import type { HomePanelId, HomeStackPanelId } from './homeLayout';
  * - A window being moved changes places with a window it shares columns with
  *   once its leading edge passes that window's middle. A window being resized
  *   keeps its top left corner and pushes what it reaches further down.
- * - The account card and Widgets only take a width: their height follows
- *   their content (HOME_AUTO_HEIGHT_WINDOWS).
+ * - The account card, Qortino and Widgets only take a width: their height
+ *   follows their content (HOME_AUTO_HEIGHT_WINDOWS).
  * - Besides Home's own windows there are the widgets the account put in
- *   windows of their own (`widget:…` keys, homeWidgetWindowId), listed with
- *   the layout.
+ *   windows of their own (`widget:…` keys, homeWidgetWindowId) and the
+ *   Workspace's copies, made with Duplicate (`workspace:…` keys,
+ *   homeWorkspaceCopyId), both listed with the layout.
  * - When Home is narrower than HOME_GRID_MIN_WIDTH_PX, the windows flow in
  *   the same order into two columns, or one on a narrow window, instead.
  *
@@ -28,7 +29,13 @@ export type HomeFixedWindowId = 'account' | HomePanelId;
 /** A Q-App widget in a window of its own: `widget:<name>:<identifier>`. */
 export type HomeWidgetWindowId = `widget:${string}`;
 
-export type HomeWindowId = HomeFixedWindowId | HomeWidgetWindowId;
+/** A copy of the Workspace, made with Duplicate: `workspace:<key>`. */
+export type HomeWorkspaceCopyId = `workspace:${string}`;
+
+/** The windows listed with the layout, besides Home's own. */
+export type HomeExtraWindowId = HomeWidgetWindowId | HomeWorkspaceCopyId;
+
+export type HomeWindowId = HomeFixedWindowId | HomeExtraWindowId;
 
 export type HomeGridItem = GridRect & { key: HomeWindowId };
 
@@ -49,6 +56,7 @@ const HOME_GRID_MAX_Y = 100_000;
 /** Home's own windows, in the order the settings and the menus list them. */
 export const HOME_WINDOW_IDS: readonly HomeFixedWindowId[] = [
   'account',
+  'workspace',
   'qortino',
   'tools',
   'featured',
@@ -59,9 +67,13 @@ export const HOME_WINDOW_IDS: readonly HomeFixedWindowId[] = [
   'feed',
 ];
 
-/** Windows whose height follows their content. */
+/**
+ * Windows whose height follows their content. Qortino's grows while it shows
+ * Getting started, and shrinks back once that's done.
+ */
 export const HOME_AUTO_HEIGHT_WINDOWS: ReadonlySet<HomeWindowId> = new Set([
   'account',
+  'qortino',
   'widgets',
 ]);
 
@@ -82,7 +94,8 @@ export const HOME_WINDOW_MIN_SIZE: Record<
   { w: number; h: number }
 > = {
   account: { w: 8, h: 3 },
-  qortino: { w: 5, h: 34 },
+  workspace: { w: 5, h: 16 },
+  qortino: { w: 5, h: 18 },
   tools: { w: 4, h: 14 },
   featured: { w: 7, h: 32 },
   status: { w: 5, h: 20 },
@@ -111,18 +124,54 @@ export const isHomeWidgetWindowId = (
 ): value is HomeWidgetWindowId =>
   typeof value === 'string' && value.startsWith('widget:');
 
+const WORKSPACE_COPY_PREFIX = 'workspace:';
+
+/** The key of a copy of the Workspace. */
+export const homeWorkspaceCopyId = (key: string): HomeWorkspaceCopyId =>
+  `${WORKSPACE_COPY_PREFIX}${key}`;
+
+export const isHomeWorkspaceCopyId = (
+  value: unknown
+): value is HomeWorkspaceCopyId =>
+  typeof value === 'string' &&
+  value.startsWith(WORKSPACE_COPY_PREFIX) &&
+  value.length > WORKSPACE_COPY_PREFIX.length;
+
+/** What a copy's key names in the layout and in the Workspace's state. */
+export const homeWorkspaceCopyKey = (id: HomeWorkspaceCopyId) =>
+  id.slice(WORKSPACE_COPY_PREFIX.length);
+
+/** The Workspace or one of its copies. */
+export const isHomeWorkspaceWindowId = (value: unknown) =>
+  value === 'workspace' || isHomeWorkspaceCopyId(value);
+
 export const homeWindowMinSize = (key: HomeWindowId) =>
   isHomeWidgetWindowId(key)
     ? HOME_WIDGET_WINDOW_MIN_SIZE
-    : HOME_WINDOW_MIN_SIZE[key];
+    : isHomeWorkspaceCopyId(key)
+      ? HOME_WINDOW_MIN_SIZE.workspace
+      : HOME_WINDOW_MIN_SIZE[key];
 
-/** The top of the default layout: today's three columns. */
+/**
+ * Qortino's height under the Workspace in the default layout. The two take
+ * the 43 rows Qortino's window had when the Workspace was part of it. Qortino's
+ * height follows its content, so this is only where it starts.
+ */
+const HOME_GRID_QORTINO_H = 23;
+
+/**
+ * The top of the default layout: today's three columns. Quick Tools is tall
+ * enough for each key's name under its icon (HomeQuickToolsPad), the
+ * Workspace and Qortino get the rest: Qortino its HOME_GRID_QORTINO_H rows,
+ * the Workspace what's left.
+ */
 const HOME_GRID_TOP: Record<
   Exclude<HomeFixedWindowId, HomeStackPanelId>,
   GridRect
 > = {
-  qortino: { x: 0, y: 0, w: 6, h: 46 },
-  tools: { x: 0, y: 46, w: 6, h: 18 },
+  workspace: { x: 0, y: 0, w: 6, h: 43 - HOME_GRID_QORTINO_H },
+  qortino: { x: 0, y: 43 - HOME_GRID_QORTINO_H, w: 6, h: HOME_GRID_QORTINO_H },
+  tools: { x: 0, y: 43, w: 6, h: 21 },
   account: { x: 6, y: 0, w: 12, h: 20 },
   featured: { x: 6, y: 20, w: 12, h: 44 },
   status: { x: 18, y: 0, w: 6, h: 33 },
@@ -221,10 +270,34 @@ export const settleHomeGrid = (items: readonly HomeGridItem[]) =>
   settle(items, readingRank);
 
 /**
- * The default layout: today's three columns at the top (Qortino over Quick
- * Tools, the account card over Featured Q-Apps, Node Status over Wallet
- * Activity), then the stack in its order. Group Activity and the feed share
- * a row when they're next to each other in it.
+ * The windows one on another, in reading order (ties keep the list's
+ * order): each lands on the lowest window placed before it in its columns,
+ * wherever that one ended up. So a window put among them makes the ones
+ * under it go down, and none of them passes another. `first` goes before
+ * every window that starts in its row, those further left too.
+ */
+const stackHomeGrid = (
+  items: readonly HomeGridItem[],
+  first?: HomeWindowId
+): HomeGridItem[] => {
+  const order = new Map(
+    items.map((item) => [
+      item.key,
+      readingRank(item.key === first ? { ...item, x: -1 } : item),
+    ])
+  );
+  // From the bottom of the grid, every window placed before it is above it.
+  return settle(
+    items.map((item) => ({ ...item, y: HOME_GRID_MAX_Y })),
+    (item) => order.get(item.key) ?? 0
+  );
+};
+
+/**
+ * The default layout: today's three columns at the top (the Workspace over
+ * Qortino over Quick Tools, the account card over Featured Q-Apps, Node
+ * Status over Wallet Activity), then the stack in its order. Group Activity
+ * and the feed share a row when they're next to each other in it.
  */
 export const homeDefaultGrid = (
   stack: readonly HomeStackPanelId[] = ['widgets', 'groupActivity', 'feed']
@@ -255,12 +328,38 @@ export const homeDefaultGrid = (
 };
 
 /**
+ * Qortino's window from before the Workspace was a window of its own, with
+ * the Workspace at its top: that top becomes the Workspace and the rest
+ * Qortino. Together they take the room the one window did, so nothing else
+ * moves.
+ */
+const splitQortinoWindow = (qortino: HomeGridItem): HomeGridItem[] => {
+  const min = HOME_WINDOW_MIN_SIZE;
+  const qortinoH = Math.min(
+    HOME_GRID_QORTINO_H,
+    Math.max(min.qortino.h, qortino.h - min.workspace.h)
+  );
+  const workspaceH = Math.max(min.workspace.h, qortino.h - qortinoH);
+  return [
+    clampHomeWindow({ ...qortino, key: 'workspace', h: workspaceH }),
+    clampHomeWindow({
+      ...qortino,
+      key: 'qortino',
+      y: qortino.y + workspaceH,
+      h: qortinoH,
+    }),
+  ];
+};
+
+/**
  * A stored layout made whole: unknown and repeated windows dropped (a
- * widget's window too, unless `widgetWindows` lists it), every window inside
- * the grid and within its sizes (the account card's place always
- * HOME_ACCOUNT_PLACE_H tall), no overlaps, nothing left floating. A
- * window it lacks (one added later) goes under everything, at its default
- * size, Home's own windows first. Anything that isn't a list gives
+ * widget's window or a copy of the Workspace too, unless `extras` lists
+ * it), every window inside the grid and within its sizes (the account
+ * card's place always HOME_ACCOUNT_PLACE_H tall), no overlaps, nothing left
+ * floating. A window it lacks (one added later) goes under everything, at
+ * its default size, Home's own windows first. A grid from before the
+ * Workspace was a window of its own gets it from the top of Qortino's window
+ * (splitQortinoWindow). Anything that isn't a list gives
  * undefined.
  *
  * The `hidden` windows keep their places, which the shown ones may have
@@ -269,14 +368,15 @@ export const homeDefaultGrid = (
 export const normalizeHomeGrid = (
   value: unknown,
   stack?: readonly HomeStackPanelId[],
-  widgetWindows: readonly HomeWidgetWindowId[] = [],
+  extras: readonly HomeExtraWindowId[] = [],
   hidden: readonly HomeWindowId[] = []
 ): HomeGridItem[] | undefined => {
   if (!Array.isArray(value)) return undefined;
   const known = (key: unknown): key is HomeWindowId =>
     isHomeFixedWindowId(key) ||
-    (isHomeWidgetWindowId(key) && widgetWindows.includes(key));
-  const items: HomeGridItem[] = [];
+    ((isHomeWidgetWindowId(key) || isHomeWorkspaceCopyId(key)) &&
+      extras.includes(key));
+  let items: HomeGridItem[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue;
     const { key } = entry as { key?: unknown };
@@ -286,6 +386,12 @@ export const normalizeHomeGrid = (
     items.push(clampHomeWindow({ ...(entry as GridRect), key }));
   }
   if (items.length === 0) return undefined;
+  const qortino = items.find((item) => item.key === 'qortino');
+  if (qortino && !items.some((item) => item.key === 'workspace')) {
+    items = items.flatMap((item) =>
+      item === qortino ? splitQortinoWindow(item) : [item]
+    );
+  }
   const card = items.findIndex((item) => item.key === 'account');
   if (card >= 0 && items[card].h !== HOME_ACCOUNT_PLACE_H) {
     items[card] = { ...items[card], h: HOME_ACCOUNT_PLACE_H };
@@ -299,12 +405,16 @@ export const normalizeHomeGrid = (
     items.push({ ...start, y: bottom });
     bottom += start.h;
   }
-  for (const key of widgetWindows) {
+  const copySize = HOME_GRID_TOP.workspace;
+  for (const key of extras) {
     if (items.some((item) => item.key === key)) continue;
-    items.push({ key, x: 0, y: bottom, ...HOME_WIDGET_WINDOW_DEFAULT_SIZE });
-    bottom += HOME_WIDGET_WINDOW_DEFAULT_SIZE.h;
+    const size = isHomeWidgetWindowId(key)
+      ? HOME_WIDGET_WINDOW_DEFAULT_SIZE
+      : { w: copySize.w, h: copySize.h };
+    items.push({ key, x: 0, y: bottom, ...size });
+    bottom += size.h;
   }
-  const order: readonly HomeWindowId[] = [...HOME_WINDOW_IDS, ...widgetWindows];
+  const order: readonly HomeWindowId[] = [...HOME_WINDOW_IDS, ...extras];
   const ordered = order
     .map((key) => items.find((item) => item.key === key))
     .filter(Boolean);
@@ -521,6 +631,39 @@ export const homeGridEdited = (
   );
 };
 
+/**
+ * The Workspace right above or under Qortino, in the same columns, as in
+ * the default layout: the two rows they share.
+ */
+const workspaceAndQortino = (grid: readonly HomeGridItem[]) => {
+  const workspace = grid.find((item) => item.key === 'workspace');
+  const qortino = grid.find((item) => item.key === 'qortino');
+  if (!workspace || !qortino) return null;
+  if (workspace.x !== qortino.x || workspace.w !== qortino.w) return null;
+  const above = workspace.y + workspace.h === qortino.y;
+  const under = qortino.y + qortino.h === workspace.y;
+  if (!above && !under) return null;
+  return { above, qortino, workspace };
+};
+
+/**
+ * Home's grid while Getting started shows in Qortino's window: the
+ * Workspace makes way, and Qortino's window takes its rows as well as its
+ * own, at that height, so the rest of Home stays where it is. Nothing
+ * changes unless the Workspace sits right above or under Qortino.
+ */
+export const homeGridForGettingStarted = (
+  grid: readonly HomeGridItem[]
+): HomeGridItem[] => {
+  const pair = workspaceAndQortino(grid);
+  if (!pair) return [...grid];
+  const { qortino, workspace } = pair;
+  const y = Math.min(workspace.y, qortino.y);
+  return grid.map((item) =>
+    item.key === 'qortino' ? { ...item, y, h: workspace.h + qortino.h } : item
+  );
+};
+
 /** A changed layout of the shown windows, with the hidden ones kept. */
 export const mergeHomeGrid = (
   stored: readonly HomeGridItem[],
@@ -531,6 +674,46 @@ export const mergeHomeGrid = (
   ),
   ...shown.filter((item) => !stored.some((entry) => entry.key === item.key)),
 ];
+
+/** Whether no shown window of `grid` takes any of `rect`'s cells. */
+export const isHomeGridPlaceFree = (
+  grid: readonly HomeGridItem[],
+  rect: GridRect,
+  hidden: readonly HomeWindowId[] = []
+) => !grid.some((item) => !hidden.includes(item.key) && collides(item, rect));
+
+/**
+ * `key` added right under `under`, as big as it (under everything, as big
+ * as the Workspace, without it). The shown windows in its way go down to
+ * make room, still one under the other (stackHomeGrid); the `hidden` ones
+ * keep their places.
+ */
+export const homeGridWithWindowUnder = (
+  grid: readonly HomeGridItem[],
+  under: HomeWindowId,
+  key: HomeWindowId,
+  hidden: readonly HomeWindowId[] = []
+): HomeGridItem[] => {
+  const source = grid.find(
+    (item) => item.key === under && !hidden.includes(item.key)
+  );
+  const shown = grid.filter(
+    (item) => item.key !== key && !hidden.includes(item.key)
+  );
+  const bottom = shown.reduce((low, item) => Math.max(low, item.y + item.h), 0);
+  const added = clampHomeWindow(
+    source
+      ? { ...source, key, y: source.y + source.h }
+      : { ...HOME_GRID_TOP.workspace, key, y: bottom }
+  );
+  // Before the windows that start in its row: they go under it, so it
+  // stays right under the one it was added to.
+  const placed = stackHomeGrid([added, ...shown], key);
+  return mergeHomeGrid(
+    grid.filter((item) => item.key !== key),
+    placed
+  );
+};
 
 /**
  * Home's flowing layout, narrower than HOME_GRID_MIN_WIDTH_PX: the shown

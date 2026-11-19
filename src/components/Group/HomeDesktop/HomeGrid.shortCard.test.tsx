@@ -66,6 +66,7 @@ const TITLES: Partial<Record<HomeWindowId, string>> = {
   status: 'Node Status',
   tools: 'Quick Tools',
   wallet: 'Wallet Activity',
+  workspace: 'Workspace',
 };
 
 const renderGrid = (grid: HomeGridItem[]) => {
@@ -109,9 +110,15 @@ const bottomOf = (grid: readonly HomeGridItem[], key: HomeWindowId) => {
 /** The top of the default layout: the three columns. */
 const topGrid = () =>
   homeDefaultGrid().filter((item) =>
-    ['account', 'featured', 'qortino', 'status', 'tools', 'wallet'].includes(
-      item.key
-    )
+    [
+      'account',
+      'featured',
+      'qortino',
+      'status',
+      'tools',
+      'wallet',
+      'workspace',
+    ].includes(item.key)
   );
 
 describe('HomeGrid, editing under a short account card', () => {
@@ -160,8 +167,9 @@ describe('HomeGrid, editing under a short account card', () => {
     // that, and shows where it was dropped.
     expect(rectOf(saved, 'account')).toEqual([6, 0, 12, 20]);
     expect(rectOf(saved, 'featured')).toEqual([5, 20, 12, 44]);
+    // Under the Workspace too, now that it reaches its columns.
     const shown = homeGridShown(saved, () => true, { account: 16 });
-    expect(rectOf(shown, 'featured')).toEqual([5, 16, 12, 44]);
+    expect(rectOf(shown, 'featured')).toEqual([5, 20, 12, 44]);
   });
 
   it('saves the card at its place when it is made wider', () => {
@@ -225,9 +233,10 @@ describe('HomeGrid, editing under a short account card', () => {
     const saved = normalizeHomeGrid(onChangeGrid.mock.calls[0][0]);
     expect(rectOf(saved, 'account')).toEqual([6, 0, 12, 20]);
     expect(rectOf(saved, 'featured')).toEqual([5, 20, 12, 44]);
-    // Where it was dropped, as the drag showed.
+    // Where it was dropped, as the drag showed: under the Workspace too, now
+    // that it reaches its columns.
     const shown = homeGridShown(saved, () => true, { account: 16 });
-    expect(rectOf(shown, 'featured')).toEqual([5, 16, 12, 44]);
+    expect(rectOf(shown, 'featured')).toEqual([5, 20, 12, 44]);
   });
 
   it('keeps the height the user gives Featured Q-Apps', () => {
@@ -246,6 +255,54 @@ describe('HomeGrid, editing under a short account card', () => {
     // What was on screen is what shows after.
     const shown = homeGridShown(saved, () => true, { account: 16 });
     expect(rectOf(shown, 'featured')).toEqual([6, 16, 12, 53]);
+  });
+
+  it("gives a window's own buttons the layout as it's saved: the card's place, Featured Q-Apps at its own height", () => {
+    const grid = topGrid();
+    const duplicate = vi.fn();
+    render(
+      <ThemeProvider theme={lightTheme}>
+        <HomeGrid
+          active
+          grid={grid}
+          hiddenWindows={[]}
+          onChangeGrid={vi.fn()}
+          onHideWindow={vi.fn()}
+          onResetGrid={vi.fn()}
+          onShowWindow={vi.fn()}
+          windows={grid.map((item) => ({
+            ...(item.key === 'workspace'
+              ? {
+                  actions: [
+                    {
+                      icon: <span />,
+                      label: 'Duplicate Workspace',
+                      onClick: duplicate,
+                    },
+                  ],
+                }
+              : {}),
+            id: item.key,
+            node: <div>{`${TITLES[item.key]} content`}</div>,
+            title: TITLES[item.key],
+          }))}
+        />
+      </ThemeProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Duplicate Workspace' })
+    );
+
+    const given = duplicate.mock.calls[0][0];
+    expect(rectOf(given, 'account')).toEqual([6, 0, 12, 20]);
+    expect(rectOf(given, 'featured')).toEqual([6, 20, 12, 44]);
+    // Saved, Home shows Featured Q-Apps level with the other columns.
+    const shown = homeGridShown(normalizeHomeGrid(given), () => true, {
+      account: 16,
+    });
+    expect(bottomOf(shown, 'featured')).toBe(bottomOf(shown, 'tools'));
   });
 
   it("leaves a widget's window under the card sized by its widget", () => {

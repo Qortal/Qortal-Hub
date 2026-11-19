@@ -201,6 +201,125 @@ describe('createWidgetRequestHandler', () => {
     expect(postMessage).toHaveBeenCalledWith({ result: true, error: null });
   });
 
+  it('opens a SET_TAB tab from its service, name, identifier and path only', async () => {
+    subscribeToEvent('addTab', onAddTab);
+    const handler = createWidgetRequestHandler({
+      owner,
+      isOnScreen: () => true,
+      answerOwn: vi.fn(),
+      sendMessage: vi.fn(),
+    });
+    const { event } = request({
+      action: 'SET_TAB',
+      payload: {
+        service: 'APP',
+        name: 'Clock',
+        identifier: 'alarm',
+        path: 'settings',
+        isPreview: true,
+        url: 'https://elsewhere.example/render/hash/page',
+        afterTabId: 'other-tab',
+      },
+    });
+    await handler(event);
+    expect(opened).toEqual([
+      {
+        data: {
+          service: 'APP',
+          name: 'Clock',
+          identifier: 'alarm',
+          path: 'settings',
+        },
+      },
+    ]);
+    expect(Object.keys((opened[0] as { data: object }).data)).toEqual([
+      'service',
+      'name',
+      'identifier',
+      'path',
+    ]);
+  });
+
+  it('opens nothing for a SET_TAB without a usable service, name or path', async () => {
+    subscribeToEvent('addTab', onAddTab);
+    const handler = createWidgetRequestHandler({
+      owner,
+      isOnScreen: () => true,
+      answerOwn: vi.fn(),
+      sendMessage: vi.fn(),
+    });
+    for (const payload of [
+      { name: 'Clock', url: 'https://elsewhere.example/' },
+      { service: 'APP' },
+      { service: 'APP', name: 'Clock', path: { toString: () => '..' } },
+    ]) {
+      const { event, postMessage } = request({ action: 'SET_TAB', payload });
+      await handler(event);
+      expect(postMessage).toHaveBeenCalledWith({
+        result: null,
+        error: expect.objectContaining({ message: expect.any(String) }),
+      });
+    }
+    expect(opened).toEqual([]);
+  });
+
+  it.each([
+    ['APP', '..'],
+    ['APP', '.'],
+    ['..', 'Clock'],
+    ['.', 'Clock'],
+    ['', 'Clock'],
+    ['APP', ''],
+    ['APP', 'Clock/..'],
+    ['APP', 'Clock\\..'],
+    ['APP/..', 'Clock'],
+    ['APP', 'Clock\n'],
+    ['APP', '\u007fClock'],
+    ['APP', '..;x'],
+    ['APP', '%2e%2e'],
+  ])(
+    'opens nothing for a SET_TAB with service %j and name %j',
+    async (service, name) => {
+      subscribeToEvent('addTab', onAddTab);
+      const handler = createWidgetRequestHandler({
+        owner,
+        isOnScreen: () => true,
+        answerOwn: vi.fn(),
+        sendMessage: vi.fn(),
+      });
+      const { event, postMessage } = request({
+        action: 'SET_TAB',
+        payload: { service, name, path: 'hash/page' },
+      });
+      await handler(event);
+      expect(postMessage).toHaveBeenCalledWith({
+        result: null,
+        error: expect.objectContaining({ message: expect.any(String) }),
+      });
+      expect(opened).toEqual([]);
+    }
+  );
+
+  it.each(['Q.Shop', 'Qortal World', 'Q-Mail+', 'Кошелёк', '名前', '...'])(
+    'opens a SET_TAB tab for the name %j',
+    async (name) => {
+      subscribeToEvent('addTab', onAddTab);
+      const handler = createWidgetRequestHandler({
+        owner,
+        isOnScreen: () => true,
+        answerOwn: vi.fn(),
+        sendMessage: vi.fn(),
+      });
+      const { event, postMessage } = request({
+        action: 'SET_TAB',
+        payload: { service: 'APP', name },
+      });
+      await handler(event);
+      expect(opened).toEqual([{ data: { service: 'APP', name } }]);
+      expect(postMessage).toHaveBeenCalledWith({ result: true, error: null });
+    }
+  );
+
   it('acknowledges navigation reports and ignores messages not for the UI', async () => {
     const sendMessage = vi.fn();
     const handler = createWidgetRequestHandler({

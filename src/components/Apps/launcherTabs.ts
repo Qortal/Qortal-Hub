@@ -11,7 +11,7 @@
  * kept beside the list, by tab id (LauncherTabState). It can't be pinned, and
  * it isn't kept for a restart (tabSession.ts).
  */
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import type { AppsLauncherRequest } from './AppsLauncher';
 import { isLauncherSubPage } from './AppsLauncher/launcherRouting';
 import { pickNextTabFromMru } from './tabSelection';
@@ -204,13 +204,30 @@ export const useLauncherTabId = () => useContext(LauncherTabContext);
 export const LauncherTabShownContext = createContext(true);
 
 /**
+ * Changes each time the launcher starts over (a library search from the top
+ * bar, say). A menu left open in it is closed then, not shown again later.
+ */
+export const LauncherRestartContext = createContext(0);
+
+/**
  * A dialog's `open` and `keepMounted` inside a launcher tab: while the tab is
  * hidden it is put away, with what it holds kept mounted, and it shows again
- * with the tab. Outside a launcher tab it is just `open`.
+ * with the tab. When the launcher starts over it is closed with `onClose`.
+ * Outside a launcher tab it is just `open`.
  */
-export const useLauncherTabDialog = (open: boolean) => {
+export const useLauncherTabDialog = (open: boolean, onClose?: () => void) => {
   const isTabShown = useContext(LauncherTabShownContext);
-  return { open: open && isTabShown, keepMounted: open && !isTabShown };
+  const restart = useContext(LauncherRestartContext);
+  const restartRef = useRef(restart);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    if (restartRef.current === restart) return;
+    restartRef.current = restart;
+    if (open) onCloseRef.current?.();
+  }, [open, restart]);
+  const isOpen = open && restartRef.current === restart;
+  return { open: isOpen && isTabShown, keepMounted: isOpen && !isTabShown };
 };
 
 /**
