@@ -44,10 +44,8 @@ import { PublicKeyMismatchError } from './addressKeyCheck';
 import { encryptDataGroup } from '../qdn/encryption/group-encryption.ts';
 import { publishData } from '../qdn/publish/publish.ts';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function account(fill: number) {
   const bytes = new Uint8Array(32).fill(fill);
