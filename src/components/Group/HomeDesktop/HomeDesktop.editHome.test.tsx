@@ -401,7 +401,7 @@ describe('a copy of the Workspace taken off Home', () => {
     renderHome(store);
     const copy = () => frame('workspace:k1');
     await waitFor(() => {
-      expect(within(copy()!).getByText('Music player')).toBeInTheDocument();
+      expect(within(copy()!).getByText('Player')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Home' }));
@@ -464,7 +464,7 @@ describe('a Home layout restored from QDN without a copy of the Workspace', () =
     renderHome(store);
     const copy = () => frame('workspace:k1');
     await waitFor(() => {
-      expect(within(copy()!).getByText('Music player')).toBeInTheDocument();
+      expect(within(copy()!).getByText('Player')).toBeInTheDocument();
     });
 
     // Saved by a Hub without copies of the Workspace, and restored here.
@@ -481,7 +481,7 @@ describe('a Home layout restored from QDN without a copy of the Workspace', () =
 
     expect(frame('feed')).toBeNull();
     expect(copy()).not.toBeNull();
-    expect(within(copy()!).getByText('Music player')).toBeInTheDocument();
+    expect(within(copy()!).getByText('Player')).toBeInTheDocument();
     await act(async () => {});
     expect(settings).toMatchObject({
       windows: { k1: { mode: 'music' } },
@@ -549,7 +549,7 @@ describe('a Home layout restored from QDN without a copy of the Workspace', () =
     renderHome(store);
     const copy = () => frame('workspace:k1');
     await waitFor(() => {
-      expect(within(copy()!).getByText('Music player')).toBeInTheDocument();
+      expect(within(copy()!).getByText('Player')).toBeInTheDocument();
     });
     expect(
       localStorage.getItem(`${QORTINO_WORKSPACE_SETTINGS_KEY}_${ALICE}`)
@@ -570,7 +570,7 @@ describe('a Home layout restored from QDN without a copy of the Workspace', () =
     expect(frame('feed')).toBeNull();
     expect(readHomeLayout(ALICE).workspaces).toEqual(['k1']);
     expect(copy()).not.toBeNull();
-    expect(within(copy()!).getByText('Music player')).toBeInTheDocument();
+    expect(within(copy()!).getByText('Player')).toBeInTheDocument();
     await act(async () => {});
     expect(settings).toMatchObject({
       windows: { k1: { mode: 'music' } },
