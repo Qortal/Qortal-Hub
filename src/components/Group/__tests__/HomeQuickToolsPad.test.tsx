@@ -22,7 +22,17 @@ i18n.init({
   interpolation: { escapeValue: false },
 });
 
-import { HomeQuickToolsPad } from '../HomeQuickToolsPad';
+import {
+  HomeQuickToolsPad,
+  QUICK_TOOL_DETAIL_UNDER_MIN_PX,
+  QUICK_TOOL_NAME_UNDER_MIN_PX,
+  quickToolKeySize,
+} from '../HomeQuickToolsPad';
+import {
+  homeDefaultGrid,
+  homeGridColumnPx,
+  homeGridRectPx,
+} from '../HomeDesktop/homeGrid';
 
 /** Accessible name (the tooltip), the name shown, the detail shown. */
 const TOOLS = [
@@ -94,6 +104,32 @@ describe('HomeQuickToolsPad', () => {
       expect(window.getComputedStyle(text).display).toBe('none');
       expect(window.getComputedStyle(detail).display).toBe('none');
     }
+  });
+
+  it('shows the names at Home’s default size, and the details once the window is bigger', () => {
+    const tools = homeDefaultGrid().find((item) => item.key === 'tools');
+    const name = QUICK_TOOL_NAME_UNDER_MIN_PX;
+    const detail = QUICK_TOOL_DETAIL_UNDER_MIN_PX;
+    const keyAt = (w: number, h: number, homeWidth: number) => {
+      const px = homeGridRectPx(
+        { ...tools, h, w },
+        homeGridColumnPx(homeWidth)
+      );
+      return quickToolKeySize(px.width, px.height);
+    };
+    // Home 1,290–1,480 px wide: the Hub about 1,340 px wide or more.
+    for (const homeWidth of [1290, 1480]) {
+      const key = keyAt(tools.w, tools.h, homeWidth);
+      expect(key.width).toBeGreaterThanOrEqual(name.width);
+      expect(key.height).toBeGreaterThanOrEqual(name.height);
+      // The details wait for a bigger window.
+      expect(key.width).toBeLessThan(detail.width);
+      expect(key.height).toBeLessThan(detail.height);
+    }
+    // Twice as wide and 6 rows taller: the details show.
+    const bigger = keyAt(tools.w * 2, tools.h + 6, 1480);
+    expect(bigger.width).toBeGreaterThanOrEqual(detail.width);
+    expect(bigger.height).toBeGreaterThanOrEqual(detail.height);
   });
 
   it('names notifications by what they are, and their state', async () => {

@@ -1,5 +1,11 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
@@ -106,6 +112,44 @@ describe('DesktopSideBar', () => {
     expect(screen.queryByText('theme selector')).toBeNull();
     // Out of sight, it still keeps the P2P health others read.
     expect(screen.getAllByTestId('core-sync-status')).toHaveLength(1);
+  });
+
+  describe('Qortino AI', () => {
+    afterEach(() => {
+      delete window.qortinoLlm;
+    });
+
+    it('has a button after Q-Chat where it can run, in the bar and the half circle', () => {
+      window.qortinoLlm = {} as typeof window.qortinoLlm;
+      renderPanel({ show: 'always' });
+      const labels = screen
+        .getAllByText(/^(Q-Chat|Qortino AI)$/)
+        .map((node) => node.textContent);
+      expect(labels).toEqual(['Q-Chat', 'Qortino AI']);
+    });
+
+    it('is in the half circle too', () => {
+      window.qortinoLlm = {} as typeof window.qortinoLlm;
+      renderPanel({ layout: 'arc' });
+      expect(
+        document.querySelector('[data-side-panel-slot="qortinoAi"]')
+      ).not.toBeNull();
+    });
+
+    it('has no button where it can’t run, or once hidden', () => {
+      renderPanel({ show: 'always' });
+      expect(screen.queryByText('Qortino AI')).toBeNull();
+      cleanup();
+      localStorage.clear();
+
+      window.qortinoLlm = {} as typeof window.qortinoLlm;
+      renderPanel({
+        items: [{ kind: 'qchat' }, { hidden: true, kind: 'qortinoAi' }],
+        show: 'always',
+      });
+      expect(screen.getByText('Q-Chat')).toBeInTheDocument();
+      expect(screen.queryByText('Qortino AI')).toBeNull();
+    });
   });
 
   it('makes room for bigger buttons', () => {

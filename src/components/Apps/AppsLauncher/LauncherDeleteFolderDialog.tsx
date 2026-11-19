@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { AppBookmarkFolder } from '../AppBookmarks/bookmarkTypes';
+import { useLauncherTabDialog } from '../launcherTabs';
 
 interface LauncherDeleteFolderDialogProps {
   /** The folder that is about to be deleted, or null while nothing is asked. */
@@ -26,13 +27,15 @@ export const LauncherDeleteFolderDialog = ({
   onConfirm,
 }: LauncherDeleteFolderDialogProps) => {
   const { t } = useTranslation(['core']);
+  // In a hidden launcher tab the question steps aside, and comes back with it.
+  const dialogShown = useLauncherTabDialog(!!folder, onCancel);
 
   return (
     <Dialog
       aria-describedby="launcher-delete-folder-text"
       aria-labelledby="launcher-delete-folder-title"
       onClose={onCancel}
-      open={!!folder}
+      {...dialogShown}
       slotProps={{
         paper: { sx: { borderRadius: '16px', maxWidth: 360 } },
       }}
