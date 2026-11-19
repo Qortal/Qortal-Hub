@@ -168,12 +168,16 @@ export const messageListenerFactory = () => ({
  * a real UI dialog.  get.ts attaches its own handleMessage listener at module
  * load time, so posting QORTAL_REQUEST_PERMISSION_RESPONSE back to window is
  * enough to resolve the getUserPermission() promise.
+ *
+ * Returns a list that receives the payload the dialog would have shown.
  */
-export function simulatePermission(accepted: boolean): void {
+export function simulatePermission(accepted: boolean): Record<string, any>[] {
+  const payloads: Record<string, any>[] = [];
   window.addEventListener(
     'message',
     (event: MessageEvent) => {
       if (event.data?.action === 'QORTAL_REQUEST_PERMISSION') {
+        payloads.push(event.data.payload);
         window.dispatchEvent(
           new MessageEvent('message', {
             data: {
@@ -189,4 +193,5 @@ export function simulatePermission(accepted: boolean): void {
     },
     { once: true }
   );
+  return payloads;
 }

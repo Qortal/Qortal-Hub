@@ -101,13 +101,17 @@ import {
   createEndpoint,
   createBuyOrderTx,
   getKeyPair,
+  getSaveWallet,
+  processTransactionVersion2,
 } from '../../background/background';
+import signTradeBotTransaction from '../../transactions/signTradeBotTransaction';
 import { simulatePermission } from './common';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
 const AT_ADDRESS = 'QORTAL_AT_1';
 const FOREIGN_BLOCKCHAIN = 'LITECOIN'; // ticker → 'LTC'
+const OPENED_APP = { name: 'Opened-App', service: 'APP', tabId: 4 };
 
 const DEFAULT_AT_DATA = {
   qortalAtAddress: AT_ADDRESS,
@@ -189,6 +193,49 @@ describe('createSellOrder on public nodes', () => {
       )
     ).rejects.toThrow('question:message.error.gateway_pirate_local_node');
     expect(getKeyPair).not.toHaveBeenCalled();
+  });
+});
+
+describe('createSellOrder on a local node', () => {
+  beforeEach(() => {
+    vi.mocked(isRunningGateway).mockResolvedValue(false);
+    vi.mocked(getSaveWallet).mockResolvedValue({ address0: 'QORT_ADDRESS' });
+    vi.mocked(getKeyPair).mockResolvedValue({
+      privateKey: 'PRIVATE',
+      publicKey: 'PUBLIC',
+      ltcAddress: 'LTC_RECEIVING_ADDRESS',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(getSaveWallet).mockReset();
+    vi.mocked(getKeyPair).mockReset();
+    vi.clearAllMocks();
+  });
+
+  it('asks for "I have read this request", and creates no trade bot when declined', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const payloads = simulatePermission(false);
+
+    await expect(
+      createSellOrder(
+        {
+          qortAmount: '10',
+          foreignBlockchain: FOREIGN_BLOCKCHAIN,
+          foreignAmount: '0.1',
+        },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow('question:message.generic.user_declined_request');
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].confirmCheckbox).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(signTradeBotTransaction).not.toHaveBeenCalled();
+    expect(processTransactionVersion2).not.toHaveBeenCalled();
   });
 });
 
@@ -364,6 +411,29 @@ describe('createBuyOrder', () => {
       await expect(createBuyOrder(makeInput(), false)).rejects.toThrow(
         'question:message.generic.user_declined_request'
       );
+    });
+
+    it('asks for "I have read this request" before a Pirate Chain buy, and sends no order to the trade bot when declined', async () => {
+      vi.stubGlobal(
+        'fetch',
+        makeFetch({
+          atData: { ...DEFAULT_AT_DATA, foreignBlockchain: 'PIRATECHAIN' },
+        })
+      );
+      const payloads = simulatePermission(false);
+
+      await expect(
+        createBuyOrder(
+          makeInput({ foreignBlockchain: 'PIRATECHAIN' }),
+          false,
+          OPENED_APP
+        )
+      ).rejects.toThrow('question:message.generic.user_declined_request');
+
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0].confirmCheckbox).toBe(true);
+      expect(fundLocalTrades).not.toHaveBeenCalled();
+      expect(createBuyOrderTx).not.toHaveBeenCalled();
     });
   });
 
