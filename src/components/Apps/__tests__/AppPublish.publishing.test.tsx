@@ -15,6 +15,11 @@ import { createStore, Provider } from 'jotai';
 import { capitalizeFirstChar } from '../../../i18n/processors';
 import enCore from '../../../i18n/locales/en/core.json';
 
+// These integration tests render the full MUI form and can publish or retry
+// several times. Successful flows exceed the default 5 s on a busy runner.
+// Keep the extra time local to this file, as in the other publish-form tests.
+vi.setConfig({ testTimeout: 20_000 });
+
 // The page part's own words are real; the rest render as their keys.
 i18n.use(capitalizeFirstChar as never).init({
   lng: 'en',
@@ -1085,6 +1090,7 @@ describe('the publish form, against the node', () => {
         'clock'
       );
       chooseZip();
+      expect(unsaved).toBe(true);
       await pressPublish();
       await waitFor(() =>
         expect(published('APP')[0]).toMatchObject({
@@ -1092,13 +1098,16 @@ describe('the publish form, against the node', () => {
         })
       );
       await waitFor(() => expect(globalSnack()?.type).toBe('success'));
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      });
 
-      // Nothing typed is left anywhere in the form.
+      // Wait for the publish to finish and report its saved state, rather
+      // than assuming the callback has settled after a fixed delay.
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: /action\.publish/i })
+        ).toBeEnabled();
+        expect(unsaved).toBe(false);
+      });
       expect(whatsNew()).toHaveValue('');
-      expect(unsaved).toBe(false);
     });
   });
 });
