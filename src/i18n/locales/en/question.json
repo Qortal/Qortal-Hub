@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "retrieving {{ token }} balance is not allowed through a gateway",
       "gateway_wallet_local_node": "cannot view {{ token }} wallet through the gateway. Please use your local node.",
       "get_foreign_fee": "error in get foreign fee",
+      "hub_locked": "Qortal Hub is locked. Unlock it and try again.",
       "insufficient_balance": "your asset balance is insufficient",
       "insufficient_balance_qort": "your QORT balance is insufficient",
       "insufficient_funds": "insufficient funds",
