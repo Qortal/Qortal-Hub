@@ -16,10 +16,8 @@ import {
 } from './addressKeyCheck';
 import { Sha256 } from 'asmcrypto.js';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function keyBytes(seed: number): Uint8Array {
   const bytes = new Uint8Array(32);

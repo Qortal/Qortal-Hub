@@ -4,10 +4,8 @@ import Base58Untyped from './Base58';
 import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddress';
 import { ADDRESS_VERSION } from '../constants/constants';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Checks for addresses and public keys that come from the node.

@@ -89,10 +89,8 @@ import {
 } from '../../background/background';
 import { createTransaction } from '../../transactions/transactions';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function account(fill: number) {
   const bytes = new Uint8Array(32).fill(fill);

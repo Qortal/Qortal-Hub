@@ -33,11 +33,9 @@ import naclUntyped from '../../encryption/nacl-fast';
 import publicKeyToAddressUntyped from '../../utils/generateWallet/publicKeyToAddress';
 import { Minting } from './Minting';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const Base58 = Base58Untyped as any;
 const nacl = naclUntyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function account(fill: number) {
   const pair = nacl.sign.keyPair.fromSeed(new Uint8Array(32).fill(fill));
