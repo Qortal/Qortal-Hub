@@ -135,15 +135,7 @@ export async function setGlobalNotificationSettings(
     ...partial,
     version: (current.version ?? 0) + 1,
   };
-  const response = await window.sendMessage('addUserSettings', {
-    keyValue: {
-      key: GLOBAL_SETTINGS_KEY,
-      value: next,
-    },
-  });
-  if (response?.error) {
-    throw new Error(response.error);
-  }
+  await writeUserSetting(GLOBAL_SETTINGS_KEY, next);
   executeEvent(NOTIFICATION_SETTINGS_UPDATED_EVENT, {
     groupId: null,
     settings: null,
@@ -187,19 +179,29 @@ export async function getGroupNotificationStore(
   };
 }
 
+/**
+ * Persists one user setting and throws when it did not land.
+ *
+ * `addUserSettings` resolves a bare `true` on success and `false` on failure; it
+ * never resolves an `{ error }` object. Checking `response?.error` therefore
+ * never fired and every failed write was silent — which matters most for the
+ * migration, where a silent failure combined with a completion flag loses the
+ * user's previous preferences permanently.
+ */
+async function writeUserSetting(key: string, value: unknown): Promise<void> {
+  const saved = await window
+    .sendMessage('addUserSettings', { keyValue: { key, value } })
+    .catch(() => false);
+  if (saved !== true) {
+    throw new Error(`Failed to save notification setting: ${key}`);
+  }
+}
+
 export async function setGroupNotificationStore(
   groupId: string | number,
   store: GroupNotificationStore
 ): Promise<void> {
-  const response = await window.sendMessage('addUserSettings', {
-    keyValue: {
-      key: groupSettingsKey(groupId),
-      value: store,
-    },
-  });
-  if (response?.error) {
-    throw new Error(response.error);
-  }
+  await writeUserSetting(groupSettingsKey(groupId), store);
   executeEvent(NOTIFICATION_SETTINGS_UPDATED_EVENT, {
     groupId,
     settings: store,
@@ -254,30 +256,69 @@ function pruneChannelOverride(
 }
 
 /**
- * Fetches known channels for a group from the Reticulum channel API when
- * available. Returns channel IDs, optionally filtered to one section.
+ * Menu id used for the hidden default section.
+ *
+ * Its channels store an empty `categoryId`, so comparing the two literally
+ * never matches and the default section's menu actions would find no channels
+ * of its own. Always map it through {@link sectionFilterMatches}.
  */
+export const DEFAULT_SECTION_MENU_ID = 'cat-qchat-default';
+
+/**
+ * Whether a channel's stored category belongs to the section a menu targets.
+ *
+ * The default section is addressed as `cat-qchat-default` in the UI but stored
+ * as an empty `categoryId`, so this is the one place the two are reconciled.
+ */
+export function sectionFilterMatches(
+  categoryId: string | null | undefined,
+  sectionFilter: string | null | undefined
+): boolean {
+  const normalizedCategory = String(categoryId ?? '').trim();
+  const normalizedFilter = String(sectionFilter ?? '').trim();
+  if (normalizedFilter === DEFAULT_SECTION_MENU_ID) {
+    return normalizedCategory === '';
+  }
+  return normalizedCategory === normalizedFilter;
+}
+
+/**
+ * Result of a channel lookup.
+ *
+ * `unavailable` is deliberately distinct from an empty `ok`. A failed lookup
+ * used to be flattened to `[]`, which made "we could not ask" indistinguishable
+ * from "there are no channels here" and let section-scoped writes fall back to
+ * every stored override in the group.
+ */
+export type ChannelLookup =
+  | { status: 'ok'; channelIds: string[] }
+  | { status: 'unavailable' };
+
+/** Fetches the group's channels, optionally filtered to one section. */
 async function fetchChannelIds(
   groupId: string | number,
   sectionFilter?: string
-): Promise<string[]> {
+): Promise<ChannelLookup> {
+  const getChannels = (window as any).reticulumChat?.getChannels;
+  if (typeof getChannels !== 'function') return { status: 'unavailable' };
   try {
-    const channels = await (window as any).reticulumChat?.getChannels?.(
-      Number(groupId),
-      true
-    );
-    if (!Array.isArray(channels) || channels.length === 0) return [];
-    const ids: string[] = [];
+    const channels = await getChannels(Number(groupId), true);
+    if (!Array.isArray(channels)) return { status: 'unavailable' };
+    const channelIds: string[] = [];
     for (const ch of channels) {
       const chId = String(ch?.channelId || '').trim();
       if (!chId) continue;
-      const catId = String(ch?.categoryId ?? '').trim();
-      if (sectionFilter != null && catId !== sectionFilter) continue;
-      ids.push(chId);
+      if (
+        sectionFilter != null &&
+        !sectionFilterMatches(ch?.categoryId, sectionFilter)
+      ) {
+        continue;
+      }
+      channelIds.push(chId);
     }
-    return ids;
+    return { status: 'ok', channelIds };
   } catch {
-    return [];
+    return { status: 'unavailable' };
   }
 }
 
@@ -322,17 +363,31 @@ export async function applyScopeNotificationSettings(
   }
 
   // Determine the channel IDs in scope.
+  //
+  // A failed lookup must never widen the scope. The previous code fell back to
+  // every stored override in the group, so muting an empty section whose lookup
+  // had failed wrote to channels in other sections. A successful empty lookup is
+  // a no-op; an unavailable one fails the operation so the caller can retry.
   let channelIds: string[] = [];
   if (scope.channelId != null) {
     channelIds = [String(scope.channelId)];
   } else {
     const known = Object.keys(store.channels);
-    const fetched = await fetchChannelIds(scope.groupId, scope.sectionId);
-    channelIds = fetched.length > 0 ? fetched : known;
-    if (scope.sectionId != null && fetched.length === 0) {
-      // Section filtering requested but channel API unavailable: cannot
-      // determine section membership — fall back to existing channels only.
-      channelIds = known;
+    const lookup = await fetchChannelIds(scope.groupId, scope.sectionId);
+    if (scope.sectionId != null) {
+      if (lookup.status === 'unavailable') {
+        throw new Error(
+          `Cannot resolve channels for section ${scope.sectionId}: channel list unavailable`
+        );
+      }
+      channelIds = lookup.channelIds;
+    } else {
+      // Group scope covers the whole group, so the stored overrides are already
+      // in scope. They are the fallback when the lookup cannot answer.
+      channelIds =
+        lookup.status === 'ok' && lookup.channelIds.length > 0
+          ? lookup.channelIds
+          : known;
     }
   }
 
@@ -944,20 +999,39 @@ export async function needsNotificationMigration(): Promise<boolean> {
   return !global || typeof global !== 'object';
 }
 
+export interface MigrateNotificationSettingsResult {
+  /** Groups whose channels could not be resolved; retry them later. */
+  unresolvedGroupIds: string[];
+  /** True when every affected group migrated and the completion flag was set. */
+  complete: boolean;
+}
+
 /**
  * Migrates legacy per-group nested settings to the flat channel-override
- * model. Idempotent: only runs when the new global key is absent. Old keys
- * are left in place (never read again after migration).
+ * model.
+ *
+ * Completion is only recorded when every group actually migrated. A group whose
+ * channel list was unavailable keeps its legacy preferences pending and is
+ * retried on the next call; previously the flag was written unconditionally, so
+ * a first login that raced membership loading dropped the user's mutes and
+ * disabled mentions for good.
+ *
+ * Old keys are left in place, which is what makes the retry possible.
  */
 export async function migrateNotificationSettings(
   memberGroupIds: Array<string | number>
-): Promise<void> {
+): Promise<MigrateNotificationSettingsResult> {
   const alreadyMigrated = await window
     .sendMessage('getUserSettings', {
       key: MIGRATION_FLAG_KEY,
     })
     .catch(() => false);
-  if (alreadyMigrated === true) return;
+  // A completion flag from an earlier run does not stop the pass. That run may
+  // have set it while some groups had no resolvable channels, leaving them with
+  // no overrides at all; those groups are repaired below. Groups that were
+  // migrated properly are skipped individually, so a later user change is never
+  // overwritten.
+  const previouslyComplete = alreadyMigrated === true;
 
   const global = await getGlobalNotificationSettings();
 
@@ -975,8 +1049,23 @@ export async function migrateNotificationSettings(
     .catch(() => []);
   const mutedGroupIds = Array.isArray(mutedGroups) ? mutedGroups : [];
 
+  // Groups whose legacy preference needs channel IDs that could not be resolved.
+  const unresolvedGroupIds: string[] = [];
+
   for (const groupId of memberGroupIds) {
     const legacy = await getLegacyGroupSettings(groupId);
+    // Already migrated in an earlier pass, so this group's store may hold
+    // choices the user made afterwards. Leave it alone.
+    if (previouslyComplete) {
+      const existing = await getGroupNotificationStore(groupId);
+      if (
+        Object.keys(existing.channels ?? {}).length > 0 ||
+        existing.notifyOnWelcomePosts !== undefined ||
+        existing.hideMutedChannels !== undefined
+      ) {
+        continue;
+      }
+    }
     const channels: Record<string, ChannelOverride> = {};
 
     if (legacy) {
@@ -1029,42 +1118,61 @@ export async function migrateNotificationSettings(
       store.notifyOnWelcomePosts = legacy.notifyOnWelcomePosts;
     }
 
-    // Apply legacy group-level pushLevel/mutes that were not channel-specific:
-    // if the legacy group root had a pushLevel of 'none' (permanent mute) but
-    // no channels were materialized, apply to all known channels is skipped —
-    // instead the channel API is consulted at write time. To preserve old
-    // group-root mutes the root mutedUntil is propagated to all channels.
-    if (legacy?.mutedUntil !== undefined && legacy.mutedUntil !== 0) {
-      const fetched = await fetchChannelIds(groupId);
-      const ids = fetched.length > 0 ? fetched : Object.keys(channels);
-      for (const chId of ids) {
-        channels[chId] = { ...channels[chId], mutedUntil: legacy.mutedUntil };
-      }
-    }
-    if (
+    const legacyGroupMute =
+      legacy?.mutedUntil !== undefined && legacy.mutedUntil !== 0;
+    const legacyGroupMentionsOff =
       wasMentionsDisabled ||
-      mutedGroupIds.some((id) => String(id) === String(groupId))
-    ) {
-      if (store.channels == null) store.channels = {};
-      const fetched = await fetchChannelIds(groupId);
-      const ids = fetched.length > 0 ? fetched : Object.keys(store.channels);
-      for (const chId of ids) {
-        store.channels[chId] = {
-          ...store.channels[chId],
-          pushLevel: 'none',
-        };
+      mutedGroupIds.some((id) => String(id) === String(groupId));
+
+    // Group-level legacy preferences need channel IDs. Resolve once, and skip
+    // the whole group rather than write a partial store when the list is not
+    // available: a group written with no overrides is a group whose preferences
+    // were silently dropped.
+    if (legacyGroupMute || legacyGroupMentionsOff) {
+      const lookup = await fetchChannelIds(groupId);
+      const resolved =
+        lookup.status === 'ok'
+          ? lookup.channelIds
+          : // Only fall back to entries this group already has. Never borrow
+            // another group's channels.
+            Object.keys(channels);
+      const canMaterialize = lookup.status === 'ok' || resolved.length > 0;
+      if (!canMaterialize) {
+        unresolvedGroupIds.push(String(groupId));
+        continue;
+      }
+      if (legacyGroupMute) {
+        for (const chId of resolved) {
+          channels[chId] = {
+            ...channels[chId],
+            mutedUntil: legacy.mutedUntil as number,
+          };
+        }
+      }
+      if (legacyGroupMentionsOff) {
+        if (store.channels == null) store.channels = {};
+        for (const chId of resolved) {
+          store.channels[chId] = {
+            ...store.channels[chId],
+            pushLevel: 'none',
+          };
+        }
       }
     }
 
     await setGroupNotificationStore(groupId, store);
   }
 
-  await window.sendMessage('addUserSettings', {
-    keyValue: {
-      key: MIGRATION_FLAG_KEY,
-      value: true,
-    },
-  });
+  // Only record completion when nothing is left to retry. Writing the flag
+  // unconditionally is what lost preferences for users whose first login raced
+  // membership loading: the channel list was unavailable, no override was
+  // written, and the flag meant it was never retried.
+  const complete = unresolvedGroupIds.length === 0;
+  if (complete) {
+    await writeUserSetting(MIGRATION_FLAG_KEY, true);
+  }
+
+  return { unresolvedGroupIds, complete };
 }
 
 // ---------------------------------------------------------------------------
@@ -1086,15 +1194,7 @@ export async function getNotificationDeliveryMethod(): Promise<NotificationDeliv
 export async function setNotificationDeliveryMethod(
   method: NotificationDeliveryMethod
 ): Promise<void> {
-  const response = await window.sendMessage('addUserSettings', {
-    keyValue: {
-      key: NOTIFICATION_DELIVERY_KEY,
-      value: method,
-    },
-  });
-  if (response?.error) {
-    throw new Error(response.error);
-  }
+  await writeUserSetting(NOTIFICATION_DELIVERY_KEY, method);
 }
 
 export function getDefaultNotificationDeliveryMethod(): NotificationDeliveryMethod {

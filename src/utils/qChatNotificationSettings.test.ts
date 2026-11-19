@@ -46,7 +46,10 @@ function mockSendMessage(map: Record<string, unknown>) {
         return map[opts.key] ?? null;
       }
       if (type === 'addUserSettings') {
-        return { error: null };
+        // The real handler resolves a bare boolean, never an error object. The
+        // mock used to return `{ error: null }`, which matched the production
+        // code's dead `response?.error` guard and hid silent write failures.
+        return true;
       }
       return null;
     }),
@@ -374,6 +377,106 @@ describe('applyScopeNotificationSettings / setScopeNotificationSettings', () => 
       .value as GroupNotificationStore;
     expect(stored.channels['general']?.pushLevel).toBe('all');
     expect(stored.channels['support']?.pushLevel).toBe('all');
+    expect(stored.channels['offtopic']).toBeUndefined();
+  });
+
+  it('a section write never widens to channels outside the section', async () => {
+    mockSendMessage({
+      [GLOBAL_SETTINGS_KEY]: {
+        pushLevel: 'mentions',
+        suppressEveryoneHere: false,
+        notifyOnReplies: true,
+        notifyOnReactions: true,
+        version: 1,
+      },
+      // Another section already has an override. Muting a section whose lookup
+      // fails used to rewrite these channels instead.
+      'q-chat-notif-21': { channels: { other: { mutedUntil: null } } },
+    });
+    (window as any).reticulumChat = {
+      getChannels: vi.fn(async () => {
+        throw new Error('not a member');
+      }),
+    };
+
+    await expect(
+      setScopeNotificationSettings(
+        { groupId: 21, sectionId: 'sec-2' },
+        {
+          mutedUntil: null,
+        }
+      )
+    ).rejects.toThrow(/channel list unavailable/);
+
+    // Nothing was written, so the unrelated section's mute is untouched.
+    const writes = (window.sendMessage as any).mock.calls.filter(
+      (c: any[]) => c[0] === 'addUserSettings'
+    );
+    expect(writes).toHaveLength(0);
+  });
+
+  it('a section write over an empty section is a no-op, not a group-wide write', async () => {
+    mockSendMessage({
+      [GLOBAL_SETTINGS_KEY]: {
+        pushLevel: 'mentions',
+        suppressEveryoneHere: false,
+        notifyOnReplies: true,
+        notifyOnReactions: true,
+        version: 1,
+      },
+      'q-chat-notif-22': { channels: { other: { mutedUntil: null } } },
+    });
+    (window as any).reticulumChat = {
+      // The section exists but holds no channels.
+      getChannels: vi.fn(async () => [
+        { channelId: 'other', categoryId: 'sec-other' },
+      ]),
+    };
+
+    await setScopeNotificationSettings(
+      { groupId: 22, sectionId: 'sec-empty' },
+      { mutedUntil: null }
+    );
+
+    const writes = (window.sendMessage as any).mock.calls.filter(
+      (c: any[]) => c[0] === 'addUserSettings'
+    );
+    const stored = writes[writes.length - 1][1].keyValue
+      .value as GroupNotificationStore;
+    // The other section's mute survives; an empty section changed nothing.
+    expect(stored.channels['other']?.mutedUntil).toBeNull();
+  });
+
+  it('resolves the default section through the menu id', async () => {
+    mockSendMessage({
+      [GLOBAL_SETTINGS_KEY]: {
+        pushLevel: 'mentions',
+        suppressEveryoneHere: false,
+        notifyOnReplies: true,
+        notifyOnReactions: true,
+        version: 1,
+      },
+    });
+    (window as any).reticulumChat = {
+      getChannels: vi.fn(async () => [
+        // The default section's channels carry an empty categoryId, while the
+        // menu addresses it as cat-qchat-default.
+        { channelId: 'general', categoryId: '' },
+        { channelId: 'offtopic', categoryId: 'sec-2' },
+      ]),
+    };
+
+    await setScopeNotificationSettings(
+      { groupId: 23, sectionId: 'cat-qchat-default' },
+      { mutedUntil: null }
+    );
+
+    const writes = (window.sendMessage as any).mock.calls.filter(
+      (c: any[]) => c[0] === 'addUserSettings'
+    );
+    const stored = writes[writes.length - 1][1].keyValue
+      .value as GroupNotificationStore;
+    expect(stored.channels['general']?.mutedUntil).toBeNull();
     expect(stored.channels['offtopic']).toBeUndefined();
   });
 
@@ -929,13 +1032,64 @@ describe('migrateNotificationSettings', () => {
     expect(stored.channels['general']?.mutedUntil).toBeNull();
   });
 
-  it('skips when already migrated', async () => {
-    mockSendMessage({ 'q-chat-notification-settings-migrated': true });
-    await migrateNotificationSettings([1, 2]);
-    const addCalls = (window.sendMessage as any).mock.calls.filter(
-      (c: any[]) => c[0] === 'addUserSettings'
-    );
-    expect(addCalls.length).toBe(0);
+  it('leaves a group alone when it already holds migrated overrides', async () => {
+    mockSendMessage({
+      'q-chat-notification-settings-migrated': true,
+      // Group 1 was migrated properly and the user has since changed it.
+      'q-chat-notif-1': { channels: { general: { pushLevel: 'all' } } },
+      // Group 2 was marked complete but holds nothing, so it is repaired.
+      'q-chat-notif-2': { channels: {} },
+      mutedGroups: [2],
+    });
+    (window as any).reticulumChat = {
+      getChannels: vi.fn(async (groupId: number) => [
+        { channelId: groupId === 1 ? 'general' : 'support', categoryId: '' },
+      ]),
+    };
+
+    const result = await migrateNotificationSettings([1, 2]);
+
+    const written = (window.sendMessage as any).mock.calls
+      .filter((c: any[]) => c[0] === 'addUserSettings')
+      .map((c: any[]) => c[1].keyValue.key);
+
+    // The migrated group keeps the user's later choice.
+    expect(written).not.toContain('q-chat-notif-1');
+    // The group flagged complete with no overrides is not left broken.
+    expect(written).toContain('q-chat-notif-2');
+    expect(result.complete).toBe(true);
+  });
+
+  it('does not mark completion while a group still has unresolved channels', async () => {
+    mockSendMessage({ mutedGroups: [7] });
+
+    const result = await migrateNotificationSettings([7]);
+
+    const written = (window.sendMessage as any).mock.calls
+      .filter((c: any[]) => c[0] === 'addUserSettings')
+      .map((c: any[]) => c[1].keyValue.key);
+
+    expect(result.complete).toBe(false);
+    expect(result.unresolvedGroupIds).toEqual(['7']);
+    // Writing the flag here is what lost the preference for good: there was no
+    // channel list to write an override against, and the flag stopped a retry.
+    expect(written).not.toContain('q-chat-notification-settings-migrated');
+  });
+
+  it('surfaces a failed settings write instead of swallowing it', async () => {
+    vi.stubGlobal('window', {
+      ...window,
+      sendMessage: vi.fn(async (type: string) => {
+        if (type === 'getUserSettings') return null;
+        // The real handler resolves a bare boolean on failure.
+        if (type === 'addUserSettings') return false;
+        return null;
+      }),
+    });
+
+    await expect(
+      setGlobalNotificationSettings({ pushLevel: 'all' })
+    ).rejects.toThrow(/Failed to save notification setting/);
   });
 });
 
