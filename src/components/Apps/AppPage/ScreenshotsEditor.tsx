@@ -31,8 +31,13 @@ export interface ShotDraft {
   caption: string;
   width?: number;
   height?: number;
-  /** A new picture, encoded as WebP. */
+  /**
+   * The picture itself, encoded as WebP: a new one, or one this Hub just
+   * published. Without it, the picture is read back from QDN.
+   */
   blob?: Blob;
+  /** Read back from QDN: the signature of the screenshots it comes from. */
+  readFrom?: string;
 }
 
 export const ScreenshotsEditor = ({

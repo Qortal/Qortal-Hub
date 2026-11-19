@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "il recupero del saldo {{ token }} non è consentito tramite un gateway",
       "gateway_wallet_local_node": "non è possibile visualizzare il wallet {{ token }} tramite il gateway. Utilizzare il nodo locale.",
       "get_foreign_fee": "errore nel recupero delle commissioni estere",
+      "hub_locked": "Qortal Hub è bloccato. Sbloccalo e riprova.",
       "insufficient_balance": "saldo asset insufficiente",
       "insufficient_balance_qort": "saldo QORT insufficiente",
       "insufficient_funds": "fondi insufficienti",

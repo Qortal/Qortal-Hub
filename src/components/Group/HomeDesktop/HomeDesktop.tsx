@@ -1,17 +1,27 @@
 import { Box, Typography, useTheme } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import LibraryAddRoundedIcon from '@mui/icons-material/LibraryAddRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { alpha } from '@mui/material/styles';
 import { useAtomValue } from 'jotai';
-import { Activity, useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Activity,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import ErrorBoundary from '../../../common/ErrorBoundary';
 import { Spacer } from '../../../common/Spacer';
 import { HomeProfileCard } from '../HomeProfileCard';
 import {
   HomeQortinoWorkspaceCard,
   QortinoMusicPlaybackController,
+  type QortinoWorkspacePlace,
 } from '../HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from '../HomeQuickToolsPad';
 import { HomeFeaturedApps } from '../HomeFeaturedApps';
@@ -53,26 +63,87 @@ import {
 } from './homeDesktopConstants';
 import { returnToQChat } from './homeNavigation';
 import {
+  HOME_WORKSPACE_COPY_LIMIT,
   type HomePanelId,
   homeLayoutGrid,
   isHomePanelShown,
+  isHomePanelShownNow,
   useHomeLayout,
   withHomeGrid,
   withHomePanelShown,
   withHomeWidgetWindow,
   withHomeWidgetWindowHeight,
+  withHomeWorkspaceCopy,
   withoutHomeWidgetWindow,
+  withoutHomeWorkspaceCopy,
 } from './homeLayout';
 import {
   HOME_WINDOW_IDS,
   type HomeFixedWindowId,
+  type HomeWindowId,
+  homeGridForGettingStarted,
   homeWidgetWindowId,
+  homeWorkspaceCopyId,
   isHomeWidgetWindowId,
+  isHomeWorkspaceCopyId,
 } from './homeGrid';
-import { HomeGrid, type HomeGridWindow } from './HomeGrid';
+import {
+  HomeGrid,
+  type HomeGridWindow,
+  type HomeGridWindowAction,
+} from './HomeGrid';
 import { RestoreLayoutButton } from '../../Save/RestoreLayoutButton';
 import { LAYOUT_EDIT_DONE_EVENT } from '../../Save/LayoutSavePrompt';
-import { homeWalletRailRect, useHomeWindowTitles } from './homeWindows';
+import {
+  homeWalletRailRect,
+  useHomeWindowTitles,
+  useHomeWorkspaceCopyTitle,
+} from './homeWindows';
+
+/** A fallback shown in each of the windows the Qortino card fills. */
+const QortinoPartsFallback = ({
+  fallback,
+  nodes,
+}: {
+  fallback: ReactNode;
+  nodes: readonly (HTMLElement | null | undefined)[];
+}) => (
+  <>
+    {nodes.map((node, index) =>
+      node ? createPortal(fallback, node, String(index)) : null
+    )}
+  </>
+);
+
+/**
+ * Where the Qortino card puts its parts: each window it fills renders an
+ * empty slot, and the card (one, so its state is shared) shows its part in it.
+ */
+const useWindowSlots = () => {
+  const [slots, setSlots] = useState<
+    Partial<Record<HomeWindowId, HTMLElement>>
+  >({});
+  const refs = useRef(
+    new Map<HomeWindowId, (node: HTMLElement | null) => void>()
+  );
+  const slotRef = useCallback((id: HomeWindowId) => {
+    let ref = refs.current.get(id);
+    if (!ref) {
+      ref = (node: HTMLElement | null) => {
+        setSlots((current) => {
+          if ((current[id] ?? null) === node) return current;
+          const next = { ...current };
+          if (node) next[id] = node;
+          else delete next[id];
+          return next;
+        });
+      };
+      refs.current.set(id, ref);
+    }
+    return ref;
+  }, []);
+  return [slots, slotRef] as const;
+};
 
 export const HomeDesktop = ({
   myAddress,
@@ -84,10 +155,28 @@ export const HomeDesktop = ({
 }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const [homeLayout, updateHomeLayout] = useHomeLayout(myAddress);
+  // While Getting started shows in Qortino's window, the Workspace makes way,
+  // but not in Edit Home: there the layout shows as it's kept, so what's
+  // arranged is what's saved.
+  const [gettingStartedShown, setGettingStartedShown] = useState(false);
+  const [isEditingHome, setIsEditingHome] = useState(false);
+  const makingWayForGettingStarted = gettingStartedShown && !isEditingHome;
   const isShown = (id: HomePanelId) =>
-    isHomePanelShown(homeLayout, id) &&
+    isHomePanelShownNow(homeLayout, id, {
+      gettingStarted: makingWayForGettingStarted,
+    }) &&
     (id !== 'widgets' || canHostHomeWidgets());
-  const showQortino = isShown('qortino');
+  const [slots, slotRef] = useWindowSlots();
+  const workspaceCopies = homeLayout.workspaces ?? [];
+  // Every Workspace window's key: the first one's, then the copies'.
+  const workspaceKeys = useMemo(
+    () => ['', ...(homeLayout.workspaces ?? [])],
+    [homeLayout]
+  );
+  const copyTitle = useHomeWorkspaceCopyTitle();
+  // The Qortino card runs while one of its windows shows.
+  const showQortinoCard =
+    isShown('qortino') || isShown('workspace') || workspaceCopies.length > 0;
   const [groupWidgetRefreshToken, setGroupWidgetRefreshToken] = useState(0);
   const [isGroupWidgetRefreshing, setIsGroupWidgetRefreshing] = useState(false);
   const [quitterWidgetRefreshToken, setQuitterWidgetRefreshToken] = useState(0);
@@ -103,7 +192,6 @@ export const HomeDesktop = ({
   const theme = useTheme();
   const titles = useHomeWindowTitles();
   const homeActive = desktopViewMode === 'home';
-  const [isEditingHome, setIsEditingHome] = useState(false);
   const wasEditingHomeRef = useRef(false);
   const [isWidgetPickerOpen, setIsWidgetPickerOpen] = useState(false);
   const [widgetReloadKeys, setWidgetReloadKeys] = useState<
@@ -202,14 +290,13 @@ export const HomeDesktop = ({
   const quitterWidgetSearchLimit =
     HOME_QUITTER_WIDGET_SEARCH_LIMITS[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
 
+  // The Qortino card fills these windows' slots (see below).
   const content: Record<HomeFixedWindowId, () => React.ReactNode> = {
     account: () => <HomeProfileCard onOpenReceive={handleOpenReceiveQort} />,
-    qortino: () =>
-      homeActive ? (
-        <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
-          <HomeQortinoWorkspaceCard />
-        </ErrorBoundary>
-      ) : null,
+    workspace: () => (
+      <Box ref={slotRef('workspace')} sx={{ height: '100%', width: '100%' }} />
+    ),
+    qortino: () => <Box ref={slotRef('qortino')} sx={{ width: '100%' }} />,
     tools: () => (
       <HomeQuickToolsPad
         fillHeight
@@ -330,19 +417,97 @@ export const HomeDesktop = ({
       };
     }
   );
+  // Duplicate: a new, empty Workspace right under this one. It's placed
+  // among the windows as they show, so the ones whose height follows their
+  // content make room at the height they show.
+  const duplicateActions = (
+    id: HomeWindowId,
+    title: string
+  ): HomeGridWindowAction[] =>
+    workspaceCopies.length < HOME_WORKSPACE_COPY_LIMIT
+      ? [
+          {
+            icon: <LibraryAddRoundedIcon sx={{ fontSize: 16 }} />,
+            label: t('group:dashboard.duplicate_window', { window: title }),
+            onClick: (shown) =>
+              updateHomeLayout((current) =>
+                withHomeWorkspaceCopy(withHomeGrid(current, shown), id)
+              ),
+          },
+        ]
+      : [];
+  const copyWindows: HomeGridWindow[] = workspaceCopies.map((key, index) => {
+    const id = homeWorkspaceCopyId(key);
+    const title = copyTitle(index);
+    return {
+      actions: [
+        ...duplicateActions(id, title),
+        {
+          icon: <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />,
+          label: t('group:dashboard.remove_window', { window: title }),
+          onClick: () =>
+            updateHomeLayout((current) =>
+              withoutHomeWorkspaceCopy(current, id)
+            ),
+        },
+      ],
+      id,
+      node: <Box ref={slotRef(id)} sx={{ height: '100%', width: '100%' }} />,
+      title,
+    };
+  });
+  const storedGrid = useMemo(() => homeLayoutGrid(homeLayout), [homeLayout]);
+  // While the Workspace makes way for Getting started, Qortino's window
+  // takes its rows too, at that height: the rest of Home stays where it is,
+  // and nothing moves when the Workspace comes back.
+  const workspaceMakingWay =
+    makingWayForGettingStarted &&
+    isShown('qortino') &&
+    isHomePanelShown(homeLayout, 'workspace');
+  const grid = useMemo(
+    () =>
+      workspaceMakingWay ? homeGridForGettingStarted(storedGrid) : storedGrid,
+    [storedGrid, workspaceMakingWay]
+  );
+  // Qortino's window keeps its place's height while it fills the
+  // Workspace's rows, and in Edit Home while Getting started shows in it:
+  // there it's as big as it's kept, Getting started inside it.
+  const qortinoFills =
+    (workspaceMakingWay &&
+      grid.find((item) => item.key === 'qortino')?.h !==
+        storedGrid.find((item) => item.key === 'qortino')?.h) ||
+    (isEditingHome && gettingStartedShown);
   const windows: HomeGridWindow[] = [
     ...HOME_WINDOW_IDS.filter((id) => id === 'account' || isShown(id)).map(
-      (id) => ({ id, node: content[id](), title: titles[id] })
+      (id) => ({
+        ...(id === 'workspace'
+          ? { actions: duplicateActions(id, titles[id]) }
+          : {}),
+        ...(id === 'qortino' && qortinoFills ? { fill: true } : {}),
+        id,
+        node: content[id](),
+        title: titles[id],
+      })
     ),
     ...widgetWindowEntries,
+    ...copyWindows,
   ];
+  const workspacePlaces: QortinoWorkspacePlace[] = [
+    { key: '', node: slots.workspace ?? null, title: titles.workspace },
+    ...workspaceCopies.map((key, index) => ({
+      key,
+      node: slots[homeWorkspaceCopyId(key)] ?? null,
+      title: copyTitle(index),
+    })),
+  ];
+  // The windows hidden in the layout, for Edit Home to show again (not the
+  // Workspace making way for Getting started).
   const hiddenWindows = HOME_WINDOW_IDS.filter(
     (id) =>
       id !== 'account' &&
-      !isShown(id) &&
+      !isHomePanelShown(homeLayout, id) &&
       (id !== 'widgets' || canHostHomeWidgets())
   ).map((id) => ({ id, title: titles[id] }));
-  const grid = useMemo(() => homeLayoutGrid(homeLayout), [homeLayout]);
   const headerLabelSx = {
     color: theme.palette.text.secondary,
     fontSize: '0.74rem',
@@ -353,8 +518,25 @@ export const HomeDesktop = ({
 
   return (
     <LazyMotion features={domAnimation}>
-      {/* Keeps Qortino's music playing while its card isn't on screen. */}
-      {!homeActive || !showQortino ? <QortinoMusicPlaybackController /> : null}
+      {homeActive && showQortinoCard ? (
+        <ErrorBoundary
+          fallback={
+            <QortinoPartsFallback
+              fallback={qortinoWorkspaceShellFallback}
+              nodes={[slots.qortino, ...workspacePlaces.map((p) => p.node)]}
+            />
+          }
+        >
+          <HomeQortinoWorkspaceCard
+            onGettingStartedShownChange={setGettingStartedShown}
+            qortinoNode={slots.qortino ?? null}
+            workspaces={workspacePlaces}
+          />
+        </ErrorBoundary>
+      ) : (
+        // Keeps Qortino's music playing while none of its windows shows.
+        <QortinoMusicPlaybackController workspaceKeys={workspaceKeys} />
+      )}
       <Activity mode={homeActive ? 'visible' : 'hidden'}>
         <motion.div
           data-tour="hub-home-page"
@@ -431,6 +613,13 @@ export const HomeDesktop = ({
                   );
                   return;
                 }
+                if (isHomeWorkspaceCopyId(id)) {
+                  // A copy of the Workspace is removed, not hidden.
+                  updateHomeLayout((current) =>
+                    withoutHomeWorkspaceCopy(current, id)
+                  );
+                  return;
+                }
                 updateHomeLayout((current) =>
                   withHomePanelShown(current, id, false)
                 );
@@ -439,7 +628,13 @@ export const HomeDesktop = ({
                 updateHomeLayout((current) => ({ ...current, grid: undefined }))
               }
               onShowWindow={(id) => {
-                if (id === 'account' || isHomeWidgetWindowId(id)) return;
+                if (
+                  id === 'account' ||
+                  isHomeWidgetWindowId(id) ||
+                  isHomeWorkspaceCopyId(id)
+                ) {
+                  return;
+                }
                 updateHomeLayout((current) =>
                   withHomePanelShown(current, id, true)
                 );

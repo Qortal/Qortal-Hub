@@ -74,7 +74,10 @@
     "build/**/*",
     "capacitor.config.*",
     "app/**/*",
-    "scripts/**/*"
+    "scripts/**/*",
+    "!node_modules/@node-llama-cpp/*cuda*/**",
+    "!node_modules/node-llama-cpp/llama/gitRelease.bundle",
+    "!node_modules/node-llama-cpp/templates/**"
   ],
 
   "asarUnpack": [
@@ -85,7 +88,8 @@
     "build/src/ed25519-verify.worker.js",
     "build/src/reticulum-chat.worker.js",
     "build/src/reticulum-resource.worker.js",
-    "build/src/reticulum-media.worker.js"
+    "build/src/reticulum-media.worker.js",
+    "node_modules/@node-llama-cpp/**/*"
   ],
 
   "mac": {

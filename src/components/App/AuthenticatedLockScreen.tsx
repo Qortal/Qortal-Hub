@@ -23,6 +23,12 @@ type AuthenticatedLockScreenProps = {
   onUnlock: (password: string) => Promise<void>;
 };
 
+/**
+ * The highest z-index there is, so the lock screen covers every Hub layer:
+ * dialogs, overlays, the side panel, tours and notifications.
+ */
+export const APP_LOCK_SCREEN_Z_INDEX = 2147483647;
+
 const RETRY_DELAY_MS = 5_000;
 const FAILURES_BEFORE_DELAY = 3;
 
@@ -199,9 +205,7 @@ export function AuthenticatedLockScreen({
       open
       disableEscapeKeyDown
       aria-labelledby="app-lock-title"
-      sx={{
-        zIndex: (muiTheme) => muiTheme.zIndex.modal + 1000,
-      }}
+      sx={{ zIndex: APP_LOCK_SCREEN_Z_INDEX }}
     >
       <Box
         role="dialog"

@@ -73,6 +73,7 @@
       "gateway_retrieve_balance": "ゲートウェイ経由では{{ token }}の残高取得は許可されていません",
       "gateway_wallet_local_node": "ゲートウェイ経由で{{ token }}のウォレットを表示できません。ローカルノードを使用してください。",
       "get_foreign_fee": "外国手数料の取得時にエラーが発生しました",
+      "hub_locked": "Qortal Hub はロックされています。ロックを解除してから、もう一度お試しください。",
       "insufficient_balance": "資産残高が不足しています",
       "insufficient_balance_qort": "QORT残高が不足しています",
       "insufficient_funds": "残高不足です",
