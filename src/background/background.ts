@@ -2916,6 +2916,10 @@ const checkGroupList = async () => {
 };
 
 export const checkNewMessages = async () => {
+  // This check awaits settings before it presents, exactly as the notification
+  // queue does, so it needs the same ownership check: logout can end the session
+  // while a lookup here is in flight.
+  const session = notificationQueue.captureSession();
   try {
     let mutedGroups = (await getUserSettings({ key: 'mutedGroups' })) || [];
     if (!isArray(mutedGroups)) mutedGroups = [];
@@ -2982,6 +2986,8 @@ export const checkNewMessages = async () => {
 
     const isDisableNotifications =
       (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+    // Awaited above; logout may have ended the session while it was in flight.
+    if (!notificationQueue.isSessionCurrent(session)) return;
 
     if (
       newAnnouncements.length > 0 &&
@@ -3162,6 +3168,8 @@ const checkActiveChatsForNotifications = async () => {
 };
 
 export const checkThreads = async (bringBack) => {
+  // See checkNewMessages: awaited lookups below can outlive the session.
+  const session = notificationQueue.captureSession();
   try {
     let myName = '';
     const userData = await getUserInfo();
@@ -3274,11 +3282,15 @@ export const checkThreads = async (bringBack) => {
       );
       const isDisableNotifications =
         (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+      // `null`, not bare `return`: this function's result is posted back to the
+      // caller by getThreadActivityCase, so it must not resolve to undefined.
+      if (!notificationQueue.isSessionCurrent(session)) return null;
       if (!isDisableNotifications) {
         // Check user settings to see if notifications are disabled
         const isDisableNotifications =
           (await getUserSettings({ key: 'disable-push-notifications' })) ||
           false;
+        if (!notificationQueue.isSessionCurrent(session)) return null;
 
         if (!isDisableNotifications) {
           const title = 'New thread post!';

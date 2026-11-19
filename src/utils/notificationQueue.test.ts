@@ -147,6 +147,35 @@ describe('notificationQueue', () => {
     consoleError.mockRestore();
   });
 
+  it('lets work outside the queue notice the session ended', async () => {
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: makeClock().setTimer,
+    });
+
+    // The periodic announcement and thread checks are not drained from this
+    // queue, but they await settings before presenting just like a queued item.
+    const session = queue.captureSession();
+    expect(queue.isSessionCurrent(session)).toBe(true);
+
+    queue.invalidateSession();
+
+    expect(queue.isSessionCurrent(session)).toBe(false);
+  });
+
+  it('keeps a token captured after the new session valid', async () => {
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: makeClock().setTimer,
+    });
+    const stale = queue.captureSession();
+    queue.invalidateSession();
+    const fresh = queue.captureSession();
+
+    expect(queue.isSessionCurrent(stale)).toBe(false);
+    expect(queue.isSessionCurrent(fresh)).toBe(true);
+  });
+
   it('reports idle only once the queue is empty', async () => {
     const clock = makeClock();
     const queue = createNotificationQueue({

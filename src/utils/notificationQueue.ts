@@ -36,11 +36,25 @@ export interface NotificationQueue {
   enqueue: (run: (isSessionCurrent: IsSessionCurrent) => Promise<void>) => void;
   /** Ends the current session: pending items are dropped and skipped. */
   invalidateSession: () => void;
+  /**
+   * Snapshot the current session, for work that is not queued here.
+   *
+   * The periodic announcement and thread checks await settings before they
+   * present, exactly as the queue does, so they need the same ownership check;
+   * they just are not drained from this queue. Capture a token when the check
+   * starts and verify it after each await.
+   */
+  captureSession: () => NotificationSessionToken;
+  /** True while the captured session is still the active one. */
+  isSessionCurrent: (token: NotificationSessionToken) => boolean;
   /** Number of items still waiting. Exposed for tests and diagnostics. */
   pendingCount: () => number;
   /** Resolves when the drain loop has no more work. */
   whenIdle: () => Promise<void>;
 }
+
+/** Opaque handle identifying a notification session. */
+export type NotificationSessionToken = number;
 
 const DEFAULT_INTERVAL_MS = 5_000;
 
@@ -101,6 +115,12 @@ export function createNotificationQueue(
       items = [];
       // A run already past the shift cannot be recalled, so it re-checks the
       // epoch through the callback it was given.
+    },
+    captureSession() {
+      return epoch;
+    },
+    isSessionCurrent(token) {
+      return token === epoch;
     },
     pendingCount() {
       return items.length;
