@@ -58,6 +58,7 @@ import {
   rawWalletAtom,
   resourceKeySelector,
   txListAtom,
+  useGetResourceStatus,
   userInfoAtom,
 } from '../../atoms/global';
 import {
@@ -162,6 +163,16 @@ import {
 } from './HomeDesktop/homeLayout';
 import { HotkeyAppAvatar, QortinoWorkspaceApps } from './QortinoWorkspaceApps';
 import { QortinoFitBox } from './QortinoFitBox';
+import { QortinoVideoPlayer } from './QortinoVideoPlayer';
+import {
+  type QortinoMediaItem,
+  QortinoMediaLinkError,
+  type QortinoMediaLinkProblem,
+  qortinoMediaUrl,
+  resolveQortinoMediaLink,
+  sanitizeQortinoMediaItem,
+  stepQortinoMediaItem,
+} from './qortinoMediaLinks';
 import { namesOwnResources } from '../Apps/libraryResources';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
@@ -222,16 +233,43 @@ const QORTINO_STATUS_REFERENCE_LABEL = 'standby';
  * window lets it (QortinoFitBox), growing in a big one.
  */
 const MUSIC_PLAYER_NATURAL_SIZE = { height: 280, width: 240 };
+/** Less room than this, and it shows in one row instead. */
+const MUSIC_PLAYER_COMPACT_BELOW_PX = 190;
+
+/** A video fills the player's window. */
+const VIDEO_PLAYER_SX = {
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  minHeight: 0,
+} as const;
 const HOTKEY_SLOT_VALUE_SEPARATOR = '::';
 const EARBUMP_AUDIO_SERVICE = 'AUDIO';
 const MUSIC_PLAYER_DOWNLOAD_SCOPE = 'music-player';
+/**
+ * Pictures too big for the saved state, by link: kept for the session, so
+ * they're there when Home is shown again. Only the latest few.
+ */
+const linkPictureCache = new Map<string, string>();
+const LINK_PICTURE_CACHE_LIMIT = 20;
+const rememberLinkPicture = (link: string, picture: string) => {
+  linkPictureCache.delete(link);
+  linkPictureCache.set(link, picture);
+  while (linkPictureCache.size > LINK_PICTURE_CACHE_LIMIT) {
+    linkPictureCache.delete(linkPictureCache.keys().next().value);
+  }
+};
 type WorkspaceMode = 'empty' | 'hotkeys' | 'music';
 type StepKey = 'get_six_qorts' | 'register_name' | 'load_avatar';
 type HotkeyActionId = string;
 type HotkeySlotValue = string | null;
 type HotkeyAppService = 'APP' | 'WEBSITE';
 
-type MusicTrack = EarbumpTrack;
+/**
+ * A track the player plays: EarBump's, or one a link plays (audio or a file,
+ * `service`, with its picture).
+ */
+type MusicTrack = EarbumpTrack & { coverImage?: string; service?: string };
 
 /** What one Workspace window holds. */
 type WorkspaceWindowState = {
@@ -255,6 +293,8 @@ type WorkspaceState = {
    * copies). There's one music player: one window at the most shows it.
    */
   windows?: Record<string, WorkspaceWindowState>;
+  /** What a link the player was given plays, until it goes back to music. */
+  mediaLink?: QortinoMediaItem;
 };
 
 /** A Workspace window on Home: the first one ('' key) or a copy. */
@@ -623,6 +663,7 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
     parsed.windows,
     nextMode === 'music'
   );
+  const mediaLink = sanitizeQortinoMediaItem(parsed.mediaLink);
 
   return {
     hotkeys: sanitizeHotkeys(parsed.hotkeys),
@@ -637,6 +678,7 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
         : DEFAULT_WORKSPACE_STATE.selectedTrackId,
     version: 1,
     ...(windows ? { windows } : {}),
+    ...(mediaLink ? { mediaLink } : {}),
   };
 };
 
@@ -765,17 +807,57 @@ const formatPlaybackTime = (seconds: number) => {
 const isAbortError = (error: unknown) =>
   error instanceof DOMException && error.name === 'AbortError';
 
-const buildTrackResourceKey = (track: Pick<MusicTrack, 'id' | 'name'>) =>
+const trackService = (track: Pick<MusicTrack, 'service'>) =>
+  track.service ?? EARBUMP_AUDIO_SERVICE;
+
+const buildTrackResourceKey = (
+  track: Pick<MusicTrack, 'id' | 'name' | 'service'>
+) =>
   track.id && track.name
-    ? `${EARBUMP_AUDIO_SERVICE}-${track.name}-${track.id}`
+    ? `${trackService(track)}-${track.name}-${track.id}`
     : '';
 
-const buildTrackPlaybackUrl = (track: Pick<MusicTrack, 'id' | 'name'>) =>
+const buildTrackPlaybackUrl = (
+  track: Pick<MusicTrack, 'id' | 'name' | 'service'>
+) =>
   track.id && track.name
-    ? `${getBaseApiReact()}/arbitrary/${EARBUMP_AUDIO_SERVICE}/${encodeURIComponent(
+    ? `${getBaseApiReact()}/arbitrary/${trackService(track)}/${encodeURIComponent(
         track.name
       )}/${encodeURIComponent(track.id)}`
     : '';
+
+/** The colours of a link's vinyl, the same for the same resource. */
+const LINK_COVER_COLORS: [string, string, string][] = [
+  ['#6EA7FF', '#243B72', '#9CCBFF'],
+  ['#B58BFF', '#3B2A72', '#D8C6FF'],
+  ['#5FD3B5', '#1E5B4E', '#A6F0DD'],
+  ['#FF9F6E', '#723A24', '#FFD2B8'],
+];
+
+/** The track an audio link plays, for the music player. */
+const mediaLinkTrack = (item: QortinoMediaItem): MusicTrack => {
+  const hash = Array.from(item.identifier).reduce(
+    (sum, character) => (sum * 31 + character.charCodeAt(0)) >>> 0,
+    7
+  );
+  return {
+    artist: item.publisher,
+    coverColors: LINK_COVER_COLORS[hash % LINK_COVER_COLORS.length],
+    ...(item.thumbnail ? { coverImage: item.thumbnail } : {}),
+    created: 0,
+    id: item.identifier,
+    length: item.durationSeconds
+      ? formatPlaybackTime(item.durationSeconds)
+      : '--:--',
+    name: item.name,
+    service: item.service,
+    status: null,
+    streamUrl: '',
+    title: item.title,
+    updated: null,
+    uploaded: '',
+  };
+};
 
 const getTrackReadyState = (
   rawStatus: string | null | undefined,
@@ -907,6 +989,67 @@ export const QortinoMusicPlaybackController = memo(
       );
     }, [workspaceHydrated, workspaceKeysSignature]);
 
+    // A video the player holds goes on getting ready while the card doesn't
+    // show. It stops being got when its Workspace window is taken off Home or
+    // the account changes, unless it's ready or the node couldn't get it.
+    const heldVideo =
+      isMusicOn && workspaceState.mediaLink?.kind === 'video'
+        ? workspaceState.mediaLink
+        : null;
+    const heldVideoKey = heldVideo
+      ? `${heldVideo.service}-${heldVideo.name}-${heldVideo.identifier}`
+      : '';
+    const heldVideoResource = useAtomValue(resourceKeySelector(heldVideoKey));
+    const heldVideoReadyState = getTrackReadyState(
+      heldVideoResource?.cancelledByScope !== MUSIC_PLAYER_DOWNLOAD_SCOPE &&
+        typeof heldVideoResource?.status?.status === 'string'
+        ? heldVideoResource.status.status
+        : null,
+      Boolean(heldVideo)
+    );
+    const heldVideoRef = useRef<{
+      failed: boolean;
+      identifier: string;
+      key: string;
+      name: string;
+      ready: boolean;
+      service: string;
+    } | null>(null);
+    useEffect(() => {
+      if (!workspaceHydrated) return;
+      const currentVideo = heldVideo
+        ? {
+            failed: heldVideoReadyState === 'error',
+            identifier: heldVideo.identifier,
+            key: heldVideoKey,
+            name: heldVideo.name,
+            ready: heldVideoReadyState === 'ready',
+            service: heldVideo.service,
+          }
+        : null;
+      const previousVideo = heldVideoRef.current;
+      if (
+        previousVideo &&
+        !previousVideo.ready &&
+        !previousVideo.failed &&
+        previousVideo.key !== currentVideo?.key
+      ) {
+        downloadResource.cancelResourceDownload({
+          downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+          identifier: previousVideo.identifier,
+          name: previousVideo.name,
+          service: previousVideo.service,
+        });
+      }
+      heldVideoRef.current = currentVideo;
+    }, [
+      downloadResource,
+      heldVideo,
+      heldVideoKey,
+      heldVideoReadyState,
+      workspaceHydrated,
+    ]);
+
     useEffect(() => {
       if (!selectedTrackSnapshot?.id) return;
       setSharedEarbumpTrackSnapshot(selectedTrackSnapshot);
@@ -1026,7 +1169,14 @@ export const QortinoMusicPlaybackController = memo(
           ? selectedTrackSnapshot
           : null))
       : null;
+    // An audio link plays in the background too; a video doesn't.
+    const linkItem = workspaceState.mediaLink;
+    const linkTrack = useMemo(
+      () => (linkItem?.kind === 'audio' ? mediaLinkTrack(linkItem) : null),
+      [linkItem]
+    );
     const activeTrackSource =
+      linkTrack ??
       selectedTrackCandidate ??
       earbumpDiscoveryTracks[0] ??
       selectedTrackSnapshot ??
@@ -1082,32 +1232,59 @@ export const QortinoMusicPlaybackController = memo(
     const isResolvingSelectedTrack =
       workspaceHydrated &&
       isMusicOn &&
+      !linkTrack &&
       Boolean(workspaceState.selectedTrackId) &&
       activeTrack.id !== workspaceState.selectedTrackId;
 
     const handleCycleTrack = useCallback(
       (direction: 'next' | 'previous') => {
+        // An EarBump playlist or artist link plays its own songs in turn.
+        const linkStep = stepQortinoMediaItem(
+          workspaceState.mediaLink,
+          direction
+        );
+        if (linkStep) {
+          applyWorkspaceState((current) => ({
+            ...current,
+            mediaLink: linkStep,
+            musicPlaying: true,
+          }));
+          return;
+        }
         if (playbackQueue.length === 0) return;
 
         const activeIndex = playbackQueue.findIndex(
           (track) => track.id === workspaceState.selectedTrackId
         );
         const currentIndex = activeIndex >= 0 ? activeIndex : 0;
-        const nextIndex =
+        const stepFrom = (index: number) =>
           direction === 'next'
-            ? (currentIndex + 1) % playbackQueue.length
-            : (currentIndex - 1 + playbackQueue.length) % playbackQueue.length;
+            ? (index + 1) % playbackQueue.length
+            : (index - 1 + playbackQueue.length) % playbackQueue.length;
+        let nextIndex = stepFrom(currentIndex);
+        // A link's own song isn't one of EarBump's tracks to go to.
+        if (linkTrack && playbackQueue[nextIndex]?.id === linkTrack.id) {
+          nextIndex = stepFrom(nextIndex);
+        }
         const nextTrack = playbackQueue[nextIndex];
-        if (!nextTrack) return;
+        if (!nextTrack || nextTrack.id === linkTrack?.id) return;
 
         setSelectedTrackSnapshot(nextTrack);
         applyWorkspaceState((current) => ({
           ...current,
+          // The next track is EarBump's: the link's done.
+          mediaLink: undefined,
           musicPlaying: true,
           selectedTrackId: nextTrack.id,
         }));
       },
-      [applyWorkspaceState, playbackQueue, workspaceState.selectedTrackId]
+      [
+        applyWorkspaceState,
+        linkTrack,
+        playbackQueue,
+        workspaceState.mediaLink,
+        workspaceState.selectedTrackId,
+      ]
     );
 
     useEffect(() => {
@@ -1125,7 +1302,7 @@ export const QortinoMusicPlaybackController = memo(
         downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
         identifier: activeTrack.id,
         name: activeTrack.name,
-        service: EARBUMP_AUDIO_SERVICE,
+        service: trackService(activeTrack),
       });
     }, [
       activeTrack.id,
@@ -1193,7 +1370,7 @@ export const QortinoMusicPlaybackController = memo(
           downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
           identifier: activeTrack.id,
           name: activeTrack.name,
-          service: EARBUMP_AUDIO_SERVICE,
+          service: trackService(activeTrack),
         });
       };
 
@@ -2176,11 +2353,11 @@ export const HomeQortinoWorkspaceCard = ({
       {
         description: qw(
           'modules_music_description',
-          'A compact Earbump player with search and quick playback.'
+          'EarBump’s music, and music or videos from Q-Share, Q-Tube or Subscreen links.'
         ),
         icon: LibraryMusicRoundedIcon,
         key: 'music',
-        label: qw('modules_music_label', 'Music player'),
+        label: qw('modules_music_label', 'Player'),
         mode: 'music',
       },
       {
@@ -2220,6 +2397,22 @@ export const HomeQortinoWorkspaceCard = ({
     useState(false);
   const [openQortsDialog, setOpenQortsDialog] = useState(false);
   const [openMusicSearchDialog, setOpenMusicSearchDialog] = useState(false);
+  // Playing a link: what's typed, why it can't play, and what's being read.
+  const [openLinkDialog, setOpenLinkDialog] = useState(false);
+  const [linkDraft, setLinkDraft] = useState('');
+  const [linkProblem, setLinkProblem] =
+    useState<QortinoMediaLinkProblem | null>(null);
+  const [isResolvingLink, setIsResolvingLink] = useState(false);
+  const linkRequestRef = useRef<AbortController | null>(null);
+  // Pictures too big for the saved state, kept for this session.
+  const [linkPictures, setLinkPictures] = useState<Record<string, string>>(() =>
+    Object.fromEntries(linkPictureCache)
+  );
+  // A video starts by itself only right after its link was played.
+  const [videoAutoPlay, setVideoAutoPlay] = useState(false);
+  // Counts each time a video link is played: a new count gives the video a
+  // new player, so one that failed is tried afresh.
+  const [videoPlayCount, setVideoPlayCount] = useState(0);
   const [openModulePickerDialog, setOpenModulePickerDialog] = useState(false);
   const [openHotkeyPickerDialog, setOpenHotkeyPickerDialog] = useState(false);
   const [availableHotkeyApps, setAvailableHotkeyApps] = useState<
@@ -2377,7 +2570,7 @@ export const HomeQortinoWorkspaceCard = ({
   const avatarCompletionAfterPanelCloseRef = useRef(false);
   const activeEarbumpDownloadRef = useRef<Pick<
     MusicTrack,
-    'id' | 'name'
+    'id' | 'name' | 'service'
   > | null>(null);
   const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
   const clearMusicStreamError = useCallback(
@@ -2385,7 +2578,7 @@ export const HomeQortinoWorkspaceCard = ({
     []
   );
   const cancelEarbumpTrackDownload = useCallback(
-    (track: Pick<MusicTrack, 'id' | 'name'> | null) => {
+    (track: Pick<MusicTrack, 'id' | 'name' | 'service'> | null) => {
       if (!track?.id || !track?.name) {
         return;
       }
@@ -2394,7 +2587,7 @@ export const HomeQortinoWorkspaceCard = ({
         downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
         identifier: track.id,
         name: track.name,
-        service: EARBUMP_AUDIO_SERVICE,
+        service: trackService(track),
       });
 
       if (
@@ -2879,6 +3072,12 @@ export const HomeQortinoWorkspaceCard = ({
       withoutWorkspaceWindowsGone(current, workspaceKeysSignature)
     );
   }, [workspaceHydrated, workspaceKeysSignature]);
+
+  // The player gone (its copy taken off Home too): picked again later, a
+  // video doesn't start by itself.
+  useEffect(() => {
+    if (!isMusicOn) setVideoAutoPlay(false);
+  }, [isMusicOn]);
 
   useEffect(() => {
     emitSharedEarbumpActivity(isMusicOn && workspaceState.musicPlaying);
@@ -3671,7 +3870,22 @@ export const HomeQortinoWorkspaceCard = ({
         ? selectedTrackSnapshot
         : null))
     : null;
+  // A link the player was given: audio plays as the track, a video shows
+  // in the player instead.
+  const mediaLink = workspaceState.mediaLink;
+  const linkTrack = useMemo(
+    () =>
+      mediaLink?.kind === 'audio'
+        ? mediaLinkTrack({
+            ...mediaLink,
+            // A picture too big for the saved state comes from the session.
+            thumbnail: linkPictures[mediaLink.link] ?? mediaLink.thumbnail,
+          })
+        : null,
+    [linkPictures, mediaLink]
+  );
   const activeTrackSource =
+    linkTrack ??
     selectedTrackCandidate ??
     earbumpDiscoveryTracks[0] ??
     selectedTrackSnapshot ??
@@ -3716,6 +3930,7 @@ export const HomeQortinoWorkspaceCard = ({
   const isResolvingSelectedTrack =
     workspaceHydrated &&
     isMusicOn &&
+    !linkTrack &&
     Boolean(workspaceState.selectedTrackId) &&
     activeTrack.id !== workspaceState.selectedTrackId;
   const activeTrackDurationSeconds = useMemo(() => {
@@ -3876,6 +4091,7 @@ export const HomeQortinoWorkspaceCard = ({
         ? {
             id: activeTrack.id,
             name: activeTrack.name,
+            service: trackService(activeTrack),
           }
         : null;
     const previousTrack = activeEarbumpDownloadRef.current;
@@ -3884,13 +4100,20 @@ export const HomeQortinoWorkspaceCard = ({
       previousTrack &&
       (!currentTrack ||
         previousTrack.id !== currentTrack.id ||
-        previousTrack.name !== currentTrack.name)
+        previousTrack.name !== currentTrack.name ||
+        trackService(previousTrack) !== currentTrack.service)
     ) {
       cancelEarbumpTrackDownload(previousTrack);
     }
 
     activeEarbumpDownloadRef.current = currentTrack;
-  }, [activeTrack.id, activeTrack.name, cancelEarbumpTrackDownload, isMusicOn]);
+  }, [
+    activeTrack,
+    activeTrack.id,
+    activeTrack.name,
+    cancelEarbumpTrackDownload,
+    isMusicOn,
+  ]);
 
   useEffect(() => {
     if (!isMusicOn) {
@@ -3918,7 +4141,7 @@ export const HomeQortinoWorkspaceCard = ({
       downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
       identifier: activeTrack.id,
       name: activeTrack.name,
-      service: EARBUMP_AUDIO_SERVICE,
+      service: trackService(activeTrack),
     });
   }, [
     activeTrack.id,
@@ -4250,6 +4473,21 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const handleCycleTrack = useCallback(
     (direction: 'next' | 'previous') => {
+      // An EarBump playlist or artist link plays its own songs in turn.
+      const linkStep = stepQortinoMediaItem(
+        workspaceState.mediaLink,
+        direction
+      );
+      if (linkStep) {
+        setMusicStreamError(null);
+        applyWorkspaceState((current) => ({
+          ...current,
+          mediaLink: linkStep,
+          musicPlaying: true,
+        }));
+        pushReaction({ kind: 'track_rotation', title: linkStep.title });
+        return;
+      }
       if (playbackQueue.length === 0) {
         return;
       }
@@ -4258,13 +4496,18 @@ export const HomeQortinoWorkspaceCard = ({
         (track) => track.id === workspaceState.selectedTrackId
       );
       const currentIndex = activeIndex >= 0 ? activeIndex : 0;
-      const nextIndex =
+      const stepFrom = (index: number) =>
         direction === 'next'
-          ? (currentIndex + 1) % playbackQueue.length
-          : (currentIndex - 1 + playbackQueue.length) % playbackQueue.length;
+          ? (index + 1) % playbackQueue.length
+          : (index - 1 + playbackQueue.length) % playbackQueue.length;
+      let nextIndex = stepFrom(currentIndex);
+      // A link's own song isn't one of EarBump's tracks to go to.
+      if (linkTrack && playbackQueue[nextIndex]?.id === linkTrack.id) {
+        nextIndex = stepFrom(nextIndex);
+      }
       const nextTrack = playbackQueue[nextIndex];
 
-      if (!nextTrack) {
+      if (!nextTrack || nextTrack.id === linkTrack?.id) {
         return;
       }
 
@@ -4272,6 +4515,8 @@ export const HomeQortinoWorkspaceCard = ({
       setSelectedTrackSnapshot(nextTrack);
       applyWorkspaceState((current) => ({
         ...current,
+        // The next track is EarBump's: the link's done.
+        mediaLink: undefined,
         musicPlaying: true,
         selectedTrackId: nextTrack.id,
       }));
@@ -4279,8 +4524,10 @@ export const HomeQortinoWorkspaceCard = ({
     },
     [
       applyWorkspaceState,
+      linkTrack,
       playbackQueue,
       pushReaction,
+      workspaceState.mediaLink,
       workspaceState.selectedTrackId,
     ]
   );
@@ -4360,7 +4607,7 @@ export const HomeQortinoWorkspaceCard = ({
         downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
         identifier: activeTrack.id,
         name: activeTrack.name,
-        service: EARBUMP_AUDIO_SERVICE,
+        service: trackService(activeTrack),
       });
     };
 
@@ -4440,6 +4687,8 @@ export const HomeQortinoWorkspaceCard = ({
       // There's one music player: picked here, it leaves the Workspace that
       // showed it.
       const playerLeaves = musicWorkspaceKey === key && mode !== 'music';
+      // Picked again later, a video doesn't start by itself.
+      if (playerLeaves) setVideoAutoPlay(false);
       applyWorkspaceState((current) => {
         const musicKey = musicWorkspaceKeyOf(current);
         let next =
@@ -4573,9 +4822,16 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       const audio = audioRef.current;
-      const isSameTrack = workspaceState.selectedTrackId === trackId;
+      // A link's track plays or pauses; an EarBump track picked meanwhile
+      // takes over from it.
+      const isLinkTrack = !!linkTrack && trackId === linkTrack.id;
+      const isSameTrack = linkTrack
+        ? isLinkTrack
+        : workspaceState.selectedTrackId === trackId;
       const wasPlaying = workspaceState.musicPlaying;
-      const track = knownMusicTracksById.get(trackId) ?? null;
+      const track = isLinkTrack
+        ? linkTrack
+        : (knownMusicTracksById.get(trackId) ?? null);
       const hadPlaybackFailure =
         isTrackLoadError || musicStreamError != null || audio?.error != null;
 
@@ -4591,7 +4847,7 @@ export const HomeQortinoWorkspaceCard = ({
             downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
             identifier: track.id,
             name: track.name,
-            service: EARBUMP_AUDIO_SERVICE,
+            service: trackService(track),
           });
         }
       }
@@ -4599,13 +4855,15 @@ export const HomeQortinoWorkspaceCard = ({
       applyWorkspaceState((current) => {
         return {
           ...current,
+          ...(isLinkTrack
+            ? {}
+            : { mediaLink: undefined, selectedTrackId: trackId }),
           musicPlaying: isSameTrack ? !current.musicPlaying : true,
           onboardingCelebrationSeen:
             current.onboardingCelebrationSeen || dismissed === true,
-          selectedTrackId: trackId,
         };
       });
-      if (track) {
+      if (track && !isLinkTrack) {
         setSelectedTrackSnapshot(track);
       }
 
@@ -4630,12 +4888,251 @@ export const HomeQortinoWorkspaceCard = ({
       isTrackLoadError,
       isTrackPlayable,
       knownMusicTracksById,
+      linkTrack,
       musicStreamError,
       pushReaction,
       qw,
       workspaceState.musicPlaying,
       workspaceState.selectedTrackId,
     ]
+  );
+
+  // A video a link plays: the node gets it ready, then it plays in the
+  // player's window.
+  const videoLink = mediaLink?.kind === 'video' ? mediaLink : null;
+  const videoResourceKey = videoLink
+    ? `${videoLink.service}-${videoLink.name}-${videoLink.identifier}`
+    : '';
+  const videoResource = useAtomValue(resourceKeySelector(videoResourceKey));
+  const videoResourceStatus =
+    typeof videoResource?.status?.status === 'string'
+      ? videoResource.status.status
+      : null;
+  // A download the player stopped itself (back to the music) starts again.
+  const wasVideoCancelledByMusicPlayer =
+    videoResource?.cancelledByScope === MUSIC_PLAYER_DOWNLOAD_SCOPE;
+  const videoReadyState = getTrackReadyState(
+    wasVideoCancelledByMusicPlayer ? null : videoResourceStatus,
+    Boolean(videoLink)
+  );
+  const videoReadyPercent = getTrackReadyPercent(
+    videoResourceStatus,
+    Number(videoResource?.status?.percentLoaded ?? 0)
+  );
+  useEffect(() => {
+    if (
+      !videoLink ||
+      !isMusicOn ||
+      videoReadyState === 'ready' ||
+      videoReadyState === 'error'
+    ) {
+      return;
+    }
+    void downloadResource({
+      downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+      identifier: videoLink.identifier,
+      name: videoLink.name,
+      service: videoLink.service,
+    });
+  }, [downloadResource, isMusicOn, videoLink, videoReadyState]);
+
+  // A video the player leaves (another link, a track, Back, the player
+  // closed) stops being got, unless it's ready or the node couldn't get it,
+  // as EarBump's tracks do. Leaving Home doesn't stop it.
+  const activeVideoDownloadRef = useRef<{
+    failed: boolean;
+    identifier: string;
+    key: string;
+    name: string;
+    ready: boolean;
+    service: string;
+  } | null>(null);
+  useEffect(() => {
+    const currentVideo =
+      isMusicOn && videoLink
+        ? {
+            failed: videoReadyState === 'error',
+            identifier: videoLink.identifier,
+            key: videoResourceKey,
+            name: videoLink.name,
+            ready: videoReadyState === 'ready',
+            service: videoLink.service,
+          }
+        : null;
+    const previousVideo = activeVideoDownloadRef.current;
+    if (
+      previousVideo &&
+      !previousVideo.ready &&
+      !previousVideo.failed &&
+      previousVideo.key !== currentVideo?.key
+    ) {
+      downloadResource.cancelResourceDownload({
+        downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+        identifier: previousVideo.identifier,
+        name: previousVideo.name,
+        service: previousVideo.service,
+      });
+    }
+    activeVideoDownloadRef.current = currentVideo;
+  }, [
+    downloadResource,
+    isMusicOn,
+    videoLink,
+    videoReadyState,
+    videoResourceKey,
+  ]);
+
+  const handleBackToMusic = useCallback(() => {
+    setVideoAutoPlay(false);
+    // What went wrong with the link's song isn't EarBump's track's.
+    setMusicStreamError(null);
+    applyWorkspaceState((current) => ({
+      ...current,
+      mediaLink: undefined,
+      musicPlaying: false,
+    }));
+  }, [applyWorkspaceState]);
+
+  const videoPicture = videoLink
+    ? (linkPictures[videoLink.link] ?? videoLink.thumbnail)
+    : undefined;
+  const videoNode = videoLink ? (
+    <QortinoVideoPlayer
+      autoPlay={videoAutoPlay}
+      key={`${videoLink.link}#${videoPlayCount}`}
+      labels={{
+        back: qw('player_video_back', 'Back 10 seconds'),
+        exitFullScreen: qw('player_video_exit_full_screen', 'Exit full screen'),
+        failed: qw(
+          'player_video_load_failed',
+          'This video could not finish loading on your node.'
+        ),
+        forward: qw('player_video_forward', 'Forward 10 seconds'),
+        fullScreen: t('core:action.full_screen', {
+          defaultValue: 'full screen',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        mute: qw('player_video_mute', 'Mute'),
+        pause: qw('player_video_pause', 'Pause'),
+        play: qw('player_video_play', 'Play'),
+        unmute: qw('player_video_unmute', 'Unmute'),
+      }}
+      onPlay={() => {
+        // Once started, it doesn't start by itself again.
+        setVideoAutoPlay(false);
+        // The video and the music don't play over each other.
+        applyWorkspaceState((current) =>
+          current.musicPlaying ? { ...current, musicPlaying: false } : current
+        );
+      }}
+      poster={videoPicture}
+      src={videoReadyState === 'ready' ? qortinoMediaUrl(videoLink) : null}
+      status={
+        videoReadyState === 'ready'
+          ? null
+          : {
+              error: videoReadyState === 'error',
+              message:
+                videoReadyState === 'error'
+                  ? qw(
+                      'player_video_load_failed',
+                      'This video could not finish loading on your node.'
+                    )
+                  : qw(
+                      'player_video_preparing',
+                      'Preparing the video on your node... {{percent}}%',
+                      { percent: Math.round(videoReadyPercent) }
+                    ),
+            }
+      }
+    />
+  ) : null;
+
+  const handleOpenLinkDialog = useCallback(() => {
+    setLinkDraft('');
+    setLinkProblem(null);
+    setOpenLinkDialog(true);
+  }, []);
+
+  // Closing the dialog stops reading the link, however it's closed.
+  const handleCloseLinkDialog = useCallback(() => {
+    linkRequestRef.current?.abort();
+    setIsResolvingLink(false);
+    setOpenLinkDialog(false);
+  }, []);
+
+  const getResourceStatus = useGetResourceStatus();
+  const handlePlayLink = useCallback(async () => {
+    const link = linkDraft.trim();
+    if (!link) return;
+    linkRequestRef.current?.abort();
+    const controller = new AbortController();
+    linkRequestRef.current = controller;
+    setIsResolvingLink(true);
+    setLinkProblem(null);
+    try {
+      const item = await resolveQortinoMediaLink(link, {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (item.kind === 'video') {
+        // A video the node couldn't get is asked for again when its link
+        // is played again.
+        const resource = await getResourceStatus(
+          `${item.service}-${item.name}-${item.identifier}`
+        );
+        if (controller.signal.aborted) return;
+        if (
+          resource?.cancelledByScope !== MUSIC_PLAYER_DOWNLOAD_SCOPE &&
+          getTrackReadyState(resource?.status?.status, true) === 'error'
+        ) {
+          void downloadResource({
+            downloadScope: MUSIC_PLAYER_DOWNLOAD_SCOPE,
+            identifier: item.identifier,
+            name: item.name,
+            service: item.service,
+          });
+        }
+      }
+      if (item.thumbnail) {
+        rememberLinkPicture(item.link, item.thumbnail);
+        setLinkPictures(Object.fromEntries(linkPictureCache));
+      }
+      setMusicStreamError(null);
+      setVideoAutoPlay(item.kind === 'video');
+      if (item.kind === 'video') setVideoPlayCount((count) => count + 1);
+      applyWorkspaceState((current) => ({
+        ...current,
+        mediaLink: item,
+        // Music plays; a video pauses the music.
+        musicPlaying: item.kind === 'audio',
+      }));
+      setOpenLinkDialog(false);
+      pushReaction({ kind: 'locked_track', title: item.title });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setLinkProblem(
+        error instanceof QortinoMediaLinkError ? error.problem : 'not_found'
+      );
+    } finally {
+      if (!controller.signal.aborted) setIsResolvingLink(false);
+    }
+  }, [
+    applyWorkspaceState,
+    downloadResource,
+    getResourceStatus,
+    linkDraft,
+    pushReaction,
+  ]);
+
+  // A link still being read is let go of when the account changes, or the
+  // card goes.
+  useEffect(
+    () => () => {
+      linkRequestRef.current?.abort();
+      setIsResolvingLink(false);
+    },
+    [userAddress]
   );
 
   const handleToggleRepeatMode = useCallback(() => {
@@ -5548,6 +6045,49 @@ export const HomeQortinoWorkspaceCard = ({
     </Box>
   ) : null;
 
+  /** The music player, in the Workspace `key`; compact for a short one. */
+  const renderMusicPlayer = (key: string, compact = false) => (
+    <QortinoMusicPlayer
+      compact={compact}
+      activeTrack={activeTrack}
+      activeTrackDurationSeconds={activeTrackDurationSeconds}
+      activeTrackPlaybackUrl={activeTrackPlaybackUrl}
+      activeTrackReadyPercent={activeTrackReadyPercent}
+      audioRef={audioRef}
+      isTrackLoadError={isTrackLoadError}
+      isTrackPeerStarved={isTrackPeerStarved}
+      isTrackPlayable={isTrackPlayable}
+      isTrackPreparing={isTrackPreparing}
+      isTrackReady={isTrackReady}
+      musicPlaying={workspaceState.musicPlaying}
+      musicStatusSlotMessage={musicStatusSlotMessage}
+      onClearStreamError={clearMusicStreamError}
+      onClose={() => handleSelectWorkspaceMode(key, 'empty')}
+      onCycleTrack={handleCycleTrack}
+      onOpenSearch={() => setOpenMusicSearchDialog(true)}
+      onToggleRepeatMode={handleToggleRepeatMode}
+      onToggleTrack={handleToggleTrack}
+      qortinoLayoutDebug={qortinoLayoutDebug}
+      repeatMode={workspaceState.repeatMode}
+      title={qw('workspace_header_music', 'Player')}
+      labels={{
+        backToMusic: qw('player_back_to_music', 'Back to EarBump'),
+        openLink: qw('player_open_link', 'Play a link'),
+      }}
+      onBackToMusic={mediaLink ? handleBackToMusic : undefined}
+      onOpenLink={handleOpenLinkDialog}
+      video={
+        videoLink
+          ? {
+              node: videoNode,
+              publisher: videoLink.publisher,
+              title: videoLink.title,
+            }
+          : undefined
+      }
+    />
+  );
+
   /** One Workspace window's module: its first app slot is where a new app goes. */
   const renderWorkspace = (key: string) => {
     const { hotkeys, mode } = workspaceWindowOf(workspaceState, key);
@@ -5649,35 +6189,17 @@ export const HomeQortinoWorkspaceCard = ({
               if (slotValue) handleRunHotkey(slotValue);
             }}
           />
+        ) : videoLink ? (
+          <Box sx={VIDEO_PLAYER_SX}>{renderMusicPlayer(key)}</Box>
         ) : (
           <QortinoFitBox
+            compact={renderMusicPlayer(key, true)}
+            compactBelow={MUSIC_PLAYER_COMPACT_BELOW_PX}
             max={1.5}
             min={0.45}
             natural={MUSIC_PLAYER_NATURAL_SIZE}
           >
-            <QortinoMusicPlayer
-              activeTrack={activeTrack}
-              activeTrackDurationSeconds={activeTrackDurationSeconds}
-              activeTrackPlaybackUrl={activeTrackPlaybackUrl}
-              activeTrackReadyPercent={activeTrackReadyPercent}
-              audioRef={audioRef}
-              isTrackLoadError={isTrackLoadError}
-              isTrackPeerStarved={isTrackPeerStarved}
-              isTrackPlayable={isTrackPlayable}
-              isTrackPreparing={isTrackPreparing}
-              isTrackReady={isTrackReady}
-              musicPlaying={workspaceState.musicPlaying}
-              musicStatusSlotMessage={musicStatusSlotMessage}
-              onClearStreamError={clearMusicStreamError}
-              onClose={() => handleSelectWorkspaceMode(key, 'empty')}
-              onCycleTrack={handleCycleTrack}
-              onOpenSearch={() => setOpenMusicSearchDialog(true)}
-              onToggleRepeatMode={handleToggleRepeatMode}
-              onToggleTrack={handleToggleTrack}
-              qortinoLayoutDebug={qortinoLayoutDebug}
-              repeatMode={workspaceState.repeatMode}
-              title={qw('workspace_header_music', 'Music player')}
-            />
+            {renderMusicPlayer(key)}
           </QortinoFitBox>
         )}
       </Box>
@@ -7268,6 +7790,126 @@ export const HomeQortinoWorkspaceCard = ({
                 </Box>
               ) : null}
             </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={openLinkDialog}
+        onClose={handleCloseLinkDialog}
+        BackdropProps={{
+          sx: {
+            backdropFilter: 'blur(10px)',
+            background: alpha('#04070C', 0.42),
+          },
+        }}
+        PaperProps={{
+          sx: {
+            background:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, rgba(26,30,37,0.96) 0%, rgba(18,21,27,0.98) 100%)'
+                : 'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,248,251,0.98) 100%)',
+            border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.08 : 0.16)}`,
+            borderRadius: '18px',
+            boxShadow: `0 26px 60px ${alpha('#000', 0.34)}`,
+            maxWidth: '480px',
+            width: 'calc(100% - 32px)',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'space-between',
+            pb: 1,
+          }}
+        >
+          <Box>
+            <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
+              {qw('player_open_link', 'Play a link')}
+            </Typography>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.78),
+                fontSize: '0.76rem',
+                mt: 0.3,
+              }}
+            >
+              {qw(
+                'player_link_subtitle',
+                'Paste a link to music or a video from Q-Share, Q-Tube or Subscreen.'
+              )}
+            </Typography>
+          </Box>
+          <IconButton
+            aria-label={t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            onClick={handleCloseLinkDialog}
+            size="small"
+          >
+            <CloseRoundedIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pb: 2.1 }}>
+          <Box
+            component="form"
+            onSubmit={(event: React.FormEvent) => {
+              event.preventDefault();
+              void handlePlayLink();
+            }}
+            sx={{ alignItems: 'flex-start', display: 'flex', gap: 1, pt: 0.5 }}
+          >
+            <TextField
+              autoFocus
+              error={linkProblem != null}
+              fullWidth
+              helperText={
+                linkProblem === 'unsupported'
+                  ? qw(
+                      'player_link_unsupported',
+                      'That isn’t a link the player can play.'
+                    )
+                  : linkProblem === 'not_playable'
+                    ? qw(
+                        'player_link_not_playable',
+                        'There’s no music or video in it.'
+                      )
+                    : linkProblem === 'not_found'
+                      ? qw(
+                          'player_link_not_found',
+                          'Couldn’t find it on QDN. Try again in a moment.'
+                        )
+                      : ' '
+              }
+              inputProps={{
+                'aria-label': qw('player_open_link', 'Play a link'),
+                spellCheck: false,
+              }}
+              onChange={(event) => {
+                setLinkDraft(event.target.value);
+                setLinkProblem(null);
+              }}
+              placeholder={qw('player_link_placeholder', 'Paste a link')}
+              size="small"
+              value={linkDraft}
+            />
+            <Button
+              disabled={!linkDraft.trim() || isResolvingLink}
+              startIcon={
+                isResolvingLink ? (
+                  <CircularProgress color="inherit" size={14} />
+                ) : (
+                  <PlayArrowRoundedIcon />
+                )
+              }
+              sx={{ flexShrink: 0, height: '40px', textTransform: 'none' }}
+              type="submit"
+              variant="contained"
+            >
+              {qw('player_link_play', 'Play')}
+            </Button>
           </Box>
         </DialogContent>
       </Dialog>

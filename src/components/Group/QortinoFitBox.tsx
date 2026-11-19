@@ -23,27 +23,33 @@ export const fitScale = (
 /**
  * Content made at one size (`natural`, in px), shown as big as the box lets
  * it, in the middle: it grows in a big window and shrinks in a small one,
- * all of it showing (CSS zoom, so it takes the room it shows in).
+ * all of it showing (CSS zoom, so it takes the room it shows in). In a box
+ * less than `compactBelow` px tall, `compact` shows instead, as it is.
  */
 export const QortinoFitBox = ({
   children,
+  compact,
+  compactBelow = 0,
   max,
   min,
   natural,
 }: {
   children: ReactNode;
+  compact?: ReactNode;
+  compactBelow?: number;
   max?: number;
   min?: number;
   natural: Size;
 }) => {
   const ref = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
+  const [isShort, setIsShort] = useState(false);
   const { height, width } = natural;
 
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node || typeof ResizeObserver === 'undefined') return;
-    const measure = () =>
+    const measure = () => {
       setScale(
         fitScale(
           { height: node.clientHeight, width: node.clientWidth },
@@ -51,11 +57,13 @@ export const QortinoFitBox = ({
           { max, min }
         )
       );
+      setIsShort(node.clientHeight > 0 && node.clientHeight < compactBelow);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [height, max, min, width]);
+  }, [compactBelow, height, max, min, width]);
 
   return (
     <Box
@@ -70,9 +78,13 @@ export const QortinoFitBox = ({
         width: '100%',
       }}
     >
-      <Box sx={{ flexShrink: 0, width: `${width}px`, zoom: scale }}>
-        {children}
-      </Box>
+      {compact && isShort ? (
+        <Box sx={{ minWidth: 0, width: '100%' }}>{compact}</Box>
+      ) : (
+        <Box sx={{ flexShrink: 0, width: `${width}px`, zoom: scale }}>
+          {children}
+        </Box>
+      )}
     </Box>
   );
 };
