@@ -8,6 +8,7 @@ import {
   compressImageFile,
   ensureImageMetadataFree,
 } from '../../../utils/imageCompression';
+import { HUB_REQUEST } from '../../../qortal/requestingApp';
 import { quitterHashString } from './quitterIdentity';
 import { TORQ_APP_NAME } from './torqFeed';
 
@@ -125,7 +126,8 @@ export const publishMultipleResources = async (
       'PUBLISH_MULTIPLE_QDN_RESOURCES',
       { resources },
       timeoutMs,
-      true
+      true,
+      HUB_REQUEST
     )) as PublishResponse | undefined;
   } catch (err) {
     // sendMessage only rejects when Hub never answered.

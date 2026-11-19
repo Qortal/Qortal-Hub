@@ -96,6 +96,7 @@ import {
   createPermissionPromptQueue,
   PERMISSION_ALREADY_GIVEN,
 } from './permissionPromptQueue';
+import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
 import Base58 from '../encryption/Base58.ts';
 import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -204,7 +205,8 @@ export async function retryTransaction(
 export const _createPoll = async (
   { pollName, pollDescription, options },
   isFromExtension,
-  skipPermission
+  skipPermission,
+  appInfo?
 ) => {
   const fee = await getFee('CREATE_POLL');
   let resPermission = {};
@@ -228,7 +230,8 @@ export const _createPoll = async (
         }),
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
   }
 
@@ -276,7 +279,8 @@ export const _createPoll = async (
 
 const _deployAt = async (
   { name, description, tags, creationBytes, amount, assetId, atType },
-  isFromExtension
+  isFromExtension,
+  appInfo?
 ) => {
   const fee = await getFee('DEPLOY_AT');
 
@@ -299,7 +303,8 @@ const _deployAt = async (
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -352,7 +357,8 @@ const _deployAt = async (
 export const _voteOnPoll = async (
   { pollName, optionIndex, optionName },
   isFromExtension,
-  skipPermission
+  skipPermission,
+  appInfo?
 ) => {
   const fee = await getFee('VOTE_ON_POLL');
   let resPermission = {};
@@ -373,7 +379,8 @@ export const _voteOnPoll = async (
         }),
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
   }
 
@@ -492,7 +499,8 @@ const backendPermissions = createBackendPermissions(
           'question:permission.backend_connection_understand'
         ),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     return response?.accepted === true;
   },
@@ -551,9 +559,12 @@ const alreadyAllowed =
       hasSessionPermission(appInfo.tabId, appInfo.name, sessionPermission)
     );
 
+// `appInfo` is the tab the request came from: the dialog names that app, and
+// never one the payload claims.
 async function getUserPermission(
   payload,
   isFromExtension,
+  appInfo?,
   isAlreadyAllowed?: () => boolean | Promise<boolean>
 ) {
   return askPermissionInTurn(
@@ -567,7 +578,15 @@ async function getUserPermission(
         window.postMessage(
           {
             action: 'QORTAL_REQUEST_PERMISSION',
-            payload: { ...payload, expiresAt },
+            payload: {
+              ...payload,
+              expiresAt,
+              // Hub's own pages name no app; a Q-App is named from its tab.
+              fromHub: isHubRequest(appInfo),
+              requestingApp: isHubRequest(appInfo)
+                ? null
+                : requestingAppFromAppInfo(appInfo),
+            },
             requestId,
             isFromExtension,
           },
@@ -594,7 +613,7 @@ async function getUserPermission(
 export const authorizeRnsDestination = async (
   destination: string,
   isFromExtension: boolean,
-  appInfo: { tabId?: string | number; name?: string }
+  appInfo: { tabId?: string | number; name?: string; service?: string }
 ) => {
   const normalized = String(destination ?? '')
     .trim()
@@ -609,7 +628,7 @@ export const authorizeRnsDestination = async (
     throw new Error('RNS_PERMISSION_DENIED');
   }
   await backendPermissions.authorize(
-    { tabId: appInfo.tabId, name: appInfo.name },
+    { tabId: appInfo.tabId, name: appInfo.name, service: appInfo.service },
     normalized,
     isFromExtension
   );
@@ -667,6 +686,7 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
           },
         },
         isFromExtension,
+        appInfo,
         alreadyAllowed(
           appInfo,
           'GET_USER_ACCOUNT',
@@ -953,6 +973,7 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
         isSessionPermission: true,
       },
       isFromExtension,
+      appInfo,
       () =>
         unapprovedSessionPermissions(
           { tabId, name: appInfo.name },
@@ -1371,7 +1392,7 @@ export const decryptDataWithSharingKey = async (data, sender) => {
   return base64ToObject.data;
 };
 
-export const getHostedData = async (data, isFromExtension) => {
+export const getHostedData = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1386,7 +1407,8 @@ export const getHostedData = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       }),
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1413,7 +1435,7 @@ export const getHostedData = async (data, isFromExtension) => {
   }
 };
 
-export const deleteHostedData = async (data, isFromExtension) => {
+export const deleteHostedData = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1436,7 +1458,8 @@ export const deleteHostedData = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       }),
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1603,6 +1626,7 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, 'GET_LIST_ITEMS', 'qAPPAutoLists')
     );
     const { accepted, checkbox1 } = resPermission;
@@ -1632,7 +1656,7 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
   }
 };
 
-export const addListItems = async (data, isFromExtension) => {
+export const addListItems = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1669,7 +1693,8 @@ export const addListItems = async (data, isFromExtension) => {
       }),
       highlightedText: items.join(', '),
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1709,7 +1734,7 @@ export const addListItems = async (data, isFromExtension) => {
   }
 };
 
-export const deleteListItems = async (data, isFromExtension) => {
+export const deleteListItems = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1754,7 +1779,8 @@ export const deleteListItems = async (data, isFromExtension) => {
       }),
       highlightedText: items ? JSON.stringify(items) : item,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1996,7 +2022,8 @@ export const publishQDNResource = async (
         fee: fee.fee,
         ...handleDynamicValues,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted, checkbox1 = false } = resPermission || {
       accepted: false,
@@ -2339,7 +2366,8 @@ export const publishMultipleQDNResources = async (
         fee: +fee.fee * resources.length,
         ...handleDynamicValues,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted, checkbox1 = false } = resPermission || {
       accepted: false,
@@ -2584,7 +2612,7 @@ export const publishMultipleQDNResources = async (
   return publishedResponses;
 };
 
-export const voteOnPoll = async (data, isFromExtension) => {
+export const voteOnPoll = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['pollName', 'optionIndex'];
   const missingFields: string[] = [];
 
@@ -2640,7 +2668,9 @@ export const voteOnPoll = async (data, isFromExtension) => {
     const optionName = pollInfo.pollOptions[optionIndex].optionName;
     const resVoteOnPoll = await _voteOnPoll(
       { pollName, optionIndex, optionName },
-      isFromExtension
+      isFromExtension,
+      false,
+      appInfo
     );
     return resVoteOnPoll;
   } catch (error) {
@@ -2653,7 +2683,7 @@ export const voteOnPoll = async (data, isFromExtension) => {
   }
 };
 
-export const createPoll = async (data, isFromExtension) => {
+export const createPoll = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'pollName',
     'pollDescription',
@@ -2686,7 +2716,9 @@ export const createPoll = async (data, isFromExtension) => {
         pollDescription,
         options: pollOptions,
       },
-      isFromExtension
+      isFromExtension,
+      false,
+      appInfo
     );
     return resCreatePoll;
   } catch (error) {
@@ -2776,6 +2808,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, null, `qAPPSendChatMessage-${appInfo?.name}`)
     );
   }
@@ -3036,6 +3069,7 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
         fee: fee.fee,
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, 'JOIN_GROUP')
     );
     const { accepted } = resPermission || {
@@ -3077,16 +3111,30 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
   }
 };
 
-export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
+export const saveFile = async (
+  data,
+  sender,
+  isFromExtension,
+  snackMethods,
+  appInfo?
+) => {
   try {
     if (!data?.filename)
-      throw new Error(i18n.t('question:message.error.missing_fields', {
-        fields: 'filename', postProcess: 'capitalizeFirstChar',
-      }));
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: 'filename',
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     // Handle location-based downloads (streaming approach)
     if (data?.location) {
-      return await saveFileFromLocation(data, isFromExtension, snackMethods);
+      return await saveFileFromLocation(
+        data,
+        isFromExtension,
+        snackMethods,
+        appInfo
+      );
     }
     const requiredFields = ['filename', 'blob'];
     const missingFields: string[] = [];
@@ -3115,7 +3163,8 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         }),
         highlightedText: `${filename}`,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 
@@ -3178,7 +3227,12 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
  * Downloads a file from QDN location with optional decryption
  * Uses streaming to avoid loading entire file into memory
  */
-async function saveFileFromLocation(data, isFromExtension, snackMethods) {
+async function saveFileFromLocation(
+  data,
+  isFromExtension,
+  snackMethods,
+  appInfo?
+) {
   const {
     filename,
     location,
@@ -3232,7 +3286,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
       }),
       highlightedText: isEncrypted ? `${filename} (encrypted)` : filename,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   if (!resPermission.accepted) {
@@ -3599,7 +3654,7 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
   }
 }
 
-export const deployAt = async (data, isFromExtension) => {
+export const deployAt = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'name',
     'description',
@@ -3638,7 +3693,8 @@ export const deployAt = async (data, isFromExtension) => {
         assetId: data.assetId,
         atType: data.type,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     return resDeployAt;
   } catch (error) {
@@ -3713,6 +3769,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_USER_WALLET',
@@ -3869,6 +3926,7 @@ export const getWalletBalance = async (
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_WALLET_BALANCE',
@@ -4131,6 +4189,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_USER_WALLET_INFO',
@@ -4255,6 +4314,7 @@ export const getUserWalletTransactions = async (
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_USER_WALLET_TRANSACTIONS',
@@ -4648,7 +4708,8 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission || {
       accepted: false,
@@ -4823,7 +4884,8 @@ export const setCurrentForeignServer = async (
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
 
     const { accepted } = resPermission || {
@@ -4937,7 +4999,8 @@ export const addForeignServer = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
 
     const { accepted } = resPermission || {
@@ -5051,7 +5114,8 @@ export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
 
     const { accepted } = resPermission || {
@@ -5678,7 +5742,7 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
   });
 };
 
-export const sendCoin = async (data, isFromExtension) => {
+export const sendCoin = async (data, isFromExtension, appInfo?) => {
   const requiredFields =
     data.sendMax === true &&
     ['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(data.coin)
@@ -5788,7 +5852,8 @@ export const sendCoin = async (data, isFromExtension) => {
         fee: fee,
         confirmCheckbox: true,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 
@@ -5808,13 +5873,18 @@ export const sendCoin = async (data, isFromExtension) => {
     }
   } else if (['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(checkCoin)) {
     return sendLocalForeignCoin(data, (payload) =>
-      getUserPermission(payload, isFromExtension)
+      getUserPermission(payload, isFromExtension, appInfo)
     );
   } else if (checkCoin === 'ARRR') {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const memo = data?.memo;
-    const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+    const arrrWalletBalance = await getWalletBalance(
+      { coin: checkCoin },
+      true,
+      undefined,
+      appInfo
+    );
 
     if (isNaN(Number(arrrWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -5842,7 +5912,8 @@ export const sendCoin = async (data, isFromExtension) => {
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} ARRR`,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 
@@ -5912,7 +5983,7 @@ const getBuyingFees = async (foreignBlockchain) => {
   };
 };
 
-export const createBuyOrder = async (data, isFromExtension) => {
+export const createBuyOrder = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['crosschainAtInfo', 'foreignBlockchain'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -5966,7 +6037,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
     return fundLocalTrades(
       crosschainAtInfo,
       localTradeCoins[foreignBlockchain],
-      (payload) => getUserPermission(payload, isFromExtension)
+      (payload) => getUserPermission(payload, isFromExtension, appInfo)
     );
   }
 
@@ -6026,7 +6097,8 @@ export const createBuyOrder = async (data, isFromExtension) => {
           }),
         },
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
     if (accepted) {
@@ -6201,7 +6273,7 @@ const tradeBotCreateRequest = async (body, keyPair) => {
   }
 };
 
-export const createSellOrder = async (data, isFromExtension) => {
+export const createSellOrder = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['qortAmount', 'foreignBlockchain', 'foreignAmount'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6246,7 +6318,8 @@ export const createSellOrder = async (data, isFromExtension) => {
         }),
         fee: '0.02',
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
     if (accepted) {
@@ -6290,7 +6363,7 @@ export const createSellOrder = async (data, isFromExtension) => {
   }
 };
 
-export const cancelSellOrder = async (data, isFromExtension) => {
+export const cancelSellOrder = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['atAddress'];
   const missingFields: string[] = [];
 
@@ -6337,7 +6410,8 @@ export const cancelSellOrder = async (data, isFromExtension) => {
         }),
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
     if (accepted) {
@@ -6470,6 +6544,7 @@ export const lockTab = async (data, isFromExtension, appInfo) => {
         }),
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, 'LOCK_TAB')
     );
 
@@ -6498,7 +6573,7 @@ export const unlockTab = async (data, isFromExtension, appInfo) => {
   return true;
 };
 
-export const adminAction = async (data, isFromExtension) => {
+export const adminAction = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['type'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6617,7 +6692,8 @@ export const adminAction = async (data, isFromExtension) => {
     {
       text1: permissionText,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -6656,7 +6732,7 @@ export const adminAction = async (data, isFromExtension) => {
   }
 };
 
-export const signTransaction = async (data, isFromExtension) => {
+export const signTransaction = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['unsignedBytes'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6710,7 +6786,8 @@ export const signTransaction = async (data, isFromExtension) => {
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -6890,7 +6967,7 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
   }
 };
 
-export const registerNameRequest = async (data, isFromExtension) => {
+export const registerNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['name'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6917,7 +6994,8 @@ export const registerNameRequest = async (data, isFromExtension) => {
       text2: data?.description,
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -6934,7 +7012,7 @@ export const registerNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const updateNameRequest = async (data, isFromExtension) => {
+export const updateNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['newName', 'oldName'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6962,7 +7040,8 @@ export const updateNameRequest = async (data, isFromExtension) => {
       text4: data?.description,
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -6977,7 +7056,7 @@ export const updateNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const leaveGroupRequest = async (data, isFromExtension) => {
+export const leaveGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7024,7 +7103,8 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
       highlightedText: `${groupInfo.groupName}`,
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7039,7 +7119,7 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const inviteToGroupRequest = async (data, isFromExtension) => {
+export const inviteToGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'inviteTime', 'inviteeAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7096,7 +7176,8 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7116,7 +7197,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const kickFromGroupRequest = async (data, isFromExtension) => {
+export const kickFromGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7172,7 +7253,8 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7192,7 +7274,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const banFromGroupRequest = async (data, isFromExtension) => {
+export const banFromGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7249,7 +7331,8 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7270,7 +7353,11 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const cancelGroupBanRequest = async (data, isFromExtension) => {
+export const cancelGroupBanRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7326,7 +7413,8 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7345,7 +7433,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   }
 };
 
-export const addGroupAdminRequest = async (data, isFromExtension) => {
+export const addGroupAdminRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7401,7 +7489,8 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7420,7 +7509,11 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   }
 };
 
-export const removeGroupAdminRequest = async (data, isFromExtension) => {
+export const removeGroupAdminRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7475,7 +7568,8 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7494,7 +7588,11 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   }
 };
 
-export const cancelGroupInviteRequest = async (data, isFromExtension) => {
+export const cancelGroupInviteRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7550,7 +7648,8 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -7571,7 +7670,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   }
 };
 
-export const createGroupRequest = async (data, isFromExtension) => {
+export const createGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'approvalThreshold',
     'groupName',
@@ -7612,7 +7711,8 @@ export const createGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7634,7 +7734,7 @@ export const createGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const updateGroupRequest = async (data, isFromExtension) => {
+export const updateGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'groupId',
     'newOwner',
@@ -7704,7 +7804,8 @@ export const updateGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7816,7 +7917,7 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   }
 };
 
-export const sellNameRequest = async (data, isFromExtension) => {
+export const sellNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['salePrice', 'nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7868,7 +7969,8 @@ export const sellNameRequest = async (data, isFromExtension) => {
       ),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7886,7 +7988,11 @@ export const sellNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const cancelSellNameRequest = async (data, isFromExtension) => {
+export const cancelSellNameRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7926,7 +8032,8 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7943,7 +8050,7 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const buyNameRequest = async (data, isFromExtension) => {
+export const buyNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7988,7 +8095,8 @@ export const buyNameRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -8008,7 +8116,7 @@ export const buyNameRequest = async (data, isFromExtension) => {
 };
 
 let foreignFeeSigningInProgress = false;
-export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
+export const signForeignFees = async (_data, appInfo, isFromExtension) => {
   if (foreignFeeSigningInProgress) {
     throw new Error(i18n.t('question:foreign_fees.busy'));
   }
@@ -8049,7 +8157,8 @@ export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
             highlightedText: i18n.t('question:foreign_fees.review'),
             json: fees,
           },
-          isFromExtension
+          isFromExtension,
+          appInfo
         );
         return accepted === true;
       },
@@ -8063,7 +8172,11 @@ export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
     foreignFeeSigningInProgress = false;
   }
 };
-export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
+export const multiPaymentWithPrivateData = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['payments', 'assetId'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
@@ -8290,7 +8403,8 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       highlightedText: `Total Amount: ${totalAmount}`,
       fee: fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted, checkbox1 = false } = resPermission;
@@ -8434,7 +8548,7 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   return transactionsDone;
 };
 
-export const transferAssetRequest = async (data, isFromExtension) => {
+export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['amount', 'assetId', 'recipient'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
@@ -8490,7 +8604,8 @@ export const transferAssetRequest = async (data, isFromExtension) => {
       }),
       fee: fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -8578,7 +8693,8 @@ export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `Group: ${groupName}`,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 

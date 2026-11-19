@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "irrota kirjanmerkeistä",
     "unsaved_publish": "julkaisulomakkeen tietoja ei ole vielä julkaistu, ja välilehden sulkeminen hylkää ne."
   },
+  "approval_dialog": {
+    "requested_by": "Pyytäjä",
+    "unknown_app": "Tuntematon Q-App",
+    "unknown_app_hint": "Qortal Hub ei pystynyt selvittämään, mikä Q-App lähetti tämän pyynnön. Hylkää se, ellet juuri itse pyytänyt tätä."
+  },
   "apps_bar": {
     "empty": "Kiinnitä sovellus tai lisää kirjanmerkki, niin se näkyy tässä.",
     "label": "Kiinnitetyt sovellukset ja kirjanmerkit",
