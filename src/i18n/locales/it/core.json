@@ -205,6 +205,8 @@
       "error_page_too_large": "il testo della pagina è troppo lungo per QDN. Accorcia «Informazioni» o «Novità».",
       "error_page_unverified": "il tuo nodo non è riuscito a confermare cosa contiene ora la pagina dell’app, quindi è stata lasciata com’era. Riprova tra un momento.",
       "error_shot_unavailable": "non è stato possibile rileggere uno screenshot da QDN. Riprova tra un momento.",
+      "error_shots_changed": "gli screenshot sono stati sostituiti su QDN da quando sono stati caricati qui, quindi queste didascalie finirebbero su altre immagini. Carica gli screenshot attuali, poi rifai la modifica.",
+      "error_shots_unverified": "il tuo nodo non è riuscito a confermare quali screenshot ha ora l’app, quindi sono stati lasciati com’erano. Riprova tra un momento.",
       "files_progress": "lettura dei file dell’app dal tuo nodo: {{done}} di {{total}}",
       "hint": "Ogni parte che modifichi viene pubblicata a sé. L’app stessa viene caricata di nuovo solo quando modifichi i dettagli della sua scheda.",
       "icon_hint": "L’icona è l’immagine del nome {{name}}, quindi cambia ovunque venga mostrata l’immagine di quel nome.",

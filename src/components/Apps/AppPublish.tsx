@@ -53,6 +53,7 @@ import {
 import { PublishSource } from './publishSource';
 import { PublishSourcePicker, formatPublishDate } from './PublishSourcePicker';
 import {
+  checkPageExtras,
   ExtrasSummary,
   extrasPartCount,
   PagePart,
@@ -61,6 +62,7 @@ import {
   PublishExtrasHandle,
   PublishPageExtras,
   publishPageExtras,
+  ShotsOutcome,
 } from './AppPage/PublishPageExtras';
 import { NameAvatar } from './AppPage/AppPageParts';
 import { appPageErrorText } from './AppPage/appPageErrors';
@@ -380,6 +382,23 @@ export const AppPublish = ({
   }, []);
   // Screenshots, version and What's new, published right after the app.
   const pageExtrasRef = useRef<PublishExtrasHandle>(null);
+  // What became of the screenshots, for the form if it's still open.
+  const noteShots = (outcome: ShotsOutcome) =>
+    pageExtrasRef.current?.noteShots(outcome);
+  /** Before the fee: screenshots the node can't confirm stop it, in words. */
+  const checkExtras = async (
+    app: { service: string; name: string },
+    extras: PublishExtras | null
+  ) => {
+    if (!extras?.shots) return;
+    await checkPageExtras(app, extras, noteShots).catch((cause) => {
+      throw new Error(appPageErrorText(t, cause));
+    });
+    // Closed meanwhile: as if the fee were declined, for a form that's gone.
+    if (!isMountedRef.current) {
+      throw Object.assign(new Error(''), { isCanceled: true });
+    }
+  };
   const [extrasSummary, setExtrasSummary] = useState<ExtrasSummary | null>(
     null
   );
@@ -778,6 +797,8 @@ export const AppPublish = ({
         ? null
         : (pageExtrasRef.current?.prepare() ?? null);
       const extraParts = extrasPartCount(extras);
+      // Screenshots the node can't confirm stop the publish before the fee.
+      await checkExtras({ service: appType, name }, extras);
       const fee = await getFee('ARBITRARY');
       const identifier = isWidget ? widgetId : undefined;
       const publishedTags = isWidget
@@ -857,7 +878,8 @@ export const AppPublish = ({
       const left = await publishPageExtras(
         { service: appType, name },
         extras,
-        signature || ''
+        signature || '',
+        noteShots
       );
       const leftText = left ? partsLeftText(left) : '';
       // What this publish took is published now: the form's fields, and for
@@ -1023,6 +1045,7 @@ export const AppPublish = ({
       // A part emptied since has nothing to publish: it is done.
       const parts = extrasPartCount(extras);
       if (parts) {
+        await checkExtras(pending.app, extras);
         const fee = await getFee('ARBITRARY');
         await show({
           message: t('core:app_page.publish.confirm_retry', {
@@ -1037,7 +1060,12 @@ export const AppPublish = ({
         );
       }
       const left = parts
-        ? await publishPageExtras(pending.app, extras, pending.signature)
+        ? await publishPageExtras(
+            pending.app,
+            extras,
+            pending.signature,
+            noteShots
+          )
         : null;
       const leftText = left ? partsLeftText(left) : '';
       if (parts) tellPublished(leftText);

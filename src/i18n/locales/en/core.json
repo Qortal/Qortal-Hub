@@ -205,6 +205,8 @@
       "error_page_too_large": "the page text is too long for QDN. Shorten About or What's new.",
       "error_page_unverified": "your node couldn't confirm what the app's page has now, so it was left as it is. Try again in a moment.",
       "error_shot_unavailable": "a screenshot could not be read back from QDN. Try again in a moment.",
+      "error_shots_changed": "the screenshots were replaced on QDN since they were loaded here, so these captions would go with other pictures. Load the current screenshots, then make your change again.",
+      "error_shots_unverified": "your node couldn't confirm which screenshots the app has now, so they were left as they are. Try again in a moment.",
       "files_progress": "reading the app's files from your node: {{done}} of {{total}}",
       "hint": "Each part you change is published on its own. The app itself is only uploaded again when you change its listing details.",
       "icon_hint": "The icon is the picture of the name {{name}}, so it changes everywhere that name's picture shows.",

@@ -205,6 +205,8 @@
       "error_page_too_large": "le texte de la page est trop long pour QDN. Raccourcissez « À propos » ou « Nouveautés ».",
       "error_page_unverified": "votre nœud n’a pas pu confirmer ce que contient actuellement la page de l’app, elle a donc été laissée telle quelle. Réessayez dans un instant.",
       "error_shot_unavailable": "une capture d’écran n’a pas pu être relue depuis QDN. Réessayez dans un instant.",
+      "error_shots_changed": "les captures d’écran ont été remplacées sur QDN depuis leur chargement ici : ces légendes iraient donc avec d’autres images. Chargez les captures actuelles, puis refaites votre modification.",
+      "error_shots_unverified": "votre nœud n’a pas pu confirmer quelles captures d’écran l’app a actuellement, elles ont donc été laissées telles quelles. Réessayez dans un instant.",
       "files_progress": "lecture des fichiers de l’app depuis votre nœud : {{done}} sur {{total}}",
       "hint": "Chaque partie modifiée est publiée séparément. L’app elle-même n’est téléversée à nouveau que si vous modifiez les détails de sa fiche.",
       "icon_hint": "L’icône est l’image du nom {{name}} : elle change donc partout où l’image de ce nom s’affiche.",

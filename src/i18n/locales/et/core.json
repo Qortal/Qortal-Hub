@@ -205,6 +205,8 @@
       "error_page_too_large": "lehe tekst on QDN-i jaoks liiga pikk. Lühenda jaotist „Teave“ või „Mis on uut“.",
       "error_page_unverified": "sinu sõlm ei suutnud kinnitada, mis rakenduse lehel praegu on, seega jäeti see nii, nagu oli. Proovi hetke pärast uuesti.",
       "error_shot_unavailable": "üht ekraanipilti ei õnnestunud QDN-ist kätte saada. Proovi hetke pärast uuesti.",
+      "error_shots_changed": "ekraanipildid asendati QDN-is pärast seda, kui need siia laaditi, seega läheksid need pildiallkirjad teiste piltide juurde. Laadi praegused ekraanipildid ja tee oma muudatus uuesti.",
+      "error_shots_unverified": "sinu sõlm ei suutnud kinnitada, millised ekraanipildid rakendusel praegu on, seega jäeti need nii, nagu olid. Proovi hetke pärast uuesti.",
       "files_progress": "rakenduse failide lugemine sinu sõlmest: {{done}}/{{total}}",
       "hint": "Iga muudetud osa avaldatakse eraldi. Rakendus ise laaditakse uuesti üles ainult siis, kui muudad selle põhiandmeid.",
       "icon_hint": "Ikoon on nime {{name}} pilt, seega muutub see kõikjal, kus selle nime pilti näidatakse.",
