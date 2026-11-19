@@ -424,9 +424,11 @@
     "locked_kept_open": "las pestañas bloqueadas siguen abiertas. Ciérralas una por una para confirmar.",
     "new_tab": "nueva pestaña",
     "pin": "fijar pestaña",
+    "pin_to_bookmarks": "fijar en marcadores",
     "pinned_and_locked_kept_open": "las pestañas fijadas y bloqueadas siguen abiertas. Desfija una pestaña fijada antes de cerrarla, y cierra las bloqueadas una por una para confirmar.",
     "pinned_kept_open": "las pestañas fijadas siguen abiertas. Desfija una pestaña para cerrarla.",
     "unpin": "desfijar pestaña",
+    "unpin_from_bookmarks": "desfijar de marcadores",
     "unsaved_publish": "los datos de su formulario de publicación aún no se han publicado, y al cerrar la pestaña se descartan."
   },
   "apps_bar": {
