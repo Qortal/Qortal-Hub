@@ -44,6 +44,17 @@ export interface GroupNotificationStore {
   channels: Record<string, ChannelOverride>;
 }
 
+/**
+ * Read-path wrapper carrying the global defaults alongside a group store.
+ *
+ * `getEffectiveNotificationSettings` attaches this so the pure resolver does not
+ * need a second argument. It is never persisted: `setGroupNotificationStore`
+ * writes only a real `GroupNotificationStore`.
+ */
+type GroupNotificationStoreWithDefaults = GroupNotificationStore & {
+  __globalDefaults?: GlobalNotificationSettings;
+};
+
 export interface EffectiveNotificationSettings {
   pushLevel: PushLevel;
   suppressEveryoneHere: boolean;
@@ -294,6 +305,22 @@ export type ChannelLookup =
   | { status: 'ok'; channelIds: string[] }
   | { status: 'unavailable' };
 
+/**
+ * Resolves the channel ids a scope covers.
+ *
+ * Exposed for the parent menus, which need the list to display a truthful state
+ * and cannot get it from the store (the store only holds channels that differ
+ * from the defaults). Returns `null` when the lookup is unavailable, so a caller
+ * can tell that from an empty scope.
+ */
+export async function getScopeChannelIds(
+  groupId: string | number,
+  sectionId?: string
+): Promise<string[] | null> {
+  const lookup = await fetchChannelIds(groupId, sectionId);
+  return lookup.status === 'ok' ? lookup.channelIds : null;
+}
+
 /** Fetches the group's channels, optionally filtered to one section. */
 async function fetchChannelIds(
   groupId: string | number,
@@ -519,8 +546,8 @@ export function resolveEffectiveSettings(
     ...fallback,
   };
   const global =
-    groupStore?.__globalDefaults ??
-    (fallback as unknown as GlobalNotificationSettings);
+    (groupStore as GroupNotificationStoreWithDefaults | undefined)
+      ?.__globalDefaults ?? (fallback as unknown as GlobalNotificationSettings);
   if (global && typeof global === 'object' && 'pushLevel' in global) {
     const g = global as GlobalNotificationSettings;
     if (typeof g.pushLevel === 'string') {
@@ -574,8 +601,72 @@ export async function getEffectiveNotificationSettings(
   ]);
   // Attach global defaults so the pure resolver can use them without an extra arg.
   // (__globalDefaults is a transient field; it is not persisted.)
-  (store as any).__globalDefaults = global;
+  (store as GroupNotificationStoreWithDefaults).__globalDefaults = global;
   return resolveEffectiveSettings(store, channelId, fallback);
+}
+
+export interface ScopedNotificationState {
+  /** The state when the channels agree, or the first channel's state otherwise. */
+  settings: EffectiveNotificationSettings;
+  /**
+   * True when the channels in scope disagree on at least one field.
+   *
+   * A parent menu (group or section) has no override of its own, so the only
+   * truthful thing it can display is the state of the channels inside it. When
+   * those differ, no single option is correct and the menu has to say so rather
+   * than picking one and looking right when it is wrong.
+   */
+  mixed: boolean;
+  /** Fields the channels in scope disagree on. Empty when they agree. */
+  mixedFields: Array<keyof EffectiveNotificationSettings>;
+  /** How many channels the state was derived from. 0 means the scope is empty. */
+  channelCount: number;
+}
+
+/**
+ * Resolves the state of a whole scope — a group or a section — from the channels
+ * inside it.
+ *
+ * Channels without an override resolve to the global defaults, which is exactly
+ * what they will behave like, so they participate like any other channel. This
+ * is the read path a parent menu needs; passing no channel id would only ever
+ * return the global defaults.
+ */
+export function resolveScopedNotificationSettings(
+  groupStore: GroupNotificationStore | undefined,
+  channelIds: readonly string[],
+  fallback: EffectiveNotificationSettings = DEFAULT_NOTIFICATION_SETTINGS
+): ScopedNotificationState {
+  const resolved = channelIds.map((channelId) =>
+    resolveEffectiveSettings(groupStore, channelId, fallback)
+  );
+  if (resolved.length === 0) {
+    return {
+      settings: resolveEffectiveSettings(groupStore, undefined, fallback),
+      mixed: false,
+      mixedFields: [],
+      channelCount: 0,
+    };
+  }
+  const [first, ...rest] = resolved;
+  const fields: Array<keyof EffectiveNotificationSettings> = [
+    'pushLevel',
+    'suppressEveryoneHere',
+    'notifyOnReplies',
+    'notifyOnReactions',
+  ];
+  // Tracked per field: a group where every channel allows notifications but
+  // only some notify on replies is mixed for that checkbox alone, and reporting
+  // the whole menu as mixed would blank controls that are in fact settled.
+  const mixedFields = fields.filter((field) =>
+    rest.some((candidate) => candidate[field] !== first[field])
+  );
+  return {
+    settings: first,
+    mixed: mixedFields.length > 0,
+    mixedFields,
+    channelCount: resolved.length,
+  };
 }
 
 // ---------------------------------------------------------------------------

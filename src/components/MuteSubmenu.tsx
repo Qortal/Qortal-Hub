@@ -17,6 +17,16 @@ export type MuteScopeType = 'Group' | 'Section' | 'Channel';
 export interface MuteSubmenuProps {
   scope: ScopeDescriptor;
   scopeType: MuteScopeType;
+  /**
+   * Channels the scope contains, when the caller knows them.
+   *
+   * A section mute is stored by writing to each of its channels, so the section's
+   * displayed state has to be read back from those same channels. Without this
+   * the menu looked at every override in the group, which meant a section whose
+   * only muted channel was in a different section offered "Unmute" and could not
+   * be muted from its own menu.
+   */
+  channelIds?: readonly string[];
 }
 
 const DURATIONS = [
@@ -33,42 +43,44 @@ function activeMutedUntil(v: number | null | undefined): boolean {
 }
 
 /**
- * Collect all channel mutedUntil values within a scope from the flat
- * channel-override store.
+ * Collect the mute state of the channels a scope covers.
  *
- * NOTE: in the flat model, section membership is not stored per channel.
- * For group scope all stored channel overrides are considered; for section
- * scope the stored overrides are used as-is (a section-scoped mute has
- * materialized into those channels already). Channel scope resolves the
- * single channel directly.
+ * A section mute is stored by writing the same `mutedUntil` to each of the
+ * section's channels, so reading it back has to look at exactly those channels.
+ * `channelIds` is how the caller says which ones; without it a section fell back
+ * to every override in the group, so a section whose only muted channel was
+ * elsewhere offered "Unmute" and had no way to mute itself.
  */
 function collectScopeMuteState(
   groupStore: GroupNotificationStore | undefined,
-  sectionId?: string,
+  channelIds: readonly string[] | undefined,
   channelId?: string
 ): { allMuted: boolean; sharedUntil: number | null | undefined } {
   if (!groupStore) return { allMuted: false, sharedUntil: undefined };
 
   if (channelId != null) {
-    const ch = groupStore.channels?.[String(channelId)];
-    const v = ch?.mutedUntil;
-    return {
-      allMuted: activeMutedUntil(v),
-      sharedUntil: v !== undefined ? v : undefined,
-    };
+    const v = groupStore.channels?.[String(channelId)]?.mutedUntil;
+    return { allMuted: activeMutedUntil(v), sharedUntil: v };
   }
 
-  const vals = Object.values(groupStore.channels ?? {}).map(
-    (ch) => ch?.mutedUntil
-  );
-  if (vals.length === 0) return { allMuted: false, sharedUntil: undefined };
+  // Group scope: every stored override is in scope by definition. Section scope
+  // passes its channels explicitly.
+  const ids = channelIds ?? Object.keys(groupStore.channels ?? {});
+  if (ids.length === 0) return { allMuted: false, sharedUntil: undefined };
+
+  const vals = ids.map((id) => groupStore.channels?.[id]?.mutedUntil);
+  // A channel with no override inherits "not muted" version of the default.
   const allMuted = vals.every((v) => activeMutedUntil(v));
   const first = vals[0];
   const sharedUntil = vals.every((v) => v === first) ? first : undefined;
   return { allMuted, sharedUntil };
 }
 
-export function MuteSubmenu({ scope, scopeType }: MuteSubmenuProps) {
+export function MuteSubmenu({
+  scope,
+  scopeType,
+  channelIds,
+}: MuteSubmenuProps) {
   const { t } = useTranslation(['group']);
   const cache = useAtomValue(notificationSettingsCacheAtom);
 
@@ -76,7 +88,7 @@ export function MuteSubmenu({ scope, scopeType }: MuteSubmenuProps) {
 
   const { allMuted, sharedUntil } = collectScopeMuteState(
     groupSettings,
-    scope.sectionId,
+    channelIds,
     scope.channelId
   );
 

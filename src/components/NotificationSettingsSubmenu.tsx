@@ -10,6 +10,9 @@ import {
   type PushLevel,
   type ScopeDescriptor,
   getEffectiveNotificationSettings,
+  getGroupNotificationStore,
+  getScopeChannelIds,
+  resolveScopedNotificationSettings,
   setScopeNotificationSettings,
   DEFAULT_NOTIFICATION_SETTINGS,
 } from '../utils/qChatNotificationSettings';
@@ -17,19 +20,61 @@ import { globalNotificationFormAtom } from '../atoms/global';
 
 export interface NotificationSettingsSubmenuProps {
   scope: ScopeDescriptor;
+  /**
+   * Channels the scope contains, when the caller knows them.
+   *
+   * A group or section menu has no override of its own, so its displayed state
+   * has to be derived from its channels. Without this the menu resolved global
+   * defaults and showed "Mentions" even when every channel was set to "None".
+   */
+  channelIds?: readonly string[];
 }
 
 export function NotificationSettingsSubmenu({
   scope,
+  channelIds,
 }: NotificationSettingsSubmenuProps) {
   const [settings, setSettings] = useState<EffectiveNotificationSettings>(
     DEFAULT_NOTIFICATION_SETTINGS
   );
+  // Fields the channels in scope disagree on. Each shows no selection rather
+  // than picking one and looking right when it is wrong.
+  const [mixedFields, setMixedFields] = useState<
+    Array<keyof EffectiveNotificationSettings>
+  >([]);
   const globalNotifForm = useAtomValue(globalNotificationFormAtom);
   const { t } = useTranslation(['group']);
 
   useEffect(() => {
     let cancelled = false;
+    // A channel menu has a single target and needs no scope resolution.
+    if (scope.channelId == null) {
+      const resolveScope = async () => {
+        // Callers that already know the channels pass them; the group menu does
+        // not, so ask. A null result means the lookup failed, in which case the
+        // previous state is better than a guess.
+        const ids =
+          channelIds ??
+          (await getScopeChannelIds(scope.groupId, scope.sectionId));
+        if (cancelled || ids == null) return;
+        const store = await getGroupNotificationStore(scope.groupId);
+        if (cancelled) return;
+        const resolved = resolveScopedNotificationSettings(
+          store,
+          ids,
+          globalNotifForm
+        );
+        setSettings(resolved.settings);
+        setMixedFields(resolved.mixedFields);
+      };
+      void resolveScope().catch(() => {
+        // Leaving the previous state is better than claiming the wrong one.
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setMixedFields([]);
     void getEffectiveNotificationSettings(
       scope.groupId,
       scope.sectionId,
@@ -41,15 +86,29 @@ export function NotificationSettingsSubmenu({
     return () => {
       cancelled = true;
     };
-  }, [scope.groupId, scope.sectionId, scope.channelId, globalNotifForm]);
+  }, [
+    scope.groupId,
+    scope.sectionId,
+    scope.channelId,
+    globalNotifForm,
+    channelIds,
+  ]);
 
   const updateSettings = (partial: Partial<EffectiveNotificationSettings>) => {
     const next = { ...settings, ...partial };
     setSettings(next);
+    // A bulk write makes the scope uniform again, so the mixed markers no longer
+    // apply.
+    setMixedFields([]);
     void setScopeNotificationSettings(scope, partial).catch(() => {
       setSettings(settings);
     });
   };
+
+  // With mixed channel states no single radio is the saved answer, so none is
+  // shown. Picking one writes it to every channel in scope.
+  const checkedLevel = (level: PushLevel) =>
+    !mixedFields.includes('pushLevel') && settings.pushLevel === level;
 
   return (
     <Submenu
@@ -72,7 +131,7 @@ export function NotificationSettingsSubmenu({
       >
         <Radio
           size="small"
-          checked={settings.pushLevel === 'all'}
+          checked={checkedLevel('all')}
           sx={{
             mr: 1.5,
             pointerEvents: 'none',
@@ -90,7 +149,7 @@ export function NotificationSettingsSubmenu({
       >
         <Radio
           size="small"
-          checked={settings.pushLevel === 'mentions'}
+          checked={checkedLevel('mentions')}
           sx={{
             mr: 1.5,
             pointerEvents: 'none',
@@ -108,7 +167,7 @@ export function NotificationSettingsSubmenu({
       >
         <Radio
           size="small"
-          checked={settings.pushLevel === 'none'}
+          checked={checkedLevel('none')}
           sx={{
             mr: 1.5,
             pointerEvents: 'none',
@@ -133,6 +192,7 @@ export function NotificationSettingsSubmenu({
         <Checkbox
           size="small"
           checked={settings.suppressEveryoneHere}
+          indeterminate={mixedFields.includes('suppressEveryoneHere')}
           disabled={settings.pushLevel === 'all'}
           sx={{
             mr: 1.5,
@@ -162,6 +222,7 @@ export function NotificationSettingsSubmenu({
         <Checkbox
           size="small"
           checked={settings.notifyOnReplies}
+          indeterminate={mixedFields.includes('notifyOnReplies')}
           disabled={settings.pushLevel === 'all'}
           sx={{
             mr: 1.5,
@@ -191,6 +252,7 @@ export function NotificationSettingsSubmenu({
         <Checkbox
           size="small"
           checked={settings.notifyOnReactions}
+          indeterminate={mixedFields.includes('notifyOnReactions')}
           disabled={settings.pushLevel === 'all'}
           sx={{
             mr: 1.5,

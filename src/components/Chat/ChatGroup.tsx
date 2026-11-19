@@ -9507,6 +9507,7 @@ export const ChatGroup = ({
                     groupId: Number(selectedGroup),
                     sectionId: reticulumCategoryMenuCategory?.categoryId,
                   }}
+                  channelIds={sectionMenuChannelIds}
                 />
                 <MuteSubmenu
                   scope={{
@@ -9514,6 +9515,7 @@ export const ChatGroup = ({
                     sectionId: reticulumCategoryMenuCategory?.categoryId,
                   }}
                   scopeType="Section"
+                  channelIds={sectionMenuChannelIds}
                 />
                 {isReticulumChannelAdmin && (
                   <>

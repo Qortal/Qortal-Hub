@@ -11,6 +11,7 @@ import {
   applyScopeNotificationSettings,
   applyNotificationSettingsToAllGroups,
   wipeAllChannelOverrides,
+  resolveScopedNotificationSettings,
   isScopeMuted,
   getScopeMutedUntil,
   setScopeMuted,
@@ -704,6 +705,67 @@ describe('getEffectiveNotificationSettings', () => {
 // ---------------------------------------------------------------------------
 // Mute helpers (flat model)
 // ---------------------------------------------------------------------------
+
+describe('resolveScopedNotificationSettings', () => {
+  it('derives parent state from the channels in scope', () => {
+    const store: GroupNotificationStore = {
+      channels: {
+        general: { pushLevel: 'none' },
+        support: { pushLevel: 'none' },
+      },
+    };
+
+    const result = resolveScopedNotificationSettings(store, [
+      'general',
+      'support',
+    ]);
+
+    // Every channel is set to None, so the parent menu must show None. Passing
+    // no channel id instead resolved global defaults and showed "Mentions".
+    expect(result.settings.pushLevel).toBe('none');
+    expect(result.mixed).toBe(false);
+    expect(result.channelCount).toBe(2);
+  });
+
+  it('counts a channel with no override as the global default', () => {
+    const store: GroupNotificationStore = {
+      channels: { general: { pushLevel: 'none' } },
+    };
+
+    const result = resolveScopedNotificationSettings(store, [
+      'general',
+      'unconfigured',
+    ]);
+
+    // The unconfigured channel behaves like the global default, so the scope is
+    // mixed rather than "None".
+    expect(result.mixed).toBe(true);
+    expect(result.mixedFields).toContain('pushLevel');
+  });
+
+  it('reports mixed per field, not for the whole menu', () => {
+    const store: GroupNotificationStore = {
+      channels: {
+        a: { pushLevel: 'all', notifyOnReplies: false },
+        b: { pushLevel: 'all', notifyOnReplies: true },
+      },
+    };
+
+    const result = resolveScopedNotificationSettings(store, ['a', 'b']);
+
+    // pushLevel agrees, so that radio keeps its selection; only the replies
+    // checkbox is indeterminate.
+    expect(result.mixedFields).toEqual(['notifyOnReplies']);
+    expect(result.mixed).toBe(true);
+  });
+
+  it('reports an empty scope rather than guessing', () => {
+    const result = resolveScopedNotificationSettings({ channels: {} }, []);
+
+    expect(result.channelCount).toBe(0);
+    expect(result.mixed).toBe(false);
+  });
+});
 
 describe('isScopeMuted', () => {
   it('returns false when no mutedUntil set at any level', () => {
