@@ -5538,6 +5538,46 @@ describe('reticulum chat database', () => {
     expect(db.getChatSummaries(accountA)[0]?.unreadCount).toBe(1);
   });
 
+  it('honours another device read that arrives before the history it covers', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 66;
+    const readUpTo = Date.now() - 1_000;
+
+    // The other device read up to `readUpTo` while this one had no history at
+    // all. Marking read locally here would be dropped: the clamp has no stored
+    // event to anchor to and the channel is empty.
+    expect(
+      db.applyRemoteReadCoverage(groupId, 'general', readUpTo, readerAddress)
+    ).toBe(true);
+
+    // The covered messages arrive afterwards, sender-stamped below the remote
+    // read. They are already read on the account's other device.
+    const late = signedEvent({
+      eventId: 'remote-coverage-late',
+      groupId,
+      authorSeq: 1,
+      timestamp: readUpTo - 5_000,
+    });
+    expect(db.insertEvent(late, true)).toBe(true);
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(0);
+
+    // A message outside the coverage is still unread.
+    const newer = signedEvent({
+      eventId: 'remote-coverage-newer',
+      groupId,
+      authorAddress: late.authorAddress,
+      authorStreamId: late.authorStreamId,
+      authorSeq: 2,
+      timestamp: readUpTo + 5_000,
+    });
+    expect(db.insertEvent(newer, true)).toBe(true);
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(1);
+  });
+
   it('reuses unchanged channel summaries and recalculates only the changed channel', () => {
     const db = new ReticulumChatDatabase(tempDbPath());
     dbs.push(db);

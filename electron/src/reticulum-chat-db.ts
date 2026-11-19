@@ -1629,6 +1629,11 @@ export class ReticulumChatDatabase {
     }>
   >();
   private memoryReadWatermarks = new Map<string, number>();
+  // Kept apart from memoryReadWatermarks on purpose. Folding remote coverage
+  // into the local watermark would make it look like this device read up to a
+  // future sender time, which is exactly the signal the reliability check in
+  // `computeChannelSummary` looks for.
+  private memoryRemoteReadCoverage = new Map<string, number>();
   /**
    * Last issued arrival sequence. Strictly increasing so several messages stored
    * inside one millisecond still order against each other and against a read.
@@ -1698,7 +1703,9 @@ export class ReticulumChatDatabase {
   private stmtUpdatePrivilegedMentionStatus: Statement;
   private stmtGetWatermark: Statement;
   private stmtGetWatermarkLocalReadAt: Statement;
+  private stmtGetWatermarkRemoteCoverage: Statement;
   private stmtUpsertWatermarkLocalReadAt: Statement;
+  private stmtUpsertRemoteReadCoverage: Statement;
   private stmtGetNewestEventTimestamp: Statement;
   private stmtGetDirectWatermark: Statement;
   private stmtUpsertWatermark: Statement;
@@ -2277,6 +2284,9 @@ export class ReticulumChatDatabase {
     this.stmtGetWatermarkLocalReadAt = this.db.prepare(
       'SELECT local_read_at FROM reticulum_chat_read_watermarks WHERE group_id = ? AND channel_id = ? AND address = ?'
     );
+    this.stmtGetWatermarkRemoteCoverage = this.db.prepare(
+      'SELECT remote_covered_timestamp FROM reticulum_chat_read_watermarks WHERE group_id = ? AND channel_id = ? AND address = ?'
+    );
     this.stmtGetDirectWatermark = this.db.prepare(
       'SELECT timestamp FROM rchat_dm_read_watermarks WHERE conversation_id = ? AND address = ?'
     );
@@ -2294,6 +2304,21 @@ export class ReticulumChatDatabase {
       UPDATE reticulum_chat_read_watermarks
          SET local_read_at = MAX(local_read_at, ?)
        WHERE group_id = ? AND channel_id = ? AND address = ?
+    `);
+    // Remote coverage is deliberately NOT clamped to the newest locally stored
+    // event. The other device read up to this sender time, so it must keep
+    // covering messages that have not arrived here yet. `timestamp` is left
+    // alone: it stays the clamped local watermark written through
+    // `stmtUpsertWatermark`, which keeps the reliability check in
+    // `computeChannelSummary` meaningful.
+    this.stmtUpsertRemoteReadCoverage = this.db.prepare(`
+      INSERT INTO reticulum_chat_read_watermarks
+        (group_id, channel_id, address, timestamp, local_read_at,
+         remote_covered_timestamp)
+      VALUES (?, ?, ?, 0, 0, ?)
+      ON CONFLICT(group_id, channel_id, address) DO UPDATE SET
+        remote_covered_timestamp =
+          MAX(remote_covered_timestamp, excluded.remote_covered_timestamp)
     `);
     this.stmtUpsertMention = this.db.prepare(`
       INSERT INTO reticulum_chat_mentions
@@ -11723,6 +11748,16 @@ export class ReticulumChatDatabase {
       normalizedChannelId,
       myAddress
     );
+    // Coverage of a read another device of this account already performed.
+    // Compared by sender time and never clamped, so history imported after the
+    // read receipt arrived here is still honouring that read. Without it, a
+    // device that receives the receipt first and the messages second has to
+    // guess, and the arrival-order fallback below would call them unread.
+    const remoteCoverage = this.getReadWatermarkRemoteCoverage(
+      groupId,
+      normalizedChannelId,
+      myAddress
+    );
     // A watermark ahead of the local clock can only come from another sender's
     // fast clock: the reader cannot have read a message stamped in their own
     // future. When that has happened, comparing sender timestamps is no longer
@@ -11748,18 +11783,31 @@ export class ReticulumChatDatabase {
             ) {
               return false;
             }
+            // Checked before the arrival-order fallback: a read another device
+            // already performed is authoritative by sender time even when this
+            // device's watermark was clamped below it. Skipping the clamp alone
+            // would not be enough, because a remote watermark ahead of the local
+            // clock switches the channel into arrival mode and the late message
+            // would still read as unread.
+            if (remoteCoverage > 0 && event.timestamp <= remoteCoverage) {
+              return false;
+            }
             return watermarkIsUnreliable
               ? messageArrivalOrder(event) > readMoment
               : event.timestamp > watermark;
           }).length
         : 0;
+    // Reply and mention counters compare sender time directly, so they take the
+    // larger of the two boundaries. Otherwise a read another device performed
+    // would clear the message count but leave its replies and mentions badged.
+    const senderTimeBoundary = Math.max(watermark, remoteCoverage);
     const replyCount =
       myAddress && !suppressUnreadState
         ? this.countUnreadReplies(
             groupId,
             normalizedChannelId,
             myAddress,
-            watermark,
+            senderTimeBoundary,
             now,
             activeSilencedAuthors,
             ignoredThroughByAuthor,
@@ -11772,7 +11820,7 @@ export class ReticulumChatDatabase {
             groupId,
             normalizedChannelId,
             myAddress,
-            watermark,
+            senderTimeBoundary,
             now,
             activeSilencedAuthors,
             ignoredThroughByAuthor
@@ -12159,6 +12207,93 @@ export class ReticulumChatDatabase {
     ) as { local_read_at?: number } | undefined;
     const stored = Number(row?.local_read_at);
     return Number.isFinite(stored) && stored > 0 ? stored : 0;
+  }
+
+  /**
+   * Sender-time coverage of an authenticated read from another device of this
+   * account, or 0 when none was applied.
+   *
+   * Kept separate from `getReadWatermark` because the two mean different
+   * things. The local watermark is clamped to the newest event stored here, so
+   * it cannot cover history this device has not received yet. A remote read
+   * describes what the *other* device saw, and must keep applying to messages
+   * that land later.
+   */
+  getReadWatermarkRemoteCoverage(
+    groupId: number,
+    channelId: string,
+    address = ''
+  ): number {
+    if (!Number.isInteger(groupId) || groupId <= 0) return 0;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    if (!normalizedAddress) return 0;
+    const row = this.stmtGetWatermarkRemoteCoverage.get(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    ) as { remote_covered_timestamp?: number } | undefined;
+    const stored = Number(row?.remote_covered_timestamp);
+    const fromDb = Number.isFinite(stored) && stored > 0 ? stored : 0;
+    const fromMemory =
+      this.memoryRemoteReadCoverage.get(
+        this.readWatermarkKey(groupId, normalizedChannelId, normalizedAddress)
+      ) ?? 0;
+    return Math.max(fromDb, fromMemory);
+  }
+
+  /**
+   * Applies an authenticated read that happened on another device of this
+   * account.
+   *
+   * Unlike `markChannelsRead`, the timestamp is NOT clamped to the newest
+   * locally stored event and is not dropped for an empty channel: the coverage
+   * has to be durable so that history imported afterwards is still counted as
+   * read. The signed record itself is validated by the caller before reaching
+   * here; this only records its coverage.
+   */
+  applyRemoteReadCoverage(
+    groupId: number,
+    channelId: string,
+    upToTimestamp: number,
+    address = ''
+  ): boolean {
+    if (!Number.isInteger(groupId) || groupId <= 0) return false;
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    const timestamp = Number(upToTimestamp);
+    if (!normalizedAddress || !Number.isFinite(timestamp) || timestamp <= 0) {
+      return false;
+    }
+    const watermark = Math.floor(timestamp);
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    if (
+      watermark <=
+      this.getReadWatermarkRemoteCoverage(
+        groupId,
+        normalizedChannelId,
+        normalizedAddress
+      )
+    ) {
+      return false;
+    }
+    this.stmtUpsertRemoteReadCoverage.run(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress,
+      watermark
+    );
+    this.memoryRemoteReadCoverage.set(
+      this.readWatermarkKey(groupId, normalizedChannelId, normalizedAddress),
+      watermark
+    );
+    // The coverage changes the unread count this account sees for the channel,
+    // so any cached summary for it is stale.
+    this.invalidateChatSummaryCache(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    );
+    return true;
   }
 
   getReadWatermark(groupId: number, channelId: string, address = ''): number {
@@ -13145,6 +13280,11 @@ export class ReticulumChatDatabase {
         -- a watermark that a fast-clocked sender pushed into the future; see
         -- effectiveReadWatermark. 0 means never recorded.
         local_read_at INTEGER NOT NULL DEFAULT 0,
+        -- Sender-time coverage of an authenticated read performed on another
+        -- device of this same account. Stored unclamped, unlike the local
+        -- watermark, so it still covers history that arrives here later. 0
+        -- means no remote read has been applied.
+        remote_covered_timestamp INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (group_id, channel_id, address)
       );
       CREATE TABLE IF NOT EXISTS rchat_dm_read_watermarks (
@@ -13499,6 +13639,17 @@ export class ReticulumChatDatabase {
     );
   }
 
+  private migrateReadWatermarkRemoteCoverageSchema(): void {
+    this.ensureColumn(
+      'reticulum_chat_read_watermarks',
+      'remote_covered_timestamp',
+      `
+      ALTER TABLE reticulum_chat_read_watermarks
+        ADD COLUMN remote_covered_timestamp INTEGER NOT NULL DEFAULT 0
+      `
+    );
+  }
+
   private migrateMetadataSnapshotLineageSchema(): void {
     this.ensureColumn(
       'rchat_metadata_snapshots',
@@ -13642,6 +13793,10 @@ export class ReticulumChatDatabase {
       {
         name: 'read-watermark-local-read-at',
         run: () => this.migrateReadWatermarkLocalReadAtSchema(),
+      },
+      {
+        name: 'read-watermark-remote-coverage',
+        run: () => this.migrateReadWatermarkRemoteCoverageSchema(),
       },
       { name: 'message-expiry', run: () => this.migrateExpirySchema() },
       {

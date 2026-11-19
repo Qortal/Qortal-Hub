@@ -19739,6 +19739,17 @@ export class ReticulumChatManager extends EventEmitter {
       )
     );
     if (state.scopeType === 'group') {
+      // Record the durable coverage first. `markRead` clamps to the newest
+      // event stored on this device and drops the request outright when the
+      // channel is still empty, so on its own it loses the read whenever the
+      // receipt arrives before the messages it covers. The coverage row keeps
+      // the sender timestamp unclamped so those messages are read on arrival.
+      this.db.applyRemoteReadCoverage(
+        state.groupId!,
+        state.channelId!,
+        state.upToTimestamp,
+        state.ownerAddress
+      );
       this.db.markRead(
         state.groupId!,
         state.channelId!,
