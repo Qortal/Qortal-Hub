@@ -25,6 +25,7 @@ import {
   permissionSecondsLeft,
   QORTAL_REQUEST_COUNTDOWN_SECONDS,
 } from '../../qortal/permissionPromptQueue';
+import type { RequestingApp } from '../../qortal/requestingApp';
 import {
   QortalRequestDetails,
   QortalRequestDetailsData,
@@ -49,6 +50,10 @@ export type MessageQortalRequestExtension = {
   confirmCheckboxLabel?: string;
   /** When the requester stops waiting for an answer (ms since the epoch). */
   expiresAt?: number;
+  /** The app that asks, from the request's tab. Null when Hub can't tell. */
+  requestingApp?: RequestingApp | null;
+  /** Sent by one of Hub's own pages: no app is named. */
+  fromHub?: boolean;
 };
 
 type QortalRequestExtensionDialogProps = {
@@ -83,11 +88,9 @@ export function QortalRequestExtensionDialog({
   useEffect(() => {
     if (open && isAppLocked) onCancel();
   }, [open, isAppLocked, onCancel]);
-  const requestMessage = (message || {}) as MessageQortalRequestExtension & {
-    appName?: string;
-    sourceKind?: string;
-    sourceLabel?: string;
-  };
+  const requestMessage = (message || {}) as MessageQortalRequestExtension;
+  const requestingApp = requestMessage.requestingApp ?? null;
+  const fromHub = requestMessage.fromHub === true;
   // Each request on screen gets its own countdown, checkboxes and second
   // before Accept, also when one follows another without the dialog closing.
   // A request that waited behind others counts down only the time it has left.
@@ -112,8 +115,6 @@ export function QortalRequestExtensionDialog({
     requestMessage.text3,
     requestMessage.text4,
   ].filter(Boolean);
-  const sourceKind = requestMessage.sourceKind || 'Q-APP';
-  const sourceLabel = requestMessage.sourceLabel || requestMessage.appName;
   const summaryText =
     requestMessage.highlightedText ||
     (requestMessage.text1?.toLowerCase().includes('authenticate')
@@ -200,29 +201,97 @@ export function QortalRequestExtensionDialog({
                 minWidth: 0,
               }}
             >
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  color: alpha(theme.palette.text.secondary, 0.92),
-                  display: 'flex',
-                  gap: '8px',
-                }}
-              >
-                <ShieldOutlinedIcon sx={{ fontSize: '18px' }} />
-                <Typography
+              {fromHub ? null : (
+                <Box
+                  data-testid="qortal-request-app"
                   sx={{
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    ...wrappingTextSx,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    minWidth: 0,
                   }}
                 >
-                  {sourceLabel
-                    ? `${sourceKind}: ${sourceLabel}`
-                    : `${sourceKind} request`}
-                </Typography>
-              </Box>
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      color: alpha(theme.palette.text.secondary, 0.92),
+                      display: 'flex',
+                      gap: '8px',
+                    }}
+                  >
+                    <ShieldOutlinedIcon sx={{ fontSize: '18px' }} />
+                    <Typography
+                      sx={{
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        ...wrappingTextSx,
+                      }}
+                    >
+                      {t('core:approval_dialog.requested_by')}
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '2px 8px',
+                      minWidth: 0,
+                    }}
+                  >
+                    <Typography
+                      data-testid="qortal-request-app-name"
+                      sx={{
+                        color: requestingApp
+                          ? theme.palette.text.primary
+                          : theme.palette.warning.main,
+                        fontSize: '17px',
+                        fontWeight: 700,
+                        lineHeight: 1.3,
+                        minWidth: 0,
+                        overflowWrap: 'anywhere',
+                        // A name never reorders the text around it.
+                        unicodeBidi: 'isolate',
+                      }}
+                    >
+                      {requestingApp
+                        ? requestingApp.name
+                        : t('core:approval_dialog.unknown_app')}
+                    </Typography>
+                    {requestingApp?.service ? (
+                      <Typography
+                        data-testid="qortal-request-app-service"
+                        sx={{
+                          border: `1px solid ${theme.palette.divider}`,
+                          borderRadius: '6px',
+                          color: theme.palette.text.secondary,
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          letterSpacing: '0.06em',
+                          lineHeight: 1.2,
+                          padding: '2px 6px',
+                        }}
+                      >
+                        {requestingApp.service}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  {requestingApp ? null : (
+                    <Typography
+                      sx={{
+                        color: theme.palette.warning.main,
+                        fontSize: '13px',
+                        lineHeight: 1.45,
+                        ...wrappingTextSx,
+                      }}
+                    >
+                      {t('core:approval_dialog.unknown_app_hint')}
+                    </Typography>
+                  )}
+                </Box>
+              )}
               <TextP
                 sx={{
                   fontSize: { xs: '22px', sm: '24px' },

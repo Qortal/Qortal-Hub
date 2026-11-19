@@ -84,8 +84,14 @@ vi.mock('../../hooks/useQortalMessageListener', async () =>
 vi.mock('../qapp-save-file', async () =>
   (await import('./common')).messageListenerFactory()
 );
+vi.mock('../foreign-coin-send', () => ({ sendLocalForeignCoin: vi.fn() }));
 
+import { readdirSync, readFileSync } from 'node:fs';
+import { relative, resolve, sep } from 'node:path';
+import getSource from '../get.ts?raw';
 import {
+  addListItems,
+  adminAction,
   authorizeRnsDestination,
   getListItems,
   getUserAccount,
@@ -96,8 +102,10 @@ import {
   joinGroup,
   lockTab,
   sendChatMessage,
+  sendCoin,
   sessionPermissions,
 } from '../get';
+import { sendLocalForeignCoin } from '../foreign-coin-send';
 import {
   createPermissionPromptQueue,
   MIN_PERMISSION_TIME_TO_SHOW_MS,
@@ -114,12 +122,18 @@ import {
   setSessionPermissions,
   VALID_SESSION_PERMISSIONS,
 } from '../qortal-requests';
+import { HUB_REQUEST } from '../requestingApp';
 import { getFee, getSaveWallet } from '../../background/background';
 import i18n from 'i18next';
 
 type Prompt = {
   requestId: string;
-  payload: { text1?: string; expiresAt?: number };
+  payload: {
+    text1?: string;
+    expiresAt?: number;
+    requestingApp?: { name: string; service: string | null } | null;
+    fromHub?: boolean;
+  };
 };
 let prompts: Prompt[];
 
@@ -263,6 +277,201 @@ describe('approval requests reach the dialog one at a time', () => {
       await settle();
     }
     expect(prompts).toHaveLength(11);
+  });
+
+  it('names the app whose tab sent the request', async () => {
+    const request = addListItems(
+      { list_name: 'blockedNames', items: ['someone'] },
+      false,
+      { name: 'Example', service: 'APP', tabId: 7 }
+    );
+    request.catch(() => undefined);
+    await settle();
+
+    expect(prompts[0].payload.requestingApp).toEqual({
+      name: 'Example',
+      service: 'APP',
+    });
+    answer(prompts[0], false);
+    await expect(request).rejects.toThrow();
+  });
+
+  it('says it cannot tell when a request comes without its tab', async () => {
+    const request = addListItems(
+      { list_name: 'blockedNames', items: ['someone'] },
+      false
+    );
+    request.catch(() => undefined);
+    await settle();
+
+    expect(prompts[0].payload.requestingApp).toBeNull();
+    answer(prompts[0], false);
+    await expect(request).rejects.toThrow();
+  });
+
+  it('names the tab’s app even when the request’s details name another', async () => {
+    // The LTC send builds its approval in its own module.
+    vi.mocked(sendLocalForeignCoin).mockImplementationOnce((_data, ask) =>
+      ask({
+        text1: 'question:send_coins',
+        requestingApp: { name: 'Q-Wallets', service: 'APP' },
+        fromHub: true,
+      })
+    );
+    const request = sendCoin(
+      { coin: 'LTC', amount: 1, recipient: 'ltc-receiver' },
+      false,
+      { name: 'Example', service: 'APP', tabId: 7 }
+    );
+    request.catch(() => undefined);
+    await settle();
+
+    expect(prompts[0].payload).toMatchObject({
+      requestingApp: { name: 'Example', service: 'APP' },
+      fromHub: false,
+    });
+    answer(prompts[0], false);
+    await request.catch(() => undefined);
+  });
+});
+
+// Each call of `name(` in `source`, from its name to its closing parenthesis.
+const callsOf = (source: string, pattern: RegExp) =>
+  [...source.matchAll(pattern)]
+    .map((match) => match.index)
+    .filter((index) => !source.slice(index - 9, index).includes('function'))
+    .map((index) => {
+      let depth = 0;
+      for (let end = index; end < source.length; end += 1) {
+        if (source[end] === '(') depth += 1;
+        if (source[end] === ')' && --depth === 0) {
+          return source.slice(index, end + 1);
+        }
+      }
+      return source.slice(index);
+    });
+
+// A call's arguments at its own level.
+const argumentsOf = (call: string) => {
+  const args: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const char of call.slice(call.indexOf('(') + 1, -1)) {
+    if ('([{'.includes(char)) depth += 1;
+    if (')]}'.includes(char)) depth -= 1;
+    if (char === ',' && depth === 0) {
+      args.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) args.push(current.trim());
+  return args;
+};
+
+describe('every approval in get.ts', () => {
+  it('passes on the tab the request came from', () => {
+    // (payload, isFromExtension, appInfo, then the "already allowed" check
+    // some requests have)
+    const calls = callsOf(getSource, /getUserPermission\(/g);
+
+    expect(calls.length).toBeGreaterThan(40);
+    const withoutApp = calls.filter(
+      (call) => argumentsOf(call)[2] !== 'appInfo'
+    );
+    expect(withoutApp).toEqual([]);
+  });
+});
+
+describe('every request Hub sends for its own pages', () => {
+  it('says so, so its approval names no app and warns of none', () => {
+    const srcDir = resolve(__dirname, '../..');
+    const sources = readdirSync(srcDir, {
+      recursive: true,
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isFile())
+      .map((entry) => resolve(entry.parentPath, entry.name))
+      .filter(
+        (file) =>
+          /\.tsx?$/.test(file) &&
+          !/\.test\.tsx?$/.test(file) &&
+          !file.split(sep).includes('__tests__')
+      )
+      .map((file) => [relative(srcDir, file), readFileSync(file, 'utf8')]);
+    // window.sendMessage(action, payload, timeout, true, appInfo): `true`
+    // sends it as a Q-App request, which can ask the user.
+    const asked = sources.flatMap(([file, source]) =>
+      callsOf(source, /window\s*\.sendMessage\(/g)
+        .map(argumentsOf)
+        .filter((args) => args[3] === 'true')
+        .map((args) => ({ file, action: args[0], appInfo: args[4] }))
+    );
+
+    expect(asked.length).toBeGreaterThanOrEqual(4);
+    expect(asked.filter((call) => !call.appInfo)).toEqual([]);
+  });
+});
+
+// What the dialog shows about who asks: everything but the request's time.
+const whoAsks = ({
+  expiresAt: _expiresAt,
+  ...shown
+}: Record<string, unknown>) => shown;
+
+describe('an approval for one of Hub\u2019s own pages', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    prompts = [];
+    vi.mocked(i18n.t).mockImplementation((key: string) => key);
+    vi.spyOn(window, 'postMessage').mockImplementation((message) => {
+      if (message?.action !== 'QORTAL_REQUEST_PERMISSION') return;
+      prompts.push({ requestId: message.requestId, payload: message.payload });
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('is not shown as a request from an unknown Q-App', async () => {
+    // The Minting page adds a minting account: Hub sends the request itself,
+    // so no tab comes with it.
+    const fromHub = adminAction(
+      { type: 'addmintingaccount', value: 'minting-key' },
+      true,
+      HUB_REQUEST
+    );
+    fromHub.catch(() => undefined);
+    await settle();
+    answer(prompts[0], false);
+    await settle();
+
+    // The same request from a Q-App whose tab has no name.
+    const fromNamelessApp = adminAction(
+      { type: 'addmintingaccount', value: 'minting-key' },
+      true,
+      { tabId: 7, name: '', service: 'APP' }
+    );
+    fromNamelessApp.catch(() => undefined);
+    await settle();
+    answer(prompts[1], false);
+    await settle();
+
+    expect(prompts).toHaveLength(2);
+    // The dialog warns about the app it can't name. Hub's own request must
+    // not look the same.
+    expect(prompts[1].payload.requestingApp).toBeNull();
+    expect(whoAsks(prompts[0].payload)).not.toEqual(
+      whoAsks(prompts[1].payload)
+    );
+    // The dialog leaves out the requester block only for this mark.
+    expect(prompts[0].payload.fromHub).toBe(true);
+    expect(prompts[1].payload.fromHub).toBe(false);
   });
 });
 

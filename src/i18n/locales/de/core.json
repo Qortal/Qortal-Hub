@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "von Lesezeichen lösen",
     "unsaved_publish": "die Angaben im Veröffentlichungsformular sind noch nicht veröffentlicht. Wenn Sie den Tab schließen, gehen sie verloren."
   },
+  "approval_dialog": {
+    "requested_by": "Angefordert von",
+    "unknown_app": "Unbekannte Q-App",
+    "unknown_app_hint": "Qortal Hub konnte nicht feststellen, welche Q-App diese Anfrage gesendet hat. Lehnen Sie sie ab, außer Sie haben das gerade selbst angefordert."
+  },
   "apps_bar": {
     "empty": "Heften Sie eine App an oder fügen Sie ein Lesezeichen hinzu, dann erscheint es hier.",
     "label": "Angeheftete Apps und Lesezeichen",

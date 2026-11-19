@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "eemalda järjehoidjatest",
     "unsaved_publish": "avaldamisvormi andmed pole veel avaldatud ja vahelehe sulgemine kustutab need."
   },
+  "approval_dialog": {
+    "requested_by": "Päringu saatja",
+    "unknown_app": "Tundmatu Q-App",
+    "unknown_app_hint": "Qortal Hub ei suutnud kindlaks teha, milline Q-App selle päringu saatis. Keeldu sellest, kui sa just ise seda ei palunud."
+  },
   "apps_bar": {
     "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",
     "label": "Kinnitatud rakendused ja järjehoidjad",
