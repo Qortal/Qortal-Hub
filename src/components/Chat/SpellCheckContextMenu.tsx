@@ -7,6 +7,10 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import { useTranslation } from 'react-i18next';
 import { CustomStyledMenu } from '../ContextMenu';
 import { executeEvent } from '../../utils/events';
+import {
+  buildCharRunsInTextblock,
+  findWordAtPosition,
+} from './spellCheckWordRange';
 
 interface SpellCheckContextMenuProps {
   children: React.ReactNode;
@@ -85,76 +89,77 @@ export const SpellCheckContextMenu = forwardRef<
         let wordEnd = 0;
 
         if (editor && !editor.isDestroyed) {
-          const textValue = editor.getText();
-
           // Get position from right-click coordinates, not from selection
           const posAtCoords = editor.view.posAtCoords({
             left: event.clientX,
             top: event.clientY,
           });
-          let clickPosition: number;
+          const clickPosition = posAtCoords
+            ? posAtCoords.pos
+            : editor.state.selection.from;
 
-          if (posAtCoords) {
-            clickPosition = posAtCoords.pos;
-          } else {
-            // Fallback to selection if posAtCoords fails
-            const { from } = editor.state.selection;
-            clickPosition = from;
+          // Resolve the word in *document* coordinates. The old code took
+          // offsets from editor.getText() and reused them as document
+          // positions; the two disagree around every node boundary, which is how
+          // replacing inside a bullet list produced "hehello" and how the word
+          // next to a mention took the mention with it.
+          // Walk out to the enclosing textblock, so a word never spans two
+          // paragraphs. `getText()` could not distinguish them: it joins the
+          // document into one string.
+          const resolvedAt = editor.state.doc.resolve(clickPosition);
+          let textblockDepth = resolvedAt.depth;
+          while (
+            textblockDepth > 0 &&
+            !resolvedAt.node(textblockDepth).isTextblock
+          ) {
+            textblockDepth -= 1;
           }
+          const textblock = resolvedAt.node(textblockDepth);
+          const textblockStart = resolvedAt.before(textblockDepth) + 1;
+          const runs = buildCharRunsInTextblock(
+            editor.state.doc,
+            textblockStart,
+            textblockStart + textblock.content.size
+          );
+          const detected = findWordAtPosition(runs, clickPosition);
 
-          if (textValue && clickPosition >= 1) {
-            // TipTap positions are 1-based gaps: position N is AFTER char at JS index N-2
-            const caretPosition = Math.max(0, clickPosition - 2);
+          if (detected) {
+            wordStart = detected.from;
+            wordEnd = detected.to;
+            word = detected.word;
+            console.log(
+              `[SpellCheckContextMenu] Detected word: "${word}" at document positions ${wordStart}-${wordEnd}`
+            );
 
-            wordStart = caretPosition;
-            wordEnd = caretPosition;
-
-            while (wordStart > 0 && /\w/.test(textValue[wordStart - 1])) {
-              wordStart--;
-            }
-            while (
-              wordEnd < textValue.length &&
-              /\w/.test(textValue[wordEnd])
-            ) {
-              wordEnd++;
-            }
-
-            if (wordStart < wordEnd) {
-              word = textValue.slice(wordStart, wordEnd);
-              console.log(
-                `[SpellCheckContextMenu] Detected word: "${word}" at position ${wordStart}-${wordEnd}`
-              );
-
-              try {
-                const electronAPI = (window as any).electronAPI;
-                if (electronAPI?.spellCheck?.getSuggestions) {
-                  console.log(
-                    '[SpellCheckContextMenu] Calling electronAPI.spellCheck.getSuggestions...'
-                  );
-                  wordSuggestions =
-                    await electronAPI.spellCheck.getSuggestions(word);
-                  console.log(
-                    `[SpellCheckContextMenu] Got ${wordSuggestions?.length ?? 0} suggestions:`,
-                    wordSuggestions
-                  );
-                } else if ('webFrame' in (window as any)) {
-                  const webFrame = (window as any).require?.(
-                    'electron'
-                  )?.webFrame;
-                  if (webFrame?.getWordSuggestions) {
-                    wordSuggestions = webFrame.getWordSuggestions(word) || [];
-                  }
-                } else {
-                  console.log(
-                    '[SpellCheckContextMenu] electronAPI.spellCheck.getSuggestions not available'
-                  );
+            try {
+              const electronAPI = (window as any).electronAPI;
+              if (electronAPI?.spellCheck?.getSuggestions) {
+                console.log(
+                  '[SpellCheckContextMenu] Calling electronAPI.spellCheck.getSuggestions...'
+                );
+                wordSuggestions =
+                  await electronAPI.spellCheck.getSuggestions(word);
+                console.log(
+                  `[SpellCheckContextMenu] Got ${wordSuggestions?.length ?? 0} suggestions:`,
+                  wordSuggestions
+                );
+              } else if ('webFrame' in (window as any)) {
+                const webFrame = (window as any).require?.(
+                  'electron'
+                )?.webFrame;
+                if (webFrame?.getWordSuggestions) {
+                  wordSuggestions = webFrame.getWordSuggestions(word) || [];
                 }
-              } catch (error) {
-                console.warn(
-                  '[SpellCheckContextMenu] Spell check API error:',
-                  error
+              } else {
+                console.log(
+                  '[SpellCheckContextMenu] electronAPI.spellCheck.getSuggestions not available'
                 );
               }
+            } catch (error) {
+              console.warn(
+                '[SpellCheckContextMenu] Spell check API error:',
+                error
+              );
             }
           }
         } else if (inputElement) {
