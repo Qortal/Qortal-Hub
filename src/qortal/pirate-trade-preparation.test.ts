@@ -127,6 +127,21 @@ describe('ARRR trade preparation', () => {
       expect(approve).not.toHaveBeenCalled();
     }
   });
+  it('explains when the selected Core still loads an older native library', async () => {
+    states(
+      new Response(
+        JSON.stringify({
+          error: 1205,
+          message: 'Unsupported Qortal wallet command: tradepreparation',
+        }),
+        { status: 400 }
+      )
+    );
+    await expect(preparePirateTrade(offer, vi.fn(), 1)).rejects.toThrow(
+      'upgrade'
+    );
+    expect(requests).toHaveLength(1);
+  });
   it('returns pending on timeout and never sends another approved request while polling', async () => {
     const pending = { ...quote, status: 'pending', txid: 'b'.repeat(64) };
     vi.stubGlobal(

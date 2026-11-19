@@ -72,13 +72,17 @@ async function prepare(
       }),
       signal: AbortSignal.timeout(180_000),
     });
-    if (!response.ok)
-      throw fail(
-        response.status === 404 || response.status === 405
-          ? 'upgrade'
-          : 'unavailable'
-      );
+    if (response.status === 404 || response.status === 405)
+      throw fail('upgrade');
     const state = JSON.parse(await readBoundedWalletResponse(response, 16_384));
+    if (!response.ok) {
+      const message = typeof state.message === 'string' ? state.message : '';
+      const unsupported =
+        message.includes(
+          'Unsupported Qortal wallet command: tradepreparation'
+        ) || message.includes('requires an updated native wallet library');
+      throw fail(unsupported ? 'upgrade' : 'unavailable');
+    }
     await assertSession();
     if (
       !['ready', 'needsPreparation', 'pending', 'insufficient'].includes(
