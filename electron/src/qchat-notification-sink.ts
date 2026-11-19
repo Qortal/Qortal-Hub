@@ -123,6 +123,28 @@ export class QChatNotificationSink {
     this.presenter = presenter;
   }
 
+  /**
+   * Release a presentation the registry no longer owns. Used when the entry was
+   * dismissed, evicted, or replaced while the presenter was awaiting: the
+   * registry side is already correct, but the OS-level notification has to be
+   * closed or it stays visible with nothing left able to dismiss it.
+   */
+  private closePresentation(presentation: QChatNotificationPresentation): void {
+    try {
+      if (presentation.close) {
+        presentation.close();
+        return;
+      }
+      const handle = presentation.notification as
+        | { close?: () => void }
+        | null
+        | undefined;
+      handle?.close?.();
+    } catch {
+      // Closing a stale notification is best-effort; the app cannot do more.
+    }
+  }
+
   getViewContextStore(): QChatViewContextStore {
     return this.viewContext;
   }
@@ -167,7 +189,10 @@ export class QChatNotificationSink {
 
       // Register first, without a handle, so the registry's cap and dedupe rules
       // apply before any OS work happens. The presenter fills in the handle.
-      this.registry.set(notificationId, {
+      // Keep the registered object so the awaited result can be checked against
+      // the *same* submission rather than just the id: a replacement that reuses
+      // the id must not inherit this presentation.
+      const registeredEntry: NotificationEntry = {
         notification: null,
         groupContext: submission.groupContext
           ? { ...submission.groupContext }
@@ -175,24 +200,42 @@ export class QChatNotificationSink {
         eventId: submission.eventId,
         createdAt,
         osClosedBySystem: false,
-      });
+      };
+      this.registry.set(notificationId, registeredEntry);
 
       if (!this.presenter) {
         return { success: true, notificationId };
       }
 
-      const presentation = await this.presenter(submission, notificationId);
-      if (presentation) {
-        const entry = this.registry.get(notificationId);
-        // The entry may have been evicted or dismissed while the presenter was
-        // awaiting; do not resurrect it.
-        if (entry && !entry.appInitiatedClose) {
-          this.registry.set(notificationId, {
-            ...entry,
-            notification: (presentation.notification as Notification) ?? null,
-            close: presentation.close,
-          });
+      let presentation: QChatNotificationPresentation | null | void;
+      try {
+        presentation = await this.presenter(submission, notificationId);
+      } catch (error) {
+        // Nothing was shown, so the placeholder must not linger as an entry
+        // that can never be closed through the app.
+        if (this.registry.get(notificationId) === registeredEntry) {
+          this.registry.closeAppInitiated(notificationId);
         }
+        throw error;
+      }
+      if (!presentation) {
+        return { success: true, notificationId };
+      }
+
+      const entry = this.registry.get(notificationId);
+      if (entry === registeredEntry && !registeredEntry.appInitiatedClose) {
+        this.registry.set(notificationId, {
+          ...registeredEntry,
+          notification: (presentation.notification as Notification) ?? null,
+          close: presentation.close,
+        });
+      } else {
+        // The submission was dismissed, evicted, or replaced while the
+        // presenter was awaiting. The entry is correctly gone, but the
+        // presentation still exists in the OS — most visibly on Linux, where
+        // the presenter awaits and the notification has no timeout. Close it
+        // here instead of dropping the handle.
+        this.closePresentation(presentation);
       }
       return { success: true, notificationId };
     } catch (error) {

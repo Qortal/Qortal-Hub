@@ -303,6 +303,136 @@ describe('QChatNotificationSink', () => {
     expect(sink.size).toBe(0);
   });
 
+  it('closes the late presentation when the entry was dismissed mid-await', async () => {
+    const sink = makeSink();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const close = vi.fn();
+    const handleClose = vi.fn();
+    sink.setPresenter(async () => {
+      await gate;
+      return { notification: { close: handleClose }, close };
+    });
+
+    const pending = sink.submit({
+      title: 'msg',
+      body: 'x',
+      groupContext: { groupId: 716, channelId: 'general' },
+    });
+    sink.dismissByContext(716, 'general');
+    release();
+    await pending;
+
+    // The registry entry is correctly gone, but the OS notification it already
+    // created must be closed too: nothing else holds a reference to it, so on
+    // Linux it would otherwise sit in the tray until the user cleared it.
+    expect(sink.size).toBe(0);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(handleClose).not.toHaveBeenCalled();
+  });
+
+  it('closes the late presentation when the entry was evicted mid-await', async () => {
+    const sink = makeSink({ max: 1 });
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const close = vi.fn();
+    sink.setPresenter(async (submission) => {
+      if (submission.title === 'slow') {
+        await gate;
+      }
+      return { close: submission.title === 'slow' ? close : vi.fn() };
+    });
+
+    const pending = sink.submit({
+      title: 'slow',
+      body: 'x',
+      notificationId: 'slow-id',
+      groupContext: { groupId: 716, channelId: 'general' },
+    });
+    // A second submission at max 1 evicts the first while it is still awaiting.
+    await sink.submit({
+      title: 'fast',
+      body: 'y',
+      notificationId: 'fast-id',
+      groupContext: { groupId: 716, channelId: 'random' },
+    });
+    release();
+    await pending;
+
+    expect(sink.snapshot().map((entry) => entry.notificationId)).toEqual([
+      'fast-id',
+    ]);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not hand the presentation to a replacement that reused the id', async () => {
+    const sink = makeSink();
+    let releaseFirst: () => void = () => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const firstClose = vi.fn();
+    const secondClose = vi.fn();
+    let call = 0;
+    sink.setPresenter(async () => {
+      call += 1;
+      if (call === 1) {
+        await firstGate;
+        return { close: firstClose };
+      }
+      return { close: secondClose };
+    });
+
+    const first = sink.submit({
+      title: 'first',
+      body: 'x',
+      notificationId: 'reused',
+      groupContext: { groupId: 716, channelId: 'general' },
+    });
+    // A second submission with the same id replaces the entry outright.
+    await sink.submit({
+      title: 'second',
+      body: 'y',
+      notificationId: 'reused',
+      groupContext: { groupId: 716, channelId: 'general' },
+    });
+    releaseFirst();
+    await first;
+
+    // The stale presentation belongs to the replaced entry, so it is closed
+    // rather than attached to the live entry - otherwise dismissing the live
+    // notification would close nothing and leave the stale one on screen.
+    expect(firstClose).toHaveBeenCalledTimes(1);
+    expect(secondClose).not.toHaveBeenCalled();
+
+    sink.dismissByContext(716, 'general');
+    expect(secondClose).toHaveBeenCalledTimes(1);
+    expect(firstClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the placeholder when the presenter throws', async () => {
+    const sink = makeSink();
+    sink.setPresenter(() => {
+      throw new Error('no notification daemon');
+    });
+
+    const result = await sink.submit({
+      title: 'msg',
+      body: 'x',
+      notificationId: 'throwing',
+      groupContext: { groupId: 716, channelId: 'general' },
+    });
+
+    expect(result.success).toBe(false);
+    // Nothing was shown, so nothing may linger as an entry that can never be
+    // closed through the app.
+    expect(sink.size).toBe(0);
+  });
+
   it('generates distinct ids when the clock does not advance', async () => {
     const sink = new QChatNotificationSink({ now: () => 1_000 });
     await sink.submit({ title: 'a', body: 'a' });
