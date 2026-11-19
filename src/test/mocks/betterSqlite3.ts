@@ -40,7 +40,6 @@ type MockStore = {
   reticulumResourceReservations: ReticulumResourceStateRow[];
   reticulumResourceProviders: ReticulumResourceStateRow[];
   reticulumResourceMeta: Map<string, string>;
-  reticulumChatGoneRanges: ReticulumChatRow[];
   schema: Map<string, Set<string>>;
 };
 
@@ -1205,17 +1204,6 @@ class Statement {
           row.to_seq === toSeq
       );
     }
-    if (this.sql.includes('FROM rchat_gone_ranges')) {
-      const [groupId, authorAddress, authorStreamId, fromSeq, toSeq] = args;
-      return this.store.reticulumChatGoneRanges.find(
-        (row) =>
-          row.group_id === groupId &&
-          row.author_address === authorAddress &&
-          row.author_stream_id === authorStreamId &&
-          Number(row.from_seq) <= Number(fromSeq) &&
-          Number(row.to_seq) >= Number(toSeq)
-      );
-    }
     if (
       this.sql.includes('FROM rchat_silences') &&
       !this.sql.includes('FROM rchat_dm_events')
@@ -2280,61 +2268,6 @@ class Statement {
         );
       return {
         changes: before - this.store.reticulumChatKnownUnavailableRanges.length,
-        lastInsertRowid: 0,
-      };
-    }
-    if (this.sql.includes('INSERT OR REPLACE INTO rchat_gone_ranges')) {
-      const [
-        groupId,
-        authorAddress,
-        authorStreamId,
-        fromSeq,
-        toSeq,
-        confirmedAt,
-      ] = args;
-      const index = this.store.reticulumChatGoneRanges.findIndex(
-        (row) =>
-          row.group_id === groupId &&
-          row.author_address === authorAddress &&
-          row.author_stream_id === authorStreamId &&
-          row.from_seq === fromSeq &&
-          row.to_seq === toSeq
-      );
-      const row = {
-        group_id: groupId,
-        author_address: authorAddress,
-        author_stream_id: authorStreamId,
-        from_seq: fromSeq,
-        to_seq: toSeq,
-        confirmed_at: confirmedAt,
-      };
-      if (index >= 0) {
-        this.store.reticulumChatGoneRanges[index] = row;
-        return { changes: 1, lastInsertRowid: 0 };
-      }
-      this.store.reticulumChatGoneRanges.push(row);
-      return {
-        changes: 1,
-        lastInsertRowid: this.store.reticulumChatGoneRanges.length,
-      };
-    }
-    if (this.sql.includes('DELETE FROM rchat_gone_ranges')) {
-      // SQL: ... WHERE from_seq <= ? AND to_seq >= ? (args here: toSeq, fromSeq)
-      // A row is deleted when from_seq <= toSeq AND to_seq >= fromSeq, i.e. the
-      // row overlaps the cleared point. Keep rows that do NOT overlap.
-      const [groupId, authorAddress, authorStreamId, toSeq, fromSeq] = args;
-      const before = this.store.reticulumChatGoneRanges.length;
-      this.store.reticulumChatGoneRanges =
-        this.store.reticulumChatGoneRanges.filter(
-          (row) =>
-            row.group_id !== groupId ||
-            row.author_address !== authorAddress ||
-            row.author_stream_id !== authorStreamId ||
-            Number(row.from_seq) > Number(toSeq) ||
-            Number(row.to_seq) < Number(fromSeq)
-        );
-      return {
-        changes: before - this.store.reticulumChatGoneRanges.length,
         lastInsertRowid: 0,
       };
     }
@@ -3660,7 +3593,6 @@ class MockDatabase {
       reticulumChatAuthorSequenceLeases: [],
       reticulumChatMissingRangePeerObservations: [],
       reticulumChatKnownUnavailableRanges: [],
-      reticulumChatGoneRanges: [],
       reticulumChatSilences: [],
       reticulumPublicGroupActivity: [],
       reticulumCalendarMutations: [],

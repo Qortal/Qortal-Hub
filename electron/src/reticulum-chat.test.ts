@@ -2972,41 +2972,57 @@ describe('reticulum chat database', () => {
     ).toBeNull();
   });
 
-  it('drops gap discovery for ranges marked locally gone and clears the marker on a late event', () => {
-    const db = new ReticulumChatDatabase(tempDbPath());
+  it('keeps a refused range discoverable across a reopen instead of excluding it', () => {
+    const dbPath = tempDbPath();
+    const db = new ReticulumChatDatabase(dbPath);
     dbs.push(db);
     const groupId = 880;
-    const event = signedEvent({
-      eventId: 'event-gone-range-author',
+    const first = signedEvent({
+      eventId: 'event-refused-range-first',
       groupId,
       authorSeq: 1,
       timestamp: Date.now() - 1_000,
     });
-    // Simulate a quorum of providers confirming sequences 2..3 are gone.
-    expect(
-      db.markRangeGone(groupId, event.authorAddress, event.authorStreamId, 2, 3)
-    ).toBe(true);
-    expect(
-      db.isRangeGone(groupId, event.authorAddress, event.authorStreamId, 2, 3)
-    ).toBe(true);
-    // A gap of 2..3 from sequence 1 is not reported once marked gone.
-    db.insertEvent(event, true);
-    expect(
-      db.getAuthorSequenceGaps(groupId, 10).some((gap) => gap.fromSeq === 2)
-    ).toBe(false);
-    // A late event INSIDE the gone range, from the SAME author, clears the
-    // marker and imports.
-    const lateEvent = signedEvent({
-      eventId: 'event-gone-range-late',
+    db.insertEvent(first, true);
+    const third = signedEvent({
+      eventId: 'event-refused-range-third',
       groupId,
-      authorAddress: event.authorAddress,
-      authorSeq: event.authorSeq + 1,
+      authorAddress: first.authorAddress,
+      authorStreamId: first.authorStreamId,
+      authorSeq: 3,
       timestamp: Date.now(),
     });
-    expect(db.insertEvent(lateEvent, true)).toBe(true);
-    expect(
-      db.isRangeGone(groupId, event.authorAddress, event.authorStreamId, 2, 3)
-    ).toBe(false);
+    db.insertEvent(third, true);
+
+    // An explicit provider refusal ("you may not read this") is not evidence
+    // that the sequence was deleted, so the gap must stay eligible for repair
+    // rather than being promoted to a permanent exclusion. A later membership
+    // or admin grant has to be able to recover it.
+    expect(db.getAuthorSequenceGaps(groupId, 10)).toEqual([
+      expect.objectContaining({ fromSeq: 2, toSeq: 2 }),
+    ]);
+
+    db.close();
+    const reopened = new ReticulumChatDatabase(dbPath);
+    dbs.push(reopened);
+
+    // The exclusion was persisted, so the check has to survive a reopen: a
+    // fresh process must still see the gap and still be able to repair it.
+    expect(reopened.getAuthorSequenceGaps(groupId, 10)).toEqual([
+      expect.objectContaining({ fromSeq: 2, toSeq: 2 }),
+    ]);
+
+    // Filling the gap closes it through normal import.
+    const second = signedEvent({
+      eventId: 'event-refused-range-second',
+      groupId,
+      authorAddress: first.authorAddress,
+      authorStreamId: first.authorStreamId,
+      authorSeq: 2,
+      timestamp: Date.now(),
+    });
+    expect(reopened.insertEvent(second, true)).toBe(true);
+    expect(reopened.getAuthorSequenceGaps(groupId, 10)).toEqual([]);
   });
 
   it('expires peer-unavailable observations before retrying a missing range', () => {

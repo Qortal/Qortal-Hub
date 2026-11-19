@@ -2638,11 +2638,6 @@ const RETICULUM_CHAT_AUTHOR_GAP_QUARANTINE_PEERS = 3;
 const RETICULUM_CHAT_AUTHOR_GAP_KNOWN_UNAVAILABLE_RECHECK_MS =
   7 * 24 * 60 * 60_000;
 const RETICULUM_CHAT_AUTHOR_GAP_KNOWN_UNAVAILABLE_MIN_ATTEMPTS = 12;
-// After a range has been independently denied by a quorum, survived a
-// restart (already marked known-unavailable), and been attempted well past
-// the durable-marker threshold, treat it as locally "gone" so the hot loop
-// converges instead of re-parking it for a 7-day recheck forever.
-const RETICULUM_CHAT_AUTHOR_GAP_GONE_MIN_ATTEMPTS = 24;
 const RETICULUM_CHAT_HISTORY_PAGE_NO_PROGRESS_TTL_MS = 10 * 60_000;
 const RETICULUM_CHAT_HISTORY_PAGE_NO_PROGRESS_MAX = 4096;
 const RETICULUM_CHAT_DIGEST_REPAIR_NO_PROGRESS_TTL_MS =
@@ -23751,62 +23746,17 @@ export class ReticulumChatManager extends EventEmitter {
     // well-tried range. Route failures and timeouts never qualify. This keeps
     // one stale or hostile provider from suppressing valid history while
     // allowing genuinely unavailable legacy holes to leave the hot loop.
-    const alreadyParked = this.db.getMissingRangeKnownUnavailable(
-      groupId,
-      normalized.a,
-      normalized.s,
-      normalized.from,
-      normalized.to
-    );
+    //
+    // The park is bounded and retryable on purpose. An explicit refusal means
+    // "you may not read this", not "this was deleted": honest providers refuse
+    // a non-admin whose range holds only admin-channel events. Permanent
+    // exclusion would therefore strand history that a later membership or
+    // access grant makes readable, so the range stays eligible and is rechecked
+    // after the recheck interval, on a new provider, or once access changes.
     const shouldMarkKnownUnavailable =
       unavailablePeers.length >= RETICULUM_CHAT_AUTHOR_GAP_QUARANTINE_PEERS &&
       (persistedRange?.attempts ?? 0) >=
         RETICULUM_CHAT_AUTHOR_GAP_KNOWN_UNAVAILABLE_MIN_ATTEMPTS;
-    // The loop must converge: a range that keeps failing across peers, survives
-    // restarts, and is already marked known-unavailable is locally "gone". Drop
-    // the missing range from the hot loop entirely (gap discovery skips gone
-    // ranges) instead of re-parking it for another 7-day recheck forever. A
-    // late event inside the range still clears the marker and re-imports.
-    const shouldMarkGone =
-      shouldMarkKnownUnavailable &&
-      alreadyParked !== null &&
-      (persistedRange?.attempts ?? 0) >=
-        RETICULUM_CHAT_AUTHOR_GAP_GONE_MIN_ATTEMPTS;
-    if (shouldMarkGone) {
-      this.db.markRangeGone(
-        groupId,
-        normalized.a,
-        normalized.s,
-        normalized.from,
-        normalized.to,
-        this.now()
-      );
-      this.db.deleteMissingRange(
-        groupId,
-        normalized.a,
-        normalized.s,
-        normalized.from,
-        normalized.to
-      );
-      this.db.clearMissingRangeKnownUnavailable(
-        groupId,
-        normalized.a,
-        normalized.s,
-        normalized.from,
-        normalized.to
-      );
-      this.db.clearMissingRangePeerUnavailable(
-        groupId,
-        normalized.a,
-        normalized.s,
-        normalized.from,
-        normalized.to
-      );
-      loggerLog(
-        `[ReticulumChat] author_gap_marked_gone group=${groupId} author=${normalized.a} from=${normalized.from} to=${normalized.to} unavailable_peers=${unavailablePeerCount} attempts=${persistedRange?.attempts ?? 0}`
-      );
-      return;
-    }
     const knownUnavailableMarker = shouldMarkKnownUnavailable
       ? this.db.markMissingRangeKnownUnavailable(
           groupId,

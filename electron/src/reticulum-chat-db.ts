@@ -1598,16 +1598,6 @@ export class ReticulumChatDatabase {
     .toString('hex');
   private db: DB;
   private readonly relayCacheKey: string;
-  private memoryGoneRanges = new Map<
-    string,
-    {
-      groupId: number;
-      author: string;
-      stream: string;
-      from: number;
-      to: number;
-    }
-  >();
   private memoryEvents = new Map<string, ReticulumChatEvent>();
   private memoryGroupKeys = new Map<string, ReticulumChatGroupKey>();
   private memoryGroupKeyDigests = new Map<
@@ -1769,9 +1759,6 @@ export class ReticulumChatDatabase {
   private stmtCountMissingRangePeerUnavailable: Statement;
   private stmtGetMissingRangePeerUnavailable: Statement;
   private stmtClearMissingRangePeerUnavailable: Statement;
-  private stmtUpsertGoneRange: Statement;
-  private stmtGetGoneRange: Statement;
-  private stmtClearGoneRange: Statement;
   private stmtUpsertKnownUnavailableRange: Statement;
   private stmtParkKnownUnavailableRange: Statement;
   private stmtGetKnownUnavailableRange: Statement;
@@ -2782,23 +2769,6 @@ export class ReticulumChatDatabase {
     `);
     this.stmtClearMissingRangePeerUnavailable = this.db.prepare(`
       DELETE FROM rchat_missing_range_peer_observations
-      WHERE group_id = ? AND author_address = ? AND author_stream_id = ?
-        AND from_seq <= ? AND to_seq >= ?
-    `);
-    this.stmtUpsertGoneRange = this.db.prepare(`
-      INSERT OR REPLACE INTO rchat_gone_ranges
-        (group_id, author_address, author_stream_id, from_seq, to_seq, confirmed_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    this.stmtGetGoneRange = this.db.prepare(`
-      SELECT group_id, author_address, author_stream_id, from_seq, to_seq, confirmed_at
-      FROM rchat_gone_ranges
-      WHERE group_id = ? AND author_address = ? AND author_stream_id = ?
-        AND from_seq <= ? AND to_seq >= ?
-      LIMIT 1
-    `);
-    this.stmtClearGoneRange = this.db.prepare(`
-      DELETE FROM rchat_gone_ranges
       WHERE group_id = ? AND author_address = ? AND author_stream_id = ?
         AND from_seq <= ? AND to_seq >= ?
     `);
@@ -9265,100 +9235,6 @@ export class ReticulumChatDatabase {
     );
   }
 
-  isRangeGone(
-    groupId: number,
-    authorAddress: string,
-    authorStreamId: string | undefined,
-    fromSeq: number,
-    toSeq: number
-  ): boolean {
-    const author = String(authorAddress || '').trim();
-    const stream = normalizeReticulumChatAuthorStreamId(authorStreamId);
-    const from = Math.max(1, Math.floor(fromSeq));
-    const to = Math.max(from, Math.floor(toSeq));
-    // In-memory mirror keeps check/clear consistent within a session; persisted
-    // rows survive reopen (they are loaded by the same query path).
-    for (const entry of this.memoryGoneRanges.values()) {
-      if (
-        entry.groupId === groupId &&
-        entry.author === author &&
-        entry.stream === stream &&
-        entry.from <= from &&
-        entry.to >= to
-      ) {
-        return true;
-      }
-    }
-    const row = this.stmtGetGoneRange.get(groupId, author, stream, from, to) as
-      | { group_id?: number }
-      | undefined;
-    return Boolean(row);
-  }
-
-  markRangeGone(
-    groupId: number,
-    authorAddress: string,
-    authorStreamId: string | undefined,
-    fromSeq: number,
-    toSeq: number,
-    confirmedAt = Date.now()
-  ): boolean {
-    if (!Number.isInteger(groupId) || groupId <= 0) return false;
-    const author = String(authorAddress || '').trim();
-    const stream = normalizeReticulumChatAuthorStreamId(authorStreamId);
-    const from = Math.max(1, Math.floor(fromSeq));
-    const to = Math.max(from, Math.floor(toSeq));
-    if (!author || !stream) return false;
-    this.memoryGoneRanges.set(
-      this.goneRangeKey(groupId, author, stream, from, to),
-      { groupId, author, stream, from, to }
-    );
-    this.stmtUpsertGoneRange.run(
-      groupId,
-      author,
-      stream,
-      from,
-      to,
-      Math.max(0, Math.floor(confirmedAt))
-    );
-    return true;
-  }
-
-  private goneRangeKey(
-    groupId: number,
-    author: string,
-    stream: string,
-    fromSeq: number,
-    toSeq: number
-  ): string {
-    return `${groupId}:${author}:${stream}:${fromSeq}:${toSeq}`;
-  }
-
-  clearGoneRange(
-    groupId: number,
-    authorAddress: string,
-    authorStreamId: string | undefined,
-    fromSeq: number,
-    toSeq: number
-  ): void {
-    const author = String(authorAddress || '').trim();
-    const stream = normalizeReticulumChatAuthorStreamId(authorStreamId);
-    const from = Math.max(1, Math.floor(fromSeq));
-    const to = Math.max(from, Math.floor(toSeq));
-    for (const [key, entry] of this.memoryGoneRanges) {
-      if (
-        entry.groupId === groupId &&
-        entry.author === author &&
-        entry.stream === stream &&
-        entry.from <= to &&
-        entry.to >= from
-      ) {
-        this.memoryGoneRanges.delete(key);
-      }
-    }
-    this.stmtClearGoneRange.run(groupId, author, stream, to, from);
-  }
-
   markMissingRangeKnownUnavailable(
     groupId: number,
     authorAddress: string,
@@ -9750,17 +9626,8 @@ export class ReticulumChatDatabase {
   }
 
   private clearMissingRangesForEvent(event: ReticulumChatEvent): void {
-    // A late event inside a locally "gone" range (or a known-unavailable range)
-    // must clear those markers so the range can be re-served/imported normally.
-    // Cleared before the early return below: a "gone" range has no persisted
-    // missing-range row, so this must run even when `rows` is empty.
-    this.clearGoneRange(
-      event.groupId,
-      event.authorAddress,
-      event.authorStreamId,
-      event.authorSeq,
-      event.authorSeq
-    );
+    // A late event inside a known-unavailable range must clear that marker so
+    // the range can be re-served/imported normally.
     const rows = this.dedupeMissingRangeRows([
       ...(this.stmtGetMissingRangesForSeq.all(
         event.groupId,
@@ -10348,16 +10215,6 @@ export class ReticulumChatDatabase {
     }
 
     return [...gaps.values()]
-      .filter(
-        (gap) =>
-          !this.isRangeGone(
-            groupId,
-            gap.authorAddress,
-            gap.authorStreamId,
-            gap.fromSeq,
-            gap.toSeq
-          )
-      )
       .sort(
         (a, b) =>
           b.toSeq - a.toSeq ||
@@ -13868,8 +13725,8 @@ export class ReticulumChatDatabase {
         run: () => this.initAuthorGapKnownUnavailableSchema(),
       },
       {
-        name: 'author-gap-gone-ranges',
-        run: () => this.initAuthorGoneRangeSchema(),
+        name: 'author-gap-gone-ranges-removed',
+        run: () => this.dropAuthorGoneRangeSchema(),
       },
       {
         name: 'rejected-event-author-sequence',
@@ -14728,24 +14585,20 @@ export class ReticulumChatDatabase {
     `);
   }
 
-  private initAuthorGoneRangeSchema(): void {
-    // A sequence range that a quorum of providers can serve only as scrubbed
-    // or expired rows is locally "gone" (deleted or expired before this node
-    // saw it). These markers stop gap discovery from re-creating the missing
-    // range, but never block import: any event inside the range clears the
-    // marker and is stored normally.
+  private dropAuthorGoneRangeSchema(): void {
+    // The permanent "gone" marker is removed: a permission denial is not
+    // evidence that history was deleted, and no marker of this kind could be
+    // woken by a later access grant. Develop's bounded, retryable
+    // known-unavailable park already keeps a dead range out of the hot loop.
+    //
+    // The table is dropped rather than left unread so that databases written by
+    // an earlier build of this branch get their suppressed gaps back through
+    // normal discovery. Markers carry no reason column, so a marker written
+    // from a refusal cannot be told apart from a genuine one and is not worth
+    // preserving.
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS rchat_gone_ranges (
-        group_id INTEGER NOT NULL,
-        author_address TEXT NOT NULL,
-        author_stream_id TEXT NOT NULL,
-        from_seq INTEGER NOT NULL,
-        to_seq INTEGER NOT NULL,
-        confirmed_at INTEGER NOT NULL,
-        PRIMARY KEY (group_id, author_address, author_stream_id, from_seq, to_seq)
-      );
-      CREATE INDEX IF NOT EXISTS idx_rchat_gone_ranges_author
-        ON rchat_gone_ranges (group_id, author_address, author_stream_id, from_seq, to_seq);
+      DROP INDEX IF EXISTS idx_rchat_gone_ranges_author;
+      DROP TABLE IF EXISTS rchat_gone_ranges;
     `);
   }
 
