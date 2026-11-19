@@ -205,6 +205,22 @@ describe('SpellCheckContextMenu', () => {
 
   describe('with TipTap editor', () => {
     const createMockEditor = (text: string = 'hello world') => {
+      // The menu resolves the click in *document* coordinates now, so the mock
+      // has to look like a ProseMirror doc: `resolve` walks out to the
+      // enclosing textblock and `nodesBetween` yields its text nodes.
+      const paragraph = {
+        isTextblock: true,
+        isText: false,
+        isLeaf: false,
+        nodeSize: text.length + 2,
+        content: { size: text.length },
+      };
+      const textNode = {
+        isText: true,
+        isLeaf: false,
+        text,
+        nodeSize: text.length,
+      };
       return {
         isDestroyed: false,
         getText: () => text,
@@ -214,6 +230,21 @@ describe('SpellCheckContextMenu', () => {
         state: {
           selection: { from: 1, to: 1 },
           doc: {
+            resolve: vi.fn(() => ({
+              depth: 1,
+              node: vi.fn(() => paragraph),
+              before: vi.fn(() => 0),
+            })),
+            nodesBetween: vi.fn(
+              (
+                _from: number,
+                _to: number,
+                fn: (n: any, at: number) => unknown
+              ) => {
+                fn(textNode, 1);
+                return undefined;
+              }
+            ),
             textBetween: vi.fn((from: number, to: number) =>
               text.slice(Math.max(0, from - 1), to - 1)
             ),
