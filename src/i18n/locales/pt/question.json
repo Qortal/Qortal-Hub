@@ -104,6 +104,8 @@
       "poll_vote": "falha ao votar na enquete",
       "process_transaction": "não foi possível processar a transação",
       "provide_key_shared_link": "para um recurso criptografado, é necessário fornecer a chave para criar o link compartilhado",
+      "public_key_mismatch": "não foi possível confirmar a chave pública de {{ address }}, então nada foi criptografado nem enviado",
+      "recipient_no_public_key": "esta conta ainda não tem chave pública na blockchain, por isso não é possível enviar-lhe uma mensagem criptografada",
       "registered_name": "um nome registrado é necessário para publicar",
       "resources_publish": "alguns recursos falharam ao serem publicados",
       "retrieve_file": "falha ao recuperar o arquivo",
