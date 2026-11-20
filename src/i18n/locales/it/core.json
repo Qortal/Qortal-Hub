@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "rimuovi dai segnalibri",
     "unsaved_publish": "i dati del suo modulo di pubblicazione non sono ancora pubblicati e chiudere la scheda li elimina."
   },
+  "approval_dialog": {
+    "requested_by": "Richiesto da",
+    "unknown_app": "Q-App sconosciuta",
+    "unknown_app_hint": "Qortal Hub non è riuscito a capire quale Q-App ha inviato questa richiesta. Rifiutala, a meno che tu non l'abbia appena chiesta tu stesso."
+  },
   "apps_bar": {
     "empty": "Fissa un’app o aggiungi un segnalibro e comparirà qui.",
     "label": "App fissate e segnalibri",
@@ -948,7 +953,7 @@
       "register_name": "vorresti registrare questo nome?",
       "reset_pinned": "non ti piacciono le attuali modifiche locali? Vuoi ripristinare le app fissate predefinite?",
       "reset_qdn": "non ti piacciono le attuali modifiche locali? Vorresti ripristinare le app QDN salvate?",
-      "transfer_qort": "vuoi trasferire {{ amount }} QORT?"
+      "transfer_qort_to": "vuoi trasferire {{ amount }} QORT a {{ recipient }}?"
     },
     "success": {
       "order_submitted": "l'ordine di acquisto è stato inviato",

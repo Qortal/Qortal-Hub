@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "ブックマークのピン留めを解除",
     "unsaved_publish": "公開フォームの内容はまだ公開されていません。タブを閉じると破棄されます。"
   },
+  "approval_dialog": {
+    "requested_by": "リクエスト元",
+    "unknown_app": "不明なQ-App",
+    "unknown_app_hint": "Qortal Hubはこのリクエストを送信したQ-Appを特定できませんでした。ご自身で今リクエストしたものでない限り、拒否してください。"
+  },
   "apps_bar": {
     "empty": "アプリをピン留めするかブックマークを追加すると、ここに表示されます。",
     "label": "ピン留めしたアプリとブックマーク",
@@ -948,7 +953,7 @@
       "register_name": "この名前を登録しますか？",
       "reset_pinned": "あなたの現在のローカルの変更が気に入らない？デフォルトのピン留めアプリにリセットしますか？",
       "reset_qdn": "あなたの現在のローカルの変更が気に入らない？保存したQDNピン留めアプリにリセットしますか？",
-      "transfer_qort": "{{ amount }} QORT を送金しますか"
+      "transfer_qort_to": "{{ amount }} QORT を {{ recipient }} に送金しますか？"
     },
     "success": {
       "order_submitted": "購入注文が提出されました",

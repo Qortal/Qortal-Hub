@@ -856,12 +856,18 @@ export const useQortalMessageListener = (
         if (!eventPort) return;
 
         try {
-          await saveFile(event.data, null, true, {
-            openSnackGlobal,
-            setOpenSnackGlobal,
-            infoSnackCustom,
-            setInfoSnackCustom,
-          });
+          await saveFile(
+            event.data,
+            null,
+            true,
+            {
+              openSnackGlobal,
+              setOpenSnackGlobal,
+              infoSnackCustom,
+              setInfoSnackCustom,
+            },
+            { name: appName, service: appService, tabId }
+          );
           eventPort.postMessage({
             result: true,
             error: null,

@@ -71,6 +71,16 @@ export function isValidQortalAddress(address: unknown): address is string {
   return isValidAddressWithVersion(address, [ADDRESS_VERSION]);
 }
 
+/**
+ * True for text that decodes to 25 Base58 bytes, the length of an address,
+ * whatever its version byte or checksum. A recipient like that is a mistyped
+ * address, not a name (utils/validateAddress draws the same line).
+ */
+export function isAddressShaped(value: unknown): value is string {
+  const bytes = decodeBase58(value);
+  return !!bytes && bytes.length === ADDRESS_BYTES;
+}
+
 /** True when `publicKey` (Base58, 32 bytes) derives `address`. */
 export function publicKeyBelongsToAddress(
   publicKey: unknown,

@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "desafixar dos marcadores",
     "unsaved_publish": "os dados do formulário de publicação ainda não foram publicados, e fechar a aba os descarta."
   },
+  "approval_dialog": {
+    "requested_by": "Solicitado por",
+    "unknown_app": "Q-App desconhecido",
+    "unknown_app_hint": "O Qortal Hub não conseguiu identificar qual Q-App enviou esta solicitação. Recuse-a, a menos que você mesmo tenha acabado de pedir isso."
+  },
   "apps_bar": {
     "empty": "Fixe uma aplicação ou adicione um marcador e aparecerá aqui.",
     "label": "Aplicações fixadas e marcadores",
@@ -948,7 +953,7 @@
       "register_name": "você gostaria de registrar este nome?",
       "reset_pinned": "não gostou das alterações locais atuais? Deseja redefinir para os aplicativos fixados padrão?",
       "reset_qdn": "não gostou das alterações locais atuais? Deseja redefinir para os aplicativos fixados salvos na QDN?",
-      "transfer_qort": "você gostaria de transferir {{ amount }} QORTs?"
+      "transfer_qort_to": "você gostaria de transferir {{ amount }} QORT para {{ recipient }}?"
     },
     "success": {
       "order_submitted": "sua ordem de compra foi enviada",

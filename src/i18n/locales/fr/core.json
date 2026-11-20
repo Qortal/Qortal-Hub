@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "désépingler des favoris",
     "unsaved_publish": "les informations de son formulaire de publication ne sont pas encore publiées, et fermer l'onglet les efface."
   },
+  "approval_dialog": {
+    "requested_by": "Demandé par",
+    "unknown_app": "Q-App inconnue",
+    "unknown_app_hint": "Qortal Hub n'a pas pu déterminer quelle Q-App a envoyé cette demande. Refusez-la, sauf si vous venez de la faire vous-même."
+  },
   "apps_bar": {
     "empty": "Épinglez une application ou ajoutez un favori, et il apparaîtra ici.",
     "label": "Applications épinglées et favoris",
@@ -948,7 +953,7 @@
       "register_name": "Souhaitez-vous enregistrer ce nom?",
       "reset_pinned": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser les applications épinglées par défaut?",
       "reset_qdn": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser avec vos applications QDN enregistrées?",
-      "transfer_qort": "voulez-vous transférer {{ amount }} QORT"
+      "transfer_qort_to": "voulez-vous transférer {{ amount }} QORT à {{ recipient }} ?"
     },
     "success": {
       "order_submitted": "Votre commande d'achat a été soumise",

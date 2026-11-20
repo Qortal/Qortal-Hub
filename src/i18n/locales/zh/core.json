@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "从书签取消固定",
     "unsaved_publish": "此标签页的发布表单中的内容尚未发布，关闭标签页将丢弃这些内容。"
   },
+  "approval_dialog": {
+    "requested_by": "请求方",
+    "unknown_app": "未知的Q-App",
+    "unknown_app_hint": "Qortal Hub无法确定是哪个Q-App发送了此请求。除非是你刚刚自己发起的，否则请拒绝。"
+  },
   "apps_bar": {
     "empty": "固定一个应用或添加书签，它就会显示在这里。",
     "label": "已固定的应用和书签",
@@ -948,7 +953,7 @@
       "register_name": "您想注册这个名字吗？",
       "reset_pinned": "不喜欢您当前的本地更改吗？您想重置默认的固定应用吗？",
       "reset_qdn": "不喜欢您当前的本地更改吗？您想重置保存的QDN固定应用吗？",
-      "transfer_qort": "要转账 {{ amount }} QORT 吗"
+      "transfer_qort_to": "要向 {{ recipient }} 转账 {{ amount }} QORT 吗？"
     },
     "success": {
       "order_submitted": "您的买入订单已提交",

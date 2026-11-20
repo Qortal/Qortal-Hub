@@ -15,6 +15,7 @@ vi.mock('compressorjs', () => ({
 }));
 
 import { quitterHashString } from './quitterIdentity';
+import { HUB_REQUEST, isHubRequest } from '../../../qortal/requestingApp';
 import { QuitterPublishCancelledError } from './quitterPublish';
 import {
   needsTorqPostLink,
@@ -53,7 +54,8 @@ const publishedResources = () => {
   expect(action).toBe('PUBLISH_MULTIPLE_QDN_RESOURCES');
   expect(timeout).toBe(240000);
   expect(isExtension).toBe(true);
-  expect(appInfo).toBeUndefined();
+  expect(appInfo).toEqual(HUB_REQUEST);
+  expect(isHubRequest(appInfo)).toBe(true);
   return (payload as { resources: Record<string, unknown>[] }).resources;
 };
 

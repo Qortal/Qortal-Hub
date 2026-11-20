@@ -499,10 +499,13 @@ export async function sendCoinCase(request, event) {
       receiver,
       password,
       amount,
+      approvedFee,
       skipConfirmPassword = false,
     } = request.payload;
+    // approvedFee: the fee shown in the confirmation; sendCoin refuses a
+    // higher fee from the node.
     const { res } = await sendCoin(
-      { receiver, password, amount },
+      { receiver, password, amount, approvedFee },
       skipConfirmPassword === true
     );
     if (!res?.success) {

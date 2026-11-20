@@ -7,10 +7,24 @@ import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
 import {
   assertPublicKeyForAddress,
+  isAddressShaped,
   isValidQortalAddress,
   publicKeyBelongsToAddress,
   PublicKeyMismatchError,
 } from '../encryption/addressKeyCheck';
+import {
+  checkValueTransferFee,
+  InvalidRecipientError,
+  isLookupSafeName,
+  isValidPaymentAddress,
+  parseAssetId,
+  parseDecimalAmount,
+  RecipientInvisibleCharactersError,
+  RecipientLookupFailedError,
+  RecipientNameNotFoundError,
+  recipientFromNameRecord,
+  type ResolvedRecipient,
+} from '../transactions/paymentSafety';
 import i18n from 'i18next';
 import {
   base64ToUint8Array,
@@ -35,7 +49,7 @@ import {
   qchatNotificationIdForEvent,
 } from '../utils/notificationClickRoute';
 import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
-import { joinNodeEndpoint } from '../utils/nodeEndpointPath';
+import { joinNodeEndpoint, nodePathSegment } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
 import {
@@ -888,6 +902,55 @@ export const sendQortFee = async (): Promise<number> => {
   const qortFee = (Number(data) / 1e8).toFixed(8);
   return qortFee;
 };
+
+/**
+ * Address and registered name for a payment recipient given as an address or
+ * a name. An account ("Q…") or AT ("A…") address with a valid checksum is
+ * returned without asking the node; text that decodes like an address but
+ * fails the checksum is a mistyped address and is refused, also without asking
+ * the node. A name with characters hasInvisibleCharacters flags is refused
+ * before any lookup. A name is checked before it goes into the /names/<name>
+ * path (encoded), and the owner the node returns must be a valid Qortal
+ * address. Only the node's answer for an unknown name (HTTP 404, or JSON
+ * error 401) is reported as a name that does not exist; any other failed
+ * lookup is reported as a lookup that failed. Payments call this before their
+ * confirmation, show the result, and pay the returned address, so nothing is
+ * looked up again after approval.
+ */
+export async function resolveRecipient(
+  receiver: unknown
+): Promise<ResolvedRecipient> {
+  const value = typeof receiver === 'string' ? receiver.trim() : '';
+  if (isValidPaymentAddress(value)) return { address: value, name: '' };
+  if (isAddressShaped(value)) throw new InvalidRecipientError();
+  if (hasInvisibleCharacters(value)) {
+    throw new RecipientInvisibleCharactersError();
+  }
+  if (!isLookupSafeName(value)) throw new InvalidRecipientError();
+
+  const validApi = await getBaseApi();
+  const url = `${validApi}/names/${nodePathSegment(value)}`;
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new RecipientLookupFailedError(value);
+  }
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  const error = (data as { error?: unknown } | null)?.error;
+  if (response?.status === 404 || error === 401) {
+    throw new RecipientNameNotFoundError();
+  }
+  if (!response?.ok || !data || error) {
+    throw new RecipientLookupFailedError(value);
+  }
+  return recipientFromNameRecord(value, data);
+}
 
 export async function getNameOrAddress(receiver) {
   try {
@@ -1894,7 +1957,27 @@ export async function kickFromGroup({
   return res;
 }
 
-export async function transferAsset({ amount, recipient, assetId }) {
+/**
+ * Builds, signs and sends one TRANSFER_ASSET to `recipient`, an address.
+ * `approvedFee` is the fee the user saw in the confirmation: a higher fee from
+ * the node is refused before signing, as is any fee above the fixed ceiling
+ * (see checkValueTransferFee). The transfer is signed once; a failure is
+ * thrown to the caller, never retried here.
+ */
+export async function transferAsset({
+  amount,
+  recipient,
+  assetId,
+  approvedFee,
+}: {
+  amount: unknown;
+  recipient: string;
+  assetId: unknown;
+  approvedFee?: unknown;
+}) {
+  if (!isValidPaymentAddress(recipient)) throw new InvalidRecipientError();
+  const parsedAmount = parseDecimalAmount(amount);
+  const parsedAssetId = parseAssetId(assetId);
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -1905,12 +1988,13 @@ export async function transferAsset({ amount, recipient, assetId }) {
     publicKey: uint8PublicKey,
   };
   const feeres = await getFee('TRANSFER_ASSET');
+  const fee = checkValueTransferFee(feeres.fee, approvedFee);
 
   const tx = await createTransaction(12, keyPair, {
-    fee: feeres.fee,
+    fee,
     recipient: recipient,
-    amount: amount,
-    assetId: assetId,
+    amount: parsedAmount.value,
+    assetId: parsedAssetId,
     lastReference: lastReference,
   });
 
@@ -2132,18 +2216,34 @@ export async function inviteToGroup({
   return res;
 }
 
+/**
+ * Signs and sends a QORT PAYMENT. Callers resolve the recipient and read the
+ * fee before their confirmation, show both, and pass the resolved address as
+ * `receiver` and the shown fee as `approvedFee`: a higher fee from the node is
+ * then refused before anything is signed. Without `approvedFee` only the fixed
+ * fee ceiling applies.
+ */
 export async function sendCoin(
-  { password, amount, receiver },
+  {
+    password,
+    amount,
+    receiver,
+    approvedFee,
+  }: {
+    password?: string | null;
+    amount: unknown;
+    receiver: string;
+    approvedFee?: unknown;
+  },
   skipConfirmPassword
 ) {
   try {
     if (!validateAddress(receiver) && hasInvisibleCharacters(receiver)) {
-      throw new Error('Recipient name contains invisible characters');
+      throw new RecipientInvisibleCharactersError();
     }
+    const parsedAmount = parseDecimalAmount(amount);
 
-    const confirmReceiver = await getNameOrAddress(receiver);
-    if (confirmReceiver.error)
-      throw new Error('Invalid receiver address or name');
+    const { address: confirmReceiver } = await resolveRecipient(receiver);
     const wallet = await getSaveWallet();
     let keyPair = '';
     if (skipConfirmPassword) {
@@ -2167,13 +2267,13 @@ export async function sendCoin(
     }
 
     const lastRef = await getLastRef();
-    const fee = await sendQortFee();
+    const fee = checkValueTransferFee(await sendQortFee(), approvedFee);
     const validApi = null;
 
     const res = await makeTransactionRequest(
       confirmReceiver,
       lastRef,
-      amount,
+      parsedAmount.value,
       fee,
       keyPair,
       validApi
