@@ -31,6 +31,20 @@ import {
   QortalRequestDetailsData,
 } from './QortalRequestDetails';
 import { appLockedAtom } from '../../atoms/presence';
+import type {
+  ApprovalBudgetInfo,
+  ApprovalBudgetTopUp,
+} from '../../qortal/appBudgetApproval';
+import {
+  BudgetRefillSection,
+  refillMinimum,
+} from '../AppBudgets/BudgetRefillSection';
+import { isDraftValid } from '../AppBudgets/BudgetChoices';
+import {
+  draftAnswer,
+  newBudgetDraft,
+  type BudgetDraft,
+} from '../AppBudgets/budgetDraft';
 
 const QORTAL_REQUEST_DIALOG_Z_INDEX = 11000;
 
@@ -54,6 +68,11 @@ export type MessageQortalRequestExtension = {
   requestingApp?: RequestingApp | null;
   /** Sent by one of Hub's own pages: no app is named. */
   fromHub?: boolean;
+  /**
+   * Why the app's budget doesn't pay for this request: used up or ended (the
+   * window offers to refill it) or at its limit.
+   */
+  budget?: ApprovalBudgetInfo | null;
 };
 
 type QortalRequestExtensionDialogProps = {
@@ -65,6 +84,8 @@ type QortalRequestExtensionDialogProps = {
   onConfirmRequestReadChange: (checked: boolean) => void;
   onCheckbox1Change: (checked: boolean) => void;
   onAccept: () => void;
+  /** "Top up and approve": refill the app's budget, then accept. */
+  onAcceptWithTopUp?: (topUp: ApprovalBudgetTopUp) => void;
   onCancel: () => void;
   onCountdownComplete: () => void;
 };
@@ -77,6 +98,7 @@ export function QortalRequestExtensionDialog({
   onConfirmRequestReadChange,
   onCheckbox1Change,
   onAccept,
+  onAcceptWithTopUp,
   onCancel,
   onCountdownComplete,
 }: QortalRequestExtensionDialogProps) {
@@ -110,6 +132,29 @@ export function QortalRequestExtensionDialog({
   const declineReady = useAcceptDelay(open, message, DECLINE_GUARD_MS);
   const canAccept =
     acceptReady && (!requestMessage.confirmCheckbox || confirmRequestRead);
+  const budgetInfo = requestMessage.budget ?? null;
+  const refill =
+    budgetInfo?.state === 'used_up' || budgetInfo?.state === 'ended'
+      ? budgetInfo
+      : null;
+  // The refill choices start afresh for each request on screen.
+  const [budgetDraftOf, setBudgetDraftOf] = useState<{
+    key: number;
+    draft: BudgetDraft;
+  } | null>(null);
+  const budgetDraft =
+    budgetDraftOf?.key === shownRequest.key
+      ? budgetDraftOf.draft
+      : newBudgetDraft(refill?.limits);
+  const setBudgetDraft = (draft: BudgetDraft) =>
+    setBudgetDraftOf({ key: shownRequest.key, draft });
+  const now = Date.now();
+  const canTopUp =
+    !!refill &&
+    !!onAcceptWithTopUp &&
+    canAccept &&
+    isDraftValid(budgetDraft, now, { minAmount: refillMinimum(refill) });
+  const appNameForBudget = requestingApp?.name ?? '';
   const bodyLines = [
     requestMessage.text2,
     requestMessage.text3,
@@ -407,6 +452,34 @@ export function QortalRequestExtensionDialog({
             </Box>
           </Box>
 
+          {budgetInfo?.state === 'limit' && budgetInfo.limit ? (
+            <Typography
+              data-testid="budget-limit-note"
+              sx={{
+                backgroundColor: alpha(theme.palette.warning.main, 0.08),
+                border: `1px solid ${alpha(theme.palette.warning.main, 0.24)}`,
+                borderRadius: '12px',
+                color: theme.palette.text.primary,
+                fontSize: '13.5px',
+                lineHeight: 1.5,
+                marginTop: '14px',
+                padding: '10px 12px',
+                ...wrappingTextSx,
+              }}
+            >
+              {t(
+                budgetInfo.limit.per === 'day'
+                  ? 'core:app_budgets.refill.limit_day'
+                  : 'core:app_budgets.refill.limit_minute',
+                {
+                  name: appNameForBudget,
+                  max: budgetInfo.limit.max,
+                  postProcess: 'capitalizeFirstChar',
+                }
+              )}
+            </Typography>
+          ) : null}
+
           {requestMessage.details && (
             <>
               <Spacer height="15px" />
@@ -662,7 +735,53 @@ export function QortalRequestExtensionDialog({
             </>
           )}
 
-          <Spacer height="22px" />
+          {refill && (
+            <>
+              <Spacer height="16px" />
+              <BudgetRefillSection
+                appName={appNameForBudget}
+                draft={budgetDraft}
+                info={refill}
+                now={now}
+                onDraftChange={setBudgetDraft}
+              />
+            </>
+          )}
+
+          {refill && onAcceptWithTopUp ? (
+            <>
+              <Spacer height="22px" />
+              <CustomButtonAccept
+                aria-disabled={!canTopUp}
+                customBgColor={theme.palette.primary.main}
+                customColor={theme.palette.primary.contrastText}
+                onClick={
+                  canTopUp
+                    ? () => onAcceptWithTopUp(draftAnswer(budgetDraft))
+                    : undefined
+                }
+                sx={{
+                  cursor: canTopUp ? 'pointer' : 'default',
+                  filter: 'none',
+                  opacity: canTopUp ? 1 : 0.35,
+                  width: '100%',
+                  '&:hover': {
+                    backgroundColor: canTopUp
+                      ? theme.palette.primary.dark
+                      : theme.palette.primary.main,
+                    color: theme.palette.primary.contrastText,
+                    opacity: canTopUp ? 1 : 0.35,
+                  },
+                }}
+              >
+                {t('core:app_budgets.refill.top_up_and_approve', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </CustomButtonAccept>
+            </>
+          ) : null}
+
+          <Spacer height={refill && onAcceptWithTopUp ? '12px' : '22px'} />
 
           <Box
             sx={{
@@ -745,7 +864,13 @@ export function QortalRequestExtensionDialog({
               aria-disabled={!canAccept}
               onClick={canAccept ? onAccept : undefined}
             >
-              {t('core:action.accept', { postProcess: 'capitalizeFirstChar' })}
+              {refill
+                ? t('core:app_budgets.refill.approve_once', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:action.accept', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
             </CustomButtonAccept>
           </Box>
 

@@ -106,6 +106,7 @@ import {
   PERMISSION_ALREADY_GIVEN,
 } from './permissionPromptQueue';
 import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
+import { askUnlessBudgeted, resourcesAreNewOnNode } from './appBudgetApproval';
 import Base58 from '../encryption/Base58.ts';
 import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -372,10 +373,16 @@ export const _voteOnPoll = async (
 ) => {
   const fee = await getFee('VOTE_ON_POLL');
   let resPermission = {};
+  // Set when the app's budget pays for this vote instead of the window.
+  let budgetTicket = null;
 
   if (!skipPermission) {
-    resPermission = await getUserPermission(
-      {
+    const asked = await askUnlessBudgeted({
+      appInfo,
+      kind: 'vote',
+      fee: fee.fee,
+      poll: pollName,
+      payload: {
         text1: i18n.t('question:request_vote_poll', {
           postProcess: 'capitalizeFirstChar',
         }),
@@ -389,14 +396,31 @@ export const _voteOnPoll = async (
         }),
         fee: fee.fee,
       },
-      isFromExtension,
-      appInfo
-    );
+      ask: (payload, isAlreadyAllowed) =>
+        getUserPermission(payload, isFromExtension, appInfo, isAlreadyAllowed),
+    });
+    resPermission = asked.answer || {};
+    budgetTicket = asked.ticket;
   }
 
   const { accepted = false } = resPermission;
 
-  if (accepted || skipPermission) {
+  if (!accepted && !skipPermission) {
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  try {
+    const res = await signAndSendVote();
+    budgetTicket?.done({ poll: pollName });
+    return res;
+  } finally {
+    budgetTicket?.release();
+  }
+
+  async function signAndSendVote() {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
@@ -426,12 +450,6 @@ export const _voteOnPoll = async (
           })
       );
     return res;
-  } else {
-    throw new Error(
-      i18n.t('question:message.generic.user_declined_request', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
   }
 };
 
@@ -2096,9 +2114,18 @@ export const publishQDNResource = async (
 
   let acceptVar = hasPermission || false;
   let checkbox1Var = false;
+  // The app's budget's hold, or the publish approved in the window, kept
+  // track of so no budget publishes the same resource meanwhile.
+  let budgetTicket = null;
   if (!hasPermission) {
-    const resPermission = await getUserPermission(
-      {
+    const resPermission = await askUnlessBudgeted({
+      appInfo,
+      kind: 'publish',
+      fee: fee.fee,
+      resources: [{ service, name, identifier }],
+      // A publish with an app fee always asks.
+      allowed: !hasAppFee,
+      payload: {
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
         }),
@@ -2108,10 +2135,13 @@ export const publishQDNResource = async (
         fee: fee.fee,
         ...handleDynamicValues,
       },
-      isFromExtension,
-      appInfo
-    );
-    const { accepted, checkbox1 = false } = resPermission || {
+      ask: (payload, isAlreadyAllowed) =>
+        getUserPermission(payload, isFromExtension, appInfo, isAlreadyAllowed),
+      resourcesAreNew: (resources) =>
+        resourcesAreNewOnNode(resources, createEndpoint),
+    });
+    budgetTicket = resPermission.ticket;
+    const { accepted, checkbox1 = false } = resPermission.answer || {
       accepted: false,
       checkbox1: false,
     };
@@ -2148,14 +2178,19 @@ export const publishQDNResource = async (
         tag5,
         apiVersion: 2,
         withFee: true,
+        // The fee the budget counted is the fee the publish pays.
+        ...(budgetTicket?.paid ? { feeAmount: Number(budgetTicket.fee) } : {}),
         encryption: isStreamedEncryption ? encryption : null,
       });
+      budgetTicket?.done({ service, name, identifier });
       if (resPublish?.signature && appFeePayment && checkbox1Var) {
         void payAppFeeAfterPublish(appFeePayment);
       }
       return resPublish;
     } catch (error) {
       throw new Error(error?.message || 'Upload failed');
+    } finally {
+      budgetTicket?.release();
     }
   } else {
     throw new Error(
@@ -2416,9 +2451,23 @@ export const publishMultipleQDNResources = async (
 
   let acceptVar = hasPermission || false;
   let checkbox1Var = false;
+  // The app's budget's hold, or the publishes approved in the window, kept
+  // track of so no budget publishes the same resources meanwhile.
+  let budgetTicket = null;
   if (!hasPermission) {
-    const resPermission = await getUserPermission(
-      {
+    const resPermission = await askUnlessBudgeted({
+      appInfo,
+      kind: 'publish',
+      count: resources.length,
+      fee: fee.fee,
+      resources: resources.map((resource) => ({
+        service: resource?.service,
+        name: resource?.name || name,
+        identifier: resource?.identifier,
+      })),
+      // A publish with an app fee always asks.
+      allowed: !hasAppFee,
+      payload: {
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
         }),
@@ -2434,10 +2483,13 @@ export const publishMultipleQDNResources = async (
         fee: +fee.fee * resources.length,
         ...handleDynamicValues,
       },
-      isFromExtension,
-      appInfo
-    );
-    const { accepted, checkbox1 = false } = resPermission || {
+      ask: (payload, isAlreadyAllowed) =>
+        getUserPermission(payload, isFromExtension, appInfo, isAlreadyAllowed),
+      resourcesAreNew: (resourcesToCheck) =>
+        resourcesAreNewOnNode(resourcesToCheck, createEndpoint),
+    });
+    budgetTicket = resPermission.ticket;
+    const { accepted, checkbox1 = false } = resPermission.answer || {
       accepted: false,
       checkbox1: false,
     };
@@ -2620,8 +2672,17 @@ export const publishMultipleQDNResources = async (
           title,
           uploadType: dataType,
           withFee: true,
+          // The fee the budget counted is the fee the publish pays.
+          ...(budgetTicket?.paid
+            ? { feeAmount: Number(budgetTicket.fee) }
+            : {}),
           appInfo,
           encryption: encryption || null,
+        });
+        budgetTicket?.done({
+          service: resource.service,
+          name: resource?.name || name,
+          identifier: resource.identifier,
         });
         if (response?.signature) {
           publishedResponses.push(response);
@@ -2657,6 +2718,9 @@ export const publishMultipleQDNResources = async (
       });
     }
   }
+  // Each resource catches its own failure: what failed goes back to the
+  // budget.
+  budgetTicket?.release();
   if (failedPublishesIdentifiers.length > 0) {
     const obj = {
       message: i18n.t('question:message.error.resources_publish', {
@@ -2842,9 +2906,14 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
     skip = true;
   }
   let resPermission;
+  // Set when the app's budget allows this message instead of the window.
+  let budgetTicket = null;
   if (!skip) {
-    resPermission = await getUserPermission(
-      {
+    const asked = await askUnlessBudgeted({
+      appInfo,
+      kind: 'chat',
+      fee: null,
+      payload: {
         text1: i18n.t('question:permission.send_chat_message', {
           postProcess: 'capitalizeFirstChar',
         }),
@@ -2869,16 +2938,37 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
           }),
         },
       },
-      isFromExtension,
-      appInfo,
-      alreadyAllowed(appInfo, null, `qAPPSendChatMessage-${appInfo?.name}`)
-    );
+      ask: (payload, isAlreadyAllowed) =>
+        getUserPermission(payload, isFromExtension, appInfo, isAlreadyAllowed),
+      alsoAllowed: alreadyAllowed(
+        appInfo,
+        null,
+        `qAPPSendChatMessage-${appInfo?.name}`
+      ),
+    });
+    resPermission = asked.answer;
+    budgetTicket = asked.ticket;
   }
   const { accepted = false, checkbox1 = false } = resPermission || {};
   if (resPermission && accepted && checkbox1) {
     setPermission(`qAPPSendChatMessage-${appInfo?.name}`, checkbox1);
   }
-  if (accepted || skip) {
+  if (!accepted && !skip) {
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_send_message', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  try {
+    const sent = await sendTheMessage();
+    budgetTicket?.done({ groupId: isRecipient ? undefined : groupId });
+    return sent;
+  } finally {
+    budgetTicket?.release();
+  }
+
+  async function sendTheMessage() {
     const tiptapJson = {
       type: 'doc',
       content: [
@@ -3066,12 +3156,6 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
         })
       );
     }
-  } else {
-    throw new Error(
-      i18n.t('question:message.generic.user_declined_send_message', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
   }
 };
 

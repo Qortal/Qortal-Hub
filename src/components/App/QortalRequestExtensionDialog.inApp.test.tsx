@@ -92,14 +92,31 @@ import '../../i18n/i18n';
 import { darkTheme } from '../../styles/theme-dark';
 import { useAppMessageHandler } from '../../hooks/useAppMessageHandler';
 import { useAppModals } from '../../hooks/useAppModals';
-import { getUserAccount, sessionPermissions } from '../../qortal/get';
+import {
+  getUserAccount,
+  publishQDNResource,
+  sessionPermissions,
+} from '../../qortal/get';
 import {
   getPermission,
   hasSessionPermission,
   setPermission,
   VALID_SESSION_PERMISSIONS,
 } from '../../qortal/qortal-requests';
-import { getSaveWallet } from '../../background/background';
+import {
+  createEndpoint,
+  getFee,
+  getSaveWallet,
+} from '../../background/background';
+import { getNameInfo } from '../../encryption/encryption';
+import { publishData } from '../../qdn/publish/publish';
+import {
+  budgetResourceKey,
+  findAppBudget,
+  refillAppBudget,
+  resetAppBudgetsForTests,
+  takeFromAppBudget,
+} from '../../qortal/appBudgets';
 import { QortalRequestExtensionDialog } from './QortalRequestExtensionDialog';
 
 /** Hub's window as far as approvals go: App.tsx's wiring around the dialog. */
@@ -127,7 +144,12 @@ function Hub() {
             message?.payload?.checkbox1?.value || false;
         }
         setConfirmRequestRead(false);
-        await showQortalRequestExtension(message?.payload);
+        const answer = await showQortalRequestExtension(message?.payload);
+        // "Top up and approve": get.ts checks the choices again.
+        const budgetTopUp =
+          answer && typeof answer === 'object' && 'budgetTopUp' in answer
+            ? { budgetTopUp: answer.budgetTopUp }
+            : {};
 
         if (qortalRequestCheckbox1Ref.current) {
           event.source.postMessage(
@@ -137,6 +159,7 @@ function Hub() {
               result: {
                 accepted: true,
                 checkbox1: qortalRequestCheckbox1Ref.current,
+                ...budgetTopUp,
               },
             },
             event.origin
@@ -147,7 +170,7 @@ function Hub() {
           {
             action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
             requestId: message?.requestId,
-            result: { accepted: true },
+            result: { accepted: true, ...budgetTopUp },
           },
           event.origin
         );
@@ -178,6 +201,21 @@ function Hub() {
     confirmRequestRead,
     onOkQortalRequestExtension,
   ]);
+  const onOkQortalRequestExtensionTopUp = useCallback(
+    (budgetTopUp: unknown) => {
+      const ext = messageQortalRequestExtension as
+        | { confirmCheckbox?: boolean }
+        | null
+        | undefined;
+      if (ext?.confirmCheckbox && !confirmRequestRead) return;
+      onOkQortalRequestExtension({ budgetTopUp });
+    },
+    [
+      messageQortalRequestExtension,
+      confirmRequestRead,
+      onOkQortalRequestExtension,
+    ]
+  );
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -192,6 +230,7 @@ function Hub() {
             qortalRequestCheckbox1Ref.current = checked;
           }}
           onAccept={onOkQortalRequestExtensionAccept}
+          onAcceptWithTopUp={onOkQortalRequestExtensionTopUp}
           onCancel={onCancelQortalRequestExtension}
           onCountdownComplete={onCancelQortalRequestExtension}
         />
@@ -331,5 +370,124 @@ describe('the approval dialog as App shows it', () => {
     await wait(50);
 
     expect(outcomes).toEqual([]);
+  });
+});
+
+describe('an app budget in the approval dialog as App shows it', () => {
+  const ACCOUNT = 'Q-test-address';
+  const APP = { service: 'APP' as const, name: 'Opened-App' };
+  const QORT = BigInt(100000000);
+  const FEE = BigInt(1000000);
+  /** A new post from Opened-App's tab. */
+  const publishPost = (identifier: string) =>
+    track(
+      identifier,
+      publishQDNResource(
+        { service: 'BLOG_POST', identifier, data64: 'QQ==' },
+        null,
+        true,
+        { name: 'Opened-App', service: 'APP', tabId: 4 }
+      )
+    );
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    outcomes = [];
+    window.localStorage.clear();
+    resetAppBudgetsForTests();
+    (window as any).__qortalCurrentAddress = ACCOUNT;
+    // A budget of 0.01 QORT, used up by one post.
+    refillAppBudget(ACCOUNT, APP, {
+      amount: FEE,
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      limits: 'standard',
+    });
+    const used = takeFromAppBudget({
+      address: ACCOUNT,
+      app: APP,
+      kind: 'publish',
+      count: 1,
+      fee: FEE,
+      resources: [budgetResourceKey('BLOG_POST', 'Publisher', 'post-0')],
+    });
+    if (used.kind !== 'take') throw new Error('expected a budget');
+    used.ticket.done({
+      service: 'BLOG_POST',
+      name: 'Publisher',
+      identifier: 'post-0',
+    });
+    vi.mocked(hasSessionPermission).mockReturnValue(false);
+    vi.mocked(getFee).mockResolvedValue({ timestamp: 1, fee: '0.01000000' });
+    vi.mocked(getNameInfo).mockResolvedValue('Publisher');
+    vi.mocked(createEndpoint).mockImplementation(
+      async (path: string) => `http://127.0.0.1:12391${path}`
+    );
+    vi.mocked(publishData).mockResolvedValue({ signature: 'PUBLISH_SIG' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ status: 'NOT_PUBLISHED' }),
+      }))
+    );
+    vi.spyOn(window, 'postMessage').mockImplementation((message) => {
+      setTimeout(() => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            origin: window.location.origin,
+            source: window,
+            data: message,
+          })
+        );
+      }, 0);
+    });
+    render(<Hub />);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(125_000);
+    });
+    delete (window as any).__qortalCurrentAddress;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('tops up the used up budget, publishes, and lets the next post go without asking', async () => {
+    publishPost('post-1');
+    await wait(1200);
+    expect(onScreen('Budget used up')).toBeGreaterThan(0);
+
+    click('5 QORT');
+    click('Top up and approve');
+    await wait(100);
+    expect(outcomes).toEqual(['post-1: accepted']);
+    expect(findAppBudget(ACCOUNT, APP)).toMatchObject({
+      total: String(FEE + QORT * BigInt(5)),
+      used: String(FEE * BigInt(2)),
+      actions: 2,
+    });
+
+    publishPost('post-2');
+    await wait(100);
+    expect(outcomes).toEqual(['post-1: accepted', 'post-2: accepted']);
+    expect(onScreen('Budget used up')).toBe(0);
+    expect(publishData).toHaveBeenCalledTimes(2);
+  });
+
+  it('declines without touching the budget', async () => {
+    publishPost('post-1');
+    await wait(1200);
+    click('Decline');
+    await wait(100);
+    expect(outcomes).toEqual(['post-1: declined']);
+    expect(publishData).not.toHaveBeenCalled();
+    expect(findAppBudget(ACCOUNT, APP)).toMatchObject({
+      total: String(FEE),
+      used: String(FEE),
+    });
   });
 });
