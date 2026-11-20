@@ -63,7 +63,12 @@ describe('MuteSubmenu', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders unmute item when all group channels are muted', () => {
+  it('keeps the durations in the group menu even when the only stored override is a mute', () => {
+    // Group scope has no channel list, so it cannot know whether every channel
+    // is muted: `pruneChannelOverride` drops `mutedUntil: 0`, so an unmuted
+    // channel leaves no entry at all. Collapsing to a bare "Unmute" here would
+    // turn one muted channel out of five into a menu with no way to mute the
+    // rest, which is the bug this guards.
     renderWithMuteState(
       {
         '123': {
@@ -74,7 +79,7 @@ describe('MuteSubmenu', () => {
       'Group'
     );
 
-    expect(screen.queryByTestId('contexify-submenu')).not.toBeInTheDocument();
+    expect(screen.getByTestId('contexify-submenu')).toBeInTheDocument();
     expect(screen.getByText('group:context_menu.unmute')).toBeInTheDocument();
   });
 
@@ -193,7 +198,10 @@ describe('MuteSubmenu', () => {
     ).toBeInTheDocument();
   });
 
-  it('collapses to a single unmute item only when every stored override is muted', () => {
+  it('collapses to a bare unmute item only for a section, which knows its channels', () => {
+    // A section names its channels, so "every one of them is muted" is a fact
+    // it can rely on and the single Unmute is the right menu. Group scope cannot
+    // make that claim — see the group test above — so it never collapses.
     renderWithMuteState(
       {
         '123': {
@@ -203,8 +211,9 @@ describe('MuteSubmenu', () => {
           },
         },
       },
-      { groupId: 123 },
-      'Group'
+      { groupId: 123, sectionId: 'sec-1' },
+      'Section',
+      ['announcements', 'general']
     );
 
     expect(

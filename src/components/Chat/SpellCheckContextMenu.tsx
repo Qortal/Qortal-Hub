@@ -242,13 +242,20 @@ export const SpellCheckContextMenu = forwardRef<
         const inputElement = inputRef?.current;
 
         if (editor && !editor.isDestroyed && wordRange) {
-          // Use stored word range from context menu detection
+          // Use stored word range from context menu detection.
+          //
+          // These are already document positions: findWordAtPosition returns
+          // runs built from buildCharRunsInTextblock, which walks the doc in
+          // document coordinates. The old `+1` on both ends converted offsets
+          // that came from getText(); it survived the switch to document
+          // positions and shifted every replacement one character late, so
+          // "say helo now" became "say hhellonow". Do not add it back.
           const { start: wordStart, end: wordEnd } = wordRange;
 
           editor
             .chain()
             .focus()
-            .setTextSelection({ from: wordStart + 1, to: wordEnd + 1 })
+            .setTextSelection({ from: wordStart, to: wordEnd })
             .deleteSelection()
             .insertContent(newWord)
             .run();

@@ -59,34 +59,56 @@ function collectScopeMuteState(
   allMuted: boolean;
   anyMuted: boolean;
   sharedUntil: number | null | undefined;
+  /** Whether the caller named the channels, so `allMuted` is provable. */
+  scopeKnown: boolean;
 } {
   if (!groupStore)
-    return { allMuted: false, anyMuted: false, sharedUntil: undefined };
+    return {
+      allMuted: false,
+      anyMuted: false,
+      sharedUntil: undefined,
+      scopeKnown: false,
+    };
 
   if (channelId != null) {
     const v = groupStore.channels?.[String(channelId)]?.mutedUntil;
     const muted = activeMutedUntil(v);
-    return { allMuted: muted, anyMuted: muted, sharedUntil: v };
+    return {
+      allMuted: muted,
+      anyMuted: muted,
+      sharedUntil: v,
+      scopeKnown: true,
+    };
   }
 
-  // Group scope: every stored override is in scope by definition. Section scope
-  // passes its channels explicitly.
+  // Only a caller that names its channels (a section) can say a scope is fully
+  // muted. Group scope passes nothing, so `ids` below is just the channels that
+  // carry an override.
+  const scopeKnown = channelIds != null;
   const ids = channelIds ?? Object.keys(groupStore.channels ?? {});
   if (ids.length === 0)
-    return { allMuted: false, anyMuted: false, sharedUntil: undefined };
+    return {
+      allMuted: false,
+      anyMuted: false,
+      sharedUntil: undefined,
+      scopeKnown,
+    };
 
   const vals = ids.map((id) => groupStore.channels?.[id]?.mutedUntil);
-  // A channel with no override inherits "not muted" version of the default.
-  const allMuted = vals.every((v) => activeMutedUntil(v));
-  // Partial state must not be reported as fully muted. Group scope has no
-  // channelIds, so `ids` is only the channels carrying an override: one timed
-  // mute in a five-channel group made `allMuted` true and collapsed the menu to
-  // a bare "Unmute", which then cleared every override and dropped the mute the
-  // user had just set. "Some are muted" needs its own branch that offers both.
   const anyMuted = vals.some((v) => activeMutedUntil(v));
+  // For a section, every named channel being muted is a real "all muted".
+  //
+  // For a group, it cannot be known: `pruneChannelOverride` deletes a
+  // `mutedUntil` of 0, so an unmuted channel leaves no entry at all. A store
+  // holding one muted channel out of five therefore looks identical to a group
+  // where everything is muted, and treating it as `allMuted` collapsed the menu
+  // to a bare "Unmute" — the one thing the user did not want after muting a
+  // single channel. Report it as partial instead, so the menu keeps offering
+  // the durations alongside Unmute.
+  const allMuted = scopeKnown && vals.every((v) => activeMutedUntil(v));
   const first = vals[0];
   const sharedUntil = vals.every((v) => v === first) ? first : undefined;
-  return { allMuted, anyMuted, sharedUntil };
+  return { allMuted, anyMuted, sharedUntil, scopeKnown };
 }
 
 export function MuteSubmenu({

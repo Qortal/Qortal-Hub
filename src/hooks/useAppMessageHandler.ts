@@ -57,6 +57,11 @@ export function useAppMessageHandler(
           payload?.qChatMention ||
           payload?.qChatMessage ||
           payload?.qChatReply ||
+          // A "joined the group" notification carries the same channelId,
+          // eventId and group id as the rest, so it opens the same way. It was
+          // left out of this list and the click did nothing but focus the
+          // window.
+          payload?.qChatWelcome ||
           payload?.qChatReaction
         ) {
           setPendingNotificationNav({ eventName: 'openGroupMessage', detail: { channelId: payload.channelId, eventId: payload.eventId, from: payload.from } });

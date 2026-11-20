@@ -2369,6 +2369,14 @@ export const ChatGroup = ({
   const reticulumHideMutedChannels =
     reticulumGroupSettings?.hideMutedChannels === true;
 
+  // What the muted-channel auto-switch last decided. Kept in a ref so the
+  // decision survives the summary churn that follows opening a channel, which is
+  // what used to move the reader out of a channel they had just opened.
+  const mutedAutoSwitchRef = useRef<{
+    channelId: string | null;
+    muted: boolean;
+  } | null>(null);
+
   useEffect(() => {
     if (!reticulumChatEnabled || !reticulumHideMutedChannels) return;
     if (!reticulumGroupSettings) return;
@@ -2381,13 +2389,30 @@ export const ChatGroup = ({
       selectedChannel.categoryId,
       selectedChannel.channelId
     );
+
+    // Decide once per selection, not on every summary change.
+    //
+    // This effect used to also run whenever the channel summaries changed, so
+    // opening a muted channel that the sidebar kept on screen for its unread
+    // mention led straight back out: the open marked the channel read, the
+    // mention count fell to zero, the effect re-ran, and the reader was moved to
+    // another channel before they could reply. The decisions below only depend
+    // on the choice of channel and on whether that channel is muted, so record
+    // what was evaluated and skip the repeat runs.
+    const lastEvaluated = mutedAutoSwitchRef.current;
+    const sameChannel = lastEvaluated?.channelId === selectedChannel.channelId;
+    const becameMuted =
+      isSelectedHidden && lastEvaluated?.muted !== true;
+    mutedAutoSwitchRef.current = {
+      channelId: selectedChannel.channelId,
+      muted: isSelectedHidden,
+    };
+    // Already on this channel and it did not just become muted: nothing to do.
+    // This is what keeps the reader on a surfaced muted channel after its
+    // mention is read.
+    if (sameChannel && !becameMuted) return;
     if (!isSelectedHidden) return;
-    // The sidebar keeps a muted channel on screen when it holds an unread
-    // mention, so the row stays clickable. Leaving it here would make that row
-    // unopenable: the click would set the channel and this effect would
-    // immediately move the reader somewhere else, so the mention could only be
-    // cleared from a context menu. Treat a channel surfaced for attention as
-    // visible.
+
     const selectedSummary = reticulumChannelSummariesById.get(
       selectedChannel.channelId
     );

@@ -1036,6 +1036,11 @@ type ReticulumChatPendingReadSync =
       groupId: number;
       channelId: string;
       upToTimestamp: number;
+      coverage?: Array<{
+        authorAddress: string;
+        authorStreamId: string;
+        coveredSeq: number;
+      }>;
     }
   | {
       scopeType: 'dm';
@@ -1337,6 +1342,32 @@ export type ReticulumChatReadSyncWire = {
   z: string;
 };
 
+/**
+ * Per-author read coverage, carried on its own wire.
+ *
+ * It cannot ride on the receipt: the Reticulum JSON budget is 383 bytes, a bare
+ * group receipt already spends 287 of them, and one coverage entry costs 84. A
+ * receipt carrying coverage therefore never fit, and `wireFitsReticulumChat`
+ * rejected it — which silently dropped the read instead of degrading. One entry
+ * per wire fits; the sender emits as many wires as the coverage needs.
+ */
+export type ReticulumChatReadCoverageWire = {
+  /** Group id. */
+  g: number;
+  /** Channel id. */
+  c: string;
+  /** `upToTimestamp` of the receipt this coverage belongs to. */
+  u: number;
+  /** `signedAt` of that receipt. */
+  n: number;
+  /** Owner public key, base58. Also identifies whose read this is. */
+  p: string;
+  /** Signature over this payload, base58. */
+  z: string;
+  /** `[authorAddress, authorStreamId, coveredSeq]`, bounded to what fits. */
+  v: Array<[string, string, number]>;
+};
+
 export type ReticulumChatReadSyncAckWire = {
   y: 'g' | 'd';
   c: string;
@@ -1491,6 +1522,13 @@ export function buildReticulumChatReadSyncSignedFields(input: {
   upToTimestamp: number;
   signedAt: number;
 }): Record<string, unknown> {
+  // These fields are frozen. Every Hub since 3.0.0 rebuilds exactly this object
+  // and checks the signature against it, so adding a field here makes the
+  // receipt unverifiable on any device that has not upgraded — a read taken on
+  // an updated device would stop reaching the account's other devices. That is
+  // why per-author coverage is signed separately, in
+  // `buildReticulumChatReadSyncCoverageSignedFields`, and travels in its own
+  // wire field that older peers simply ignore.
   return {
     type: 'RCHAT_READ_SYNC_V1',
     scopeType: input.scopeType,
@@ -1507,6 +1545,148 @@ export function buildReticulumChatReadSyncSignedFields(input: {
     upToTimestamp: input.upToTimestamp,
     signedAt: input.signedAt,
   };
+}
+
+/**
+ * Signed fields for the per-author coverage that rides alongside a read receipt.
+ *
+ * Separate from the receipt itself so an unupgraded peer can keep verifying the
+ * receipt while ignoring this. It repeats the receipt's identity — owner, scope,
+ * `upToTimestamp`, `signedAt` — so a coverage payload cannot be lifted off one
+ * receipt and replayed onto another, and cannot be widened without the key.
+ */
+export function buildReticulumChatReadSyncCoverageSignedFields(input: {
+  ownerAddress: string;
+  groupId: number;
+  channelId: string;
+  upToTimestamp: number;
+  signedAt: number;
+  coverage: Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }>;
+}): Record<string, unknown> {
+  return {
+    type: 'RCHAT_READ_SYNC_COVERAGE_V1',
+    ownerAddress: input.ownerAddress,
+    groupId: input.groupId,
+    channelId: input.channelId,
+    upToTimestamp: input.upToTimestamp,
+    signedAt: input.signedAt,
+    coverage: input.coverage.map((entry) => [
+      entry.authorAddress,
+      entry.authorStreamId,
+      entry.coveredSeq,
+    ]),
+  };
+}
+
+/**
+ * Validates and normalises the per-author coverage of a V2 read receipt.
+ *
+ * Bounded so a peer cannot make us write unbounded rows, and every field is
+ * checked because this arrives from the wire. Returns undefined when the receipt
+ * carries none, which is how a V1 receipt stays distinguishable.
+ */
+export const RETICULUM_CHAT_MAX_READ_SYNC_COVERAGE = 200;
+
+function parseReadSyncCoverage(
+  raw: unknown
+):
+  | Array<{ authorAddress: string; authorStreamId: string; coveredSeq: number }>
+  | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const coverage: Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }> = [];
+  for (const entry of raw.slice(0, RETICULUM_CHAT_MAX_READ_SYNC_COVERAGE)) {
+    if (!Array.isArray(entry) || entry.length !== 3) continue;
+    const authorAddress = String(entry[0] ?? '').trim();
+    const authorStreamId = normalizeReticulumChatAuthorStreamId(entry[1]);
+    const coveredSeq = Number(entry[2]);
+    if (!isValidQortalAddress(authorAddress)) continue;
+    if (!authorStreamId) continue;
+    if (!Number.isInteger(coveredSeq) || coveredSeq <= 0) continue;
+    coverage.push({ authorAddress, authorStreamId, coveredSeq });
+  }
+  return coverage.length > 0 ? coverage : undefined;
+}
+
+/**
+ * Verifies one `read_cov` wire.
+ *
+ * Returns the coverage it carries only when the signature checks out over this
+ * wire's own identity (owner, group, channel, the receipt's `upToTimestamp` and
+ * `signedAt`) plus the coverage itself. Anything else is discarded, and the
+ * receiving device simply keeps the sender-time approximation the receipt
+ * already gave it. A bad coverage wire must never cost the read itself.
+ */
+export function verifyReticulumChatReadCoverageWire(
+  wire: ReticulumChatReadCoverageWire,
+  now = Date.now()
+): {
+  ownerAddress: string;
+  groupId: number;
+  channelId: string;
+  upToTimestamp: number;
+  signedAt: number;
+  coverage: Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }>;
+} | null {
+  try {
+    const ownerAddress = deriveAddressFromPublicKey(wire.p);
+    const groupId = Number(wire.g);
+    const channelId = normalizeReticulumChatChannelId(wire.c);
+    const upToTimestamp = Math.floor(Number(wire.u));
+    const signedAt = Math.floor(Number(wire.n));
+    if (
+      !isValidQortalAddress(ownerAddress) ||
+      !Number.isSafeInteger(groupId) ||
+      groupId <= 0 ||
+      !channelId ||
+      typeof wire.c !== 'string' ||
+      wire.c.trim().toLowerCase() !== channelId ||
+      !Number.isSafeInteger(upToTimestamp) ||
+      upToTimestamp <= 0 ||
+      upToTimestamp > now + RETICULUM_CHAT_MAX_FUTURE_SKEW_MS ||
+      !Number.isSafeInteger(signedAt) ||
+      signedAt <= 0 ||
+      signedAt > now + RETICULUM_CHAT_CONTROL_MAX_FUTURE_SKEW_MS ||
+      typeof wire.z !== 'string' ||
+      !wire.z
+    ) {
+      return null;
+    }
+    const coverage = parseReadSyncCoverage(wire.v);
+    if (!coverage) return null;
+    const fields = {
+      ...buildReticulumChatReadSyncCoverageSignedFields({
+        ownerAddress,
+        groupId,
+        channelId,
+        upToTimestamp,
+        signedAt,
+        coverage,
+      }),
+      authorAddress: ownerAddress,
+      authorPublicKey: wire.p,
+    };
+    return verifyEd25519Detached(
+      new Uint8Array(canonicalizeForSigning(fields)),
+      new Uint8Array(base58Decode(wire.z)),
+      new Uint8Array(base58Decode(wire.p))
+    )
+      ? { ownerAddress, groupId, channelId, upToTimestamp, signedAt, coverage }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function verifyReticulumChatReadSyncWire(
@@ -1736,6 +1916,7 @@ type ReticulumDmPageResource = {
 export type ReticulumChatWire =
   | { t: 'RCHAT'; k: 'hello_v3'; v: 3; f: ReticulumChatProtocolFeature[] }
   | { t: 'RCHAT'; k: 'read_sync'; w: ReticulumChatReadSyncWire }
+  | { t: 'RCHAT'; k: 'read_cov'; w: ReticulumChatReadCoverageWire }
   | { t: 'RCHAT'; k: 'read_sync_ack'; w: ReticulumChatReadSyncAckWire }
   | { t: 'RCHAT'; k: 'call_history'; w: ReticulumDirectCallHistoryWire }
   | {
@@ -14403,15 +14584,18 @@ export class ReticulumChatManager extends EventEmitter {
     const replyTargetDeleted =
       !!event.replyToEventId &&
       this.db.isEventPayloadScrubbed(event.replyToEventId);
+    // Both read sources, not just the watermark. A V2 receipt deliberately does
+    // not move the channel-wide watermark, so considering it alone would leave
+    // messages this account already read on another device rendering as unread.
     const readByOwner =
       includeReadState &&
       !!localAddress &&
-      event.timestamp <=
-        this.db.getReadWatermark(
-          event.groupId,
-          normalizeReticulumChatChannelId(event.channelId),
-          localAddress
-        );
+      this.db.isEventCoveredByReadState(
+        event.groupId,
+        normalizeReticulumChatChannelId(event.channelId),
+        localAddress,
+        event
+      );
     const expiresAt = this.db.getEventExpiresAtForRenderer(event);
     const rendererEvent = {
       ...event,
@@ -15175,12 +15359,25 @@ export class ReticulumChatManager extends EventEmitter {
       Number.isFinite(upToTimestamp) &&
       upToTimestamp > 0
     ) {
+      const receiptChannelId = normalizeReticulumChatChannelId(channelId);
+      // The coverage describes exactly the events this read covers: each
+      // author's highest seq at or below the read timestamp. It is what lets the
+      // receiving device honour the read without comparing across clocks.
       this.queueReadSync({
         scopeType: 'group',
         ownerAddress,
         groupId,
-        channelId: normalizeReticulumChatChannelId(channelId),
+        channelId: receiptChannelId,
         upToTimestamp: Math.floor(upToTimestamp),
+        // Read after `db.markRead` above, so `local_read_at` is the moment this
+        // device just recorded and the coverage describes exactly what it had
+        // received then.
+        coverage: this.db.getLocalAuthorCoverageUpTo(
+          groupId,
+          receiptChannelId,
+          upToTimestamp,
+          ownerAddress
+        ),
       });
     }
   }
@@ -15319,12 +15516,34 @@ export class ReticulumChatManager extends EventEmitter {
     const signer = this.signLocalFields;
     if (!signer || this.isClosed) return null;
     const signedAt = this.nextReadSyncSignedAt(pending.ownerAddress);
-    const base = {
+    // Recomputed here rather than trusted from the pending row. The durable
+    // pending table has no coverage column, so a receipt replayed after a
+    // restart would otherwise go out as V1 and lose the per-author detail.
+    // Deriving it at signing time also keeps the coverage consistent with what
+    // this device had actually read when the receipt is finally sent.
+    const coverage =
+      pending.scopeType === 'group' &&
+      pending.groupId &&
+      pending.channelId &&
+      Number.isFinite(pending.upToTimestamp)
+        ? this.db.getLocalAuthorCoverageUpTo(
+            pending.groupId,
+            pending.channelId,
+            pending.upToTimestamp,
+            pending.ownerAddress
+          )
+        : [];
+    // The receipt signs the frozen V1 field set, which is what every released
+    // Hub rebuilds and verifies. Coverage is signed separately so the two can
+    // evolve independently: adding it here would have made the receipt
+    // unverifiable on any device that has not upgraded.
+    const receiptFields = {
       ...pending,
       signedAt,
     };
+    delete (receiptFields as { coverage?: unknown }).coverage;
     const signed = await signer(
-      buildReticulumChatReadSyncSignedFields(base)
+      buildReticulumChatReadSyncSignedFields(receiptFields)
     ).catch(() => null);
     // The signer may outlive the manager during shutdown. Never resume into
     // SQLite after close; the unsigned watermark remains in the durable
@@ -15349,7 +15568,21 @@ export class ReticulumChatManager extends EventEmitter {
       authorPublicKey: signed.authorPublicKey,
       signature: signed.signature,
     };
-    return this.deviceReadStateToWire(state) ? state : null;
+    const wire = this.deviceReadStateToWire(state);
+    if (wire) {
+      // Coverage cannot ride on the receipt: the Reticulum JSON budget is 383
+      // bytes and a bare group receipt already spends 287 of them, so a receipt
+      // carrying coverage never fits and `wireFitsReticulumChat` would reject it
+      // — dropping the read entirely.
+      //
+      // It is sent FIRST, and awaited. The receiver treats "this channel already
+      // has per-author coverage" as the signal to skip the channel-wide
+      // watermark, and applying the watermark is what re-created the
+      // cross-author over-coverage. Waiting here is what makes that signal
+      // reliable rather than a race against the receipt.
+      await this.sendReadCoverageToOwnDevices(state, coverage);
+    }
+    return wire ? state : null;
   }
 
   private ownDevicePeerHashes(ownerAddress: string): string[] {
@@ -15371,6 +15604,75 @@ export class ReticulumChatManager extends EventEmitter {
         this.sendToPeerOnce(peerHash, wire)
       )
     );
+  }
+
+  /**
+   * Sends per-author coverage as one `read_cov` wire per author.
+   *
+   * One entry per wire because the budget allows exactly that: a `read_cov`
+   * carrying a single entry is 360 bytes against the 383-byte limit, and two
+   * are 436. Chunking is not a nicety here, it is the only shape that fits.
+   *
+   * Each wire is signed over its own identity, so it stands alone: a receiver
+   * that gets the coverage but not the receipt — or the reverse — still applies
+   * what it can, and neither half can be replayed onto a different channel.
+   */
+  private async sendReadCoverageToOwnDevices(
+    state: ReticulumChatDeviceReadState,
+    coverage: Array<{
+      authorAddress: string;
+      authorStreamId: string;
+      coveredSeq: number;
+    }>
+  ): Promise<void> {
+    if (
+      state.scopeType !== 'group' ||
+      !state.groupId ||
+      !state.channelId ||
+      coverage.length === 0 ||
+      this.isClosed
+    ) {
+      return;
+    }
+    const signer = this.signLocalFields;
+    if (!signer) return;
+    const peers = this.ownDevicePeerHashes(state.ownerAddress);
+    if (peers.length === 0) return;
+    const groupId = state.groupId;
+    const channelId = state.channelId;
+    const upToTimestamp = Math.floor(state.upToTimestamp);
+    for (const entry of coverage) {
+      if (this.isClosed) return;
+      const signed = await signer(
+        buildReticulumChatReadSyncCoverageSignedFields({
+          ownerAddress: state.ownerAddress,
+          groupId,
+          channelId,
+          upToTimestamp,
+          signedAt: state.signedAt,
+          coverage: [entry],
+        })
+      ).catch(() => null);
+      if (this.isClosed) return;
+      if (!signed?.signature) continue;
+      const wire: Extract<ReticulumChatWire, { k: 'read_cov' }> = {
+        t: 'RCHAT',
+        k: 'read_cov',
+        w: {
+          g: groupId,
+          c: channelId,
+          u: upToTimestamp,
+          n: state.signedAt,
+          p: signed.authorPublicKey,
+          z: signed.signature,
+          v: [[entry.authorAddress, entry.authorStreamId, entry.coveredSeq]],
+        },
+      };
+      if (!wireFitsReticulumChat(wire)) continue;
+      await Promise.allSettled(
+        peers.map((peerHash) => this.sendToPeerOnce(peerHash, wire))
+      );
+    }
   }
 
   private async sendReadSyncAck(
@@ -15441,9 +15743,26 @@ export class ReticulumChatManager extends EventEmitter {
             const results = await Promise.all(
               batch.map(async (state) => {
                 const wire = this.deviceReadStateToWire(state);
-                return wire
-                  ? this.sendToPeerOnce(peerHash, wire)
-                  : ({ ok: false, reason: 'send-command-failed' } as const);
+                if (!wire) {
+                  return { ok: false, reason: 'send-command-failed' } as const;
+                }
+                // Coverage is resent from what this device can still compute,
+                // because it lives on its own wires and a peer may have missed
+                // them. Recomputed rather than stored: the pending and signed
+                // state tables have no room for it, and the read moment is
+                // durable, so the value is reproducible.
+                if (state.scopeType === 'group' && state.groupId) {
+                  void this.sendReadCoverageToOwnDevices(
+                    state,
+                    this.db.getLocalAuthorCoverageUpTo(
+                      state.groupId,
+                      state.channelId ?? '',
+                      state.upToTimestamp,
+                      state.ownerAddress
+                    )
+                  );
+                }
+                return this.sendToPeerOnce(peerHash, wire);
               })
             );
             if (accountGeneration !== this.localAccountGeneration) return;
@@ -18567,6 +18886,12 @@ export class ReticulumChatManager extends EventEmitter {
           peerHash
         );
         return;
+      case 'read_cov':
+        this.handleReadCoverage(
+          wire as Extract<ReticulumChatWire, { k: 'read_cov' }>,
+          peerHash
+        );
+        return;
       case 'read_sync_ack':
         this.handleReadSyncAck(
           wire as Extract<ReticulumChatWire, { k: 'read_sync_ack' }>,
@@ -19739,11 +20064,29 @@ export class ReticulumChatManager extends EventEmitter {
       )
     );
     if (state.scopeType === 'group') {
-      // Record the durable coverage first. `markRead` clamps to the newest
-      // event stored on this device and drops the request outright when the
-      // channel is still empty, so on its own it loses the read whenever the
-      // receipt arrives before the messages it covers. The coverage row keeps
-      // the sender timestamp unclamped so those messages are read on arrival.
+      // Per-author coverage arrives as separate `read_cov` wires, sent before the
+      // receipt. If this channel already has any, the sender is coverage-capable
+      // and the per-author rows are authoritative — so the channel-wide watermark
+      // is deliberately NOT touched. Advancing it to the receipt's sender
+      // timestamp is exactly how a fast-clocked author's read came to cover a
+      // correctly-clocked author's later message.
+      const hasAuthorCoverage =
+        this.db.getReadAuthorCoverage(
+          state.groupId!,
+          state.channelId!,
+          state.ownerAddress
+        ).size > 0;
+      if (hasAuthorCoverage) {
+        this.emitSummaryChanged(state.groupId!, undefined, {
+          readStateChanged: true,
+        });
+        return;
+      }
+      // No coverage: a peer that has not upgraded. Sender time is the only signal
+      // it carries, so this is the coarse approximation it always was. `markRead`
+      // clamps to the newest event stored on this device and drops the request
+      // when the channel is still empty, which is why the durable coverage row is
+      // written first — the receipt can arrive before the messages it covers.
       this.db.applyRemoteReadCoverage(
         state.groupId!,
         state.channelId!,
@@ -19769,6 +20112,51 @@ export class ReticulumChatManager extends EventEmitter {
     this.emit('directSummaryChanged', {
       conversationId: state.conversationId,
       peerAddress: state.peerAddress,
+    });
+  }
+
+  /**
+   * Applies one `read_cov` wire: the per-author half of a read performed on
+   * another device of this account.
+   *
+   * Deliberately independent of `handleReadSync`. Coverage travels on its own
+   * wire because it cannot fit on the receipt, so it may arrive before or after
+   * the receipt, and duplicate or reordered deliveries are normal. The upsert is
+   * monotonic per author, so replaying one costs nothing.
+   *
+   * Nothing here touches the channel-wide watermark. That number is compared
+   * against every author's sender timestamp, so advancing it from another
+   * device's read is exactly how a fast sender's timestamp came to cover a
+   * correctly-clocked author's later message.
+   */
+  private handleReadCoverage(
+    wire: Extract<ReticulumChatWire, { k: 'read_cov' }>,
+    peerHash: string
+  ): void {
+    const height = verifyReticulumChatReadCoverageWire(wire.w, this.now());
+    if (!height) return;
+    const sourcePeer = this.routePeerHash(peerHash) ?? peerHash.toLowerCase();
+    if (
+      !sourcePeer ||
+      !this.getVerifiedDmPeerHashes(height.ownerAddress).includes(sourcePeer)
+    ) {
+      return;
+    }
+    if (
+      !this.localGroupIds.has(height.groupId) ||
+      this.localGroupAddresses.get(height.groupId) !== height.ownerAddress
+    ) {
+      return;
+    }
+    const applied = this.db.applyRemoteAuthorReadCoverage(
+      height.groupId,
+      height.channelId,
+      height.coverage,
+      height.ownerAddress
+    );
+    if (applied <= 0) return;
+    this.emitSummaryChanged(height.groupId, undefined, {
+      readStateChanged: true,
     });
   }
 

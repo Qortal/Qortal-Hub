@@ -367,6 +367,24 @@ const rchatSchemas: Readonly<Record<string, SigningSchema>> = {
     ['type', 'scopeType', 'ownerAddress', 'upToTimestamp', 'signedAt'],
     ['groupId', 'channelId', 'conversationId', 'peerAddress']
   ),
+  // Per-author read coverage, on its own `read_cov` wire. It cannot travel on
+  // RCHAT_READ_SYNC_V1: every released Hub rebuilds that exact field set to
+  // verify the signature, so an added field makes the receipt unverifiable, and
+  // the 383-byte wire budget has no room for it anyway.
+  RCHAT_READ_SYNC_COVERAGE_V1: schema(
+    [
+      'type',
+      'ownerAddress',
+      'groupId',
+      'channelId',
+      'upToTimestamp',
+      'signedAt',
+      'coverage',
+      'authorAddress',
+      'authorPublicKey',
+    ],
+    []
+  ),
   RCHAT_DIRECT_CALL_HISTORY_V1: schema([
     'type',
     'ownerAddress',

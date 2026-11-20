@@ -1138,6 +1138,63 @@ describe('migrateNotificationSettings', () => {
     expect(written).not.toContain('q-chat-notification-settings-migrated');
   });
 
+  it('does not re-apply legacy values to a group that already migrated', async () => {
+    // Group 2's channel lookup fails, so the global flag stays unset and the
+    // next pass re-enters migration for every group. Group 1 carries the
+    // per-group marker, so it must be skipped even though the global flag is
+    // false -- otherwise a channel the user set back to 'all' is rewritten to
+    // 'none' from the stale legacy value.
+    mockSendMessage({
+      'q-chat-notification-settings-migrated': false,
+      'q-chat-notif-1': {
+        legacyMigratedAt: 1,
+        channels: { general: { pushLevel: 'all' } },
+      },
+      'q-chat-notification-settings-1': {
+        sections: { '': { channels: { general: { mutedUntil: null } } } },
+      },
+      mutedGroups: [2],
+    });
+    (window as any).reticulumChat = {
+      getChannels: vi.fn(async (groupId: number) => {
+        if (groupId === 2) throw new Error('lookup failed');
+        return [{ channelId: 'general', categoryId: '' }];
+      }),
+    };
+
+    await migrateNotificationSettings([1, 2]);
+
+    const written = (window.sendMessage as any).mock.calls
+      .filter((c: any[]) => c[0] === 'addUserSettings')
+      .map((c: any[]) => c[1].keyValue.key);
+
+    expect(written).not.toContain('q-chat-notif-1');
+  });
+
+  it('treats an empty channel list as unresolved for a group-level preference', async () => {
+    // Main answers getChannels with [] while memberships are still loading, and
+    // a genuinely empty group looks identical. Writing a store with no
+    // overrides and setting the marker dropped the preference for good, because
+    // the marker then stopped the retry that would have repaired it.
+    mockSendMessage({
+      'q-chat-notification-settings-1': { mutedUntil: null },
+    });
+    (window as any).reticulumChat = {
+      getChannels: vi.fn(async () => []),
+    };
+
+    const result = await migrateNotificationSettings([1]);
+
+    const written = (window.sendMessage as any).mock.calls
+      .filter((c: any[]) => c[0] === 'addUserSettings')
+      .map((c: any[]) => c[1].keyValue.key);
+
+    expect(result.unresolvedGroupIds).toEqual(['1']);
+    expect(result.complete).toBe(false);
+    // No store written, so nothing to carry a marker that would block a retry.
+    expect(written).not.toContain('q-chat-notif-1');
+  });
+
   it('surfaces a failed settings write instead of swallowing it', async () => {
     vi.stubGlobal('window', {
       ...window,

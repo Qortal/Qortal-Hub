@@ -3107,7 +3107,14 @@ export const fireOsNotificationPayment = async (
           .catch(() => ''),
       ]);
       if (!isSessionCurrent()) return;
-      if (ownedByAddress && currentAddress !== ownedByAddress) return;
+      // An item queued while nobody was signed in has no owner. Presenting it
+      // would show it under whichever account signs in next, which is the same
+      // leak as a cross-account item — the narrow gap left when the address
+      // check only fired for a non-empty owner. Work started for an account
+      // that logged out before the wallet read settled cannot be attributed, so
+      // it is dropped rather than guessed at.
+      if (!ownedByAddress) return;
+      if (currentAddress !== ownedByAddress) return;
 
       // Keyed on the event when one is supplied, so the main-process sink can
       // dedupe: it replaces an entry with the same id rather than adding a

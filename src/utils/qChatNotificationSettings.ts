@@ -198,6 +198,14 @@ export async function getGroupNotificationStore(
     globalVersion: store.globalVersion,
     notifyOnWelcomePosts: store.notifyOnWelcomePosts,
     hideMutedChannels: store.hideMutedChannels,
+    // Must be carried through. This reader rebuilds the store from a fixed set
+    // of fields, so a marker it does not name is dropped on every read and the
+    // migration can never see that a group was already migrated. Adding the
+    // field to the interface alone is not enough.
+    legacyMigratedAt:
+      typeof store.legacyMigratedAt === 'number'
+        ? store.legacyMigratedAt
+        : undefined,
     channels,
   };
 }
@@ -485,6 +493,14 @@ export async function applyScopeNotificationSettings(
   // notifications arriving. `mutedUntil` of 0 is an explicit unmute, so the
   // group is removed again.
   //
+  // ONLY "until I turn it back on" (`null`) is mirrored. That list has no end
+  // time — announcements are gated on `!mutedGroups.includes(groupId)` — so a
+  // timed mute written into it silenced announcements forever: once the 15
+  // minutes elapsed the channels notified again but the announcement stayed
+  // muted, and the group menu then offered no Unmute because the channel mutes
+  // had also expired. The per-channel store already carries the end time, and
+  // Q-Chat itself ignores this legacy key.
+  //
   // Written before the store so the store stays the last and authoritative
   // write for this operation.
   const isGroupScope = scope.sectionId == null && scope.channelId == null;
@@ -498,7 +514,10 @@ export async function applyScopeNotificationSettings(
         const list: number[] = Array.isArray(raw)
           ? raw.map((id) => Number(id)).filter((id) => Number.isFinite(id))
           : [];
-        const muted = settings.mutedUntil !== 0;
+        // `null` is the only indefinite mute. A number is a deadline, and
+        // removing the group is also correct for one, so a timed mute clears
+        // any stale entry the group may already have.
+        const muted = settings.mutedUntil === null;
         const next = muted
           ? Array.from(new Set([...list, numericGroupId]))
           : list.filter((id) => id !== numericGroupId);
@@ -1188,13 +1207,22 @@ export async function migrateNotificationSettings(
     const legacy = await getLegacyGroupSettings(groupId);
     // Already migrated in an earlier pass, so this group's store may hold
     // choices the user made afterwards. Leave it alone.
+    //
+    // The per-group marker is checked unconditionally. Gating it on the global
+    // flag was not enough: when any group's channel lookup fails the global flag
+    // stays unset, the next pass re-enters migration for every group, and a
+    // migrated group is rewritten from the stale legacy values — a channel the
+    // user set back to "All messages" returns to "None". The flag says "the last
+    // pass finished cleanly", which is a different question from "this group was
+    // migrated", and only the marker answers the second.
+    const existing = await getGroupNotificationStore(groupId);
+    if (existing.legacyMigratedAt !== undefined) {
+      continue;
+    }
     if (previouslyComplete) {
-      const existing = await getGroupNotificationStore(groupId);
-      // An explicit marker wins: this group was migrated, whatever it holds
-      // now. Falling back to "store is non-empty" keeps groups migrated by an
-      // earlier build from being re-run once.
+      // Groups migrated by an earlier build carry no marker. Fall back to their
+      // store being non-empty so they are not re-run once.
       if (
-        existing.legacyMigratedAt !== undefined ||
         Object.keys(existing.channels ?? {}).length > 0 ||
         existing.notifyOnWelcomePosts !== undefined ||
         existing.hideMutedChannels !== undefined
@@ -1267,13 +1295,20 @@ export async function migrateNotificationSettings(
     // were silently dropped.
     if (legacyGroupMute || legacyGroupMentionsOff) {
       const lookup = await fetchChannelIds(groupId);
+      // An `ok` but empty answer is ambiguous. Main reports a membership that
+      // has not been applied yet as an empty list rather than an error, and a
+      // genuinely empty group looks identical. Treating it as "no channels"
+      // wrote a store with no overrides and set the migration marker, so a mute
+      // or a mentions-off that needed those channels was dropped and the marker
+      // then stopped the retry that would have repaired it. A group-level
+      // preference with nothing to write is unresolved, not done.
       const resolved =
-        lookup.status === 'ok'
+        lookup.status === 'ok' && lookup.channelIds.length > 0
           ? lookup.channelIds
           : // Only fall back to entries this group already has. Never borrow
             // another group's channels.
             Object.keys(channels);
-      const canMaterialize = lookup.status === 'ok' || resolved.length > 0;
+      const canMaterialize = resolved.length > 0;
       if (!canMaterialize) {
         unresolvedGroupIds.push(String(groupId));
         continue;
