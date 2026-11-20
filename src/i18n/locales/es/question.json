@@ -104,6 +104,8 @@
       "poll_vote": "falló al votar en la encuesta",
       "process_transaction": "no se pudo procesar la transacción",
       "provide_key_shared_link": "para un recurso cifrado, debe proporcionar la clave para crear el enlace compartido",
+      "public_key_mismatch": "no se pudo confirmar la clave pública de {{ address }}, así que no se cifró ni se envió nada",
+      "recipient_no_public_key": "esta cuenta aún no tiene clave pública en la cadena, así que no se le puede enviar un mensaje cifrado",
       "registered_name": "se necesita un nombre registrado para publicar",
       "resources_publish": "algunos recursos no se pudieron publicar",
       "retrieve_file": "no se pudo recuperar el archivo",

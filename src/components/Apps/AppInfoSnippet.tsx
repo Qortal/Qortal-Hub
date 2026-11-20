@@ -84,9 +84,9 @@ export const AppInfoSnippet = ({
                   },
                 }}
                 alt={app?.name}
-                src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(
                   app?.name
-                }/qortal_avatar?async=true`}
+                )}/qortal_avatar?async=true`}
               >
                 <img
                   style={{

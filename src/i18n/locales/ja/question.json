@@ -104,6 +104,8 @@
       "poll_vote": "投票への投票に失敗しました",
       "process_transaction": "トランザクションを処理できません",
       "provide_key_shared_link": "暗号化リソースのため、共有リンク作成にはキーが必要です",
+      "public_key_mismatch": "{{ address }} の公開鍵を確認できなかったため、何も暗号化・送信されていません",
+      "recipient_no_public_key": "このアカウントにはまだチェーン上の公開鍵がないため、暗号化メッセージを送れません",
       "registered_name": "公開には登録済みの名前が必要です",
       "resources_publish": "一部のリソースの公開に失敗しました",
       "retrieve_file": "ファイルの取得に失敗しました",
