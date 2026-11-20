@@ -54,9 +54,9 @@ export const AppsDevModeTabComponent = ({ isSelected, app }) => {
               app?.customIcon
                 ? app?.customIcon
                 : app?.service
-                  ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                  ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(
                       app?.name
-                    }/qortal_avatar?async=true`
+                    )}/qortal_avatar?async=true`
                   : LogoSelected
             }
             alt="center-icon"

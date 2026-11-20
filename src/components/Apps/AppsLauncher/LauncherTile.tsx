@@ -61,7 +61,7 @@ const askForPicture = (
   address:
     src ||
     (appName
-      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true${
+      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(appName)}/qortal_avatar?async=true${
           attempt ? `&retry=${attempt}` : ''
         }`
       : null),
@@ -282,7 +282,7 @@ export const LauncherFolderIcon = ({
           const src =
             picture.src ||
             (picture.appName
-              ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${picture.appName}/qortal_avatar?async=true`
+              ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(picture.appName)}/qortal_avatar?async=true`
               : null);
           return src ? (
             <Box
