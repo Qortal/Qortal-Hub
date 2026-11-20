@@ -24,7 +24,7 @@ export type WorkspaceApp = {
 };
 
 export const getHotkeyAppThumbnailUrl = (appName: string) =>
-  `${getBaseApiReact()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
+  `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(appName)}/qortal_avatar?async=true`;
 
 /**
  * An app's picture, the Qortal logo until it loads or when it has none.

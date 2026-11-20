@@ -104,6 +104,8 @@
       "poll_vote": "failed to vote on the poll",
       "process_transaction": "unable to process transaction",
       "provide_key_shared_link": "for an encrypted resource, you must provide the key to create the shared link",
+      "public_key_mismatch": "could not confirm the public key of {{ address }}, so nothing was encrypted or sent",
+      "recipient_no_public_key": "this account has no public key on chain yet, so an encrypted message can't be sent to it",
       "registered_name": "a registered name is needed to publish",
       "resources_publish": "some resources have failed to publish",
       "retrieve_file": "failed to retrieve file",

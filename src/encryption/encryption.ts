@@ -9,6 +9,11 @@ import {
 import { publishData } from '../qdn/publish/publish.ts';
 import { getData } from '../utils/chromeStorage.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
+import {
+  assertPublicKeyForAddress,
+  isValidQortalAddress,
+  PublicKeyMismatchError,
+} from './addressKeyCheck.ts';
 
 export const requestQueueGetPublicKeys = new RequestQueueWithPromise(10);
 
@@ -75,6 +80,24 @@ async function getKeyPair() {
   }
 }
 
+/**
+ * The public key of `address` from the node's account record, checked to
+ * derive that address. A group key is encrypted to every key returned here, so
+ * a missing key, another account's key or a malformed address throws, and
+ * nothing is encrypted or published.
+ */
+export const fetchVerifiedAccountPublicKey = async (
+  validApi: string,
+  address: unknown
+): Promise<string> => {
+  if (!isValidQortalAddress(address)) {
+    throw new PublicKeyMismatchError(address);
+  }
+  const resAddress = await fetch(`${validApi}/addresses/${address}`);
+  const resData = await resAddress.json();
+  return assertPublicKeyForAddress(resData?.publicKey, address);
+};
+
 const getPublicKeys = async (groupNumber: number) => {
   const validApi = await getBaseApi();
   const response = await fetch(
@@ -87,13 +110,9 @@ const getPublicKeys = async (groupNumber: number) => {
     const memberPromises = groupData.members
       .filter((member) => member.member)
       .map((member) =>
-        requestQueueGetPublicKeys.enqueue(async () => {
-          const resAddress = await fetch(
-            `${validApi}/addresses/${member.member}`
-          );
-          const resData = await resAddress.json();
-          return resData.publicKey;
-        })
+        requestQueueGetPublicKeys.enqueue(() =>
+          fetchVerifiedAccountPublicKey(validApi, member.member)
+        )
       );
 
     const members = await Promise.all(memberPromises);
@@ -111,11 +130,9 @@ export const getPublicKeysByAddress = async (admins: string[]) => {
     const memberPromises = admins
       .filter((address) => address) // Ensure the address is valid
       .map((address) =>
-        requestQueueGetPublicKeys.enqueue(async () => {
-          const resAddress = await fetch(`${validApi}/addresses/${address}`);
-          const resData = await resAddress.json();
-          return resData.publicKey;
-        })
+        requestQueueGetPublicKeys.enqueue(() =>
+          fetchVerifiedAccountPublicKey(validApi, address)
+        )
       );
 
     const members = await Promise.all(memberPromises);
