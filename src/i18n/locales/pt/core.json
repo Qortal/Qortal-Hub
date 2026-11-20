@@ -909,7 +909,7 @@
       "publishing": "publicando... Por favor, aguarde.",
       "qdn": "usar salvamento na QDN",
       "rating": "avaliação para {{ service }} {{ name }}",
-      "register_name": "você precisa de um nome registrado na QDN para salvar seus aplicativos fixados na QDN.",
+      "register_name": "você precisa de um nome Qortal registrado para salvar seus aplicativos fixados na QDN.",
       "replied_to": "respondeu para {{ person }}",
       "replied_to_deleted_message": "respondeu a uma mensagem eliminada",
       "replied_to_you": "↩ respondeu-te",
