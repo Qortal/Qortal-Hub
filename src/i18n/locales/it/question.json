@@ -104,6 +104,8 @@
       "poll_vote": "voto al sondaggio fallito",
       "process_transaction": "impossibile elaborare la transazione",
       "provide_key_shared_link": "per una risorsa criptata, devi fornire la chiave per creare il link condiviso",
+      "public_key_mismatch": "impossibile confermare la chiave pubblica di {{ address }}, quindi non è stato cifrato né inviato nulla",
+      "recipient_no_public_key": "questo account non ha ancora una chiave pubblica sulla blockchain, quindi non gli si può inviare un messaggio cifrato",
       "registered_name": "serve un nome registrato per pubblicare",
       "resources_publish": "alcune risorse non sono state pubblicate",
       "retrieve_file": "recupero file fallito",

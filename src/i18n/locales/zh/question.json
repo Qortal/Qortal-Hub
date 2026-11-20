@@ -104,6 +104,8 @@
       "poll_vote": "投票失败",
       "process_transaction": "无法处理交易",
       "provide_key_shared_link": "加密资源需要提供密钥以创建共享链接",
+      "public_key_mismatch": "无法确认 {{ address }} 的公钥，因此未加密或发送任何内容",
+      "recipient_no_public_key": "此账户在链上还没有公钥，因此无法向其发送加密消息",
       "registered_name": "发布需要注册的名称",
       "resources_publish": "某些资源发布失败",
       "retrieve_file": "获取文件失败",

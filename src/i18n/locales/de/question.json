@@ -104,6 +104,8 @@
       "poll_vote": "Abstimmung zur Umfrage fehlgeschlagen",
       "process_transaction": "Transaktion konnte nicht verarbeitet werden",
       "provide_key_shared_link": "Für verschlüsselte Ressourcen müssen Sie den Schlüssel für den Freigabelink angeben",
+      "public_key_mismatch": "Der öffentliche Schlüssel von {{ address }} konnte nicht bestätigt werden, daher wurde nichts verschlüsselt oder gesendet",
+      "recipient_no_public_key": "dieses Konto hat noch keinen öffentlichen Schlüssel auf der Blockchain, daher kann ihm keine verschlüsselte Nachricht gesendet werden",
       "registered_name": "Ein registrierter Name ist für die Veröffentlichung erforderlich",
       "resources_publish": "Einige Ressourcen konnten nicht veröffentlicht werden",
       "retrieve_file": "Datei konnte nicht abgerufen werden",

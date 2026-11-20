@@ -98,6 +98,7 @@ import {
 } from './permissionPromptQueue';
 import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
 import Base58 from '../encryption/Base58.ts';
+import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
 import {
@@ -2879,7 +2880,8 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       if (res?.error === 102) {
         key = '';
         hasPublicKey = false;
-      } else if (res !== false) {
+      } else if (res !== false && res !== 'false') {
+        // Core answers the text "false" for an account with no key on chain.
         key = res;
         hasPublicKey = true;
       } else {
@@ -2889,9 +2891,17 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
 
       if (!hasPublicKey && isRecipient) {
         throw new Error(
-          'Cannot send an encrypted message to this user since they do not have their publickey on chain.'
+          i18n.t('question:message.error.recipient_no_public_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
       }
+      // The message is encrypted to this key: it must belong to the recipient
+      // address.
+      key = assertPublicKeyForAddress(
+        typeof key === 'string' ? key : '',
+        recipient
+      );
       let _reference = new Uint8Array(64);
       self.crypto.getRandomValues(_reference);
 

@@ -104,6 +104,8 @@
       "poll_vote": "küsitlusel hääletamine ebaõnnestus",
       "process_transaction": "tehingu töötlemine ebaõnnestus",
       "provide_key_shared_link": "krüpteeritud ressursi jaoks pead sa andma võtme, et luua jagatav link",
+      "public_key_mismatch": "aadressi {{ address }} avalikku võtit ei õnnestunud kinnitada, seega midagi ei krüpteeritud ega saadetud",
+      "recipient_no_public_key": "sellel kontol pole veel plokiahelas avalikku võtit, seega ei saa sellele krüpteeritud sõnumit saata",
       "registered_name": "avaldamiseks on vajalik registreeritud nimi",
       "resources_publish": "mõnede ressursside avaldamine ebaõnnestus",
       "retrieve_file": "faili kättesaamine ebaõnnestus",

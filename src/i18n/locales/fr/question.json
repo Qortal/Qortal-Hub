@@ -104,6 +104,8 @@
       "poll_vote": "échec du vote dans le sondage",
       "process_transaction": "impossible de traiter la transaction",
       "provide_key_shared_link": "pour une ressource chiffrée, vous devez fournir la clé pour créer le lien partagé",
+      "public_key_mismatch": "impossible de confirmer la clé publique de {{ address }}, rien n'a donc été chiffré ni envoyé",
+      "recipient_no_public_key": "ce compte n'a pas encore de clé publique sur la chaîne, on ne peut donc pas lui envoyer de message chiffré",
       "registered_name": "un nom enregistré est requis pour publier",
       "resources_publish": "certaines ressources n'ont pas pu être publiées",
       "retrieve_file": "échec de la récupération du fichier",

@@ -4,6 +4,12 @@ import { getNotificationOsPushDisabled } from '../qortal/qortal-requests';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
+import {
+  assertPublicKeyForAddress,
+  isValidQortalAddress,
+  publicKeyBelongsToAddress,
+  PublicKeyMismatchError,
+} from '../encryption/addressKeyCheck';
 import i18n from 'i18next';
 import {
   base64ToUint8Array,
@@ -895,19 +901,36 @@ export async function getNameOrAddress(receiver) {
   }
 }
 
+/**
+ * The public key of `receiver` (an account address) from the node, checked to
+ * derive that address. Throws for anything that is not an account address, for
+ * no key, and for another account's key.
+ */
 export async function getPublicKey(receiver) {
   try {
+    if (!isValidQortalAddress(receiver)) {
+      throw new PublicKeyMismatchError(receiver);
+    }
     const validApi = await getBaseApi();
 
     const response = await fetch(validApi + '/addresses/publickey/' + receiver);
-    if (!response?.ok) throw new Error("Cannot fetch recipient's public key");
-
-    const data = await response.text();
-    if (!data?.error && data !== 'false') return data;
-    if (data?.error) {
-      throw new Error("Cannot fetch recipient's public key");
+    if (!response?.ok) {
+      throw new Error(
+        i18n.t('question:message.error.fetch_recipient_public_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
-    throw new Error("Cannot fetch recipient's public key");
+
+    const data = (await response.text()).trim();
+    if (!data || data === 'false') {
+      throw new Error(
+        i18n.t('question:message.error.fetch_recipient_public_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+    return assertPublicKeyForAddress(data, receiver);
   } catch (error) {
     throw new Error(error?.message || 'cannot validate address or name');
   }
@@ -1296,6 +1319,14 @@ export async function sendChatDirect({
   }
 
   if (!recipientPublicKey) throw new Error('Cannot retrieve publickey');
+  // A key handed in by the caller is used only when it belongs to the
+  // recipient; otherwise the key is fetched again, and getPublicKey checks it.
+  recipientPublicKey = publicKeyBelongsToAddress(
+    recipientPublicKey,
+    recipientAddress
+  )
+    ? recipientPublicKey.trim()
+    : await getPublicKey(recipientAddress);
 
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
