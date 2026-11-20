@@ -199,6 +199,17 @@ it('does not access the private key or submit signatures after refusal', async (
   expect(fetchMock).toHaveBeenCalledOnce();
 });
 
+it('asks for "I have read this request", and signs and submits nothing when declined', async () => {
+  accepted = false;
+  await expect(
+    signForeignFees({}, { name: 'Opened-App', tabId: 42 }, true)
+  ).rejects.toThrow('foreign_fees.declined');
+  expect(prompts).toHaveLength(1);
+  expect(prompts[0].confirmCheckbox).toBe(true);
+  expect(getKeyPair).not.toHaveBeenCalled();
+  expect(fetchMock).toHaveBeenCalledOnce();
+});
+
 it('rejects overlapping requests rather than replacing the pending approval', async () => {
   let finish: (value: Response) => void;
   fetchMock.mockImplementationOnce(

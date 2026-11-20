@@ -474,6 +474,7 @@ describe('TRANSFER_ASSET', () => {
     expect(payloads[0].text3).toContain('Recipient B');
     expect(payloads[0].text3).toContain(ACCOUNT_A);
     expect(payloads[0].highlightedText).toContain('"quantity":"2.5"');
+    expect(payloads[0].confirmCheckbox).toBe(true);
     expect(getAssetBalanceInfo).toHaveBeenCalledWith(5);
     expect(transferAsset).toHaveBeenCalledWith({
       amount: 2.5,
@@ -481,6 +482,22 @@ describe('TRANSFER_ASSET', () => {
       assetId: 5,
       approvedFee: FEE,
     });
+  });
+
+  it('asks for "I have read this request", and transfers nothing when declined', async () => {
+    const payloads = answerPrompts({ accepted: false });
+
+    await expect(
+      transferAssetRequest(
+        { amount: '2.50', assetId: '5', recipient: 'Recipient B' },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow('question:message.generic.user_declined_request');
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].confirmCheckbox).toBe(true);
+    expect(transferAsset).not.toHaveBeenCalled();
   });
 
   it('transfers 100000000 units, an amount the builder signs exactly', async () => {
@@ -604,6 +621,7 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
     expect(payloads[0].highlightedText).toBe(
       `question:total_amount ${JSON.stringify({ amount: '3.25' })}`
     );
+    expect(payloads[0].confirmCheckbox).toBe(true);
     expect(getPublicKey).toHaveBeenNthCalledWith(1, ACCOUNT_A);
     expect(getPublicKey).toHaveBeenNthCalledWith(2, ACCOUNT_C);
     expect(transferAsset).toHaveBeenNthCalledWith(1, {
@@ -618,6 +636,19 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
       recipient: ACCOUNT_C,
       approvedFee: FEE,
     });
+  });
+
+  it('asks for "I have read this request", and pays and publishes nothing when declined', async () => {
+    const payloads = answerPrompts({ accepted: false });
+
+    await expect(
+      multiPaymentWithPrivateData(request, false, OPENED_APP)
+    ).rejects.toThrow('question:message.generic.user_declined_request');
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0].confirmCheckbox).toBe(true);
+    expect(transferAsset).not.toHaveBeenCalled();
+    expect(publishData).not.toHaveBeenCalled();
   });
 
   it('sends a transfer of a large amount it showed, as background transferAsset reads it', async () => {
@@ -971,11 +1002,29 @@ describe('app fee after a publish', () => {
             })}`,
           })}`
         );
+        expect(payloads[0].confirmCheckbox).toBe(true);
         expect(sendCoinFunc).toHaveBeenCalledTimes(1);
         expect(sendCoinFunc).toHaveBeenCalledWith(
           { amount: 1.5, receiver: ACCOUNT_A, approvedFee: FEE },
           true
         );
+      }
+    );
+
+    it.each(publishes)(
+      '%s asks for "I have read this request" with an app fee, and publishes and pays nothing when declined',
+      async (_kind, publish) => {
+        const payloads = answerPrompts({ accepted: false });
+
+        await expect(
+          publish({ appFee: '1.50', appFeeRecipient: 'Recipient B' })
+        ).rejects.toThrow('question:message.generic.user_declined_request');
+
+        expect(payloads).toHaveLength(1);
+        expect(payloads[0].appFee).toBe('1.51');
+        expect(payloads[0].confirmCheckbox).toBe(true);
+        expect(publishData).not.toHaveBeenCalled();
+        expect(sendCoinFunc).not.toHaveBeenCalled();
       }
     );
 
@@ -1000,6 +1049,7 @@ describe('app fee after a publish', () => {
         expect(payloads).toHaveLength(1);
         expect(payloads[0].appFee).toBeUndefined();
         expect(payloads[0].checkbox1).toBeUndefined();
+        expect(payloads[0].confirmCheckbox).toBeUndefined();
         expect(publishData).toHaveBeenCalled();
         expect(resolveRecipient).not.toHaveBeenCalled();
         expect(sendCoinFunc).not.toHaveBeenCalled();

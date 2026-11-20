@@ -311,6 +311,7 @@ const _deployAt = async (
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee.fee,
+      confirmCheckbox: true,
     },
     isFromExtension,
     appInfo
@@ -1849,8 +1850,9 @@ function readAppFee(data: any): {
 /**
  * Before the publish dialog: resolves the app fee's recipient and reads the
  * PAYMENT fee, which may not be above the ceiling. The dialog shows the app
- * fee with that fee and names who gets it; after the publish, `payment` pays
- * that address the parsed amount with that fee.
+ * fee with that fee, names who gets it and asks for "I have read this
+ * request"; after the publish, `payment` pays that address the parsed amount
+ * with that fee.
  */
 async function prepareAppFee(appFee: ParsedAmount, appFeeRecipient: unknown) {
   const recipient = await resolveRecipient(appFeeRecipient);
@@ -1873,6 +1875,7 @@ async function prepareAppFee(appFee: ParsedAmount, appFeeRecipient: unknown) {
           postProcess: 'capitalizeFirstChar',
         }),
       },
+      confirmCheckbox: true,
     },
   };
 }
@@ -5977,6 +5980,7 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} ARRR`,
+        confirmCheckbox: true,
       },
       isFromExtension,
       appInfo
@@ -6162,6 +6166,7 @@ export const createBuyOrder = async (data, isFromExtension, appInfo?) => {
             postProcess: 'capitalizeFirstChar',
           }),
         },
+        confirmCheckbox: true,
       },
       isFromExtension,
       appInfo
@@ -6383,6 +6388,7 @@ export const createSellOrder = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
         fee: '0.02',
+        confirmCheckbox: true,
       },
       isFromExtension,
       appInfo
@@ -6851,6 +6857,7 @@ export const signTransaction = async (data, isFromExtension, appInfo?) => {
       ),
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
+      confirmCheckbox: true,
     },
     isFromExtension,
     appInfo
@@ -8034,6 +8041,7 @@ export const sellNameRequest = async (data, isFromExtension, appInfo?) => {
         }
       ),
       fee: fee.fee,
+      confirmCheckbox: true,
     },
     isFromExtension,
     appInfo
@@ -8160,6 +8168,7 @@ export const buyNameRequest = async (data, isFromExtension, appInfo?) => {
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee.fee,
+      confirmCheckbox: true,
     },
     isFromExtension,
     appInfo
@@ -8222,6 +8231,7 @@ export const signForeignFees = async (_data, appInfo, isFromExtension) => {
             text1: i18n.t('question:foreign_fees.approve'),
             highlightedText: i18n.t('question:foreign_fees.review'),
             json: fees,
+            confirmCheckbox: true,
           },
           isFromExtension,
           appInfo
@@ -8476,6 +8486,7 @@ export const multiPaymentWithPrivateData = async (
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee,
+      confirmCheckbox: true,
     },
     isFromExtension,
     appInfo
@@ -8701,6 +8712,7 @@ export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee,
+      confirmCheckbox: true,
     },
     isFromExtension,
     appInfo
