@@ -953,7 +953,7 @@
       "register_name": "haluatko rekisteröidä tämän nimen?",
       "reset_pinned": "etkö pidä nykyisistä paikallisista muutoksistasi? Haluatko palauttaa oletuksena kiinnitetyt sovellukset?",
       "reset_qdn": "etkö pidä nykyisistä paikallisista muutoksistasi? Haluatko palauttaa QDN:ään tallennetut kiinnitetyt sovellukset?",
-      "transfer_qort": "haluatko siirtää {{ amount }} QORT"
+      "transfer_qort_to": "haluatko siirtää {{ amount }} QORT vastaanottajalle {{ recipient }}?"
     },
     "success": {
       "order_submitted": "ostotoimeksiantosi lähetettiin",

@@ -46,13 +46,22 @@ import {
   buyName,
   getBaseApi,
   getAssetBalanceInfo,
-  getNameOrAddress,
   getAssetInfo,
   getPublicKey,
+  resolveRecipient,
   transferAsset,
   sendChatNotification,
   sendChatGroup,
 } from '../background/background.ts';
+import {
+  checkValueTransferFee,
+  formatAtomicAmount,
+  parseAssetId,
+  parseDecimalAmount,
+  type ParsedAmount,
+  RecipientInvisibleCharactersError,
+  recipientDisplayLabel,
+} from '../transactions/paymentSafety';
 import {
   encryptAndPublishSymmetricKeyGroupChat,
   getAllUserNames,
@@ -1820,6 +1829,88 @@ export const deleteListItems = async (data, isFromExtension, appInfo?) => {
   }
 };
 
+/**
+ * A publish request's app fee: plain decimals only ("0x10", "1e3" are
+ * refused). There is no app fee when it is zero or the request names no
+ * recipient for it.
+ */
+function readAppFee(data: any): {
+  appFee: ParsedAmount | null;
+  hasAppFee: boolean;
+} {
+  const appFee = data?.appFee
+    ? parseDecimalAmount(data.appFee, { allowZero: true })
+    : null;
+  const hasAppFee =
+    !!appFee && appFee.atomic > BigInt(0) && !!data?.appFeeRecipient;
+  return { appFee, hasAppFee };
+}
+
+/**
+ * Before the publish dialog: resolves the app fee's recipient and reads the
+ * PAYMENT fee, which may not be above the ceiling. The dialog shows the app
+ * fee with that fee and names who gets it; after the publish, `payment` pays
+ * that address the parsed amount with that fee.
+ */
+async function prepareAppFee(appFee: ParsedAmount, appFeeRecipient: unknown) {
+  const recipient = await resolveRecipient(appFeeRecipient);
+  const paymentFee = checkValueTransferFee((await getFee('PAYMENT')).fee);
+  const paymentFeeAtomic = parseDecimalAmount(paymentFee, {
+    allowZero: true,
+  }).atomic;
+  return {
+    payment: {
+      amount: appFee.value,
+      receiver: recipient.address,
+      approvedFee: paymentFee,
+    },
+    dialogValues: {
+      appFee: formatAtomicAmount(appFee.atomic + paymentFeeAtomic),
+      checkbox1: {
+        value: true,
+        label: i18n.t('question:accept_app_fee_to', {
+          recipient: recipientDisplayLabel(recipient),
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+    },
+  };
+}
+
+/**
+ * Pays a Q-App's app fee after its publish went through. The publish has
+ * already been reported to the Q-App, so a payment that fails or is refused
+ * (for example a node fee above the one the dialog showed) is told to the
+ * user instead.
+ */
+export function payAppFeeAfterPublish(payment: {
+  amount: unknown;
+  receiver: string;
+  approvedFee: unknown;
+}): Promise<void> {
+  const tellUser = (reason: string) => {
+    console.warn('[app fee] payment not sent', reason);
+    executeEvent('openGlobalSnackBar', {
+      message: i18n.t('question:message.error.app_fee_not_sent', {
+        error: reason,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      type: 'error',
+      duration: 8000,
+    });
+  };
+  return sendCoinFunc({ ...payment }, true).then(
+    (result) => {
+      if (result?.res?.success) return;
+      const message = result?.res?.data?.message;
+      tellUser(typeof message === 'string' ? message : '');
+    },
+    (error) => {
+      tellUser(typeof error?.message === 'string' ? error.message : '');
+    }
+  );
+}
+
 export const publishQDNResource = async (
   data: any,
   sender,
@@ -1862,12 +1953,7 @@ export const publishQDNResource = async (
 
   // Use "default" if user hasn't specified an identifier
   const service = data.service;
-  const appFee = data?.appFee ? +data.appFee : undefined;
-  const appFeeRecipient = data?.appFeeRecipient;
-  let hasAppFee = false;
-  if (appFee && appFee > 0 && appFeeRecipient) {
-    hasAppFee = true;
-  }
+  const { appFee, hasAppFee } = readAppFee(data);
   const registeredName = data?.name || (await getNameInfo());
   const name = registeredName;
   if (!name) {
@@ -1987,16 +2073,13 @@ export const publishQDNResource = async (
   const fee = await getFee('ARBITRARY');
 
   const handleDynamicValues = {};
+  // Resolved and checked before asking: the dialog names who gets the app fee,
+  // and the payment after the publish uses that address and that fee.
+  let appFeePayment = null;
   if (hasAppFee) {
-    const feePayment = await getFee('PAYMENT');
-
-    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
-      (handleDynamicValues['checkbox1'] = {
-        value: true,
-        label: i18n.t('question:accept_app_fee', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      }));
+    const prepared = await prepareAppFee(appFee, data.appFeeRecipient);
+    appFeePayment = prepared.payment;
+    Object.assign(handleDynamicValues, prepared.dialogValues);
   }
   if (!!data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
@@ -2064,14 +2147,8 @@ export const publishQDNResource = async (
         withFee: true,
         encryption: isStreamedEncryption ? encryption : null,
       });
-      if (resPublish?.signature && hasAppFee && checkbox1Var) {
-        sendCoinFunc(
-          {
-            amount: appFee,
-            receiver: appFeeRecipient,
-          },
-          true
-        );
+      if (resPublish?.signature && appFeePayment && checkbox1Var) {
+        void payAppFeeAfterPublish(appFeePayment);
       }
       return resPublish;
     } catch (error) {
@@ -2297,27 +2374,16 @@ export const publishMultipleQDNResources = async (
       );
   });
 
-  const appFee = data?.appFee ? +data.appFee : undefined;
-  const appFeeRecipient = data?.appFeeRecipient;
-  let hasAppFee = false;
+  const { appFee, hasAppFee } = readAppFee(data);
 
-  if (appFee && appFee > 0 && appFeeRecipient) {
-    hasAppFee = true;
-  }
-
-  let paymentFeeAmount = 0;
+  // Resolved and checked before asking: the dialog names who gets the app fee,
+  // and the payment after the publish uses that address and that fee.
+  let appFeePayment = null;
   const handleDynamicValues = {};
   if (hasAppFee) {
-    const feePayment = await getFee('PAYMENT');
-    paymentFeeAmount = +feePayment.fee;
-
-    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
-      (handleDynamicValues['checkbox1'] = {
-        value: true,
-        label: i18n.t('question:accept_app_fee', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      }));
+    const prepared = await prepareAppFee(appFee, data.appFeeRecipient);
+    appFeePayment = prepared.payment;
+    Object.assign(handleDynamicValues, prepared.dialogValues);
   }
   if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
@@ -2325,8 +2391,7 @@ export const publishMultipleQDNResources = async (
 
   const totalRequiredQort =
     resources.length * +fee.fee +
-    paymentFeeAmount +
-    (hasAppFee && appFee ? +appFee : 0);
+    (appFeePayment ? +appFeePayment.approvedFee + appFeePayment.amount : 0);
   const balance = await getBalanceInfo();
   if (+balance < totalRequiredQort) {
     throw new Error(
@@ -2600,14 +2665,8 @@ export const publishMultipleQDNResources = async (
     };
     return obj;
   }
-  if (hasAppFee && checkbox1Var) {
-    sendCoinFunc(
-      {
-        amount: appFee,
-        receiver: appFeeRecipient,
-      },
-      true
-    );
+  if (appFeePayment && checkbox1Var) {
+    void payAppFeeAfterPublish(appFeePayment);
   }
   return publishedResponses;
 };
@@ -5786,7 +5845,10 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
     // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
     // then set the response string from the core to the `response` variable (defined above)
     // If they decline, send back JSON that includes an `error` key, such as `{"error": "User declined request"}`
-    const amount = Number(data.amount);
+    // Plain decimals only ("1e3", "0x10" are refused); the dialog shows the
+    // normalised amount that is signed.
+    const parsedAmount = parseDecimalAmount(data.amount);
+    const amount = parsedAmount.value;
     const recipient = data?.recipient || data.destinationAddress;
 
     const url = await createEndpoint(`/addresses/balance/${address}`);
@@ -5816,28 +5878,27 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
     );
     const walletBalanceDecimals = Number(transformDecimals);
     const amountDecimals = Number(amount) * QORT_DECIMALS;
-    const fee: number = await sendQortFee();
+    // The fee the dialog shows: no fee above the ceiling is shown, and the
+    // payment refuses a node fee higher than this one.
+    const fee: number = checkValueTransferFee(await sendQortFee());
     if (amountDecimals + fee * QORT_DECIMALS > walletBalanceDecimals) {
       const errorMsg = i18n.t('question:message.error.insufficient_funds', {
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
     }
-    if (amount <= 0) {
-      const errorMsg = i18n.t('core:message.error.invalid_amount', {
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-    if (recipient.length === 0) {
+    if (typeof recipient !== 'string' || recipient.trim().length === 0) {
       const errorMsg = i18n.t('question:message.error.empty_receiver', {
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
     }
     if (!validateAddress(recipient) && hasInvisibleCharacters(recipient)) {
-      throw new Error('Recipient name contains invisible characters');
+      throw new RecipientInvisibleCharactersError();
     }
+    // A name is resolved before asking: the dialog shows the name and the full
+    // address, and that address is paid without a second lookup.
+    const resolvedRecipient = await resolveRecipient(recipient);
 
     const resPermission = await getUserPermission(
       {
@@ -5845,10 +5906,10 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:to_recipient', {
-          recipient: recipient,
+          recipient: recipientDisplayLabel(resolvedRecipient),
           postProcess: 'capitalizeFirstChar',
         }),
-        highlightedText: `${amount} ${checkCoin}`,
+        highlightedText: `${parsedAmount.text} ${checkCoin}`,
         fee: fee,
         confirmCheckbox: true,
       },
@@ -5859,7 +5920,12 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
 
     if (accepted) {
       const makePayment = await sendCoinFunc(
-        { amount, password: null, receiver: recipient },
+        {
+          amount,
+          password: null,
+          receiver: resolvedRecipient.address,
+          approvedFee: fee,
+        },
         true
       );
       return makePayment.res?.data;
@@ -8193,16 +8259,19 @@ export const multiPaymentWithPrivateData = async (
   const privateKey = parsedData.privateKey;
   const userPublicKey = parsedData.publicKey;
   const { fee: paymentFee } = await getFee('TRANSFER_ASSET');
+  // Each transfer's fee in the total the dialog shows: no fee above the
+  // ceiling is shown, and each transfer refuses a node fee higher than this.
+  checkValueTransferFee(paymentFee);
   const { fee: arbitraryFee } = await getFee('ARBITRARY');
 
   let name = null;
   const payments = data.payments;
-  const assetId = data.assetId;
+  const assetId = parseAssetId(data.assetId);
   const pendingTransactions = [];
   const pendingAdditionalArbitraryTxs = [];
   const additionalArbitraryTxsWithoutPayment =
     data?.additionalArbitraryTxsWithoutPayment || [];
-  let totalAmount = 0;
+  let totalAtomic = BigInt(0);
   let fee = 0;
   for (const payment of payments) {
     const paymentRefId = uid.rnd();
@@ -8219,27 +8288,26 @@ export const multiPaymentWithPrivateData = async (
       }
     }
 
-    const confirmReceiver = await getNameOrAddress(payment.recipient);
-    if (confirmReceiver.error) {
-      throw new Error(
-        i18n.t('question:message.error.invalid_receiver', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
+    // Resolved before the dialog, which shows the name and the address; the
+    // transfer goes to this address.
+    const resolvedRecipient = await resolveRecipient(payment.recipient);
+    const confirmReceiver = resolvedRecipient.address;
     const receiverPublicKey = await getPublicKey(confirmReceiver);
 
-    const amount = +payment.amount.toFixed(8);
+    const parsedAmount = parseDecimalAmount(payment.amount);
+    const amount = parsedAmount.value;
 
     pendingTransactions.push({
       type: 'PAYMENT',
       recipientAddress: confirmReceiver,
+      recipientLabel: recipientDisplayLabel(resolvedRecipient),
       amount: amount,
+      amountText: parsedAmount.text,
       paymentRefId,
     });
 
     fee = fee + +paymentFee;
-    totalAmount = totalAmount + amount;
+    totalAtomic = totalAtomic + parsedAmount.atomic;
 
     if (payment.arbitraryTxs && payment.arbitraryTxs.length > 0) {
       for (const arbitraryTx of payment.arbitraryTxs) {
@@ -8366,6 +8434,8 @@ export const multiPaymentWithPrivateData = async (
         postProcess: 'capitalizeFirstChar',
       })
     );
+  const totalAmountText = formatAtomicAmount(totalAtomic);
+  const totalAmount = Number(totalAmountText);
   const assetBalance = await getAssetBalanceInfo(assetId);
   const assetInfo = await getAssetInfo(assetId);
   if (assetBalance < totalAmount)
@@ -8389,8 +8459,9 @@ export const multiPaymentWithPrivateData = async (
         payments: pendingTransactions
           .filter((item) => item.type === 'PAYMENT')
           .map((payment) => ({
-            recipientAddress: payment.recipientAddress,
-            amount: payment.amount,
+            // Shown only: "name (address)" or the address.
+            recipientAddress: payment.recipientLabel,
+            amount: payment.amountText,
           })),
         resources: [...pendingTransactions, ...pendingAdditionalArbitraryTxs]
           .filter((item) => item.type === 'ARBITRARY')
@@ -8400,7 +8471,10 @@ export const multiPaymentWithPrivateData = async (
             identifier: arbitraryTx.identifier,
           })),
       },
-      highlightedText: `Total Amount: ${totalAmount}`,
+      highlightedText: i18n.t('question:total_amount', {
+        amount: totalAmountText,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee,
     },
     isFromExtension,
@@ -8420,32 +8494,90 @@ export const multiPaymentWithPrivateData = async (
   const paymentsDone = {};
 
   const transactionsDone = [];
+  const paymentCount = pendingTransactions.filter(
+    (item) => item.type === 'PAYMENT'
+  ).length;
+  let paymentsSent = 0;
 
-  for (const transaction of pendingTransactions) {
-    const type = transaction.type;
+  try {
+    for (const transaction of pendingTransactions) {
+      const type = transaction.type;
 
-    if (type === 'PAYMENT') {
-      const makePayment = await retryTransaction(
-        transferAsset,
-        [
-          {
-            amount: transaction.amount,
-            assetId,
-            recipient: transaction.recipientAddress,
-          },
-        ],
-        true
-      );
-      if (makePayment) {
-        transactionsDone.push(makePayment?.signature);
-        if (transaction.paymentRefId) {
-          paymentsDone[transaction.paymentRefId] = makePayment;
+      if (type === 'PAYMENT') {
+        // Each approved transfer is signed and sent once. A failure stops here;
+        // it is never retried with a new signature.
+        const makePayment = await transferAsset({
+          amount: transaction.amount,
+          assetId,
+          recipient: transaction.recipientAddress,
+          approvedFee: paymentFee,
+        });
+        paymentsSent += 1;
+        if (makePayment) {
+          transactionsDone.push(makePayment?.signature);
+          if (transaction.paymentRefId) {
+            paymentsDone[transaction.paymentRefId] = makePayment;
+          }
+        }
+      } else if (
+        type === 'ARBITRARY' &&
+        paymentsDone[transaction.paymentRefId]
+      ) {
+        const objectToEncrypt = {
+          data: transaction.base64,
+          payment: paymentsDone[transaction.paymentRefId],
+        };
+
+        const toBase64 = await retryTransaction(
+          objectToBase64,
+          [objectToEncrypt],
+          true
+        );
+
+        if (!toBase64) continue; // Skip if encryption fails
+
+        const encryptDataResponse = await retryTransaction(
+          encryptDataGroup,
+          [
+            {
+              data64: toBase64,
+              publicKeys: transaction.publicKeys,
+              privateKey,
+              userPublicKey,
+            },
+          ],
+          true
+        );
+
+        if (!encryptDataResponse) continue; // Skip if encryption fails
+
+        const resPublish = await retryTransaction(
+          publishData,
+          [
+            {
+              registeredName: encodeURIComponent(name),
+              file: encryptDataResponse,
+              service: transaction.service,
+              identifier: encodeURIComponent(transaction.identifier),
+              uploadType: 'file',
+              description: transaction?.description,
+              isBase64: true,
+              apiVersion: 2,
+              withFee: true,
+            },
+          ],
+          true
+        );
+
+        if (resPublish?.signature) {
+          transactionsDone.push(resPublish?.signature);
         }
       }
-    } else if (type === 'ARBITRARY' && paymentsDone[transaction.paymentRefId]) {
+    }
+
+    for (const transaction of pendingAdditionalArbitraryTxs) {
       const objectToEncrypt = {
         data: transaction.base64,
-        payment: paymentsDone[transaction.paymentRefId],
       };
 
       const toBase64 = await retryTransaction(
@@ -8476,12 +8608,11 @@ export const multiPaymentWithPrivateData = async (
         [
           {
             registeredName: encodeURIComponent(name),
-            file: encryptDataResponse,
+            data: encryptDataResponse,
             service: transaction.service,
             identifier: encodeURIComponent(transaction.identifier),
-            uploadType: 'file',
+            uploadType: 'base64',
             description: transaction?.description,
-            isBase64: true,
             apiVersion: 2,
             withFee: true,
           },
@@ -8493,56 +8624,19 @@ export const multiPaymentWithPrivateData = async (
         transactionsDone.push(resPublish?.signature);
       }
     }
-  }
-
-  for (const transaction of pendingAdditionalArbitraryTxs) {
-    const objectToEncrypt = {
-      data: transaction.base64,
-    };
-
-    const toBase64 = await retryTransaction(
-      objectToBase64,
-      [objectToEncrypt],
-      true
+  } catch (error) {
+    // Once a payment went through, a failure in a later transfer or in the
+    // private data says how many payments went through, so they are checked
+    // before the request is tried again.
+    if (paymentsSent === 0) throw error;
+    throw new Error(
+      i18n.t('question:message.error.payments_partially_sent', {
+        sent: paymentsSent,
+        total: paymentCount,
+        error: error?.message || '',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
-
-    if (!toBase64) continue; // Skip if encryption fails
-
-    const encryptDataResponse = await retryTransaction(
-      encryptDataGroup,
-      [
-        {
-          data64: toBase64,
-          publicKeys: transaction.publicKeys,
-          privateKey,
-          userPublicKey,
-        },
-      ],
-      true
-    );
-
-    if (!encryptDataResponse) continue; // Skip if encryption fails
-
-    const resPublish = await retryTransaction(
-      publishData,
-      [
-        {
-          registeredName: encodeURIComponent(name),
-          data: encryptDataResponse,
-          service: transaction.service,
-          identifier: encodeURIComponent(transaction.identifier),
-          uploadType: 'base64',
-          description: transaction?.description,
-          apiVersion: 2,
-          withFee: true,
-        },
-      ],
-      true
-    );
-
-    if (resPublish?.signature) {
-      transactionsDone.push(resPublish?.signature);
-    }
   }
 
   return transactionsDone;
@@ -8560,11 +8654,16 @@ export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
       );
     }
   });
-  const amount = data.amount;
-  const assetId = data.assetId;
+  // Plain decimals only; the dialog shows the normalised amount that is signed.
+  const parsedAmount = parseDecimalAmount(data.amount);
+  const amount = parsedAmount.value;
+  const assetId = parseAssetId(data.assetId);
   const recipient = data.recipient;
 
   const { fee } = await getFee('TRANSFER_ASSET');
+  // The fee the dialog shows: no fee above the ceiling is shown, and the
+  // transfer refuses a node fee higher than this one.
+  checkValueTransferFee(fee);
   const balance = await getBalanceInfo();
 
   if (+balance < +fee)
@@ -8580,14 +8679,9 @@ export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
         postProcess: 'capitalizeFirstChar',
       })
     );
-  const confirmReceiver = await getNameOrAddress(recipient);
-  if (confirmReceiver.error) {
-    throw new Error(
-      i18n.t('question:message.error.invalid_receiver', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
-  }
+  // Resolved before the dialog, shown as the name and the full address, and
+  // paid to that address without a second lookup.
+  const resolvedRecipient = await resolveRecipient(recipient);
   const assetInfo = await getAssetInfo(assetId);
   const resPermission = await getUserPermission(
     {
@@ -8598,8 +8692,12 @@ export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
         asset: assetInfo?.name,
         postProcess: 'capitalizeFirstChar',
       }),
+      text3: i18n.t('question:to_recipient', {
+        recipient: recipientDisplayLabel(resolvedRecipient),
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: i18n.t('question:amount_qty', {
-        quantity: amount,
+        quantity: parsedAmount.text,
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee,
@@ -8618,8 +8716,9 @@ export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
   }
   const res = await transferAsset({
     amount,
-    recipient: confirmReceiver,
+    recipient: resolvedRecipient.address,
     assetId,
+    approvedFee: fee,
   });
   return res;
 };
