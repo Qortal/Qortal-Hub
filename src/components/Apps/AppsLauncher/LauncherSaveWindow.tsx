@@ -15,11 +15,8 @@ import {
 } from '../../Save/QdnSettingsCard';
 import { useSaveSettingsToQdn } from '../../Save/useSaveSettingsToQdn';
 import type { AppBookmarksForAddress } from '../AppBookmarks/bookmarkTypes';
-import {
-  launcherEditsAtom,
-  savedLauncherAtom,
-  useHasUnsavedLauncher,
-} from './launcherQdnSync';
+import { launcherEditsAtom } from './launcherQdnSync';
+import { savedAppsStateAtom, useHasUnsavedSavedApps } from './savedAppsSync';
 
 /** How long "saved" stays before the window goes. */
 export const SAVED_NOTICE_MS = QDN_CARD_DONE_MS;
@@ -56,10 +53,10 @@ export const LauncherSaveWindow = ({
 }: LauncherSaveWindowProps) => {
   const { t } = useTranslation(['core']);
   const edits = useAtomValue(launcherEditsAtom);
-  const saved = useAtomValue(savedLauncherAtom);
+  const saved = useAtomValue(savedAppsStateAtom);
   const isUsingImportExport = useAtomValue(isUsingImportExportSettingsAtom);
   const settingsQdnLastUpdated = useAtomValue(settingsQDNLastUpdatedAtom);
-  const hasUnsaved = useHasUnsavedLauncher(myAddress, bookmarks);
+  const hasUnsaved = useHasUnsavedSavedApps(myAddress, bookmarks);
   const save = useSaveSettingsToQdn(myAddress, myName);
 
   const [phase, setPhase] = useState<Phase>('idle');

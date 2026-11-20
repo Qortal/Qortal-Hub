@@ -13,6 +13,9 @@ export const setPinnedAppsAccount = (address: string | null | undefined) => {
   currentAccount = address || null;
 };
 
+/** The account whose pins are the ones in use, or null. */
+export const getPinnedAppsAccount = (): string | null => currentAccount;
+
 /** The localStorage key holding an account's pins (the signed-in one by default). */
 export const pinnedAppsStorageKey = (
   address: string | null | undefined = currentAccount
@@ -64,5 +67,30 @@ export const localPinnedAppsTimestamp = (
       : -1;
   } catch {
     return -1;
+  }
+};
+
+/**
+ * Keeps an account's pin list on this device, with the time it changed. It
+ * writes to that account's own key, whichever account is signed in.
+ */
+export const savePinnedAppsFor = (
+  address: string,
+  pins: unknown[],
+  storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage
+): void => {
+  try {
+    const key = pinnedAppsStorageKey(address);
+    const stored = JSON.parse(storage.getItem(key) ?? 'null');
+    storage.setItem(
+      key,
+      JSON.stringify({
+        ...(stored && typeof stored === 'object' ? stored : {}),
+        sortablePinnedApps: pins,
+        timestamp: Date.now(),
+      })
+    );
+  } catch (error) {
+    console.error('Error saving pinned apps:', error);
   }
 };
