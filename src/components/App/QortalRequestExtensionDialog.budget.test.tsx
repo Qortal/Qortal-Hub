@@ -178,10 +178,34 @@ describe('the approval window when an app budget is used up or ended', () => {
     expect(onAccept).toHaveBeenCalledTimes(1);
   });
 
+  it("says why the budget doesn't pay for a publish that replaces something, and asks as usual", () => {
+    const { onAccept } = renderDialog({
+      ...usedUp,
+      budget: { state: 'replaces' },
+    } as Message);
+    expect(screen.getByTestId('budget-not-covered-note').textContent).toBe(
+      "Opened-App's budget doesn't cover this: it replaces something already published."
+    );
+    expect(screen.queryByTestId('budget-refill')).toBeNull();
+    expect(screen.queryByText('Top up and approve')).toBeNull();
+    waitASecond();
+    fireEvent.click(screen.getByText('Accept'));
+    expect(onAccept).toHaveBeenCalledTimes(1);
+  });
+
+  it('says when the app is already publishing the same thing', () => {
+    renderDialog({ ...usedUp, budget: { state: 'publishing' } } as Message);
+    expect(screen.getByTestId('budget-not-covered-note').textContent).toBe(
+      "Opened-App is already publishing this, so its budget doesn't cover it again. Approving publishes it a second time."
+    );
+    expect(screen.queryByTestId('budget-limit-note')).toBeNull();
+  });
+
   it('shows nothing about budgets for a request without one', () => {
     renderDialog({ ...usedUp, budget: undefined } as Message);
     expect(screen.queryByTestId('budget-refill')).toBeNull();
     expect(screen.queryByTestId('budget-limit-note')).toBeNull();
+    expect(screen.queryByTestId('budget-not-covered-note')).toBeNull();
     expect(screen.getByText('Accept')).toBeTruthy();
   });
 });

@@ -106,7 +106,7 @@ import {
   PERMISSION_ALREADY_GIVEN,
 } from './permissionPromptQueue';
 import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
-import { askUnlessBudgeted, resourcesAreNewOnNode } from './appBudgetApproval';
+import { askUnlessBudgeted, resourcesOnNode } from './appBudgetApproval';
 import Base58 from '../encryption/Base58.ts';
 import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -2137,8 +2137,8 @@ export const publishQDNResource = async (
       },
       ask: (payload, isAlreadyAllowed) =>
         getUserPermission(payload, isFromExtension, appInfo, isAlreadyAllowed),
-      resourcesAreNew: (resources) =>
-        resourcesAreNewOnNode(resources, createEndpoint),
+      resourcesOnNode: (resources) =>
+        resourcesOnNode(resources, createEndpoint),
     });
     budgetTicket = resPermission.ticket;
     const { accepted, checkbox1 = false } = resPermission.answer || {
@@ -2485,8 +2485,8 @@ export const publishMultipleQDNResources = async (
       },
       ask: (payload, isAlreadyAllowed) =>
         getUserPermission(payload, isFromExtension, appInfo, isAlreadyAllowed),
-      resourcesAreNew: (resourcesToCheck) =>
-        resourcesAreNewOnNode(resourcesToCheck, createEndpoint),
+      resourcesOnNode: (resourcesToCheck) =>
+        resourcesOnNode(resourcesToCheck, createEndpoint),
     });
     budgetTicket = resPermission.ticket;
     const { accepted, checkbox1 = false } = resPermission.answer || {

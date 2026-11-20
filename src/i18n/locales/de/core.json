@@ -188,6 +188,10 @@
     "no_budget": "{{name}} hat noch kein Budget.",
     "no_end": "kein Enddatum",
     "none_yet": "noch keine Budgets. Öffnen Sie eine Q-App oder Website und fügen Sie hier eines hinzu.",
+    "not_covered": {
+      "publishing": "{{name}} veröffentlicht dies bereits, daher deckt das Budget es nicht noch einmal. Wenn Sie zustimmen, wird es ein zweites Mal veröffentlicht.",
+      "replaces": "das Budget von {{name}} deckt dies nicht: Es ersetzt bereits Veröffentlichtes."
+    },
     "not_saved": "das Budget konnte auf diesem PC nicht gespeichert werden.",
     "other_budgets": "andere Budgets",
     "refill": {

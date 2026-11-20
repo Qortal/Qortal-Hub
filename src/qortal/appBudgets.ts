@@ -729,10 +729,6 @@ function notePublished(address: string, key: string) {
   }
 }
 
-/** Being published right now, or published this session. */
-const isResourceTaken = (address: string, key: string) =>
-  underWayOf(address).has(key) || publishedOf(address).has(key);
-
 /** What one done action was, for the budget's list. */
 export type AppBudgetActionDetails = {
   /** A publish: the resource, as the request named it. */
@@ -760,8 +756,15 @@ export type AppBudgetTicket = {
   release: () => void;
 };
 
+/**
+ * Why a publish asks although the app's budget could pay for it: one of its
+ * resources is being published from this Hub right now, or was published from
+ * this Hub this session (publishing it again would replace it).
+ */
+export type AppBudgetAskReason = 'publishing' | 'published';
+
 export type AppBudgetDecision =
-  | { kind: 'ask' }
+  | { kind: 'ask'; reason?: AppBudgetAskReason }
   | { kind: 'take'; ticket: AppBudgetTicket }
   | { kind: 'ended'; budget: AppBudget }
   | { kind: 'used_up'; budget: AppBudget }
@@ -794,8 +797,8 @@ const ASK: AppBudgetDecision = { kind: 'ask' };
  * so nothing else takes from the budget between the check and the hold.
  *
  * - `ask`: no budget; a resource of the request is being published or was
- *   published this session (publishing it again would replace it); or the
- *   request alone is more than its limits allow.
+ *   published this session (publishing it again would replace it; `reason`
+ *   says which); or the request alone is more than its limits allow.
  * - `ended` / `used_up`: the window offers to refill it.
  * - `limit`: too many actions in the last minute or day.
  * - `take`: the fees are held; call the ticket's `done` for each action done
@@ -816,11 +819,12 @@ export function takeFromAppBudget(
 
   const resources = request.resources ?? [];
   if (kind === 'publish' && resources.length !== count) return ASK;
-  if (
-    new Set(resources).size !== resources.length ||
-    resources.some((key) => isResourceTaken(address, key))
-  ) {
-    return ASK;
+  if (new Set(resources).size !== resources.length) return ASK;
+  if (resources.some((key) => underWayOf(address).has(key))) {
+    return { kind: 'ask', reason: 'publishing' };
+  }
+  if (resources.some((key) => publishedOf(address).has(key))) {
+    return { kind: 'ask', reason: 'published' };
   }
 
   if (hasBudgetEnded(budget, now)) return { kind: 'ended', budget };

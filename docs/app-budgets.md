@@ -116,6 +116,12 @@ countdown, Accept delay, lock handling), with `budget` in its payload:
   for this request; a request waiting behind it in the queue then uses the
   new budget without a window.
 - **limit**: one line saying which limit made it ask.
+- **replaces** or **publishing**: one line saying why the budget doesn't pay
+  for a publish it would otherwise pay for: the node lists one of its
+  resources, or this Hub published it earlier this session (`replaces`), or
+  the app is publishing the same resource right now (`publishing`, e.g. a
+  second tap on a like before the first one is published). When the node
+  can't say whether a resource exists, the window says nothing.
 
 A request that waited its turn shows the budget as it is when its window
 opens, not as it was when the request came. "Approve this one only" isn't

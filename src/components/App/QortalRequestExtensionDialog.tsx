@@ -33,6 +33,7 @@ import {
 import { appLockedAtom } from '../../atoms/presence';
 import type {
   ApprovalBudgetInfo,
+  ApprovalBudgetNote,
   ApprovalBudgetTopUp,
 } from '../../qortal/appBudgetApproval';
 import {
@@ -70,9 +71,10 @@ export type MessageQortalRequestExtension = {
   fromHub?: boolean;
   /**
    * Why the app's budget doesn't pay for this request: used up or ended (the
-   * window offers to refill it) or at its limit.
+   * window offers to refill it), at its limit, or a publish that would replace
+   * something already published or that the app is publishing right now.
    */
-  budget?: ApprovalBudgetInfo | null;
+  budget?: ApprovalBudgetInfo | ApprovalBudgetNote | null;
 };
 
 type QortalRequestExtensionDialogProps = {
@@ -168,6 +170,19 @@ export function QortalRequestExtensionDialog({
   const wrappingTextSx = {
     overflowWrap: 'anywhere',
     wordBreak: 'break-word',
+  };
+
+  // Why the app's budget doesn't pay for this request, in one line.
+  const budgetNoteSx = {
+    backgroundColor: alpha(theme.palette.warning.main, 0.08),
+    border: `1px solid ${alpha(theme.palette.warning.main, 0.24)}`,
+    borderRadius: '12px',
+    color: theme.palette.text.primary,
+    fontSize: '13.5px',
+    lineHeight: 1.5,
+    marginTop: '14px',
+    padding: '10px 12px',
+    ...wrappingTextSx,
   };
 
   if (!open) return null;
@@ -453,20 +468,7 @@ export function QortalRequestExtensionDialog({
           </Box>
 
           {budgetInfo?.state === 'limit' && budgetInfo.limit ? (
-            <Typography
-              data-testid="budget-limit-note"
-              sx={{
-                backgroundColor: alpha(theme.palette.warning.main, 0.08),
-                border: `1px solid ${alpha(theme.palette.warning.main, 0.24)}`,
-                borderRadius: '12px',
-                color: theme.palette.text.primary,
-                fontSize: '13.5px',
-                lineHeight: 1.5,
-                marginTop: '14px',
-                padding: '10px 12px',
-                ...wrappingTextSx,
-              }}
-            >
+            <Typography data-testid="budget-limit-note" sx={budgetNoteSx}>
               {t(
                 budgetInfo.limit.per === 'day'
                   ? 'core:app_budgets.refill.limit_day'
@@ -474,6 +476,22 @@ export function QortalRequestExtensionDialog({
                 {
                   name: appNameForBudget,
                   max: budgetInfo.limit.max,
+                  postProcess: 'capitalizeFirstChar',
+                }
+              )}
+            </Typography>
+          ) : null}
+
+          {(budgetInfo?.state === 'replaces' ||
+            budgetInfo?.state === 'publishing') &&
+          appNameForBudget ? (
+            <Typography data-testid="budget-not-covered-note" sx={budgetNoteSx}>
+              {t(
+                budgetInfo.state === 'publishing'
+                  ? 'core:app_budgets.not_covered.publishing'
+                  : 'core:app_budgets.not_covered.replaces',
+                {
+                  name: appNameForBudget,
                   postProcess: 'capitalizeFirstChar',
                 }
               )}

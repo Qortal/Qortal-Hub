@@ -335,7 +335,8 @@ describe('a budget pays for new publishes', () => {
 
     const publishing = publishPost('post-1');
     await vi.waitFor(() => expect(shown).toHaveLength(1));
-    expect(shown[0].payload.budget).toBeUndefined();
+    // The window says why the budget doesn't pay.
+    expect(shown[0].payload.budget).toEqual({ state: 'replaces' });
     answer(0, { accepted: true });
     await publishing;
 
@@ -345,17 +346,35 @@ describe('a budget pays for new publishes', () => {
     expect(budget()).toMatchObject({ used: '0', actions: 0 });
   });
 
-  it("asks when the node can't say whether the resource exists", async () => {
-    giveBudget(QORT);
-    stubNode({ 'post-1': 'FAIL' });
+  it.each([
+    ['fails', 'FAIL'],
+    ['answers without a status', ''],
+  ])(
+    "asks when the node can't say whether the resource exists (it %s), and says nothing about the budget",
+    async (_label, status) => {
+      giveBudget(QORT);
+      stubNode({ 'post-1': status });
+      const { shown, answer } = watchWindows();
+      const publishing = publishPost('post-1');
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+      expect(shown[0].payload.budget).toBeUndefined();
+      answer(0, { accepted: false });
+      await expect(publishing).rejects.toThrow(
+        'question:message.generic.user_declined_request'
+      );
+      expect(publishData).not.toHaveBeenCalled();
+    }
+  );
+
+  it('says nothing about a budget for an app without one, and leaves the node alone', async () => {
+    const fetchMock = stubNode({ 'post-1': 'READY' });
     const { shown, answer } = watchWindows();
     const publishing = publishPost('post-1');
     await vi.waitFor(() => expect(shown).toHaveLength(1));
+    expect(shown[0].payload.budget).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
     answer(0, { accepted: false });
-    await expect(publishing).rejects.toThrow(
-      'question:message.generic.user_declined_request'
-    );
-    expect(publishData).not.toHaveBeenCalled();
+    await expect(publishing).rejects.toThrow();
   });
 
   it("asks when the node's fee can't be read", async () => {
@@ -384,6 +403,8 @@ describe('a budget pays for new publishes', () => {
     });
     await vi.waitFor(() => expect(shown).toHaveLength(1));
     expect(shown[0].payload.appFee).toBeDefined();
+    // An app fee always asks; the window doesn't blame the resource.
+    expect(shown[0].payload.budget).toBeUndefined();
     answer(0, { accepted: false });
     await expect(publishing).rejects.toThrow();
     expect(publishData).not.toHaveBeenCalled();
@@ -411,7 +432,7 @@ describe('a budget pays for new publishes', () => {
     const first = publishPost('post-1');
     const second = publishPost('post-1', SECOND_TAB);
     await vi.waitFor(() => expect(shown).toHaveLength(1));
-    expect(shown[0].payload.budget).toBeUndefined();
+    expect(shown[0].payload.budget).toEqual({ state: 'publishing' });
     answer(0, { accepted: false });
     await expect(first).resolves.toEqual({ signature: 'PUBLISH_SIG' });
     await expect(second).rejects.toThrow();
@@ -427,6 +448,7 @@ describe('a budget pays for new publishes', () => {
     // The node may not list it yet.
     const again = publishPost('post-1');
     await vi.waitFor(() => expect(shown).toHaveLength(1));
+    expect(shown[0].payload.budget).toEqual({ state: 'replaces' });
     answer(0, { accepted: false });
     await expect(again).rejects.toThrow();
     expect(publishData).toHaveBeenCalledTimes(1);
@@ -460,6 +482,7 @@ describe('a budget pays for new publishes', () => {
       OPENED_APP
     );
     await vi.waitFor(() => expect(shown).toHaveLength(1));
+    expect(shown[0].payload.budget).toEqual({ state: 'replaces' });
     answer(0, { accepted: true });
     await publishing;
     expect(publishData).toHaveBeenCalledTimes(2);
@@ -808,6 +831,8 @@ describe('what a budget never pays for, new or not', () => {
     const pending = request();
     await new Promise((resolve) => setTimeout(resolve, 50));
     const asked = shown.length;
+    // Always asked for its own sake: nothing about what it would replace.
+    if (asked) expect(shown[0].payload.budget).toBeUndefined();
     if (asked) answer(0, { accepted: false });
     await Promise.allSettled([pending]);
     return asked;
@@ -907,6 +932,7 @@ describe('a publish and what happened while it waited', () => {
     await first;
     // The one that waited would replace it: it asks.
     await vi.waitFor(() => expect(shown).toHaveLength(2));
+    expect(shown[1].payload.budget).toEqual({ state: 'replaces' });
     answer(1, { accepted: false });
     await expect(second).rejects.toThrow();
     expect(publishesOf('post-1')).toBe(1);
@@ -937,6 +963,7 @@ describe('a publish and what happened while it waited', () => {
     });
     await vote;
     await vi.waitFor(() => expect(shown).toHaveLength(3));
+    expect(shown[2].payload.budget).toEqual({ state: 'replaces' });
     answer(2, { accepted: false });
     await expect(second).rejects.toThrow();
     expect(publishesOf('post-1')).toBe(1);
@@ -960,12 +987,37 @@ describe('a publish and what happened while it waited', () => {
       budgetTopUp: { amount: '1', end: { kind: 'month' }, limits: 'standard' },
     });
     await first;
-    // The refilled budget doesn't replace it: post-1 asks.
+    // The refilled budget doesn't replace it: post-1 asks, and says why.
     await vi.waitFor(() => expect(shown).toHaveLength(2));
-    expect(shown[1].payload.budget).toBeUndefined();
+    expect(shown[1].payload.budget).toEqual({ state: 'replaces' });
     answer(1, { accepted: false });
     await expect(second).rejects.toThrow();
     expect(publishesOf('post-1')).toBe(0);
+  });
+
+  it('still says why when a publish of something that exists waited behind another window', async () => {
+    giveBudget(QORT);
+    stubNode({ 'post-1': 'READY' });
+    vi.mocked(resolveRecipient).mockResolvedValue({
+      address: 'QrecipientAddress',
+      name: null,
+    } as any);
+    const { shown, answer } = watchWindows();
+    // An app fee makes the first one ask; post-1 waits behind it.
+    const first = publishPost('post-0', OPENED_APP, {
+      appFee: '0.5',
+      appFeeRecipient: 'QrecipientAddress',
+    });
+    await vi.waitFor(() => expect(shown).toHaveLength(1));
+    const second = publishPost('post-1', SECOND_TAB);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    answer(0, { accepted: false });
+    await expect(first).rejects.toThrow();
+    await vi.waitFor(() => expect(shown).toHaveLength(2));
+    expect(shown[1].payload.budget).toEqual({ state: 'replaces' });
+    answer(1, { accepted: false });
+    await expect(second).rejects.toThrow();
+    expect(publishData).not.toHaveBeenCalled();
   });
 
   it('asks before publishing again what is being published after the window', async () => {
@@ -994,6 +1046,7 @@ describe('a publish and what happened while it waited', () => {
     // The node doesn't list it yet; the budget still mustn't publish it.
     const second = publishPost('post-1', SECOND_TAB);
     await vi.waitFor(() => expect(shown).toHaveLength(2));
+    expect(shown[1].payload.budget).toEqual({ state: 'publishing' });
     answer(1, { accepted: false });
     await expect(second).rejects.toThrow();
     finishUpload();

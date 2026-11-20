@@ -14,7 +14,8 @@
  *
  * Otherwise the window opens as before. When the budget is used up or has
  * ended, the window offers to refill it; when a limit stops it, the window
- * says so.
+ * says so. When a publish would replace something already published, or the
+ * app is publishing the same resource right now, the window says that too.
  */
 
 import { isHubLocked } from '../atoms/presence';
@@ -22,6 +23,7 @@ import { parseDecimalAmount } from '../transactions/paymentSafety';
 import { nodePathSegment } from '../utils/nodeEndpointPath';
 import {
   AppBudgetActionKind,
+  AppBudgetAskReason,
   AppBudgetDecision,
   AppBudgetLimits,
   AppBudgetTicket,
@@ -62,6 +64,15 @@ export type ApprovalBudgetInfo = {
   count: number;
 };
 
+/**
+ * Why the app's budget doesn't pay for a publish it would otherwise pay for:
+ * it would replace something already published, or the app is publishing the
+ * same resource right now.
+ */
+export type ApprovalBudgetNote = {
+  state: 'replaces' | 'publishing';
+};
+
 /** The window's answer when the user chose "Top up and approve". */
 export type ApprovalBudgetTopUp = {
   amount: string;
@@ -99,8 +110,8 @@ export type BudgetedAsk = {
   ) => Promise<any>;
   /** What else may allow a request that waited its turn (stored switches). */
   alsoAllowed?: () => boolean | Promise<boolean>;
-  /** Whether the node says each resource is new. */
-  resourcesAreNew?: (resources: BudgetResource[]) => Promise<boolean>;
+  /** What the node says about the resources (`resourcesOnNode`). */
+  resourcesOnNode?: (resources: BudgetResource[]) => Promise<ResourcesOnNode>;
 };
 
 const currentAddress = (): string | null => {
@@ -122,37 +133,57 @@ function readFee(fee: string | null): bigint | null {
 const STATUS_PATH = '/arbitrary/resource/status';
 
 /**
- * True only when the node answers NOT_PUBLISHED for every resource. A name or
- * identifier that can't be a path segment, a failed request or any other
- * answer counts as "exists", so the request asks.
+ * What the node says about a publish's resources: `new` when it answers
+ * NOT_PUBLISHED for every one, `exists` when it answers with another status
+ * for one of them, `unknown` when it couldn't say (a name or identifier that
+ * can't be a path segment, a failed request, an answer without a status).
  */
-export async function resourcesAreNewOnNode(
+export type ResourcesOnNode = 'new' | 'exists' | 'unknown';
+
+/**
+ * Asks the node about each resource. Only `new` lets a budget pay: `exists`
+ * and `unknown` both ask, and only `exists` is said in the window.
+ */
+export async function resourcesOnNode(
   resources: BudgetResource[],
   endpoint: (path: string) => Promise<string>,
   fetchFn: typeof fetch = fetch
-): Promise<boolean> {
-  if (!resources.length) return false;
-  try {
-    const answers = await Promise.all(
-      resources.map(async ({ service, name, identifier }) => {
+): Promise<ResourcesOnNode> {
+  if (!resources.length) return 'unknown';
+  const answers = await Promise.all(
+    resources.map(async ({ service, name, identifier }) => {
+      try {
         if (typeof service !== 'string' || !/^[A-Z0-9_]+$/.test(service)) {
-          return false;
+          return 'unknown';
         }
         const path =
           `${STATUS_PATH}/${nodePathSegment(service)}` +
           `/${nodePathSegment(name)}` +
           `/${nodePathSegment(publishedIdentifier(identifier))}`;
         const response = await fetchFn(await endpoint(path));
-        if (!response.ok) return false;
-        const body = await response.json();
-        return body?.status === 'NOT_PUBLISHED';
-      })
-    );
-    return answers.every((answer) => answer === true);
-  } catch {
-    return false;
-  }
+        if (!response.ok) return 'unknown';
+        const status = (await response.json())?.status;
+        if (typeof status !== 'string' || !status) return 'unknown';
+        return status === 'NOT_PUBLISHED' ? 'new' : 'exists';
+      } catch {
+        return 'unknown';
+      }
+    })
+  );
+  if (answers.includes('exists')) return 'exists';
+  return answers.every((answer) => answer === 'new') ? 'new' : 'unknown';
 }
+
+/** The window's note for a publish that asks because of what it writes. */
+const noteFor = (
+  reason: AppBudgetAskReason | 'exists' | null | undefined
+): ApprovalBudgetNote | null => {
+  if (reason === 'publishing') return { state: 'publishing' };
+  if (reason === 'published' || reason === 'exists') {
+    return { state: 'replaces' };
+  }
+  return null;
+};
 
 function windowInfo(
   decision: AppBudgetDecision,
@@ -200,7 +231,7 @@ export async function askUnlessBudgeted(
   const resources = request.resources ?? [];
   // Asked of the node only when the app has a budget: an app without one
   // asks exactly as before.
-  let budgetMayPay =
+  const budgetMayPayIfNew =
     request.allowed !== false &&
     !!app &&
     !!address &&
@@ -215,12 +246,17 @@ export async function askUnlessBudgeted(
     !(request.kind === 'vote' && isAlwaysAskedPoll(request.poll)) &&
     !!findAppBudget(address, app);
   // What the node says now: a publish is only paid for while it is new.
-  const stillNew = async () =>
-    resourceKeys.length === count &&
-    !!request.resourcesAreNew &&
-    (await request.resourcesAreNew(resources));
-  if (budgetMayPay && request.kind === 'publish') {
-    budgetMayPay = await stillNew();
+  const onNode = async (): Promise<ResourcesOnNode> =>
+    resourceKeys.length === count && request.resourcesOnNode
+      ? await request.resourcesOnNode(resources)
+      : 'unknown';
+  let budgetMayPay = budgetMayPayIfNew;
+  // What the window says when the node finds a resource already there.
+  let nodeNote: ApprovalBudgetNote | null = null;
+  if (budgetMayPayIfNew && request.kind === 'publish') {
+    const found = await onNode();
+    budgetMayPay = found === 'new';
+    if (found === 'exists') nodeNote = noteFor('exists');
   }
 
   const take = (approved = false): AppBudgetDecision =>
@@ -250,9 +286,14 @@ export async function askUnlessBudgeted(
   // the budget as it is then.
   let info: ApprovalBudgetInfo | null = null;
   const windowPayload: Record<string, unknown> = { ...request.payload };
-  const showBudget = (next: AppBudgetDecision) => {
+  const showBudget = (
+    next: AppBudgetDecision,
+    note: ApprovalBudgetNote | null = nodeNote
+  ) => {
     info = windowInfo(next, fee ?? BigInt(0), count);
-    if (info) windowPayload.budget = info;
+    const shown =
+      info ?? note ?? (next.kind === 'ask' ? noteFor(next.reason) : null);
+    if (shown) windowPayload.budget = shown;
     else delete windowPayload.budget;
   };
   showBudget(decision);
@@ -261,9 +302,12 @@ export async function askUnlessBudgeted(
   const isAlreadyAllowed = async () => {
     if (request.alsoAllowed && (await request.alsoAllowed())) return true;
     // It may have waited a minute: something published meanwhile isn't new.
-    if (budgetMayPay && request.kind === 'publish' && !(await stillNew())) {
-      showBudget({ kind: 'ask' });
-      return false;
+    if (budgetMayPay && request.kind === 'publish') {
+      const found = await onNode();
+      if (found !== 'new') {
+        showBudget({ kind: 'ask' }, noteFor(found === 'exists' ? found : null));
+        return false;
+      }
     }
     const later = take();
     if (later.kind !== 'take') {

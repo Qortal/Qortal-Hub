@@ -325,20 +325,18 @@ describe('taking from a budget', () => {
     expect(
       takeFromAppBudget(
         request({ kind: 'publish', count: 2, resources: [key('a'), key('a')] })
-      ).kind
-    ).toBe('ask');
+      )
+    ).toEqual({ kind: 'ask' });
     const first = takeOne({ kind: 'publish', resources: [POST_KEY] });
     expect(
       takeFromAppBudget(request({ kind: 'publish', resources: [POST_KEY] }))
-        .kind
-    ).toBe('ask');
+    ).toEqual({ kind: 'ask', reason: 'publishing' });
     first.done(POST);
     first.release();
     // Published by a budget this session: the node may not list it yet.
     expect(
       takeFromAppBudget(request({ kind: 'publish', resources: [POST_KEY] }))
-        .kind
-    ).toBe('ask');
+    ).toEqual({ kind: 'ask', reason: 'published' });
   });
 
   it('frees a resource that failed to publish', () => {
