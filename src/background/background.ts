@@ -23,6 +23,11 @@ import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
 import { createNotificationQueue } from '../utils/notificationQueue';
+import {
+  GENERAL_NOTIFICATION_TYPE_MARKER,
+  notificationClickRoute,
+  qchatNotificationIdForEvent,
+} from '../utils/notificationClickRoute';
 import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
 import { joinNodeEndpoint } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
@@ -159,16 +164,17 @@ export function handleNotificationClick(notificationId) {
   // Decode the notificationId if it was encoded
   const decodedNotificationId = decodeURIComponent(notificationId);
 
-  // Determine the type of notification by parsing decodedNotificationId
-  const isDirect = decodedNotificationId.includes('_type=direct_');
-  const isGroup = decodedNotificationId.includes('_type=group_');
-  const isGroupAnnouncement = decodedNotificationId.includes(
-    '_type=group-announcement_'
-  );
-  const isNewThreadPost = decodedNotificationId.includes('_type=thread-post_');
-  const isGeneralNotification = decodedNotificationId.includes(
-    '_type=general-notification'
-  );
+  // Determine the type of notification by parsing decodedNotificationId.
+  // The classification lives in an import-free module so it can be tested
+  // without the Electron shell: a mis-routed id means a click that lands
+  // nowhere, and that is exactly what shipping the event-keyed id without this
+  // branch did.
+  const route = notificationClickRoute(decodedNotificationId);
+  const isGeneralNotification = route === 'general';
+  const isDirect = route === 'direct';
+  const isGroup = route === 'group';
+  const isGroupAnnouncement = route === 'group-announcement';
+  const isNewThreadPost = route === 'thread-post';
 
   // Helper function to extract parameter values safely
   function getParameterValue(id, key) {
@@ -3112,9 +3118,11 @@ export const fireOsNotificationPayment = async (
       // Non-Q-Chat notifications (payments, app resources) have no eventId and
       // keep the clock-derived id.
       const notificationId = encodeURIComponent(
-        eventId
-          ? `q-chat_notification_${eventId}`
-          : 'general_notification_' + Date.now() + '_type=general-notification'
+        // Event-keyed when we have an event, so the sink can replace an entry
+        // rather than stack a second notification for the same post. Otherwise
+        // a clock-derived id, which carries the type marker the router needs.
+        qchatNotificationIdForEvent(eventId) ??
+          'general_notification_' + Date.now() + GENERAL_NOTIFICATION_TYPE_MARKER
       );
 
       generalNotificationPayloadById.set(

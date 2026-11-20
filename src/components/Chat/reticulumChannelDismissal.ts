@@ -93,6 +93,17 @@ export function getReticulumViewChannelPayload(params: {
   isActive: boolean;
   selectedGroup: string | number | null | undefined;
   selectedChannelId: string | null | undefined;
+  /**
+   * The group the selected channel id was resolved for, if known.
+   *
+   * Declared here because this wrapper is the published contract: without it,
+   * a caller can pass the field and it works at runtime while the type says it
+   * is not part of the contract. Any future rewrite of this function that
+   * builds its result from the declared fields would then silently drop the
+   * group-switch gate and publish `(newGroup, oldChannel)` — the wrong-channel
+   * suppression the gate exists to prevent.
+   */
+  channelStateGroupId?: string | null | undefined;
 }): ViewChannelPayload {
   return getReticulumChannelDismissalTarget(params) ?? NOT_VIEWING_VIEW_CONTEXT;
 }

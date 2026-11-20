@@ -273,13 +273,25 @@ describe('D5: notification ids are stable per event', () => {
   );
 
   it('keys the id on the event when one is supplied', () => {
-    expect(backgroundSource).toContain('q-chat_notification_${eventId}');
+    // The id shape is now built by qchatNotificationIdForEvent, which is
+    // exercised directly in src/utils/notificationClickRoute.test.ts. Assert
+    // that background.ts delegates to it rather than re-inlining the literal.
+    expect(backgroundSource).toContain('qchatNotificationIdForEvent(eventId)');
   });
 
   it('keeps the clock-derived id only for notifications with no event', () => {
-    // Payments and app resources have no eventId; they must still get an id.
+    // Payments and app resources have no eventId; they must still get an id
+    // that carries the marker the click router requires.
     expect(backgroundSource).toContain('general_notification_');
     expect(backgroundSource).toContain('Date.now()');
+    expect(backgroundSource).toContain('GENERAL_NOTIFICATION_TYPE_MARKER');
+  });
+
+  it('routes ids through the shared classifier rather than ad-hoc includes', () => {
+    // Regression: the event-keyed id carries no `_type=` segment and used to
+    // fall through every branch, so clicking a Q-Chat notification navigated
+    // nowhere. The classifier is the single place that mapping lives.
+    expect(backgroundSource).toContain('notificationClickRoute(');
   });
 
   it('osNotificationIdForEvent is stable and clock-free', () => {

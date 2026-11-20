@@ -40,6 +40,18 @@ export interface GroupNotificationStore {
   notifyOnWelcomePosts?: boolean;
   /** Group-only setting: hide muted channels in the UI. Not per-channel. */
   hideMutedChannels?: boolean;
+  /**
+   * Set once the legacy settings for this group have been migrated.
+   *
+   * This is a marker of *having migrated*, not of holding data. Without it the
+   * migration could only recognise an already-migrated group by its store being
+   * non-empty, so a user who cleared every override silently opted back in to
+   * the legacy values on the next launch: a stale `q-chat-mention-notifications-
+   * disabled` would rewrite every channel to `pushLevel: 'none'`. Migration is
+   * also re-invoked whenever the membership list reloads, so the check has to be
+   * cheap and stable rather than inferred from content.
+   */
+  legacyMigratedAt?: number;
   /** Flat per-channel overrides. Keyed by channel ID. Only diffs stored. */
   channels: Record<string, ChannelOverride>;
 }
@@ -463,6 +475,47 @@ export async function applyScopeNotificationSettings(
   }
 
   store.globalVersion = global.version;
+
+  // Mirror a group-wide mute into the legacy `mutedGroups` key.
+  //
+  // Group announcements are still gated on that key in background.ts, which has
+  // no access to the per-channel store, and the group context menu now writes
+  // through this function instead of the old handleSetGroupMute. Without the
+  // mirror, muting a group from its right-click menu left announcement
+  // notifications arriving. `mutedUntil` of 0 is an explicit unmute, so the
+  // group is removed again.
+  //
+  // Written before the store so the store stays the last and authoritative
+  // write for this operation.
+  const isGroupScope = scope.sectionId == null && scope.channelId == null;
+  if (isGroupScope && settings.mutedUntil !== undefined) {
+    try {
+      const numericGroupId = Number(scope.groupId);
+      if (Number.isFinite(numericGroupId)) {
+        const raw = await window
+          .sendMessage('getUserSettings', { key: OLD_MUTED_GROUPS_KEY })
+          .catch(() => []);
+        const list: number[] = Array.isArray(raw)
+          ? raw.map((id) => Number(id)).filter((id) => Number.isFinite(id))
+          : [];
+        const muted = settings.mutedUntil !== 0;
+        const next = muted
+          ? Array.from(new Set([...list, numericGroupId]))
+          : list.filter((id) => id !== numericGroupId);
+        if (
+          next.length !== list.length ||
+          next.some((id, i) => id !== list[i])
+        ) {
+          await writeUserSetting(OLD_MUTED_GROUPS_KEY, next);
+        }
+      }
+    } catch (error) {
+      // Best effort: the per-channel store is the source of truth for Q-Chat
+      // itself. Failing to mirror must not fail the mute the user asked for.
+      console.error('Failed to mirror group mute to mutedGroups:', error);
+    }
+  }
+
   await setGroupNotificationStore(scope.groupId, store);
 }
 
@@ -726,19 +779,7 @@ export async function setScopeMuted(
 }
 
 export async function unmuteScope(scope: ScopeDescriptor): Promise<void> {
-  await applyScopeNotificationSettings(scope, { mutedUntil: 0 });
-}
-
-/**
- * Builds a map from channelId to sectionId. In the flat model section
- * membership is not stored per channel; this returns an empty map for API
- * compatibility. Callers that need section membership should query the
- * Reticulum channel API directly.
- */
-export function buildChannelSectionMap(
-  groupStore: GroupNotificationStore | undefined
-): Map<string, string> {
-  return new Map<string, string>();
+  await applyScopeNotificationSettings(scope, { mutedUntil: EXPLICITLY_UNMUTED });
 }
 
 // ---------------------------------------------------------------------------
@@ -1149,7 +1190,11 @@ export async function migrateNotificationSettings(
     // choices the user made afterwards. Leave it alone.
     if (previouslyComplete) {
       const existing = await getGroupNotificationStore(groupId);
+      // An explicit marker wins: this group was migrated, whatever it holds
+      // now. Falling back to "store is non-empty" keeps groups migrated by an
+      // earlier build from being re-run once.
       if (
+        existing.legacyMigratedAt !== undefined ||
         Object.keys(existing.channels ?? {}).length > 0 ||
         existing.notifyOnWelcomePosts !== undefined ||
         existing.hideMutedChannels !== undefined
@@ -1200,6 +1245,7 @@ export async function migrateNotificationSettings(
 
     const store: GroupNotificationStore = {
       globalVersion: global.version,
+      legacyMigratedAt: Date.now(),
       channels,
     };
     if (legacy?.hideMutedChannels !== undefined) {

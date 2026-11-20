@@ -127,7 +127,10 @@ import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { ContextMenu } from '../ContextMenu';
 import { NotificationSettingsSubmenu } from '../NotificationSettingsSubmenu';
 import { MuteSubmenu } from '../MuteSubmenu';
-import { isScopeMuted } from '../../utils/qChatNotificationSettings';
+import {
+  isScopeMuted,
+  sectionFilterMatches,
+} from '../../utils/qChatNotificationSettings';
 import {
   Menu as ContexifyMenu,
   Item,
@@ -2379,6 +2382,19 @@ export const ChatGroup = ({
       selectedChannel.channelId
     );
     if (!isSelectedHidden) return;
+    // The sidebar keeps a muted channel on screen when it holds an unread
+    // mention, so the row stays clickable. Leaving it here would make that row
+    // unopenable: the click would set the channel and this effect would
+    // immediately move the reader somewhere else, so the mention could only be
+    // cleared from a context menu. Treat a channel surfaced for attention as
+    // visible.
+    const selectedSummary = reticulumChannelSummariesById.get(
+      selectedChannel.channelId
+    );
+    const selectedHasUnreadMention =
+      selectedSummary?.hasUnreadMention === true ||
+      (selectedSummary?.mentionCount ?? 0) > 0;
+    if (selectedHasUnreadMention) return;
     const firstVisible = reticulumChannelsForSelectedGroup.find(
       (channel) =>
         !isScopeMuted(
@@ -2395,6 +2411,7 @@ export const ChatGroup = ({
     reticulumHideMutedChannels,
     reticulumGroupSettings,
     reticulumChannelsForSelectedGroup,
+    reticulumChannelSummariesById,
     selectedReticulumChannelId,
   ]);
 
@@ -2457,11 +2474,21 @@ export const ChatGroup = ({
     Math.max(0, Number(channelMenuSummary?.mentionCount) || 0) > 0;
 
   const sectionMenuChannelIds = reticulumCategoryMenuCategory
-    ? (
-        reticulumChannelsByCategory.get(
-          reticulumCategoryMenuCategory.categoryId
-        ) ?? []
-      ).map((ch) => ch.channelId)
+    ? reticulumChannelsForSelectedGroup
+        // Read through sectionFilterMatches, the same helper the write path
+        // uses. The default section is addressed as `cat-qchat-default` in the
+        // UI but its channels store an empty `categoryId`, so a literal map
+        // lookup finds nothing for the section that holds every uncategorised
+        // channel: mark-as-read stays disabled and mute never offers Unmute,
+        // while the writes land correctly and the menu shows the opposite of
+        // the stored state.
+        .filter((ch) =>
+          sectionFilterMatches(
+            ch.categoryId,
+            reticulumCategoryMenuCategory.categoryId
+          )
+        )
+        .map((ch) => ch.channelId)
     : [];
   const sectionMenuHasUnread = sectionMenuChannelIds.some((id) => {
     const s = reticulumChannelSummariesById.get(id);

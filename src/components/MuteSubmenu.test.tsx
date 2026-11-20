@@ -166,4 +166,52 @@ describe('MuteSubmenu', () => {
       screen.getByText('group:context_menu.mute_group')
     ).toBeInTheDocument();
   });
+
+  it('offers unmute alongside durations when only some channels are muted', () => {
+    // Regression: group scope has no channelIds, so `ids` is only the channels
+    // carrying an override. One timed mute in a multi-channel group made
+    // allMuted true and collapsed the menu to a bare "Unmute", which cleared
+    // every override and dropped the mute the user had just set.
+    renderWithMuteState(
+      {
+        '123': {
+          channels: {
+            announcements: { mutedUntil: Date.now() + 15 * 60_000 },
+            general: { mutedUntil: 0 },
+          },
+        },
+      },
+      { groupId: 123 },
+      'Group'
+    );
+
+    // The duration submenu is still offered.
+    expect(screen.getByTestId('contexify-submenu')).toBeInTheDocument();
+    // And there is a way back out of the partial mute.
+    expect(
+      screen.getByText('group:context_menu.unmute')
+    ).toBeInTheDocument();
+  });
+
+  it('collapses to a single unmute item only when every stored override is muted', () => {
+    renderWithMuteState(
+      {
+        '123': {
+          channels: {
+            announcements: { mutedUntil: null },
+            general: { mutedUntil: null },
+          },
+        },
+      },
+      { groupId: 123 },
+      'Group'
+    );
+
+    expect(
+      screen.queryByTestId('contexify-submenu')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('group:context_menu.unmute')
+    ).toBeInTheDocument();
+  });
 });

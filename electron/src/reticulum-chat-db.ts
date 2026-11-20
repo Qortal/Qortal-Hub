@@ -9385,25 +9385,6 @@ export class ReticulumChatDatabase {
     };
   }
 
-  deleteMissingRange(
-    groupId: number,
-    authorAddress: string,
-    authorStreamId: string,
-    fromSeq: number,
-    toSeq: number
-  ): void {
-    const author = String(authorAddress || '').trim();
-    const stream = normalizeReticulumChatAuthorStreamId(authorStreamId);
-    const from = Math.max(1, Math.floor(fromSeq));
-    const to = Math.max(from, Math.floor(toSeq));
-    if (!Number.isInteger(groupId) || groupId <= 0 || !author || !stream)
-      return;
-    this.stmtDeleteMissingRange.run(groupId, author, stream, from, to);
-    this.memoryMissingRanges.delete(
-      this.missingRangeKey(groupId, author, stream, from, to)
-    );
-  }
-
   clearMissingRangeKnownUnavailable(
     groupId: number,
     authorAddress: string,
@@ -11864,7 +11845,11 @@ export class ReticulumChatDatabase {
       if (
         !myMentionHash ||
         event.authorAddress === myAddress ||
-        event.timestamp <= watermark ||
+        // Compare against the same boundary the SQL counters use. A remote read
+        // raises senderTimeBoundary above the local watermark; testing the
+        // watermark alone recounted a mention the other device had already read
+        // and kept the badge alive.
+        event.timestamp <= senderTimeBoundary ||
         event.timestamp <=
           (ignoredThroughByAuthor.get(event.authorAddress) ?? 0) ||
         (event.eventType !== 'message' &&
@@ -11878,7 +11863,7 @@ export class ReticulumChatDatabase {
     };
     const countEventMentionTarget = (event: ReticulumChatEvent) => {
       if (
-        event.timestamp <= watermark ||
+        event.timestamp <= senderTimeBoundary ||
         event.timestamp <=
           (ignoredThroughByAuthor.get(event.authorAddress) ?? 0) ||
         (event.eventType !== 'message' &&
@@ -11921,7 +11906,7 @@ export class ReticulumChatDatabase {
       const mentionTargetRows = this.stmtGetUnreadMentionTargetEvents.all(
         groupId,
         normalizedChannelId,
-        watermark,
+        senderTimeBoundary,
         myAddress
       ) as EventRow[];
       const effectiveTargetEvents = new Map<string, ReticulumChatEvent>();
@@ -11957,7 +11942,7 @@ export class ReticulumChatDatabase {
           event.groupId !== groupId ||
           normalizeReticulumChatChannelId(event.channelId) !==
             normalizedChannelId ||
-          event.timestamp <= watermark ||
+          event.timestamp <= senderTimeBoundary ||
           event.authorAddress === myAddress ||
           activeSilencedAuthors.has(event.authorAddress) ||
           event.timestamp <=
@@ -11993,7 +11978,7 @@ export class ReticulumChatDatabase {
             mention.channelId === normalizedChannelId &&
             mention.mentionedAddress === myAddress &&
             mention.authorAddress !== myAddress &&
-            mention.timestamp > watermark &&
+            mention.timestamp > senderTimeBoundary &&
             !activeSilencedAuthors.has(mention.authorAddress) &&
             mention.timestamp >
               (ignoredThroughByAuthor.get(mention.authorAddress) ?? 0) &&

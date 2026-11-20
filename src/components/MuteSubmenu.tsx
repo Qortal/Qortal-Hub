@@ -55,25 +55,38 @@ function collectScopeMuteState(
   groupStore: GroupNotificationStore | undefined,
   channelIds: readonly string[] | undefined,
   channelId?: string
-): { allMuted: boolean; sharedUntil: number | null | undefined } {
-  if (!groupStore) return { allMuted: false, sharedUntil: undefined };
+): {
+  allMuted: boolean;
+  anyMuted: boolean;
+  sharedUntil: number | null | undefined;
+} {
+  if (!groupStore)
+    return { allMuted: false, anyMuted: false, sharedUntil: undefined };
 
   if (channelId != null) {
     const v = groupStore.channels?.[String(channelId)]?.mutedUntil;
-    return { allMuted: activeMutedUntil(v), sharedUntil: v };
+    const muted = activeMutedUntil(v);
+    return { allMuted: muted, anyMuted: muted, sharedUntil: v };
   }
 
   // Group scope: every stored override is in scope by definition. Section scope
   // passes its channels explicitly.
   const ids = channelIds ?? Object.keys(groupStore.channels ?? {});
-  if (ids.length === 0) return { allMuted: false, sharedUntil: undefined };
+  if (ids.length === 0)
+    return { allMuted: false, anyMuted: false, sharedUntil: undefined };
 
   const vals = ids.map((id) => groupStore.channels?.[id]?.mutedUntil);
   // A channel with no override inherits "not muted" version of the default.
   const allMuted = vals.every((v) => activeMutedUntil(v));
+  // Partial state must not be reported as fully muted. Group scope has no
+  // channelIds, so `ids` is only the channels carrying an override: one timed
+  // mute in a five-channel group made `allMuted` true and collapsed the menu to
+  // a bare "Unmute", which then cleared every override and dropped the mute the
+  // user had just set. "Some are muted" needs its own branch that offers both.
+  const anyMuted = vals.some((v) => activeMutedUntil(v));
   const first = vals[0];
   const sharedUntil = vals.every((v) => v === first) ? first : undefined;
-  return { allMuted, sharedUntil };
+  return { allMuted, anyMuted, sharedUntil };
 }
 
 export function MuteSubmenu({
@@ -86,7 +99,7 @@ export function MuteSubmenu({
 
   const groupSettings = cache[String(scope.groupId)];
 
-  const { allMuted, sharedUntil } = collectScopeMuteState(
+  const { allMuted, anyMuted, sharedUntil } = collectScopeMuteState(
     groupSettings,
     channelIds,
     scope.channelId
@@ -162,6 +175,24 @@ export function MuteSubmenu({
       }
       arrow={<ChevronRightRoundedIcon sx={{ fontSize: 20 }} />}
     >
+      {/* Partial mute: some channels in scope are muted and some are not.
+          Offer Unmute as well as the durations, or the only way back out is to
+          mute everything first. */}
+      {anyMuted && (
+        <Item
+          onClick={() => {
+            void unmuteScope(scope).catch(console.error);
+            contextMenu.hideAll();
+          }}
+        >
+          <Typography
+            component="span"
+            sx={{ fontSize: '14px', fontWeight: 600 }}
+          >
+            {t('group:context_menu.unmute')}
+          </Typography>
+        </Item>
+      )}
       {DURATIONS.map(({ key, ms }) => (
         <Item
           key={key}

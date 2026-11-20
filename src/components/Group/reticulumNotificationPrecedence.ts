@@ -7,19 +7,35 @@
  * most specific kind that applies. Emitting one per matched kind produced two
  * notifications for one post whenever the push level was "all".
  *
- * Precedence, most specific first:
+ * This module holds **two** orderings, and they are deliberately different:
  *
- *   reply  >  mention  >  message
+ * 1. `RETICULUM_NOTIFICATION_PRECEDENCE` — which kind the *emitter* is
+ *    allowed to produce for a post, most specific first:
  *
- * Reactions are a different event type (`reaction_add`) and never compete with
- * these — a reaction is never also a message.
+ *        reply  >  mention  >  message
  *
- * The emitter in `Group.tsx` evaluates these in order and stops at the first
- * kind that fires. This module exists because the ordering was previously
- * implicit in nested booleans, and one of the guards read variables that were
- * only assigned inside an earlier branch — so "skipped" and "not applicable"
- * were indistinguishable, and the generic notification fired alongside the
- * specific one.
+ *    Reactions are a different event type (`reaction_add`) and are not in this
+ *    list — a reaction is never also a message, so it never competes here. The
+ *    emitter in `Group.tsx` evaluates these in order and stops at the first
+ *    kind that fires.
+ *
+ * 2. `OS_NOTIFICATION_PRECEDENCE` — which kind the *OS-presentation gate*
+ *    allows when several handlers fire for the same post, most specific first:
+ *
+ *        reply  >  welcome  >  mention  >  reaction  >  message
+ *
+ *    This list is longer because it has to arbitrate between handlers that
+ *    cover event types the emitter list does not contain. `welcome` and
+ *    `reaction` exist only here.
+ *
+ * The distinction matters: reading list 1 as the module's only ordering makes
+ * the gate look wrong, and reading list 2 as the emitter's ordering makes it
+ * look like reactions compete with messages. Neither is the case.
+ *
+ * This module exists because the ordering was previously implicit in nested
+ * booleans, and one of the guards read variables that were only assigned inside
+ * an earlier branch — so "skipped" and "not applicable" were indistinguishable,
+ * and the generic notification fired alongside the specific one.
  */
 
 export type ReticulumNotificationKind = 'reply' | 'mention' | 'message';
