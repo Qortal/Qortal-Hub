@@ -237,16 +237,44 @@ function toPermissionRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+// Every choice in the record but the notification ones (the "always allow"
+// boxes) belongs to the account that made it: one made while an account is
+// signed in never counts for another account on this Hub.
+const ACCOUNT_PERMISSION_PREFIX = 'account:';
+
+/** The key a choice is kept under, or null when no account is signed in. */
+function storedPermissionKey(key: unknown): string | null {
+  if (isNotificationPermissionKey(key)) return normalizePermissionKey(key);
+  const address = getCurrentAddress();
+  if (address === NOTIFICATION_PERMISSION_NO_ADDRESS) return null;
+  return `${ACCOUNT_PERMISSION_PREFIX}${address}:${String(key ?? '')}`;
+}
+
+/** Choices made before they were kept per account no longer count. */
+function withoutSharedChoices(
+  permissions: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...permissions };
+  for (const key of Object.keys(next)) {
+    const kept =
+      key.startsWith(ACCOUNT_PERMISSION_PREFIX) ||
+      isNotificationPermissionKey(key);
+    if (!kept) delete next[key];
+  }
+  return next;
+}
+
 export async function setPermission(key, value) {
   try {
-    const normalizedKey = normalizePermissionKey(key);
+    const normalizedKey = storedPermissionKey(key);
+    if (!normalizedKey) return;
     const appStorage = getAppStorage();
     if (appStorage) {
       const rawPermissions = toPermissionRecord(
         await appStorage.get('qortalRequestPermissions')
       );
       const qortalRequestPermissions = migrateNotificationPermissionKeys(
-        rawPermissions,
+        withoutSharedChoices(rawPermissions),
         normalizedKey
       );
       qortalRequestPermissions[normalizedKey] = value;
@@ -264,7 +292,7 @@ export async function setPermission(key, value) {
       await getLocalStorage('qortalRequestPermissions')
     );
     const qortalRequestPermissions = migrateNotificationPermissionKeys(
-      rawPermissions,
+      withoutSharedChoices(rawPermissions),
       normalizedKey
     );
     qortalRequestPermissions[normalizedKey] = value;
@@ -280,7 +308,8 @@ export async function setPermission(key, value) {
 
 export async function getPermission(key) {
   try {
-    const normalizedKey = normalizePermissionKey(key);
+    const normalizedKey = storedPermissionKey(key);
+    if (!normalizedKey) return null;
     const appStorage = getAppStorage();
     if (appStorage) {
       const qortalRequestPermissions = toPermissionRecord(
