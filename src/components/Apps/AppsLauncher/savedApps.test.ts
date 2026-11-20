@@ -17,6 +17,7 @@ import {
   dropExpiredItems,
   dropOldRemovals,
   emptySavedApps,
+  heldPrivatePins,
   type KnownStores,
   launcherContent,
   laterEntry,
@@ -488,6 +489,40 @@ describe('recording a change', () => {
 });
 
 describe('copies saved by Hubs and GO that do not know saved apps', () => {
+  it("takes Hub 3.0.3's `{}` entries for one private app each: the one after the same app, else the next", () => {
+    const names = (pins: PinnedApp[]) =>
+      pins.map((pin) => pin.name ?? pin.privateAppProperties?.identifier);
+    // One `{}`, after Q-Tube: the private app after Q-Tube here.
+    const afterTube = readOlderFields({
+      sortablePinnedApps: [app('Q-Mail'), app('Q-Tube'), {}],
+    });
+    expect(afterTube.placeholderSpots).toEqual(['APP|q-tube|']);
+    expect(
+      names(
+        heldPrivatePins(afterTube, [
+          app('Q-Mail'),
+          privateApp('tool-1'),
+          app('Q-Tube'),
+          privateApp('tool-2'),
+        ])
+      )
+    ).toEqual(['Q-Mail', 'Q-Tube', 'tool-2']);
+    // One `{}` at the start, and none here: the next one.
+    const atStart = readOlderFields({
+      sortablePinnedApps: [{}, app('Q-Mail'), app('Q-Tube')],
+    });
+    expect(atStart.placeholderSpots).toEqual([null]);
+    expect(
+      names(
+        heldPrivatePins(atStart, [
+          app('Q-Mail'),
+          privateApp('tool-1'),
+          app('Q-Tube'),
+        ])
+      )
+    ).toEqual(['Q-Mail', 'tool-1', 'Q-Tube']);
+  });
+
   it('writes the older fields the way #374 reads them', () => {
     const apps = savedFrom(launcherWithFolder());
     const fields = olderFieldsOf(apps);

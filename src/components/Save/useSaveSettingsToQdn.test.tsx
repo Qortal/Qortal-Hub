@@ -89,6 +89,7 @@ import {
   toSavedAppsField,
 } from '../Apps/AppsLauncher/savedApps';
 import {
+  nothingCarried,
   saveSavedAppsBase,
   saveSavedAppsReplica,
 } from '../Apps/AppsLauncher/savedAppsSync';
@@ -138,6 +139,9 @@ const signedInWith = (apps: SavedApps) => {
     updated: 100,
     hasCopy: true,
     hasBookmarks: true,
+    carried: nothingCarried(),
+    placeholders: [],
+    seenAt: 100,
     apps,
   });
   saveSavedAppsReplica(ADDRESS, { seen: 100, apps });

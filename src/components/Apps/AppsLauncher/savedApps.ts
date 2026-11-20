@@ -589,6 +589,11 @@ export type FoundOlderFields = {
    * private app (`{}`): it can't say which private apps it kept.
    */
   placeholders: boolean;
+  /**
+   * Where those entries stand: for each, the key of the app before it in the
+   * list (not a private app), or null at the start.
+   */
+  placeholderSpots: (string | null)[];
   /** The bookmarks, folders and order (#374's fields), or null. */
   launcher: SavedLauncher | null;
 };
@@ -597,17 +602,19 @@ export const readOlderFields = (settings: unknown): FoundOlderFields => {
   const list = (settings as { sortablePinnedApps?: unknown } | null)
     ?.sortablePinnedApps;
   const pins = Array.isArray(list) ? (list as PinnedApp[]) : null;
+  const spots: (string | null)[] = [];
+  let before: string | null = null;
+  for (const entry of pins ?? []) {
+    if (!entry || typeof entry !== 'object' || entry.isPrivate) continue;
+    if (isBrokenPinnedApp(entry)) spots.push(before);
+    else before = pinKeyOf(entry);
+  }
   return {
     pins: pins
       ? removeBrokenPinnedApps(pins).map(serializePinnedAppForQdn)
       : null,
-    placeholders: !!pins?.some(
-      (entry) =>
-        !!entry &&
-        typeof entry === 'object' &&
-        !entry.isPrivate &&
-        isBrokenPinnedApp(entry)
-    ),
+    placeholders: spots.length > 0,
+    placeholderSpots: spots,
     launcher: readSavedLauncher(settings),
   };
 };
@@ -941,16 +948,52 @@ export const withPrivatePinsKept = (pins: PinnedApp[], before: PinnedApp[]) => {
 };
 
 /**
+ * Of a pin list, the apps and the private apps a list with Hub 3.0.3's `{}`
+ * entries stands for: one per entry, the one after the same app here, or
+ * else the next one here.
+ */
+export const heldPrivatePins = (
+  found: FoundOlderFields,
+  pins: PinnedApp[]
+): PinnedApp[] => {
+  const privates: { app: PinnedApp; after: string | null }[] = [];
+  let after: string | null = null;
+  for (const app of pins) {
+    if (app.isPrivate) privates.push({ app, after });
+    else after = pinKeyOf(app);
+  }
+  const held = new Set<PinnedApp>();
+  const take = (fits: (entry: (typeof privates)[number]) => boolean) => {
+    const entry = privates.find((each) => !held.has(each.app) && fits(each));
+    if (entry) held.add(entry.app);
+    return !!entry;
+  };
+  const unmatched = found.placeholderSpots.filter(
+    (spot) => !take((entry) => entry.after === spot)
+  );
+  unmatched.forEach(() => take(() => true));
+  return pins.filter((app) => !app.isPrivate || held.has(app));
+};
+
+/**
  * What a copy's older fields hold, as the launcher's stores: what's missing
- * is taken as `base` has it.
+ * is taken as `base` has it. Private apps saved as `{}` are `base`'s, each
+ * after the pin it followed there; or, with `privateFrom`, the ones of that
+ * list they stand for.
  */
 export const storesFromOlderFields = (
   found: FoundOlderFields,
-  base: SavedApps
+  base: SavedApps,
+  privateFrom?: PinnedApp[]
 ): KnownStores => {
   const pins =
     found.pins && found.placeholders
-      ? withPrivatePinsKept(found.pins, deriveLauncher(base).pins)
+      ? withPrivatePinsKept(
+          found.pins,
+          privateFrom
+            ? heldPrivatePins(found, privateFrom)
+            : deriveLauncher(base).pins
+        )
       : found.pins;
   return {
     pins,
@@ -970,10 +1013,13 @@ export const storesFromOlderFields = (
 export const changesFromOlderFields = (
   base: SavedApps,
   found: FoundOlderFields,
-  updated: number
+  updated: number,
+  privateFrom?: PinnedApp[]
 ) =>
-  recordStores(base, storesFromOlderFields(found, base), ({ previous }) =>
-    Math.max(updated, (previous?.at ?? 0) + 1)
+  recordStores(
+    base,
+    storesFromOlderFields(found, base, privateFrom),
+    ({ previous }) => Math.max(updated, (previous?.at ?? 0) + 1)
   );
 
 // --- Comparing with what is saved --------------------------------------------

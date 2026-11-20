@@ -32,6 +32,7 @@ import {
   dropExpiredItems,
   dropOldRemovals,
   emptySavedApps,
+  isRemoved,
   launcherContent,
   type LauncherStores,
   mergeSavedApps,
@@ -43,6 +44,7 @@ import {
   readOlderFields,
   readSavedApps,
   recordStores,
+  REMOVAL_KEPT_MS,
   type SavedApps,
   type SavedAppsField,
   stableJson,
@@ -81,7 +83,51 @@ export type SavedAppsBase = {
    * the ones read before stay what is saved.
    */
   hasBookmarks: boolean;
+  /**
+   * Records kept from before that QDN's copy has none of: whoever saved it
+   * didn't know them (Hub 3.0.3 saves the pin list alone; a device whose
+   * first copy was such a one saves without the folders it never saw).
+   * Nobody removed them, so Revert keeps them and they never count as
+   * expired. They aren't on QDN, so the Save button offers them.
+   */
+  carried: SavedAppsKeys;
+  /**
+   * Private apps QDN's copy holds only as Hub 3.0.3's `{}`: saved, but no
+   * one can read which they are. They never count as expired.
+   */
+  placeholders: string[];
+  /**
+   * This device's time when it last took in or saved a copy, or found QDN's
+   * the same, or null when unknown. A removal's record can only have expired
+   * since if that is longer ago than removals are kept.
+   */
+  seenAt: number | null;
   apps: SavedApps;
+};
+
+/** Records by kind: a pin's or bookmark's key, a folder's id. */
+export type SavedAppsKeys = {
+  pins: string[];
+  folders: string[];
+  bookmarks: string[];
+};
+
+export const nothingCarried = (): SavedAppsKeys => ({
+  pins: [],
+  folders: [],
+  bookmarks: [],
+});
+
+const readKeys = (value: unknown): SavedAppsKeys => {
+  const keys = nothingCarried();
+  if (!value || typeof value !== 'object') return keys;
+  for (const kind of ['pins', 'folders', 'bookmarks'] as const) {
+    const list = (value as Record<string, unknown>)[kind];
+    if (Array.isArray(list)) {
+      keys[kind] = list.filter((key): key is string => typeof key === 'string');
+    }
+  }
+  return keys;
 };
 
 const REPLICA_KEY = 'ext_saved_apps';
@@ -150,6 +196,12 @@ export const loadSavedAppsBase = (
       stored.updated === null || !Number.isFinite(updated) ? null : updated,
     hasCopy: stored.hasCopy === true,
     hasBookmarks: stored.hasBookmarks === true,
+    carried: readKeys(stored.carried),
+    placeholders: readKeys({ pins: stored.placeholders }).pins,
+    seenAt:
+      typeof stored.seenAt === 'number' && Number.isFinite(stored.seenAt)
+        ? stored.seenAt
+        : null,
     apps,
   };
 };
@@ -163,6 +215,9 @@ export const saveSavedAppsBase = (
     updated: base.updated,
     hasCopy: base.hasCopy,
     hasBookmarks: base.hasBookmarks,
+    carried: base.carried,
+    placeholders: base.placeholders,
+    seenAt: base.seenAt,
     savedApps: toSavedAppsField(base.apps),
   });
 
@@ -336,12 +391,67 @@ export async function recordLocalChanges(
   return next;
 }
 
+const liveKeys = <T>(map: Map<string, T>) =>
+  [...map].filter(([, entry]) => !isRemoved(entry)).map(([key]) => key);
+
+/** `apps` without the records under `keys`. */
+const withoutKeys = (apps: SavedApps, keys: SavedAppsKeys): SavedApps => {
+  const without = <T>(map: Map<string, T>, list: string[]) => {
+    const next = new Map(map);
+    for (const key of list) next.delete(key);
+    return next;
+  };
+  return {
+    pins: without(apps.pins, keys.pins),
+    folders: without(apps.folders, keys.folders),
+    bookmarks: without(apps.bookmarks, keys.bookmarks),
+  };
+};
+
+/** The records of `apps` under `keys` that `copy` has none of. */
+const recordsLeftOut = (
+  apps: SavedApps,
+  keys: SavedAppsKeys,
+  copy: SavedApps
+): SavedApps => {
+  const pick = <T>(
+    map: Map<string, T>,
+    list: string[],
+    theirs: Map<string, T>
+  ) => {
+    const result = new Map<string, T>();
+    for (const key of list) {
+      const entry = map.get(key);
+      if (entry !== undefined && !theirs.has(key)) result.set(key, entry);
+    }
+    return result;
+  };
+  return {
+    pins: pick(apps.pins, keys.pins, copy.pins),
+    folders: pick(apps.folders, keys.folders, copy.folders),
+    bookmarks: pick(apps.bookmarks, keys.bookmarks, copy.bookmarks),
+  };
+};
+
+const keysOf = (apps: SavedApps): SavedAppsKeys => ({
+  pins: [...apps.pins.keys()],
+  folders: [...apps.folders.keys()],
+  bookmarks: [...apps.bookmarks.keys()],
+});
+
 /**
- * A copy's saved apps as records: what QDN holds, whoever saved it. It holds
- * folders and bookmarks when it has #374's `appBookmarks`, which every Hub and
- * GO that keeps them saves (this one next to `savedApps`).
+ * A copy's saved apps as records: what QDN holds, whoever saved it, measured
+ * against `base`, the record of QDN's copy as last read here (null at a
+ * device's first take-in). It holds folders and bookmarks when it has #374's
+ * `appBookmarks`, which every Hub and GO that keeps them saves (this one next
+ * to `savedApps`). At a first take-in, private apps saved as `{}` are those
+ * of `privateFrom` they stand for.
  */
-const copyFrom = (found: FoundSettings, base: SavedApps) => {
+const copyFrom = (
+  found: FoundSettings,
+  base: SavedAppsBase | null,
+  privateFrom?: PinnedApp[]
+) => {
   const incoming = readSavedApps(found.settings);
   const older = readOlderFields(found.settings);
   const holdsBookmarks = !!older.launcher;
@@ -349,15 +459,88 @@ const copyFrom = (found: FoundSettings, base: SavedApps) => {
     const apps = olderFieldsMatch(incoming, older)
       ? incoming
       : changesFromOlderFields(incoming, older, found.updated).apps;
-    return { incoming, apps, changes: apps, holdsBookmarks };
+    return {
+      incoming,
+      apps,
+      changes: apps,
+      holdsBookmarks,
+      carried: nothingCarried(),
+      placeholders: [] as string[],
+    };
   }
-  // Saved by a Hub or GO that doesn't know saved apps.
-  const result = changesFromOlderFields(base, older, found.updated);
+  // Saved by a Hub or GO that doesn't know saved apps. Its changes are
+  // measured against what QDN's copy held; what this device kept that QDN's
+  // copy had none of, that client never saw: it stays, still carried.
+  const before = base ? withoutKeys(base.apps, base.carried) : emptySavedApps();
+  const result = changesFromOlderFields(
+    before,
+    older,
+    found.updated,
+    privateFrom
+  );
+  const stillCarried = base
+    ? recordsLeftOut(base.apps, base.carried, result.apps)
+    : emptySavedApps();
+  const kept = keysOf(stillCarried);
+  const listed = new Set((older.pins ?? []).map(pinKeyOf));
   return {
     incoming: null,
-    apps: result.apps,
+    apps: mergeSavedApps(result.apps, stillCarried),
     changes: result.changed,
     holdsBookmarks,
+    // Without `appBookmarks`, the folders and bookmarks QDN's copy held are
+    // no longer on it.
+    carried: {
+      pins: kept.pins,
+      folders: holdsBookmarks
+        ? kept.folders
+        : [...kept.folders, ...liveKeys(result.apps.folders)],
+      bookmarks: holdsBookmarks
+        ? kept.bookmarks
+        : [...kept.bookmarks, ...liveKeys(result.apps.bookmarks)],
+    },
+    // The private apps it holds as `{}`.
+    placeholders: liveKeys(result.apps.pins).filter((key) => !listed.has(key)),
+  };
+};
+
+/**
+ * What QDN's copy listed when last read here: carried records weren't on it,
+ * and placeholders say nothing of which private app they are.
+ */
+const listedIn = (base: SavedAppsBase): SavedApps =>
+  withoutKeys(base.apps, {
+    ...base.carried,
+    pins: [...base.carried.pins, ...base.placeholders],
+  });
+
+/**
+ * What QDN's copy holds, as last read here, for the Save button: without the
+ * records kept here that it has none of.
+ */
+export const savedOnQdn = (base: SavedAppsBase): SavedApps =>
+  withoutKeys(base.apps, base.carried);
+
+/**
+ * The records of QDN's copy as read before that a newer copy has none of and
+ * this device still keeps: whoever saved it didn't know them.
+ */
+const keptFrom = (before: SavedApps, copy: SavedApps, mine: SavedApps) => {
+  const kept = <T>(
+    seen: Map<string, T>,
+    theirs: Map<string, T>,
+    ours: Map<string, T>
+  ) => {
+    const result = new Map<string, T>();
+    for (const [key, entry] of seen) {
+      if (!theirs.has(key) && ours.has(key)) result.set(key, entry);
+    }
+    return result;
+  };
+  return {
+    pins: kept(before.pins, copy.pins, mine.pins),
+    folders: kept(before.folders, copy.folders, mine.folders),
+    bookmarks: kept(before.bookmarks, copy.bookmarks, mine.bookmarks),
   };
 };
 
@@ -408,9 +591,16 @@ export async function startSavedApps(
   const pins = stores.readPins(address);
   if (!pins || !stores.isCurrent(address)) return null;
 
+  // Private apps a copy holds as `{}` are this device's, as in its pin list.
   const copy = found
-    ? copyFrom(found, emptySavedApps())
-    : { incoming: null, apps: emptySavedApps(), holdsBookmarks: false };
+    ? copyFrom(found, null, before.pins)
+    : {
+        incoming: null,
+        apps: emptySavedApps(),
+        holdsBookmarks: false,
+        carried: nothingCarried(),
+        placeholders: [] as string[],
+      };
   const ownPinsTime = pinsTime > 0 ? pinsTime : 1;
   const storeTime = data && data.updatedAt > 0 ? data.updatedAt : 1;
   let apps = recordStores(
@@ -435,6 +625,9 @@ export async function startSavedApps(
     updated: found ? found.updated : null,
     hasCopy: !!found,
     hasBookmarks: copy.holdsBookmarks,
+    carried: copy.carried,
+    placeholders: copy.placeholders,
+    seenAt: now,
     apps: dropOldRemovals(copy.apps, now),
   };
   // Kept only once the launcher shows it: stores left as they were would
@@ -462,26 +655,46 @@ export async function takeInSavedApps(
   }
   const replica = await recordLocalChanges(address, stores);
   if (!replica || !stores.isCurrent(address)) return null;
+  const now = stores.now();
   // Nothing newer on QDN. A node that is behind may answer with a copy
-  // older than the one read here.
+  // older than the one read here; the same one still lists what it did.
   if (!found || (base.updated !== null && found.updated <= base.updated)) {
-    return base;
+    if (!found || found.updated !== base.updated) return base;
+    const seen = { ...base, seenAt: now };
+    stores.writeBase(address, seen);
+    return seen;
   }
 
-  const now = stores.now();
-  const copy = copyFrom(found, base.apps);
+  const copy = copyFrom(found, base);
   let apps = mergeSavedApps(replica.apps, copy.changes);
-  if (copy.incoming) apps = dropExpiredItems(apps, copy.apps, base.apps, now);
+  // An item gone from a newer copy with no record left: its removal can only
+  // have expired if the copy this device last took in or saved listed it
+  // longer ago than removals are kept. Otherwise whoever saved didn't know it.
+  if (
+    copy.incoming &&
+    base.seenAt !== null &&
+    base.seenAt < now - REMOVAL_KEPT_MS
+  ) {
+    apps = dropExpiredItems(apps, copy.apps, listedIn(base), now);
+  }
   apps = dropOldRemovals(apps, now);
   const next = {
     seen: Math.max(replica.seen, newestTime(copy.apps)),
     apps,
   };
+  // What the copy has none of and this device keeps stays what is saved.
+  const kept = copy.incoming ? keptFrom(base.apps, copy.apps, apps) : null;
   const nextBase: SavedAppsBase = {
     updated: found.updated,
     hasCopy: true,
     hasBookmarks: base.hasBookmarks || copy.holdsBookmarks,
-    apps: dropOldRemovals(copy.apps, now),
+    carried: kept ? keysOf(kept) : copy.carried,
+    placeholders: copy.placeholders,
+    seenAt: now,
+    apps: dropOldRemovals(
+      kept ? mergeSavedApps(copy.apps, kept) : copy.apps,
+      now
+    ),
   };
   // Kept only once the launcher shows it: stores left as they were would
   // otherwise be recorded as changes made here, reversing the copy's.
@@ -529,6 +742,10 @@ export function markSavedAppsPublished(
     updated: stores.readBase(address)?.updated ?? null,
     hasCopy: true,
     hasBookmarks: true,
+    // What was published is what QDN holds.
+    carried: nothingCarried(),
+    placeholders: [],
+    seenAt: stores.now(),
     apps,
   };
   stores.writeBase(address, base);
@@ -650,7 +867,7 @@ export const useSavedAppsSync = () => {
   const show = useCallback(
     (address: string, base: SavedAppsBase | null) => {
       if (!base || !stores.isCurrent(address)) return;
-      const saved = deriveLauncher(base.apps);
+      const saved = deriveLauncher(savedOnQdn(base));
       setState({ address, status: 'read', saved, hasCopy: base.hasCopy });
       // What the pins go back to, and what other parts compare with.
       setOldPinnedApps(serializePinnedAppsForQdn(saved.pins) as never);

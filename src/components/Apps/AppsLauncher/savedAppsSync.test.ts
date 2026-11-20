@@ -12,7 +12,7 @@ import type {
 } from '../AppBookmarks/bookmarkTypes';
 import type { LauncherView } from './launcherItems';
 import type { LauncherSyncMark } from './launcherQdn';
-import { readSavedApps } from './savedApps';
+import { deriveLauncher, launcherContent, readSavedApps } from './savedApps';
 import {
   type FoundSettings,
   loadSavedAppsBase,
@@ -23,12 +23,14 @@ import {
   saveSavedAppsBase,
   saveSavedAppsReplica,
   savedAppsForSave,
+  savedOnQdn,
   type SavedAppsStores,
   takeInSavedApps,
 } from './savedAppsSync';
 
 const ADDRESS = 'Qaccount';
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 
 const app = (name: string): PinnedApp => ({ name, service: 'APP' });
 
@@ -570,6 +572,461 @@ describe('Revert', () => {
     await a.change(rename('Play'));
     expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
     expect(a.folderNames()).toEqual(['Games']);
+  });
+});
+
+describe("a copy saved by a device that didn't see everything", () => {
+  beforeEach(() => {
+    // Far enough from 1970 for things unchanged for 200 days.
+    clock = 1_000 * DAY;
+  });
+
+  /** A folder with a page in it, made long ago and not changed since. */
+  const withOldFolder = (longAgo = clock - 200 * DAY) => {
+    return {
+      pins: [app('Q-Mail'), app('Q-Tube')],
+      bookmarks: {
+        folders: [folder('f1', 'Games', longAgo)],
+        bookmarks: [bookmark('b1', 'Q-Blog', 'blog/post-1', 'f1', longAgo)],
+        updatedAt: longAgo,
+      },
+      order: ['APP-Q-Mail', 'folder:f1', 'APP-Q-Tube'],
+    };
+  };
+
+  /** Hub 3.0.3 saves the pin list alone. */
+  const savedByOlderHub = () => {
+    qdn = {
+      settings: { sortablePinnedApps: [app('Q-Mail'), app('Q-Tube')] },
+      updated: clock,
+    };
+  };
+
+  /**
+   * The PC that ran Hub 3.0.3, now updated: its first sign-in reads the pin
+   * list alone, so it never saw the folder. It pins Q-Share and saves.
+   */
+  const updatedPcSaves = async () => {
+    const b = device({
+      pins: [app('Q-Mail'), app('Q-Tube')],
+      pinsTime: clock - 2 * HOUR,
+    });
+    await b.read();
+    clock += 1000;
+    await b.change((s) => {
+      s.pins = [...s.pins, app('Q-Share')];
+    });
+    await b.save();
+    return b;
+  };
+
+  /**
+   * Whether the Save button offers something here: the launcher against what
+   * QDN's copy holds, as read here, compared as the button does.
+   */
+  const unsavedHere = (a: ReturnType<typeof device>) =>
+    launcherContent({
+      pins: a.state.pins,
+      data: a.state.bookmarks!,
+      order: a.state.view.order,
+    }) !==
+    launcherContent(
+      deriveLauncher(savedOnQdn(loadSavedAppsBase(ADDRESS, a.storage)!))
+    );
+
+  /** A pin made here, then Revert. */
+  const pinThenRevert = async (a: ReturnType<typeof device>) => {
+    clock += 1000;
+    await a.change((s) => {
+      s.pins = [...s.pins, app('Q-Search')];
+    });
+    expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
+  };
+
+  it("keeps a folder kept through Hub 3.0.3's pin list, also through Revert, until it's saved again", async () => {
+    const a = device({ ...withOldFolder(), pinsTime: clock });
+    await a.read();
+    await a.save();
+    clock += HOUR;
+    savedByOlderHub();
+    await a.read();
+
+    clock += HOUR;
+    const b = await updatedPcSaves();
+    clock += HOUR;
+    await a.read();
+    expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Tube', 'Q-Share']);
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(a.pages()).toEqual(['blog/post-1']);
+    // It isn't on QDN's copy: the Save button offers it.
+    expect(unsavedHere(a)).toBe(true);
+
+    // That PC saves again, still without it.
+    clock += HOUR;
+    await b.change((s) => {
+      s.pins = s.pins.filter((pin) => pin.name !== 'Q-Tube');
+    });
+    await b.save();
+    clock += HOUR;
+    await a.read();
+    await pinThenRevert(a);
+    expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Share']);
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(a.pages()).toEqual(['blog/post-1']);
+
+    // Saved from here again, it reaches that PC.
+    clock += HOUR;
+    await a.change((s) => {
+      s.pins = [...s.pins, app('Q-Search')];
+    });
+    await a.save();
+    expect(unsavedHere(a)).toBe(false);
+    await b.read();
+    expect(b.folderNames()).toEqual(['Games']);
+  });
+
+  it("keeps a folder saved here when Hub 3.0.3's copy came between, unread here", async () => {
+    const start = clock;
+    const a = device({ ...withOldFolder(), pinsTime: start - 200 * DAY });
+    // Signed in here long ago, saved now.
+    clock = start - 190 * DAY;
+    await a.read();
+    clock = start;
+    await a.save();
+    clock += HOUR;
+    savedByOlderHub();
+    clock += HOUR;
+    await updatedPcSaves();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(a.pages()).toEqual(['blog/post-1']);
+    await pinThenRevert(a);
+    expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Tube', 'Q-Share']);
+    expect(a.folderNames()).toEqual(['Games']);
+  });
+
+  it("keeps a folder read here lately when Hub 3.0.3's copy came between, unread here", async () => {
+    const start = clock;
+    const a = device({
+      pins: [app('Q-Mail'), app('Q-Tube')],
+      pinsTime: start - 200 * DAY,
+    });
+    // Signed in here long ago; another device saves the folder now.
+    clock = start - 190 * DAY;
+    await a.read();
+    clock = start;
+    const other = device({ ...withOldFolder(), pinsTime: start });
+    await other.read();
+    await other.save();
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+
+    clock += HOUR;
+    savedByOlderHub();
+    clock += HOUR;
+    await updatedPcSaves();
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+  });
+
+  it('still drops a folder whose removal expired while this device was away', async () => {
+    const other = device({ ...withOldFolder(), pinsTime: clock });
+    await other.read();
+    await other.save();
+    // This device's first sign-in reads it; it's away after that.
+    clock += HOUR;
+    const a = device();
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+
+    // Removed there, and saved again over 180 days later, without a record.
+    clock += HOUR;
+    await other.change((s) => {
+      s.bookmarks = { folders: [], bookmarks: [], updatedAt: clock };
+      s.view = {
+        ...s.view,
+        order: s.view.order.filter((key) => key !== 'folder:f1'),
+      };
+    });
+    await other.save();
+    clock += 181 * DAY;
+    await other.change((s) => {
+      s.pins = [...s.pins, app('Q-Share')];
+    });
+    await other.save();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual([]);
+    expect(a.pages()).toEqual([]);
+    await pinThenRevert(a);
+    expect(a.folderNames()).toEqual([]);
+  });
+
+  it('drops a folder listed again since, once its removal expired', async () => {
+    const a = device({ ...withOldFolder(), pinsTime: clock });
+    await a.read();
+    await a.save();
+    const other = device();
+    await other.read();
+    clock += HOUR;
+    savedByOlderHub();
+    await a.read();
+    // Saved again from a device that has it: on QDN's copy again.
+    clock += HOUR;
+    await other.change((s) => {
+      s.pins = [...s.pins, app('Q-Share')];
+    });
+    await other.save();
+    clock += HOUR;
+    await a.read();
+
+    // Removed there, and saved again over 180 days later, without a record.
+    clock += HOUR;
+    await other.change((s) => {
+      s.bookmarks = { folders: [], bookmarks: [], updatedAt: clock };
+      s.view = {
+        ...s.view,
+        order: s.view.order.filter((key) => key !== 'folder:f1'),
+      };
+    });
+    await other.save();
+    clock += 181 * DAY;
+    await other.change((s) => {
+      s.pins = s.pins.filter((pin) => pin.name !== 'Q-Share');
+    });
+    await other.save();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual([]);
+  });
+
+  it("keeps what Hub 3.0.3's copy held nothing of while this device was away", async () => {
+    const a = device({
+      ...withOldFolder(),
+      pins: [app('Q-Mail'), privateApp('tool-1'), app('Q-Tube')],
+      pinsTime: clock,
+    });
+    await a.read();
+    await a.save();
+    // Hub 3.0.3 saves the pin list, the private app as `{}`. This device
+    // reads it, then is away for longer than removals are kept.
+    clock += HOUR;
+    qdn = {
+      settings: { sortablePinnedApps: [app('Q-Mail'), {}, app('Q-Tube')] },
+      updated: clock,
+    };
+    await a.read();
+    clock += 200 * DAY;
+    await updatedPcSaves();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.pinNames()).toContain('tool-1');
+    expect(a.pinNames()).toContain('Q-Share');
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(a.pages()).toEqual(['blog/post-1']);
+  });
+
+  it('keeps a private app Hub 3.0.3 saved as `{}`, with nothing to save after the first sign-in, and through Revert', async () => {
+    qdn = {
+      settings: {
+        sortablePinnedApps: [app('Q-Mail'), {}, app('Q-Tube')],
+      },
+      updated: clock,
+    };
+    const a = device({
+      pins: [app('Q-Mail'), privateApp('tool-1'), app('Q-Tube')],
+      pinsTime: clock - HOUR,
+    });
+    await a.read();
+    expect(a.pinNames()).toEqual(['Q-Mail', 'tool-1', 'Q-Tube']);
+    expect(unsavedHere(a)).toBe(false);
+
+    await pinThenRevert(a);
+    expect(a.pinNames()).toEqual(['Q-Mail', 'tool-1', 'Q-Tube']);
+  });
+
+  it('keeps a folder when this device last saved over 180 days ago and signed in every week since', async () => {
+    const start = clock;
+    const savedAt = start - 190 * DAY;
+    const a = device({
+      ...withOldFolder(start - 210 * DAY),
+      pinsTime: start - 210 * DAY,
+    });
+    clock = savedAt;
+    await a.read();
+    await a.save();
+    // Nobody saves: each sign-in finds the same copy.
+    for (let day = 1; day < 190; day += 7) {
+      clock = savedAt + day * DAY;
+      await a.read();
+    }
+    clock = start;
+    savedByOlderHub();
+    clock += HOUR;
+    await updatedPcSaves();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(a.pages()).toEqual(['blog/post-1']);
+  });
+
+  it("offers to save a folder another device's save left off QDN, and Revert keeps it", async () => {
+    const a = device({ pins: [app('Q-Mail'), app('Q-Tube')], pinsTime: clock });
+    await a.read();
+    await a.save();
+    const b = device();
+    await b.read();
+    // A folder made and saved here; the other device saves a minute later,
+    // its node not showing that copy yet.
+    clock += HOUR;
+    await a.change((s) => {
+      s.bookmarks = {
+        folders: [folder('f1', 'Games', clock)],
+        bookmarks: [bookmark('b1', 'Q-Blog', 'blog/post-1', 'f1', clock)],
+        updatedAt: clock,
+      };
+      s.view = { ...s.view, order: [...s.view.order, 'folder:f1'] };
+    });
+    const before = qdn;
+    await a.save();
+    clock += 60_000;
+    await b.change((s) => {
+      s.pins = [...s.pins, app('Q-Share')];
+    });
+    qdn = before;
+    await b.save();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(unsavedHere(a)).toBe(true);
+    await pinThenRevert(a);
+    expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Tube', 'Q-Share']);
+    expect(a.folderNames()).toEqual(['Games']);
+    // Saved again, it reaches the other device.
+    await a.save();
+    await b.read();
+    expect(b.folderNames()).toEqual(['Games']);
+  });
+
+  it("offers to save a pin another device's save left off QDN, also after Hub 3.0.3's list", async () => {
+    const a = device({ pins: [app('Q-Mail'), app('Q-Tube')], pinsTime: clock });
+    await a.read();
+    await a.save();
+    const b = device();
+    await b.read();
+    // Pinned and saved here; the other device saves a minute later, its
+    // node not showing that copy yet.
+    clock += HOUR;
+    await a.change((s) => {
+      s.pins = [...s.pins, app('Q-Search')];
+    });
+    const before = qdn;
+    await a.save();
+    clock += 60_000;
+    await b.change((s) => {
+      s.pins = [...s.pins, app('Q-Share')];
+    });
+    qdn = before;
+    await b.save();
+    clock += HOUR;
+    await a.read();
+    // Hub 3.0.3 saves the list it read, without it.
+    clock += HOUR;
+    qdn = {
+      settings: {
+        sortablePinnedApps: [app('Q-Mail'), app('Q-Tube'), app('Q-Share')],
+      },
+      updated: clock,
+    };
+    await a.read();
+    expect(a.pinNames()).toContain('Q-Search');
+    expect(unsavedHere(a)).toBe(true);
+  });
+
+  it("keeps a folder kept through Hub 3.0.3's pin list when a Hub with #374 that never saw it saves", async () => {
+    const a = device({ ...withOldFolder(), pinsTime: clock });
+    await a.read();
+    await a.save();
+    clock += HOUR;
+    savedByOlderHub();
+    await a.read();
+    // A Hub with #374 whose first sign-in read that pin list saves its own
+    // fields, with no folders.
+    clock += HOUR;
+    qdn = {
+      settings: {
+        sortablePinnedApps: [app('Q-Mail'), app('Q-Tube'), app('Q-Share')],
+        appBookmarks: { version: 1, folders: [], bookmarks: [] },
+        launcherOrder: ['APP-Q-Mail', 'APP-Q-Tube', 'APP-Q-Share'],
+      },
+      updated: clock,
+    };
+
+    clock += HOUR;
+    await a.read();
+    expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Tube', 'Q-Share']);
+    expect(a.folderNames()).toEqual(['Games']);
+    expect(a.pages()).toEqual(['blog/post-1']);
+    // Still kept from before, and still not on QDN's copy.
+    expect(loadSavedAppsBase(ADDRESS, a.storage)!.carried).toEqual({
+      pins: [],
+      folders: ['f1'],
+      bookmarks: ['APP|q-blog||blog/post-1'],
+    });
+    expect(unsavedHere(a)).toBe(true);
+    await pinThenRevert(a);
+    expect(a.folderNames()).toEqual(['Games']);
+  });
+
+  it("keeps a private app Hub 3.0.3's first copy held as `{}` while this device was away", async () => {
+    qdn = {
+      settings: { sortablePinnedApps: [app('Q-Mail'), {}, app('Q-Tube')] },
+      updated: clock,
+    };
+    const a = device({
+      pins: [app('Q-Mail'), privateApp('tool-1'), app('Q-Tube')],
+      pinsTime: clock - HOUR,
+    });
+    await a.read();
+    clock += 200 * DAY;
+    await updatedPcSaves();
+
+    clock += HOUR;
+    await a.read();
+    expect(a.pinNames()).toContain('tool-1');
+    expect(a.pinNames()).toContain('Q-Share');
+  });
+
+  it("counts a private app pinned here since Hub 3.0.3's copy as unsaved, and Revert takes it off", async () => {
+    // Hub 3.0.3 saved one private app, as `{}` after Q-Mail, before this
+    // device's list changed.
+    qdn = {
+      settings: { sortablePinnedApps: [app('Q-Mail'), {}, app('Q-Tube')] },
+      updated: clock - HOUR,
+    };
+    const a = device({
+      pins: [
+        app('Q-Mail'),
+        privateApp('tool-1'),
+        app('Q-Tube'),
+        privateApp('tool-2'),
+      ],
+      pinsTime: clock,
+    });
+    await a.read();
+    expect(a.pinNames()).toEqual(['Q-Mail', 'tool-1', 'Q-Tube', 'tool-2']);
+    expect(unsavedHere(a)).toBe(true);
+    expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
+    expect(a.pinNames()).toEqual(['Q-Mail', 'tool-1', 'Q-Tube']);
   });
 });
 

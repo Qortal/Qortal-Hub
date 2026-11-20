@@ -23,10 +23,12 @@ import {
 } from './savedApps';
 import {
   loadSavedAppsReplica,
+  nothingCarried,
   oneAtATime,
   RECORD_DELAY_MS,
   saveSavedAppsBase,
   saveSavedAppsReplica,
+  savedAppsStateAtom,
   useHasUnsavedSavedApps,
   useRecordSavedAppsChanges,
   useSavedAppsSync,
@@ -51,6 +53,9 @@ const signedInWith = (names: string[]) => {
     updated: START - 500,
     hasCopy: true,
     hasBookmarks: true,
+    carried: nothingCarried(),
+    placeholders: [],
+    seenAt: START - 500,
     apps,
   });
   saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
@@ -165,6 +170,9 @@ describe('whether there is something to save', () => {
       updated: START - 500,
       hasCopy: true,
       hasBookmarks: true,
+      carried: nothingCarried(),
+      placeholders: [],
+      seenAt: START - 500,
       apps,
     });
     saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
@@ -239,6 +247,9 @@ describe('whether there is something to save', () => {
       updated: START - 500,
       hasCopy: true,
       hasBookmarks: true,
+      carried: nothingCarried(),
+      placeholders: [],
+      seenAt: START - 500,
       apps,
     });
     saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
@@ -324,5 +335,42 @@ describe('the sync used by sign-in, Save and Revert', () => {
     const first = result.current;
     rerender();
     expect(result.current).toBe(first);
+  });
+});
+
+describe('what the Save button takes as saved', () => {
+  it("leaves out what QDN's copy has none of, kept here", async () => {
+    const games = {
+      id: 'f1',
+      name: 'Games',
+      createdAt: START,
+      updatedAt: START,
+    };
+    const apps = recordStores(
+      emptySavedApps(),
+      {
+        pins: [pin('Q-Mail')],
+        data: { folders: [games], bookmarks: [] },
+        order: ['APP-Q-Mail', 'folder:f1'],
+      },
+      () => START - 1000
+    ).apps;
+    // Read here, with the folder kept: the copy itself had none of it.
+    saveSavedAppsBase(ADDRESS, {
+      updated: START - 500,
+      hasCopy: true,
+      hasBookmarks: true,
+      carried: { pins: [], folders: ['f1'], bookmarks: [] },
+      placeholders: [],
+      seenAt: START - 500,
+      apps,
+    });
+    saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
+    const { store, result } = render();
+
+    await act(async () => {
+      await result.current.sync.takeIn(ADDRESS, null);
+    });
+    expect(store.get(savedAppsStateAtom).saved?.data.folders).toEqual([]);
   });
 });

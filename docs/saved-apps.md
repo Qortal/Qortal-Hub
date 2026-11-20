@@ -90,9 +90,18 @@ one fee.
   same changes show the same launcher, in whatever order they saw them.
 - One time per record: a rename and a move of one bookmark made on two devices
   before either saved keep only the later.
-- Removals are kept 180 days, at most 1,000. An item a device saw on QDN and
-  finds gone with no record goes too, if it hadn't changed for 180 days and
-  not here since; anything else missing stays.
+- Removals are kept 180 days, at most 1,000. An item gone from a newer copy
+  with no record goes too only if its removal can have expired: the device
+  last saw QDN's copy list it (taking it in, saving it, or finding it the same
+  at a sign-in) more than 180 days ago, and the item hadn't changed for 180
+  days, nor here since.
+- Anything else missing was saved over by a device that didn't know it (one
+  whose first copy was saved by Hub 3.0.3, say). It stays here until a copy
+  holds a record of it: Revert keeps it and it never counts as expired. It
+  isn't on QDN, so the Save button offers it. A folder removed elsewhere
+  while this device was away for more than 180 days, after Hub 3.0.3 saved
+  the pin list alone, can come back that way: losing one nobody removed
+  would be worse.
 
 ## Clocks
 
@@ -115,9 +124,13 @@ one fee.
   and what it last saw on QDN as that client's changes: pins added, removed or
   moved, and (with `appBookmarks`) folders and bookmarks added, removed,
   renamed or moved. They are timed at the copy's `updated`, and at least 1 ms
-  after the version of each item that client saw.
-- No `appBookmarks` says nothing about folders and bookmarks; `{}` entries
-  say nothing about private apps. Those stay as they are.
+  after the version of each item that client saw. What this device kept that
+  QDN's copy had none of, that client never saw: it stays.
+- No `appBookmarks` says nothing about folders and bookmarks: they stay as
+  they are, no longer on QDN, so the Save button offers them. Each `{}` entry
+  is a private app nobody can read: this device's stay pinned, and count as
+  saved, one per entry; at a device's first sign-in, the one after the same
+  app in its pin list, else the next one there. Neither counts as expired.
 - The same applies to a copy whose older fields no longer match its
   `savedApps`.
 - An older Hub still saves its whole pin list, so the last writer wins there.
@@ -130,8 +143,9 @@ one fee.
   change made here. It is updated as the pin list, the bookmarks or the
   launcher's order change.
 - `ext_saved_apps_qdn:<address>`: QDN's copy as last read or saved here, which
-  Revert goes back to and changes are measured against, and whether it holds
-  folders and bookmarks.
+  Revert goes back to and changes are measured against; whether it holds
+  folders and bookmarks; what it keeps that QDN's copy has no record of, and
+  the private apps it holds as `{}`; and when this device last saw QDN's copy.
 - Revert puts back that copy. When no copy read or saved here held folders and
   bookmarks (Hub 3.0.3 saves the pin list alone), it puts back the pins only:
   this device's folders and bookmarks stay as they are.

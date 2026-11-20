@@ -52,6 +52,7 @@ import {
 import { emptySavedApps, recordStores } from '../Apps/AppsLauncher/savedApps';
 import {
   loadSavedAppsReplica,
+  nothingCarried,
   oneAtATime,
   saveSavedAppsBase,
   saveSavedAppsReplica,
@@ -120,6 +121,9 @@ const render = (status: 'saved' | 'none' | 'unknown') => {
       updated: status === 'saved' ? 500 : null,
       hasCopy: status === 'saved',
       hasBookmarks: status === 'saved',
+      carried: nothingCarried(),
+      placeholders: [],
+      seenAt: 500,
       apps: saved,
     });
     // Changed here since: this device's own record differs.
