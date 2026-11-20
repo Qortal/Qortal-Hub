@@ -96,7 +96,7 @@
     "open_as_qortal_link": "Ouvrir comme lien Qortal",
     "open_in_new": "ouvrir dans une nouvelle fenêtre",
     "pin": "épingler",
-    "pin_app": "application PIN",
+    "pin_app": "épingler l'application",
     "pin_to_dashboard": "Épingler au tableau de bord",
     "post": "publier",
     "post_message": "Message de publication",
@@ -136,9 +136,9 @@
     "trade_qort": "Trade Qort",
     "transfer_qort": "transférer Qort",
     "unblock": "unblock",
-    "unpin": "détacher",
-    "unpin_app": "Appin Upin",
-    "unpin_from_dashboard": "UNIN DU Tableau de bord",
+    "unpin": "désépingler",
+    "unpin_app": "désépingler l'application",
+    "unpin_from_dashboard": "désépingler du tableau de bord",
     "update": "mise à jour",
     "update_app": "Mettez à jour votre application",
     "vote": "voter"
@@ -430,6 +430,11 @@
     "unpin": "désépingler l'onglet",
     "unpin_from_bookmarks": "désépingler des favoris",
     "unsaved_publish": "les informations de son formulaire de publication ne sont pas encore publiées, et fermer l'onglet les efface."
+  },
+  "approval_dialog": {
+    "requested_by": "Demandé par",
+    "unknown_app": "Q-App inconnue",
+    "unknown_app_hint": "Qortal Hub n'a pas pu déterminer quelle Q-App a envoyé cette demande. Refusez-la, sauf si vous venez de la faire vous-même."
   },
   "apps_bar": {
     "empty": "Épinglez une application ou ajoutez un favori, et il apparaîtra ici.",
@@ -927,7 +932,7 @@
       "space_for_admins": "désolé, cet espace est uniquement pour les administrateurs.",
       "status": "Statut",
       "unread_messages": "messages non lus ci-dessous",
-      "unsaved_changes": "vous avez des modifications non enregistrées à vos applications épinglées. Enregistrez-les sur QDN.",
+      "unsaved_changes": "vous avez des modifications non enregistrées dans vos applications épinglées. Enregistrez-les sur QDN.",
       "updating": "mise à jour",
       "wait": "attendez s'il vous plaît"
     },
@@ -938,7 +943,7 @@
       "delete_chat_image": "Souhaitez-vous supprimer votre image de chat précédente?",
       "logout": "Êtes-vous sûr que vous aimeriez vous connecter?",
       "new_user": "Êtes-vous un nouvel utilisateur?",
-      "overwrite_changes": "L'application n'a pas été en mesure de télécharger vos applications épinglées existantes existantes. Souhaitez-vous écraser ces changements?",
+      "overwrite_changes": "L'application n'a pas pu télécharger vos applications épinglées enregistrées sur QDN. Souhaitez-vous écraser ces changements?",
       "perform_transaction": "voulez-vous effectuer une transaction {{action}} ?",
       "provide_thread": "Veuillez fournir un titre de fil",
       "publish_app": "Souhaitez-vous publier cette application?",
@@ -948,7 +953,7 @@
       "register_name": "Souhaitez-vous enregistrer ce nom?",
       "reset_pinned": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser les applications épinglées par défaut?",
       "reset_qdn": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser avec vos applications QDN enregistrées?",
-      "transfer_qort": "voulez-vous transférer {{ amount }} QORT"
+      "transfer_qort_to": "voulez-vous transférer {{ amount }} QORT à {{ recipient }} ?"
     },
     "success": {
       "order_submitted": "Votre commande d'achat a été soumise",

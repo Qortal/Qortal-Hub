@@ -96,8 +96,8 @@
     "open_as_qortal_link": "Als Qortal-Link öffnen",
     "open_in_new": "in neuem fenster öffnen",
     "pin": "anheften",
-    "pin_app": "Pin App",
-    "pin_to_dashboard": "An Dashboard anheften",
+    "pin_app": "App anheften",
+    "pin_to_dashboard": "ans Dashboard anheften",
     "post": "posten",
     "post_message": "Post Nachricht",
     "publish": "veröffentlichen",
@@ -136,9 +136,9 @@
     "trade_qort": "Handel Qort",
     "transfer_qort": "Qort übertragen",
     "unblock": "unblock",
-    "unpin": "loslösen",
-    "unpin_app": "UNPIN App",
-    "unpin_from_dashboard": "Unpin aus dem Dashboard",
+    "unpin": "ablösen",
+    "unpin_app": "App ablösen",
+    "unpin_from_dashboard": "vom Dashboard lösen",
     "update": "aktualisieren",
     "update_app": "Aktualisieren Sie Ihre App",
     "vote": "abstimmen"
@@ -430,6 +430,11 @@
     "unpin": "Tab ablösen",
     "unpin_from_bookmarks": "von Lesezeichen lösen",
     "unsaved_publish": "die Angaben im Veröffentlichungsformular sind noch nicht veröffentlicht. Wenn Sie den Tab schließen, gehen sie verloren."
+  },
+  "approval_dialog": {
+    "requested_by": "Angefordert von",
+    "unknown_app": "Unbekannte Q-App",
+    "unknown_app_hint": "Qortal Hub konnte nicht feststellen, welche Q-App diese Anfrage gesendet hat. Lehnen Sie sie ab, außer Sie haben das gerade selbst angefordert."
   },
   "apps_bar": {
     "empty": "Heften Sie eine App an oder fügen Sie ein Lesezeichen hinzu, dann erscheint es hier.",
@@ -888,7 +893,7 @@
       "no_notification_apps": "Noch keine Apps mit Benachrichtigungsberechtigung.",
       "no_notifications": "Keine neuen Benachrichtigungen",
       "no_payments": "Keine Zahlungen",
-      "no_pinned_changes": "Sie haben derzeit keine Änderungen an Ihren angestellten Apps",
+      "no_pinned_changes": "Sie haben derzeit keine Änderungen an Ihren angehefteten Apps",
       "no_primary_name": "kein primärer name",
       "no_results": "Keine Ergebnisse",
       "notification_settings": "Benachrichtigungseinstellungen",
@@ -909,7 +914,7 @@
       "publishing": "Veröffentlichung ... bitte warten.",
       "qdn": "Verwenden Sie QDN Saving",
       "rating": "Bewertung für {{ service }} {{ name }}",
-      "register_name": "Sie benötigen einen registrierten Qortal -Namen, um Ihre angestellten Apps vor QDN zu speichern.",
+      "register_name": "Sie benötigen einen registrierten Qortal-Namen, um Ihre angehefteten Apps in QDN zu speichern.",
       "replied_to": "antwortete {{ person }}",
       "replied_to_deleted_message": "hat auf eine gelöschte Nachricht geantwortet",
       "replied_to_you": "↩ hat dir geantwortet",
@@ -927,7 +932,7 @@
       "space_for_admins": "Entschuldigung, dieser Raum gilt nur für Administratoren.",
       "status": "Status",
       "unread_messages": "ungelesene Nachrichten unten",
-      "unsaved_changes": "sie haben nicht gespeicherte Änderungen an Ihren angestellten Apps. Speichern Sie sie bei QDN.",
+      "unsaved_changes": "Sie haben nicht gespeicherte Änderungen an Ihren angehefteten Apps. Speichern Sie sie in QDN.",
       "updating": "aktualisierung",
       "wait": "bitte warten"
     },
@@ -938,7 +943,7 @@
       "delete_chat_image": "Möchten Sie Ihr vorheriges Chat -Bild löschen?",
       "logout": "Sind Sie sicher, dass Sie sich abmelden möchten?",
       "new_user": "Sind Sie ein neuer Benutzer?",
-      "overwrite_changes": "Die App konnte Ihre vorhandenen QDN-Saved-Apps nicht herunterladen. Möchten Sie diese Änderungen überschreiben?",
+      "overwrite_changes": "Die App konnte Ihre in QDN gespeicherten angehefteten Apps nicht herunterladen. Möchten Sie diese Änderungen überschreiben?",
       "perform_transaction": "Möchten Sie eine {{action}}-Transaktion ausführen?",
       "provide_thread": "Bitte geben Sie einen Thread -Titel an",
       "publish_app": "Möchten Sie diese App veröffentlichen?",
@@ -946,9 +951,9 @@
       "publish_qdn": "Möchten Sie Ihre Einstellungen an QDN veröffentlichen (verschlüsselt)?",
       "rate_app": "Möchten Sie dieser App die Bewertung {{ rate }} geben? Es wird eine POLL-Transaktion erstellt.",
       "register_name": "Möchten Sie diesen Namen registrieren?",
-      "reset_pinned": "Mögen Sie Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf die standardmäßigen angestellten Apps zurücksetzen?",
+      "reset_pinned": "Gefallen Ihnen Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf die standardmäßig angehefteten Apps zurücksetzen?",
       "reset_qdn": "Mögen Sie Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf Ihre gespeicherten QDN -Apps zurücksetzen?",
-      "transfer_qort": "Möchten Sie {{ amount }} QORT überweisen"
+      "transfer_qort_to": "Möchten Sie {{ amount }} QORT an {{ recipient }} überweisen?"
     },
     "success": {
       "order_submitted": "Ihre Kaufbestellung wurde eingereicht",

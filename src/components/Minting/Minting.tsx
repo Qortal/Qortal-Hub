@@ -20,6 +20,7 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { getFee } from '../../background/background.ts';
+import { assertPublicKeyForAddress } from '../../encryption/addressKeyCheck';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
@@ -39,6 +40,7 @@ import {
   countRewardDay,
 } from './MintingStats.tsx';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { HUB_REQUEST } from '../../qortal/requestingApp';
 
 export type AddressLevelEntry = {
   level: number;
@@ -270,7 +272,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 value: val,
               },
               180000,
-              true
+              true,
+              HUB_REQUEST
             )
             .then((response) => {
               if (!response?.error) {
@@ -322,7 +325,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 value: val,
               },
               180000,
-              true
+              true,
+              HUB_REQUEST
             )
             .then((response) => {
               if (!response?.error) {
@@ -479,23 +483,25 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const startMinting = async () => {
     try {
       setIsLoading(true);
+      // The self share and the minting key are made from this key: it must
+      // be this account's own.
+      const publicKey = assertPublicKeyForAddress(
+        accountInfo?.publicKey,
+        myAddress
+      );
       const latestRewardShares = await getRewardShares(myAddress);
       const rewardSharesToCheck = latestRewardShares || rewardShares;
       const findRewardShare = findSelfRewardShare(rewardSharesToCheck);
       if (findRewardShare) {
-        const privateRewardShare = await getRewardSharePrivateKey(
-          accountInfo?.publicKey
-        );
+        const privateRewardShare = await getRewardSharePrivateKey(publicKey);
         addMintingAccount(privateRewardShare);
       } else {
-        await createRewardShare(accountInfo?.publicKey, myAddress);
+        await createRewardShare(publicKey, myAddress);
         setShowWaitDialog(true);
         await waitUntilRewardShareIsConfirmed();
         await showNext({ message: '' });
 
-        const privateRewardShare = await getRewardSharePrivateKey(
-          accountInfo?.publicKey
-        );
+        const privateRewardShare = await getRewardSharePrivateKey(publicKey);
 
         setShowWaitDialog(false);
         addMintingAccount(privateRewardShare);

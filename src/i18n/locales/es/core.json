@@ -96,7 +96,7 @@
     "open_as_qortal_link": "Abrir como enlace Qortal",
     "open_in_new": "abrir en una ventana nueva",
     "pin": "fijar",
-    "pin_app": "aplicación PIN",
+    "pin_app": "fijar aplicación",
     "pin_to_dashboard": "Fijar en el tablero",
     "post": "publicar",
     "post_message": "mensaje de publicación",
@@ -136,9 +136,9 @@
     "trade_qort": "comercio Qort",
     "transfer_qort": "transferir Qort",
     "unblock": "unblock",
-    "unpin": "desprender",
-    "unpin_app": "Aplicación de desgaste",
-    "unpin_from_dashboard": "Desvinar del tablero",
+    "unpin": "desfijar",
+    "unpin_app": "desfijar aplicación",
+    "unpin_from_dashboard": "desfijar del tablero",
     "update": "actualizar",
     "update_app": "Actualiza tu aplicación",
     "vote": "votar"
@@ -430,6 +430,11 @@
     "unpin": "desfijar pestaña",
     "unpin_from_bookmarks": "desfijar de marcadores",
     "unsaved_publish": "los datos de su formulario de publicación aún no se han publicado, y al cerrar la pestaña se descartan."
+  },
+  "approval_dialog": {
+    "requested_by": "Solicitado por",
+    "unknown_app": "Q-App desconocida",
+    "unknown_app_hint": "Qortal Hub no pudo determinar qué Q-App envió esta solicitud. Recházala a menos que acabes de pedirlo tú mismo."
   },
   "apps_bar": {
     "empty": "Fija una aplicación o añade un marcador y aparecerá aquí.",
@@ -927,7 +932,7 @@
       "space_for_admins": "lo siento, este espacio es solo para administradores.",
       "status": "Estado",
       "unread_messages": "mensajes no leídos a continuación",
-      "unsaved_changes": "tiene cambios no salvos en sus aplicaciones fijadas. Guárdelos a QDN.",
+      "unsaved_changes": "tiene cambios sin guardar en sus aplicaciones fijadas. Guárdelos en QDN.",
       "updating": "actualización",
       "wait": "espera por favor"
     },
@@ -946,9 +951,9 @@
       "publish_qdn": "¿Le gustaría publicar su configuración en QDN (cifrado)?",
       "rate_app": "¿Quieres valorar esta app con {{ rate }}? Se creará una transacción POLL.",
       "register_name": "¿Le gustaría registrar este nombre?",
-      "reset_pinned": "¿No te gustan tus cambios locales actuales? ¿Le gustaría restablecer las aplicaciones fijadas predeterminadas?",
+      "reset_pinned": "¿No le gustan sus cambios locales actuales? ¿Desea restablecer las aplicaciones fijadas predeterminadas?",
       "reset_qdn": "¿No te gustan tus cambios locales actuales? ¿Le gustaría restablecer a sus aplicaciones guardadas de QDN guardadas?",
-      "transfer_qort": "¿quieres transferir {{ amount }} QORT"
+      "transfer_qort_to": "¿quieres transferir {{ amount }} QORT a {{ recipient }}?"
     },
     "success": {
       "order_submitted": "Su pedido de compra fue enviado",

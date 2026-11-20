@@ -4,6 +4,26 @@ import { getNotificationOsPushDisabled } from '../qortal/qortal-requests';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
+import {
+  assertPublicKeyForAddress,
+  isAddressShaped,
+  isValidQortalAddress,
+  publicKeyBelongsToAddress,
+  PublicKeyMismatchError,
+} from '../encryption/addressKeyCheck';
+import {
+  checkValueTransferFee,
+  InvalidRecipientError,
+  isLookupSafeName,
+  isValidPaymentAddress,
+  parseAssetId,
+  parseDecimalAmount,
+  RecipientInvisibleCharactersError,
+  RecipientLookupFailedError,
+  RecipientNameNotFoundError,
+  recipientFromNameRecord,
+  type ResolvedRecipient,
+} from '../transactions/paymentSafety';
 import i18n from 'i18next';
 import {
   base64ToUint8Array,
@@ -22,7 +42,7 @@ import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
 import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
-import { joinNodeEndpoint } from '../utils/nodeEndpointPath';
+import { joinNodeEndpoint, nodePathSegment } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
 import {
@@ -874,6 +894,55 @@ export const sendQortFee = async (): Promise<number> => {
   return qortFee;
 };
 
+/**
+ * Address and registered name for a payment recipient given as an address or
+ * a name. An account ("Q…") or AT ("A…") address with a valid checksum is
+ * returned without asking the node; text that decodes like an address but
+ * fails the checksum is a mistyped address and is refused, also without asking
+ * the node. A name with characters hasInvisibleCharacters flags is refused
+ * before any lookup. A name is checked before it goes into the /names/<name>
+ * path (encoded), and the owner the node returns must be a valid Qortal
+ * address. Only the node's answer for an unknown name (HTTP 404, or JSON
+ * error 401) is reported as a name that does not exist; any other failed
+ * lookup is reported as a lookup that failed. Payments call this before their
+ * confirmation, show the result, and pay the returned address, so nothing is
+ * looked up again after approval.
+ */
+export async function resolveRecipient(
+  receiver: unknown
+): Promise<ResolvedRecipient> {
+  const value = typeof receiver === 'string' ? receiver.trim() : '';
+  if (isValidPaymentAddress(value)) return { address: value, name: '' };
+  if (isAddressShaped(value)) throw new InvalidRecipientError();
+  if (hasInvisibleCharacters(value)) {
+    throw new RecipientInvisibleCharactersError();
+  }
+  if (!isLookupSafeName(value)) throw new InvalidRecipientError();
+
+  const validApi = await getBaseApi();
+  const url = `${validApi}/names/${nodePathSegment(value)}`;
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new RecipientLookupFailedError(value);
+  }
+  let data: unknown = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  const error = (data as { error?: unknown } | null)?.error;
+  if (response?.status === 404 || error === 401) {
+    throw new RecipientNameNotFoundError();
+  }
+  if (!response?.ok || !data || error) {
+    throw new RecipientLookupFailedError(value);
+  }
+  return recipientFromNameRecord(value, data);
+}
+
 export async function getNameOrAddress(receiver) {
   try {
     const isAddress = validateAddress(receiver);
@@ -895,19 +964,36 @@ export async function getNameOrAddress(receiver) {
   }
 }
 
+/**
+ * The public key of `receiver` (an account address) from the node, checked to
+ * derive that address. Throws for anything that is not an account address, for
+ * no key, and for another account's key.
+ */
 export async function getPublicKey(receiver) {
   try {
+    if (!isValidQortalAddress(receiver)) {
+      throw new PublicKeyMismatchError(receiver);
+    }
     const validApi = await getBaseApi();
 
     const response = await fetch(validApi + '/addresses/publickey/' + receiver);
-    if (!response?.ok) throw new Error("Cannot fetch recipient's public key");
-
-    const data = await response.text();
-    if (!data?.error && data !== 'false') return data;
-    if (data?.error) {
-      throw new Error("Cannot fetch recipient's public key");
+    if (!response?.ok) {
+      throw new Error(
+        i18n.t('question:message.error.fetch_recipient_public_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
-    throw new Error("Cannot fetch recipient's public key");
+
+    const data = (await response.text()).trim();
+    if (!data || data === 'false') {
+      throw new Error(
+        i18n.t('question:message.error.fetch_recipient_public_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+    return assertPublicKeyForAddress(data, receiver);
   } catch (error) {
     throw new Error(error?.message || 'cannot validate address or name');
   }
@@ -1296,6 +1382,14 @@ export async function sendChatDirect({
   }
 
   if (!recipientPublicKey) throw new Error('Cannot retrieve publickey');
+  // A key handed in by the caller is used only when it belongs to the
+  // recipient; otherwise the key is fetched again, and getPublicKey checks it.
+  recipientPublicKey = publicKeyBelongsToAddress(
+    recipientPublicKey,
+    recipientAddress
+  )
+    ? recipientPublicKey.trim()
+    : await getPublicKey(recipientAddress);
 
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
@@ -1854,7 +1948,27 @@ export async function kickFromGroup({
   return res;
 }
 
-export async function transferAsset({ amount, recipient, assetId }) {
+/**
+ * Builds, signs and sends one TRANSFER_ASSET to `recipient`, an address.
+ * `approvedFee` is the fee the user saw in the confirmation: a higher fee from
+ * the node is refused before signing, as is any fee above the fixed ceiling
+ * (see checkValueTransferFee). The transfer is signed once; a failure is
+ * thrown to the caller, never retried here.
+ */
+export async function transferAsset({
+  amount,
+  recipient,
+  assetId,
+  approvedFee,
+}: {
+  amount: unknown;
+  recipient: string;
+  assetId: unknown;
+  approvedFee?: unknown;
+}) {
+  if (!isValidPaymentAddress(recipient)) throw new InvalidRecipientError();
+  const parsedAmount = parseDecimalAmount(amount);
+  const parsedAssetId = parseAssetId(assetId);
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -1865,12 +1979,13 @@ export async function transferAsset({ amount, recipient, assetId }) {
     publicKey: uint8PublicKey,
   };
   const feeres = await getFee('TRANSFER_ASSET');
+  const fee = checkValueTransferFee(feeres.fee, approvedFee);
 
   const tx = await createTransaction(12, keyPair, {
-    fee: feeres.fee,
+    fee,
     recipient: recipient,
-    amount: amount,
-    assetId: assetId,
+    amount: parsedAmount.value,
+    assetId: parsedAssetId,
     lastReference: lastReference,
   });
 
@@ -2092,18 +2207,34 @@ export async function inviteToGroup({
   return res;
 }
 
+/**
+ * Signs and sends a QORT PAYMENT. Callers resolve the recipient and read the
+ * fee before their confirmation, show both, and pass the resolved address as
+ * `receiver` and the shown fee as `approvedFee`: a higher fee from the node is
+ * then refused before anything is signed. Without `approvedFee` only the fixed
+ * fee ceiling applies.
+ */
 export async function sendCoin(
-  { password, amount, receiver },
+  {
+    password,
+    amount,
+    receiver,
+    approvedFee,
+  }: {
+    password?: string | null;
+    amount: unknown;
+    receiver: string;
+    approvedFee?: unknown;
+  },
   skipConfirmPassword
 ) {
   try {
     if (!validateAddress(receiver) && hasInvisibleCharacters(receiver)) {
-      throw new Error('Recipient name contains invisible characters');
+      throw new RecipientInvisibleCharactersError();
     }
+    const parsedAmount = parseDecimalAmount(amount);
 
-    const confirmReceiver = await getNameOrAddress(receiver);
-    if (confirmReceiver.error)
-      throw new Error('Invalid receiver address or name');
+    const { address: confirmReceiver } = await resolveRecipient(receiver);
     const wallet = await getSaveWallet();
     let keyPair = '';
     if (skipConfirmPassword) {
@@ -2127,13 +2258,13 @@ export async function sendCoin(
     }
 
     const lastRef = await getLastRef();
-    const fee = await sendQortFee();
+    const fee = checkValueTransferFee(await sendQortFee(), approvedFee);
     const validApi = null;
 
     const res = await makeTransactionRequest(
       confirmReceiver,
       lastRef,
-      amount,
+      parsedAmount.value,
       fee,
       keyPair,
       validApi

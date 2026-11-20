@@ -96,7 +96,7 @@
     "open_as_qortal_link": "作为 Qortal 链接打开",
     "open_in_new": "在新窗口中打开",
     "pin": "固定",
-    "pin_app": "引脚应用程序",
+    "pin_app": "固定应用",
     "pin_to_dashboard": "固定到仪表板",
     "post": "发布",
     "post_message": "发布消息",
@@ -137,8 +137,8 @@
     "transfer_qort": "转移Qort",
     "unblock": "unblock",
     "unpin": "取消固定",
-    "unpin_app": "Unpin App",
-    "unpin_from_dashboard": "从仪表板上锁定",
+    "unpin_app": "取消固定应用",
+    "unpin_from_dashboard": "从仪表板取消固定",
     "update": "更新",
     "update_app": "更新您的应用程序",
     "vote": "投票"
@@ -430,6 +430,11 @@
     "unpin": "取消固定标签页",
     "unpin_from_bookmarks": "从书签取消固定",
     "unsaved_publish": "此标签页的发布表单中的内容尚未发布，关闭标签页将丢弃这些内容。"
+  },
+  "approval_dialog": {
+    "requested_by": "请求方",
+    "unknown_app": "未知的Q-App",
+    "unknown_app_hint": "Qortal Hub无法确定是哪个Q-App发送了此请求。除非是你刚刚自己发起的，否则请拒绝。"
   },
   "apps_bar": {
     "empty": "固定一个应用或添加书签，它就会显示在这里。",
@@ -938,7 +943,7 @@
       "delete_chat_image": "您想删除以前的聊天图片吗？",
       "logout": "您确定要注销吗？",
       "new_user": "您是新用户吗？",
-      "overwrite_changes": "该应用程序无法下载您现有的QDN固定固定应用程序。您想覆盖这些更改吗？",
+      "overwrite_changes": "该应用无法下载您保存在QDN的固定应用。要覆盖这些更改吗？",
       "perform_transaction": "要执行 {{action}} 交易吗？",
       "provide_thread": "请提供线程标题",
       "publish_app": "您想发布此应用吗？",
@@ -948,7 +953,7 @@
       "register_name": "您想注册这个名字吗？",
       "reset_pinned": "不喜欢您当前的本地更改吗？您想重置默认的固定应用吗？",
       "reset_qdn": "不喜欢您当前的本地更改吗？您想重置保存的QDN固定应用吗？",
-      "transfer_qort": "要转账 {{ amount }} QORT 吗"
+      "transfer_qort_to": "要向 {{ recipient }} 转账 {{ amount }} QORT 吗？"
     },
     "success": {
       "order_submitted": "您的买入订单已提交",

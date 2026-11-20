@@ -48,6 +48,7 @@ describe('dedicated Q-App Reticulum request dispatch', () => {
 
     expect(authorizeRnsDestination).toHaveBeenCalledWith(destination, true, {
       name: 'ExampleApp',
+      service: 'APP',
       tabId: 42,
     });
     expect(window.electronAPI.qappReticulumRequest).toHaveBeenCalledWith(

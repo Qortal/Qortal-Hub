@@ -46,13 +46,22 @@ import {
   buyName,
   getBaseApi,
   getAssetBalanceInfo,
-  getNameOrAddress,
   getAssetInfo,
   getPublicKey,
+  resolveRecipient,
   transferAsset,
   sendChatNotification,
   sendChatGroup,
 } from '../background/background.ts';
+import {
+  checkValueTransferFee,
+  formatAtomicAmount,
+  parseAssetId,
+  parseDecimalAmount,
+  type ParsedAmount,
+  RecipientInvisibleCharactersError,
+  recipientDisplayLabel,
+} from '../transactions/paymentSafety';
 import {
   encryptAndPublishSymmetricKeyGroupChat,
   getAllUserNames,
@@ -96,7 +105,9 @@ import {
   createPermissionPromptQueue,
   PERMISSION_ALREADY_GIVEN,
 } from './permissionPromptQueue';
+import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
 import Base58 from '../encryption/Base58.ts';
+import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
 import {
@@ -203,7 +214,8 @@ export async function retryTransaction(
 export const _createPoll = async (
   { pollName, pollDescription, options },
   isFromExtension,
-  skipPermission
+  skipPermission,
+  appInfo?
 ) => {
   const fee = await getFee('CREATE_POLL');
   let resPermission = {};
@@ -227,7 +239,8 @@ export const _createPoll = async (
         }),
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
   }
 
@@ -275,7 +288,8 @@ export const _createPoll = async (
 
 const _deployAt = async (
   { name, description, tags, creationBytes, amount, assetId, atType },
-  isFromExtension
+  isFromExtension,
+  appInfo?
 ) => {
   const fee = await getFee('DEPLOY_AT');
 
@@ -297,8 +311,10 @@ const _deployAt = async (
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee.fee,
+      confirmCheckbox: true,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -351,7 +367,8 @@ const _deployAt = async (
 export const _voteOnPoll = async (
   { pollName, optionIndex, optionName },
   isFromExtension,
-  skipPermission
+  skipPermission,
+  appInfo?
 ) => {
   const fee = await getFee('VOTE_ON_POLL');
   let resPermission = {};
@@ -372,7 +389,8 @@ export const _voteOnPoll = async (
         }),
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
   }
 
@@ -491,7 +509,8 @@ const backendPermissions = createBackendPermissions(
           'question:permission.backend_connection_understand'
         ),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     return response?.accepted === true;
   },
@@ -550,9 +569,12 @@ const alreadyAllowed =
       hasSessionPermission(appInfo.tabId, appInfo.name, sessionPermission)
     );
 
+// `appInfo` is the tab the request came from: the dialog names that app, and
+// never one the payload claims.
 async function getUserPermission(
   payload,
   isFromExtension,
+  appInfo?,
   isAlreadyAllowed?: () => boolean | Promise<boolean>
 ) {
   return askPermissionInTurn(
@@ -566,7 +588,15 @@ async function getUserPermission(
         window.postMessage(
           {
             action: 'QORTAL_REQUEST_PERMISSION',
-            payload: { ...payload, expiresAt },
+            payload: {
+              ...payload,
+              expiresAt,
+              // Hub's own pages name no app; a Q-App is named from its tab.
+              fromHub: isHubRequest(appInfo),
+              requestingApp: isHubRequest(appInfo)
+                ? null
+                : requestingAppFromAppInfo(appInfo),
+            },
             requestId,
             isFromExtension,
           },
@@ -593,7 +623,7 @@ async function getUserPermission(
 export const authorizeRnsDestination = async (
   destination: string,
   isFromExtension: boolean,
-  appInfo: { tabId?: string | number; name?: string }
+  appInfo: { tabId?: string | number; name?: string; service?: string }
 ) => {
   const normalized = String(destination ?? '')
     .trim()
@@ -608,7 +638,7 @@ export const authorizeRnsDestination = async (
     throw new Error('RNS_PERMISSION_DENIED');
   }
   await backendPermissions.authorize(
-    { tabId: appInfo.tabId, name: appInfo.name },
+    { tabId: appInfo.tabId, name: appInfo.name, service: appInfo.service },
     normalized,
     isFromExtension
   );
@@ -666,6 +696,7 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
           },
         },
         isFromExtension,
+        appInfo,
         alreadyAllowed(
           appInfo,
           'GET_USER_ACCOUNT',
@@ -952,6 +983,7 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
         isSessionPermission: true,
       },
       isFromExtension,
+      appInfo,
       () =>
         unapprovedSessionPermissions(
           { tabId, name: appInfo.name },
@@ -1370,7 +1402,7 @@ export const decryptDataWithSharingKey = async (data, sender) => {
   return base64ToObject.data;
 };
 
-export const getHostedData = async (data, isFromExtension) => {
+export const getHostedData = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1385,7 +1417,8 @@ export const getHostedData = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       }),
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1412,7 +1445,7 @@ export const getHostedData = async (data, isFromExtension) => {
   }
 };
 
-export const deleteHostedData = async (data, isFromExtension) => {
+export const deleteHostedData = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1435,7 +1468,8 @@ export const deleteHostedData = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       }),
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1602,6 +1636,7 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, 'GET_LIST_ITEMS', 'qAPPAutoLists')
     );
     const { accepted, checkbox1 } = resPermission;
@@ -1631,7 +1666,7 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
   }
 };
 
-export const addListItems = async (data, isFromExtension) => {
+export const addListItems = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1668,7 +1703,8 @@ export const addListItems = async (data, isFromExtension) => {
       }),
       highlightedText: items.join(', '),
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1708,7 +1744,7 @@ export const addListItems = async (data, isFromExtension) => {
   }
 };
 
-export const deleteListItems = async (data, isFromExtension) => {
+export const deleteListItems = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1753,7 +1789,8 @@ export const deleteListItems = async (data, isFromExtension) => {
       }),
       highlightedText: items ? JSON.stringify(items) : item,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
 
@@ -1792,6 +1829,90 @@ export const deleteListItems = async (data, isFromExtension) => {
     );
   }
 };
+
+/**
+ * A publish request's app fee: plain decimals only ("0x10", "1e3" are
+ * refused). There is no app fee when it is zero or the request names no
+ * recipient for it.
+ */
+function readAppFee(data: any): {
+  appFee: ParsedAmount | null;
+  hasAppFee: boolean;
+} {
+  const appFee = data?.appFee
+    ? parseDecimalAmount(data.appFee, { allowZero: true })
+    : null;
+  const hasAppFee =
+    !!appFee && appFee.atomic > BigInt(0) && !!data?.appFeeRecipient;
+  return { appFee, hasAppFee };
+}
+
+/**
+ * Before the publish dialog: resolves the app fee's recipient and reads the
+ * PAYMENT fee, which may not be above the ceiling. The dialog shows the app
+ * fee with that fee, names who gets it and asks for "I have read this
+ * request"; after the publish, `payment` pays that address the parsed amount
+ * with that fee.
+ */
+async function prepareAppFee(appFee: ParsedAmount, appFeeRecipient: unknown) {
+  const recipient = await resolveRecipient(appFeeRecipient);
+  const paymentFee = checkValueTransferFee((await getFee('PAYMENT')).fee);
+  const paymentFeeAtomic = parseDecimalAmount(paymentFee, {
+    allowZero: true,
+  }).atomic;
+  return {
+    payment: {
+      amount: appFee.value,
+      receiver: recipient.address,
+      approvedFee: paymentFee,
+    },
+    dialogValues: {
+      appFee: formatAtomicAmount(appFee.atomic + paymentFeeAtomic),
+      checkbox1: {
+        value: true,
+        label: i18n.t('question:accept_app_fee_to', {
+          recipient: recipientDisplayLabel(recipient),
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      confirmCheckbox: true,
+    },
+  };
+}
+
+/**
+ * Pays a Q-App's app fee after its publish went through. The publish has
+ * already been reported to the Q-App, so a payment that fails or is refused
+ * (for example a node fee above the one the dialog showed) is told to the
+ * user instead.
+ */
+export function payAppFeeAfterPublish(payment: {
+  amount: unknown;
+  receiver: string;
+  approvedFee: unknown;
+}): Promise<void> {
+  const tellUser = (reason: string) => {
+    console.warn('[app fee] payment not sent', reason);
+    executeEvent('openGlobalSnackBar', {
+      message: i18n.t('question:message.error.app_fee_not_sent', {
+        error: reason,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      type: 'error',
+      duration: 8000,
+    });
+  };
+  return sendCoinFunc({ ...payment }, true).then(
+    (result) => {
+      if (result?.res?.success) return;
+      const message = result?.res?.data?.message;
+      tellUser(typeof message === 'string' ? message : '');
+    },
+    (error) => {
+      tellUser(typeof error?.message === 'string' ? error.message : '');
+    }
+  );
+}
 
 export const publishQDNResource = async (
   data: any,
@@ -1835,12 +1956,7 @@ export const publishQDNResource = async (
 
   // Use "default" if user hasn't specified an identifier
   const service = data.service;
-  const appFee = data?.appFee ? +data.appFee : undefined;
-  const appFeeRecipient = data?.appFeeRecipient;
-  let hasAppFee = false;
-  if (appFee && appFee > 0 && appFeeRecipient) {
-    hasAppFee = true;
-  }
+  const { appFee, hasAppFee } = readAppFee(data);
   const registeredName = data?.name || (await getNameInfo());
   const name = registeredName;
   if (!name) {
@@ -1960,16 +2076,13 @@ export const publishQDNResource = async (
   const fee = await getFee('ARBITRARY');
 
   const handleDynamicValues = {};
+  // Resolved and checked before asking: the dialog names who gets the app fee,
+  // and the payment after the publish uses that address and that fee.
+  let appFeePayment = null;
   if (hasAppFee) {
-    const feePayment = await getFee('PAYMENT');
-
-    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
-      (handleDynamicValues['checkbox1'] = {
-        value: true,
-        label: i18n.t('question:accept_app_fee', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      }));
+    const prepared = await prepareAppFee(appFee, data.appFeeRecipient);
+    appFeePayment = prepared.payment;
+    Object.assign(handleDynamicValues, prepared.dialogValues);
   }
   if (!!data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
@@ -1995,7 +2108,8 @@ export const publishQDNResource = async (
         fee: fee.fee,
         ...handleDynamicValues,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted, checkbox1 = false } = resPermission || {
       accepted: false,
@@ -2036,14 +2150,8 @@ export const publishQDNResource = async (
         withFee: true,
         encryption: isStreamedEncryption ? encryption : null,
       });
-      if (resPublish?.signature && hasAppFee && checkbox1Var) {
-        sendCoinFunc(
-          {
-            amount: appFee,
-            receiver: appFeeRecipient,
-          },
-          true
-        );
+      if (resPublish?.signature && appFeePayment && checkbox1Var) {
+        void payAppFeeAfterPublish(appFeePayment);
       }
       return resPublish;
     } catch (error) {
@@ -2269,27 +2377,16 @@ export const publishMultipleQDNResources = async (
       );
   });
 
-  const appFee = data?.appFee ? +data.appFee : undefined;
-  const appFeeRecipient = data?.appFeeRecipient;
-  let hasAppFee = false;
+  const { appFee, hasAppFee } = readAppFee(data);
 
-  if (appFee && appFee > 0 && appFeeRecipient) {
-    hasAppFee = true;
-  }
-
-  let paymentFeeAmount = 0;
+  // Resolved and checked before asking: the dialog names who gets the app fee,
+  // and the payment after the publish uses that address and that fee.
+  let appFeePayment = null;
   const handleDynamicValues = {};
   if (hasAppFee) {
-    const feePayment = await getFee('PAYMENT');
-    paymentFeeAmount = +feePayment.fee;
-
-    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
-      (handleDynamicValues['checkbox1'] = {
-        value: true,
-        label: i18n.t('question:accept_app_fee', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      }));
+    const prepared = await prepareAppFee(appFee, data.appFeeRecipient);
+    appFeePayment = prepared.payment;
+    Object.assign(handleDynamicValues, prepared.dialogValues);
   }
   if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
@@ -2297,8 +2394,7 @@ export const publishMultipleQDNResources = async (
 
   const totalRequiredQort =
     resources.length * +fee.fee +
-    paymentFeeAmount +
-    (hasAppFee && appFee ? +appFee : 0);
+    (appFeePayment ? +appFeePayment.approvedFee + appFeePayment.amount : 0);
   const balance = await getBalanceInfo();
   if (+balance < totalRequiredQort) {
     throw new Error(
@@ -2338,7 +2434,8 @@ export const publishMultipleQDNResources = async (
         fee: +fee.fee * resources.length,
         ...handleDynamicValues,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted, checkbox1 = false } = resPermission || {
       accepted: false,
@@ -2571,19 +2668,13 @@ export const publishMultipleQDNResources = async (
     };
     return obj;
   }
-  if (hasAppFee && checkbox1Var) {
-    sendCoinFunc(
-      {
-        amount: appFee,
-        receiver: appFeeRecipient,
-      },
-      true
-    );
+  if (appFeePayment && checkbox1Var) {
+    void payAppFeeAfterPublish(appFeePayment);
   }
   return publishedResponses;
 };
 
-export const voteOnPoll = async (data, isFromExtension) => {
+export const voteOnPoll = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['pollName', 'optionIndex'];
   const missingFields: string[] = [];
 
@@ -2639,7 +2730,9 @@ export const voteOnPoll = async (data, isFromExtension) => {
     const optionName = pollInfo.pollOptions[optionIndex].optionName;
     const resVoteOnPoll = await _voteOnPoll(
       { pollName, optionIndex, optionName },
-      isFromExtension
+      isFromExtension,
+      false,
+      appInfo
     );
     return resVoteOnPoll;
   } catch (error) {
@@ -2652,7 +2745,7 @@ export const voteOnPoll = async (data, isFromExtension) => {
   }
 };
 
-export const createPoll = async (data, isFromExtension) => {
+export const createPoll = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'pollName',
     'pollDescription',
@@ -2685,7 +2778,9 @@ export const createPoll = async (data, isFromExtension) => {
         pollDescription,
         options: pollOptions,
       },
-      isFromExtension
+      isFromExtension,
+      false,
+      appInfo
     );
     return resCreatePoll;
   } catch (error) {
@@ -2775,6 +2870,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, null, `qAPPSendChatMessage-${appInfo?.name}`)
     );
   }
@@ -2846,7 +2942,8 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       if (res?.error === 102) {
         key = '';
         hasPublicKey = false;
-      } else if (res !== false) {
+      } else if (res !== false && res !== 'false') {
+        // Core answers the text "false" for an account with no key on chain.
         key = res;
         hasPublicKey = true;
       } else {
@@ -2856,9 +2953,17 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
 
       if (!hasPublicKey && isRecipient) {
         throw new Error(
-          'Cannot send an encrypted message to this user since they do not have their publickey on chain.'
+          i18n.t('question:message.error.recipient_no_public_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
       }
+      // The message is encrypted to this key: it must belong to the recipient
+      // address.
+      key = assertPublicKeyForAddress(
+        typeof key === 'string' ? key : '',
+        recipient
+      );
       let _reference = new Uint8Array(64);
       self.crypto.getRandomValues(_reference);
 
@@ -3026,6 +3131,7 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
         fee: fee.fee,
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, 'JOIN_GROUP')
     );
     const { accepted } = resPermission || {
@@ -3067,16 +3173,30 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
   }
 };
 
-export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
+export const saveFile = async (
+  data,
+  sender,
+  isFromExtension,
+  snackMethods,
+  appInfo?
+) => {
   try {
     if (!data?.filename)
-      throw new Error(i18n.t('question:message.error.missing_fields', {
-        fields: 'filename', postProcess: 'capitalizeFirstChar',
-      }));
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: 'filename',
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     // Handle location-based downloads (streaming approach)
     if (data?.location) {
-      return await saveFileFromLocation(data, isFromExtension, snackMethods);
+      return await saveFileFromLocation(
+        data,
+        isFromExtension,
+        snackMethods,
+        appInfo
+      );
     }
     const requiredFields = ['filename', 'blob'];
     const missingFields: string[] = [];
@@ -3105,7 +3225,8 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         }),
         highlightedText: `${filename}`,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 
@@ -3168,7 +3289,12 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
  * Downloads a file from QDN location with optional decryption
  * Uses streaming to avoid loading entire file into memory
  */
-async function saveFileFromLocation(data, isFromExtension, snackMethods) {
+async function saveFileFromLocation(
+  data,
+  isFromExtension,
+  snackMethods,
+  appInfo?
+) {
   const {
     filename,
     location,
@@ -3222,7 +3348,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
       }),
       highlightedText: isEncrypted ? `${filename} (encrypted)` : filename,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   if (!resPermission.accepted) {
@@ -3589,7 +3716,7 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
   }
 }
 
-export const deployAt = async (data, isFromExtension) => {
+export const deployAt = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'name',
     'description',
@@ -3628,7 +3755,8 @@ export const deployAt = async (data, isFromExtension) => {
         assetId: data.assetId,
         atType: data.type,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     return resDeployAt;
   } catch (error) {
@@ -3703,6 +3831,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_USER_WALLET',
@@ -3859,6 +3988,7 @@ export const getWalletBalance = async (
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_WALLET_BALANCE',
@@ -4121,6 +4251,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_USER_WALLET_INFO',
@@ -4245,6 +4376,7 @@ export const getUserWalletTransactions = async (
         },
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(
         appInfo,
         'GET_USER_WALLET_TRANSACTIONS',
@@ -4638,7 +4770,8 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission || {
       accepted: false,
@@ -4813,7 +4946,8 @@ export const setCurrentForeignServer = async (
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
 
     const { accepted } = resPermission || {
@@ -4927,7 +5061,8 @@ export const addForeignServer = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
 
     const { accepted } = resPermission || {
@@ -5041,7 +5176,8 @@ export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
           postProcess: 'capitalizeFirstChar',
         }),
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
 
     const { accepted } = resPermission || {
@@ -5668,7 +5804,7 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
   });
 };
 
-export const sendCoin = async (data, isFromExtension) => {
+export const sendCoin = async (data, isFromExtension, appInfo?) => {
   const requiredFields =
     data.sendMax === true &&
     ['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(data.coin)
@@ -5712,7 +5848,10 @@ export const sendCoin = async (data, isFromExtension) => {
     // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
     // then set the response string from the core to the `response` variable (defined above)
     // If they decline, send back JSON that includes an `error` key, such as `{"error": "User declined request"}`
-    const amount = Number(data.amount);
+    // Plain decimals only ("1e3", "0x10" are refused); the dialog shows the
+    // normalised amount that is signed.
+    const parsedAmount = parseDecimalAmount(data.amount);
+    const amount = parsedAmount.value;
     const recipient = data?.recipient || data.destinationAddress;
 
     const url = await createEndpoint(`/addresses/balance/${address}`);
@@ -5742,28 +5881,27 @@ export const sendCoin = async (data, isFromExtension) => {
     );
     const walletBalanceDecimals = Number(transformDecimals);
     const amountDecimals = Number(amount) * QORT_DECIMALS;
-    const fee: number = await sendQortFee();
+    // The fee the dialog shows: no fee above the ceiling is shown, and the
+    // payment refuses a node fee higher than this one.
+    const fee: number = checkValueTransferFee(await sendQortFee());
     if (amountDecimals + fee * QORT_DECIMALS > walletBalanceDecimals) {
       const errorMsg = i18n.t('question:message.error.insufficient_funds', {
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
     }
-    if (amount <= 0) {
-      const errorMsg = i18n.t('core:message.error.invalid_amount', {
-        postProcess: 'capitalizeFirstChar',
-      });
-      throw new Error(errorMsg);
-    }
-    if (recipient.length === 0) {
+    if (typeof recipient !== 'string' || recipient.trim().length === 0) {
       const errorMsg = i18n.t('question:message.error.empty_receiver', {
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
     }
     if (!validateAddress(recipient) && hasInvisibleCharacters(recipient)) {
-      throw new Error('Recipient name contains invisible characters');
+      throw new RecipientInvisibleCharactersError();
     }
+    // A name is resolved before asking: the dialog shows the name and the full
+    // address, and that address is paid without a second lookup.
+    const resolvedRecipient = await resolveRecipient(recipient);
 
     const resPermission = await getUserPermission(
       {
@@ -5771,20 +5909,26 @@ export const sendCoin = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:to_recipient', {
-          recipient: recipient,
+          recipient: recipientDisplayLabel(resolvedRecipient),
           postProcess: 'capitalizeFirstChar',
         }),
-        highlightedText: `${amount} ${checkCoin}`,
+        highlightedText: `${parsedAmount.text} ${checkCoin}`,
         fee: fee,
         confirmCheckbox: true,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 
     if (accepted) {
       const makePayment = await sendCoinFunc(
-        { amount, password: null, receiver: recipient },
+        {
+          amount,
+          password: null,
+          receiver: resolvedRecipient.address,
+          approvedFee: fee,
+        },
         true
       );
       return makePayment.res?.data;
@@ -5798,13 +5942,18 @@ export const sendCoin = async (data, isFromExtension) => {
     }
   } else if (['BTC', 'LTC', 'DOGE', 'DGB', 'RVN'].includes(checkCoin)) {
     return sendLocalForeignCoin(data, (payload) =>
-      getUserPermission(payload, isFromExtension)
+      getUserPermission(payload, isFromExtension, appInfo)
     );
   } else if (checkCoin === 'ARRR') {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const memo = data?.memo;
-    const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+    const arrrWalletBalance = await getWalletBalance(
+      { coin: checkCoin },
+      true,
+      undefined,
+      appInfo
+    );
 
     if (isNaN(Number(arrrWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -5831,8 +5980,10 @@ export const sendCoin = async (data, isFromExtension) => {
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} ARRR`,
+        confirmCheckbox: true,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 
@@ -5902,7 +6053,7 @@ const getBuyingFees = async (foreignBlockchain) => {
   };
 };
 
-export const createBuyOrder = async (data, isFromExtension) => {
+export const createBuyOrder = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['crosschainAtInfo', 'foreignBlockchain'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -5956,7 +6107,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
     return fundLocalTrades(
       crosschainAtInfo,
       localTradeCoins[foreignBlockchain],
-      (payload) => getUserPermission(payload, isFromExtension)
+      (payload) => getUserPermission(payload, isFromExtension, appInfo)
     );
   }
 
@@ -6015,8 +6166,10 @@ export const createBuyOrder = async (data, isFromExtension) => {
             postProcess: 'capitalizeFirstChar',
           }),
         },
+        confirmCheckbox: true,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
     if (accepted) {
@@ -6191,7 +6344,7 @@ const tradeBotCreateRequest = async (body, keyPair) => {
   }
 };
 
-export const createSellOrder = async (data, isFromExtension) => {
+export const createSellOrder = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['qortAmount', 'foreignBlockchain', 'foreignAmount'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6235,8 +6388,10 @@ export const createSellOrder = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         }),
         fee: '0.02',
+        confirmCheckbox: true,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
     if (accepted) {
@@ -6280,7 +6435,7 @@ export const createSellOrder = async (data, isFromExtension) => {
   }
 };
 
-export const cancelSellOrder = async (data, isFromExtension) => {
+export const cancelSellOrder = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['atAddress'];
   const missingFields: string[] = [];
 
@@ -6327,7 +6482,8 @@ export const cancelSellOrder = async (data, isFromExtension) => {
         }),
         fee: fee.fee,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
     if (accepted) {
@@ -6460,6 +6616,7 @@ export const lockTab = async (data, isFromExtension, appInfo) => {
         }),
       },
       isFromExtension,
+      appInfo,
       alreadyAllowed(appInfo, 'LOCK_TAB')
     );
 
@@ -6488,7 +6645,7 @@ export const unlockTab = async (data, isFromExtension, appInfo) => {
   return true;
 };
 
-export const adminAction = async (data, isFromExtension) => {
+export const adminAction = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['type'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6607,7 +6764,8 @@ export const adminAction = async (data, isFromExtension) => {
     {
       text1: permissionText,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -6646,7 +6804,7 @@ export const adminAction = async (data, isFromExtension) => {
   }
 };
 
-export const signTransaction = async (data, isFromExtension) => {
+export const signTransaction = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['unsignedBytes'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6699,8 +6857,10 @@ export const signTransaction = async (data, isFromExtension) => {
       ),
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
+      confirmCheckbox: true,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -6880,7 +7040,7 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
   }
 };
 
-export const registerNameRequest = async (data, isFromExtension) => {
+export const registerNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['name'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6907,7 +7067,8 @@ export const registerNameRequest = async (data, isFromExtension) => {
       text2: data?.description,
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -6924,7 +7085,7 @@ export const registerNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const updateNameRequest = async (data, isFromExtension) => {
+export const updateNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['newName', 'oldName'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -6952,7 +7113,8 @@ export const updateNameRequest = async (data, isFromExtension) => {
       text4: data?.description,
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -6967,7 +7129,7 @@ export const updateNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const leaveGroupRequest = async (data, isFromExtension) => {
+export const leaveGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7014,7 +7176,8 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
       highlightedText: `${groupInfo.groupName}`,
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7029,7 +7192,7 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const inviteToGroupRequest = async (data, isFromExtension) => {
+export const inviteToGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'inviteTime', 'inviteeAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7086,7 +7249,8 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7106,7 +7270,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const kickFromGroupRequest = async (data, isFromExtension) => {
+export const kickFromGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7162,7 +7326,8 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7182,7 +7347,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const banFromGroupRequest = async (data, isFromExtension) => {
+export const banFromGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7239,7 +7404,8 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7260,7 +7426,11 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const cancelGroupBanRequest = async (data, isFromExtension) => {
+export const cancelGroupBanRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7316,7 +7486,8 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7335,7 +7506,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   }
 };
 
-export const addGroupAdminRequest = async (data, isFromExtension) => {
+export const addGroupAdminRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7391,7 +7562,8 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7410,7 +7582,11 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   }
 };
 
-export const removeGroupAdminRequest = async (data, isFromExtension) => {
+export const removeGroupAdminRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7465,7 +7641,8 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7484,7 +7661,11 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   }
 };
 
-export const cancelGroupInviteRequest = async (data, isFromExtension) => {
+export const cancelGroupInviteRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['groupId', 'qortalAddress'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7540,7 +7721,8 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -7561,7 +7743,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   }
 };
 
-export const createGroupRequest = async (data, isFromExtension) => {
+export const createGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'approvalThreshold',
     'groupName',
@@ -7602,7 +7784,8 @@ export const createGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7624,7 +7807,7 @@ export const createGroupRequest = async (data, isFromExtension) => {
   }
 };
 
-export const updateGroupRequest = async (data, isFromExtension) => {
+export const updateGroupRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = [
     'groupId',
     'newOwner',
@@ -7694,7 +7877,8 @@ export const updateGroupRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7806,7 +7990,7 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   }
 };
 
-export const sellNameRequest = async (data, isFromExtension) => {
+export const sellNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['salePrice', 'nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7857,8 +8041,10 @@ export const sellNameRequest = async (data, isFromExtension) => {
         }
       ),
       fee: fee.fee,
+      confirmCheckbox: true,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7876,7 +8062,11 @@ export const sellNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const cancelSellNameRequest = async (data, isFromExtension) => {
+export const cancelSellNameRequest = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7916,7 +8106,8 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
       }),
       fee: fee.fee,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7933,7 +8124,7 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const buyNameRequest = async (data, isFromExtension) => {
+export const buyNameRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -7977,8 +8168,10 @@ export const buyNameRequest = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee.fee,
+      confirmCheckbox: true,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
   const { accepted } = resPermission;
   if (accepted) {
@@ -7998,7 +8191,7 @@ export const buyNameRequest = async (data, isFromExtension) => {
 };
 
 let foreignFeeSigningInProgress = false;
-export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
+export const signForeignFees = async (_data, appInfo, isFromExtension) => {
   if (foreignFeeSigningInProgress) {
     throw new Error(i18n.t('question:foreign_fees.busy'));
   }
@@ -8038,8 +8231,10 @@ export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
             text1: i18n.t('question:foreign_fees.approve'),
             highlightedText: i18n.t('question:foreign_fees.review'),
             json: fees,
+            confirmCheckbox: true,
           },
-          isFromExtension
+          isFromExtension,
+          appInfo
         );
         return accepted === true;
       },
@@ -8053,7 +8248,11 @@ export const signForeignFees = async (_data, _appInfo, isFromExtension) => {
     foreignFeeSigningInProgress = false;
   }
 };
-export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
+export const multiPaymentWithPrivateData = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const requiredFields = ['payments', 'assetId'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
@@ -8070,16 +8269,19 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   const privateKey = parsedData.privateKey;
   const userPublicKey = parsedData.publicKey;
   const { fee: paymentFee } = await getFee('TRANSFER_ASSET');
+  // Each transfer's fee in the total the dialog shows: no fee above the
+  // ceiling is shown, and each transfer refuses a node fee higher than this.
+  checkValueTransferFee(paymentFee);
   const { fee: arbitraryFee } = await getFee('ARBITRARY');
 
   let name = null;
   const payments = data.payments;
-  const assetId = data.assetId;
+  const assetId = parseAssetId(data.assetId);
   const pendingTransactions = [];
   const pendingAdditionalArbitraryTxs = [];
   const additionalArbitraryTxsWithoutPayment =
     data?.additionalArbitraryTxsWithoutPayment || [];
-  let totalAmount = 0;
+  let totalAtomic = BigInt(0);
   let fee = 0;
   for (const payment of payments) {
     const paymentRefId = uid.rnd();
@@ -8096,27 +8298,26 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       }
     }
 
-    const confirmReceiver = await getNameOrAddress(payment.recipient);
-    if (confirmReceiver.error) {
-      throw new Error(
-        i18n.t('question:message.error.invalid_receiver', {
-          postProcess: 'capitalizeFirstChar',
-        })
-      );
-    }
+    // Resolved before the dialog, which shows the name and the address; the
+    // transfer goes to this address.
+    const resolvedRecipient = await resolveRecipient(payment.recipient);
+    const confirmReceiver = resolvedRecipient.address;
     const receiverPublicKey = await getPublicKey(confirmReceiver);
 
-    const amount = +payment.amount.toFixed(8);
+    const parsedAmount = parseDecimalAmount(payment.amount);
+    const amount = parsedAmount.value;
 
     pendingTransactions.push({
       type: 'PAYMENT',
       recipientAddress: confirmReceiver,
+      recipientLabel: recipientDisplayLabel(resolvedRecipient),
       amount: amount,
+      amountText: parsedAmount.text,
       paymentRefId,
     });
 
     fee = fee + +paymentFee;
-    totalAmount = totalAmount + amount;
+    totalAtomic = totalAtomic + parsedAmount.atomic;
 
     if (payment.arbitraryTxs && payment.arbitraryTxs.length > 0) {
       for (const arbitraryTx of payment.arbitraryTxs) {
@@ -8243,6 +8444,8 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       })
     );
+  const totalAmountText = formatAtomicAmount(totalAtomic);
+  const totalAmount = Number(totalAmountText);
   const assetBalance = await getAssetBalanceInfo(assetId);
   const assetInfo = await getAssetInfo(assetId);
   if (assetBalance < totalAmount)
@@ -8266,8 +8469,9 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         payments: pendingTransactions
           .filter((item) => item.type === 'PAYMENT')
           .map((payment) => ({
-            recipientAddress: payment.recipientAddress,
-            amount: payment.amount,
+            // Shown only: "name (address)" or the address.
+            recipientAddress: payment.recipientLabel,
+            amount: payment.amountText,
           })),
         resources: [...pendingTransactions, ...pendingAdditionalArbitraryTxs]
           .filter((item) => item.type === 'ARBITRARY')
@@ -8277,10 +8481,15 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
             identifier: arbitraryTx.identifier,
           })),
       },
-      highlightedText: `Total Amount: ${totalAmount}`,
+      highlightedText: i18n.t('question:total_amount', {
+        amount: totalAmountText,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee,
+      confirmCheckbox: true,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted, checkbox1 = false } = resPermission;
@@ -8296,32 +8505,90 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   const paymentsDone = {};
 
   const transactionsDone = [];
+  const paymentCount = pendingTransactions.filter(
+    (item) => item.type === 'PAYMENT'
+  ).length;
+  let paymentsSent = 0;
 
-  for (const transaction of pendingTransactions) {
-    const type = transaction.type;
+  try {
+    for (const transaction of pendingTransactions) {
+      const type = transaction.type;
 
-    if (type === 'PAYMENT') {
-      const makePayment = await retryTransaction(
-        transferAsset,
-        [
-          {
-            amount: transaction.amount,
-            assetId,
-            recipient: transaction.recipientAddress,
-          },
-        ],
-        true
-      );
-      if (makePayment) {
-        transactionsDone.push(makePayment?.signature);
-        if (transaction.paymentRefId) {
-          paymentsDone[transaction.paymentRefId] = makePayment;
+      if (type === 'PAYMENT') {
+        // Each approved transfer is signed and sent once. A failure stops here;
+        // it is never retried with a new signature.
+        const makePayment = await transferAsset({
+          amount: transaction.amount,
+          assetId,
+          recipient: transaction.recipientAddress,
+          approvedFee: paymentFee,
+        });
+        paymentsSent += 1;
+        if (makePayment) {
+          transactionsDone.push(makePayment?.signature);
+          if (transaction.paymentRefId) {
+            paymentsDone[transaction.paymentRefId] = makePayment;
+          }
+        }
+      } else if (
+        type === 'ARBITRARY' &&
+        paymentsDone[transaction.paymentRefId]
+      ) {
+        const objectToEncrypt = {
+          data: transaction.base64,
+          payment: paymentsDone[transaction.paymentRefId],
+        };
+
+        const toBase64 = await retryTransaction(
+          objectToBase64,
+          [objectToEncrypt],
+          true
+        );
+
+        if (!toBase64) continue; // Skip if encryption fails
+
+        const encryptDataResponse = await retryTransaction(
+          encryptDataGroup,
+          [
+            {
+              data64: toBase64,
+              publicKeys: transaction.publicKeys,
+              privateKey,
+              userPublicKey,
+            },
+          ],
+          true
+        );
+
+        if (!encryptDataResponse) continue; // Skip if encryption fails
+
+        const resPublish = await retryTransaction(
+          publishData,
+          [
+            {
+              registeredName: encodeURIComponent(name),
+              file: encryptDataResponse,
+              service: transaction.service,
+              identifier: encodeURIComponent(transaction.identifier),
+              uploadType: 'file',
+              description: transaction?.description,
+              isBase64: true,
+              apiVersion: 2,
+              withFee: true,
+            },
+          ],
+          true
+        );
+
+        if (resPublish?.signature) {
+          transactionsDone.push(resPublish?.signature);
         }
       }
-    } else if (type === 'ARBITRARY' && paymentsDone[transaction.paymentRefId]) {
+    }
+
+    for (const transaction of pendingAdditionalArbitraryTxs) {
       const objectToEncrypt = {
         data: transaction.base64,
-        payment: paymentsDone[transaction.paymentRefId],
       };
 
       const toBase64 = await retryTransaction(
@@ -8352,12 +8619,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         [
           {
             registeredName: encodeURIComponent(name),
-            file: encryptDataResponse,
+            data: encryptDataResponse,
             service: transaction.service,
             identifier: encodeURIComponent(transaction.identifier),
-            uploadType: 'file',
+            uploadType: 'base64',
             description: transaction?.description,
-            isBase64: true,
             apiVersion: 2,
             withFee: true,
           },
@@ -8369,62 +8635,25 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         transactionsDone.push(resPublish?.signature);
       }
     }
-  }
-
-  for (const transaction of pendingAdditionalArbitraryTxs) {
-    const objectToEncrypt = {
-      data: transaction.base64,
-    };
-
-    const toBase64 = await retryTransaction(
-      objectToBase64,
-      [objectToEncrypt],
-      true
+  } catch (error) {
+    // Once a payment went through, a failure in a later transfer or in the
+    // private data says how many payments went through, so they are checked
+    // before the request is tried again.
+    if (paymentsSent === 0) throw error;
+    throw new Error(
+      i18n.t('question:message.error.payments_partially_sent', {
+        sent: paymentsSent,
+        total: paymentCount,
+        error: error?.message || '',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
-
-    if (!toBase64) continue; // Skip if encryption fails
-
-    const encryptDataResponse = await retryTransaction(
-      encryptDataGroup,
-      [
-        {
-          data64: toBase64,
-          publicKeys: transaction.publicKeys,
-          privateKey,
-          userPublicKey,
-        },
-      ],
-      true
-    );
-
-    if (!encryptDataResponse) continue; // Skip if encryption fails
-
-    const resPublish = await retryTransaction(
-      publishData,
-      [
-        {
-          registeredName: encodeURIComponent(name),
-          data: encryptDataResponse,
-          service: transaction.service,
-          identifier: encodeURIComponent(transaction.identifier),
-          uploadType: 'base64',
-          description: transaction?.description,
-          apiVersion: 2,
-          withFee: true,
-        },
-      ],
-      true
-    );
-
-    if (resPublish?.signature) {
-      transactionsDone.push(resPublish?.signature);
-    }
   }
 
   return transactionsDone;
 };
 
-export const transferAssetRequest = async (data, isFromExtension) => {
+export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['amount', 'assetId', 'recipient'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
@@ -8436,11 +8665,16 @@ export const transferAssetRequest = async (data, isFromExtension) => {
       );
     }
   });
-  const amount = data.amount;
-  const assetId = data.assetId;
+  // Plain decimals only; the dialog shows the normalised amount that is signed.
+  const parsedAmount = parseDecimalAmount(data.amount);
+  const amount = parsedAmount.value;
+  const assetId = parseAssetId(data.assetId);
   const recipient = data.recipient;
 
   const { fee } = await getFee('TRANSFER_ASSET');
+  // The fee the dialog shows: no fee above the ceiling is shown, and the
+  // transfer refuses a node fee higher than this one.
+  checkValueTransferFee(fee);
   const balance = await getBalanceInfo();
 
   if (+balance < +fee)
@@ -8456,14 +8690,9 @@ export const transferAssetRequest = async (data, isFromExtension) => {
         postProcess: 'capitalizeFirstChar',
       })
     );
-  const confirmReceiver = await getNameOrAddress(recipient);
-  if (confirmReceiver.error) {
-    throw new Error(
-      i18n.t('question:message.error.invalid_receiver', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
-  }
+  // Resolved before the dialog, shown as the name and the full address, and
+  // paid to that address without a second lookup.
+  const resolvedRecipient = await resolveRecipient(recipient);
   const assetInfo = await getAssetInfo(assetId);
   const resPermission = await getUserPermission(
     {
@@ -8474,13 +8703,19 @@ export const transferAssetRequest = async (data, isFromExtension) => {
         asset: assetInfo?.name,
         postProcess: 'capitalizeFirstChar',
       }),
+      text3: i18n.t('question:to_recipient', {
+        recipient: recipientDisplayLabel(resolvedRecipient),
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: i18n.t('question:amount_qty', {
-        quantity: amount,
+        quantity: parsedAmount.text,
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee,
+      confirmCheckbox: true,
     },
-    isFromExtension
+    isFromExtension,
+    appInfo
   );
 
   const { accepted } = resPermission;
@@ -8493,8 +8728,9 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   }
   const res = await transferAsset({
     amount,
-    recipient: confirmReceiver,
+    recipient: resolvedRecipient.address,
     assetId,
+    approvedFee: fee,
   });
   return res;
 };
@@ -8568,7 +8804,8 @@ export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `Group: ${groupName}`,
       },
-      isFromExtension
+      isFromExtension,
+      appInfo
     );
     const { accepted } = resPermission;
 

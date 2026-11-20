@@ -1,6 +1,6 @@
 import { qappReticulumSessionPermissionKey } from './qapp-identity.ts';
 
-type AppInfo = { tabId: string | number; name: string };
+type AppInfo = { tabId: string | number; name: string; service?: string };
 type HasPermission = (
   tabId: string | number,
   appName: string,

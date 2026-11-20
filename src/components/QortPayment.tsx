@@ -12,7 +12,7 @@ import {
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useEffect, useState } from 'react';
-import { getFee } from '../background/background.ts';
+import { getFee, resolveRecipient } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
 import { ErrorText } from './ErrorText/ErrorText.tsx';
@@ -20,6 +20,11 @@ import { getBlueTier1ButtonSx } from '../styles/blueMaterial';
 import { executeEvent } from '../utils/events';
 import { formatQortAmount } from '../utils/numberFunctions';
 import { QORTINO_DONATION_COMPLETED_EVENT } from './Group/qortinoDonationEasterEgg';
+import {
+  checkValueTransferFee,
+  parseDecimalAmount,
+  recipientDisplayLabel,
+} from '../transactions/paymentSafety';
 
 export const QortPayment = ({
   balance,
@@ -150,23 +155,51 @@ export const QortPayment = ({
         return;
       }
 
-      const fee = await getFee('PAYMENT');
+      let parsedAmount;
+      try {
+        parsedAmount = parseDecimalAmount(paymentAmount);
+      } catch (error) {
+        setSendPaymentError(formatSendPaymentError(error));
+        return;
+      }
+
+      // A name is resolved before asking, so the confirmation shows who is
+      // paid (the name and the full address) and the payment goes to that
+      // address without a second lookup.
+      let recipient;
+      try {
+        recipient = await resolveRecipient(paymentTo.trim());
+      } catch (error) {
+        setSendPaymentError(formatSendPaymentError(error));
+        return;
+      }
+
+      // The fee the confirmation shows; sendCoin refuses a higher one.
+      let fee;
+      try {
+        fee = checkValueTransferFee((await getFee('PAYMENT')).fee);
+      } catch (error) {
+        setSendPaymentError(formatSendPaymentError(error));
+        return;
+      }
 
       await show({
-        message: t('core:message.question.transfer_qort', {
-          amount: Number(paymentAmount),
+        message: t('core:message.question.transfer_qort_to', {
+          amount: parsedAmount.text,
+          recipient: recipientDisplayLabel(recipient),
           postProcess: 'capitalizeFirstChar',
         }),
-        paymentFee: fee.fee + ' QORT',
+        paymentFee: fee + ' QORT',
       });
 
       setIsLoadingSendCoin(true);
 
       window
         .sendMessage('sendCoin', {
-          amount: Number(paymentAmount),
-          receiver: paymentTo.trim(),
+          amount: parsedAmount.value,
+          receiver: recipient.address,
           password: paymentPassword,
+          approvedFee: fee,
         })
         .then((response) => {
           if (response?.error) {
