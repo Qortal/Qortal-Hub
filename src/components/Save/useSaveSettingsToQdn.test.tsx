@@ -134,7 +134,12 @@ const savedWith = (pins: unknown[], at: number) =>
 
 /** This device read QDN's copy of `apps` at sign-in (QDN's time 100). */
 const signedInWith = (apps: SavedApps) => {
-  saveSavedAppsBase(ADDRESS, { updated: 100, hasCopy: true, apps });
+  saveSavedAppsBase(ADDRESS, {
+    updated: 100,
+    hasCopy: true,
+    hasBookmarks: true,
+    apps,
+  });
   saveSavedAppsReplica(ADDRESS, { seen: 100, apps });
 };
 

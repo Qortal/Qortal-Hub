@@ -12,7 +12,7 @@ import type {
 } from '../AppBookmarks/bookmarkTypes';
 import type { LauncherView } from './launcherItems';
 import type { LauncherSyncMark } from './launcherQdn';
-import { readSavedApps, toSavedAppsField } from './savedApps';
+import { readSavedApps } from './savedApps';
 import {
   type FoundSettings,
   loadSavedAppsBase,
@@ -20,6 +20,7 @@ import {
   markSavedAppsPublished,
   recordLocalChanges,
   revertSavedApps,
+  saveSavedAppsBase,
   saveSavedAppsReplica,
   savedAppsForSave,
   type SavedAppsStores,
@@ -152,16 +153,7 @@ const device = ({
     writeReplica: (address, replica) =>
       saveSavedAppsReplica(address, replica, storage),
     readBase: (address) => loadSavedAppsBase(address, storage),
-    writeBase: (address, base) => {
-      storage.setItem(
-        `ext_saved_apps_qdn:${address}`,
-        JSON.stringify({
-          updated: base.updated,
-          hasCopy: base.hasCopy,
-          savedApps: toSavedAppsField(base.apps),
-        })
-      );
-    },
+    writeBase: (address, base) => saveSavedAppsBase(address, base, storage),
     legacy: {
       loadBookmarks: async () =>
         state.bookmarks ?? { folders: [], bookmarks: [], updatedAt: 0 },
@@ -476,6 +468,108 @@ describe('copies saved by Hubs and GO that do not know saved apps', () => {
     expect(a.folderNames()).toEqual(['Play']);
     expect(a.pages()).toEqual(['blog/post-1']);
     expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Tube', 'Q-Share']);
+  });
+});
+
+describe('Revert', () => {
+  /** QDN's copy as GO writes it: the older fields of the copy before. */
+  const savedByGo = () => {
+    const fields = qdn!.settings as Record<string, unknown>;
+    qdn = {
+      settings: {
+        sortablePinnedApps: fields.sortablePinnedApps,
+        appBookmarks: fields.appBookmarks,
+        launcherOrder: fields.launcherOrder,
+      },
+      updated: clock,
+    };
+  };
+
+  /** The folder renamed here. */
+  const rename =
+    (name: string) => (s: { bookmarks: AppBookmarksForAddress | null }) => {
+      s.bookmarks = { ...s.bookmarks!, folders: [folder('f1', name, clock)] };
+    };
+
+  it("keeps this device's folders and bookmarks when QDN's copy holds pins alone", async () => {
+    // Saved by Hub 3.0.3: the pin list, and nothing about folders and
+    // bookmarks.
+    qdn = {
+      settings: { sortablePinnedApps: [app('Q-Mail'), app('Q-Tube')] },
+      updated: clock,
+    };
+    const a = device({ ...withFolder(), pinsTime: clock - HOUR });
+    await a.read();
+    const order = a.state.view.order;
+
+    clock += 1000;
+    await a.change((s) => {
+      s.pins = [...s.pins, app('Q-Search')];
+    });
+    // Renamed just now, before it was recorded.
+    a.state.bookmarks = {
+      ...a.state.bookmarks!,
+      folders: [folder('f1', 'Play', clock)],
+    };
+
+    expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
+    expect(a.pinNames()).toEqual(['Q-Mail', 'Q-Tube']);
+    expect(a.folderNames()).toEqual(['Play']);
+    expect(a.pages()).toEqual(['blog/post-1', 'page']);
+    expect(a.state.view.order).toEqual(order);
+  });
+
+  it('puts back the folders and bookmarks of a copy saved by GO', async () => {
+    const other = device({ ...withFolder(), pinsTime: clock });
+    await other.read();
+    await other.save();
+    savedByGo();
+    const a = device();
+    await a.read();
+
+    clock += 1000;
+    await a.change(rename('Play'));
+    expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
+    expect(a.folderNames()).toEqual(['Games']);
+  });
+
+  it('puts back the folders and bookmarks once a copy that holds them is read', async () => {
+    qdn = { settings: { sortablePinnedApps: [app('Q-Mail')] }, updated: clock };
+    const a = device({ pins: [app('Q-Mail')], pinsTime: clock - HOUR });
+    await a.read();
+    // GO saves a folder made on another device.
+    clock += HOUR;
+    const other = device({ ...withFolder(), pinsTime: clock });
+    await other.read();
+    await other.save();
+    savedByGo();
+    await a.read();
+    expect(a.folderNames()).toEqual(['Games']);
+
+    clock += 1000;
+    await a.change(rename('Play'));
+    expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
+    expect(a.folderNames()).toEqual(['Games']);
+  });
+
+  it('puts back the folders and bookmarks last read after Hub 3.0.3 saves pins alone', async () => {
+    const a = device({ ...withFolder(), pinsTime: clock });
+    await a.read();
+    await a.save();
+    // Hub 3.0.3 saves over it: pins only, so they are what was saved before.
+    clock += HOUR;
+    qdn = {
+      settings: {
+        sortablePinnedApps: [app('Q-Mail'), app('Q-Tube'), app('Q-Share')],
+      },
+      updated: clock,
+    };
+    await a.read();
+
+    clock += 1000;
+    await a.change(rename('Play'));
+    expect(await revertSavedApps(ADDRESS, a.stores)).toBe('reverted');
+    expect(a.folderNames()).toEqual(['Games']);
   });
 });
 

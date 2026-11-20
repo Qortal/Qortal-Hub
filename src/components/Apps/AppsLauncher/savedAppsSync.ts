@@ -75,6 +75,12 @@ export type SavedAppsBase = {
   updated: number | null;
   /** Whether QDN holds a copy (read here, or saved from here). */
   hasCopy: boolean;
+  /**
+   * Whether that copy holds folders and bookmarks. Hub 3.0.3 saves the pin
+   * list alone, which says nothing about them: over a copy that held them,
+   * the ones read before stay what is saved.
+   */
+  hasBookmarks: boolean;
   apps: SavedApps;
 };
 
@@ -143,6 +149,7 @@ export const loadSavedAppsBase = (
     updated:
       stored.updated === null || !Number.isFinite(updated) ? null : updated,
     hasCopy: stored.hasCopy === true,
+    hasBookmarks: stored.hasBookmarks === true,
     apps,
   };
 };
@@ -155,6 +162,7 @@ export const saveSavedAppsBase = (
   writeStored(storage, savedAppsBaseKey(address), {
     updated: base.updated,
     hasCopy: base.hasCopy,
+    hasBookmarks: base.hasBookmarks,
     savedApps: toSavedAppsField(base.apps),
   });
 
@@ -328,19 +336,29 @@ export async function recordLocalChanges(
   return next;
 }
 
-/** A copy's saved apps as records: what QDN holds, whoever saved it. */
+/**
+ * A copy's saved apps as records: what QDN holds, whoever saved it. It holds
+ * folders and bookmarks when it has #374's `appBookmarks`, which every Hub and
+ * GO that keeps them saves (this one next to `savedApps`).
+ */
 const copyFrom = (found: FoundSettings, base: SavedApps) => {
   const incoming = readSavedApps(found.settings);
   const older = readOlderFields(found.settings);
+  const holdsBookmarks = !!older.launcher;
   if (incoming) {
     const apps = olderFieldsMatch(incoming, older)
       ? incoming
       : changesFromOlderFields(incoming, older, found.updated).apps;
-    return { incoming, apps, changes: apps };
+    return { incoming, apps, changes: apps, holdsBookmarks };
   }
   // Saved by a Hub or GO that doesn't know saved apps.
   const result = changesFromOlderFields(base, older, found.updated);
-  return { incoming: null, apps: result.apps, changes: result.changed };
+  return {
+    incoming: null,
+    apps: result.apps,
+    changes: result.changed,
+    holdsBookmarks,
+  };
 };
 
 /**
@@ -392,7 +410,7 @@ export async function startSavedApps(
 
   const copy = found
     ? copyFrom(found, emptySavedApps())
-    : { incoming: null, apps: emptySavedApps() };
+    : { incoming: null, apps: emptySavedApps(), holdsBookmarks: false };
   const ownPinsTime = pinsTime > 0 ? pinsTime : 1;
   const storeTime = data && data.updatedAt > 0 ? data.updatedAt : 1;
   let apps = recordStores(
@@ -416,6 +434,7 @@ export async function startSavedApps(
   const base: SavedAppsBase = {
     updated: found ? found.updated : null,
     hasCopy: !!found,
+    hasBookmarks: copy.holdsBookmarks,
     apps: dropOldRemovals(copy.apps, now),
   };
   // Kept only once the launcher shows it: stores left as they were would
@@ -461,6 +480,7 @@ export async function takeInSavedApps(
   const nextBase: SavedAppsBase = {
     updated: found.updated,
     hasCopy: true,
+    hasBookmarks: base.hasBookmarks || copy.holdsBookmarks,
     apps: dropOldRemovals(copy.apps, now),
   };
   // Kept only once the launcher shows it: stores left as they were would
@@ -508,6 +528,7 @@ export function markSavedAppsPublished(
   const base: SavedAppsBase = {
     updated: stores.readBase(address)?.updated ?? null,
     hasCopy: true,
+    hasBookmarks: true,
     apps,
   };
   stores.writeBase(address, base);
@@ -516,21 +537,27 @@ export function markSavedAppsPublished(
 
 /**
  * Revert: this device's saved apps go back to QDN's copy as last read here,
- * and the launcher shows it. `no-copy` when QDN holds none; `unknown` before
- * this device has read it.
+ * and the launcher shows it. A copy without folders and bookmarks has none
+ * to go back to: this device's stay as they are. `no-copy` when QDN holds
+ * none; `unknown` before this device has read it.
  */
 export async function revertSavedApps(
   address: string,
   stores: SavedAppsStores
 ): Promise<'reverted' | 'no-copy' | 'unknown'> {
   const base = stores.readBase(address);
-  const replica = stores.readReplica(address);
-  if (!base || !replica) return 'unknown';
+  if (!base || !stores.readReplica(address)) return 'unknown';
   if (!base.hasCopy) return 'no-copy';
+  // This device's latest changes first, so what stays is what it shows now.
+  const replica = await recordLocalChanges(address, stores);
+  if (!replica) return 'unknown';
+  const apps = base.hasBookmarks
+    ? base.apps
+    : { ...replica.apps, pins: base.apps.pins };
   // What couldn't be put back (bookmarks that can't be read) stays this
   // device's own, unsaved.
-  if (await applySavedApps(address, base.apps, stores)) {
-    stores.writeReplica(address, { seen: replica.seen, apps: base.apps });
+  if (await applySavedApps(address, apps, stores)) {
+    stores.writeReplica(address, { seen: replica.seen, apps });
   }
   return 'reverted';
 }
@@ -660,7 +687,11 @@ export const useSavedAppsSync = () => {
     [stores]
   );
 
-  return { forSave, markPublished, revert, takeIn };
+  // The same object at every render: sign-in reads QDN again when it changes.
+  return useMemo(
+    () => ({ forSave, markPublished, revert, takeIn }),
+    [forSave, markPublished, revert, takeIn]
+  );
 };
 
 /** How long changes settle before they are recorded. */

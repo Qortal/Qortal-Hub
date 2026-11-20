@@ -130,7 +130,11 @@ one fee.
   change made here. It is updated as the pin list, the bookmarks or the
   launcher's order change.
 - `ext_saved_apps_qdn:<address>`: QDN's copy as last read or saved here, which
-  Revert goes back to and changes are measured against.
+  Revert goes back to and changes are measured against, and whether it holds
+  folders and bookmarks.
+- Revert puts back that copy. When no copy read or saved here held folders and
+  bookmarks (Hub 3.0.3 saves the pin list alone), it puts back the pins only:
+  this device's folders and bookmarks stay as they are.
 - At sign-in and before a save, QDN's copy is merged in and the launcher's
   stores (the pin list, the bookmarks and the row's order) are filled from the
   result. The first time on a device, #374's rules run once first.

@@ -47,7 +47,12 @@ const savedWith = (names: string[], at: number) =>
 /** This device read QDN's copy holding these pins. */
 const signedInWith = (names: string[]) => {
   const apps = savedWith(names, START - 1000);
-  saveSavedAppsBase(ADDRESS, { updated: START - 500, hasCopy: true, apps });
+  saveSavedAppsBase(ADDRESS, {
+    updated: START - 500,
+    hasCopy: true,
+    hasBookmarks: true,
+    apps,
+  });
   saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
 };
 
@@ -156,7 +161,12 @@ describe('whether there is something to save', () => {
       { pins: [pin('Q-Mail'), pin('Q-Blog')], data: null, order: null },
       () => START - 1000
     ).apps;
-    saveSavedAppsBase(ADDRESS, { updated: START - 500, hasCopy: true, apps });
+    saveSavedAppsBase(ADDRESS, {
+      updated: START - 500,
+      hasCopy: true,
+      hasBookmarks: true,
+      apps,
+    });
     saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
 
     // Q-Blog's start page, bookmarked from the bookmarks menu.
@@ -225,7 +235,12 @@ describe('whether there is something to save', () => {
       },
       () => START - 1000
     ).apps;
-    saveSavedAppsBase(ADDRESS, { updated: START - 500, hasCopy: true, apps });
+    saveSavedAppsBase(ADDRESS, {
+      updated: START - 500,
+      hasCopy: true,
+      hasBookmarks: true,
+      apps,
+    });
     saveSavedAppsReplica(ADDRESS, { seen: START - 1000, apps });
     delete (window as unknown as { appStorage?: unknown }).appStorage;
     const store = createStore();
@@ -297,5 +312,17 @@ describe('whether there is something to save', () => {
       await result.current.sync.takeIn(ADDRESS, null);
     });
     expect(result.current.unsaved).toBe(true);
+  });
+});
+
+describe('the sync used by sign-in, Save and Revert', () => {
+  it('is the same between renders, so what uses it runs only when asked', () => {
+    const store = createStore();
+    const { result, rerender } = renderHook(() => useSavedAppsSync(), {
+      wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+    });
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
   });
 });
