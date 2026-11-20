@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import i18n from '../../../i18n/i18n';
 import { userInfoAtom } from '../../../atoms/global';
+import { HUB_REQUEST, isHubRequest } from '../../../qortal/requestingApp';
 import { lightTheme } from '../../../styles/theme-light';
 import { executeEvent } from '../../../utils/events';
 import { TorqComposer, type PublishedTorqPost } from './TorqComposer';
@@ -223,7 +224,8 @@ describe('TorqComposer', () => {
     expect(action).toBe('PUBLISH_MULTIPLE_QDN_RESOURCES');
     expect(timeout).toBe(240000);
     expect(isExtension).toBe(true);
-    expect(appInfo).toBeUndefined();
+    expect(appInfo).toEqual(HUB_REQUEST);
+    expect(isHubRequest(appInfo)).toBe(true);
     const resources = publishedResources();
     expect(resources).toHaveLength(1);
     const [resource] = resources;

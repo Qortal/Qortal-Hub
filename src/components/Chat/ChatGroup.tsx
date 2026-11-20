@@ -193,6 +193,7 @@ import {
   resolveReticulumPreferredMessageExpiryDurationMs,
   saveReticulumMessageExpiryPreference,
 } from './reticulumMessageExpiry';
+import { HUB_REQUEST } from '../../qortal/requestingApp';
 
 type PendingReticulumResourceFile = {
   filePath?: string;
@@ -6230,7 +6231,8 @@ export const ChatGroup = ({
               resources: imagesToPublish,
             },
             240000,
-            true
+            true,
+            HUB_REQUEST
           );
           if (res?.error)
             throw new Error(

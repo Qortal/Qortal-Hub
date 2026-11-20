@@ -40,6 +40,7 @@ import {
   countRewardDay,
 } from './MintingStats.tsx';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { HUB_REQUEST } from '../../qortal/requestingApp';
 
 export type AddressLevelEntry = {
   level: number;
@@ -271,7 +272,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 value: val,
               },
               180000,
-              true
+              true,
+              HUB_REQUEST
             )
             .then((response) => {
               if (!response?.error) {
@@ -323,7 +325,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 value: val,
               },
               180000,
-              true
+              true,
+              HUB_REQUEST
             )
             .then((response) => {
               if (!response?.error) {

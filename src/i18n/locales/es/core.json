@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "desfijar de marcadores",
     "unsaved_publish": "los datos de su formulario de publicación aún no se han publicado, y al cerrar la pestaña se descartan."
   },
+  "approval_dialog": {
+    "requested_by": "Solicitado por",
+    "unknown_app": "Q-App desconocida",
+    "unknown_app_hint": "Qortal Hub no pudo determinar qué Q-App envió esta solicitud. Recházala a menos que acabes de pedirlo tú mismo."
+  },
   "apps_bar": {
     "empty": "Fija una aplicación o añade un marcador y aparecerá aquí.",
     "label": "Aplicaciones fijadas y marcadores",

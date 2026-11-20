@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "unpin from bookmarks",
     "unsaved_publish": "the details in its publish form are not published yet, and closing the tab discards them."
   },
+  "approval_dialog": {
+    "requested_by": "Requested by",
+    "unknown_app": "Unknown Q-App",
+    "unknown_app_hint": "Qortal Hub could not tell which Q-App sent this request. Decline it unless you just asked for this yourself."
+  },
   "apps_bar": {
     "empty": "Pin an app or add a bookmark, and it shows here.",
     "label": "Pinned apps and bookmarks",
