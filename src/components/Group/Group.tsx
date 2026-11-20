@@ -157,6 +157,7 @@ import { GlobalChatWidget } from './GlobalChatWidget';
 import { openQChatTab, QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
 import {
   drainPendingNotificationNav,
+  setNotificationNavHostMounted,
   type PendingNav,
 } from '../../utils/notificationClickBuffer';
 import { HubOnboardingTour } from '../Onboarding/HubOnboardingTour';
@@ -4393,12 +4394,27 @@ export const Group = ({
   // Drain any notification click that arrived before Group.tsx mounted
   // (e.g. clicks from the Home page). Re-dispatch so the subscriber above
   // can navigate to the target.
+  //
+  // This runs once, on mount, deliberately. Without the empty dependency array
+  // it ran after every render, and because the click handlers in
+  // GeneralNotifications dispatch the event directly *and* buffer it, a click
+  // while Group was already mounted was handled twice: once immediately, then
+  // again when this effect picked up the buffered copy on the next render. That
+  // issued addTimestampEnterChat twice for one click. The buffer exists only to
+  // cover the window before this component mounts, so a single drain on mount is
+  // exactly the intended scope — the direct dispatch covers every later click.
   useEffect(() => {
     const pending = drainPendingNotificationNav();
     if (pending) {
       executeEvent(pending.eventName, pending.detail);
     }
-  });
+    // Subscribers are live from here on, so clicks are dispatched directly and
+    // must not also be buffered: a buffered copy would outlive this mount and
+    // replay on the next one. Released on unmount so the pre-mount window is
+    // covered again if this component goes away.
+    setNotificationNavHostMounted(true);
+    return () => setNotificationNavHostMounted(false);
+  }, []);
 
   const openGroupAnnouncementFromNotification = useCallback(
     (e) => {

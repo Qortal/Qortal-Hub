@@ -32,8 +32,25 @@ export interface NotificationQueue {
    *
    * The body receives an ownership check so it can re-run it after an await,
    * which is where the settings lookup happens.
+   *
+   * `key` identifies the notification this item will present. A second item with
+   * the same key replaces the first one still waiting, so the same event
+   * delivered twice — which happens whenever a post reaches two handlers — shows
+   * one desktop notification rather than two.
    */
-  enqueue: (run: (isSessionCurrent: IsSessionCurrent) => Promise<void>) => void;
+  enqueue: (
+    run: (isSessionCurrent: IsSessionCurrent) => Promise<void>,
+    key?: string
+  ) => void;
+  /**
+   * Drops a pending item by key, without touching the session.
+   *
+   * Used when the notification is no longer wanted before it is presented — a
+   * direct message deleted while its notification is still queued. The drain
+   * presents several seconds apart, so without this the deleted message pops up
+   * after the user has already removed it.
+   */
+  cancel: (key: string) => void;
   /** Ends the current session: pending items are dropped and skipped. */
   invalidateSession: () => void;
   /**
@@ -68,6 +85,7 @@ export function createNotificationQueue(
 
   interface QueueItem {
     epoch: number;
+    key?: string;
     run: (isSessionCurrent: IsSessionCurrent) => Promise<void>;
   }
 
@@ -106,9 +124,17 @@ export function createNotificationQueue(
   };
 
   return {
-    enqueue(run) {
-      items.push({ epoch, run });
+    enqueue(run, key) {
+      if (key) {
+        // An item already draining has been shifted off the queue and cannot be
+        // replaced, but anything still waiting is a duplicate of this one.
+        items = items.filter((item) => item.key !== key);
+      }
+      items.push({ epoch, key, run });
       void drain();
+    },
+    cancel(key) {
+      items = items.filter((item) => item.key !== key);
     },
     invalidateSession() {
       epoch += 1;

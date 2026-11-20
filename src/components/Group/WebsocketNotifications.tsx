@@ -15,9 +15,11 @@ import {
   globalNotificationFormAtom,
 } from '../../atoms/global';
 import {
+  cancelQueuedNotification,
   fireOsNotificationPayment,
   handleNotificationClick,
 } from '../../background/background';
+import { dmNotificationQueueKey } from '../../utils/notificationClickRoute';
 import {
   getNotificationPermissionKey,
   getPermission,
@@ -314,12 +316,21 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         payload?: string;
         timestamp?: number;
         readByOwner?: boolean;
+        targetEventId?: string;
       };
       const eventId = String(directEvent.eventId || '');
       if (!eventId) return;
 
-      // Handle DM deletion — dismiss OS notification and skip notification processing
+      // Handle DM deletion — dismiss the OS notification and drop any queued one,
+      // then skip notification processing. The queue presents items several
+      // seconds apart, so a message deleted while its notification is still
+      // waiting would otherwise pop up after the user had removed it.
       if (directEvent.eventType === 'delete') {
+        if (directEvent.targetEventId) {
+          cancelQueuedNotification(
+            dmNotificationQueueKey(String(directEvent.targetEventId))
+          );
+        }
         if (directEvent.senderAddress) {
           window.reticulumChat?.dismissNotifications?.(
             NaN,
@@ -395,7 +406,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
           dmDeliveryMethod,
           directEvent.senderAddress
             ? { groupId: 0, channelId: directEvent.senderAddress }
-            : undefined
+            : undefined,
+          // No `eventId`: that would change the notification id from the DM
+          // routing form to `general`, and a click would stop opening the
+          // conversation. The queue key is what deduplicates and cancels.
+          undefined,
+          dmNotificationQueueKey(eventId)
         );
       });
     });

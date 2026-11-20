@@ -44,6 +44,18 @@ export function qchatNotificationIdForEvent(
 }
 
 /**
+ * Queue key for a direct-message notification.
+ *
+ * Separate from the notification id: a Q-Chat event id used as the notification
+ * id routes a click to `general` instead of the conversation, so a DM has to
+ * keep its own id and be deduplicated and cancelled by this key instead.
+ */
+export function dmNotificationQueueKey(eventId: string | null | undefined) {
+  const id = String(eventId ?? '').trim();
+  return id ? `reticulum-dm-queued-${id}` : null;
+}
+
+/**
  * Classify a notification id. Accepts the id raw or URI-encoded.
  *
  * Order matters: the `_type=` tests are more specific than the Q-Chat prefix,

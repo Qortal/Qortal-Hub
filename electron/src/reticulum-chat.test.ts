@@ -1778,18 +1778,21 @@ describe('reticulum chat protocol', () => {
       // check silently dropped the whole read instead of degrading.
       expect(wireFitsReticulumChat(captured!)).toBe(true);
 
-      // Coverage rides its own wire, one entry each, and fits that way.
+      // Coverage rides its own wire, one entry each, and fits that way. The entry
+      // is a compact `address:stream:seq` string rather than an array, and there
+      // is no `upToTimestamp`: together those are what keep a created channel's
+      // 39-character id inside the 383-byte budget.
       expect(capturedCoverage).toHaveLength(1);
       expect(capturedCoverage[0].w.v).toEqual([
-        [fromA.authorAddress, fromA.authorStreamId, 1],
+        `${fromA.authorAddress}:${fromA.authorStreamId}:1`,
       ]);
+      expect(capturedCoverage[0].w).not.toHaveProperty('u');
       expect(wireFitsReticulumChat(capturedCoverage[0])).toBe(true);
       expect(
         buildReticulumChatReadSyncCoverageSignedFields({
           ownerAddress: owner.address,
           groupId,
           channelId: 'general',
-          upToTimestamp: captured!.w.u,
           signedAt: captured!.w.n,
           coverage: [
             {
@@ -1842,6 +1845,189 @@ describe('reticulum chat protocol', () => {
     } finally {
       deviceA.close();
       deviceB.close();
+    }
+  });
+
+  it('replays coverage before the receipt, to one device, and only what moved', async () => {
+    // Two defects shared this path. The coverage was sent with `void` and not
+    // awaited, so a receipt could overtake it — and the receiver decides whether
+    // to apply the receipt's watermark from whether its coverage has arrived. And
+    // it was sent to every device once per device, so with two other devices each
+    // received the same coverage twice. On top of that, every author who had ever
+    // posted was re-sent on every read.
+    const owner = createDmIdentity();
+    const deviceAHash = 'a9'.padEnd(32, '0');
+    const deviceBHash = 'b9'.padEnd(32, '0');
+    const deviceCHash = 'c9'.padEnd(32, '0');
+    const groupId = 1_159;
+    const sent: Array<{ target: string; kind: string }> = [];
+    const deviceA = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(owner),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceBHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+        {
+          destinationHash: deviceCHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => deviceAHash,
+        sendReticulumChatDetailed: async (
+          target: string,
+          wire: ReticulumChatWire
+        ) => {
+          sent.push({ target, kind: wire.k });
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    try {
+      deviceA.setLocalGroupMemberships([
+        { groupId, isPrivate: false, localAddress: owner.address },
+      ]);
+      const first = signedEvent({
+        eventId: 'replay-coverage-one',
+        groupId,
+        authorSeq: 1,
+        timestamp: Date.now() - 2_000,
+      });
+      const second = signedEvent({
+        eventId: 'replay-coverage-two',
+        groupId,
+        authorStreamId: 'e'.repeat(32),
+        authorSeq: 1,
+        timestamp: Date.now() - 1_500,
+      });
+      expect((deviceA as any).acceptValidatedEvent(first, false)).toBe(true);
+      expect((deviceA as any).acceptValidatedEvent(second, false)).toBe(true);
+
+      const coverageTo = (target: string) =>
+        sent.filter((item) => item.target === target && item.kind === 'read_cov');
+
+      deviceA.markRead(groupId, 'general', second.timestamp, owner.address);
+      await flushQueuedWork();
+      // One wire per author, per device: a fresh read has to reach every device.
+      expect(coverageTo(deviceBHash)).toHaveLength(2);
+      expect(coverageTo(deviceCHash)).toHaveLength(2);
+      // And each device's coverage precedes its receipt, so the receiver's
+      // "coverage already here?" test cannot lose the race that re-creates C.
+      for (const target of [deviceBHash, deviceCHash]) {
+        const toTarget = sent.filter((item) => item.target === target);
+        const lastCoverage = toTarget
+          .map((item, index) => (item.kind === 'read_cov' ? index : -1))
+          .reduce((max, index) => Math.max(max, index), -1);
+        const firstReceipt = toTarget.findIndex(
+          (item) => item.kind === 'read_sync'
+        );
+        expect(lastCoverage).toBeGreaterThanOrEqual(0);
+        expect(firstReceipt).toBeGreaterThan(lastCoverage);
+      }
+      sent.length = 0;
+
+      await (deviceA as any).replayReadStatesToOwnDevices();
+      // Nothing moved, so a replay sends no coverage. That is the 25-author case
+      // that used to spend 25 signatures per read and the same again after any
+      // new message.
+      expect(sent.filter((item) => item.kind === 'read_cov')).toHaveLength(0);
+
+      // A new message from the first author moves that one entry only.
+      const third = signedEvent({
+        eventId: 'replay-coverage-three',
+        groupId,
+        authorAddress: first.authorAddress,
+        authorPublicKey: first.authorPublicKey,
+        authorStreamId: first.authorStreamId,
+        authorSeq: 2,
+        timestamp: Date.now() - 500,
+      });
+      expect((deviceA as any).acceptValidatedEvent(third, false)).toBe(true);
+      deviceA.markRead(groupId, 'general', third.timestamp, owner.address);
+      await flushQueuedWork();
+      // Only the author whose seq moved, still once per device.
+      expect(coverageTo(deviceBHash)).toHaveLength(1);
+      expect(coverageTo(deviceCHash)).toHaveLength(1);
+    } finally {
+      deviceA.close();
+    }
+  });
+
+  it('coverage fits the wire budget in a generated 39-character channel', async () => {
+    // ChatGroup names every new channel `ch-` plus a UUID. That is 39 characters
+    // against `general`'s 7, and with the receipt timestamp still on the wire the
+    // single-entry coverage came to 396 bytes — over the 383-byte budget, so
+    // `wireFitsReticulumChat` dropped it and the read silently stopped
+    // propagating outside "general". Every entry is checked here, because this is
+    // the case the whole per-author mechanism has to survive.
+    const owner = createDmIdentity();
+    const deviceAHash = 'a1'.padEnd(32, '0');
+    const deviceBHash = 'b2'.padEnd(32, '0');
+    const groupId = 1_158;
+    const channelId = `ch-${'01234567-89ab-cdef-0123-456789abcdef'}`;
+    expect(channelId).toHaveLength(39);
+    const capturedCoverage: Array<
+      Extract<ReticulumChatWire, { k: 'read_cov' }>
+    > = [];
+    const deviceA = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(owner),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceBHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => deviceAHash,
+        sendReticulumChatDetailed: async (
+          _target: string,
+          wire: ReticulumChatWire
+        ) => {
+          if (wire.k === 'read_cov') capturedCoverage.push(wire);
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    try {
+      deviceA.setLocalGroupMemberships([
+        {
+          groupId,
+          isPrivate: false,
+          localAddress: owner.address,
+        },
+      ]);
+      const event = signedEvent({
+        eventId: 'created-channel-coverage',
+        groupId,
+        channelId,
+        authorSeq: 1,
+        timestamp: Date.now() - 1_000,
+      });
+      expect((deviceA as any).acceptValidatedEvent(event, false)).toBe(true);
+
+      deviceA.markRead(groupId, channelId, event.timestamp, owner.address);
+      await flushQueuedWork();
+
+      expect(capturedCoverage).toHaveLength(1);
+      expect(wireFitsReticulumChat(capturedCoverage[0])).toBe(true);
+      expect(capturedCoverage[0].w.c).toBe(channelId);
+      expect(capturedCoverage[0].w.v).toEqual([
+        `${event.authorAddress}:${event.authorStreamId}:1`,
+      ]);
+    } finally {
+      deviceA.close();
     }
   });
 
@@ -5884,6 +6070,83 @@ describe('reticulum chat database', () => {
     expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(1);
   });
 
+  it('does not treat an unrelated receipt coverage as this receipt own', () => {
+    // `handleReadSync` used to skip a receipt whenever the channel already held
+    // ANY coverage rows. That is a per-channel test, so one device sending
+    // coverage once made every later receipt for the channel a no-op — including
+    // a read from an older Hub that sends no coverage, which no other device would
+    // ever apply. The decision has to name the receipt.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9404;
+    const first = signedEvent({ eventId: 'receipt-scope-a', groupId });
+    expect(db.insertEvent(first, true)).toBe(true);
+
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 500)
+    ).toBe(false);
+    db.applyRemoteAuthorReadCoverage(
+      groupId,
+      'general',
+      [
+        {
+          authorAddress: first.authorAddress,
+          authorStreamId: first.authorStreamId,
+          coveredSeq: 1,
+        },
+      ],
+      readerAddress,
+      1_000
+    );
+    // The receipt that produced the rows is recognised…
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 1_000)
+    ).toBe(true);
+    // …and an older one it covers is too, since coverage is monotonic…
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 500)
+    ).toBe(true);
+    // …but a newer receipt has no coverage of its own here yet.
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 2_000)
+    ).toBe(false);
+  });
+
+  it('a receipt from another device does not move this device read moment', () => {
+    // `markChannelsRead` records the local arrival position of the read. For a
+    // receipt that describes another device's read, recording it here claims
+    // this device looked now, so the next coverage resend describes messages that
+    // arrived afterwards as read — and peers show a message nobody read as read.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9405;
+    const event = signedEvent({
+      eventId: 'remote-read-moment',
+      groupId,
+      timestamp: Date.now() - 1_000,
+    });
+    expect(db.insertEvent(event, true)).toBe(true);
+
+    db.markRead(groupId, 'general', event.timestamp, readerAddress, {
+      recordReadMoment: false,
+    });
+    expect(
+      db.getReadWatermarkLocalReadAt(groupId, 'general', readerAddress)
+    ).toBe(0);
+
+    // A read this device actually performed still records it.
+    db.markRead(groupId, 'general', event.timestamp, readerAddress);
+    expect(
+      db.getReadWatermarkLocalReadAt(groupId, 'general', readerAddress)
+    ).toBeGreaterThan(0);
+  });
+
   it('a V1 receipt without per-author coverage still over-covers, by design', () => {
     // Characterisation of the unupgraded path, not a defect being reintroduced.
     // A peer that has not upgraded sends RCHAT_READ_SYNC_V1, which carries only
@@ -5931,6 +6194,62 @@ describe('reticulum chat database', () => {
     // this to 1 and should do so deliberately, because ignoring the peer's read
     // would silently resurrect messages they have already seen.
     expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(0);
+  });
+
+  it('a reply and a mention from a correct clock still badge after a fast sender was read', () => {
+    // The unread count already fell back to arrival order when the watermark sat
+    // ahead of this device's clock. The reply and mention counters did not: they
+    // compared sender timestamps against that same watermark, so a
+    // correctly-clocked member's reply or mention stamped below a fast sender's
+    // message counted as unread but produced no badge.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const reader = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9501;
+    const now = Date.now();
+
+    // The reader's own message is what the reply hangs off; a reply only counts
+    // against a parent the reader wrote.
+    const mine = signedEvent({
+      eventId: 'badge-mine',
+      groupId,
+      authorAddress: reader,
+      authorSeq: 1,
+      timestamp: now - 60_000,
+    });
+    expect(db.insertEvent(mine, true)).toBe(true);
+
+    // A's clock runs 30 s fast and the reader has read up to it, which leaves the
+    // watermark ahead of this device's own clock — the condition under test.
+    const fast = signedEvent({
+      eventId: 'badge-fast',
+      groupId,
+      authorSeq: 1,
+      timestamp: now + 30_000,
+    });
+    expect(db.insertEvent(fast, true)).toBe(true);
+    db.markRead(groupId, 'general', fast.timestamp, reader);
+
+    // B is correctly clocked and both of its timestamps sit below the watermark.
+    const reply = signedEvent({
+      eventId: 'badge-reply',
+      groupId,
+      authorStreamId: 'b'.repeat(32),
+      authorSeq: 1,
+      timestamp: now + 1_000,
+      replyToEventId: mine.eventId,
+      mentionAddressHashes: [hashReticulumChatMentionAddress(reader)],
+    });
+    expect(reply.authorAddress).not.toBe(fast.authorAddress);
+    expect(db.insertEvent(reply, true)).toBe(true);
+
+    const summary = db.getChatSummaries(reader)[0];
+    // The message is unread, so the badges describing it must match.
+    expect(summary?.unreadCount).toBe(1);
+    expect(summary?.replyCount).toBe(1);
+    expect(summary?.mentionCount).toBe(1);
   });
 
   it('reuses unchanged channel summaries and recalculates only the changed channel', () => {

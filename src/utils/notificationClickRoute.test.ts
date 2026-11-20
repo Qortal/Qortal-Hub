@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GENERAL_NOTIFICATION_TYPE_MARKER,
   QCHAT_NOTIFICATION_ID_PREFIX,
+  dmNotificationQueueKey,
   notificationClickRoute,
   qchatNotificationIdForEvent,
 } from './notificationClickRoute';
@@ -60,6 +61,22 @@ describe('notificationClickRoute', () => {
     expect(notificationClickRoute(null)).toBe('none');
     expect(notificationClickRoute(undefined)).toBe('none');
     expect(notificationClickRoute('something-else')).toBe('none');
+  });
+});
+
+describe('dmNotificationQueueKey', () => {
+  it('is distinct from the notification id so a DM click still opens the DM', () => {
+    // Using the event id as the notification id would route the click to
+    // `general` instead of the conversation, so the queue key is separate.
+    expect(dmNotificationQueueKey('evt-1')).toBe('reticulum-dm-queued-evt-1');
+    expect(dmNotificationQueueKey('evt-1')).not.toBe(
+      qchatNotificationIdForEvent('evt-1')
+    );
+  });
+
+  it('returns null when there is no event to key on', () => {
+    expect(dmNotificationQueueKey('')).toBeNull();
+    expect(dmNotificationQueueKey(null)).toBeNull();
   });
 });
 

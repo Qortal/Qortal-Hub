@@ -3194,7 +3194,16 @@ export const fireOsNotificationPayment = async (
   internalPayload,
   deliveryMethod: 'native' | 'ephemeral' = 'native',
   groupContext?: { groupId: number; channelId: string },
-  eventId?: string
+  eventId?: string,
+  /**
+   * Queue identity, independent of `eventId`.
+   *
+   * `eventId` also drives the notification id the OS routes a click by, and a
+   * Q-Chat event id routes to `general`. A direct message must keep its own
+   * routing id, so it passes a key here instead of an event id: the queue still
+   * deduplicates and can cancel it, and the click still opens the DM.
+   */
+  queueKey?: string
 ) => {
   // Record which account queues this item, resolved from the wallet read that
   // starts here rather than at presentation time. The settings lookup below
@@ -3206,6 +3215,14 @@ export const fireOsNotificationPayment = async (
   const queuedForAddress = getSaveWallet()
     .then((wallet) => String(wallet?.address0 || ''))
     .catch(() => '');
+
+  // Keyed on the event when one is supplied. A post that reaches two handlers
+  // calls this twice, and the queue drains one item every few seconds, so
+  // without a key both items survive the drain and the user gets two desktop
+  // notifications for one message. The id is also the cancel key, so a DM
+  // deleted while its notification waits can drop it.
+  const effectiveQueueKey =
+    queueKey ?? (eventId ? qchatNotificationIdForEvent(eventId) : null);
 
   notificationQueue.enqueue(async (isSessionCurrent) => {
     try {
@@ -3302,7 +3319,23 @@ export const fireOsNotificationPayment = async (
     } catch (error) {
       console.error(error);
     }
-  });
+  }, effectiveQueueKey ?? undefined);
+};
+
+/**
+ * Drops a queued notification that is no longer wanted.
+ *
+ * A direct message can be deleted while its notification is still waiting in the
+ * drain queue several seconds out. Without this the message pops up after the
+ * user has already removed it.
+ *
+ * Takes the queue key, not an event id: a DM is queued under
+ * `dmNotificationQueueKey`, because using its event id as the notification id
+ * would re-route a click away from the conversation.
+ */
+export const cancelQueuedNotification = (queueKey: string | null) => {
+  const key = String(queueKey ?? '').trim();
+  if (key) notificationQueue.cancel(key);
 };
 
 const checkActiveChatsForNotifications = async () => {

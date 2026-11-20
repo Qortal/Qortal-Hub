@@ -176,6 +176,61 @@ describe('notificationQueue', () => {
     expect(queue.isSessionCurrent(fresh)).toBe(true);
   });
 
+  it('replaces a waiting item with the same key instead of stacking it', async () => {
+    // The same DM can reach two handlers, which enqueues it twice. The drain
+    // presents items seconds apart, so both copies would survive it and the user
+    // would see two desktop notifications for one message.
+    const clock = makeClock();
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: clock.setTimer,
+    });
+    const seen: string[] = [];
+
+    // The first item is already draining and cannot be replaced.
+    queue.enqueue(async () => {
+      seen.push('first');
+    }, 'dm-1');
+    queue.enqueue(async () => {
+      seen.push('duplicate');
+    }, 'dm-1');
+    queue.enqueue(async () => {
+      seen.push('replacement');
+    }, 'dm-1');
+
+    await flush();
+    expect(seen).toEqual(['first']);
+    clock.tick();
+    await flush();
+    // Only one of the two waiting copies ran, and it is the newer one.
+    expect(seen).toEqual(['first', 'replacement']);
+  });
+
+  it('cancels a waiting item by key', async () => {
+    // A direct message deleted while its notification waits must not pop up
+    // afterwards.
+    const clock = makeClock();
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: clock.setTimer,
+    });
+    const seen: string[] = [];
+
+    queue.enqueue(async () => {
+      seen.push('delivered');
+    });
+    queue.enqueue(async () => {
+      seen.push('deleted-message');
+    }, 'dm-deleted');
+
+    await flush();
+    queue.cancel('dm-deleted');
+    clock.tick();
+    await flush();
+
+    expect(seen).toEqual(['delivered']);
+  });
+
   it('reports idle only once the queue is empty', async () => {
     const clock = makeClock();
     const queue = createNotificationQueue({

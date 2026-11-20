@@ -2370,76 +2370,12 @@ export const ChatGroup = ({
   const reticulumHideMutedChannels =
     reticulumGroupSettings?.hideMutedChannels === true;
 
-  // What the muted-channel auto-switch last decided. Kept in a ref so the
-  // decision survives the summary churn that follows opening a channel, which is
-  // what used to move the reader out of a channel they had just opened.
-  const mutedAutoSwitchRef = useRef<{
-    channelId: string | null;
-    muted: boolean;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!reticulumChatEnabled || !reticulumHideMutedChannels) return;
-    if (!reticulumGroupSettings) return;
-    const selectedChannel = reticulumChannelsForSelectedGroup.find(
-      (channel) => channel.channelId === selectedReticulumChannelId
-    );
-    if (!selectedChannel) return;
-    const isSelectedHidden = isScopeMuted(
-      reticulumGroupSettings,
-      selectedChannel.categoryId,
-      selectedChannel.channelId
-    );
-
-    // Decide once per selection, not on every summary change.
-    //
-    // This effect used to also run whenever the channel summaries changed, so
-    // opening a muted channel that the sidebar kept on screen for its unread
-    // mention led straight back out: the open marked the channel read, the
-    // mention count fell to zero, the effect re-ran, and the reader was moved to
-    // another channel before they could reply. The decisions below only depend
-    // on the choice of channel and on whether that channel is muted, so record
-    // what was evaluated and skip the repeat runs.
-    const lastEvaluated = mutedAutoSwitchRef.current;
-    const sameChannel = lastEvaluated?.channelId === selectedChannel.channelId;
-    const becameMuted =
-      isSelectedHidden && lastEvaluated?.muted !== true;
-    mutedAutoSwitchRef.current = {
-      channelId: selectedChannel.channelId,
-      muted: isSelectedHidden,
-    };
-    // Already on this channel and it did not just become muted: nothing to do.
-    // This is what keeps the reader on a surfaced muted channel after its
-    // mention is read.
-    if (sameChannel && !becameMuted) return;
-    if (!isSelectedHidden) return;
-
-    const selectedSummary = reticulumChannelSummariesById.get(
-      selectedChannel.channelId
-    );
-    const selectedHasUnreadMention =
-      selectedSummary?.hasUnreadMention === true ||
-      (selectedSummary?.mentionCount ?? 0) > 0;
-    if (selectedHasUnreadMention) return;
-    const firstVisible = reticulumChannelsForSelectedGroup.find(
-      (channel) =>
-        !isScopeMuted(
-          reticulumGroupSettings,
-          channel.categoryId,
-          channel.channelId
-        )
-    );
-    setSelectedReticulumChannelId(
-      firstVisible?.channelId ?? DEFAULT_RETICULUM_CHANNEL_ID
-    );
-  }, [
-    reticulumChatEnabled,
-    reticulumHideMutedChannels,
-    reticulumGroupSettings,
-    reticulumChannelsForSelectedGroup,
-    reticulumChannelSummariesById,
-    selectedReticulumChannelId,
-  ]);
+  // `hideMutedChannels` is visibility-only: it hides, dims and suppresses
+  // badges, and never changes the selection. An effect here used to move the
+  // reader off a muted channel as soon as it was opened (the open cleared the
+  // mention that had surfaced it), which is why the option cannot also decide
+  // what is being read. See the "Hide muted channels option" requirement in
+  // `openspec/specs/per-scope-notification-settings/spec.md`.
 
   const reticulumChannelsByCategory = useMemo(() => {
     const categoryIds = new Set(

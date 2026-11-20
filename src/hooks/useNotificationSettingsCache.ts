@@ -10,7 +10,6 @@ import {
   getGroupNotificationStore,
   getGlobalNotificationSettings,
   migrateNotificationSettings,
-  needsNotificationMigration,
   NOTIFICATION_SETTINGS_UPDATED_EVENT,
   type GroupNotificationStore,
 } from '../utils/qChatNotificationSettings';
@@ -77,16 +76,23 @@ export function useNotificationSettingsCache() {
     };
   }, [refreshGroup, refreshGlobal, setGlobalCache, setCache]);
 
-  // Initial load: run migration (once), then populate global + per-group caches.
+  // Initial load: run migration, then populate global + per-group caches.
+  //
+  // The pass is NOT gated on `needsNotificationMigration`. That only asks
+  // whether the global key exists, so once any pass had written it the gate
+  // closed for good — including for the groups that pass could not migrate
+  // because their channel list had not loaded yet. Their legacy mute then sat
+  // unapplied until some later session, and mentions in those groups notified in
+  // the meantime. `migrateNotificationSettings` is idempotent: it skips every
+  // group that already carries its marker and returns which ones are still
+  // unresolved, so calling it on each load is what retries them.
   useEffect(() => {
     const ids = memberGroupIdsRef.current;
     if (!ids.length) return;
     let cancelled = false;
     void (async () => {
       try {
-        if (await needsNotificationMigration()) {
-          await migrateNotificationSettings(ids);
-        }
+        await migrateNotificationSettings(ids);
       } catch (error) {
         // Migration is best-effort; continue with defaults if it fails.
         console.error('Failed to migrate notification settings:', error);

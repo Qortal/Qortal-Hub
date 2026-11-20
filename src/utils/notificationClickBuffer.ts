@@ -24,13 +24,31 @@ export interface PendingNav {
 }
 
 let pending: PendingNav | null = null;
+let hostMounted = false;
 
 /**
  * Store a pending navigation. Called BEFORE opening the Q-Chat tab so the
  * buffer is ready for Group.tsx to consume on mount.
+ *
+ * Does nothing while the host is already mounted. In that case the caller's own
+ * `executeEvent` is delivered directly, and buffering the same payload as well
+ * left a stale entry behind: the drain only runs on mount, so the copy would
+ * survive until Group unmounted and mounted again, then navigate somewhere the
+ * user had long since left.
  */
 export function setPendingNotificationNav(nav: PendingNav): void {
+  if (hostMounted) return;
   pending = nav;
+}
+
+/**
+ * Records that the consumer is mounted, so later clicks are not buffered.
+ *
+ * Group.tsx calls this on mount and clears it on unmount. Between those points
+ * its subscribers are live and handle clicks directly.
+ */
+export function setNotificationNavHostMounted(mounted: boolean): void {
+  hostMounted = mounted;
 }
 
 /**
