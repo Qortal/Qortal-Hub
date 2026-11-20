@@ -359,10 +359,10 @@ describe('isLookupSafeName', () => {
     'a\\b',
     '.',
     '..',
-    'a​b',
-    'a‮b',
+    'a\u200Bb',
+    'a\u202Eb',
     'a\u0000b',
-    'a b',
+    'a\u00A0b',
     'x'.repeat(41),
     'ü'.repeat(21),
   ])('refuses %j', (name) => {
