@@ -16,7 +16,11 @@ import {
   uint8ArrayToObject,
 } from '../encryption/encryption';
 import { useAtom, useSetAtom } from 'jotai';
-import { useTakeInSavedLauncher } from '../components/Apps/AppsLauncher/launcherQdnSync';
+import {
+  type FoundSettings,
+  useRecordSavedAppsChanges,
+  useSavedAppsSync,
+} from '../components/Apps/AppsLauncher/savedAppsSync';
 import { loadQortinoWorkspaceSettings } from '../components/Group/HomeDesktop/homeLayout';
 import {
   savedLayoutsAtom,
@@ -90,21 +94,23 @@ export const useQortalGetSaveSettings = (
   // account switched meanwhile) is dropped.
   const currentNameRef = useRef(myName);
   currentNameRef.current = myName;
-  const takeInSavedLauncher = useTakeInSavedLauncher();
+  const savedApps = useSavedAppsSync();
   const setSavedLayouts = useSetAtom(savedLayoutsAtom);
+  // Each change to the pins, folders and bookmarks gets the time it's made.
+  useRecordSavedAppsChanges(isAuthenticated ? myAddress : null);
 
   /**
-   * The bookmarks and the launcher's order, Home's layout and the side
+   * The pins, folders and bookmarks (saved apps), Home's layout and the side
    * panel, from the same settings.
    */
   const takeInLauncher = useCallback(
     async (
       myAddress: string | null | undefined,
-      found: { settings: unknown; savedAt: number } | null
+      found: FoundSettings | null
     ) => {
       if (!myAddress) return;
       try {
-        await takeInSavedLauncher(myAddress, found);
+        await savedApps.takeIn(myAddress, found);
       } catch (error) {
         console.error(error);
       }
@@ -116,7 +122,7 @@ export const useQortalGetSaveSettings = (
         console.error(error);
       }
     },
-    [setSavedLayouts, takeInSavedLauncher]
+    [savedApps, setSavedLayouts]
   );
 
   const getSavedSettings = useCallback(
@@ -126,29 +132,30 @@ export const useQortalGetSaveSettings = (
         if (hasPublishRecord) {
           const settings = await getPublish(myName);
           if (currentNameRef.current !== myName) return;
-          // Compare with the pins as they are now, not as they were when this
-          // fetch started: a pin made meanwhile is newer than the QDN copy.
-          const latestLocal = Math.max(
-            settingsLocalLastUpdated,
-            localPinnedAppsTimestamp()
-          );
-          if (settings?.sortablePinnedApps && timestamp > latestLocal) {
-            setSortablePinnedApps(
-              removeBrokenPinnedApps(settings.sortablePinnedApps)
+          if (!myAddress) {
+            // No account to keep saved apps for: the pin list alone, as
+            // before. Compare with the pins as they are now, not as they were
+            // when this fetch started: a pin made meanwhile is newer.
+            const latestLocal = Math.max(
+              settingsLocalLastUpdated,
+              localPinnedAppsTimestamp()
             );
-
-            setSettingsQDNLastUpdated(timestamp || 0);
-          } else if (settings?.sortablePinnedApps) {
-            setSettingsQDNLastUpdated(timestamp || 0);
-            setOldPinnedApps(settings.sortablePinnedApps);
+            if (settings?.sortablePinnedApps && timestamp > latestLocal) {
+              setSortablePinnedApps(
+                removeBrokenPinnedApps(settings.sortablePinnedApps)
+              );
+            } else if (settings?.sortablePinnedApps) {
+              setOldPinnedApps(settings.sortablePinnedApps);
+            }
           }
           if (!settings) {
             // set -100 to indicate that it couldn't fetch the publish
             setSettingsQDNLastUpdated(-100);
           } else {
+            setSettingsQDNLastUpdated(timestamp || 0);
             await takeInLauncher(myAddress, {
               settings,
-              savedAt: timestamp || 0,
+              updated: timestamp || 0,
             });
           }
         } else {

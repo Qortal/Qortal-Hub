@@ -30,7 +30,8 @@ import {
 } from '../../../atoms/global';
 import type { AppBookmarksForAddress } from '../AppBookmarks/bookmarkTypes';
 import { launcherViewStorageKey } from './launcherItems';
-import { launcherEditsAtom, savedLauncherAtom } from './launcherQdnSync';
+import { launcherEditsAtom } from './launcherQdnSync';
+import { savedAppsStateAtom } from './savedAppsSync';
 import { LauncherSaveWindow, SAVED_NOTICE_MS } from './LauncherSaveWindow';
 
 const ADDRESS = 'Qaddress';
@@ -81,22 +82,15 @@ const setUp = ({
   store.set(sortablePinnedAppsAtom, []);
   store.set(oldPinnedAppsAtom, []);
   store.set(launcherEditsAtom, { address: ADDRESS, count: edits });
-  store.set(savedLauncherAtom, {
+  store.set(savedAppsStateAtom, {
     address: ADDRESS,
-    status: savedBookmarks ? 'saved' : 'none',
-    launcher: savedBookmarks
-      ? {
-          bookmarks: {
-            version: 1,
-            folders: [],
-            bookmarks: savedBookmarks.bookmarks.map(
-              ({ link: _link, ...rest }) => rest
-            ),
-          },
-          order: [],
-        }
-      : null,
-    savedAt: 100,
+    status: 'read',
+    saved: {
+      pins: [],
+      data: savedBookmarks ?? { folders: [], bookmarks: [] },
+      order: [],
+    },
+    hasCopy: !!savedBookmarks,
   });
 
   const view = render(
@@ -118,10 +112,16 @@ beforeEach(() => {
   saveSettings.mockReset();
   saveSettings.mockResolvedValue('saved');
   useSaveSettingsToQdnArgs.length = 0;
+  // The desktop app, which keeps bookmarks.
+  (window as unknown as { appStorage: unknown }).appStorage = {
+    get: async () => undefined,
+    set: async () => undefined,
+  };
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  delete (window as unknown as { appStorage?: unknown }).appStorage;
 });
 
 describe('LauncherSaveWindow', () => {
@@ -156,11 +156,11 @@ describe('LauncherSaveWindow', () => {
     expect(screen.getByText(TITLE)).toBeVisible();
 
     act(() => {
-      store.set(savedLauncherAtom, {
+      store.set(savedAppsStateAtom, {
         address: ADDRESS,
         status: 'unknown',
-        launcher: null,
-        savedAt: 0,
+        saved: null,
+        hasCopy: false,
       });
     });
 
@@ -270,11 +270,25 @@ describe('LauncherSaveWindow', () => {
   });
 
   it('counts the order of the tiles as something to save', () => {
+    // The same two bookmarks, the other way round.
     localStorage.setItem(
       launcherViewStorageKey(ADDRESS),
-      JSON.stringify({ version: 1, order: ['APP-Q-Tube'], openFolders: [] })
+      JSON.stringify({
+        version: 1,
+        order: ['bookmark:b1', 'bookmark:b0'],
+        openFolders: [],
+      })
     );
-    setUp({ data: bookmarks(['Q-Tube']) });
+    setUp({
+      data: bookmarks(['Q-Tube', 'Q-Mail']),
+      savedBookmarks: bookmarks(['Q-Tube', 'Q-Mail']),
+    });
+
+    expect(screen.getByText(TITLE)).toBeVisible();
+  });
+
+  it('offers to save bookmarks made before anything was saved', () => {
+    setUp({ savedBookmarks: null });
 
     expect(screen.getByText(TITLE)).toBeVisible();
   });
