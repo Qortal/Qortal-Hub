@@ -57,7 +57,7 @@ export const AppIconTile = ({
       <Avatar
         alt=""
         slotProps={{ img: { draggable: false } }}
-        src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${app?.name}/qortal_avatar?async=true`}
+        src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(app?.name)}/qortal_avatar?async=true`}
         sx={{
           backgroundColor: 'transparent',
           borderRadius: '10px',
