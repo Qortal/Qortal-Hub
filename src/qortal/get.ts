@@ -3895,7 +3895,9 @@ export const getWalletBalance = async (
           break;
         case 'ARRR':
           await checkArrrSyncStatus(parsedData.arrrSeed58);
-          _url = await createEndpoint(`/crosschain/arrr/walletbalance`);
+          _url = await createEndpoint(
+            `/crosschain/arrr/walletbalance${data.verified === true ? '?verified=true' : ''}`
+          );
           _body = parsedData.arrrSeed58;
           break;
         default:

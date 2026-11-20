@@ -39,7 +39,10 @@ cannot supply the native wallet worker or native Reticulum runtime.
    before local signing. The worker checks the checksum/network, balance, actual
    fee and selected account; fees above the approved cap are not broadcast.
    Standard addresses and subaddresses are supported; integrated addresses,
-   payment IDs, memo and send-max are not supported in this first release.
+   payment IDs and memo are not supported in this first release. Q-Wallets
+   testing Max computes unlocked balance minus the full approved fee limit and
+   submits that exact decimal amount. The native `sendMax` sweep flag remains
+   unsupported; unused fee reserve may remain after a payment.
 6. Check history/balances on both sides, close/reopen, then verify backup recovery.
    Denial, changing Core/account during approval and insufficient unlocked funds
    must produce no new payment. Do not use public synthetic test-vector addresses.

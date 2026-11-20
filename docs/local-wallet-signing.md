@@ -67,7 +67,7 @@ spend funds.
 - Public nodes can serve BTC-family sends and QORT trade buys through the local
   signer; creating sell offers and all ARRR trading still require a local node.
   Hub does not route public-node purchases through a trading proxy.
-- Core's existing trade state machine still watches, redeems and refunds swaps.
+- Core's existing trade state machine still watches, redeems and refunds cross-chain trades.
 - Legacy Core send endpoints remain available for older clients, but this Hub
   does not use them for BTC, LTC, DOGE, DGB or RVN.
 - Existing wallet derivation remains unchanged, so existing addresses and funds
@@ -612,3 +612,28 @@ branch's renderer and native code.
 
 Using an audited library reduces custom cryptographic code, but a library audit
 does not audit Hub's integration or future dependency versions.
+
+## Q-Wallets testing Send Max contract
+
+For BTC, LTC, DOGE, DGB and RVN, a Q-App Max request must provide `sendMax: true`
+and omit `amount`. A request containing both is rejected. The optional `fee`
+retains its existing whole-coin-per-byte units. Hub plans from the confirmed
+public spend context, applies its fee/output limits and asks for approval of the
+final recipient, amount and total fee. It rechecks the plan before signing.
+Q-Wallets-TESTING 1.4.0-xmr.4 now uses this contract; its displayed Max value is
+an estimate, while manual edits submit an ordinary fixed amount. There is no
+fallback to an older host's amount-only path after a failed request.
+
+ARRR uses a separate fixed-fee send path. `GET_WALLET_BALANCE` now honors
+`verified: true` for ARRR by requesting Core's existing
+`/crosschain/arrr/walletbalance?verified=true`. This returns the spendable/verified
+balance used by the native wallet rather than its total with pending funds. The
+option is explicit: omitted/false retains the previous total-balance contract.
+The Q-App receives only the balance; entropy stays inside the existing Hub/Core
+ARRR bridge. This change requires a new Hub renderer/desktop build, with no new
+Core endpoint, JNI publication, wallet migration or database update.
+
+Offline regressions cover 40 verified inputs per Bitcoin-family coin: the old
+fixed-size amount cannot be funded, while Max accounts for every input and the
+calculated fee before approval. Those tests decline approval and never broadcast.
+ARRR bridge tests cover the verified flag and unchanged default balance request.

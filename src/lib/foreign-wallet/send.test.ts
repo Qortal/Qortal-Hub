@@ -119,6 +119,94 @@ function transactionStatus(
 }
 
 describe('local foreign wallet signing', () => {
+  it.each(foreignCoins)(
+    '%s: Max plans all 40 inputs instead of trusting a fixed-size app estimate',
+    async (coin) => {
+      const base = fixture(coin, 100000000n);
+      const inputs = Array.from({ length: 40 }, (_, index) => {
+        const previousTransactionHex =
+          base.input.previousTransactionHex.slice(0, 10) +
+          (index + 32).toString(16).padStart(2, '0').repeat(32) +
+          base.input.previousTransactionHex.slice(74);
+        const txHash = bytesToHex(
+          sha256(
+            sha256(
+              Uint8Array.from(
+                previousTransactionHex.match(/../g)!.map((v) => parseInt(v, 16))
+              )
+            )
+          ).reverse()
+        );
+        return { ...base.input, txHash, previousTransactionHex };
+      });
+      const context = {
+        ...base.context,
+        previousTransactions: Object.fromEntries(
+          inputs.map((input) => [input.txHash, input.previousTransactionHex])
+        ),
+        utxos: inputs.map((input) => ({
+          ...input,
+          path: [0, 0],
+          pathAsString: input.path,
+          outputIndex: 0,
+          scriptPubKeyHex: input.scriptPubKey,
+          value: input.value.toString(),
+        })),
+      };
+      const approve = vi.fn().mockResolvedValue(false);
+      const post = vi.fn(async (path: string) => {
+        if (!path.endsWith('/spend-context'))
+          throw new Error('No broadcasts in this test');
+        return context;
+      });
+      const deps = {
+        post,
+        approve,
+        stillValid: async () => true,
+        readPending: async () => null,
+        writePending: async () => {},
+      };
+      const oldBytes = coin === 'BTC' ? 500 : coin === 'DOGE' ? 5000 : 1000;
+      // The current planner cannot fund the app's old amount for this wallet.
+      await expect(
+        sendForeignCoin(
+          {
+            coin,
+            xprv: base.xprv,
+            recipient: base.leaf.address,
+            amount: (4000000000 - oldBytes * 10 - 1000) / 1e8,
+            fee: 0.0000001,
+          },
+          deps
+        )
+      ).rejects.toThrow();
+      expect(approve).not.toHaveBeenCalled();
+      await expect(
+        sendForeignCoin(
+          {
+            coin,
+            xprv: base.xprv,
+            recipient: base.leaf.address,
+            sendMax: true,
+            fee: 0.0000001,
+          },
+          deps
+        )
+      ).rejects.toThrow('declined');
+      expect(approve).toHaveBeenCalledOnce();
+      const plan = approve.mock.calls[0][0];
+      expect(plan.inputs).toHaveLength(40);
+      expect(plan.change).toBe(0n);
+      expect(plan.amount + plan.fee).toBe(4000000000n);
+      expect(plan.fee).toBe(BigInt(plan.estimatedMaximumSize) * 10n);
+      expect(plan.outputs).toEqual([
+        { address: base.leaf.address, value: plan.amount },
+      ]);
+      expect(
+        post.mock.calls.every(([path]) => path.endsWith('/spend-context'))
+      ).toBe(true);
+    }
+  );
   for (const coin of foreignCoins) {
     it(`${coin}: preserves existing Hub derivation and signs valid input scripts`, async () => {
       const { xprv, original, leaf, input } = fixture(coin);
