@@ -104,6 +104,8 @@
       "poll_vote": "kyselyssä äänestäminen epäonnistui",
       "process_transaction": "tapahtuman käsittely ei onnistu",
       "provide_key_shared_link": "salatun resurssin osalta sinun on annettava avain jaettavan linkin luomiseksi",
+      "public_key_mismatch": "osoitteen {{ address }} julkista avainta ei voitu vahvistaa, joten mitään ei salattu eikä lähetetty",
+      "recipient_no_public_key": "tällä tilillä ei ole vielä julkista avainta lohkoketjussa, joten sille ei voi lähettää salattua viestiä",
       "registered_name": "julkaisemiseen tarvitaan rekisteröity nimi",
       "resources_publish": "joidenkin resurssien julkaiseminen epäonnistui",
       "retrieve_file": "tiedoston nouto epäonnistui",
