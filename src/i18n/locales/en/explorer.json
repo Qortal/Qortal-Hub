@@ -1,0 +1,167 @@
+{
+  "account": {
+    "at_address": "This is an AT address: a program on the chain, not an account.",
+    "failed": "Couldn't load this account.",
+    "invalid": "This isn't a valid Qortal address.",
+    "name_failed": "Couldn't look up this name.",
+    "no_similar_names": "No registered name starts with it either.",
+    "no_such_name": "No one has the name “{{name}}”.",
+    "signature": "This looks like a transaction signature. The Explorer opens accounts: look up a name or an address.",
+    "similar_failed": "Couldn't look for names that start with it.",
+    "similar_names": "Names that start with it:",
+    "unused": "This address has never been used: no transaction has involved it yet."
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "An admin of the dev group (group 1), the group of Qortal's developers.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "An admin of MINTER, the group whose members mint. Minter Admins decide who joins it.",
+    "minter_member": "MINTER member",
+    "minter_member_explained": "A member of MINTER, the group whose members mint.",
+    "minting_now": "minting now",
+    "minting_now_explained": "It is in a reward share that is online right now, so it takes part in minting blocks.",
+    "minting_penalty": "minting penalty",
+    "minting_penalty_explained": "The node recorded a minting penalty on this account. Its Notes give the number."
+  },
+  "facts": {
+    "adjustment": "adjustment {{blocks}}",
+    "at_block": "at block {{block}}",
+    "balance": "balance",
+    "balance_exact": "exactly {{amount}} QORT",
+    "balance_failed": "Couldn't load its balance.",
+    "blocks_to_level_one": "{{blocks}} block to level {{level}}",
+    "blocks_to_level_other": "{{blocks}} blocks to level {{level}}",
+    "days_to_level_one": "about {{count}} day of minting",
+    "days_to_level_other": "about {{count}} days of minting",
+    "first_seen": "first seen",
+    "first_seen_failed": "Couldn't load when it was first seen.",
+    "first_seen_none": "no record found",
+    "groups": "groups",
+    "in_groups_one": "in {{groups}} group",
+    "in_groups_other": "in {{groups}} groups",
+    "in_no_groups": "in no groups",
+    "level_progress": "progress to level {{level}}: {{percent}}%",
+    "pace_failed": "Couldn't load the node's pace, which the blocks and days to the next level need.",
+    "payments_all_one": "in all {{payments}} of its payments",
+    "payments_all_other": "in all {{payments}} of its payments",
+    "payments_newest_one": "in its newest {{payments}} payments",
+    "payments_newest_other": "in its newest {{payments}} payments",
+    "payments_none": "no payments yet",
+    "payments_single": "in its only payment",
+    "penalty": "penalty {{blocks}}",
+    "received_sent": "QORT received / sent",
+    "received_sent_info": "QORT payments only: multi-payments, trades and minting aren't counted.",
+    "title": "at a glance",
+    "top_level": "top level"
+  },
+  "groups": {
+    "admin": "admin",
+    "closed": "closed group",
+    "failed": "Couldn't load its groups.",
+    "members_one": "{{members}} member",
+    "members_other": "{{members}} members",
+    "none": "It isn't in any group.",
+    "open": "open group",
+    "owner": "owner",
+    "sort": "sort",
+    "sort_az": "name A–Z",
+    "sort_members": "most members",
+    "sort_minter": "MINTER first",
+    "sort_roles": "owner and admin first",
+    "title": "groups",
+    "title_count": "groups ({{n}})",
+    "unnamed": "group #{{id}}"
+  },
+  "header": {
+    "about": "about this account",
+    "blocked": "Account blocked.",
+    "copy_public_key": "copy public key",
+    "name_failed": "Couldn't load its name.",
+    "name_matched": "You looked up “{{typed}}”; the node matched the name “{{matched}}”, ignoring case and look-alike letters.",
+    "no_primary_name": "no primary name",
+    "opened_from_name": "Opened from its name “{{name}}”.",
+    "public_key_copied": "Public key copied to clipboard.",
+    "unblocked": "Account unblocked."
+  },
+  "minter": {
+    "open_app": "open {{app}}",
+    "standing_admin": "Minter Admin and MINTER member.",
+    "standing_member": "MINTER member.",
+    "standing_outside": "Not in MINTER.",
+    "story": "Its MINTER story, from nominations to decisions, is kept in {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Last signed a block on {{date}} (block {{block}}).",
+    "last_signed_block": "Last signed block {{block}}.",
+    "last_signed_failed": "Couldn't load the last block it signed.",
+    "last_signed_none": "It hasn't signed a block.",
+    "not_now": "Not minting right now.",
+    "online_failed": "Couldn't load who is minting now.",
+    "own_key": "Minting now, with its own key.",
+    "own_key_and_shares": "Minting now, with its own key and through reward shares with:",
+    "shares": "Minting now through reward shares with:",
+    "show_all_one": "show all {{count}}",
+    "show_all_other": "show all {{count}}",
+    "show_fewer": "show fewer",
+    "title": "minting"
+  },
+  "notes": {
+    "name_address_like": "Its primary name “{{name}}” is written like an address.",
+    "name_invisible_one": "Its primary name “{{name}}” contains {{count}} invisible or blank characters.",
+    "name_invisible_other": "Its primary name “{{name}}” contains {{count}} invisible or blank characters.",
+    "name_invisible_single": "Its primary name “{{name}}” contains an invisible or blank character.",
+    "name_owner_end": "Its primary name “{{name}}” ends with the same characters as its address (…{{end}}).",
+    "name_owner_start": "Its primary name “{{name}}” starts with the same characters as its address ({{start}}…).",
+    "penalty": "The node recorded a minting penalty of {{blocks}} blocks on this account.",
+    "title": "notes"
+  },
+  "payments": {
+    "failed": "Couldn't load its payments.",
+    "newest_only": "These are its newest payments only.",
+    "received_from": "received from",
+    "sent_to": "sent to",
+    "show_more": "show more",
+    "shown": "Showing {{shown}} of {{total}}.",
+    "to_itself": "to itself"
+  },
+  "search": {
+    "clear": "clear",
+    "compact_placeholder": "search the Explorer",
+    "helper": "Pick a suggestion, or press Enter to look up exactly what you typed.",
+    "label": "find an account",
+    "placeholder": "name or Q… address"
+  },
+  "settings": {
+    "remember": "remember accounts I explore on this device",
+    "remember_hint": "Only their addresses, for this Hub account. Turning it off forgets them.",
+    "title": "Explorer settings"
+  },
+  "start": {
+    "clear": "clear",
+    "clear_recent": "clear recent explorations",
+    "recent": "recent explorations",
+    "your_account": "your account"
+  },
+  "summary": {
+    "first_seen": "first seen {{date}}",
+    "last_sent": "last sent a transaction {{ago}}",
+    "minter_admin": "Minter Admin, in MINTER",
+    "minter_member": "in MINTER",
+    "minter_outside": "not in MINTER",
+    "no_names": "no registered name",
+    "owns_names_more_one": "owns {{shown}}+ names",
+    "owns_names_more_other": "owns {{shown}}+ names",
+    "owns_names_one": "owns {{shown}} name",
+    "owns_names_other": "owns {{shown}} names"
+  },
+  "trail": {
+    "label": "your trail"
+  },
+  "window": {
+    "forward": "forward",
+    "full": "full window",
+    "leave_full": "leave full window",
+    "subtitle": "Look up any Qortal account"
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "account": {
+    "at_address": "See on AT-aadress: programm plokiahelas, mitte konto.",
+    "failed": "Seda kontot ei õnnestunud laadida.",
+    "invalid": "See ei ole kehtiv Qortali aadress.",
+    "name_failed": "Seda nime ei õnnestunud otsida.",
+    "no_similar_names": "Ka ükski registreeritud nimi ei alga sellega.",
+    "no_such_name": "Kellelgi pole nime „{{name}}“.",
+    "signature": "See näeb välja nagu tehingu allkiri. Explorer avab kontosid: otsi nime või aadressi.",
+    "similar_failed": "Sellega algavaid nimesid ei õnnestunud otsida.",
+    "similar_names": "Sellega algavad nimed:",
+    "unused": "Seda aadressi pole kunagi kasutatud: ükski tehing pole seda veel puudutanud."
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Dev-rühma (rühm 1) ehk Qortali arendajate rühma administraator.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "MINTERi administraator. MINTER on rühm, mille liikmed mindivad; selle administraatorid otsustavad, kes sellega liitub.",
+    "minter_member": "MINTERi liige",
+    "minter_member_explained": "MINTERi liige. MINTER on rühm, mille liikmed mindivad.",
+    "minting_now": "mindib praegu",
+    "minting_now_explained": "See kuulub preemia jagamisse, mis on praegu võrgus, seega osaleb see plokkide mintimises.",
+    "minting_penalty": "mintimise karistus",
+    "minting_penalty_explained": "Sõlm on sellele kontole registreerinud mintimise karistuse. Arv on kirjas jaotises „Märkused“."
+  },
+  "facts": {
+    "adjustment": "korrigeerimine {{blocks}}",
+    "at_block": "plokis {{block}}",
+    "balance": "saldo",
+    "balance_exact": "täpselt {{amount}} QORT",
+    "balance_failed": "Saldot ei õnnestunud laadida.",
+    "blocks_to_level_one": "{{blocks}} plokk tasemeni {{level}}",
+    "blocks_to_level_other": "{{blocks}} plokki tasemeni {{level}}",
+    "days_to_level_one": "umbes {{count}} päev mintimist",
+    "days_to_level_other": "umbes {{count}} päeva mintimist",
+    "first_seen": "esmakordselt nähtud",
+    "first_seen_failed": "Esmakordse nägemise aega ei õnnestunud laadida.",
+    "first_seen_none": "kirjet ei leitud",
+    "groups": "rühmad",
+    "in_groups_one": "{{groups}} rühmas",
+    "in_groups_other": "{{groups}} rühmas",
+    "in_no_groups": "pole üheski rühmas",
+    "level_progress": "edenemine tasemeni {{level}}: {{percent}}%",
+    "pace_failed": "Sõlme tempot, mida on vaja järgmise tasemeni jäänud plokkide ja päevade jaoks, ei õnnestunud laadida.",
+    "payments_all_one": "kõigis selle {{payments}} makses",
+    "payments_all_other": "kõigis selle {{payments}} makses",
+    "payments_newest_one": "selle {{payments}} uusimas makses",
+    "payments_newest_other": "selle {{payments}} uusimas makses",
+    "payments_none": "makseid veel pole",
+    "payments_single": "selle ainsas makses",
+    "penalty": "karistus {{blocks}}",
+    "received_sent": "QORT saadud / saadetud",
+    "received_sent_info": "Ainult QORT-maksed: mitmikmakseid, tehinguid ja mintimist ei arvestata.",
+    "title": "ühe pilguga",
+    "top_level": "kõrgeim tase"
+  },
+  "groups": {
+    "admin": "administraator",
+    "closed": "suletud rühm",
+    "failed": "Rühmi ei õnnestunud laadida.",
+    "members_one": "{{members}} liige",
+    "members_other": "{{members}} liiget",
+    "none": "See ei kuulu ühtegi rühma.",
+    "open": "avatud rühm",
+    "owner": "omanik",
+    "sort": "sorteeri",
+    "sort_az": "nimi A–Z",
+    "sort_members": "kõige rohkem liikmeid",
+    "sort_minter": "MINTER eespool",
+    "sort_roles": "omanik ja administraator eespool",
+    "title": "rühmad",
+    "title_count": "rühmad ({{n}})",
+    "unnamed": "rühm #{{id}}"
+  },
+  "header": {
+    "about": "selle konto kohta",
+    "blocked": "Konto blokeeritud.",
+    "copy_public_key": "kopeeri avalik võti",
+    "name_failed": "Nime ei õnnestunud laadida.",
+    "name_matched": "Sa otsisid nime „{{typed}}“; sõlm leidis nime „{{matched}}“, arvestamata suur- ja väiketähti ning sarnase välimusega tähti.",
+    "no_primary_name": "peamine nimi puudub",
+    "opened_from_name": "Avatud selle nime „{{name}}“ kaudu.",
+    "public_key_copied": "Avalik võti kopeeriti lõikelauale.",
+    "unblocked": "Konto blokeering eemaldatud."
+  },
+  "minter": {
+    "open_app": "ava {{app}}",
+    "standing_admin": "Minter Admin ja MINTERi liige.",
+    "standing_member": "MINTERi liige.",
+    "standing_outside": "Pole MINTERis.",
+    "story": "Selle MINTERi lugu nominatsioonidest otsusteni on talletatud rakenduses {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Allkirjastas viimati ploki {{date}} (plokk {{block}}).",
+    "last_signed_block": "Viimati allkirjastatud plokk: {{block}}.",
+    "last_signed_failed": "Viimati allkirjastatud plokki ei õnnestunud laadida.",
+    "last_signed_none": "See pole ühtegi plokki allkirjastanud.",
+    "not_now": "Praegu ei mindi.",
+    "online_failed": "Ei õnnestunud laadida, kes praegu mindib.",
+    "own_key": "Mindib praegu oma võtmega.",
+    "own_key_and_shares": "Mindib praegu oma võtmega ja preemia jagamise kaudu koos nendega:",
+    "shares": "Mindib praegu preemia jagamise kaudu koos nendega:",
+    "show_all_one": "näita kõiki {{count}}",
+    "show_all_other": "näita kõiki {{count}}",
+    "show_fewer": "näita vähem",
+    "title": "mintimine"
+  },
+  "notes": {
+    "name_address_like": "Selle peamine nimi „{{name}}“ on kirjutatud nagu aadress.",
+    "name_invisible_one": "Selle peamine nimi „{{name}}“ sisaldab {{count}} nähtamatut või tühja märki.",
+    "name_invisible_other": "Selle peamine nimi „{{name}}“ sisaldab {{count}} nähtamatut või tühja märki.",
+    "name_invisible_single": "Selle peamine nimi „{{name}}“ sisaldab nähtamatut või tühja märki.",
+    "name_owner_end": "Selle peamine nimi „{{name}}“ lõpeb samade märkidega kui selle aadress (…{{end}}).",
+    "name_owner_start": "Selle peamine nimi „{{name}}“ algab samade märkidega kui selle aadress ({{start}}…).",
+    "penalty": "Sõlm on sellele kontole registreerinud mintimise karistuse: {{blocks}} plokki.",
+    "title": "märkused"
+  },
+  "payments": {
+    "failed": "Makseid ei õnnestunud laadida.",
+    "newest_only": "Need on ainult selle uusimad maksed.",
+    "received_from": "saadud saatjalt",
+    "sent_to": "saadetud saajale",
+    "show_more": "näita rohkem",
+    "shown": "Näidatud {{shown}} / {{total}}.",
+    "to_itself": "iseendale"
+  },
+  "search": {
+    "clear": "tühjenda",
+    "compact_placeholder": "otsi Explorerist",
+    "helper": "Vali soovitus või vajuta Enter, et otsida täpselt seda, mille sisestasid.",
+    "label": "leia konto",
+    "placeholder": "nimi või Q…-aadress"
+  },
+  "settings": {
+    "remember": "jäta minu uuritud kontod selles seadmes meelde",
+    "remember_hint": "Ainult nende aadressid, selle Hubi konto jaoks. Väljalülitamisel unustatakse need.",
+    "title": "Exploreri seaded"
+  },
+  "start": {
+    "clear": "tühjenda",
+    "clear_recent": "tühjenda hiljuti uuritud",
+    "recent": "hiljuti uuritud",
+    "your_account": "sinu konto"
+  },
+  "summary": {
+    "first_seen": "esmakordselt nähtud: {{date}}",
+    "last_sent": "saatis viimati tehingu {{ago}}",
+    "minter_admin": "Minter Admin, MINTERis",
+    "minter_member": "MINTERis",
+    "minter_outside": "pole MINTERis",
+    "no_names": "registreeritud nimi puudub",
+    "owns_names_more_one": "omab {{shown}}+ nime",
+    "owns_names_more_other": "omab {{shown}}+ nime",
+    "owns_names_one": "omab {{shown}} nime",
+    "owns_names_other": "omab {{shown}} nime"
+  },
+  "trail": {
+    "label": "sinu teekond"
+  },
+  "window": {
+    "forward": "edasi",
+    "full": "laienda kogu aknale",
+    "leave_full": "taasta tavasuurus",
+    "subtitle": "Otsi mis tahes Qortali kontot"
+  }
+}

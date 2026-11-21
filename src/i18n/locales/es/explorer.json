@@ -1,0 +1,167 @@
+{
+  "account": {
+    "at_address": "Esta es una dirección de AT: un programa en la cadena, no una cuenta.",
+    "failed": "No se pudo cargar esta cuenta.",
+    "invalid": "Esta no es una dirección de Qortal válida.",
+    "name_failed": "No se pudo consultar este nombre.",
+    "no_similar_names": "Tampoco hay ningún nombre registrado que empiece así.",
+    "no_such_name": "Nadie tiene el nombre «{{name}}».",
+    "signature": "Esto parece una firma de transacción. El Explorador abre cuentas: busca un nombre o una dirección.",
+    "similar_failed": "No se pudieron buscar nombres que empiecen así.",
+    "similar_names": "Nombres que empiezan así:",
+    "unused": "Esta dirección nunca se ha usado: todavía no ha participado en ninguna transacción."
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Un administrador del grupo dev (grupo 1), el grupo de los desarrolladores de Qortal.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "Un administrador de MINTER, el grupo cuyos miembros hacen minting. Los Minter Admins deciden quién entra.",
+    "minter_member": "miembro de MINTER",
+    "minter_member_explained": "Un miembro de MINTER, el grupo cuyos miembros hacen minting.",
+    "minting_now": "minting activo",
+    "minting_now_explained": "Está en un reward share que ahora mismo está en línea, así que participa en el minting de bloques.",
+    "minting_penalty": "penalización de minting",
+    "minting_penalty_explained": "El nodo registró una penalización de minting en esta cuenta. La cifra aparece en «Notas»."
+  },
+  "facts": {
+    "adjustment": "ajuste {{blocks}}",
+    "at_block": "en el bloque {{block}}",
+    "balance": "saldo",
+    "balance_exact": "exactamente {{amount}} QORT",
+    "balance_failed": "No se pudo cargar su saldo.",
+    "blocks_to_level_one": "falta {{blocks}} bloque para el nivel {{level}}",
+    "blocks_to_level_other": "faltan {{blocks}} bloques para el nivel {{level}}",
+    "days_to_level_one": "alrededor de {{count}} día de minting",
+    "days_to_level_other": "alrededor de {{count}} días de minting",
+    "first_seen": "primera aparición",
+    "first_seen_failed": "No se pudo cargar su primera aparición.",
+    "first_seen_none": "no se encontró ningún registro",
+    "groups": "grupos",
+    "in_groups_one": "en {{groups}} grupo",
+    "in_groups_other": "en {{groups}} grupos",
+    "in_no_groups": "en ningún grupo",
+    "level_progress": "progreso hacia el nivel {{level}}: {{percent}} %",
+    "pace_failed": "No se pudo cargar el ritmo del nodo, necesario para los bloques y días hasta el siguiente nivel.",
+    "payments_all_one": "en todos sus {{payments}} pagos",
+    "payments_all_other": "en todos sus {{payments}} pagos",
+    "payments_newest_one": "en sus {{payments}} pagos más recientes",
+    "payments_newest_other": "en sus {{payments}} pagos más recientes",
+    "payments_none": "aún no hay pagos",
+    "payments_single": "en su único pago",
+    "penalty": "penalización {{blocks}}",
+    "received_sent": "QORT recibidos / enviados",
+    "received_sent_info": "Solo pagos en QORT: no se cuentan los pagos múltiples, los intercambios ni el minting.",
+    "title": "de un vistazo",
+    "top_level": "nivel máximo"
+  },
+  "groups": {
+    "admin": "administrador",
+    "closed": "grupo cerrado",
+    "failed": "No se pudieron cargar sus grupos.",
+    "members_one": "{{members}} miembro",
+    "members_other": "{{members}} miembros",
+    "none": "No está en ningún grupo.",
+    "open": "grupo abierto",
+    "owner": "propietario",
+    "sort": "ordenar",
+    "sort_az": "nombre A–Z",
+    "sort_members": "más miembros",
+    "sort_minter": "MINTER primero",
+    "sort_roles": "propietario y administrador primero",
+    "title": "grupos",
+    "title_count": "grupos ({{n}})",
+    "unnamed": "grupo #{{id}}"
+  },
+  "header": {
+    "about": "sobre esta cuenta",
+    "blocked": "Cuenta bloqueada.",
+    "copy_public_key": "copiar clave pública",
+    "name_failed": "No se pudo cargar su nombre.",
+    "name_matched": "Buscaste «{{typed}}»; el nodo encontró el nombre «{{matched}}», sin distinguir mayúsculas ni letras parecidas.",
+    "no_primary_name": "sin nombre principal",
+    "opened_from_name": "Abierta desde su nombre «{{name}}».",
+    "public_key_copied": "Clave pública copiada al portapapeles.",
+    "unblocked": "Cuenta desbloqueada."
+  },
+  "minter": {
+    "open_app": "abrir {{app}}",
+    "standing_admin": "Minter Admin y miembro de MINTER.",
+    "standing_member": "Miembro de MINTER.",
+    "standing_outside": "No está en MINTER.",
+    "story": "Su historia en MINTER, de las nominaciones a las decisiones, se guarda en {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Firmó un bloque por última vez el {{date}} (bloque {{block}}).",
+    "last_signed_block": "Último bloque firmado: {{block}}.",
+    "last_signed_failed": "No se pudo cargar el último bloque que firmó.",
+    "last_signed_none": "No ha firmado ningún bloque.",
+    "not_now": "Sin minting en este momento.",
+    "online_failed": "No se pudo cargar quién está haciendo minting ahora.",
+    "own_key": "Minting activo, con su propia clave.",
+    "own_key_and_shares": "Minting activo, con su propia clave y mediante reward shares con:",
+    "shares": "Minting activo mediante reward shares con:",
+    "show_all_one": "mostrar todos ({{count}})",
+    "show_all_other": "mostrar todos ({{count}})",
+    "show_fewer": "mostrar menos",
+    "title": "minting"
+  },
+  "notes": {
+    "name_address_like": "Su nombre principal «{{name}}» está escrito como una dirección.",
+    "name_invisible_one": "Su nombre principal «{{name}}» contiene {{count}} caracteres invisibles o en blanco.",
+    "name_invisible_other": "Su nombre principal «{{name}}» contiene {{count}} caracteres invisibles o en blanco.",
+    "name_invisible_single": "Su nombre principal «{{name}}» contiene un carácter invisible o en blanco.",
+    "name_owner_end": "Su nombre principal «{{name}}» termina con los mismos caracteres que su dirección (…{{end}}).",
+    "name_owner_start": "Su nombre principal «{{name}}» empieza con los mismos caracteres que su dirección ({{start}}…).",
+    "penalty": "El nodo registró en esta cuenta una penalización de minting de {{blocks}} bloques.",
+    "title": "notas"
+  },
+  "payments": {
+    "failed": "No se pudieron cargar sus pagos.",
+    "newest_only": "Solo son sus pagos más recientes.",
+    "received_from": "recibido de",
+    "sent_to": "enviado a",
+    "show_more": "mostrar más",
+    "shown": "Mostrando {{shown}} de {{total}}.",
+    "to_itself": "a sí misma"
+  },
+  "search": {
+    "clear": "borrar",
+    "compact_placeholder": "buscar en el Explorador",
+    "helper": "Elige una sugerencia o pulsa Enter para buscar exactamente lo que escribiste.",
+    "label": "buscar una cuenta",
+    "placeholder": "nombre o dirección Q…"
+  },
+  "settings": {
+    "remember": "recordar en este dispositivo las cuentas que exploro",
+    "remember_hint": "Solo sus direcciones, para esta cuenta de Hub. Al desactivarlo, se olvidan.",
+    "title": "ajustes del Explorador"
+  },
+  "start": {
+    "clear": "borrar",
+    "clear_recent": "borrar exploraciones recientes",
+    "recent": "exploraciones recientes",
+    "your_account": "tu cuenta"
+  },
+  "summary": {
+    "first_seen": "primera aparición en {{date}}",
+    "last_sent": "última transacción enviada {{ago}}",
+    "minter_admin": "Minter Admin, en MINTER",
+    "minter_member": "en MINTER",
+    "minter_outside": "fuera de MINTER",
+    "no_names": "sin nombre registrado",
+    "owns_names_more_one": "tiene {{shown}}+ nombres",
+    "owns_names_more_other": "tiene {{shown}}+ nombres",
+    "owns_names_one": "tiene {{shown}} nombre",
+    "owns_names_other": "tiene {{shown}} nombres"
+  },
+  "trail": {
+    "label": "tu recorrido"
+  },
+  "window": {
+    "forward": "adelante",
+    "full": "ampliar a toda la ventana",
+    "leave_full": "volver al tamaño normal",
+    "subtitle": "Consulta cualquier cuenta de Qortal"
+  }
+}

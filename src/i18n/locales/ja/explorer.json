@@ -1,0 +1,167 @@
+{
+  "account": {
+    "at_address": "これは AT アドレスです。アカウントではなく、チェーン上のプログラムです。",
+    "failed": "このアカウントを読み込めませんでした。",
+    "invalid": "有効な Qortal アドレスではありません。",
+    "name_failed": "この名前を照会できませんでした。",
+    "no_similar_names": "これで始まる登録名もありません。",
+    "no_such_name": "「{{name}}」という名前を持つアカウントはありません。",
+    "signature": "これはトランザクション署名のようです。エクスプローラーで開けるのはアカウントです。名前またはアドレスで検索してください。",
+    "similar_failed": "これで始まる名前を検索できませんでした。",
+    "similar_names": "これで始まる名前:",
+    "unused": "このアドレスは一度も使われていません。まだどのトランザクションにも関わっていません。"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Qortal の開発者のグループである dev グループ（グループ 1）の管理者です。",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "メンバーがミンティングを行うグループ MINTER の管理者です。MINTER の管理者が参加できる人を決めます。",
+    "minter_member": "MINTER メンバー",
+    "minter_member_explained": "メンバーがミンティングを行うグループ MINTER のメンバーです。",
+    "minting_now": "ミンティング中",
+    "minting_now_explained": "現在オンラインのリワードシェアに含まれているため、ブロックのミンティングに参加しています。",
+    "minting_penalty": "ミンティングペナルティ",
+    "minting_penalty_explained": "ノードがこのアカウントにミンティングペナルティを記録しています。その数は「注記」に表示されます。"
+  },
+  "facts": {
+    "adjustment": "調整 {{blocks}}",
+    "at_block": "ブロック {{block}}",
+    "balance": "残高",
+    "balance_exact": "正確には {{amount}} QORT",
+    "balance_failed": "残高を読み込めませんでした。",
+    "blocks_to_level_one": "レベル {{level}} まであと {{blocks}} ブロック",
+    "blocks_to_level_other": "レベル {{level}} まであと {{blocks}} ブロック",
+    "days_to_level_one": "約 {{count}} 日のミンティング",
+    "days_to_level_other": "約 {{count}} 日のミンティング",
+    "first_seen": "初回確認",
+    "first_seen_failed": "初回確認の日時を読み込めませんでした。",
+    "first_seen_none": "記録が見つかりません",
+    "groups": "グループ",
+    "in_groups_one": "{{groups}} グループに所属",
+    "in_groups_other": "{{groups}} グループに所属",
+    "in_no_groups": "どのグループにも所属していません",
+    "level_progress": "レベル {{level}} への進捗: {{percent}}%",
+    "pace_failed": "次のレベルまでのブロック数と日数に必要な、ノードのペースを読み込めませんでした。",
+    "payments_all_one": "全 {{payments}} 件の支払い",
+    "payments_all_other": "全 {{payments}} 件の支払い",
+    "payments_newest_one": "最新 {{payments}} 件の支払い",
+    "payments_newest_other": "最新 {{payments}} 件の支払い",
+    "payments_none": "まだ支払いはありません",
+    "payments_single": "唯一の支払い",
+    "penalty": "ペナルティ {{blocks}}",
+    "received_sent": "QORT 受取 / 送金",
+    "received_sent_info": "QORT の支払いのみ：一括支払い、取引、ミンティングは含まれません。",
+    "title": "概要",
+    "top_level": "最高レベル"
+  },
+  "groups": {
+    "admin": "管理者",
+    "closed": "非公開グループ",
+    "failed": "グループを読み込めませんでした。",
+    "members_one": "メンバー {{members}} 人",
+    "members_other": "メンバー {{members}} 人",
+    "none": "どのグループにも所属していません。",
+    "open": "公開グループ",
+    "owner": "オーナー",
+    "sort": "並び替え",
+    "sort_az": "名前順（A–Z）",
+    "sort_members": "メンバーが多い順",
+    "sort_minter": "MINTER を先頭に",
+    "sort_roles": "オーナーと管理者を先頭に",
+    "title": "グループ",
+    "title_count": "グループ（{{n}}）",
+    "unnamed": "グループ #{{id}}"
+  },
+  "header": {
+    "about": "このアカウントについて",
+    "blocked": "アカウントをブロックしました。",
+    "copy_public_key": "公開鍵をコピー",
+    "name_failed": "名前を読み込めませんでした。",
+    "name_matched": "「{{typed}}」を検索しました。ノードは大文字と小文字や似た文字の違いを無視して、名前「{{matched}}」と一致させました。",
+    "no_primary_name": "プライマリ名なし",
+    "opened_from_name": "名前「{{name}}」から開きました。",
+    "public_key_copied": "公開鍵をクリップボードにコピーしました。",
+    "unblocked": "アカウントのブロックを解除しました。"
+  },
+  "minter": {
+    "open_app": "{{app}} を開く",
+    "standing_admin": "Minter Admin で、MINTER メンバーです。",
+    "standing_member": "MINTER メンバーです。",
+    "standing_outside": "MINTER には所属していません。",
+    "story": "推薦から決定までの MINTER での経緯は {{app}} に記録されています。",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "最後にブロックに署名したのは {{date}} です（ブロック {{block}}）。",
+    "last_signed_block": "最後に署名したブロック: {{block}}。",
+    "last_signed_failed": "最後に署名したブロックを読み込めませんでした。",
+    "last_signed_none": "ブロックに署名したことはありません。",
+    "not_now": "現在はミンティングしていません。",
+    "online_failed": "現在ミンティング中のアカウントを読み込めませんでした。",
+    "own_key": "現在、自身のキーでミンティング中です。",
+    "own_key_and_shares": "現在、自身のキーと、次のアカウントとのリワードシェアでミンティング中です:",
+    "shares": "現在、次のアカウントとのリワードシェアでミンティング中です:",
+    "show_all_one": "すべて表示（{{count}}）",
+    "show_all_other": "すべて表示（{{count}}）",
+    "show_fewer": "表示を減らす",
+    "title": "ミンティング"
+  },
+  "notes": {
+    "name_address_like": "プライマリ名「{{name}}」はアドレスのような書き方です。",
+    "name_invisible_one": "プライマリ名「{{name}}」に見えない文字または空白文字が {{count}} 個含まれています。",
+    "name_invisible_other": "プライマリ名「{{name}}」に見えない文字または空白文字が {{count}} 個含まれています。",
+    "name_invisible_single": "プライマリ名「{{name}}」に見えない文字または空白文字が含まれています。",
+    "name_owner_end": "プライマリ名「{{name}}」の末尾が、アドレスの末尾（…{{end}}）と同じ文字です。",
+    "name_owner_start": "プライマリ名「{{name}}」の先頭が、アドレスの先頭（{{start}}…）と同じ文字です。",
+    "penalty": "ノードはこのアカウントに {{blocks}} ブロックのミンティングペナルティを記録しています。",
+    "title": "注記"
+  },
+  "payments": {
+    "failed": "支払いを読み込めませんでした。",
+    "newest_only": "これらは最新の支払いのみです。",
+    "received_from": "受取元",
+    "sent_to": "送金先",
+    "show_more": "さらに表示",
+    "shown": "{{total}} 件中 {{shown}} 件を表示しています。",
+    "to_itself": "自分自身へ"
+  },
+  "search": {
+    "clear": "クリア",
+    "compact_placeholder": "エクスプローラーで検索",
+    "helper": "候補を選ぶか、Enter キーを押して入力したとおりに検索します。",
+    "label": "アカウントを探す",
+    "placeholder": "名前または Q… アドレス"
+  },
+  "settings": {
+    "remember": "このデバイスで閲覧したアカウントを記憶する",
+    "remember_hint": "この Hub アカウント用に、アドレスのみを保存します。オフにすると消去されます。",
+    "title": "エクスプローラーの設定"
+  },
+  "start": {
+    "clear": "クリア",
+    "clear_recent": "最近の閲覧をクリア",
+    "recent": "最近の閲覧",
+    "your_account": "あなたのアカウント"
+  },
+  "summary": {
+    "first_seen": "{{date}}に初めて確認",
+    "last_sent": "最終トランザクション送信: {{ago}}",
+    "minter_admin": "Minter Admin、MINTER 所属",
+    "minter_member": "MINTER 所属",
+    "minter_outside": "MINTER 非所属",
+    "no_names": "登録名なし",
+    "owns_names_more_one": "名前を {{shown}} 件以上所有",
+    "owns_names_more_other": "名前を {{shown}} 件以上所有",
+    "owns_names_one": "名前を {{shown}} 件所有",
+    "owns_names_other": "名前を {{shown}} 件所有"
+  },
+  "trail": {
+    "label": "たどった経路"
+  },
+  "window": {
+    "forward": "進む",
+    "full": "ウィンドウ全体に広げる",
+    "leave_full": "通常のサイズに戻す",
+    "subtitle": "任意の Qortal アカウントを照会"
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "account": {
+    "at_address": "Tämä on AT-osoite: ohjelma lohkoketjussa, ei tili.",
+    "failed": "Tätä tiliä ei voitu ladata.",
+    "invalid": "Tämä ei ole kelvollinen Qortal-osoite.",
+    "name_failed": "Tätä nimeä ei voitu hakea.",
+    "no_similar_names": "Mikään rekisteröity nimi ei myöskään ala sillä.",
+    "no_such_name": "Kenelläkään ei ole nimeä ”{{name}}”.",
+    "signature": "Tämä näyttää tapahtuman allekirjoitukselta. Lohkoketjuselain avaa tilejä: hae nimeä tai osoitetta.",
+    "similar_failed": "Näin alkavia nimiä ei voitu hakea.",
+    "similar_names": "Nimet, jotka alkavat sillä:",
+    "unused": "Tätä osoitetta ei ole koskaan käytetty: se ei ole vielä ollut osallisena yhdessäkään tapahtumassa."
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Dev-ryhmän (ryhmä 1) eli Qortalin kehittäjien ryhmän ylläpitäjä.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "MINTERin ylläpitäjä. MINTER on ryhmä, jonka jäsenet minttaavat; sen ylläpitäjät päättävät, kuka siihen liittyy.",
+    "minter_member": "MINTER-jäsen",
+    "minter_member_explained": "MINTERin jäsen. MINTER on ryhmä, jonka jäsenet minttaavat.",
+    "minting_now": "minttaa nyt",
+    "minting_now_explained": "Se kuuluu palkkionjakoon, joka on juuri nyt verkossa, joten se osallistuu lohkojen minttaukseen.",
+    "minting_penalty": "minttausrangaistus",
+    "minting_penalty_explained": "Solmu on kirjannut tälle tilille minttausrangaistuksen. Määrä näkyy kohdassa ”Huomiot”."
+  },
+  "facts": {
+    "adjustment": "korjaus {{blocks}}",
+    "at_block": "lohkossa {{block}}",
+    "balance": "saldo",
+    "balance_exact": "tarkalleen {{amount}} QORT",
+    "balance_failed": "Saldoa ei voitu ladata.",
+    "blocks_to_level_one": "{{blocks}} lohko tasolle {{level}}",
+    "blocks_to_level_other": "{{blocks}} lohkoa tasolle {{level}}",
+    "days_to_level_one": "noin {{count}} päivä minttausta",
+    "days_to_level_other": "noin {{count}} päivää minttausta",
+    "first_seen": "nähty ensi kerran",
+    "first_seen_failed": "Ensimmäisen havainnon aikaa ei voitu ladata.",
+    "first_seen_none": "merkintää ei löytynyt",
+    "groups": "ryhmät",
+    "in_groups_one": "{{groups}} ryhmässä",
+    "in_groups_other": "{{groups}} ryhmässä",
+    "in_no_groups": "ei missään ryhmässä",
+    "level_progress": "edistyminen tasolle {{level}}: {{percent}} %",
+    "pace_failed": "Solmun tahtia, jota tarvitaan lohkoihin ja päiviin seuraavalle tasolle, ei voitu ladata.",
+    "payments_all_one": "kaikissa sen {{payments}} maksussa",
+    "payments_all_other": "kaikissa sen {{payments}} maksussa",
+    "payments_newest_one": "sen {{payments}} uusimmassa maksussa",
+    "payments_newest_other": "sen {{payments}} uusimmassa maksussa",
+    "payments_none": "ei vielä maksuja",
+    "payments_single": "sen ainoassa maksussa",
+    "penalty": "rangaistus {{blocks}}",
+    "received_sent": "QORT vastaanotettu / lähetetty",
+    "received_sent_info": "Vain QORT-maksut: monimaksuja, kauppoja ja minttausta ei lasketa.",
+    "title": "yhdellä silmäyksellä",
+    "top_level": "korkein taso"
+  },
+  "groups": {
+    "admin": "ylläpitäjä",
+    "closed": "suljettu ryhmä",
+    "failed": "Ryhmiä ei voitu ladata.",
+    "members_one": "{{members}} jäsen",
+    "members_other": "{{members}} jäsentä",
+    "none": "Se ei kuulu mihinkään ryhmään.",
+    "open": "avoin ryhmä",
+    "owner": "omistaja",
+    "sort": "lajittele",
+    "sort_az": "nimi A–Ö",
+    "sort_members": "eniten jäseniä",
+    "sort_minter": "MINTER ensin",
+    "sort_roles": "omistaja ja ylläpitäjä ensin",
+    "title": "ryhmät",
+    "title_count": "ryhmät ({{n}})",
+    "unnamed": "ryhmä #{{id}}"
+  },
+  "header": {
+    "about": "tietoja tästä tilistä",
+    "blocked": "Tili estetty.",
+    "copy_public_key": "kopioi julkinen avain",
+    "name_failed": "Nimeä ei voitu ladata.",
+    "name_matched": "Hait nimeä ”{{typed}}”; solmu löysi nimen ”{{matched}}” kirjainkoosta ja samannäköisistä kirjaimista välittämättä.",
+    "no_primary_name": "ei ensisijaista nimeä",
+    "opened_from_name": "Avattu nimen ”{{name}}” kautta.",
+    "public_key_copied": "Julkinen avain kopioitu leikepöydälle.",
+    "unblocked": "Tilin esto poistettu."
+  },
+  "minter": {
+    "open_app": "avaa {{app}}",
+    "standing_admin": "Minter Admin ja MINTER-jäsen.",
+    "standing_member": "MINTER-jäsen.",
+    "standing_outside": "Ei MINTERissä.",
+    "story": "Sen MINTER-historia nimityksistä päätöksiin säilyy sovelluksessa {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Allekirjoitti viimeksi lohkon {{date}} (lohko {{block}}).",
+    "last_signed_block": "Viimeksi allekirjoitettu lohko: {{block}}.",
+    "last_signed_failed": "Viimeksi allekirjoitettua lohkoa ei voitu ladata.",
+    "last_signed_none": "Se ei ole allekirjoittanut yhtään lohkoa.",
+    "not_now": "Ei minttaa juuri nyt.",
+    "online_failed": "Juuri nyt minttaavia ei voitu ladata.",
+    "own_key": "Minttaa nyt omalla avaimellaan.",
+    "own_key_and_shares": "Minttaa nyt omalla avaimellaan ja palkkionjakojen kautta näiden kanssa:",
+    "shares": "Minttaa nyt palkkionjakojen kautta näiden kanssa:",
+    "show_all_one": "näytä kaikki {{count}}",
+    "show_all_other": "näytä kaikki {{count}}",
+    "show_fewer": "näytä vähemmän",
+    "title": "minttaus"
+  },
+  "notes": {
+    "name_address_like": "Sen ensisijainen nimi ”{{name}}” on kirjoitettu kuin osoite.",
+    "name_invisible_one": "Sen ensisijainen nimi ”{{name}}” sisältää {{count}} näkymätöntä tai tyhjää merkkiä.",
+    "name_invisible_other": "Sen ensisijainen nimi ”{{name}}” sisältää {{count}} näkymätöntä tai tyhjää merkkiä.",
+    "name_invisible_single": "Sen ensisijainen nimi ”{{name}}” sisältää näkymättömän tai tyhjän merkin.",
+    "name_owner_end": "Sen ensisijainen nimi ”{{name}}” päättyy samoihin merkkeihin kuin sen osoite (…{{end}}).",
+    "name_owner_start": "Sen ensisijainen nimi ”{{name}}” alkaa samoilla merkeillä kuin sen osoite ({{start}}…).",
+    "penalty": "Solmu on kirjannut tälle tilille {{blocks}} lohkon minttausrangaistuksen.",
+    "title": "huomiot"
+  },
+  "payments": {
+    "failed": "Maksuja ei voitu ladata.",
+    "newest_only": "Nämä ovat vain sen uusimmat maksut.",
+    "received_from": "vastaanotettu lähettäjältä",
+    "sent_to": "lähetetty vastaanottajalle",
+    "show_more": "näytä lisää",
+    "shown": "Näytetään {{shown}} / {{total}}.",
+    "to_itself": "itselleen"
+  },
+  "search": {
+    "clear": "tyhjennä",
+    "compact_placeholder": "hae lohkoketjuselaimesta",
+    "helper": "Valitse ehdotus tai paina Enter hakeaksesi täsmälleen kirjoittamasi.",
+    "label": "etsi tili",
+    "placeholder": "nimi tai Q…-osoite"
+  },
+  "settings": {
+    "remember": "muista selaamani tilit tällä laitteella",
+    "remember_hint": "Vain niiden osoitteet, tälle Hub-tilille. Kun poistat tämän käytöstä, ne unohdetaan.",
+    "title": "lohkoketjuselaimen asetukset"
+  },
+  "start": {
+    "clear": "tyhjennä",
+    "clear_recent": "tyhjennä viimeksi selatut",
+    "recent": "viimeksi selatut",
+    "your_account": "oma tilisi"
+  },
+  "summary": {
+    "first_seen": "nähty ensi kerran: {{date}}",
+    "last_sent": "lähetti viimeksi tapahtuman {{ago}}",
+    "minter_admin": "Minter Admin, MINTERissä",
+    "minter_member": "MINTERissä",
+    "minter_outside": "ei MINTERissä",
+    "no_names": "ei rekisteröityä nimeä",
+    "owns_names_more_one": "omistaa {{shown}}+ nimeä",
+    "owns_names_more_other": "omistaa {{shown}}+ nimeä",
+    "owns_names_one": "omistaa {{shown}} nimen",
+    "owns_names_other": "omistaa {{shown}} nimeä"
+  },
+  "trail": {
+    "label": "polkusi"
+  },
+  "window": {
+    "forward": "eteenpäin",
+    "full": "laajenna koko ikkunaan",
+    "leave_full": "palauta normaali koko",
+    "subtitle": "Hae mitä tahansa Qortal-tiliä"
+  }
+}
