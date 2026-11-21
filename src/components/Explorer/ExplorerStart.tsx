@@ -1,6 +1,7 @@
 /**
  * The Explorer's start page: one field for any account, your own account,
- * and the accounts explored on this device (when remembering is on).
+ * the accounts explored on this device (when remembering is on), and the
+ * whole chain's latest transactions (chain/ChainLatest.tsx).
  * Read-only: nothing here sends anything.
  */
 import { Box, Button, ButtonBase, Typography } from '@mui/material';
@@ -8,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { shortAddress } from '../../lib/explorer/addresses';
 import { primaryNameRead } from '../../lib/explorer/reads';
 import { visibleName } from '../../lib/explorer/rules';
+import { ChainLatest } from './chain/ChainLatest';
 import { useExplorer, useExplorerRead } from './ExplorerContext';
 import { ExplorerAvatar, ExplorerSearchField } from './ExplorerSearchField';
 import { cap, mutedText, panelSx, Section } from './parts';
@@ -131,6 +133,7 @@ export function ExplorerStart({
           </Box>
         </Section>
       ) : null}
+      <ChainLatest />
     </Box>
   );
 }

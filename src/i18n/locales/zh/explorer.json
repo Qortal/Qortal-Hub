@@ -124,6 +124,79 @@
     "about": "自动化合约（AT）：链上的程序，而不是个人账户。",
     "title": "AT 地址"
   },
+  "chain": {
+    "blocks": {
+      "bad": "请输入区块号，例如 {{plain}} 或 {{grouped}}。",
+      "from": "从某个区块开始…",
+      "from_field": "起始区块",
+      "label": "区块",
+      "latest_one": "最近 {{blocks}} 个区块",
+      "latest_other": "最近 {{blocks}} 个区块",
+      "one_block": "仅此区块",
+      "past_tip": "链目前在区块 {{tip}}。",
+      "show": "显示",
+      "span": "区块数量",
+      "span_blocks_one": "{{blocks}} 个区块",
+      "span_blocks_other": "{{blocks}} 个区块"
+    },
+    "ceiling": "区块浏览器每次搜索最多列出 {{max}} 笔交易：如需查看更多，请选择其他区块。",
+    "cover": {
+      "all_block_one": "已显示区块 {{block}} 中的全部 {{shown}} 笔交易。",
+      "all_block_other": "已显示区块 {{block}} 中的全部 {{shown}} 笔交易。",
+      "all_one": "已显示区块 {{from}}–{{to}} 中的全部 {{shown}} 笔交易。",
+      "all_other": "已显示区块 {{from}}–{{to}} 中的全部 {{shown}} 笔交易。",
+      "newest_block_one": "已显示区块 {{block}} 中最新的 {{shown}} 笔交易。",
+      "newest_block_other": "已显示区块 {{block}} 中最新的 {{shown}} 笔交易。",
+      "newest_one": "已显示区块 {{from}}–{{to}} 中最新的 {{shown}} 笔交易。",
+      "newest_other": "已显示区块 {{from}}–{{to}} 中最新的 {{shown}} 笔交易。",
+      "none_all": "区块 {{from}}–{{to}} 中除消息外没有交易。",
+      "none_all_block": "区块 {{block}} 中除消息外没有交易。",
+      "none_kind": "区块 {{from}}–{{to}} 中没有此类型的交易。",
+      "none_kind_block": "区块 {{block}} 中没有此类型的交易。",
+      "oldest_block_one": "已显示区块 {{block}} 中最早的 {{shown}} 笔交易。",
+      "oldest_block_other": "已显示区块 {{block}} 中最早的 {{shown}} 笔交易。",
+      "oldest_one": "已显示区块 {{from}}–{{to}} 中最早的 {{shown}} 笔交易。",
+      "oldest_other": "已显示区块 {{from}}–{{to}} 中最早的 {{shown}} 笔交易。",
+      "only": "这是区块 {{from}}–{{to}} 中唯一的一笔交易。",
+      "only_block": "这是区块 {{block}} 中唯一的一笔交易。"
+    },
+    "failed": "无法搜索链。",
+    "in_block": "此区块中的交易",
+    "intro": "某个区块范围内所选类型的全部已确认交易，可按最新或最早在前排列。此处不列出消息：账户的“交易”标签页会显示它自己的消息。",
+    "list_all": "除消息外的所有类型",
+    "more_failed_newer": "无法加载更新的交易。",
+    "more_failed_older": "无法加载更早的交易。",
+    "order": {
+      "label": "顺序",
+      "newest": "最新在前",
+      "oldest": "最早在前"
+    },
+    "past_tip_hint": "请选择更早的区块作为起点。",
+    "show_newer": "显示更新的",
+    "show_older": "显示更早的",
+    "start": {
+      "failed": "无法读取链上的最新交易。",
+      "list": "Qortal 上的最新交易",
+      "none_one": "最近 {{blocks}} 个区块中除消息外没有交易。",
+      "none_other": "最近 {{blocks}} 个区块中除消息外没有交易。",
+      "title": "整条链"
+    },
+    "tip": {
+      "failed": "无法读取链上的最新区块。",
+      "pinned": "截至区块 {{tip}}，即此列表上次更新到最新状态时链上的最新区块。刷新会读取更新的区块。",
+      "renew_failed": "无法读取链上的最新区块：列表仍截至区块 {{tip}}。"
+    },
+    "title": "Qortal 上的交易",
+    "waiting": {
+      "failed": "无法检查等待区块的交易。",
+      "loading": "正在检查等待区块的交易…",
+      "note": "在被区块收录之前，这些交易由您的节点保存。",
+      "title": "等待确认（{{n}}）",
+      "title_more": "等待确认（最新 {{n}} 笔）"
+    },
+    "wider_one": "在最近 {{blocks}} 个区块中查找",
+    "wider_other": "在最近 {{blocks}} 个区块中查找"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "dev 群组（群组 1）的管理员，该群组由 Qortal 的开发者组成。",

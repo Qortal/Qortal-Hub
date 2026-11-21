@@ -110,6 +110,17 @@ const COUNTED: Array<[string, string]> = [
   ['explorer:tx.say.multi.none', 'accounts'],
   ['explorer:tx.say.multi.out', 'accounts'],
   ['explorer:tx.show_all', 'count'],
+  // Transactions on Qortal.
+  ['explorer:chain.blocks.latest', 'blocks'],
+  ['explorer:chain.blocks.span_blocks', 'blocks'],
+  ['explorer:chain.cover.all', 'shown'],
+  ['explorer:chain.cover.all_block', 'shown'],
+  ['explorer:chain.cover.newest', 'shown'],
+  ['explorer:chain.cover.newest_block', 'shown'],
+  ['explorer:chain.cover.oldest', 'shown'],
+  ['explorer:chain.cover.oldest_block', 'shown'],
+  ['explorer:chain.start.none', 'blocks'],
+  ['explorer:chain.wider', 'blocks'],
 ];
 
 const original = i18n.language;

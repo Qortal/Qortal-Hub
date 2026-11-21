@@ -10,9 +10,10 @@
  *
  * Its history is a list of steps: the start page, an account, one
  * transaction (a signature typed, sent by the event, or opened from a
- * row), or a name's whole history (opened from a name on the Names tab or
- * in a sentence). Each step keeps what it showed (the tab, a filter:
- * useStepState), so Back and Forward show it as it was left.
+ * row), a name's whole history (opened from a name on the Names tab or
+ * in a sentence), or Transactions on Qortal (the whole chain's, from the
+ * start page or a transaction's block). Each step keeps what it showed (the
+ * tab, a filter: useStepState), so Back and Forward show it as it was left.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -60,7 +61,10 @@ import {
   isSignature,
 } from '../../lib/explorer/addresses';
 import { nextTrail } from '../../lib/explorer/rules';
+import { CHAIN_SCOPE, type ChainPreset } from '../../lib/explorer/chainTx';
 import type { NameMatch } from './AccountHeader';
+import { chainStepState } from './chain/chainStep';
+import { ChainView } from './chain/ChainView';
 import { ExplorerAccount } from './ExplorerAccount';
 import {
   ExplorerContext,
@@ -107,7 +111,9 @@ type View =
       /** The trail it was opened from: an account opened from it goes on from there. */
       trail: string[];
       state: StepState;
-    };
+    }
+  /** Transactions on Qortal: an account opened from it starts a trail of its own. */
+  | { kind: 'chain'; id: number; state: StepState };
 
 interface History {
   views: View[];
@@ -272,6 +278,20 @@ export function ExplorerWindow({
     });
   }, []);
 
+  // Transactions on Qortal: a step from what is on screen, starting from `preset`.
+  const openChain = useCallback((preset: ChainPreset = {}) => {
+    setMenuAnchor(null);
+    lastId.current += 1;
+    const id = lastId.current;
+    setHistory((current) => {
+      const next: View = { kind: 'chain', id, state: chainStepState(preset) };
+      const views = [...current.views.slice(0, current.index + 1), next].slice(
+        -HISTORY_MAX
+      );
+      return { views, index: views.length - 1 };
+    });
+  }, []);
+
   // A step's own state (its tab, a filter), changed in place: never a step more.
   const setStepState = useCallback(
     (stepId: number, key: string, value: unknown) =>
@@ -374,6 +394,7 @@ export function ExplorerWindow({
       openAccount,
       openTransaction,
       openName,
+      openChain,
       refresh,
       close,
       activity,
@@ -387,6 +408,7 @@ export function ExplorerWindow({
       openAccount,
       openTransaction,
       openName,
+      openChain,
       refresh,
       close,
       activity,
@@ -416,7 +438,7 @@ export function ExplorerWindow({
     setMenuAnchor(null);
   };
 
-  /** What Refresh reads again: the account or AT on screen, the transaction, or the name. */
+  /** What Refresh reads again: the account or AT on screen, the transaction, the name, or the chain's newest blocks. */
   const refreshScope =
     view.kind === 'account' &&
     (isQortAddress(view.who) || isAtAddress(view.who))
@@ -425,7 +447,9 @@ export function ExplorerWindow({
         ? view.signature
         : view.kind === 'name'
           ? view.name
-          : null;
+          : view.kind === 'chain'
+            ? CHAIN_SCOPE
+            : null;
 
   return (
     <Dialog
@@ -638,6 +662,8 @@ export function ExplorerWindow({
                   <TxView key={view.id} signature={view.signature} />
                 ) : view.kind === 'name' ? (
                   <NameLifeView key={view.id} name={view.name} />
+                ) : view.kind === 'chain' ? (
+                  <ChainView key={view.id} />
                 ) : (
                   <ExplorerAccount
                     key={`${view.id}:${view.who}`}

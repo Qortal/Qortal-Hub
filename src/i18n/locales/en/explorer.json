@@ -124,6 +124,79 @@
     "about": "An automated contract (AT): a program on the chain, not a personal account.",
     "title": "AT address"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Enter a block number, like {{plain}} or {{grouped}}.",
+      "from": "from a block…",
+      "from_field": "from block",
+      "label": "blocks",
+      "latest_one": "the latest {{blocks}} blocks",
+      "latest_other": "the latest {{blocks}} blocks",
+      "one_block": "just this block",
+      "past_tip": "The chain is at block {{tip}}.",
+      "show": "show",
+      "span": "how many blocks",
+      "span_blocks_one": "{{blocks}} blocks",
+      "span_blocks_other": "{{blocks}} blocks"
+    },
+    "ceiling": "The Explorer lists up to {{max}} transactions of one search: pick other blocks to see more.",
+    "cover": {
+      "all_block_one": "All {{shown}} in block {{block}}.",
+      "all_block_other": "All {{shown}} in block {{block}}.",
+      "all_one": "All {{shown}} in blocks {{from}}–{{to}}.",
+      "all_other": "All {{shown}} in blocks {{from}}–{{to}}.",
+      "newest_block_one": "The newest {{shown}} in block {{block}}.",
+      "newest_block_other": "The newest {{shown}} in block {{block}}.",
+      "newest_one": "The newest {{shown}} in blocks {{from}}–{{to}}.",
+      "newest_other": "The newest {{shown}} in blocks {{from}}–{{to}}.",
+      "none_all": "No transactions other than messages in blocks {{from}}–{{to}}.",
+      "none_all_block": "No transactions other than messages in block {{block}}.",
+      "none_kind": "No transactions of this kind in blocks {{from}}–{{to}}.",
+      "none_kind_block": "No transactions of this kind in block {{block}}.",
+      "oldest_block_one": "The oldest {{shown}} in block {{block}}.",
+      "oldest_block_other": "The oldest {{shown}} in block {{block}}.",
+      "oldest_one": "The oldest {{shown}} in blocks {{from}}–{{to}}.",
+      "oldest_other": "The oldest {{shown}} in blocks {{from}}–{{to}}.",
+      "only": "The only one in blocks {{from}}–{{to}}.",
+      "only_block": "The only one in block {{block}}."
+    },
+    "failed": "Couldn't search the chain.",
+    "in_block": "transactions in this block",
+    "intro": "Every confirmed transaction in a range of blocks, of the kinds you pick, newest or oldest first. Messages aren't listed here: an account's Transactions tab shows its own.",
+    "list_all": "every kind except messages",
+    "more_failed_newer": "Couldn't load newer transactions.",
+    "more_failed_older": "Couldn't load older transactions.",
+    "order": {
+      "label": "order",
+      "newest": "newest first",
+      "oldest": "oldest first"
+    },
+    "past_tip_hint": "Pick an earlier block to start from.",
+    "show_newer": "show newer",
+    "show_older": "show older",
+    "start": {
+      "failed": "Couldn't read the chain's latest transactions.",
+      "list": "latest transactions on Qortal",
+      "none_one": "No transactions other than messages in the latest {{blocks}} blocks.",
+      "none_other": "No transactions other than messages in the latest {{blocks}} blocks.",
+      "title": "the whole chain"
+    },
+    "tip": {
+      "failed": "Couldn't read the chain's newest block.",
+      "pinned": "Up to block {{tip}}, the chain's newest when this list was last brought up to date. Refresh reads newer blocks.",
+      "renew_failed": "Couldn't read the chain's newest block: the list stays up to block {{tip}}."
+    },
+    "title": "transactions on Qortal",
+    "waiting": {
+      "failed": "Couldn't check what waits for a block.",
+      "loading": "Checking what waits for a block…",
+      "note": "Your node holds these until a block takes them.",
+      "title": "waiting to be confirmed ({{n}})",
+      "title_more": "waiting to be confirmed (the newest {{n}})"
+    },
+    "wider_one": "look in the latest {{blocks}} blocks",
+    "wider_other": "look in the latest {{blocks}} blocks"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "An admin of the dev group (group 1), the group of Qortal's developers.",

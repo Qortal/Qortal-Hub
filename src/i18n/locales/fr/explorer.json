@@ -124,6 +124,79 @@
     "about": "Un contrat automatisé (AT) : un programme sur la chaîne, pas un compte personnel.",
     "title": "adresse d'AT"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Saisissez un numéro de bloc, par exemple {{plain}} ou {{grouped}}.",
+      "from": "à partir d'un bloc…",
+      "from_field": "à partir du bloc",
+      "label": "blocs",
+      "latest_one": "les {{blocks}} derniers blocs",
+      "latest_other": "les {{blocks}} derniers blocs",
+      "one_block": "ce bloc seulement",
+      "past_tip": "La chaîne en est au bloc {{tip}}.",
+      "show": "afficher",
+      "span": "combien de blocs",
+      "span_blocks_one": "{{blocks}} blocs",
+      "span_blocks_other": "{{blocks}} blocs"
+    },
+    "ceiling": "L'Explorateur affiche jusqu'à {{max}} transactions par recherche : choisissez d'autres blocs pour en voir davantage.",
+    "cover": {
+      "all_block_one": "Toutes les {{shown}} du bloc {{block}}.",
+      "all_block_other": "Toutes les {{shown}} du bloc {{block}}.",
+      "all_one": "Toutes les {{shown}} des blocs {{from}}–{{to}}.",
+      "all_other": "Toutes les {{shown}} des blocs {{from}}–{{to}}.",
+      "newest_block_one": "Les {{shown}} plus récentes du bloc {{block}}.",
+      "newest_block_other": "Les {{shown}} plus récentes du bloc {{block}}.",
+      "newest_one": "Les {{shown}} plus récentes des blocs {{from}}–{{to}}.",
+      "newest_other": "Les {{shown}} plus récentes des blocs {{from}}–{{to}}.",
+      "none_all": "Aucune transaction autre que des messages dans les blocs {{from}}–{{to}}.",
+      "none_all_block": "Aucune transaction autre que des messages dans le bloc {{block}}.",
+      "none_kind": "Aucune transaction de cette catégorie dans les blocs {{from}}–{{to}}.",
+      "none_kind_block": "Aucune transaction de cette catégorie dans le bloc {{block}}.",
+      "oldest_block_one": "Les {{shown}} plus anciennes du bloc {{block}}.",
+      "oldest_block_other": "Les {{shown}} plus anciennes du bloc {{block}}.",
+      "oldest_one": "Les {{shown}} plus anciennes des blocs {{from}}–{{to}}.",
+      "oldest_other": "Les {{shown}} plus anciennes des blocs {{from}}–{{to}}.",
+      "only": "La seule des blocs {{from}}–{{to}}.",
+      "only_block": "La seule du bloc {{block}}."
+    },
+    "failed": "Impossible de chercher dans la chaîne.",
+    "in_block": "transactions de ce bloc",
+    "intro": "Toutes les transactions confirmées dans une plage de blocs, des catégories que vous choisissez, les plus récentes ou les plus anciennes d'abord. Les messages n'y figurent pas : l'onglet Transactions d'un compte affiche les siens.",
+    "list_all": "toutes les catégories sauf les messages",
+    "more_failed_newer": "Impossible de charger des transactions plus récentes.",
+    "more_failed_older": "Impossible de charger des transactions plus anciennes.",
+    "order": {
+      "label": "ordre",
+      "newest": "les plus récentes d'abord",
+      "oldest": "les plus anciennes d'abord"
+    },
+    "past_tip_hint": "Choisissez un bloc antérieur pour commencer.",
+    "show_newer": "afficher plus récentes",
+    "show_older": "afficher plus anciennes",
+    "start": {
+      "failed": "Impossible de lire les dernières transactions de la chaîne.",
+      "list": "dernières transactions sur Qortal",
+      "none_one": "Aucune transaction autre que des messages dans les {{blocks}} derniers blocs.",
+      "none_other": "Aucune transaction autre que des messages dans les {{blocks}} derniers blocs.",
+      "title": "toute la chaîne"
+    },
+    "tip": {
+      "failed": "Impossible de lire le bloc le plus récent de la chaîne.",
+      "pinned": "Jusqu'au bloc {{tip}}, le plus récent de la chaîne la dernière fois que cette liste a été mise à jour. Rafraîchir lit les blocs plus récents.",
+      "renew_failed": "Impossible de lire le bloc le plus récent de la chaîne : la liste reste jusqu'au bloc {{tip}}."
+    },
+    "title": "transactions sur Qortal",
+    "waiting": {
+      "failed": "Impossible de vérifier ce qui attend un bloc.",
+      "loading": "Vérification de ce qui attend un bloc…",
+      "note": "Votre nœud les conserve jusqu'à ce qu'un bloc les inclue.",
+      "title": "en attente de confirmation ({{n}})",
+      "title_more": "en attente de confirmation (les {{n}} plus récentes)"
+    },
+    "wider_one": "chercher dans les {{blocks}} derniers blocs",
+    "wider_other": "chercher dans les {{blocks}} derniers blocs"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "Un administrateur du groupe dev (groupe 1), le groupe des développeurs de Qortal.",

@@ -23,6 +23,7 @@ import {
 } from '../../../lib/explorer/format';
 import { txRead, type TxRow } from '../../../lib/explorer/reads';
 import { makerOf } from '../../../lib/explorer/txWords';
+import { BlockTransactionsLink } from '../chain/BlockLink';
 import { useExplorer, useExplorerRead } from '../ExplorerContext';
 import {
   cap,
@@ -106,9 +107,19 @@ function Facts({ tx }: { tx: TxRow }) {
         }}
       >
         <Fact label={t('explorer:tx_page.block', cap)}>
-          {confirmed
-            ? formatCount(tx.blockHeight as number, language)
-            : t('explorer:tx_page.waiting', cap)}
+          {confirmed ? (
+            <>
+              {formatCount(tx.blockHeight as number, language)}
+              <Box
+                component="span"
+                sx={{ display: 'block', fontSize: '0.85rem', fontWeight: 400 }}
+              >
+                <BlockTransactionsLink height={tx.blockHeight as number} />
+              </Box>
+            </>
+          ) : (
+            t('explorer:tx_page.waiting', cap)
+          )}
         </Fact>
         <Fact
           label={

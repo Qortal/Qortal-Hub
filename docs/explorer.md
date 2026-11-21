@@ -57,6 +57,10 @@ step of the trail. A Q-App's `OPEN_USER_LOOKUP` request sends the same event.
   one, its signature with Copy, the accounts involved, for a group approval the
   transaction it answers, its fields and its raw API answer.
 - **An AT** (a program on the chain, `A…`): its address and its transactions.
+- **Transactions on Qortal** (from the start page, which shows the newest
+  five, or from one transaction's block): the whole chain's confirmed
+  transactions of the kinds picked, in a range of blocks, newest or oldest
+  first, 20 a page, and what waits for a block (see below).
 - **Its own pages** for a name no one has, an address the node rejects, an
   address never used and a signature the node doesn't know.
 
@@ -459,6 +463,78 @@ is the trades it settles, which the traders' QORT purchased / sold add up.
   window; an account opened from a name's page goes on from the trail it was
   opened from.
 
+## Transactions on Qortal
+
+The whole chain's confirmed transactions, for everyone: a step of the window,
+opened from the start page ("Transactions on Qortal" under its latest
+transactions) or from one transaction's block ("Transactions in this block":
+that block alone, oldest first).
+
+- **What it lists:** every confirmed transaction of the kinds picked (the
+  Transactions tab's kinds and types, without Messages: All is every other
+  type), in a range of blocks, newest or oldest first, 20 a page. Messages
+  aren't listed, as in Q-Mintership+: an account's Transactions tab shows its
+  own. Each row is the Transactions tab's row, told from no one's side
+  ("Publisher sent 15 QORT to Second"); an account opened from it starts a
+  trail of its own.
+- **Core's rules** (`src/lib/explorer/chainTx.ts`): a search without an
+  address needs a type or at most 20 rows, and a block range goes only with
+  `confirmationStatus=CONFIRMED`. So every search names its types, is
+  confirmed, has a block range and asks for 20
+  (`/transactions/search?txType=…&startBlock=…&blockLimit=…&confirmationStatus=CONFIRMED&limit=20&offset=…&reverse=…`);
+  none goes out without types, with a message type, or without a range of 1
+  to 10,000 blocks. Core orders by each transaction's own time and counts
+  blocks [startBlock, startBlock + blockLimit). A type it doesn't know is a
+  400, shown as a failure.
+- **The blocks:** the latest 1,000 (the default) or 10,000 up to the chain's
+  newest block when the list was first read (`/blocks/height`), or 1, 10,
+  100, 1,000 or 10,000 blocks from a block typed in (written as numbers are
+  in any of Hub's languages, Arabic digits too). A range never reaches past
+  that tip: Core answers a range past it with no rows. A tip taken from a
+  kept answer (the start page's, or the window's cache, up to 30 seconds
+  old) can be behind a block the window has just shown, so a block past the
+  pinned tip is never refused on its word: the newest block is read again
+  first, and the block is shown once the chain has it (that tip then
+  pinned) or refused with that fresh height ("The chain is at block …"),
+  before anything is searched. The tip is pinned with the step, so the rows
+  don't move while they are paged and Back shows the same blocks. The
+  window's Refresh reads the newest block and pins it deliberately: when it
+  is newer, the list starts again from it at one page; when it isn't, the
+  list stays as it is, pages and all. When that read fails, the list stays
+  and says so, with Retry. A block typed in but not shown yet belongs to the
+  step too, so Back and Forward keep it.
+- **Pages:** each page of 20 is one read, kept 30 minutes (rows in blocks
+  already made don't change). "Show older" ("Show newer", oldest first) reads
+  the next, up to 50 pages (1,000 rows), and puts the keyboard on the first
+  row it added. The line under the list says what it holds ("The newest 40 in
+  blocks …", "All 37 in blocks …", "The only one in block …"): "all" only
+  once a page came back short. A row Core gives on two pages shows once, and
+  the line then never says "all": Core orders by each transaction's time
+  alone, so two made at the same moment can trade places between reads, and
+  another may have been passed over. "No transactions of this kind in blocks
+  …" only from an empty answer of a search, with "Look in the latest 10,000
+  blocks" when the latest 1,000 held none; a failed first page says so with
+  Retry, and a later page that fails keeps the rows above it, with Retry.
+  Where a button goes once pressed (Retry, more blocks), the keyboard goes to
+  the first row the read brought, the line that says what came, or the Retry
+  of a read that failed again; another kind, range, order or tip starts a
+  list afresh, the keyboard left where it is. The kind, the blocks, the
+  order, the tip and how many pages show belong to the step, so Back and
+  Forward show it as it was left.
+- **What waits for a block,** with the latest blocks only: the node's own list
+  (`/transactions/unconfirmed?txType=…&limit=20&reverse=true`), apart,
+  "waiting to be confirmed (n)", or "(the newest 20)" when the node gave as
+  many as it gives at most; a line while it reads, nothing when none waits, a
+  failure with Retry. Read when the list opens, and again on Refresh.
+- **On the start page,** "The whole chain": the newest five of the latest
+  1,000 blocks, every kind but messages, read when the start page shows,
+  once, with "Transactions on Qortal", which opens the list on the same tip
+  (its first page is the one read there). Shown again once the tip it read
+  has gone stale (after 30 seconds), it reads the newest; after the window
+  closes or Hub's account changes, nothing of it is kept. A failed read says
+  so with Retry, never "no transactions".
+- **Nothing polls,** nothing is sent, and nothing reads `/chat/`.
+
 ## Rules
 
 - **Read-only.** Public GETs to the node Hub uses, no API key. Send QORT and
@@ -496,6 +572,7 @@ is the trades it settles, which the traders' QORT purchased / sold add up.
 | `src/components/Explorer/`              | the window, start page, account page, header, trail, tabs (`AccountTabs.tsx`) and Overview sections                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `src/components/Explorer/transactions/` | the Transactions tab, its rows and their sentences, one transaction's page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `src/components/Explorer/names/`        | the Names tab, a name's parts and history, a name's own page (`NameLifeView.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/components/Explorer/chain/`        | Transactions on Qortal: the step, its pickers and pages, what waits, the start page's latest transactions and the link from a transaction's block; its reads and rules are `src/lib/explorer/chainTx.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `src/components/Explorer/connections/`  | the Connections tab, its rows, payments, In common and the exchange notice; `useExplorerAccess.ts` runs the rule in the window; the Overview's Direct links (`overview/DirectLinksPreview.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `src/components/Explorer/overview/`     | the Overview's sections; the All list it holds (`useAccountHistory.ts`), the QORT figures (`QortFacts.tsx`, `Fact.tsx`) and Activity (`activity/`: the section, the chart, its colours and words, the settings dialog)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |

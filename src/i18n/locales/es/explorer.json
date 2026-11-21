@@ -124,6 +124,79 @@
     "about": "Un contrato automatizado (AT): un programa en la cadena, no una cuenta personal.",
     "title": "dirección de AT"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Escribe un número de bloque, como {{plain}} o {{grouped}}.",
+      "from": "desde un bloque…",
+      "from_field": "desde el bloque",
+      "label": "bloques",
+      "latest_one": "los últimos {{blocks}} bloques",
+      "latest_other": "los últimos {{blocks}} bloques",
+      "one_block": "solo este bloque",
+      "past_tip": "La cadena va por el bloque {{tip}}.",
+      "show": "mostrar",
+      "span": "cuántos bloques",
+      "span_blocks_one": "{{blocks}} bloques",
+      "span_blocks_other": "{{blocks}} bloques"
+    },
+    "ceiling": "El Explorador muestra hasta {{max}} transacciones por búsqueda: elige otros bloques para ver más.",
+    "cover": {
+      "all_block_one": "Todas las {{shown}} del bloque {{block}}.",
+      "all_block_other": "Todas las {{shown}} del bloque {{block}}.",
+      "all_one": "Todas las {{shown}} de los bloques {{from}}–{{to}}.",
+      "all_other": "Todas las {{shown}} de los bloques {{from}}–{{to}}.",
+      "newest_block_one": "Las {{shown}} más recientes del bloque {{block}}.",
+      "newest_block_other": "Las {{shown}} más recientes del bloque {{block}}.",
+      "newest_one": "Las {{shown}} más recientes de los bloques {{from}}–{{to}}.",
+      "newest_other": "Las {{shown}} más recientes de los bloques {{from}}–{{to}}.",
+      "none_all": "No hay transacciones, aparte de mensajes, en los bloques {{from}}–{{to}}.",
+      "none_all_block": "No hay transacciones, aparte de mensajes, en el bloque {{block}}.",
+      "none_kind": "No hay transacciones de este tipo en los bloques {{from}}–{{to}}.",
+      "none_kind_block": "No hay transacciones de este tipo en el bloque {{block}}.",
+      "oldest_block_one": "Las {{shown}} más antiguas del bloque {{block}}.",
+      "oldest_block_other": "Las {{shown}} más antiguas del bloque {{block}}.",
+      "oldest_one": "Las {{shown}} más antiguas de los bloques {{from}}–{{to}}.",
+      "oldest_other": "Las {{shown}} más antiguas de los bloques {{from}}–{{to}}.",
+      "only": "La única de los bloques {{from}}–{{to}}.",
+      "only_block": "La única del bloque {{block}}."
+    },
+    "failed": "No se pudo buscar en la cadena.",
+    "in_block": "transacciones de este bloque",
+    "intro": "Todas las transacciones confirmadas en un rango de bloques, de los tipos que elijas, las más recientes o las más antiguas primero. Los mensajes no aparecen aquí: la pestaña Transacciones de una cuenta muestra los suyos.",
+    "list_all": "todos los tipos excepto mensajes",
+    "more_failed_newer": "No se pudieron cargar transacciones más recientes.",
+    "more_failed_older": "No se pudieron cargar transacciones más antiguas.",
+    "order": {
+      "label": "orden",
+      "newest": "más recientes primero",
+      "oldest": "más antiguas primero"
+    },
+    "past_tip_hint": "Elige un bloque anterior desde el que empezar.",
+    "show_newer": "mostrar más recientes",
+    "show_older": "mostrar más antiguas",
+    "start": {
+      "failed": "No se pudieron leer las últimas transacciones de la cadena.",
+      "list": "últimas transacciones en Qortal",
+      "none_one": "No hay transacciones, aparte de mensajes, en los últimos {{blocks}} bloques.",
+      "none_other": "No hay transacciones, aparte de mensajes, en los últimos {{blocks}} bloques.",
+      "title": "toda la cadena"
+    },
+    "tip": {
+      "failed": "No se pudo leer el bloque más reciente de la cadena.",
+      "pinned": "Hasta el bloque {{tip}}, el más reciente de la cadena la última vez que se puso al día esta lista. Refrescar lee bloques más nuevos.",
+      "renew_failed": "No se pudo leer el bloque más reciente de la cadena: la lista sigue hasta el bloque {{tip}}."
+    },
+    "title": "transacciones en Qortal",
+    "waiting": {
+      "failed": "No se pudo comprobar qué espera un bloque.",
+      "loading": "Comprobando qué espera un bloque…",
+      "note": "Tu nodo las guarda hasta que un bloque las incluya.",
+      "title": "pendientes de confirmación ({{n}})",
+      "title_more": "pendientes de confirmación (las {{n}} más recientes)"
+    },
+    "wider_one": "buscar en los últimos {{blocks}} bloques",
+    "wider_other": "buscar en los últimos {{blocks}} bloques"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "Un administrador del grupo dev (grupo 1), el grupo de los desarrolladores de Qortal.",

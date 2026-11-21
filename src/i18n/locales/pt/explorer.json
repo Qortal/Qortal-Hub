@@ -124,6 +124,79 @@
     "about": "Um contrato automatizado (AT): um programa na blockchain, não uma conta pessoal.",
     "title": "endereço de AT"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Digite um número de bloco, como {{plain}} ou {{grouped}}.",
+      "from": "a partir de um bloco…",
+      "from_field": "a partir do bloco",
+      "label": "blocos",
+      "latest_one": "os últimos {{blocks}} blocos",
+      "latest_other": "os últimos {{blocks}} blocos",
+      "one_block": "só este bloco",
+      "past_tip": "A blockchain está no bloco {{tip}}.",
+      "show": "mostrar",
+      "span": "quantos blocos",
+      "span_blocks_one": "{{blocks}} blocos",
+      "span_blocks_other": "{{blocks}} blocos"
+    },
+    "ceiling": "O Explorador lista até {{max}} transações por busca: escolha outros blocos para ver mais.",
+    "cover": {
+      "all_block_one": "Todas as {{shown}} do bloco {{block}}.",
+      "all_block_other": "Todas as {{shown}} do bloco {{block}}.",
+      "all_one": "Todas as {{shown}} dos blocos {{from}}–{{to}}.",
+      "all_other": "Todas as {{shown}} dos blocos {{from}}–{{to}}.",
+      "newest_block_one": "As {{shown}} mais recentes do bloco {{block}}.",
+      "newest_block_other": "As {{shown}} mais recentes do bloco {{block}}.",
+      "newest_one": "As {{shown}} mais recentes dos blocos {{from}}–{{to}}.",
+      "newest_other": "As {{shown}} mais recentes dos blocos {{from}}–{{to}}.",
+      "none_all": "Nenhuma transação além de mensagens nos blocos {{from}}–{{to}}.",
+      "none_all_block": "Nenhuma transação além de mensagens no bloco {{block}}.",
+      "none_kind": "Nenhuma transação deste tipo nos blocos {{from}}–{{to}}.",
+      "none_kind_block": "Nenhuma transação deste tipo no bloco {{block}}.",
+      "oldest_block_one": "As {{shown}} mais antigas do bloco {{block}}.",
+      "oldest_block_other": "As {{shown}} mais antigas do bloco {{block}}.",
+      "oldest_one": "As {{shown}} mais antigas dos blocos {{from}}–{{to}}.",
+      "oldest_other": "As {{shown}} mais antigas dos blocos {{from}}–{{to}}.",
+      "only": "A única dos blocos {{from}}–{{to}}.",
+      "only_block": "A única do bloco {{block}}."
+    },
+    "failed": "Não foi possível buscar na blockchain.",
+    "in_block": "transações deste bloco",
+    "intro": "Todas as transações confirmadas em um intervalo de blocos, dos tipos que você escolher, das mais recentes ou das mais antigas primeiro. As mensagens não aparecem aqui: a aba Transações de uma conta mostra as dela.",
+    "list_all": "todos os tipos exceto mensagens",
+    "more_failed_newer": "Não foi possível carregar transações mais recentes.",
+    "more_failed_older": "Não foi possível carregar transações mais antigas.",
+    "order": {
+      "label": "ordem",
+      "newest": "mais recentes primeiro",
+      "oldest": "mais antigas primeiro"
+    },
+    "past_tip_hint": "Escolha um bloco anterior para começar.",
+    "show_newer": "mostrar mais recentes",
+    "show_older": "mostrar mais antigas",
+    "start": {
+      "failed": "Não foi possível ler as transações mais recentes da blockchain.",
+      "list": "transações mais recentes no Qortal",
+      "none_one": "Nenhuma transação além de mensagens nos últimos {{blocks}} blocos.",
+      "none_other": "Nenhuma transação além de mensagens nos últimos {{blocks}} blocos.",
+      "title": "toda a blockchain"
+    },
+    "tip": {
+      "failed": "Não foi possível ler o bloco mais recente da blockchain.",
+      "pinned": "Até o bloco {{tip}}, o mais recente da blockchain da última vez que esta lista foi atualizada. Recarregar lê blocos mais novos.",
+      "renew_failed": "Não foi possível ler o bloco mais recente da blockchain: a lista continua até o bloco {{tip}}."
+    },
+    "title": "transações no Qortal",
+    "waiting": {
+      "failed": "Não foi possível verificar o que aguarda um bloco.",
+      "loading": "Verificando o que aguarda um bloco…",
+      "note": "Seu nó guarda estas transações até que entrem em um bloco.",
+      "title": "aguardando confirmação ({{n}})",
+      "title_more": "aguardando confirmação (as {{n}} mais recentes)"
+    },
+    "wider_one": "procurar nos últimos {{blocks}} blocos",
+    "wider_other": "procurar nos últimos {{blocks}} blocos"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "Um administrador do grupo dev (grupo 1), o grupo dos desenvolvedores do Qortal.",

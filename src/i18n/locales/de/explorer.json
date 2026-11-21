@@ -124,6 +124,79 @@
     "about": "Ein automatisierter Vertrag (AT): ein Programm auf der Blockchain, kein persönliches Konto.",
     "title": "AT-Adresse"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Geben Sie eine Blocknummer ein, etwa {{plain}} oder {{grouped}}.",
+      "from": "ab einem Block…",
+      "from_field": "ab Block",
+      "label": "Blöcke",
+      "latest_one": "die letzten {{blocks}} Blöcke",
+      "latest_other": "die letzten {{blocks}} Blöcke",
+      "one_block": "nur dieser Block",
+      "past_tip": "Die Blockchain ist bei Block {{tip}}.",
+      "show": "anzeigen",
+      "span": "wie viele Blöcke",
+      "span_blocks_one": "{{blocks}} Blöcke",
+      "span_blocks_other": "{{blocks}} Blöcke"
+    },
+    "ceiling": "Der Explorer listet bis zu {{max}} Transaktionen einer Suche auf: Wählen Sie andere Blöcke, um weitere zu sehen.",
+    "cover": {
+      "all_block_one": "Alle {{shown}} in Block {{block}}.",
+      "all_block_other": "Alle {{shown}} in Block {{block}}.",
+      "all_one": "Alle {{shown}} in den Blöcken {{from}}–{{to}}.",
+      "all_other": "Alle {{shown}} in den Blöcken {{from}}–{{to}}.",
+      "newest_block_one": "Die neuesten {{shown}} in Block {{block}}.",
+      "newest_block_other": "Die neuesten {{shown}} in Block {{block}}.",
+      "newest_one": "Die neuesten {{shown}} in den Blöcken {{from}}–{{to}}.",
+      "newest_other": "Die neuesten {{shown}} in den Blöcken {{from}}–{{to}}.",
+      "none_all": "Keine Transaktionen außer Nachrichten in den Blöcken {{from}}–{{to}}.",
+      "none_all_block": "Keine Transaktionen außer Nachrichten in Block {{block}}.",
+      "none_kind": "Keine Transaktionen dieser Art in den Blöcken {{from}}–{{to}}.",
+      "none_kind_block": "Keine Transaktionen dieser Art in Block {{block}}.",
+      "oldest_block_one": "Die ältesten {{shown}} in Block {{block}}.",
+      "oldest_block_other": "Die ältesten {{shown}} in Block {{block}}.",
+      "oldest_one": "Die ältesten {{shown}} in den Blöcken {{from}}–{{to}}.",
+      "oldest_other": "Die ältesten {{shown}} in den Blöcken {{from}}–{{to}}.",
+      "only": "Die einzige in den Blöcken {{from}}–{{to}}.",
+      "only_block": "Die einzige in Block {{block}}."
+    },
+    "failed": "Die Blockchain konnte nicht durchsucht werden.",
+    "in_block": "Transaktionen in diesem Block",
+    "intro": "Alle bestätigten Transaktionen in einem Bereich von Blöcken, der Arten, die Sie wählen, die neuesten oder die ältesten zuerst. Nachrichten werden hier nicht aufgeführt: Der Tab „Transaktionen“ eines Kontos zeigt seine eigenen.",
+    "list_all": "alle Arten außer Nachrichten",
+    "more_failed_newer": "Neuere Transaktionen konnten nicht geladen werden.",
+    "more_failed_older": "Ältere Transaktionen konnten nicht geladen werden.",
+    "order": {
+      "label": "Reihenfolge",
+      "newest": "neueste zuerst",
+      "oldest": "älteste zuerst"
+    },
+    "past_tip_hint": "Wählen Sie einen früheren Block als Anfang.",
+    "show_newer": "neuere anzeigen",
+    "show_older": "ältere anzeigen",
+    "start": {
+      "failed": "Die neuesten Transaktionen der Blockchain konnten nicht gelesen werden.",
+      "list": "neueste Transaktionen auf Qortal",
+      "none_one": "Keine Transaktionen außer Nachrichten in den letzten {{blocks}} Blöcken.",
+      "none_other": "Keine Transaktionen außer Nachrichten in den letzten {{blocks}} Blöcken.",
+      "title": "die ganze Blockchain"
+    },
+    "tip": {
+      "failed": "Der neueste Block der Blockchain konnte nicht gelesen werden.",
+      "pinned": "Bis Block {{tip}}, dem neuesten der Blockchain, als diese Liste zuletzt auf den neuesten Stand gebracht wurde. „Aktualisieren“ liest neuere Blöcke.",
+      "renew_failed": "Der neueste Block der Blockchain konnte nicht gelesen werden: Die Liste bleibt bis Block {{tip}}."
+    },
+    "title": "Transaktionen auf Qortal",
+    "waiting": {
+      "failed": "Es konnte nicht geprüft werden, was auf einen Block wartet.",
+      "loading": "Es wird geprüft, was auf einen Block wartet…",
+      "note": "Ihr Node hält diese bereit, bis ein Block sie aufnimmt.",
+      "title": "warten auf Bestätigung ({{n}})",
+      "title_more": "warten auf Bestätigung (die neuesten {{n}})"
+    },
+    "wider_one": "in den letzten {{blocks}} Blöcken suchen",
+    "wider_other": "in den letzten {{blocks}} Blöcken suchen"
+  },
   "chip": {
     "dev_admin": "Dev-Admin",
     "dev_admin_explained": "Ein Admin der Dev-Gruppe (Gruppe 1), der Gruppe der Qortal-Entwickler.",

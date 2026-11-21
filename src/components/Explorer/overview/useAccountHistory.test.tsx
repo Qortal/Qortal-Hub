@@ -87,6 +87,7 @@ function renderAtTheMost() {
     openAccount: vi.fn(),
     openTransaction: vi.fn(),
     openName: vi.fn(),
+    openChain: vi.fn(),
     refresh: vi.fn(),
     close: vi.fn(),
     activity: DEFAULT_ACTIVITY_SETTINGS,

@@ -124,6 +124,79 @@
     "about": "Automatiseeritud leping (AT): programm plokiahelas, mitte isiklik konto.",
     "title": "AT-aadress"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Sisesta ploki number, näiteks {{plain}} või {{grouped}}.",
+      "from": "alates plokist…",
+      "from_field": "alates plokist",
+      "label": "plokid",
+      "latest_one": "viimased {{blocks}} plokki",
+      "latest_other": "viimased {{blocks}} plokki",
+      "one_block": "ainult see plokk",
+      "past_tip": "Plokiahel on plokil {{tip}}.",
+      "show": "näita",
+      "span": "mitu plokki",
+      "span_blocks_one": "{{blocks}} plokki",
+      "span_blocks_other": "{{blocks}} plokki"
+    },
+    "ceiling": "Explorer näitab ühe otsingu kohta kuni {{max}} tehingut: rohkemate nägemiseks vali teised plokid.",
+    "cover": {
+      "all_block_one": "Kõik {{shown}} tehingut plokis {{block}}.",
+      "all_block_other": "Kõik {{shown}} tehingut plokis {{block}}.",
+      "all_one": "Kõik {{shown}} tehingut plokkides {{from}}–{{to}}.",
+      "all_other": "Kõik {{shown}} tehingut plokkides {{from}}–{{to}}.",
+      "newest_block_one": "Uusimad {{shown}} tehingut plokis {{block}}.",
+      "newest_block_other": "Uusimad {{shown}} tehingut plokis {{block}}.",
+      "newest_one": "Uusimad {{shown}} tehingut plokkides {{from}}–{{to}}.",
+      "newest_other": "Uusimad {{shown}} tehingut plokkides {{from}}–{{to}}.",
+      "none_all": "Plokkides {{from}}–{{to}} pole peale sõnumite tehinguid.",
+      "none_all_block": "Plokis {{block}} pole peale sõnumite tehinguid.",
+      "none_kind": "Plokkides {{from}}–{{to}} pole seda liiki tehinguid.",
+      "none_kind_block": "Plokis {{block}} pole seda liiki tehinguid.",
+      "oldest_block_one": "Vanimad {{shown}} tehingut plokis {{block}}.",
+      "oldest_block_other": "Vanimad {{shown}} tehingut plokis {{block}}.",
+      "oldest_one": "Vanimad {{shown}} tehingut plokkides {{from}}–{{to}}.",
+      "oldest_other": "Vanimad {{shown}} tehingut plokkides {{from}}–{{to}}.",
+      "only": "Ainus tehing plokkides {{from}}–{{to}}.",
+      "only_block": "Ainus tehing plokis {{block}}."
+    },
+    "failed": "Plokiahelast ei õnnestunud otsida.",
+    "in_block": "selle ploki tehingud",
+    "intro": "Kõik kinnitatud tehingud plokkide vahemikus, sinu valitud liiki, uusimad või vanimad eespool. Sõnumeid siin ei näidata: konto vahekaart „Tehingud“ näitab selle konto omi.",
+    "list_all": "kõik liigid peale sõnumite",
+    "more_failed_newer": "Uuemaid tehinguid ei õnnestunud laadida.",
+    "more_failed_older": "Vanemaid tehinguid ei õnnestunud laadida.",
+    "order": {
+      "label": "järjestus",
+      "newest": "uusimad eespool",
+      "oldest": "vanimad eespool"
+    },
+    "past_tip_hint": "Vali varasem plokk, millest alustada.",
+    "show_newer": "näita uuemaid",
+    "show_older": "näita vanemaid",
+    "start": {
+      "failed": "Plokiahela viimaseid tehinguid ei õnnestunud lugeda.",
+      "list": "Qortali viimased tehingud",
+      "none_one": "Viimases {{blocks}} plokis pole peale sõnumite tehinguid.",
+      "none_other": "Viimases {{blocks}} plokis pole peale sõnumite tehinguid.",
+      "title": "kogu plokiahel"
+    },
+    "tip": {
+      "failed": "Plokiahela uusimat plokki ei õnnestunud lugeda.",
+      "pinned": "Kuni plokini {{tip}}, mis oli plokiahela uusim, kui see loend viimati ajakohastati. „Värskenda“ loeb uuemaid plokke.",
+      "renew_failed": "Plokiahela uusimat plokki ei õnnestunud lugeda: loend jääb kuni plokini {{tip}}."
+    },
+    "title": "tehingud Qortalis",
+    "waiting": {
+      "failed": "Ei õnnestunud kontrollida, mis ootab plokki.",
+      "loading": "Kontrollitakse, mis ootab plokki…",
+      "note": "Sinu sõlm hoiab neid, kuni need plokki jõuavad.",
+      "title": "ootavad kinnitamist ({{n}})",
+      "title_more": "ootavad kinnitamist (uusimad {{n}})"
+    },
+    "wider_one": "otsi viimasest {{blocks}} plokist",
+    "wider_other": "otsi viimasest {{blocks}} plokist"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "Dev-rühma (rühm 1) ehk Qortali arendajate rühma administraator.",

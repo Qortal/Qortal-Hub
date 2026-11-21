@@ -124,6 +124,79 @@
     "about": "Automaattinen sopimus (AT): ohjelma lohkoketjussa, ei henkilökohtainen tili.",
     "title": "AT-osoite"
   },
+  "chain": {
+    "blocks": {
+      "bad": "Kirjoita lohkon numero, esimerkiksi {{plain}} tai {{grouped}}.",
+      "from": "lohkosta alkaen…",
+      "from_field": "alkaen lohkosta",
+      "label": "lohkot",
+      "latest_one": "viimeiset {{blocks}} lohkoa",
+      "latest_other": "viimeiset {{blocks}} lohkoa",
+      "one_block": "vain tämä lohko",
+      "past_tip": "Lohkoketju on lohkossa {{tip}}.",
+      "show": "näytä",
+      "span": "montako lohkoa",
+      "span_blocks_one": "{{blocks}} lohkoa",
+      "span_blocks_other": "{{blocks}} lohkoa"
+    },
+    "ceiling": "Lohkoketjuselain näyttää yhdestä hausta enintään {{max}} tapahtumaa: valitse muut lohkot nähdäksesi lisää.",
+    "cover": {
+      "all_block_one": "Kaikki {{shown}} tapahtumaa lohkossa {{block}}.",
+      "all_block_other": "Kaikki {{shown}} tapahtumaa lohkossa {{block}}.",
+      "all_one": "Kaikki {{shown}} tapahtumaa lohkoissa {{from}}–{{to}}.",
+      "all_other": "Kaikki {{shown}} tapahtumaa lohkoissa {{from}}–{{to}}.",
+      "newest_block_one": "Uusimmat {{shown}} tapahtumaa lohkossa {{block}}.",
+      "newest_block_other": "Uusimmat {{shown}} tapahtumaa lohkossa {{block}}.",
+      "newest_one": "Uusimmat {{shown}} tapahtumaa lohkoissa {{from}}–{{to}}.",
+      "newest_other": "Uusimmat {{shown}} tapahtumaa lohkoissa {{from}}–{{to}}.",
+      "none_all": "Lohkoissa {{from}}–{{to}} ei ole muita tapahtumia kuin viestejä.",
+      "none_all_block": "Lohkossa {{block}} ei ole muita tapahtumia kuin viestejä.",
+      "none_kind": "Lohkoissa {{from}}–{{to}} ei ole tämän lajin tapahtumia.",
+      "none_kind_block": "Lohkossa {{block}} ei ole tämän lajin tapahtumia.",
+      "oldest_block_one": "Vanhimmat {{shown}} tapahtumaa lohkossa {{block}}.",
+      "oldest_block_other": "Vanhimmat {{shown}} tapahtumaa lohkossa {{block}}.",
+      "oldest_one": "Vanhimmat {{shown}} tapahtumaa lohkoissa {{from}}–{{to}}.",
+      "oldest_other": "Vanhimmat {{shown}} tapahtumaa lohkoissa {{from}}–{{to}}.",
+      "only": "Ainoa tapahtuma lohkoissa {{from}}–{{to}}.",
+      "only_block": "Ainoa tapahtuma lohkossa {{block}}."
+    },
+    "failed": "Lohkoketjusta ei voitu hakea.",
+    "in_block": "tämän lohkon tapahtumat",
+    "intro": "Kaikki vahvistetut tapahtumat lohkoväliltä, valitsemiasi lajeja, uusimmat tai vanhimmat ensin. Viestejä ei luetella täällä: tilin Tapahtumat-välilehti näyttää sen omat.",
+    "list_all": "kaikki lajit paitsi viestit",
+    "more_failed_newer": "Uudempia tapahtumia ei voitu ladata.",
+    "more_failed_older": "Vanhempia tapahtumia ei voitu ladata.",
+    "order": {
+      "label": "järjestys",
+      "newest": "uusimmat ensin",
+      "oldest": "vanhimmat ensin"
+    },
+    "past_tip_hint": "Valitse aiempi lohko, josta aloittaa.",
+    "show_newer": "näytä uudempia",
+    "show_older": "näytä vanhempia",
+    "start": {
+      "failed": "Lohkoketjun viimeisimpiä tapahtumia ei voitu lukea.",
+      "list": "Qortalin viimeisimmät tapahtumat",
+      "none_one": "Viimeisissä {{blocks}} lohkossa ei ole muita tapahtumia kuin viestejä.",
+      "none_other": "Viimeisissä {{blocks}} lohkossa ei ole muita tapahtumia kuin viestejä.",
+      "title": "koko lohkoketju"
+    },
+    "tip": {
+      "failed": "Lohkoketjun uusinta lohkoa ei voitu lukea.",
+      "pinned": "Lohkoon {{tip}} asti, joka oli lohkoketjun uusin, kun tämä lista viimeksi saatettiin ajan tasalle. Päivitä lukee uudemmat lohkot.",
+      "renew_failed": "Lohkoketjun uusinta lohkoa ei voitu lukea: lista pysyy lohkoon {{tip}} asti."
+    },
+    "title": "tapahtumat Qortalissa",
+    "waiting": {
+      "failed": "Lohkoa odottavia tapahtumia ei voitu tarkistaa.",
+      "loading": "Tarkistetaan lohkoa odottavia tapahtumia…",
+      "note": "Solmusi säilyttää nämä, kunnes ne otetaan lohkoon.",
+      "title": "odottavat vahvistusta ({{n}})",
+      "title_more": "odottavat vahvistusta (uusimmat {{n}})"
+    },
+    "wider_one": "etsi viimeisistä {{blocks}} lohkosta",
+    "wider_other": "etsi viimeisistä {{blocks}} lohkosta"
+  },
   "chip": {
     "dev_admin": "Dev Admin",
     "dev_admin_explained": "Dev-ryhmän (ryhmä 1) eli Qortalin kehittäjien ryhmän ylläpitäjä.",

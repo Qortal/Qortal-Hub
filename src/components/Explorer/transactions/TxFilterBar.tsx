@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   TX_FAMILIES,
   typesFor,
+  type TxFamily,
   type TxFilter,
   type TxType,
 } from '../../../lib/explorer/txFamilies';
@@ -19,9 +20,12 @@ import { typeTitle } from './sentenceText';
 export function TxFilterBar({
   filter,
   onChange,
+  families = TX_FAMILIES,
 }: {
   filter: TxFilter;
   onChange: (filter: TxFilter) => void;
+  /** The kinds offered (the whole chain's list leaves out Messages). */
+  families?: readonly TxFamily[];
 }) {
   const { t } = useTranslation(['explorer']);
   const types = filter.kind === 'all' ? [] : typesFor(filter.kind);
@@ -34,7 +38,7 @@ export function TxFilterBar({
         aria-label={t('explorer:transactions.kind_label', cap)}
         sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}
       >
-        {TX_FAMILIES.map((family) => {
+        {families.map((family) => {
           const active = filter.kind === family.key;
           return (
             <Chip

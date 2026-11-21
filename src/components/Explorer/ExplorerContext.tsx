@@ -15,6 +15,7 @@ import {
 } from 'react';
 import type { ActivitySettings } from '../../lib/explorer/activitySettings';
 import type { ExplorerCache } from '../../lib/explorer/cache';
+import type { ChainPreset } from '../../lib/explorer/chainTx';
 import type { ReadSpec } from '../../lib/explorer/reads';
 import type { AccessState } from './useExplorerAccess';
 
@@ -47,6 +48,8 @@ export interface ExplorerContextValue {
   openTransaction: (signature: string) => void;
   /** Open a name's whole history, as a step from what is on screen. */
   openName: (name: string) => void;
+  /** Open Transactions on Qortal (the whole chain), as a step from what is on screen. */
+  openChain: (preset?: ChainPreset) => void;
   /** Read what is about `scope` (an address, a signature) again from the node. */
   refresh: (scope: string) => void;
   /** Close the Explorer window. */
