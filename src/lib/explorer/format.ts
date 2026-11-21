@@ -85,3 +85,89 @@ export function formatAgo(
   }
   return formatter.format(0, 'minute');
 }
+
+/** The decimal separator of `language` ("." or ","). */
+function decimalSeparator(language: string): string {
+  return (
+    safe((lang) => new Intl.NumberFormat(lang), language)
+      .formatToParts(1.5)
+      .find((part) => part.type === 'decimal')?.value ?? '.'
+  );
+}
+
+/**
+ * An amount as Core writes it ("637557960.49687541"), exactly, in Hub's
+ * language: digits grouped, trailing zeros dropped ("4.30000000" → "4.3",
+ * "100.00000000" → "100"). Text that isn't an amount is shown as it is.
+ */
+export function formatAmountExact(amount: string, language: string): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(amount ?? '').trim());
+  if (!match) return String(amount ?? '');
+  const [, sign, whole, fraction = ''] = match;
+  const grouped = safe((lang) => new Intl.NumberFormat(lang), language).format(
+    BigInt(whole)
+  );
+  const decimals = fraction.replace(/0+$/, '');
+  return `${sign ? '−' : ''}${grouped}${
+    decimals ? `${decimalSeparator(language)}${decimals}` : ''
+  }`;
+}
+
+/** A percent as Core writes it ("5.50"): "5.5 %", "5,5 %", "5.5%"… as the language writes it. */
+export function formatPercent(value: string, language: string): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value ?? '');
+  return safe(
+    (lang) =>
+      new Intl.NumberFormat(lang, {
+        style: 'percent',
+        maximumFractionDigits: 2,
+      }),
+    language
+  ).format(n / 100);
+}
+
+const SIZE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
+
+/** A size in the language's own units: "240 byte", "1.2 kB", "3.5 MB" (1 kB = 1,000 bytes). */
+export function formatSize(bytes: number, language: string): string {
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  while (value >= 1000 && unit < SIZE_UNITS.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return safe(
+    (lang) =>
+      new Intl.NumberFormat(lang, {
+        style: 'unit',
+        unit: SIZE_UNITS[unit],
+        unitDisplay: 'short',
+        maximumFractionDigits: unit === 0 ? 0 : 1,
+      }),
+    language
+  ).format(value);
+}
+
+interface ListFormatter {
+  format(items: string[]): string;
+}
+
+/** Intl.ListFormat, which this project's TypeScript library list predates. */
+const ListFormat = (
+  Intl as unknown as {
+    ListFormat?: new (
+      language: string,
+      options: { type: 'conjunction' }
+    ) => ListFormatter;
+  }
+).ListFormat;
+
+/** Items as a list, joined the way the language joins them ("A, B and C"). */
+export function formatList(items: readonly string[], language: string): string {
+  if (!ListFormat) return items.join(', ');
+  return safe(
+    (lang) => new ListFormat(lang, { type: 'conjunction' }),
+    language
+  ).format([...items]);
+}

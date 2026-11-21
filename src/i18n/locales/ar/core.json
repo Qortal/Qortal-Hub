@@ -8,7 +8,6 @@
     "dialog_title": "المستكشف",
     "label_address": "العنوان",
     "label_public_key": "المفتاح العام",
-    "payments_title": "المدفوعات الأخيرة",
     "tooltip_block_public_node": "حظر المستخدمين غير متاح عند تشغيل عقدة عامة.",
     "tooltip_block_self": "لا يمكنك حظر نفسك.",
     "tooltip_send_disabled": "هذا ملفك الشخصي."
@@ -917,7 +916,6 @@
       "no_minting_details": "لا يمكن عرض تفاصيل التعدين على البوابة",
       "no_notification_apps": "لا يوجد بعد أي تطبيقات لديها صلاحية الإشعارات.",
       "no_notifications": "لا توجد إشعارات جديدة",
-      "no_payments": "لا توجد مدفوعات",
       "no_pinned_changes": "ليس لديك أي تغييرات على تطبيقاتك المثبتة",
       "no_primary_name": "لا يوجد اسم أساسي",
       "no_results": "لا توجد نتائج",

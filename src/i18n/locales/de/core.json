@@ -8,7 +8,6 @@
     "dialog_title": "Explorer",
     "label_address": "Adresse",
     "label_public_key": "Öffentlicher Schlüssel",
-    "payments_title": "Letzte Zahlungen",
     "tooltip_block_public_node": "Nutzer sperren ist im öffentlichen Knotenbetrieb nicht verfügbar.",
     "tooltip_block_self": "Du kannst dich nicht selbst sperren.",
     "tooltip_send_disabled": "Das ist dein eigenes Profil."
@@ -881,7 +880,6 @@
       "no_minting_details": "Müngungsdetails auf dem Gateway können nicht angezeigt werden",
       "no_notification_apps": "Noch keine Apps mit Benachrichtigungsberechtigung.",
       "no_notifications": "Keine neuen Benachrichtigungen",
-      "no_payments": "Keine Zahlungen",
       "no_pinned_changes": "Sie haben derzeit keine Änderungen an Ihren angehefteten Apps",
       "no_primary_name": "kein primärer name",
       "no_results": "Keine Ergebnisse",

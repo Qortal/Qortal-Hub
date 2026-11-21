@@ -8,7 +8,6 @@
     "dialog_title": "Explorador",
     "label_address": "Endereço",
     "label_public_key": "Chave pública",
-    "payments_title": "Pagamentos recentes",
     "tooltip_block_public_node": "Bloquear utilizadores não está disponível num nó público.",
     "tooltip_block_self": "Não te podes bloquear a ti próprio.",
     "tooltip_send_disabled": "Este é o teu próprio perfil."
@@ -881,7 +880,6 @@
       "no_minting_details": "não é possível visualizar os detalhes de cunhagem no gateway",
       "no_notification_apps": "Nenhum app tem permissão de notificação ainda.",
       "no_notifications": "nenhuma nova notificação",
-      "no_payments": "nenhum pagamento",
       "no_pinned_changes": "você atualmente não tem alterações nos seus aplicativos fixados",
       "no_primary_name": "sem nome principal",
       "no_results": "nenhum resultado",

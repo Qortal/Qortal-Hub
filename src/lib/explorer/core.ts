@@ -40,15 +40,20 @@ export const seg = (value: string | number): string => {
   return encodeURIComponent(text);
 };
 
-/** `a=1&b=x`, leaving out undefined values. */
+type QueryValue = string | number | boolean;
+
+/** `a=1&b=x`, leaving out undefined values; a list repeats its key (`txType=A&txType=B`). */
 export function queryString(
-  params: Record<string, string | number | boolean | undefined>
+  params: Record<string, QueryValue | readonly QueryValue[] | undefined>
 ): string {
   return Object.entries(params)
-    .filter(([, value]) => value !== undefined)
-    .map(
-      ([key, value]) =>
-        `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
+    .flatMap(([key, value]) =>
+      value === undefined
+        ? []
+        : (Array.isArray(value) ? value : [value]).map(
+            (item) =>
+              `${encodeURIComponent(key)}=${encodeURIComponent(String(item))}`
+          )
     )
     .join('&');
 }
@@ -77,6 +82,17 @@ export async function getJson<T>(path: string): Promise<T> {
     throw new CoreHttpError(response.status, text);
   }
   return parsed as T;
+}
+
+/**
+ * GET `path` from the node as text (a transaction's raw bytes in base58).
+ * A non-2xx answer throws a CoreHttpError, as `getJson` does.
+ */
+export async function getText(path: string): Promise<string> {
+  const response = await fetch(`${getBaseApiReact()}${path}`);
+  const text = await response.text();
+  if (!response.ok) throw new CoreHttpError(response.status, text);
+  return text;
 }
 
 /** True when `error` is the node saying `status` with Core error `code`. */

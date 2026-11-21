@@ -8,7 +8,6 @@
     "dialog_title": "エクスプローラー",
     "label_address": "アドレス",
     "label_public_key": "公開鍵",
-    "payments_title": "最近の支払い",
     "tooltip_block_public_node": "公開ノードではユーザーのブロックは利用できません。",
     "tooltip_block_self": "自分自身をブロックすることはできません。",
     "tooltip_send_disabled": "これはあなた自身のプロフィールです。"
@@ -881,7 +880,6 @@
       "no_minting_details": "ゲートウェイでミントの詳細を表示できません",
       "no_notification_apps": "通知の許可があるアプリはまだありません。",
       "no_notifications": "新しい通知はありません",
-      "no_payments": "支払いなし",
       "no_pinned_changes": "現在、ピン留めアプリに変更がありません",
       "no_primary_name": "プライマリ名がありません",
       "no_results": "結果はありません",

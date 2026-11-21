@@ -1,15 +1,17 @@
 {
   "account": {
-    "at_address": "See on AT-aadress: programm plokiahelas, mitte konto.",
     "failed": "Seda kontot ei õnnestunud laadida.",
     "invalid": "See ei ole kehtiv Qortali aadress.",
     "name_failed": "Seda nime ei õnnestunud otsida.",
     "no_similar_names": "Ka ükski registreeritud nimi ei alga sellega.",
     "no_such_name": "Kellelgi pole nime „{{name}}“.",
-    "signature": "See näeb välja nagu tehingu allkiri. Explorer avab kontosid: otsi nime või aadressi.",
     "similar_failed": "Sellega algavaid nimesid ei õnnestunud otsida.",
     "similar_names": "Sellega algavad nimed:",
     "unused": "Seda aadressi pole kunagi kasutatud: ükski tehing pole seda veel puudutanud."
+  },
+  "at": {
+    "about": "Automatiseeritud leping (AT): programm plokiahelas, mitte isiklik konto.",
+    "title": "AT-aadress"
   },
   "chip": {
     "dev_admin": "Dev Admin",
@@ -83,6 +85,12 @@
     "public_key_copied": "Avalik võti kopeeriti lõikelauale.",
     "unblocked": "Konto blokeering eemaldatud."
   },
+  "latest": {
+    "all": "kõik tehingud",
+    "failed": "Viimaseid tehinguid ei õnnestunud laadida.",
+    "none": "Kinnitatud tehinguid veel pole.",
+    "title": "viimased tehingud"
+  },
   "minter": {
     "open_app": "ava {{app}}",
     "standing_admin": "Minter Admin ja MINTERi liige.",
@@ -117,20 +125,14 @@
     "title": "märkused"
   },
   "payments": {
-    "failed": "Makseid ei õnnestunud laadida.",
-    "newest_only": "Need on ainult selle uusimad maksed.",
-    "received_from": "saadud saatjalt",
-    "sent_to": "saadetud saajale",
-    "show_more": "näita rohkem",
-    "shown": "Näidatud {{shown}} / {{total}}.",
-    "to_itself": "iseendale"
+    "failed": "Makseid ei õnnestunud laadida."
   },
   "search": {
     "clear": "tühjenda",
     "compact_placeholder": "otsi Explorerist",
     "helper": "Vali soovitus või vajuta Enter, et otsida täpselt seda, mille sisestasid.",
-    "label": "leia konto",
-    "placeholder": "nimi või Q…-aadress"
+    "label": "leia konto või tehing",
+    "placeholder": "nimi, aadress või tehingu allkiri"
   },
   "settings": {
     "remember": "jäta minu uuritud kontod selles seadmes meelde",
@@ -155,13 +157,555 @@
     "owns_names_one": "omab {{shown}} nime",
     "owns_names_other": "omab {{shown}} nime"
   },
+  "tabs": {
+    "label": "konto jaotised",
+    "overview": "ülevaade",
+    "transactions": "tehingud"
+  },
   "trail": {
     "label": "sinu teekond"
+  },
+  "transactions": {
+    "all_kind_one": "Kokku {{shown}} seda liiki tehing.",
+    "all_kind_other": "Kõik {{shown}} seda liiki tehingut.",
+    "all_one": "Kokku {{shown}} tehing.",
+    "all_other": "Kõik selle konto {{shown}} tehingut.",
+    "ceiling": "Explorer loeb iga liigi kohta kuni {{max}} tehingut.",
+    "every_type": "kõik liigid",
+    "failed": "Tehinguid ei õnnestunud laadida.",
+    "kind_label": "näita ainult üht tehinguliiki",
+    "more_failed": "Rohkem tehinguid ei õnnestunud laadida.",
+    "newest_kind_one": "Uusim {{shown}} seda liiki tehing.",
+    "newest_kind_other": "Uusimad {{shown}} seda liiki tehingut.",
+    "newest_one": "Selle konto uusim {{shown}} tehing.",
+    "newest_other": "Selle konto uusimad {{shown}} tehingut.",
+    "none": "Sellel kontol pole veel kinnitatud tehinguid.",
+    "none_kind": "Ükski selle konto kinnitatud tehing pole seda liiki.",
+    "only": "Selle konto ainus tehing.",
+    "only_kind": "Ainus seda liiki tehing.",
+    "refresh_failed": "Ei õnnestunud kontrollida, kas on uuemaid tehinguid.",
+    "show_more": "näita rohkem",
+    "title_all": "kõik tehingud",
+    "type": "liik",
+    "waiting_failed": "Ei õnnestunud kontrollida, millised selle konto saadetud tehingud ootavad plokki.",
+    "waiting_loading": "Kontrollitakse, millised selle konto saadetud tehingud ootavad plokki…",
+    "waiting_note": "Sinu sõlm hoiab neid, kuni need plokki jõuavad. Sellele kontole saadetud tehingud ilmuvad alles siis, kui need on plokis.",
+    "waiting_title": "selle konto saadetud tehingud, mis ootavad kinnitamist ({{n}})",
+    "waiting_title_more": "selle konto saadetud tehingud, mis ootavad kinnitamist (vähemalt {{n}})"
+  },
+  "tx": {
+    "approval": {
+      "approved": "heaks kiidetud",
+      "expired": "õigel ajal heaks kiitmata",
+      "invalid": "kehtetu",
+      "pending": "ootab heakskiitu",
+      "rejected": "tagasi lükatud"
+    },
+    "asset_number": "vara #{{id}}",
+    "creator": "looja",
+    "details_of": "üksikasjad: {{type}}",
+    "field": {
+      "account": "konto",
+      "admin": "administraator",
+      "amount": "summa",
+      "answer": "vastus",
+      "asset": "vara",
+      "at": "AT (automatiseeritud leping)",
+      "at_address": "AT-aadress",
+      "at_kind": "liik",
+      "at_name": "AT-nimi",
+      "change": "muudatus",
+      "data": "andmed",
+      "description": "kirjeldus",
+      "divisible": "jagatav",
+      "encrypted": "krüpteeritud",
+      "funded_with": "rahastus",
+      "group": "rühm",
+      "group_approval": "rühma heakskiit",
+      "identifier": "identifikaator",
+      "invitee": "kutsutu",
+      "level": "tase",
+      "member": "liige",
+      "moved_to": "üle kantud kontole",
+      "name": "nimi",
+      "new_admin": "uus administraator",
+      "new_data": "uued andmed",
+      "new_description": "uus kirjeldus",
+      "new_name": "uus nimi",
+      "new_owner": "uus omanik",
+      "open": "avatud kõigile",
+      "option": "valik",
+      "options": "valikud",
+      "order": "korraldus",
+      "owner": "omanik",
+      "payment": "makse",
+      "poll": "küsitlus",
+      "price": "hind",
+      "quantity": "kogus",
+      "reason": "põhjus",
+      "recipient": "saaja",
+      "seller": "müüja",
+      "service": "teenus",
+      "share": "osakaal",
+      "size": "suurus",
+      "tags": "sildid",
+      "transaction": "tehing"
+    },
+    "incoming": "sissetulev",
+    "not_shown": "(ei näidata)",
+    "open": "ava tehing",
+    "outcome": {
+      "expired": "(ei saanud õigel ajal heakskiitu)",
+      "invalid": "(kehtetu)",
+      "pending": "(ootab rühma heakskiitu)",
+      "rejected": "(rühma heakskiitmisel tagasi lükatud)"
+    },
+    "outgoing": "väljaminev",
+    "people": "seotud kontod",
+    "privs_failed": "Ei õnnestunud lugeda, milline konto mintimise taseme sai.",
+    "raw": "API toorvastus",
+    "raw_caption": "Sinu sõlme vastus JSON-vormingus.",
+    "raw_copied": "Toorvastus kopeeriti lõikelauale.",
+    "raw_copy": "kopeeri toorvastus",
+    "say": {
+      "account_flags": {
+        "in": "Selle konto lipud määrati geneesisplokis",
+        "none": "Konto {{target}} lipud määrati geneesisplokis"
+      },
+      "account_level": {
+        "in": "Sellele kontole määrati geneesisplokis tase {{level}}",
+        "none": "Kontole {{target}} määrati geneesisplokis tase {{level}}"
+      },
+      "add_group_admin": {
+        "in": "{{actor}} tegi selle konto rühma {{group}} administraatoriks",
+        "in_proposed": "{{actor}} tegi ettepaneku teha see konto rühma {{group}} administraatoriks",
+        "none": "{{actor}} tegi konto {{member}} rühma {{group}} administraatoriks",
+        "none_proposed": "{{actor}} tegi ettepaneku teha konto {{member}} rühma {{group}} administraatoriks",
+        "out": "Tegi konto {{member}} rühma {{group}} administraatoriks",
+        "out_proposed": "Tegi ettepaneku teha konto {{member}} rühma {{group}} administraatoriks",
+        "self": {
+          "mine": "Sai rühma {{group}} administraatoriks",
+          "mine_proposed": "Tegi ettepaneku saada rühma {{group}} administraatoriks",
+          "none": "{{actor}} sai rühma {{group}} administraatoriks",
+          "none_proposed": "{{actor}} tegi ettepaneku saada rühma {{group}} administraatoriks"
+        }
+      },
+      "airdrop": {
+        "mine": "Tegi airdropi",
+        "none": "{{actor}} tegi airdropi"
+      },
+      "arbitrary": {
+        "in": "Sai {{amount}} kontolt {{from}} koos QDN-i avaldamisega",
+        "named": {
+          "mine": "Avaldas {{what}} nime „{{name}}“ all",
+          "none": "{{actor}} avaldas {{what}} nime „{{name}}“ all"
+        },
+        "unnamed": {
+          "mine": "Avaldas {{what}}",
+          "none": "{{actor}} avaldas {{what}}"
+        }
+      },
+      "at": {
+        "ran": "{{at}} käivitas oma programmi",
+        "ran_mine": "Käivitas oma programmi"
+      },
+      "buy_name": {
+        "in": "Müüs nime „{{name}}“ kontole {{buyer}} hinnaga {{price}}",
+        "none": "{{actor}} ostis nime „{{name}}“ kontolt {{seller}} hinnaga {{price}}",
+        "out": "Ostis nime „{{name}}“ kontolt {{seller}} hinnaga {{price}}"
+      },
+      "cancel_asset_order": {
+        "mine": "Tühistas vara vahetuskorralduse",
+        "none": "{{actor}} tühistas vara vahetuskorralduse"
+      },
+      "cancel_group_ban": {
+        "in": "{{actor}} tühistas selle konto keelu rühmas {{group}}",
+        "in_proposed": "{{actor}} tegi ettepaneku tühistada selle konto keeld rühmas {{group}}",
+        "none": "{{actor}} tühistas konto {{member}} keelu rühmas {{group}}",
+        "none_proposed": "{{actor}} tegi ettepaneku tühistada konto {{member}} keeld rühmas {{group}}",
+        "out": "Tühistas konto {{member}} keelu rühmas {{group}}",
+        "out_proposed": "Tegi ettepaneku tühistada konto {{member}} keeld rühmas {{group}}"
+      },
+      "cancel_group_invite": {
+        "mine": "Tühistas rühmakutse",
+        "mine_proposed": "Tegi ettepaneku tühistada rühmakutse",
+        "none": "{{actor}} tühistas rühmakutse",
+        "none_proposed": "{{actor}} tegi ettepaneku tühistada rühmakutse"
+      },
+      "cancel_sell_name": {
+        "mine": "Võttis nime „{{name}}“ müügist maha",
+        "none": "{{actor}} võttis nime „{{name}}“ müügist maha"
+      },
+      "chat": {
+        "group": {
+          "mine": "Saatis rühmale vestlussõnumi",
+          "none": "{{actor}} saatis rühmale vestlussõnumi"
+        },
+        "in": "Sai kontolt {{from}} vestlussõnumi",
+        "none": "{{from}} saatis kontole {{to}} vestlussõnumi",
+        "out": "Saatis kontole {{to}} vestlussõnumi"
+      },
+      "create_asset_order": {
+        "mine": "Esitas korralduse vahetada vara {{have}} vara {{want}} vastu",
+        "none": "{{actor}} esitas korralduse vahetada vara {{have}} vara {{want}} vastu"
+      },
+      "create_group": {
+        "mine": "Lõi rühma {{group}}",
+        "none": "{{actor}} lõi rühma {{group}}"
+      },
+      "create_poll": {
+        "for_me": "{{actor}} lõi küsitluse „{{poll}}“, mille omanik on see konto",
+        "mine": "Lõi küsitluse „{{poll}}“",
+        "none": "{{actor}} lõi küsitluse „{{poll}}“",
+        "owned_by": "{{actor}} lõi küsitluse „{{poll}}“, mille omanik on konto {{owner}}",
+        "owned_by_mine": "Lõi küsitluse „{{poll}}“, mille omanik on konto {{owner}}"
+      },
+      "deploy_at": {
+        "in": "{{actor}} lõi selle AT (automatiseeritud lepingu)",
+        "mine": "Lõi AT (automatiseeritud lepingu)",
+        "none": "{{actor}} lõi AT (automatiseeritud lepingu)"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "{{actor}} lülitas sellele kontole sepistamise sisse",
+          "none": "{{actor}} lülitas kontole {{target}} sepistamise sisse",
+          "out": "Lülitas kontole {{target}} sepistamise sisse"
+        },
+        "mine": "Lülitas sepistamise sisse",
+        "none": "{{actor}} lülitas sepistamise sisse"
+      },
+      "generic": {
+        "mine": "Tegi tehingu: {{type}}",
+        "nobody": "Tehing: {{type}}",
+        "none": "{{actor}} tegi tehingu: {{type}}"
+      },
+      "genesis": {
+        "in": "Sai geneesisplokis {{amount}}",
+        "none": "{{to}} sai geneesisplokis {{amount}}"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "Kiitis tehingu {{tx}} heaks",
+          "none": "{{actor}} kiitis tehingu {{tx}} heaks"
+        },
+        "rejected": {
+          "mine": "Lükkas tehingu {{tx}} tagasi",
+          "none": "{{actor}} lükkas tehingu {{tx}} tagasi"
+        }
+      },
+      "group_ban": {
+        "in": "{{actor}} keelas sellele kontole juurdepääsu rühmale {{group}}",
+        "in_proposed": "{{actor}} tegi ettepaneku keelata sellele kontole juurdepääs rühmale {{group}}",
+        "none": "{{actor}} keelas kontole {{member}} juurdepääsu rühmale {{group}}",
+        "none_proposed": "{{actor}} tegi ettepaneku keelata kontole {{member}} juurdepääs rühmale {{group}}",
+        "out": "Keelas kontole {{member}} juurdepääsu rühmale {{group}}",
+        "out_proposed": "Tegi ettepaneku keelata kontole {{member}} juurdepääs rühmale {{group}}"
+      },
+      "group_invite": {
+        "in": "{{actor}} kutsus selle konto rühmasse {{group}}",
+        "in_proposed": "{{actor}} tegi ettepaneku kutsuda see konto rühmasse {{group}}",
+        "none": "{{actor}} kutsus konto {{invitee}} rühmasse {{group}}",
+        "none_proposed": "{{actor}} tegi ettepaneku kutsuda konto {{invitee}} rühmasse {{group}}",
+        "out": "Kutsus konto {{invitee}} rühmasse {{group}}",
+        "out_proposed": "Tegi ettepaneku kutsuda konto {{invitee}} rühmasse {{group}}"
+      },
+      "group_kick": {
+        "in": "{{actor}} eemaldas selle konto rühmast {{group}}",
+        "in_proposed": "{{actor}} tegi ettepaneku eemaldada see konto rühmast {{group}}",
+        "none": "{{actor}} eemaldas konto {{member}} rühmast {{group}}",
+        "none_proposed": "{{actor}} tegi ettepaneku eemaldada konto {{member}} rühmast {{group}}",
+        "out": "Eemaldas konto {{member}} rühmast {{group}}",
+        "out_proposed": "Tegi ettepaneku eemaldada konto {{member}} rühmast {{group}}"
+      },
+      "issue_asset": {
+        "mine": "Väljastas vara „{{asset}}“",
+        "nobody": "Väljastati vara „{{asset}}“",
+        "none": "{{actor}} väljastas vara „{{asset}}“"
+      },
+      "join_group": {
+        "mine": "Liitus rühmaga {{group}} või taotles liitumist",
+        "none": "{{actor}} liitus rühmaga {{group}} või taotles liitumist"
+      },
+      "leave_group": {
+        "mine": "Lahkus rühmast {{group}}",
+        "none": "{{actor}} lahkus rühmast {{group}}"
+      },
+      "message": {
+        "in": "Sai kontolt {{from}} sõnumi",
+        "in_amount": "Sai kontolt {{from}} sõnumi, millega oli kaasas {{amount}}",
+        "none": "{{from}} saatis kontole {{to}} sõnumi",
+        "none_amount": "{{from}} saatis kontole {{to}} sõnumi, millega oli kaasas {{amount}}",
+        "none_nobody": "{{from}} saatis sõnumi",
+        "out": "Saatis kontole {{to}} sõnumi",
+        "out_amount": "Saatis kontole {{to}} sõnumi, millega oli kaasas {{amount}}",
+        "out_nobody": "Saatis sõnumi"
+      },
+      "multi": {
+        "in_one": "Sai {{amount}} kontolt {{from}} osana maksest {{accounts}} kontole",
+        "in_other": "Sai {{amount}} kontolt {{from}} osana maksest {{accounts}} kontole",
+        "none_one": "{{actor}} maksis ühe maksega {{accounts}} kontole kokku {{amount}}",
+        "none_other": "{{actor}} maksis ühe maksega {{accounts}} kontole kokku {{amount}}",
+        "out_one": "Maksis ühe maksega {{accounts}} kontole kokku {{amount}}",
+        "out_other": "Maksis ühe maksega {{accounts}} kontole kokku {{amount}}"
+      },
+      "payment_line": "{{amount}} kontole {{to}}",
+      "presence": {
+        "minting": {
+          "mine": "Andis teada, et on võrgus (mintimine)",
+          "none": "{{actor}} andis teada, et on võrgus (mintimine)"
+        },
+        "trade_bot": {
+          "mine": "Andis teada, et on võrgus (kauplemisrobot)",
+          "none": "{{actor}} andis teada, et on võrgus (kauplemisrobot)"
+        }
+      },
+      "publicize": {
+        "mine": "Avaldas oma avaliku võtme",
+        "none": "{{actor}} avaldas oma avaliku võtme"
+      },
+      "register_name": {
+        "mine": "Registreeris nime „{{name}}“",
+        "none": "{{actor}} registreeris nime „{{name}}“"
+      },
+      "remove_group_admin": {
+        "in": "{{actor}} eemaldas selle konto rühma {{group}} administraatorite seast",
+        "in_proposed": "{{actor}} tegi ettepaneku eemaldada see konto rühma {{group}} administraatorite seast",
+        "none": "{{actor}} eemaldas konto {{member}} rühma {{group}} administraatorite seast",
+        "none_proposed": "{{actor}} tegi ettepaneku eemaldada konto {{member}} rühma {{group}} administraatorite seast",
+        "out": "Eemaldas konto {{member}} rühma {{group}} administraatorite seast",
+        "out_proposed": "Tegi ettepaneku eemaldada konto {{member}} rühma {{group}} administraatorite seast",
+        "self": {
+          "mine": "Loobus rühma {{group}} administraatori kohast",
+          "mine_proposed": "Tegi ettepaneku loobuda rühma {{group}} administraatori kohast",
+          "none": "{{actor}} loobus rühma {{group}} administraatori kohast",
+          "none_proposed": "{{actor}} tegi ettepaneku loobuda rühma {{group}} administraatori kohast"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "{{actor}} eemaldas oma preemia jagamise selle kontoga",
+          "none": "{{actor}} eemaldas preemia jagamise kontoga {{other}}",
+          "out": "Eemaldas preemia jagamise kontoga {{other}}"
+        },
+        "self_start": "{{actor}} alustas mintimist (preemia jagamine iseendaga)",
+        "self_start_mine": "Alustas mintimist (preemia jagamine iseendaga)",
+        "self_stop": "{{actor}} lõpetas mintimise (eemaldas preemia jagamise iseendaga)",
+        "self_stop_mine": "Lõpetas mintimise (eemaldas preemia jagamise iseendaga)",
+        "started": {
+          "in": "{{actor}} alustas selle kontoga preemia jagamist määraga {{percent}}",
+          "none": "{{actor}} alustas kontoga {{other}} preemia jagamist määraga {{percent}}",
+          "out": "Alustas kontoga {{other}} preemia jagamist määraga {{percent}}"
+        }
+      },
+      "sell_name": {
+        "mine": "Pani nime „{{name}}“ müüki hinnaga {{price}}",
+        "none": "{{actor}} pani nime „{{name}}“ müüki hinnaga {{price}}"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "Eemaldas oma vaikerühma",
+          "none": "{{actor}} eemaldas oma vaikerühma"
+        },
+        "set": {
+          "mine": "Määras oma vaikerühmaks rühma {{group}}",
+          "none": "{{actor}} määras oma vaikerühmaks rühma {{group}}"
+        }
+      },
+      "transfer": {
+        "in": "Sai {{amount}} kontolt {{from}}",
+        "none": "{{from}} saatis {{amount}} kontole {{to}}",
+        "out": "Saatis {{amount}} kontole {{to}}",
+        "self": "{{actor}} saatis {{amount}} iseendale",
+        "self_mine": "Saatis {{amount}} iseendale"
+      },
+      "transfer_privs": {
+        "in": "Sai oma mintimise taseme kontolt {{from}}",
+        "none": "{{actor}} kandis oma mintimise taseme üle kontole {{to}}",
+        "none_unknown": "{{actor}} kandis oma mintimise taseme üle teisele kontole",
+        "out": "Kandis oma mintimise taseme üle kontole {{to}}",
+        "out_unknown": "Kandis oma mintimise taseme üle teisele kontole"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "Uuendas vara {{asset}} andmeid",
+          "none": "{{actor}} uuendas vara {{asset}} andmeid"
+        },
+        "owner": {
+          "in": "{{actor}} andis vara {{asset}} üle sellele kontole",
+          "none": "{{actor}} andis vara {{asset}} üle kontole {{new_owner}}",
+          "out": "Andis vara {{asset}} üle kontole {{new_owner}}"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "{{actor}} tegi selle konto rühma {{group}} omanikuks",
+          "in_proposed": "{{actor}} tegi ettepaneku teha see konto rühma {{group}} omanikuks",
+          "none": "{{actor}} tegi konto {{new_owner}} rühma {{group}} omanikuks",
+          "none_proposed": "{{actor}} tegi ettepaneku teha konto {{new_owner}} rühma {{group}} omanikuks",
+          "out": "Tegi konto {{new_owner}} rühma {{group}} omanikuks",
+          "out_proposed": "Tegi ettepaneku teha konto {{new_owner}} rühma {{group}} omanikuks"
+        },
+        "settings": {
+          "mine": "Uuendas rühma {{group}} seadeid",
+          "mine_proposed": "Tegi ettepaneku uuendada rühma {{group}} seadeid",
+          "none": "{{actor}} uuendas rühma {{group}} seadeid",
+          "none_proposed": "{{actor}} tegi ettepaneku uuendada rühma {{group}} seadeid"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "Uuendas nime „{{name}}“ andmeid",
+          "none": "{{actor}} uuendas nime „{{name}}“ andmeid"
+        },
+        "renamed": {
+          "mine": "Muutis nime „{{name}}“ nimeks „{{new_name}}“",
+          "none": "{{actor}} muutis nime „{{name}}“ nimeks „{{new_name}}“"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "Hääletas küsitluses „{{poll}}“",
+        "none": "{{actor}} hääletas küsitluses „{{poll}}“"
+      }
+    },
+    "service": {
+      "app": "rakenduse",
+      "arbitrary_data": "andmed",
+      "attachment": "manuse",
+      "audio": "helifaili",
+      "auto_update": "Core'i uuenduse",
+      "blog": "blogi",
+      "blog_comment": "blogikommentaari",
+      "blog_post": "blogipostituse",
+      "chain_comment": "plokiahela kommentaari",
+      "chain_data": "plokiahela andmed",
+      "code": "koodi",
+      "comment": "kommentaari",
+      "coupon": "kupongi",
+      "database": "andmebaasi",
+      "document": "dokumendi",
+      "encrypted": "krüpteeritud ressursi",
+      "extension": "laienduse",
+      "file": "faili",
+      "files": "failid",
+      "game": "mängu",
+      "gif_repository": "GIF-kogu",
+      "git_repository": "Git-hoidla",
+      "image": "pildi",
+      "item": "eseme",
+      "json": "JSON-andmed",
+      "list": "loendi",
+      "message": "sõnumi",
+      "metadata": "metaandmed",
+      "nft": "NFT",
+      "offer": "pakkumise",
+      "playlist": "esitusloendi",
+      "plugin": "pistikprogrammi",
+      "podcast": "taskuhäälingu",
+      "product": "toote",
+      "qchat_attachment": "Q-Chati manuse",
+      "qchat_audio": "Q-Chati helifaili",
+      "qchat_image": "Q-Chati pildi",
+      "qchat_voice": "Q-Chati häälsõnumi",
+      "snapshot": "hetktõmmise",
+      "store": "poe",
+      "thumbnail": "pisipildi",
+      "unknown": "QDN-ressursi",
+      "video": "video",
+      "voice": "häälsalvestise",
+      "website": "veebilehe"
+    },
+    "show_all_one": "näita kõiki {{count}}",
+    "show_all_other": "näita kõiki {{count}}",
+    "unknown_account": "(teadmata)",
+    "value": {
+      "approve": "heakskiit",
+      "flags": "AND {{and}}, OR {{or}}, XOR {{xor}}",
+      "no": "ei",
+      "option": "valik {{n}}",
+      "reject": "tagasilükkamine",
+      "removed": "eemaldatud",
+      "yes": "jah"
+    },
+    "when_block": "{{time}} · plokk {{block}}",
+    "when_waiting": "ootab kinnitamist · saadetud {{ago}}"
+  },
+  "tx_family": {
+    "all": "kõik",
+    "groups": "rühmad",
+    "messages": "sõnumid",
+    "minting": "mintimine",
+    "names": "nimed",
+    "other": "muu",
+    "payments": "maksed",
+    "qdn": "QDN-andmed",
+    "trading": "kauplemine"
+  },
+  "tx_page": {
+    "about": "selle tehingu kohta",
+    "answers": "tehing, millele see vastab",
+    "answers_failed": "Tehingut, millele see vastab, ei õnnestunud laadida.",
+    "answers_unknown": "Sinu sõlmes pole tehingut, millele see vastab.",
+    "block": "plokk",
+    "copy_signature": "kopeeri allkiri",
+    "details": "üksikasjad",
+    "failed": "Seda tehingut ei õnnestunud laadida.",
+    "fee": "tasu",
+    "open_answered": "ava see tehing",
+    "sent": "saadetud",
+    "signature": "allkiri",
+    "signature_copied": "Allkiri kopeeriti lõikelauale.",
+    "time": "aeg",
+    "unknown": "Sinu sõlmes pole selle allkirjaga tehingut.",
+    "unknown_hint": "See ei pruugi olla veel sinu sõlme jõudnud või võib mõni märk olla vale.",
+    "waiting": "ootab kinnitamist"
+  },
+  "tx_type": {
+    "account_flags": "konto lipud",
+    "account_level": "konto tase",
+    "add_group_admin": "rühma administraator lisatud",
+    "airdrop": "airdrop",
+    "arbitrary": "QDN-i avaldamine",
+    "at": "AT-tehing",
+    "buy_name": "nime ost",
+    "cancel_asset_order": "vara vahetuskorraldus tühistatud",
+    "cancel_group_ban": "rühmakeeld tühistatud",
+    "cancel_group_invite": "rühmakutse tühistatud",
+    "cancel_sell_name": "nime müük tühistatud",
+    "chat": "vestlussõnum",
+    "create_asset_order": "vara vahetuskorraldus",
+    "create_group": "rühm loodud",
+    "create_poll": "küsitlus loodud",
+    "deploy_at": "AT loodud",
+    "enable_forging": "sepistamine sisse lülitatud",
+    "genesis": "geneesisploki eraldis",
+    "group_approval": "rühma heakskiit",
+    "group_ban": "rühmakeeld",
+    "group_invite": "rühmakutse",
+    "group_kick": "rühmast eemaldamine",
+    "issue_asset": "vara väljastatud",
+    "join_group": "rühmaga liitumine",
+    "leave_group": "rühmast lahkumine",
+    "message": "sõnum",
+    "multi_payment": "mitmikmakse",
+    "payment": "makse",
+    "presence": "kohalolek",
+    "publicize": "avalik võti avaldatud",
+    "register_name": "nime registreerimine",
+    "remove_group_admin": "rühma administraator eemaldatud",
+    "reward_share": "preemia jagamine",
+    "sell_name": "nimi müüki pandud",
+    "set_group": "vaikerühm määratud",
+    "transfer_asset": "vara ülekanne",
+    "transfer_privs": "mintimise taseme ülekanne",
+    "update_asset": "vara uuendus",
+    "update_group": "rühma uuendus",
+    "update_name": "nime uuendus",
+    "vote_on_poll": "küsitluses hääletamine"
   },
   "window": {
     "forward": "edasi",
     "full": "laienda kogu aknale",
     "leave_full": "taasta tavasuurus",
-    "subtitle": "Otsi mis tahes Qortali kontot"
+    "subtitle": "Otsi mis tahes Qortali kontot või tehingut"
   }
 }

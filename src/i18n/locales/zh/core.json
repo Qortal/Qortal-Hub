@@ -8,7 +8,6 @@
     "dialog_title": "区块浏览器",
     "label_address": "地址",
     "label_public_key": "公钥",
-    "payments_title": "最近付款",
     "tooltip_block_public_node": "在公共节点上无法屏蔽用户。",
     "tooltip_block_self": "您不能屏蔽自己。",
     "tooltip_send_disabled": "这是您自己的资料。"
@@ -881,7 +880,6 @@
       "no_minting_details": "无法在网关上查看薄荷细节",
       "no_notification_apps": "还没有应用拥有通知权限。",
       "no_notifications": "没有新的通知",
-      "no_payments": "无付款",
       "no_pinned_changes": "您目前对固定应用程序没有任何更改",
       "no_primary_name": "没有主要名称",
       "no_results": "没有结果",

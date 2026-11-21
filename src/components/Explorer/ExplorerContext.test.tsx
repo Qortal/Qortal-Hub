@@ -24,6 +24,7 @@ function contextWith(): ExplorerContextValue {
     version: 0,
     viewer: null,
     openAccount: vi.fn(),
+    openTransaction: vi.fn(),
     refresh: vi.fn(),
     close: vi.fn(),
   };

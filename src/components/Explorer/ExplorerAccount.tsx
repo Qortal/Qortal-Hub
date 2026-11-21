@@ -2,18 +2,22 @@
  * One account in the Explorer. `who` is an address, or a name: a name is
  * looked up and the view switches to its owner's address, carrying the
  * name, so the header can say which name it came from. A name no one has,
- * an address the node rejects, an address never used, an AT address and a
- * transaction signature each get a page of their own; a failed read gets
- * Retry. Read-only: nothing here writes (Send QORT and Block hand over to
- * Hub's own windows and lists).
+ * an address the node rejects and an address never used each get a page of
+ * their own; a failed read gets Retry. An AT address (a program on the
+ * chain) opens a page with its transactions only. (A transaction signature
+ * is a step of its own: ExplorerWindow opens it in TxView.)
+ *
+ * An account's page is its header, the trail, then its tabs (AccountTabs):
+ * Overview and Transactions. Each tab reads what it shows when it opens.
+ * Read-only: nothing here writes (Send QORT and Block hand over to Hub's
+ * own windows and lists).
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Box, ButtonBase, CircularProgress, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import {
   isAtAddress,
   isQortAddress,
-  isSignature,
   looksLikeAddress,
 } from '../../lib/explorer/addresses';
 import {
@@ -29,30 +33,51 @@ import {
   primaryNameRead,
   recentPaymentsRead,
   type AccountInfo,
+  type GroupOf,
+  type NamesOf,
+  type OnlineShare,
 } from '../../lib/explorer/reads';
 import {
   minterStandingOf,
   mintingNowOf,
   visibleName,
 } from '../../lib/explorer/rules';
+import { ALL_TRANSACTIONS, type TxFilter } from '../../lib/explorer/txFamilies';
 import { AccountHeader, type NameMatch } from './AccountHeader';
-import { useExplorer, useExplorerRead } from './ExplorerContext';
+import {
+  AccountTabPanel,
+  AccountTabs,
+  focusTab,
+  tabsFor,
+  useAccountTab,
+  type AccountPage,
+  type AccountTabDef,
+  type AccountTabId,
+} from './AccountTabs';
+import {
+  useExplorer,
+  useExplorerRead,
+  useStepState,
+  type ReadState,
+} from './ExplorerContext';
 import { ExplorerAvatar } from './ExplorerSearchField';
 import { ExplorerTrail } from './ExplorerTrail';
 import { AtAGlance } from './overview/AtAGlance';
 import { GroupsSection } from './overview/GroupsSection';
 import { MinterSection, MintingSection } from './overview/MinterAndMinting';
 import { NotesSection } from './overview/NotesSection';
+import { LatestTransactions } from './overview/LatestTransactions';
 import { OverviewSummary } from './overview/OverviewSummary';
-import { RecentPayments } from './overview/RecentPayments';
 import {
   cap,
+  CopyButton,
   isolate,
   LoadingLine,
   mutedText,
   panelSx,
   ReadError,
 } from './parts';
+import { TransactionsTab } from './transactions/TransactionsTab';
 
 function Message({
   title,
@@ -155,50 +180,64 @@ function NamesStartingWith({ text }: { text: string }) {
   );
 }
 
-/** An account that exists: its header, the trail, then its Overview. */
-function AccountView({
+/**
+ * The tab bar and the tab on screen; a page with one tab (an AT) shows it
+ * without a bar.
+ */
+function TabsView({
+  tabs,
+  render,
+}: {
+  tabs: readonly AccountTabDef[];
+  render: (tab: AccountTabId, open: (tab: AccountTabId) => void) => ReactNode;
+}) {
+  const [tab, setTab] = useAccountTab(tabs);
+  const open = (next: AccountTabId) => {
+    setTab(next);
+    focusTab(next);
+  };
+  if (tabs.length < 2) return <>{render(tab, open)}</>;
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+      <AccountTabs tabs={tabs} tab={tab} onChange={setTab} />
+      <AccountTabPanel id={tab}>{render(tab, open)}</AccountTabPanel>
+    </Box>
+  );
+}
+
+/** undefined while loading, null when it failed. */
+const part = <T,>(read: { data: T | undefined; status: string }) =>
+  read.data !== undefined
+    ? read.data
+    : read.status === 'error'
+      ? null
+      : undefined;
+
+/** The Overview: its reads start when it opens. */
+function OverviewTab({
   account,
-  openedBy,
-  trail,
+  primary,
+  names,
+  groups,
+  online,
+  onShowTransactions,
 }: {
   account: AccountInfo;
-  openedBy: NameMatch | null;
-  trail: string[];
+  primary: string | null | undefined;
+  names: ReadState<NamesOf>;
+  groups: ReadState<GroupOf[]>;
+  online: ReadState<OnlineShare[]>;
+  onShowTransactions: () => void;
 }) {
   const { address, publicKey } = account;
-  const primary = useExplorerRead(primaryNameRead(address));
-  const names = useExplorerRead(namesOfRead(address));
-  const groups = useExplorerRead(groupsOfRead(address));
-  const online = useExplorerRead(onlineRead());
-  const devAdmins = useExplorerRead(devAdminsRead());
   const firstSeen = useExplorerRead(firstSeenRead(address));
   const lastSent = useExplorerRead(
     publicKey ? lastSentRead(address, publicKey) : null
   );
   const payments = useExplorerRead(recentPaymentsRead(address));
-
-  /** undefined while loading, null when it failed. */
-  const part = <T,>(read: { data: T | undefined; status: string }) =>
-    read.data !== undefined
-      ? read.data
-      : read.status === 'error'
-        ? null
-        : undefined;
-
   const standing = groups.data ? minterStandingOf(groups.data) : undefined;
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <AccountHeader
-        account={account}
-        primary={primary.data}
-        onRetryPrimary={primary.status === 'error' ? primary.retry : null}
-        names={names.data}
-        standing={standing}
-        devAdmin={Boolean(devAdmins.data?.includes(address))}
-        minting={online.data ? mintingNowOf(online.data, address) : undefined}
-        openedBy={openedBy}
-      />
-      <ExplorerTrail trail={trail} />
+    <>
       <OverviewSummary
         level={account.level}
         standing={groups.status === 'error' ? null : standing}
@@ -222,21 +261,133 @@ function AccountView({
       <NotesSection
         address={address}
         penalty={account.blocksMintedPenalty}
-        primary={primary.data ?? null}
+        primary={primary ?? null}
       />
-      <RecentPayments owner={address} read={payments} />
+      <LatestTransactions address={address} onShowAll={onShowTransactions} />
+    </>
+  );
+}
+
+/** An account that exists: its header, the trail, then its tabs. */
+function AccountView({
+  account,
+  openedBy,
+  trail,
+}: {
+  account: AccountInfo;
+  openedBy: NameMatch | null;
+  trail: string[];
+}) {
+  const { address, publicKey } = account;
+  const primary = useExplorerRead(primaryNameRead(address));
+  const names = useExplorerRead(namesOfRead(address));
+  const groups = useExplorerRead(groupsOfRead(address));
+  const online = useExplorerRead(onlineRead());
+  const devAdmins = useExplorerRead(devAdminsRead());
+  // The Transactions tab's filter, kept by the step: "All transactions" shows every kind.
+  const [, setTxFilter] = useStepState<TxFilter>('txFilter', ALL_TRANSACTIONS);
+
+  const standing = groups.data ? minterStandingOf(groups.data) : undefined;
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <AccountHeader
+        account={account}
+        primary={primary.data}
+        onRetryPrimary={primary.status === 'error' ? primary.retry : null}
+        names={names.data}
+        standing={standing}
+        devAdmin={Boolean(devAdmins.data?.includes(address))}
+        minting={online.data ? mintingNowOf(online.data, address) : undefined}
+        openedBy={openedBy}
+      />
+      <ExplorerTrail trail={trail} />
+      <TabsView
+        tabs={tabsFor({ page: 'account' })}
+        render={(tab, open) =>
+          tab === 'transactions' ? (
+            <TransactionsTab address={address} publicKey={publicKey} />
+          ) : (
+            <OverviewTab
+              account={account}
+              primary={primary.data}
+              names={names}
+              groups={groups}
+              online={online}
+              onShowTransactions={() => {
+                setTxFilter(ALL_TRANSACTIONS);
+                open('transactions');
+              }}
+            />
+          )
+        }
+      />
     </Box>
   );
 }
 
-/** An address: whether the node knows it, and the account if it does. */
+/** An AT (a program on the chain): what it is, its address, then its transactions. */
+function AtView({ address, trail }: { address: string; trail: string[] }) {
+  const { t } = useTranslation(['core', 'explorer', 'group']);
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        <Typography
+          component="h2"
+          sx={{
+            fontSize: { xs: '1.15rem', sm: '1.3rem' },
+            fontWeight: 700,
+            lineHeight: 1.25,
+          }}
+        >
+          {t('explorer:at.title', cap)}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={(theme) => ({ color: mutedText(theme) })}
+        >
+          {t('explorer:at.about', cap)}
+        </Typography>
+        <Box
+          sx={{ alignItems: 'center', display: 'flex', gap: 0.5, minWidth: 0 }}
+        >
+          <Typography
+            component="span"
+            variant="body2"
+            sx={{
+              fontFamily: 'monospace',
+              fontSize: '0.82rem',
+              minWidth: 0,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {address}
+          </Typography>
+          <CopyButton
+            value={address}
+            label={t('core:message.generic.copy_address', cap)}
+            copiedMessage={t('group:home.address_copied', cap)}
+          />
+        </Box>
+      </Box>
+      <ExplorerTrail trail={trail} />
+      <TabsView
+        tabs={tabsFor({ page: 'at' })}
+        render={() => <TransactionsTab address={address} publicKey={null} />}
+      />
+    </Box>
+  );
+}
+
+/** An address: whether the node knows it, and the account (or the AT) if it does. */
 function AddressView({
   address,
+  page,
   openedBy,
   trail,
   onShown,
 }: {
   address: string;
+  page: AccountPage;
   openedBy: NameMatch | null;
   trail: string[];
   onShown: (address: string) => void;
@@ -273,6 +424,7 @@ function AddressView({
         <Mono text={address} />
       </Message>
     );
+  if (page === 'at') return <AtView address={address} trail={trail} />;
   return (
     <AccountView
       account={explored.data.account}
@@ -341,27 +493,15 @@ export function ExplorerAccount({
   onNameResolved: (owner: string, match: NameMatch) => void;
   onShown: (address: string) => void;
 }) {
-  const { t } = useTranslation(['explorer']);
-  if (isQortAddress(who))
+  if (isQortAddress(who) || isAtAddress(who))
     return (
       <AddressView
         address={who}
+        page={isAtAddress(who) ? 'at' : 'account'}
         openedBy={openedBy}
         trail={trail}
         onShown={onShown}
       />
-    );
-  if (isAtAddress(who))
-    return (
-      <Message title={t('explorer:account.at_address', cap)}>
-        <Mono text={who} />
-      </Message>
-    );
-  if (isSignature(who))
-    return (
-      <Message title={t('explorer:account.signature', cap)}>
-        <Mono text={who} />
-      </Message>
     );
   return <NameView key={who} name={who} onResolved={onNameResolved} />;
 }

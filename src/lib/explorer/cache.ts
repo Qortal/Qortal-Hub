@@ -12,6 +12,9 @@
  * - After `clear` or `forget`, a read started before it isn't kept.
  * - Every part showing a key hears of a new answer for it (`subscribe`),
  *   so Retry pressed in one place fixes the others too.
+ * - `put` keeps a value worked out on screen (a list grown by Show more) as
+ *   the key's newest answer; a read of the key still on its way is then
+ *   not kept.
  */
 
 export interface ExplorerReadOptions {
@@ -29,6 +32,8 @@ export interface ExplorerCache {
   ): Promise<T>;
   /** The kept answer for `key`, if it is still fresh. */
   peek<T>(key: string): T | undefined;
+  /** Keep `value` as the newest answer for `key`, telling every part showing it. */
+  put<T>(key: string, value: T, options?: ExplorerReadOptions): void;
   /** Be told when a new answer for `key` is kept; returns the way to stop. */
   subscribe(key: string, listener: () => void): () => void;
   /** Drop the answers whose key `matches` (Refresh on one account). */
@@ -105,6 +110,18 @@ export function createExplorerCache(
 
     peek<T>(key: string): T | undefined {
       return fresh(key)?.value as T | undefined;
+    },
+
+    put<T>(
+      key: string,
+      value: T,
+      { ttlMs = DEFAULT_TTL_MS }: ExplorerReadOptions = {}
+    ) {
+      // A read of the key still on its way read the node before this: not kept.
+      latest.delete(key);
+      pending.delete(key);
+      kept.set(key, { value, at: now(), ttlMs });
+      for (const listener of [...(listeners.get(key) ?? [])]) listener();
     },
 
     subscribe(key: string, listener: () => void) {

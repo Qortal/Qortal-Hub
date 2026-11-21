@@ -33,6 +33,14 @@ const COUNTED: Array<[string, string]> = [
   ['explorer:notes.name_invisible', 'count'],
   ['explorer:summary.owns_names', 'shown'],
   ['explorer:summary.owns_names_more', 'shown'],
+  ['explorer:transactions.all', 'shown'],
+  ['explorer:transactions.all_kind', 'shown'],
+  ['explorer:transactions.newest', 'shown'],
+  ['explorer:transactions.newest_kind', 'shown'],
+  ['explorer:tx.say.multi.in', 'accounts'],
+  ['explorer:tx.say.multi.none', 'accounts'],
+  ['explorer:tx.say.multi.out', 'accounts'],
+  ['explorer:tx.show_all', 'count'],
 ];
 
 const original = i18n.language;

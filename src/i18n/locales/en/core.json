@@ -8,7 +8,6 @@
     "dialog_title": "Explorer",
     "label_address": "Address",
     "label_public_key": "Public key",
-    "payments_title": "Recent payments",
     "tooltip_block_public_node": "Blocking users is unavailable while running on a public node.",
     "tooltip_block_self": "You cannot block yourself.",
     "tooltip_send_disabled": "This is your own profile."
@@ -881,7 +880,6 @@
       "no_minting_details": "cannot view minting details on the gateway",
       "no_notification_apps": "No apps have notification permission yet.",
       "no_notifications": "no new notifications",
-      "no_payments": "no payments",
       "no_pinned_changes": "you currently do not have any changes to your pinned apps",
       "no_primary_name": "no primary name",
       "no_results": "no results",

@@ -1,7 +1,8 @@
 /**
- * One field for any account: a name or a Q-address. Names are suggested
- * from 2 letters (the node's name search); Enter looks up exactly what was
- * typed, and a suggestion opens that name.
+ * One field for any account or transaction: a name, an address (Q… or an
+ * AT's A…) or a transaction signature. Names are suggested from 2 letters
+ * (the node's name search; not for an address or a signature); Enter looks
+ * up exactly what was typed, and a suggestion opens that name.
  */
 import { useState } from 'react';
 import {
@@ -17,7 +18,11 @@ import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../App';
 import { useNameSearch } from '../../hooks/useNameSearch';
-import { isQortAddress } from '../../lib/explorer/addresses';
+import {
+  isAtAddress,
+  isQortAddress,
+  isSignature,
+} from '../../lib/explorer/addresses';
 import { seg } from '../../lib/explorer/core';
 import { visibleName } from '../../lib/explorer/rules';
 import { cap } from './parts';
@@ -80,13 +85,20 @@ export function ExplorerSearchField({
   const { t } = useTranslation(['core', 'explorer']);
   const [input, setInput] = useState('');
   const typed = input.trim();
-  const { results, isLoading } = useNameSearch(typed, SUGGESTIONS, {
-    minLength: 2,
-  });
-  const options =
-    typed.length >= 2 && !isQortAddress(typed)
-      ? results.map((row) => row.name).filter(Boolean)
-      : [];
+  // An address or a signature is looked up as it is: no names to suggest.
+  const nameLike =
+    typed.length >= 2 &&
+    !isQortAddress(typed) &&
+    !isAtAddress(typed) &&
+    !isSignature(typed);
+  const { results, isLoading } = useNameSearch(
+    nameLike ? typed : '',
+    SUGGESTIONS,
+    { minLength: 2 }
+  );
+  const options = nameLike
+    ? results.map((row) => row.name).filter(Boolean)
+    : [];
 
   const lookUp = (value: string) => {
     const who = value.trim();
@@ -110,7 +122,7 @@ export function ExplorerSearchField({
       onChange={(_event, value) => {
         if (typeof value === 'string') lookUp(value);
       }}
-      loading={isLoading && options.length === 0 && typed.length >= 2}
+      loading={isLoading && options.length === 0 && nameLike}
       loadingText={t('core:loading.generic', cap)}
       clearText={t('explorer:search.clear', cap)}
       size={compact ? 'small' : 'medium'}
@@ -159,7 +171,7 @@ export function ExplorerSearchField({
             ),
             endAdornment: (
               <>
-                {isLoading && typed.length >= 2 ? (
+                {isLoading && nameLike ? (
                   <CircularProgress size={16} sx={{ mr: 1 }} />
                 ) : null}
                 {params.InputProps.endAdornment}

@@ -82,4 +82,19 @@ describe('createExplorerCache', () => {
     await read;
     expect(cache.peek('key')).toBeUndefined();
   });
+
+  it('keeps a value put on screen, tells those showing it, and keeps no read older than it', async () => {
+    const cache = createExplorerCache();
+    const heard = vi.fn();
+    cache.subscribe('key', heard);
+    const slow = later();
+    const reading = cache.read('key', () => slow.promise);
+    cache.put('key', 'grown');
+    expect(cache.peek('key')).toBe('grown');
+    expect(heard).toHaveBeenCalledTimes(1);
+    slow.resolve('read before');
+    await reading;
+    expect(cache.peek('key')).toBe('grown');
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
 });

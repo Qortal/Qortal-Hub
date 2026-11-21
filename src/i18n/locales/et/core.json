@@ -8,7 +8,6 @@
     "dialog_title": "Explorer",
     "label_address": "Aadress",
     "label_public_key": "Avalik võti",
-    "payments_title": "Viimased maksed",
     "tooltip_block_public_node": "Kasutajate blokeerimine pole avaliku sõlme režiimis saadaval.",
     "tooltip_block_self": "Sa ei saa iseennast blokeerida.",
     "tooltip_send_disabled": "See on sinu enda profiil."
@@ -881,7 +880,6 @@
       "no_minting_details": "mintimise andmeid pole võimalik värava kaudu vaadata",
       "no_notification_apps": "Ühelgi rakendusel pole veel teavituste luba.",
       "no_notifications": "teavitusi pole",
-      "no_payments": "makseid pole",
       "no_pinned_changes": "sul pole praegu kinnitatud rakenduste muudatusi",
       "no_primary_name": "peamine nimi puudub",
       "no_results": "tulemusi pole",

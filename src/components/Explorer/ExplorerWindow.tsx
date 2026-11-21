@@ -7,6 +7,11 @@
  *
  * The window keeps what it read (its own cache) until it closes or Hub's
  * signed-in account changes; then it starts again from its start page.
+ *
+ * Its history is a list of steps: the start page, an account, or one
+ * transaction (a signature typed, sent by the event, or opened from a
+ * row). Each step keeps what it showed (the tab, a filter: useStepState),
+ * so Back and Forward show it as it was left.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -43,23 +48,31 @@ import {
   readRemember,
   writeRemember,
 } from '../../lib/explorer/recent';
-import { isQortAddress } from '../../lib/explorer/addresses';
+import {
+  isAtAddress,
+  isQortAddress,
+  isSignature,
+} from '../../lib/explorer/addresses';
 import { nextTrail } from '../../lib/explorer/rules';
 import type { NameMatch } from './AccountHeader';
 import { ExplorerAccount } from './ExplorerAccount';
 import {
   ExplorerContext,
+  ExplorerStepContext,
   type ExplorerContextValue,
   type OpenAccountOptions,
+  type StepState,
 } from './ExplorerContext';
 import { ExplorerSearchField } from './ExplorerSearchField';
 import { ExplorerStart } from './ExplorerStart';
 import { cap, mutedText } from './parts';
+import { TxView } from './transactions/TxView';
 
 type View =
-  | { kind: 'start' }
+  | { kind: 'start'; id: number; state: StepState }
   | {
       kind: 'account';
+      id: number;
       who: string;
       fromExplorer: boolean;
       openedBy: NameMatch | null;
@@ -67,6 +80,15 @@ type View =
       trailBefore: string[];
       /** Its own trail, once the account is known: Back shows it as it was. */
       trail: string[] | null;
+      state: StepState;
+    }
+  | {
+      kind: 'tx';
+      id: number;
+      signature: string;
+      /** The trail it was opened from: an account opened from it goes on from there. */
+      trail: string[];
+      state: StepState;
     };
 
 interface History {
@@ -74,7 +96,18 @@ interface History {
   index: number;
 }
 
-const START: History = { views: [{ kind: 'start' }], index: 0 };
+const START: History = {
+  views: [{ kind: 'start', id: 0, state: {} }],
+  index: 0,
+};
+
+/** The trail a step shows (or that an account opened from it goes on from). */
+const trailOf = (view: View | undefined): string[] =>
+  view?.kind === 'account'
+    ? (view.trail ?? [])
+    : view?.kind === 'tx'
+      ? view.trail
+      : [];
 
 /**
  * Hub's body2 is larger than its body text, and its buttons are in capitals:
@@ -112,6 +145,8 @@ export function ExplorerWindow({
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
   const view = history.views[history.index] ?? START.views[0];
+  /** Each step gets its own id: what it keeps is found by it. */
+  const lastId = useRef(0);
 
   /** Start again: nothing read, nothing on the trail, the start page. */
   const reset = useCallback(() => {
@@ -139,18 +174,34 @@ export function ExplorerWindow({
       const trimmed = who.trim();
       if (!trimmed) return;
       setMenuAnchor(null);
+      lastId.current += 1;
+      const id = lastId.current;
       setHistory((current) => {
         const here = current.views[current.index];
-        // Already on screen: not a step more.
-        if (here?.kind === 'account' && here.who === trimmed) return current;
-        const next: View = {
-          kind: 'account',
-          who: trimmed,
-          fromExplorer: Boolean(options.fromExplorer),
-          openedBy: null,
-          trailBefore: here?.kind === 'account' ? (here.trail ?? []) : [],
-          trail: null,
-        };
+        let next: View;
+        if (isSignature(trimmed)) {
+          // Already on screen: not a step more.
+          if (here?.kind === 'tx' && here.signature === trimmed) return current;
+          next = {
+            kind: 'tx',
+            id,
+            signature: trimmed,
+            trail: options.fromExplorer ? trailOf(here) : [],
+            state: {},
+          };
+        } else {
+          if (here?.kind === 'account' && here.who === trimmed) return current;
+          next = {
+            kind: 'account',
+            id,
+            who: trimmed,
+            fromExplorer: Boolean(options.fromExplorer),
+            openedBy: null,
+            trailBefore: trailOf(here),
+            trail: null,
+            state: {},
+          };
+        }
         const views = [
           ...current.views.slice(0, current.index + 1),
           next,
@@ -158,6 +209,29 @@ export function ExplorerWindow({
         return { views, index: views.length - 1 };
       });
     },
+    []
+  );
+
+  const openTransaction = useCallback(
+    (signature: string) => {
+      // Only a signature: anything else would be looked up as a name.
+      if (isSignature(signature))
+        openAccount(signature, { fromExplorer: true });
+    },
+    [openAccount]
+  );
+
+  // A step's own state (its tab, a filter), changed in place: never a step more.
+  const setStepState = useCallback(
+    (stepId: number, key: string, value: unknown) =>
+      setHistory((current) => {
+        const at = current.views.findIndex((step) => step.id === stepId);
+        const step = current.views[at];
+        if (!step || step.state[key] === value) return current;
+        const views = [...current.views];
+        views[at] = { ...step, state: { ...step.state, [key]: value } };
+        return { ...current, views };
+      }),
     []
   );
 
@@ -192,12 +266,10 @@ export function ExplorerWindow({
   );
 
   const refresh = useCallback(
-    (address: string) => {
+    (scope: string) => {
       cache.forget(
         (key) =>
-          key.endsWith(`:${address}`) ||
-          key === 'online' ||
-          key === 'nodetiming'
+          key.endsWith(`:${scope}`) || key === 'online' || key === 'nodetiming'
       );
       setVersion((n) => n + 1);
     },
@@ -227,8 +299,20 @@ export function ExplorerWindow({
   }, [openAccount, setIsOpenDrawerLookup]);
 
   const context = useMemo<ExplorerContextValue>(
-    () => ({ cache, version, viewer, openAccount, refresh, close }),
-    [cache, version, viewer, openAccount, refresh, close]
+    () => ({
+      cache,
+      version,
+      viewer,
+      openAccount,
+      openTransaction,
+      refresh,
+      close,
+    }),
+    [cache, version, viewer, openAccount, openTransaction, refresh, close]
+  );
+  const step = useMemo(
+    () => ({ stepId: view.id, state: view.state, setState: setStepState }),
+    [view.id, view.state, setStepState]
   );
 
   const canBack = history.index > 0;
@@ -249,8 +333,14 @@ export function ExplorerWindow({
     setMenuAnchor(null);
   };
 
-  const accountAddress =
-    view.kind === 'account' && isQortAddress(view.who) ? view.who : null;
+  /** What Refresh reads again: the account or AT on screen, or the transaction. */
+  const refreshScope =
+    view.kind === 'account' &&
+    (isQortAddress(view.who) || isAtAddress(view.who))
+      ? view.who
+      : view.kind === 'tx'
+        ? view.signature
+        : null;
 
   return (
     <Dialog
@@ -378,7 +468,7 @@ export function ExplorerWindow({
                 justifyContent: 'flex-end',
               }}
             >
-              {view.kind === 'account' ? (
+              {view.kind !== 'start' ? (
                 <Box sx={{ flex: 1, maxWidth: 320, minWidth: 140 }}>
                   <ExplorerSearchField
                     compact
@@ -386,12 +476,12 @@ export function ExplorerWindow({
                   />
                 </Box>
               ) : null}
-              {accountAddress ? (
+              {refreshScope ? (
                 <Tooltip title={t('core:action.refresh', cap)}>
                   <IconButton
                     size="small"
                     aria-label={t('core:action.refresh', cap)}
-                    onClick={() => refresh(accountAddress)}
+                    onClick={() => refresh(refreshScope)}
                   >
                     <RefreshRoundedIcon fontSize="small" />
                   </IconButton>
@@ -456,18 +546,22 @@ export function ExplorerWindow({
             }}
           >
             <Box sx={{ margin: '0 auto', maxWidth: 1080, minWidth: 0 }}>
-              {view.kind === 'start' ? (
-                <ExplorerStart recent={recent} onClearRecent={forgetRecent} />
-              ) : (
-                <ExplorerAccount
-                  key={view.who}
-                  who={view.who}
-                  openedBy={view.openedBy}
-                  trail={view.trail ?? []}
-                  onNameResolved={onNameResolved}
-                  onShown={onShown}
-                />
-              )}
+              <ExplorerStepContext.Provider value={step}>
+                {view.kind === 'start' ? (
+                  <ExplorerStart recent={recent} onClearRecent={forgetRecent} />
+                ) : view.kind === 'tx' ? (
+                  <TxView key={view.id} signature={view.signature} />
+                ) : (
+                  <ExplorerAccount
+                    key={`${view.id}:${view.who}`}
+                    who={view.who}
+                    openedBy={view.openedBy}
+                    trail={view.trail ?? []}
+                    onNameResolved={onNameResolved}
+                    onShown={onShown}
+                  />
+                )}
+              </ExplorerStepContext.Provider>
             </Box>
           </Box>
         </Box>

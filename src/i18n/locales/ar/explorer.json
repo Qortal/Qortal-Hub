@@ -1,15 +1,17 @@
 {
   "account": {
-    "at_address": "هذا عنوان AT: برنامج على السلسلة، وليس حسابًا.",
     "failed": "تعذّر تحميل هذا الحساب.",
     "invalid": "هذا ليس عنوان Qortal صالحًا.",
     "name_failed": "تعذّر البحث عن هذا الاسم.",
     "no_similar_names": "ولا يبدأ به أي اسم مسجَّل أيضًا.",
     "no_such_name": "لا يملك أحد الاسم «{{name}}».",
-    "signature": "يبدو هذا توقيع معاملة. المستكشف يفتح الحسابات: ابحث عن اسم أو عنوان.",
     "similar_failed": "تعذّر البحث عن أسماء تبدأ به.",
     "similar_names": "أسماء تبدأ به:",
     "unused": "لم يُستخدم هذا العنوان قط: لم يشارك في أي معاملة بعد."
+  },
+  "at": {
+    "about": "عقد آلي (AT): برنامج على السلسلة، وليس حسابًا شخصيًا.",
+    "title": "عنوان AT"
   },
   "chip": {
     "dev_admin": "Dev Admin",
@@ -107,6 +109,12 @@
     "public_key_copied": "تم نسخ المفتاح العام إلى الحافظة.",
     "unblocked": "تم إلغاء حظر الحساب."
   },
+  "latest": {
+    "all": "جميع المعاملات",
+    "failed": "تعذّر تحميل أحدث معاملاته.",
+    "none": "لا توجد معاملات مؤكدة بعد.",
+    "title": "أحدث المعاملات"
+  },
   "minter": {
     "open_app": "فتح {{app}}",
     "standing_admin": "Minter Admin وعضو في MINTER.",
@@ -149,20 +157,14 @@
     "title": "ملاحظات"
   },
   "payments": {
-    "failed": "تعذّر تحميل دفعاته.",
-    "newest_only": "هذه أحدث دفعاته فقط.",
-    "received_from": "مستلَمة من",
-    "sent_to": "مرسَلة إلى",
-    "show_more": "عرض المزيد",
-    "shown": "يُعرض {{shown}} من {{total}}.",
-    "to_itself": "إلى نفسه"
+    "failed": "تعذّر تحميل دفعاته."
   },
   "search": {
     "clear": "مسح",
     "compact_placeholder": "ابحث في المستكشف",
     "helper": "اختر اقتراحًا، أو اضغط Enter للبحث عمّا كتبته بالضبط.",
-    "label": "ابحث عن حساب",
-    "placeholder": "اسم أو عنوان Q…"
+    "label": "ابحث عن حساب أو معاملة",
+    "placeholder": "اسم أو عنوان أو توقيع معاملة"
   },
   "settings": {
     "remember": "تذكّر الحسابات التي أستكشفها على هذا الجهاز",
@@ -195,13 +197,587 @@
     "owns_names_two": "يملك {{shown}} اسمين",
     "owns_names_zero": "يملك {{shown}} اسم"
   },
+  "tabs": {
+    "label": "أقسام الحساب",
+    "overview": "نظرة عامة",
+    "transactions": "المعاملات"
+  },
   "trail": {
     "label": "مسارك"
+  },
+  "transactions": {
+    "all_few": "جميع معاملاته الـ{{shown}}.",
+    "all_kind_few": "جميع المعاملات الـ{{shown}} من هذا النوع.",
+    "all_kind_many": "جميع المعاملات الـ{{shown}} من هذا النوع.",
+    "all_kind_one": "جميع المعاملات الـ{{shown}} من هذا النوع.",
+    "all_kind_other": "جميع المعاملات الـ{{shown}} من هذا النوع.",
+    "all_kind_two": "جميع المعاملات الـ{{shown}} من هذا النوع.",
+    "all_kind_zero": "جميع المعاملات الـ{{shown}} من هذا النوع.",
+    "all_many": "جميع معاملاته الـ{{shown}}.",
+    "all_one": "جميع معاملاته الـ{{shown}}.",
+    "all_other": "جميع معاملاته الـ{{shown}}.",
+    "all_two": "جميع معاملاته الـ{{shown}}.",
+    "all_zero": "جميع معاملاته الـ{{shown}}.",
+    "ceiling": "يقرأ المستكشف ما يصل إلى {{max}} معاملة من كل نوع.",
+    "every_type": "جميع الأنواع",
+    "failed": "تعذّر تحميل معاملاته.",
+    "kind_label": "عرض نوع واحد من المعاملات",
+    "more_failed": "تعذّر تحميل المزيد من معاملاته.",
+    "newest_few": "أحدث {{shown}} معاملات له.",
+    "newest_kind_few": "أحدث {{shown}} معاملات من هذا النوع.",
+    "newest_kind_many": "أحدث {{shown}} معاملة من هذا النوع.",
+    "newest_kind_one": "أحدث {{shown}} معاملة من هذا النوع.",
+    "newest_kind_other": "أحدث {{shown}} معاملة من هذا النوع.",
+    "newest_kind_two": "أحدث {{shown}} معاملتين من هذا النوع.",
+    "newest_kind_zero": "أحدث {{shown}} معاملة من هذا النوع.",
+    "newest_many": "أحدث {{shown}} معاملة له.",
+    "newest_one": "أحدث {{shown}} معاملة له.",
+    "newest_other": "أحدث {{shown}} معاملة له.",
+    "newest_two": "أحدث {{shown}} معاملتين له.",
+    "newest_zero": "أحدث {{shown}} معاملة له.",
+    "none": "ليست لديه معاملات مؤكدة بعد.",
+    "none_kind": "لا توجد بين معاملاته المؤكدة أي معاملة من هذا النوع.",
+    "only": "معاملته الوحيدة.",
+    "only_kind": "المعاملة الوحيدة من هذا النوع.",
+    "refresh_failed": "تعذّر التحقق من وجود معاملات أحدث.",
+    "show_more": "عرض المزيد",
+    "title_all": "جميع المعاملات",
+    "type": "النوع",
+    "waiting_failed": "تعذّر التحقق مما أرسله ولا يزال ينتظر إدراجه في كتلة.",
+    "waiting_loading": "جارٍ التحقق مما أرسله ولا يزال ينتظر إدراجه في كتلة…",
+    "waiting_note": "تحتفظ عقدتك بهذه المعاملات إلى أن تُدرَج في كتلة. أما المعاملات المرسَلة إلى هذا الحساب فلا تظهر إلا بعد إدراجها في كتلة.",
+    "waiting_title": "معاملات أرسلها هذا الحساب وتنتظر التأكيد ({{n}})",
+    "waiting_title_more": "معاملات أرسلها هذا الحساب وتنتظر التأكيد ({{n}} على الأقل)"
+  },
+  "tx": {
+    "approval": {
+      "approved": "تمت الموافقة",
+      "expired": "لم تتم الموافقة في الوقت المحدد",
+      "invalid": "غير صالحة",
+      "pending": "بانتظار الموافقات",
+      "rejected": "تم الرفض"
+    },
+    "asset_number": "من الأصل #{{id}}",
+    "creator": "المُنشئ",
+    "details_of": "تفاصيل {{type}}",
+    "field": {
+      "account": "الحساب",
+      "admin": "المشرف",
+      "amount": "المبلغ",
+      "answer": "الرد",
+      "asset": "الأصل",
+      "at": "AT (عقد آلي)",
+      "at_address": "عنوان AT",
+      "at_kind": "النوع",
+      "at_name": "اسم AT",
+      "change": "التغيير",
+      "data": "البيانات",
+      "description": "الوصف",
+      "divisible": "قابل للتجزئة",
+      "encrypted": "مشفّرة",
+      "funded_with": "التمويل",
+      "group": "المجموعة",
+      "group_approval": "موافقة المجموعة",
+      "identifier": "المعرّف",
+      "invitee": "المدعوّ",
+      "level": "المستوى",
+      "member": "العضو",
+      "moved_to": "نُقل إلى",
+      "name": "الاسم",
+      "new_admin": "المشرف الجديد",
+      "new_data": "البيانات الجديدة",
+      "new_description": "الوصف الجديد",
+      "new_name": "الاسم الجديد",
+      "new_owner": "المالك الجديد",
+      "open": "مفتوحة للجميع",
+      "option": "الخيار",
+      "options": "الخيارات",
+      "order": "الطلب",
+      "owner": "المالك",
+      "payment": "الدفعة",
+      "poll": "الاستطلاع",
+      "price": "السعر",
+      "quantity": "الكمية",
+      "reason": "السبب",
+      "recipient": "المستلِم",
+      "seller": "البائع",
+      "service": "الخدمة",
+      "share": "الحصة",
+      "size": "الحجم",
+      "tags": "الوسوم",
+      "transaction": "المعاملة"
+    },
+    "incoming": "واردة",
+    "not_shown": "(غير معروض)",
+    "open": "فتح المعاملة",
+    "outcome": {
+      "expired": "(لم تتم الموافقة عليها في الوقت المحدد)",
+      "invalid": "(غير صالحة)",
+      "pending": "(بانتظار موافقة المجموعة)",
+      "rejected": "(رفضها مشرفو المجموعة)"
+    },
+    "outgoing": "صادرة",
+    "people": "الحسابات المعنية",
+    "privs_failed": "تعذّرت معرفة الحساب الذي تلقّى مستوى السك.",
+    "raw": "استجابة API الخام",
+    "raw_caption": "استجابة عقدتك بصيغة JSON.",
+    "raw_copied": "تم نسخ الاستجابة الخام إلى الحافظة.",
+    "raw_copy": "نسخ الاستجابة الخام",
+    "say": {
+      "account_flags": {
+        "in": "ضُبطت علامات حسابه في كتلة التكوين",
+        "none": "ضُبطت علامات الحساب {{target}} في كتلة التكوين"
+      },
+      "account_level": {
+        "in": "ضُبط مستواه على {{level}} في كتلة التكوين",
+        "none": "ضُبط مستوى الحساب {{target}} على {{level}} في كتلة التكوين"
+      },
+      "add_group_admin": {
+        "in": "عيّن {{actor}} هذا الحساب مشرفًا في المجموعة {{group}}",
+        "in_proposed": "اقترح {{actor}} تعيين هذا الحساب مشرفًا في المجموعة {{group}}",
+        "none": "عيّن {{actor}} العضو {{member}} مشرفًا في المجموعة {{group}}",
+        "none_proposed": "اقترح {{actor}} تعيين العضو {{member}} مشرفًا في المجموعة {{group}}",
+        "out": "عيّن العضو {{member}} مشرفًا في المجموعة {{group}}",
+        "out_proposed": "اقترح تعيين العضو {{member}} مشرفًا في المجموعة {{group}}",
+        "self": {
+          "mine": "أصبح مشرفًا في المجموعة {{group}}",
+          "mine_proposed": "اقترح تعيين نفسه مشرفًا في المجموعة {{group}}",
+          "none": "أصبح {{actor}} مشرفًا في المجموعة {{group}}",
+          "none_proposed": "اقترح {{actor}} تعيين نفسه مشرفًا في المجموعة {{group}}"
+        }
+      },
+      "airdrop": {
+        "mine": "أجرى توزيعًا مجانيًا",
+        "none": "أجرى {{actor}} توزيعًا مجانيًا"
+      },
+      "arbitrary": {
+        "in": "تلقّى {{amount}} من {{from}} ضمن عملية نشر على QDN",
+        "named": {
+          "mine": "نشر {{what}} باسم «{{name}}»",
+          "none": "نشر {{actor}} {{what}} باسم «{{name}}»"
+        },
+        "unnamed": {
+          "mine": "نشر {{what}}",
+          "none": "نشر {{actor}} {{what}}"
+        }
+      },
+      "at": {
+        "ran": "نفّذ {{at}} برنامجه",
+        "ran_mine": "نفّذ برنامجه"
+      },
+      "buy_name": {
+        "in": "باع الاسم «{{name}}» إلى {{buyer}} بسعر {{price}}",
+        "none": "اشترى {{actor}} الاسم «{{name}}» من {{seller}} بسعر {{price}}",
+        "out": "اشترى الاسم «{{name}}» من {{seller}} بسعر {{price}}"
+      },
+      "cancel_asset_order": {
+        "mine": "ألغى طلب تداول أصل",
+        "none": "ألغى {{actor}} طلب تداول أصل"
+      },
+      "cancel_group_ban": {
+        "in": "رفع {{actor}} الحظر عن هذا الحساب في المجموعة {{group}}",
+        "in_proposed": "اقترح {{actor}} رفع الحظر عن هذا الحساب في المجموعة {{group}}",
+        "none": "رفع {{actor}} الحظر عن الحساب {{member}} في المجموعة {{group}}",
+        "none_proposed": "اقترح {{actor}} رفع الحظر عن الحساب {{member}} في المجموعة {{group}}",
+        "out": "رفع الحظر عن الحساب {{member}} في المجموعة {{group}}",
+        "out_proposed": "اقترح رفع الحظر عن الحساب {{member}} في المجموعة {{group}}"
+      },
+      "cancel_group_invite": {
+        "mine": "ألغى دعوة إلى مجموعة",
+        "mine_proposed": "اقترح إلغاء دعوة إلى مجموعة",
+        "none": "ألغى {{actor}} دعوة إلى مجموعة",
+        "none_proposed": "اقترح {{actor}} إلغاء دعوة إلى مجموعة"
+      },
+      "cancel_sell_name": {
+        "mine": "سحب الاسم «{{name}}» من البيع",
+        "none": "سحب {{actor}} الاسم «{{name}}» من البيع"
+      },
+      "chat": {
+        "group": {
+          "mine": "أرسل رسالة دردشة إلى مجموعة",
+          "none": "أرسل {{actor}} رسالة دردشة إلى مجموعة"
+        },
+        "in": "تلقّى رسالة دردشة من {{from}}",
+        "none": "أرسل {{from}} رسالة دردشة إلى {{to}}",
+        "out": "أرسل رسالة دردشة إلى {{to}}"
+      },
+      "create_asset_order": {
+        "mine": "قدّم طلبًا لمبادلة {{have}} مقابل {{want}}",
+        "none": "قدّم {{actor}} طلبًا لمبادلة {{have}} مقابل {{want}}"
+      },
+      "create_group": {
+        "mine": "أنشأ المجموعة {{group}}",
+        "none": "أنشأ {{actor}} المجموعة {{group}}"
+      },
+      "create_poll": {
+        "for_me": "أنشأ {{actor}} الاستطلاع «{{poll}}» الذي يملكه هذا الحساب",
+        "mine": "أنشأ الاستطلاع «{{poll}}»",
+        "none": "أنشأ {{actor}} الاستطلاع «{{poll}}»",
+        "owned_by": "أنشأ {{actor}} الاستطلاع «{{poll}}» الذي يملكه {{owner}}",
+        "owned_by_mine": "أنشأ الاستطلاع «{{poll}}» الذي يملكه {{owner}}"
+      },
+      "deploy_at": {
+        "in": "أنشأ {{actor}} هذا العقد الآلي (AT)",
+        "mine": "أنشأ عقدًا آليًا (AT)",
+        "none": "أنشأ {{actor}} عقدًا آليًا (AT)"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "فعّل {{actor}} صياغة الكتل لهذا الحساب",
+          "none": "فعّل {{actor}} صياغة الكتل للحساب {{target}}",
+          "out": "فعّل صياغة الكتل للحساب {{target}}"
+        },
+        "mine": "فعّل صياغة الكتل",
+        "none": "فعّل {{actor}} صياغة الكتل"
+      },
+      "generic": {
+        "mine": "أجرى معاملة: {{type}}",
+        "nobody": "معاملة: {{type}}",
+        "none": "أجرى {{actor}} معاملة: {{type}}"
+      },
+      "genesis": {
+        "in": "تلقّى {{amount}} في كتلة التكوين",
+        "none": "تلقّى {{to}} مبلغ {{amount}} في كتلة التكوين"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "وافق على المعاملة {{tx}}",
+          "none": "وافق {{actor}} على المعاملة {{tx}}"
+        },
+        "rejected": {
+          "mine": "رفض المعاملة {{tx}}",
+          "none": "رفض {{actor}} المعاملة {{tx}}"
+        }
+      },
+      "group_ban": {
+        "in": "حظر {{actor}} هذا الحساب من المجموعة {{group}}",
+        "in_proposed": "اقترح {{actor}} حظر هذا الحساب من المجموعة {{group}}",
+        "none": "حظر {{actor}} الحساب {{member}} من المجموعة {{group}}",
+        "none_proposed": "اقترح {{actor}} حظر الحساب {{member}} من المجموعة {{group}}",
+        "out": "حظر الحساب {{member}} من المجموعة {{group}}",
+        "out_proposed": "اقترح حظر الحساب {{member}} من المجموعة {{group}}"
+      },
+      "group_invite": {
+        "in": "دعا {{actor}} هذا الحساب إلى المجموعة {{group}}",
+        "in_proposed": "اقترح {{actor}} دعوة هذا الحساب إلى المجموعة {{group}}",
+        "none": "دعا {{actor}} الحساب {{invitee}} إلى المجموعة {{group}}",
+        "none_proposed": "اقترح {{actor}} دعوة الحساب {{invitee}} إلى المجموعة {{group}}",
+        "out": "دعا الحساب {{invitee}} إلى المجموعة {{group}}",
+        "out_proposed": "اقترح دعوة الحساب {{invitee}} إلى المجموعة {{group}}"
+      },
+      "group_kick": {
+        "in": "أزال {{actor}} هذا الحساب من المجموعة {{group}}",
+        "in_proposed": "اقترح {{actor}} إزالة هذا الحساب من المجموعة {{group}}",
+        "none": "أزال {{actor}} العضو {{member}} من المجموعة {{group}}",
+        "none_proposed": "اقترح {{actor}} إزالة العضو {{member}} من المجموعة {{group}}",
+        "out": "أزال العضو {{member}} من المجموعة {{group}}",
+        "out_proposed": "اقترح إزالة العضو {{member}} من المجموعة {{group}}"
+      },
+      "issue_asset": {
+        "mine": "أصدر الأصل «{{asset}}»",
+        "nobody": "تم إصدار الأصل «{{asset}}»",
+        "none": "أصدر {{actor}} الأصل «{{asset}}»"
+      },
+      "join_group": {
+        "mine": "انضم إلى المجموعة {{group}} أو طلب الانضمام إليها",
+        "none": "انضم {{actor}} إلى المجموعة {{group}} أو طلب الانضمام إليها"
+      },
+      "leave_group": {
+        "mine": "غادر المجموعة {{group}}",
+        "none": "غادر {{actor}} المجموعة {{group}}"
+      },
+      "message": {
+        "in": "تلقّى رسالة من {{from}}",
+        "in_amount": "تلقّى من {{from}} رسالة مرفقًا بها {{amount}}",
+        "none": "أرسل {{from}} رسالة إلى {{to}}",
+        "none_amount": "أرسل {{from}} إلى {{to}} رسالة مرفقًا بها {{amount}}",
+        "none_nobody": "أرسل {{from}} رسالة",
+        "out": "أرسل رسالة إلى {{to}}",
+        "out_amount": "أرسل إلى {{to}} رسالة مرفقًا بها {{amount}}",
+        "out_nobody": "أرسل رسالة"
+      },
+      "multi": {
+        "in_few": "تلقّى {{amount}} من {{from}} ضمن دفعة إلى {{accounts}} حسابات",
+        "in_many": "تلقّى {{amount}} من {{from}} ضمن دفعة إلى {{accounts}} حسابًا",
+        "in_one": "تلقّى {{amount}} من {{from}} ضمن دفعة إلى {{accounts}} حساب",
+        "in_other": "تلقّى {{amount}} من {{from}} ضمن دفعة إلى {{accounts}} حساب",
+        "in_two": "تلقّى {{amount}} من {{from}} ضمن دفعة إلى {{accounts}} حسابين",
+        "in_zero": "تلقّى {{amount}} من {{from}} ضمن دفعة إلى {{accounts}} حساب",
+        "none_few": "دفع {{actor}} مبلغ {{amount}} إلى {{accounts}} حسابات في دفعة واحدة",
+        "none_many": "دفع {{actor}} مبلغ {{amount}} إلى {{accounts}} حسابًا في دفعة واحدة",
+        "none_one": "دفع {{actor}} مبلغ {{amount}} إلى {{accounts}} حساب في دفعة واحدة",
+        "none_other": "دفع {{actor}} مبلغ {{amount}} إلى {{accounts}} حساب في دفعة واحدة",
+        "none_two": "دفع {{actor}} مبلغ {{amount}} إلى {{accounts}} حسابين في دفعة واحدة",
+        "none_zero": "دفع {{actor}} مبلغ {{amount}} إلى {{accounts}} حساب في دفعة واحدة",
+        "out_few": "دفع {{amount}} إلى {{accounts}} حسابات في دفعة واحدة",
+        "out_many": "دفع {{amount}} إلى {{accounts}} حسابًا في دفعة واحدة",
+        "out_one": "دفع {{amount}} إلى {{accounts}} حساب في دفعة واحدة",
+        "out_other": "دفع {{amount}} إلى {{accounts}} حساب في دفعة واحدة",
+        "out_two": "دفع {{amount}} إلى {{accounts}} حسابين في دفعة واحدة",
+        "out_zero": "دفع {{amount}} إلى {{accounts}} حساب في دفعة واحدة"
+      },
+      "payment_line": "{{amount}} إلى {{to}}",
+      "presence": {
+        "minting": {
+          "mine": "أعلن أنه متصل (للسك)",
+          "none": "أعلن {{actor}} أنه متصل (للسك)"
+        },
+        "trade_bot": {
+          "mine": "أعلن أنه متصل (لروبوت التداول)",
+          "none": "أعلن {{actor}} أنه متصل (لروبوت التداول)"
+        }
+      },
+      "publicize": {
+        "mine": "نشر مفتاحه العام",
+        "none": "نشر {{actor}} مفتاحه العام"
+      },
+      "register_name": {
+        "mine": "سجّل الاسم «{{name}}»",
+        "none": "سجّل {{actor}} الاسم «{{name}}»"
+      },
+      "remove_group_admin": {
+        "in": "أزال {{actor}} هذا الحساب من مشرفي المجموعة {{group}}",
+        "in_proposed": "اقترح {{actor}} إزالة هذا الحساب من مشرفي المجموعة {{group}}",
+        "none": "أزال {{actor}} العضو {{member}} من مشرفي المجموعة {{group}}",
+        "none_proposed": "اقترح {{actor}} إزالة العضو {{member}} من مشرفي المجموعة {{group}}",
+        "out": "أزال العضو {{member}} من مشرفي المجموعة {{group}}",
+        "out_proposed": "اقترح إزالة العضو {{member}} من مشرفي المجموعة {{group}}",
+        "self": {
+          "mine": "تنحّى عن الإشراف على المجموعة {{group}}",
+          "mine_proposed": "اقترح تنحّيه عن الإشراف على المجموعة {{group}}",
+          "none": "تنحّى {{actor}} عن الإشراف على المجموعة {{group}}",
+          "none_proposed": "اقترح {{actor}} تنحّيه عن الإشراف على المجموعة {{group}}"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "أزال {{actor}} مشاركة المكافأة بينه وبين هذا الحساب",
+          "none": "أزال {{actor}} مشاركة المكافأة مع {{other}}",
+          "out": "أزال مشاركة المكافأة مع {{other}}"
+        },
+        "self_start": "بدأ {{actor}} السك (مشاركة ذاتية)",
+        "self_start_mine": "بدأ السك (مشاركة ذاتية)",
+        "self_stop": "أوقف {{actor}} السك (أزال مشاركته الذاتية)",
+        "self_stop_mine": "أوقف السك (أزال مشاركته الذاتية)",
+        "started": {
+          "in": "بدأ {{actor}} مشاركة مكافأة مع هذا الحساب بنسبة {{percent}}",
+          "none": "بدأ {{actor}} مشاركة مكافأة مع {{other}} بنسبة {{percent}}",
+          "out": "بدأ مشاركة مكافأة مع {{other}} بنسبة {{percent}}"
+        }
+      },
+      "sell_name": {
+        "mine": "عرض الاسم «{{name}}» للبيع بسعر {{price}}",
+        "none": "عرض {{actor}} الاسم «{{name}}» للبيع بسعر {{price}}"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "ألغى تعيين مجموعته الافتراضية",
+          "none": "ألغى {{actor}} تعيين مجموعته الافتراضية"
+        },
+        "set": {
+          "mine": "جعل المجموعة {{group}} مجموعته الافتراضية",
+          "none": "جعل {{actor}} المجموعة {{group}} مجموعته الافتراضية"
+        }
+      },
+      "transfer": {
+        "in": "تلقّى {{amount}} من {{from}}",
+        "none": "أرسل {{from}} مبلغ {{amount}} إلى {{to}}",
+        "out": "أرسل {{amount}} إلى {{to}}",
+        "self": "أرسل {{actor}} مبلغ {{amount}} إلى نفسه",
+        "self_mine": "أرسل {{amount}} إلى نفسه"
+      },
+      "transfer_privs": {
+        "in": "تلقّى مستوى السك من {{from}}",
+        "none": "نقل {{actor}} مستوى السك الخاص به إلى {{to}}",
+        "none_unknown": "نقل {{actor}} مستوى السك الخاص به إلى حساب آخر",
+        "out": "نقل مستوى السك الخاص به إلى {{to}}",
+        "out_unknown": "نقل مستوى السك الخاص به إلى حساب آخر"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "حدّث الأصل {{asset}}",
+          "none": "حدّث {{actor}} الأصل {{asset}}"
+        },
+        "owner": {
+          "in": "نقل {{actor}} ملكية الأصل {{asset}} إلى هذا الحساب",
+          "none": "نقل {{actor}} ملكية الأصل {{asset}} إلى {{new_owner}}",
+          "out": "نقل ملكية الأصل {{asset}} إلى {{new_owner}}"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "نقل {{actor}} ملكية المجموعة {{group}} إلى هذا الحساب",
+          "in_proposed": "اقترح {{actor}} نقل ملكية المجموعة {{group}} إلى هذا الحساب",
+          "none": "نقل {{actor}} ملكية المجموعة {{group}} إلى {{new_owner}}",
+          "none_proposed": "اقترح {{actor}} نقل ملكية المجموعة {{group}} إلى {{new_owner}}",
+          "out": "نقل ملكية المجموعة {{group}} إلى {{new_owner}}",
+          "out_proposed": "اقترح نقل ملكية المجموعة {{group}} إلى {{new_owner}}"
+        },
+        "settings": {
+          "mine": "حدّث إعدادات المجموعة {{group}}",
+          "mine_proposed": "اقترح تحديث إعدادات المجموعة {{group}}",
+          "none": "حدّث {{actor}} إعدادات المجموعة {{group}}",
+          "none_proposed": "اقترح {{actor}} تحديث إعدادات المجموعة {{group}}"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "حدّث بيانات الاسم «{{name}}»",
+          "none": "حدّث {{actor}} بيانات الاسم «{{name}}»"
+        },
+        "renamed": {
+          "mine": "غيّر الاسم «{{name}}» إلى «{{new_name}}»",
+          "none": "غيّر {{actor}} الاسم «{{name}}» إلى «{{new_name}}»"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "صوّت في الاستطلاع «{{poll}}»",
+        "none": "صوّت {{actor}} في الاستطلاع «{{poll}}»"
+      }
+    },
+    "service": {
+      "app": "تطبيقًا",
+      "arbitrary_data": "بيانات",
+      "attachment": "مرفقًا",
+      "audio": "مقطعًا صوتيًا",
+      "auto_update": "تحديثًا لبرنامج Core",
+      "blog": "مدونة",
+      "blog_comment": "تعليقًا على مدونة",
+      "blog_post": "تدوينة",
+      "chain_comment": "تعليقًا مخزّنًا على السلسلة",
+      "chain_data": "بيانات مخزّنة على السلسلة",
+      "code": "شيفرة برمجية",
+      "comment": "تعليقًا",
+      "coupon": "قسيمة",
+      "database": "قاعدة بيانات",
+      "document": "مستندًا",
+      "encrypted": "موردًا مشفّرًا",
+      "extension": "امتدادًا",
+      "file": "ملفًا",
+      "files": "ملفات",
+      "game": "لعبة",
+      "gif_repository": "مجموعة صور GIF",
+      "git_repository": "مستودع Git",
+      "image": "صورة",
+      "item": "عنصرًا",
+      "json": "بيانات JSON",
+      "list": "قائمة",
+      "message": "رسالة",
+      "metadata": "بيانات وصفية",
+      "nft": "رمز NFT",
+      "offer": "عرضًا",
+      "playlist": "قائمة تشغيل",
+      "plugin": "مكوّنًا إضافيًا",
+      "podcast": "بودكاست",
+      "product": "منتجًا",
+      "qchat_attachment": "مرفقًا في Q-Chat",
+      "qchat_audio": "مقطعًا صوتيًا في Q-Chat",
+      "qchat_image": "صورة في Q-Chat",
+      "qchat_voice": "رسالة صوتية في Q-Chat",
+      "snapshot": "لقطة بيانات",
+      "store": "متجرًا",
+      "thumbnail": "صورة مصغّرة",
+      "unknown": "موردًا على QDN",
+      "video": "مقطع فيديو",
+      "voice": "تسجيلًا صوتيًا",
+      "website": "موقعًا إلكترونيًا"
+    },
+    "show_all_few": "عرض الكل ({{count}})",
+    "show_all_many": "عرض الكل ({{count}})",
+    "show_all_one": "عرض الكل ({{count}})",
+    "show_all_other": "عرض الكل ({{count}})",
+    "show_all_two": "عرض الكل ({{count}})",
+    "show_all_zero": "عرض الكل ({{count}})",
+    "unknown_account": "حساب غير معروف",
+    "value": {
+      "approve": "موافقة",
+      "flags": "AND {{and}}، OR {{or}}، XOR {{xor}}",
+      "no": "لا",
+      "option": "الخيار {{n}}",
+      "reject": "رفض",
+      "removed": "أُزيلت",
+      "yes": "نعم"
+    },
+    "when_block": "{{time}} · الكتلة {{block}}",
+    "when_waiting": "بانتظار التأكيد · أُرسلت {{ago}}"
+  },
+  "tx_family": {
+    "all": "الكل",
+    "groups": "المجموعات",
+    "messages": "الرسائل",
+    "minting": "السك",
+    "names": "الأسماء",
+    "other": "أخرى",
+    "payments": "المدفوعات",
+    "qdn": "بيانات QDN",
+    "trading": "التداول"
+  },
+  "tx_page": {
+    "about": "حول هذه المعاملة",
+    "answers": "المعاملة التي تردّ عليها",
+    "answers_failed": "تعذّر تحميل المعاملة التي تردّ عليها.",
+    "answers_unknown": "لا توجد على عقدتك المعاملة التي تردّ عليها.",
+    "block": "الكتلة",
+    "copy_signature": "نسخ التوقيع",
+    "details": "التفاصيل",
+    "failed": "تعذّر تحميل هذه المعاملة.",
+    "fee": "الرسوم",
+    "open_answered": "فتح تلك المعاملة",
+    "sent": "وقت الإرسال",
+    "signature": "التوقيع",
+    "signature_copied": "تم نسخ التوقيع إلى الحافظة.",
+    "time": "الوقت",
+    "unknown": "لا توجد على عقدتك معاملة بهذا التوقيع.",
+    "unknown_hint": "ربما لم تصل إلى عقدتك بعد، أو ربما يكون أحد الأحرف خاطئًا.",
+    "waiting": "بانتظار التأكيد"
+  },
+  "tx_type": {
+    "account_flags": "علامات الحساب",
+    "account_level": "مستوى الحساب",
+    "add_group_admin": "إضافة مشرف إلى مجموعة",
+    "airdrop": "توزيع مجاني",
+    "arbitrary": "نشر على QDN",
+    "at": "معاملة AT",
+    "buy_name": "شراء اسم",
+    "cancel_asset_order": "إلغاء طلب تداول أصل",
+    "cancel_group_ban": "رفع حظر في مجموعة",
+    "cancel_group_invite": "إلغاء دعوة إلى مجموعة",
+    "cancel_sell_name": "إلغاء بيع اسم",
+    "chat": "رسالة دردشة",
+    "create_asset_order": "طلب تداول أصل",
+    "create_group": "إنشاء مجموعة",
+    "create_poll": "إنشاء استطلاع",
+    "deploy_at": "إنشاء AT",
+    "enable_forging": "تفعيل صياغة الكتل",
+    "genesis": "تخصيص كتلة التكوين",
+    "group_approval": "موافقة المجموعة",
+    "group_ban": "حظر من مجموعة",
+    "group_invite": "دعوة إلى مجموعة",
+    "group_kick": "إزالة من مجموعة",
+    "issue_asset": "إصدار أصل",
+    "join_group": "الانضمام إلى مجموعة",
+    "leave_group": "مغادرة مجموعة",
+    "message": "رسالة",
+    "multi_payment": "دفعة متعددة",
+    "payment": "دفعة",
+    "presence": "إعلان حضور",
+    "publicize": "نشر المفتاح العام",
+    "register_name": "تسجيل اسم",
+    "remove_group_admin": "إزالة مشرف من مجموعة",
+    "reward_share": "مشاركة مكافأة",
+    "sell_name": "عرض اسم للبيع",
+    "set_group": "تعيين المجموعة الافتراضية",
+    "transfer_asset": "تحويل أصل",
+    "transfer_privs": "نقل مستوى السك",
+    "update_asset": "تحديث أصل",
+    "update_group": "تحديث مجموعة",
+    "update_name": "تحديث اسم",
+    "vote_on_poll": "تصويت في استطلاع"
   },
   "window": {
     "forward": "تقدّم",
     "full": "توسيع إلى كامل النافذة",
     "leave_full": "استعادة الحجم العادي",
-    "subtitle": "ابحث عن أي حساب في Qortal"
+    "subtitle": "ابحث عن أي حساب أو معاملة في Qortal"
   }
 }

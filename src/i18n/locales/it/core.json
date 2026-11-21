@@ -8,7 +8,6 @@
     "dialog_title": "Explorer",
     "label_address": "Indirizzo",
     "label_public_key": "Chiave pubblica",
-    "payments_title": "Pagamenti recenti",
     "tooltip_block_public_node": "Il blocco utenti non è disponibile quando usi un nodo pubblico.",
     "tooltip_block_self": "Non puoi bloccare te stesso.",
     "tooltip_send_disabled": "Questo è il tuo profilo."
@@ -881,7 +880,6 @@
       "no_minting_details": "impossibile visualizzare i dettagli di minting sul gateway",
       "no_notification_apps": "Nessuna app ha ancora l’autorizzazione per le notifiche.",
       "no_notifications": "nessuna nuova notifica",
-      "no_payments": "nessun pagamento",
       "no_pinned_changes": "per ora non ci sono modifiche alle app fissate",
       "no_primary_name": "nessun nome principale",
       "no_results": "nessun risultato",

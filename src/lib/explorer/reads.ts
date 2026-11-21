@@ -4,7 +4,15 @@
  * all public. A failed read throws; "Core has nothing" is an answer of its
  * own (null, an empty list, 'unused'), never a failure turned into one.
  */
-import { CoreHttpError, getJson, isCoreError, queryString, seg } from './core';
+import Base58Module from '../../encryption/Base58';
+import {
+  CoreHttpError,
+  getJson,
+  getText,
+  isCoreError,
+  queryString,
+  seg,
+} from './core';
 
 export interface ReadSpec<T> {
   key: string;
@@ -340,22 +348,28 @@ export const lastSignedRead = (address: string): ReadSpec<BlockAt | null> => ({
 
 // ---- Transactions ----------------------------------------------------------------------
 
-/** The fields of a transaction the Explorer reads; Core sends more. */
+/** A transaction as Core sends it: the fields every one has, and its type's own. */
 export interface TxRow {
   type: string;
   timestamp: number;
   signature: string;
   reference?: string;
+  fee?: string;
+  txGroupId?: number;
+  /** Absent while it waits for a block. */
   blockHeight?: number;
+  /** NOT_REQUIRED, PENDING, APPROVED, REJECTED, EXPIRED or INVALID. */
+  approvalStatus?: string;
   creatorAddress?: string;
   recipient?: string;
   amount?: string;
   assetId?: number | string;
   atAddress?: string;
   payments?: Array<{ recipient?: string; amount?: string; assetId?: unknown }>;
+  [field: string]: unknown;
 }
 
-const toTxRows = (rows: unknown): TxRow[] =>
+export const toTxRows = (rows: unknown): TxRow[] =>
   (Array.isArray(rows) ? rows : []).filter(
     (row): row is TxRow =>
       Boolean(row) &&
@@ -487,4 +501,120 @@ export const nodeTimingRead = (): ReadSpec<NodeTiming> => ({
       throw new CoreHttpError(200, 'timing');
     return { height, currentTimestamp, dayBackTimestamp };
   },
+});
+
+// ---- One transaction ----------------------------------------------------------------------
+
+/** Core's "transaction unknown". */
+const TRANSACTION_UNKNOWN = 311;
+
+/**
+ * A transaction by its signature, or null when the node doesn't know it
+ * (it may not have reached the node yet). Kept a minute: one waiting for a
+ * block is read again by Refresh, or by opening it again later.
+ */
+export const txRead = (signature: string): ReadSpec<TxRow | null> => ({
+  key: `tx:${signature}`,
+  ttlMs: MINUTE,
+  load: async () => {
+    try {
+      const [row] = toTxRows([
+        await getJson<unknown>(`/transactions/signature/${seg(signature)}`),
+      ]);
+      if (!row) throw new CoreHttpError(200, 'not a transaction');
+      return row;
+    } catch (error) {
+      if (isCoreError(error, 404, TRANSACTION_UNKNOWN)) return null;
+      throw error;
+    }
+  },
+});
+
+/** Hub's base58 (an untyped module), with the two calls used here typed. */
+const Base58 = Base58Module as unknown as {
+  decode(text: string): Uint8Array;
+  encode(bytes: Uint8Array): string;
+};
+
+/** TRANSFER_PRIVS is type 40. */
+const TRANSFER_PRIVS_TYPE = 40;
+
+/**
+ * The recipient of a TRANSFER_PRIVS (a minting level moved to a new key),
+ * from the transaction's raw bytes, since Core's JSON leaves it out: type
+ * (4 bytes), timestamp (8), txGroupId (4), reference (64), the sender's
+ * public key (32), then the recipient's 25-byte address. Null when the
+ * bytes aren't such a transaction.
+ */
+export function decodePrivsRecipient(raw: string): string | null {
+  let bytes: Uint8Array;
+  try {
+    bytes = Base58.decode(raw.trim());
+  } catch {
+    return null;
+  }
+  if (!(bytes instanceof Uint8Array) || bytes.length < 137) return null;
+  const type = new DataView(bytes.buffer, bytes.byteOffset, 4).getInt32(0);
+  if (type !== TRANSFER_PRIVS_TYPE) return null;
+  const address = Base58.encode(bytes.slice(112, 137));
+  return /^Q[1-9A-HJ-NP-Za-km-z]{33}$/.test(address) ? address : null;
+}
+
+/** Who a minting level was moved to (a transaction never changes: kept 30 minutes). */
+export const privsRecipientRead = (
+  signature: string
+): ReadSpec<string | null> => ({
+  key: `privs:${signature}`,
+  ttlMs: 30 * MINUTE,
+  load: async () =>
+    decodePrivsRecipient(
+      await getText(`/transactions/signature/${seg(signature)}/raw`)
+    ),
+});
+
+/** Core's "group unknown". */
+const GROUP_UNKNOWN = 1101;
+
+/** A group's name, for a sentence; null when the node has no such group. */
+export const groupNameRead = (groupId: number): ReadSpec<string | null> => ({
+  key: `group:${groupId}`,
+  ttlMs: 30 * MINUTE,
+  load: async () => {
+    try {
+      const body = await getJson<{ groupName?: unknown }>(
+        `/groups/${seg(groupId)}`
+      );
+      return str(body?.groupName);
+    } catch (error) {
+      if (isCoreError(error, 404, GROUP_UNKNOWN)) return null;
+      throw error;
+    }
+  },
+});
+
+/** How many of an account's own waiting transactions are read at most. */
+export const WAITING_LIMIT = 100;
+
+/**
+ * What the account sent that isn't in a block yet (the node's own list of
+ * waiting transactions, by its public key), newest first. Kept 20 seconds;
+ * never polled. Waiting transactions sent to it can't be found: Core
+ * records who a transaction involves only once it is in a block.
+ */
+export const waitingRead = (
+  address: string,
+  publicKey: string
+): ReadSpec<TxRow[]> => ({
+  key: `waiting:${address}`,
+  ttlMs: 20_000,
+  load: async () =>
+    toTxRows(
+      await getJson<unknown>(
+        `/transactions/unconfirmed?${queryString({
+          creator: publicKey,
+          limit: WAITING_LIMIT,
+          reverse: true,
+        })}`
+      )
+    ).sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0)),
 });

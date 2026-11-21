@@ -30,10 +30,15 @@ export interface ExplorerContextValue {
   version: number;
   /** The signed-in Hub account's address, or null. */
   viewer: string | null;
-  /** Open an account by its address or by one of its names. */
+  /**
+   * Open an account by its address or by one of its names (a transaction
+   * signature opens that transaction).
+   */
   openAccount: (who: string, options?: OpenAccountOptions) => void;
-  /** Read `address` again from the node. */
-  refresh: (address: string) => void;
+  /** Open one transaction, as a step from what is on screen. */
+  openTransaction: (signature: string) => void;
+  /** Read what is about `scope` (an address, a signature) again from the node. */
+  refresh: (scope: string) => void;
   /** Close the Explorer window. */
   close: () => void;
 }
@@ -81,13 +86,24 @@ export function useExplorerRead<T>(spec: ReadSpec<T> | null): ReadState<T> {
     (force: boolean) => {
       const current = specRef.current;
       const id = ++run.current;
+      // The state as it already is stays the same object: no render for nothing.
       if (!current) {
-        setState({ key: null, status: 'idle' });
+        setState((shown) =>
+          shown.key === null && shown.status === 'idle'
+            ? shown
+            : { key: null, status: 'idle' }
+        );
         return;
       }
       const kept = force ? undefined : cache.peek<T>(current.key);
       if (kept !== undefined) {
-        setState({ key: current.key, data: kept, status: 'ready' });
+        setState((shown) =>
+          shown.key === current.key &&
+          shown.status === 'ready' &&
+          shown.data === kept
+            ? shown
+            : { key: current.key, data: kept, status: 'ready' }
+        );
         return;
       }
       // Read again for the same key (Refresh, Retry): what is shown stays until the answer.
@@ -152,4 +168,61 @@ export function useExplorerRead<T>(spec: ReadSpec<T> | null): ReadState<T> {
     status: key === null ? 'idle' : kept !== undefined ? 'ready' : 'loading',
     retry,
   };
+}
+
+// ---- What a step of the history keeps ---------------------------------------------------
+
+export type StepState = Readonly<Record<string, unknown>>;
+
+interface StepContextValue {
+  /** The step on screen: what it keeps belongs to it, wherever it is in the history. */
+  stepId: number;
+  state: StepState;
+  setState: (stepId: number, key: string, value: unknown) => void;
+}
+
+export const ExplorerStepContext = createContext<StepContextValue | null>(null);
+
+/**
+ * A value the history step on screen keeps (the tab it shows, a filter):
+ * changing it changes this step in place, never adds one, and Back and
+ * Forward show each step as it was left.
+ */
+export function useStepState<T>(
+  key: string,
+  initial: T
+): [T, (value: T) => void] {
+  const step = useContext(ExplorerStepContext);
+  if (!step) throw new Error('Explorer parts belong inside ExplorerWindow');
+  const { stepId, state, setState } = step;
+  const value = key in state ? (state[key] as T) : initial;
+  const set = useCallback(
+    (next: T) => setState(stepId, key, next),
+    [setState, stepId, key]
+  );
+  return [value, set];
+}
+
+/**
+ * True once `node` is near the screen (within `margin`), and from then on:
+ * for reads a long list needs only for the rows someone looks at. Where the
+ * browser can't tell, it is near at once.
+ */
+export function useNearScreen(node: Element | null, margin = '300px'): boolean {
+  const [near, setNear] = useState(
+    () => typeof IntersectionObserver === 'undefined'
+  );
+  useEffect(() => {
+    if (near || !node || typeof IntersectionObserver === 'undefined')
+      return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
+      },
+      { rootMargin: margin }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [near, node, margin]);
+  return near;
 }

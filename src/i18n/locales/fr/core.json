@@ -8,7 +8,6 @@
     "dialog_title": "Explorateur",
     "label_address": "Adresse",
     "label_public_key": "Clé publique",
-    "payments_title": "Paiements récents",
     "tooltip_block_public_node": "Le blocage des utilisateurs n'est pas disponible sur un nœud public.",
     "tooltip_block_self": "Vous ne pouvez pas vous bloquer vous‑même.",
     "tooltip_send_disabled": "Ceci est votre propre profil."
@@ -881,7 +880,6 @@
       "no_minting_details": "Impossible d'afficher les détails de la passerelle sur la passerelle",
       "no_notification_apps": "Aucune application n’a encore l’autorisation pour les notifications.",
       "no_notifications": "pas de nouvelles notifications",
-      "no_payments": "Aucun paiement",
       "no_pinned_changes": "Vous n'avez actuellement aucune modification à vos applications épinglées",
       "no_primary_name": "aucun nom principal",
       "no_results": "Aucun résultat",

@@ -8,7 +8,6 @@
     "dialog_title": "Lohkoketjuselain",
     "label_address": "Osoite",
     "label_public_key": "Julkinen avain",
-    "payments_title": "Viimeisimmät maksut",
     "tooltip_block_public_node": "Käyttäjien esto ei ole käytettävissä julkisella solmulla.",
     "tooltip_block_self": "Et voi estää itseäsi.",
     "tooltip_send_disabled": "Tämä on oma profiilisi."
@@ -881,7 +880,6 @@
       "no_minting_details": "lyöntitietoja ei voi tarkastella yhdyskäytävässä",
       "no_notification_apps": "Yhdelläkään sovelluksella ei ole vielä ilmoituslupaa.",
       "no_notifications": "ei uusia ilmoituksia",
-      "no_payments": "ei maksuja",
       "no_pinned_changes": "sinulla ei ole tällä hetkellä muutoksia kiinnitettyihin sovelluksiin",
       "no_primary_name": "ei ensisijaista nimeä",
       "no_results": "ei tuloksia",
