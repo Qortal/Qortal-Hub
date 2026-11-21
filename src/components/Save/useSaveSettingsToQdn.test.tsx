@@ -81,6 +81,18 @@ import {
   type SavedLayoutsState,
   takeInSavedLayouts,
 } from './savedLayouts';
+import {
+  emptySavedApps,
+  olderFieldsOf,
+  recordStores,
+  type SavedApps,
+  toSavedAppsField,
+} from '../Apps/AppsLauncher/savedApps';
+import {
+  nothingCarried,
+  saveSavedAppsBase,
+  saveSavedAppsReplica,
+} from '../Apps/AppsLauncher/savedAppsSync';
 import { useRevertSettings } from './useRevertSettings';
 import { useSaveSettingsToQdn } from './useSaveSettingsToQdn';
 
@@ -111,6 +123,40 @@ const renderSettings = (pins: unknown[], layouts?: SavedLayoutsState) => {
 const publishedPins = () => {
   const call = sent.calls.find((entry) => entry.action === 'ENCRYPT_DATA');
   return JSON.parse(String(call?.payload?.data64)).sortablePinnedApps;
+};
+
+/** Saved apps holding these pins, each changed at `at`. */
+const savedWith = (pins: unknown[], at: number) =>
+  recordStores(
+    emptySavedApps(),
+    { pins: pins as never, data: null, order: null },
+    () => at
+  ).apps;
+
+/** This device read QDN's copy of `apps` at sign-in (QDN's time 100). */
+const signedInWith = (apps: SavedApps) => {
+  saveSavedAppsBase(ADDRESS, {
+    updated: 100,
+    hasCopy: true,
+    hasBookmarks: true,
+    carried: nothingCarried(),
+    placeholders: [],
+    seenAt: 100,
+    apps,
+  });
+  saveSavedAppsReplica(ADDRESS, { seen: 100, apps });
+};
+
+/** A copy saved by a Hub that knows saved apps. */
+const copyOf = (apps: SavedApps) => ({
+  ...olderFieldsOf(apps),
+  savedApps: toSavedAppsField(apps),
+});
+
+/** What went into the publish. */
+const publishedSettings = () => {
+  const call = sent.calls.find((entry) => entry.action === 'ENCRYPT_DATA');
+  return JSON.parse(String(call?.payload?.data64));
 };
 
 /** The pin list this device kept. */
@@ -144,21 +190,94 @@ afterEach(() => {
 
 describe('saving the settings to QDN', () => {
   it('keeps an app pinned on another device', async () => {
+    const atSignIn = savedWith([pin('Q-Tube')], 50);
+    signedInWith(atSignIn);
+    // Another device pinned Q-Mail and saved.
     qdn.record = { hasPublishRecord: true, timestamp: 500 };
-    qdn.settings = { sortablePinnedApps: [pin('Q-Mail')] };
-    const { store, result } = renderSettings([pin('Q-Tube')]);
+    qdn.settings = copyOf(
+      recordStores(
+        atSignIn,
+        { pins: [pin('Q-Tube'), pin('Q-Mail')], data: null, order: null },
+        () => 450
+      ).apps
+    );
+    // This device pinned Q-Share since.
+    const { store, result } = renderSettings([pin('Q-Tube'), pin('Q-Share')]);
 
     await act(async () => {
       expect(await result.current.save()).toBe('saved');
     });
 
-    const both = [pin('Q-Tube'), pin('Q-Mail')];
-    expect(publishedPins()).toEqual(both);
-    expect(store.get(sortablePinnedAppsAtom)).toEqual(both);
+    const all = [pin('Q-Tube'), pin('Q-Mail'), pin('Q-Share')];
+    expect(publishedPins()).toEqual(all);
+    expect(store.get(sortablePinnedAppsAtom)).toEqual(all);
     // What is saved now, so the Save button has nothing left to offer.
-    expect(store.get(oldPinnedAppsAtom)).toEqual(both);
+    expect(store.get(oldPinnedAppsAtom)).toEqual(all);
     // And on this device, for the next sign-in.
-    expect(keptHere()).toEqual(both);
+    expect(keptHere()).toEqual(all);
+  });
+
+  it('keeps an app removed on another device removed', async () => {
+    // Real times: removals older than 180 days aren't kept.
+    const hourAgo = Date.now() - 3_600_000;
+    const atSignIn = savedWith([pin('Q-Tube'), pin('Q-Mail')], hourAgo);
+    signedInWith(atSignIn);
+    // Another device removed Q-Mail and saved.
+    qdn.record = { hasPublishRecord: true, timestamp: 500 };
+    qdn.settings = copyOf(
+      recordStores(
+        atSignIn,
+        { pins: [pin('Q-Tube')], data: null, order: null },
+        () => hourAgo + 1000
+      ).apps
+    );
+    // This device still had Q-Mail, and pinned Q-Share since.
+    const { store, result } = renderSettings([
+      pin('Q-Tube'),
+      pin('Q-Mail'),
+      pin('Q-Share'),
+    ]);
+
+    await act(async () => {
+      expect(await result.current.save()).toBe('saved');
+    });
+
+    expect(publishedPins()).toEqual([pin('Q-Tube'), pin('Q-Share')]);
+    expect(store.get(sortablePinnedAppsAtom)).toEqual([
+      pin('Q-Tube'),
+      pin('Q-Share'),
+    ]);
+    expect(publishedSettings().savedApps.pins).toContainEqual({
+      k: 'APP|q-mail|',
+      removed: true,
+      at: hourAgo + 1000,
+    });
+  });
+
+  it("takes in an older Hub's save over the saved apps, and saves them again", async () => {
+    signedInWith(savedWith([pin('Q-Tube'), pin('Q-Mail')], 50));
+    // An older Hub unpinned Q-Mail and saved its list alone.
+    qdn.record = { hasPublishRecord: true, timestamp: 500 };
+    qdn.settings = { sortablePinnedApps: [pin('Q-Tube')] };
+    const { result } = renderSettings([
+      pin('Q-Tube'),
+      pin('Q-Mail'),
+      pin('Q-Share'),
+    ]);
+
+    await act(async () => {
+      expect(await result.current.save()).toBe('saved');
+    });
+
+    expect(publishedPins()).toEqual([pin('Q-Tube'), pin('Q-Share')]);
+    const saved = publishedSettings();
+    expect(saved.savedApps.v).toBe(1);
+    expect(saved.appBookmarks).toEqual({
+      version: 1,
+      folders: [],
+      bookmarks: [],
+    });
+    expect(saved.launcherOrder).toEqual(['APP-Q-Tube', 'APP-Q-Share']);
   });
 
   it("publishes this device's list when told to write over", async () => {

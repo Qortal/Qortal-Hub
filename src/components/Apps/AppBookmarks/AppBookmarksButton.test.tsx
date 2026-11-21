@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { createStore, Provider } from 'jotai';
@@ -42,7 +42,11 @@ vi.mock('../../../utils/events', async (importOriginal) => {
 
 import { darkTheme } from '../../../styles/theme-dark';
 import { AppBookmarksButton } from './AppBookmarksButton';
-import { APP_BOOKMARKS_STORAGE_KEY } from './bookmarkStorage';
+import {
+  APP_BOOKMARKS_CHANGED_EVENT,
+  APP_BOOKMARKS_STORAGE_KEY,
+  saveBookmarksForAddress,
+} from './bookmarkStorage';
 import type { AppBookmark, AppBookmarkFolder } from './bookmarkTypes';
 
 const ADDRESS = 'Qaddress';
@@ -230,6 +234,47 @@ describe('the bookmarks menu', () => {
 
     expect(screen.getByText('Q-Mail')).toBeVisible();
     expect(screen.getByText('Q-Shop')).toBeVisible();
+  });
+
+  it('keeps a change made elsewhere while it is open', async () => {
+    const { kept, user } = await show(
+      [],
+      [bookmark('b1', 'Q-Mail'), bookmark('b2', 'Q-Blog')]
+    );
+    // The launcher (or the account's settings taken in) adds a bookmark.
+    await act(async () => {
+      await saveBookmarksForAddress(ADDRESS, {
+        folders: [],
+        bookmarks: [
+          bookmark('b1', 'Q-Mail'),
+          bookmark('b2', 'Q-Blog'),
+          bookmark('b3', 'Q-Tube'),
+        ],
+        updatedAt: 2,
+      });
+      // The store's change event, as the app sends it (mocked in this file).
+      document.dispatchEvent(
+        new CustomEvent(APP_BOOKMARKS_CHANGED_EVENT, {
+          detail: { address: ADDRESS },
+        })
+      );
+    });
+    expect(await screen.findByText('Q-Tube')).toBeVisible();
+
+    await user.click(
+      within(rowOf('Q-Blog')).getByRole('button', { name: MORE })
+    );
+    await user.click(screen.getByText(DELETE));
+
+    await waitFor(() => expect(screen.queryByText('Q-Blog')).toBeNull());
+    const stored = kept.get(APP_BOOKMARKS_STORAGE_KEY) as Record<
+      string,
+      { bookmarks: AppBookmark[] }
+    >;
+    expect(stored[ADDRESS].bookmarks.map((entry) => entry.id)).toEqual([
+      'b1',
+      'b3',
+    ]);
   });
 
   it('says when nothing matches what was typed', async () => {
