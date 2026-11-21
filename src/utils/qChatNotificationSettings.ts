@@ -936,7 +936,7 @@ function computeFilteredChannelCounts(
  * A set below the total is subtracted: at least one real unread message remains
  * however the ambiguity resolves, so the dot still shows either way.
  */
-function resolveEffectiveWelcomeUnread(
+export function resolveEffectiveWelcomeUnread(
   welcomeUnreadCount: number | undefined,
   totalUnread: number
 ): number {

@@ -92,6 +92,7 @@ import {
   groupHasUnreadConsideringMute,
   getGroupUnreadCountConsideringMute,
   getWelcomeUnreadCount,
+  resolveEffectiveWelcomeUnread,
   DEFAULT_NOTIFICATION_SETTINGS,
   applyNotificationSettingsToAllGroups,
   setGlobalNotificationSettings,
@@ -165,17 +166,36 @@ export const ReticulumChatSettingsDialog = ({
     useState<NotificationDeliveryMethod>('native');
   const [deliveryMethodLoaded, setDeliveryMethodLoaded] = useState(false);
   const [applying, setApplying] = useState(false);
+  // `writeUserSetting` throws when `addUserSettings` fails. Both Apply handlers
+  // had `finally` but no `catch`, so a failed save became an unhandled rejection
+  // with no feedback: the dialog stayed open on a partial write and the user had
+  // no idea anything went wrong.
+  const [applyError, setApplyError] = useState('');
   useEffect(() => {
+    // A read that settles after the dialog closed would latch a stale method for
+    // the life of the mount, and would also fight the reset branch below.
+    let cancelled = false;
     if (open && !deliveryMethodLoaded) {
       setDraftNotifForm(committedNotifForm);
-      getNotificationDeliveryMethod().then((method) => {
-        setDeliveryMethod(method);
-        setDeliveryMethodLoaded(true);
-      });
+      getNotificationDeliveryMethod()
+        .then((method) => {
+          if (cancelled) return;
+          setDeliveryMethod(method);
+          setDeliveryMethodLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // Keep the defaults rather than leaving the spinner up for ever.
+          setDeliveryMethod(getDefaultNotificationDeliveryMethod());
+          setDeliveryMethodLoaded(true);
+        });
     } else if (!open) {
       setDeliveryMethod(getDefaultNotificationDeliveryMethod());
       setDeliveryMethodLoaded(false);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [open, deliveryMethodLoaded, committedNotifForm]);
   const notifFormChanged =
     draftNotifForm.pushLevel !== DEFAULT_GLOBAL_NOTIF_FORM.pushLevel ||
@@ -839,7 +859,18 @@ export const ReticulumChatSettingsDialog = ({
                       });
                       await wipeAllChannelOverrides(groupIds);
                       setNotifForm(draftNotifForm);
+                      setApplyError('');
                       onClose();
+                    } catch (error) {
+                      console.error(
+                        'Failed to apply notification settings:',
+                        error
+                      );
+                      setApplyError(
+                        t('core:message.error.generic', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      );
                     } finally {
                       setApplying(false);
                     }
@@ -889,6 +920,11 @@ export const ReticulumChatSettingsDialog = ({
                   </Button>
                 )}
               </Box>
+              {applyError ? (
+                <Typography sx={{ color: 'error.main', fontSize: 14, mt: 1 }}>
+                  {applyError}
+                </Typography>
+              ) : null}
               <Typography
                 sx={{
                   color: 'text.primary',
@@ -913,8 +949,21 @@ export const ReticulumChatSettingsDialog = ({
                 value={deliveryMethod}
                 onChange={(_, value: string) => {
                   const method = value as NotificationDeliveryMethod;
+                  const previous = deliveryMethod;
                   setDeliveryMethod(method);
-                  void setNotificationDeliveryMethod(method);
+                  // `setNotificationDeliveryMethod` rejects when the write
+                  // fails. Fired bare it became an unhandled rejection while the
+                  // radio stayed on the new value, so the UI claimed a save that
+                  // did not happen. Put the radio back and say so.
+                  setNotificationDeliveryMethod(method).catch((error) => {
+                    console.error('Failed to set delivery method:', error);
+                    setDeliveryMethod(previous);
+                    setApplyError(
+                      t('core:message.error.generic', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    );
+                  });
                 }}
                 sx={{ display: 'flex', gap: 0 }}
               >
@@ -2072,12 +2121,31 @@ const GroupItem = memo(
       0,
       Number(group?.reticulumChatSummary?.replyCount || 0)
     );
+    // What the badge shows. It used the raw `replyCount`, so a muted group still
+    // displayed a number while its dot was correctly suppressed: the two halves
+    // disagreed. Use the mute-aware count, and keep the reply count only as a
+    // floor so a channel with replies but no filtered total still shows a figure.
+    const reticulumBadgeCount =
+      reticulumFilteredUnreadCount > 0
+        ? Math.max(reticulumFilteredUnreadCount, reticulumReplyCount)
+        : 0;
     const hasReticulumUnread = reticulumFilteredUnreadCount > 0;
+    // Welcome posts nobody has read must not mask a real @mention. Subtracting
+    // the welcome count by hand is wrong at the boundary: one stale welcome id
+    // from another device makes `1 - 1 > 0` false and the mention badge
+    // disappears. `resolveEffectiveWelcomeUnread` is the clamp the rest of the
+    // codebase uses: it answers 0 when the welcome set covers everything, so
+    // nothing is subtracted and the mention survives.
+    const effectiveWelcomeUnread = resolveEffectiveWelcomeUnread(
+      welcomeUnreadCount,
+      Number(group?.reticulumChatSummary?.unreadCount || 0)
+    );
     const hasReticulumMention =
       (group?.reticulumChatSummary?.hasUnreadMention === true ||
         (group?.reticulumChatSummary?.mentionCount ?? 0) > 0) &&
       (notifyOnWelcomePosts ||
-        (group?.reticulumChatSummary?.mentionCount ?? 0) - welcomeUnreadCount >
+        (group?.reticulumChatSummary?.mentionCount ?? 0) -
+          effectiveWelcomeUnread >
           0);
     const isGroupMuted = groupMuteSettings
       ? isScopeMuted(groupMuteSettings) &&
@@ -2111,7 +2179,12 @@ const GroupItem = memo(
     );
     const showGroupCallIndicator =
       Boolean(gcallRoomIdForRow) && (imInThisGroupGcall || meshShowsCall);
+    // `isPrivate` counts as closed, the same way `Group.tsx` reads it: a legacy
+    // private group carries no `isOpen: false` and no `groupType`, so without
+    // this the rail showed a globe and the list dropped the lock.
     const isClosedGroup =
+      groupProperty?.isPrivate === true ||
+      (group as { isPrivate?: unknown })?.isPrivate === true ||
       groupProperty?.isOpen === false ||
       group?.isOpen === false ||
       Number(group?.groupType) === 1 ||
@@ -2346,13 +2419,13 @@ const GroupItem = memo(
                         timeDifferenceForNotificationChats) ||
                       timestampEnterData < group?.timestamp))) && (
                   <ReticulumUnreadCountBadge
-                    count={reticulumReplyCount > 0 ? reticulumReplyCount : null}
+                    count={reticulumBadgeCount > 0 ? reticulumBadgeCount : null}
                     outlineColor={theme.palette.background.surface}
-                    size={reticulumReplyCount > 0 ? 18 : 8}
+                    size={reticulumBadgeCount > 0 ? 18 : 8}
                     sx={{
-                      bottom: reticulumReplyCount > 0 ? -2 : 1,
+                      bottom: reticulumBadgeCount > 0 ? -2 : 1,
                       position: 'absolute',
-                      right: reticulumReplyCount > 0 ? -2 : 1,
+                      right: reticulumBadgeCount > 0 ? -2 : 1,
                       zIndex: 2,
                     }}
                   />
@@ -2490,7 +2563,16 @@ const GroupItem = memo(
           },
         }}
       >
-        <ContextMenu getUserSettings={getUserSettings} groupId={group.groupId}>
+        {/* The rail instance above passes `myAddress` and `reticulumGroup`; this
+            legacy one did not, so `isGroupOwner` could never be true and the
+            invite-link, About and leave-group items silently vanished whenever
+            Reticulum chat was off. */}
+        <ContextMenu
+          getUserSettings={getUserSettings}
+          groupId={group.groupId}
+          myAddress={myAddress}
+          reticulumGroup={group}
+        >
           <Box
             sx={{
               alignItems: 'center',

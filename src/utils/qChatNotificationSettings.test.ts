@@ -28,6 +28,7 @@ import {
   getWelcomeUnreadCount,
   getEffectiveUnreadCount,
   reconcileWelcomeUnreadForGroup,
+  resolveEffectiveWelcomeUnread,
   DEFAULT_NOTIFICATION_SETTINGS,
   GLOBAL_SETTINGS_KEY,
   type EffectiveNotificationSettings,
@@ -1391,5 +1392,31 @@ describe('welcome subtraction is bounded by real unread', () => {
     expect(
       getGroupUnreadCountConsideringMute(groupStore, summary, 1, fallback)
     ).toBe(2);
+  });
+});
+
+describe('resolveEffectiveWelcomeUnread', () => {
+  // A welcome post counts as unread until read, but it must never mask a real
+  // @mention. GroupList hand-rolled `mentionCount - welcomeUnreadCount > 0`,
+  // which with one stale welcome id from another device computes `1 - 1 > 0`
+  // — false — and the mention badge vanished. This clamp is the codebase's
+  // answer and GroupList should use it.
+  it('returns 0 when there is no welcome unread', () => {
+    expect(resolveEffectiveWelcomeUnread(0, 3)).toBe(0);
+    expect(resolveEffectiveWelcomeUnread(undefined, 3)).toBe(0);
+  });
+
+  it('returns 0 rather than subtracting when the welcome set covers everything', () => {
+    // The old arithmetic subtracted here and killed a genuine mention.
+    expect(resolveEffectiveWelcomeUnread(1, 1)).toBe(0);
+    expect(resolveEffectiveWelcomeUnread(5, 2)).toBe(0);
+  });
+
+  it('subtracts when the welcome set is genuinely below the total', () => {
+    expect(resolveEffectiveWelcomeUnread(2, 5)).toBe(2);
+  });
+
+  it('never returns a negative number', () => {
+    expect(resolveEffectiveWelcomeUnread(-3, 5)).toBe(0);
   });
 });

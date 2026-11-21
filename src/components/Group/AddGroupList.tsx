@@ -57,10 +57,43 @@ const GROUP_ROW_HEIGHT = 82;
 const FIND_GROUPS_PAGE_SIZE = 10;
 const FIND_GROUPS_AVATAR_LIMIT = 20;
 
+/**
+ * Whether joining this group sends a JOIN transaction (open) or a join request
+ * (private).
+ *
+ * Normalised through `Number()`, the same way `GroupList` reads `groupType`. The
+ * strict `=== 0` here treated a string `'0'` from the node as private, so a
+ * public group rendered as private and recorded a join *request* instead of the
+ * join. An absent or unrecognised type is treated as closed on purpose: assuming
+ * open would send a JOIN the group may reject, taking a fee for nothing.
+ */
 export const isOpenGroup = (group) =>
   group?.isOpen === true ||
-  group?.groupType === 0 ||
+  Number(group?.groupType) === 0 ||
   group?.groupType === 'OPEN';
+
+/** The tx-list entry types that mean "a join for this group is in flight". */
+const PENDING_JOIN_TX_TYPES = ['joined-group', 'joined-group-request'];
+
+/**
+ * Whether a join for `groupId` is already in flight, from the tx list.
+ *
+ * Both types count. A private group writes `joined-group-request`, and matching
+ * only `joined-group` left the row looking un-joined: every further click signed
+ * and paid for another JOIN_GROUP.
+ */
+export const isPendingGroup = (txList, groupId) =>
+  (txList || []).some(
+    (tx) =>
+      PENDING_JOIN_TX_TYPES.includes(tx?.type) &&
+      tx?.done !== true &&
+      String(tx?.groupId) === String(groupId)
+  );
+
+export const isJoinedGroup = (memberGroups, groupId) =>
+  (memberGroups || []).some(
+    (group) => String(group?.groupId) === String(groupId)
+  );
 const formatMemberCount = (count) =>
   new Intl.NumberFormat().format(Math.max(0, Number(count) || 0));
 
@@ -300,12 +333,20 @@ export const AddGroupList = ({
         }
       })
     ).then((entries) => {
-      if (!cancelled) {
-        setGroupOwnerNames((previous) => ({
-          ...previous,
-          ...Object.fromEntries(entries),
-        }));
+      if (cancelled) {
+        // The attempt was recorded before the fetch, so a search that changed
+        // mid-flight left those ids marked as done while their results were
+        // thrown away: the group kept its placeholder avatar for the rest of the
+        // session. Unmark them so the next pass retries.
+        groupsToResolve.forEach((group) => {
+          avatarOwnerLookupAttemptedRef.current.delete(String(group?.groupId));
+        });
+        return;
       }
+      setGroupOwnerNames((previous) => ({
+        ...previous,
+        ...Object.fromEntries(entries),
+      }));
     });
     return () => {
       cancelled = true;
@@ -321,18 +362,6 @@ export const AddGroupList = ({
   ) => {
     setSortMode(nextSortMode);
   };
-
-  const isJoinedGroup = (groupId) =>
-    (memberGroups || []).some(
-      (group) => String(group?.groupId) === String(groupId)
-    );
-  const isPendingGroup = (groupId) =>
-    (txList || []).some(
-      (tx) =>
-        tx?.type === 'joined-group' &&
-        tx?.done !== true &&
-        String(tx?.groupId) === String(groupId)
-    );
 
   const getGroups = async () => {
     setGroupsLoading(true);
@@ -359,7 +388,7 @@ export const AddGroupList = ({
   };
 
   const handleGroupClick = (group) => {
-    if (isJoinedGroup(group?.groupId) && onJoinedGroupOpen) {
+    if (isJoinedGroup(memberGroups, group?.groupId) && onJoinedGroupOpen) {
       const joinedGroup = (memberGroups || []).find(
         (memberGroup) => String(memberGroup?.groupId) === String(group?.groupId)
       );
@@ -420,13 +449,21 @@ export const AddGroupList = ({
 
       const fee = await getFee('JOIN_GROUP');
 
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'JOIN_GROUP',
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
+      // `cancelIfReplaced` answers this confirmation as cancelled if another
+      // `show()` takes its place (a group link, a Q-App request). Without it the
+      // replaced promise is never settled, this `await` never returns, the
+      // `finally` never runs, and `joiningGroupIdRef` wedges every join button
+      // until the page is reloaded.
+      await show(
+        {
+          message: t('core:message.question.perform_transaction', {
+            action: 'JOIN_GROUP',
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: fee.fee + ' QORT',
+        },
+        { cancelIfReplaced: true }
+      );
       setIsLoading(true);
 
       await new Promise((res, rej) => {
@@ -434,8 +471,15 @@ export const AddGroupList = ({
           .sendMessage('joinGroup', {
             groupId,
           })
-          .then((response) => {
-            if (!response?.error) {
+          .then((rawResponse) => {
+            // `sendMessageBackground` reports a failed payload as
+            // `{ error: undefined, message: '...' }`, so a bare `.error` test
+            // read that as success: the user got the success toast and a
+            // signature-less pending entry nothing could clear.
+            const response = rawResponse as
+              | { error?: string; message?: string; [key: string]: unknown }
+              | undefined;
+            if (!response?.error && !response?.message) {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_join', {
@@ -564,8 +608,8 @@ export const AddGroupList = ({
     const group = visibleItems[index];
     const memberCount = group?.memberCount ?? 0;
     const openGroup = isOpenGroup(group);
-    const joinedGroup = isJoinedGroup(group?.groupId);
-    const pendingGroup = isPendingGroup(group?.groupId);
+    const joinedGroup = isJoinedGroup(memberGroups, group?.groupId);
+    const pendingGroup = isPendingGroup(txList, group?.groupId);
     const joiningGroup = joiningGroupId === String(group?.groupId);
     const pinnedGroup = isPinnedTopGroup(sortMode, group);
     const membershipUnavailable = joinedGroup || pendingGroup;
@@ -874,8 +918,11 @@ export const AddGroupList = ({
 
   const isSelectedGroupOpen =
     selectedGroup != null && isOpenGroup(selectedGroup);
-  const isSelectedGroupJoined = isJoinedGroup(selectedGroup?.groupId);
-  const isSelectedGroupPending = isPendingGroup(selectedGroup?.groupId);
+  const isSelectedGroupJoined = isJoinedGroup(
+    memberGroups,
+    selectedGroup?.groupId
+  );
+  const isSelectedGroupPending = isPendingGroup(txList, selectedGroup?.groupId);
   const selectedGroupMemberCount = Math.max(
     0,
     Number(selectedGroup?.memberCount) || 0

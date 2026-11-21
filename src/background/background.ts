@@ -888,7 +888,15 @@ export const getLastRef = async () => {
   return data;
 };
 
-export const sendQortFee = async (): Promise<number> => {
+/**
+ * The PAYMENT fee the node quotes, as decimal text ("0.01000000").
+ *
+ * The declaration said `Promise<number>` while the body returned `.toFixed(8)`,
+ * a string. Nothing broke, because both callers parse the value, but the lie is
+ * why a correct `const fee: string = ...` at the call site looked like a type
+ * error. Declared for what it actually returns.
+ */
+export const sendQortFee = async (): Promise<string> => {
   const validApi = await getBaseApi();
   const response = await fetch(
     validApi + '/transactions/unitfee?txType=PAYMENT'
