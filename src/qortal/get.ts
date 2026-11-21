@@ -60,6 +60,7 @@ import {
   parseAssetId,
   parseDecimalAmount,
   type ParsedAmount,
+  InvalidRecipientError,
   RecipientInvisibleCharactersError,
   recipientDisplayLabel,
 } from '../transactions/paymentSafety';
@@ -108,7 +109,10 @@ import {
 } from './permissionPromptQueue';
 import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
 import Base58 from '../encryption/Base58.ts';
-import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
+import {
+  assertPublicKeyForAddress,
+  isValidQortalAddress,
+} from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
 import {
@@ -8341,6 +8345,14 @@ export const multiPaymentWithPrivateData = async (
     // transfer goes to this address.
     const resolvedRecipient = await resolveRecipient(payment.recipient);
     const confirmReceiver = resolvedRecipient.address;
+    // This request encrypts to the recipient's public key, and an AT has none.
+    // `isValidPaymentAddress` admits AT addresses (Core accepts them for a plain
+    // PAYMENT), so without this check the AT passed the recipient gate and the
+    // next line threw a *public key* error: the user was told their recipient had
+    // a key problem instead of that an AT cannot receive a private payment.
+    if (!isValidQortalAddress(confirmReceiver)) {
+      throw new InvalidRecipientError();
+    }
     const receiverPublicKey = await getPublicKey(confirmReceiver);
 
     const parsedAmount = parseDecimalAmount(payment.amount);

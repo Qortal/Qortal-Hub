@@ -88,7 +88,6 @@ import { timeDifferenceForNotificationChats } from './Group';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
-  isScopeMuted,
   groupHasUnreadConsideringMute,
   getGroupUnreadCountConsideringMute,
   getWelcomeUnreadCount,
@@ -2147,15 +2146,11 @@ const GroupItem = memo(
         (group?.reticulumChatSummary?.mentionCount ?? 0) -
           effectiveWelcomeUnread >
           0);
-    const isGroupMuted = groupMuteSettings
-      ? isScopeMuted(groupMuteSettings) &&
-        !groupHasUnreadConsideringMute(
-          groupMuteSettings,
-          group?.reticulumChatSummary,
-          welcomeUnreadCount,
-          globalNotifForm
-        )
-      : false;
+    // `isGroupMuted` used to be computed here and never read. It also called
+    // isScopeMuted + groupHasUnreadConsideringMute on every row, on every
+    // render, for a value nothing consumed — which defeated `memo` on this item.
+    // The mute-aware answer the UI actually needs is `hasReticulumMention`
+    // above, and the badge below.
 
     const gcallRoomIdForRow =
       group?.groupId &&
@@ -2192,8 +2187,15 @@ const GroupItem = memo(
     const isOpenGroup = !isClosedGroup;
 
     if (railMode) {
+      // Reuse the already-translated keys rather than hardcoded English, the
+      // same way GroupsWidget reads them.
       const groupLabel =
-        group.groupId === '0' ? 'General' : group.groupName || 'Group';
+        group.groupId === '0'
+          ? t('group:groups_widget.group_general')
+          : group.groupName ||
+            t('group:groups_widget.group_named', {
+              id: group.groupId,
+            });
       const fallbackAvatarBackground =
         theme.palette.mode === 'dark'
           ? 'rgba(7, 10, 17, 0.82)'
@@ -2626,7 +2628,11 @@ const GroupItem = memo(
             </ListItemAvatar>
 
             <ListItemText
-              primary={group.groupId === '0' ? 'General' : group.groupName}
+              primary={
+                group.groupId === '0'
+                  ? t('group:groups_widget.group_general')
+                  : group.groupName
+              }
               secondary={
                 !group?.timestamp
                   ? t('core:message.generic.no_messages', {

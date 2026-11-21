@@ -909,6 +909,30 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
     );
   });
 
+  it('names an AT recipient as an invalid recipient, not a missing public key', async () => {
+    // A MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA encrypts to the recipient's public
+    // key, and an AT has none. The recipient gate accepted the AT address and the
+    // very next line threw a public-key error, so the user was told their
+    // recipient had a key problem rather than that an AT cannot receive a
+    // private payment.
+    const payloads = answerPrompts({ accepted: true });
+    const atAddress = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+    await expect(
+      multiPaymentWithPrivateData(
+        {
+          ...request,
+          payments: [{ ...request.payments[0], recipient: atAddress }],
+        },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow(/invalid_receiver|recipient/i);
+
+    expect(payloads).toHaveLength(0);
+    expect(transferAsset).not.toHaveBeenCalled();
+  });
+
   it('refuses an asset id it cannot read before asking', async () => {
     const payloads = answerPrompts({ accepted: true });
     await expect(

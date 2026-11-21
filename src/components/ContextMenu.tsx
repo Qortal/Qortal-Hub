@@ -137,6 +137,8 @@ export const ContextMenu = ({
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
+  /** Guards `leaveGroup`, which signs a fee-bearing transaction. */
+  const leaveGroupInFlightRef = useRef(false);
   const longPressTimeout = useRef(null);
   const preventClick = useRef(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -257,20 +259,40 @@ export const ContextMenu = ({
 
   const leaveGroup = async () => {
     contextMenu.hideAll();
+    // A fee action reached by a menu click: two fast clicks must not sign two
+    // transactions. A ref, not state, because the second click can arrive before
+    // React has re-rendered.
+    if (leaveGroupInFlightRef.current) return;
+    leaveGroupInFlightRef.current = true;
     try {
       const fee = await getFee('LEAVE_GROUP');
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'LEAVE_GROUP',
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: `${fee.fee} QORT`,
-      });
+      // `cancelIfReplaced` answers this as declined if another show() takes its
+      // place. Without it the replaced promise never settles, this await never
+      // returns, the guard is never released, and leaving a group is dead until
+      // reload.
+      await show(
+        {
+          message: t('core:message.question.perform_transaction', {
+            action: 'LEAVE_GROUP',
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: `${fee.fee} QORT`,
+        },
+        { cancelIfReplaced: true }
+      );
       const response = await window.sendMessage('leaveGroup', {
         groupId: displayedGroupInfo.groupId,
       });
-      if (response && typeof response === 'object' && 'error' in response)
-        throw new Error((response as { error: string }).error);
+      // A failed payload arrives as `{ error: undefined, message }`. Testing for
+      // the key path only read that as success and threw Error(undefined). Match
+      // the message path the rest of the codebase uses.
+      const failed = response as
+        | { error?: string; message?: string }
+        | null
+        | undefined;
+      if (failed && (failed.error || failed.message)) {
+        throw new Error(failed.error || failed.message);
+      }
       setTxList((previous) => [
         {
           ...(typeof response === 'object' && response ? response : {}),
@@ -296,10 +318,14 @@ export const ContextMenu = ({
       });
       setOpenSnack(true);
     } catch (error) {
+      // A declined or replaced confirmation rejects with `{ isCanceled: true }`,
+      // which has no message: that is not an error to show.
       if (error?.message) {
         setInfoSnack({ type: 'error', message: error.message });
         setOpenSnack(true);
       }
+    } finally {
+      leaveGroupInFlightRef.current = false;
     }
   };
 

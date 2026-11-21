@@ -364,7 +364,11 @@ export const AddGroupList = ({
   };
 
   const getGroups = async () => {
-    setGroupsLoading(true);
+    // Only blank the list on the first load. This re-runs whenever membership
+    // changes (to refresh member counts after a join), and raising the spinner
+    // for a refetch unmounted the virtualized list, throwing away the user's
+    // scroll position and search result.
+    setGroupsLoading((previous) => previous || groups.length === 0);
     try {
       const response = await fetch(`${getBaseApiReact()}/groups/?limit=0`);
       const groupData = await response.json();

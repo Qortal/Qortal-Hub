@@ -2225,11 +2225,22 @@ export async function inviteToGroup({
 }
 
 /**
- * Signs and sends a QORT PAYMENT. Callers resolve the recipient and read the
- * fee before their confirmation, show both, and pass the resolved address as
- * `receiver` and the shown fee as `approvedFee`: a higher fee from the node is
- * then refused before anything is signed. Without `approvedFee` only the fixed
- * fee ceiling applies.
+ * Signs and sends a QORT PAYMENT.
+ *
+ * `receiver` may be an address (including an AT) or a registered name; a name is
+ * resolved here, and that resolution is the address paid.
+ *
+ * The guarantee this range adds is about the *fee*, not the recipient: a caller
+ * that showed the user a fee passes it as `approvedFee`, and a higher fee from
+ * the node is then refused before anything is signed. Without `approvedFee` only
+ * the fixed fee ceiling applies.
+ *
+ * Callers that have already resolved the name should pass the address, so the
+ * address the confirmation displayed is the address paid. `get.ts` and the Send
+ * QORT dialog both do; passing a name means this function resolves it a second
+ * time, after the confirmation, and a name whose owner changed in between would
+ * pay the new owner. The previous wording claimed every caller resolves first,
+ * which the message-channel caller does not.
  */
 export async function sendCoin(
   {
